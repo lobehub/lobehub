@@ -24490,7 +24490,9 @@ paths:
         of `fileIds` by cosine similarity. Files must be parsed and embedded
         first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST
         /files/{id}/embeddings`). Answers 404 when any file is not visible to
-        the caller and 502 when the embedding provider fails.
+        the caller, 403 when a file sits in a knowledge base restricted for the
+        caller, 401 / 429 when the embedding provider rejects the deployment key
+        or quota, and 502 when the provider fails otherwise.
 
 
         **API key scopes:** `file:read`.
@@ -24820,7 +24822,9 @@ paths:
       description: >-
         Discards the previous chunking task (typically a failed one) and queues
         a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for
-        `chunkingStatus`. Answers 422 when the file type cannot be chunked.
+        `chunkingStatus`. Answers 422, without discarding the previous task,
+        when no loader supports the file extension; 403 when the file sits in a
+        knowledge base restricted for the caller.
 
 
         **API key scopes:** `file:write`.
@@ -28596,8 +28600,9 @@ paths:
         by cosine similarity (`chunks`, grouped per file in `files`), and runs a
         full-text search over the documents stored in it (`documents`). Answers
         404 when the knowledge base is not visible to the caller, 403 when it is
-        restricted for the caller, and 502 when the embedding provider fails and
-        nothing matched.
+        restricted for the caller, 401 / 429 when the embedding provider rejects
+        the deployment key or quota, and 502 when the provider fails otherwise
+        and nothing matched.
 
 
         **API key scopes:** `knowledge:read`.
@@ -30016,7 +30021,9 @@ paths:
         recency signals (the retrieval the agent memory tool uses). Send
         `topicId` instead to retrieve the memories relevant to a conversation
         topic; the other filters then do not apply. A failing embedding provider
-        yields empty layers rather than an error.
+        yields empty layers rather than an error. Memory belongs to the user,
+        not to a workspace: a workspace-bound key searches the same personal
+        memory.
 
 
         **API key scopes:** `user:read`.
@@ -30611,7 +30618,9 @@ paths:
       operationId: memories.createIdentity
       description: >-
         Writes a identity memory and embeds its text so `POST /memories/search`
-        can find it; answers with the stored entry.
+        can find it; answers with the stored entry. Memory belongs to the user,
+        not to a workspace: a workspace-bound key writes the same personal
+        memory.
 
 
         **API key scopes:** `user:write`.
@@ -30743,6 +30752,13 @@ paths:
   /api/v1/memories/identities/{id}:
     patch:
       operationId: memories.updateIdentity
+      description: >-
+        Patches a identity memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
       summary: Update a identity memory
       tags:
         - memories
@@ -30886,13 +30902,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateMemoryIdentity"
-      description: "**API key scopes:** `user:write`."
   /api/v1/memories/preferences:
     post:
       operationId: memories.createPreference
       description: >-
         Writes a preference memory and embeds its text so `POST
-        /memories/search` can find it; answers with the stored entry.
+        /memories/search` can find it; answers with the stored entry. Memory
+        belongs to the user, not to a workspace: a workspace-bound key writes
+        the same personal memory.
 
 
         **API key scopes:** `user:write`.
@@ -31024,6 +31041,13 @@ paths:
   /api/v1/memories/preferences/{id}:
     patch:
       operationId: memories.updatePreference
+      description: >-
+        Patches a preference memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
       summary: Update a preference memory
       tags:
         - memories
@@ -31167,13 +31191,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateMemoryPreference"
-      description: "**API key scopes:** `user:write`."
   /api/v1/memories/contexts:
     post:
       operationId: memories.createContext
       description: >-
         Writes a context memory and embeds its text so `POST /memories/search`
-        can find it; answers with the stored entry.
+        can find it; answers with the stored entry. Memory belongs to the user,
+        not to a workspace: a workspace-bound key writes the same personal
+        memory.
 
 
         **API key scopes:** `user:write`.
@@ -31305,6 +31330,13 @@ paths:
   /api/v1/memories/contexts/{id}:
     patch:
       operationId: memories.updateContext
+      description: >-
+        Patches a context memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
       summary: Update a context memory
       tags:
         - memories
@@ -31448,13 +31480,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateMemoryContext"
-      description: "**API key scopes:** `user:write`."
   /api/v1/memories/activities:
     post:
       operationId: memories.createActivity
       description: >-
         Writes a activity memory and embeds its text so `POST /memories/search`
-        can find it; answers with the stored entry.
+        can find it; answers with the stored entry. Memory belongs to the user,
+        not to a workspace: a workspace-bound key writes the same personal
+        memory.
 
 
         **API key scopes:** `user:write`.
@@ -31586,6 +31619,13 @@ paths:
   /api/v1/memories/activities/{id}:
     patch:
       operationId: memories.updateActivity
+      description: >-
+        Patches a activity memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
       summary: Update a activity memory
       tags:
         - memories
@@ -31729,13 +31769,14 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateMemoryActivity"
-      description: "**API key scopes:** `user:write`."
   /api/v1/memories/experiences:
     post:
       operationId: memories.createExperience
       description: >-
         Writes a experience memory and embeds its text so `POST
-        /memories/search` can find it; answers with the stored entry.
+        /memories/search` can find it; answers with the stored entry. Memory
+        belongs to the user, not to a workspace: a workspace-bound key writes
+        the same personal memory.
 
 
         **API key scopes:** `user:write`.
@@ -31867,6 +31908,13 @@ paths:
   /api/v1/memories/experiences/{id}:
     patch:
       operationId: memories.updateExperience
+      description: >-
+        Patches a experience memory the caller owns. Memory belongs to the user,
+        not to a workspace, so a workspace-bound key edits the same personal
+        memory.
+
+
+        **API key scopes:** `user:write`.
       summary: Update a experience memory
       tags:
         - memories
@@ -32010,7 +32058,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateMemoryExperience"
-      description: "**API key scopes:** `user:write`."
   /api/v1/memories:
     delete:
       operationId: memories.deleteAll

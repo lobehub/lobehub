@@ -1,10 +1,12 @@
 import { AsyncTaskStatus } from '@lobechat/types';
+import { HTTPException } from 'hono/http-exception';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import type { LobeChatDatabase } from '@/database/type';
+import { getChunkingLoaderType } from '@/libs/document-loaders/loaderType';
 import {
   KnowledgeBaseSearchService,
   type SemanticSearchForChatResult,
@@ -24,6 +26,7 @@ import type {
   KnowledgeBaseSearchRequest,
   KnowledgeBaseSearchResult,
 } from '../types/retrieval.type';
+import { describeRelayFailure } from './heterogeneous-direct.service';
 
 const DEFAULT_TOP_K = 20;
 
@@ -78,16 +81,24 @@ export class RetrievalRestService extends BaseService {
 
   /**
    * The vector path failed and nothing else matched: an embedding-provider
-   * failure must not read as "no results".
+   * failure must not read as "no results". A provider rejection keeps its
+   * actionable status (invalid key → 401, quota → 429, else 502), classified
+   * the same way the model relays do; anything else (e.g. the database) is
+   * logged and answered without internal detail.
    */
   private assertSearchRan(result: SemanticSearchForChatResult) {
-    if (result.errors?.vector && result.totalResults === 0) {
-      throw new ApiException(
-        502,
-        'upstream_error',
-        `Semantic search failed: ${result.errors.vector}`,
-      );
+    if (!result.errors?.vector || result.totalResults > 0) return;
+
+    const rejection = result.rejections?.vector;
+    if (rejection && typeof rejection === 'object' && 'errorType' in rejection) {
+      const failure = describeRelayFailure(rejection);
+      // The error catalogue infers the code (unauthorized / rate_limited / upstream_error) from the status.
+      throw new HTTPException(failure.status, {
+        message: `Embedding provider failed: ${failure.message}`,
+      });
     }
+    this.log('error', 'Semantic search failed', { error: rejection ?? result.errors.vector });
+    throw new ApiException(500, 'internal_error', 'Semantic search failed');
   }
 
   private toFileResult(result: SemanticSearchForChatResult): FileSearchResult {
@@ -190,16 +201,18 @@ export class RetrievalRestService extends BaseService {
    */
   async retryParse(fileId: string): Promise<FileTaskAccepted> {
     const file = await this.requireFile(fileId);
-    if (file.chunkTaskId) await this.asyncTaskModel.delete(file.chunkTaskId);
-
-    const taskId = await (await this.chunkService()).asyncParseFileToChunks(fileId);
-    if (!taskId) {
+    // Refuse before touching the previous task: a 422 must leave state as it was.
+    if (!getChunkingLoaderType(file.name)) {
       throw new ApiException(
         422,
         'unprocessable_entity',
-        `File type '${file.fileType}' cannot be parsed into chunks`,
+        `'${file.name}' cannot be parsed into chunks: no loader supports this file extension`,
       );
     }
+    if (file.chunkTaskId) await this.asyncTaskModel.delete(file.chunkTaskId);
+
+    const taskId = await (await this.chunkService()).asyncParseFileToChunks(fileId);
+    if (!taskId) throw this.createNotFoundError('File not found');
     return this.accepted(fileId, taskId);
   }
 }

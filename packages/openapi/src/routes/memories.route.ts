@@ -112,7 +112,7 @@ MemoryRoutes.post(
   routeDoc({
     data: MemorySearchResultSchema,
     description:
-      'Embeds `queries` and ranks every memory layer by semantic, keyword and recency signals (the retrieval the agent memory tool uses). Send `topicId` instead to retrieve the memories relevant to a conversation topic; the other filters then do not apply. A failing embedding provider yields empty layers rather than an error.',
+      'Embeds `queries` and ranks every memory layer by semantic, keyword and recency signals (the retrieval the agent memory tool uses). Send `topicId` instead to retrieve the memories relevant to a conversation topic; the other filters then do not apply. A failing embedding provider yields empty layers rather than an error. Memory belongs to the user, not to a workspace: a workspace-bound key searches the same personal memory.',
     errors: [404],
     operationId: 'memories.search',
     summary: 'Search memories',
@@ -227,7 +227,7 @@ for (const layer of WRITABLE_LAYERS) {
     `/${layer.category}`,
     routeDoc({
       data: layer.entry,
-      description: `Writes a ${label} memory and embeds its text so \`POST /memories/search\` can find it; answers with the stored entry.`,
+      description: `Writes a ${label} memory and embeds its text so \`POST /memories/search\` can find it; answers with the stored entry. Memory belongs to the user, not to a workspace: a workspace-bound key writes the same personal memory.`,
       operationId: `memories.create${layer.name}`,
       status: 201,
       summary: `Create a ${label} memory`,
@@ -244,6 +244,7 @@ for (const layer of WRITABLE_LAYERS) {
     `/${layer.category}/:id`,
     routeDoc({
       data: layer.entry,
+      description: `Patches a ${label} memory the caller owns. Memory belongs to the user, not to a workspace, so a workspace-bound key edits the same personal memory.`,
       errors: [404],
       operationId: `memories.update${layer.name}`,
       summary: `Update a ${label} memory`,

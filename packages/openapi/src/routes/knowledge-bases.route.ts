@@ -308,8 +308,8 @@ app.post(
   routeDoc({
     data: KnowledgeBaseSearchResultSchema,
     description:
-      'Embeds `query` and ranks the chunks of every file in the knowledge base by cosine similarity (`chunks`, grouped per file in `files`), and runs a full-text search over the documents stored in it (`documents`). Answers 404 when the knowledge base is not visible to the caller, 403 when it is restricted for the caller, and 502 when the embedding provider fails and nothing matched.',
-    errors: [404, 502],
+      'Embeds `query` and ranks the chunks of every file in the knowledge base by cosine similarity (`chunks`, grouped per file in `files`), and runs a full-text search over the documents stored in it (`documents`). Answers 404 when the knowledge base is not visible to the caller, 403 when it is restricted for the caller, 401 / 429 when the embedding provider rejects the deployment key or quota, and 502 when the provider fails otherwise and nothing matched.',
+    errors: [404, 429, 502],
     operationId: 'knowledgeBases.search',
     summary: 'Semantic search in a knowledge base',
     tags: ['knowledge-bases'],

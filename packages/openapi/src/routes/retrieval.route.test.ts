@@ -20,7 +20,10 @@ const DIM = 1024;
 const axis = (index: number) => Array.from({ length: DIM }, (_, i) => (i === index ? 1 : 0));
 
 const holder = vi.hoisted(() => ({
-  embeddingsFail: false,
+  /** What the embedding provider rejects with, when set. */
+  embeddingsFail: undefined as unknown,
+  /** Knowledge-base ids the access guards treat as restricted for the caller. */
+  restricted: new Set<string>(),
   serverDB: undefined as unknown,
 }));
 
@@ -32,12 +35,44 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: async () => ({
     // Queries mentioning "design" land on axis 0, anything else on axis 1.
     embeddings: async ({ input }: { input: string | string[] }) => {
-      if (holder.embeddingsFail) throw new Error('embedding provider down');
+      if (holder.embeddingsFail) throw holder.embeddingsFail;
       const texts = Array.isArray(input) ? input : [input];
       return texts.map((text) => axis(text.includes('design') ? 0 : 1));
     },
   }),
 }));
+
+// Restriction needs workspace RBAC rows; the REST contract under test is only
+// that a guard refusal becomes a 403 and nothing is searched or queued.
+vi.mock('@/server/services/knowledgeBaseAccess', async (importOriginal) => {
+  const { TRPCError } = await import('@trpc/server');
+  const actual = await importOriginal<Record<string, unknown>>();
+  const { getTestDB } = await import('@/database/core/getTestDB');
+  const refuse = () => {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Restricted knowledge base' });
+  };
+  const fileIsRestricted = async (fileId: string) => {
+    const db = (await getTestDB()) as any;
+    const rows = await db.query.knowledgeBaseFiles.findMany({
+      where: (t: any, { eq }: any) => eq(t.fileId, fileId),
+    });
+    return rows.some((row: { knowledgeBaseId: string }) =>
+      holder.restricted.has(row.knowledgeBaseId),
+    );
+  };
+  return {
+    ...actual,
+    assertContentsNotInRestrictedKnowledgeBase: async (_ctx: unknown, fileIds: string[]) => {
+      for (const id of fileIds) if (await fileIsRestricted(id)) refuse();
+    },
+    assertFileNotInRestrictedKnowledgeBase: async (_ctx: unknown, fileId: string) => {
+      if (await fileIsRestricted(fileId)) refuse();
+    },
+    assertKnowledgeBaseBrowsable: async (_ctx: unknown, id: string) => {
+      if (holder.restricted.has(id)) refuse();
+    },
+  };
+});
 
 const asyncCalls = vi.hoisted(() => ({ embeddingChunks: vi.fn(), parseFileToChunks: vi.fn() }));
 vi.mock('@/server/routers/async', () => ({
@@ -136,7 +171,8 @@ const seedChunk = async (fileId: string, userId: string, text: string, vector: n
 };
 
 beforeEach(async () => {
-  holder.embeddingsFail = false;
+  holder.embeddingsFail = undefined;
+  holder.restricted.clear();
   asyncCalls.embeddingChunks.mockReset().mockResolvedValue(undefined);
   asyncCalls.parseFileToChunks.mockReset().mockResolvedValue(undefined);
   for (const table of [
@@ -274,19 +310,61 @@ describe('POST /files/search', () => {
     expect((await json(res)).code).toBe('validation_error');
   });
 
-  it('answers 502 when the embedding provider fails', async () => {
-    holder.embeddingsFail = true;
+  it.each([
+    [{ error: { message: 'boom' }, errorType: 'ProviderBizError' }, 502, 'upstream_error'],
+    [
+      { error: { message: 'Key disabled' }, errorType: 'InvalidProviderAPIKey' },
+      401,
+      'unauthorized',
+    ],
+    [{ error: 'Balance exhausted', errorType: 'InsufficientQuota' }, 429, 'rate_limited'],
+  ])(
+    'maps an embedding-provider rejection to an actionable status (%#)',
+    async (rejection, status, code) => {
+      holder.embeddingsFail = rejection;
+      const res = await call('/files/search', {
+        body: { fileIds: [FILE_DESIGN], query: 'design' },
+        key: KEYS.fileRead,
+      });
+
+      expect(res.status).toBe(status);
+      expect((await json(res)).code).toBe(code);
+    },
+  );
+
+  it('answers 500 without internal detail when search fails outside the provider', async () => {
+    holder.embeddingsFail = new Error('relation "embeddings" does not exist');
     const res = await call('/files/search', {
       body: { fileIds: [FILE_DESIGN], query: 'design' },
       key: KEYS.fileRead,
     });
 
-    expect(res.status).toBe(502);
-    expect((await json(res)).code).toBe('upstream_error');
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await json(res))).not.toContain('relation');
+  });
+
+  it('answers 403 when a file sits in a knowledge base restricted for the caller', async () => {
+    holder.restricted.add(KB);
+    const res = await call('/files/search', {
+      body: { fileIds: [FILE_DESIGN], query: 'design' },
+      key: KEYS.fileRead,
+    });
+
+    expect(res.status).toBe(403);
   });
 });
 
 describe('POST /knowledge-bases/{id}/search', () => {
+  it('answers 403 for a knowledge base restricted for the caller', async () => {
+    holder.restricted.add(KB);
+    const res = await call(`/knowledge-bases/${KB}/search`, {
+      body: { query: 'design' },
+      key: KEYS.knowledgeRead,
+    });
+
+    expect(res.status).toBe(403);
+  });
+
   it('searches only the files inside the knowledge base', async () => {
     const res = await call(`/knowledge-bases/${KB}/search`, {
       body: { query: 'design thinking', topK: 5 },
@@ -418,12 +496,36 @@ describe('POST /files/{id}/parses/retry', () => {
     ).toBeUndefined();
   });
 
-  it('answers 422 for a file type that cannot be chunked', async () => {
-    await serverDB.insert(files).values(file('file_r5drawing001', OWNER, 'plan.dwg'));
+  it('answers 422 for a file type that cannot be chunked and keeps its previous task', async () => {
+    const [previous] = await serverDB
+      .insert(asyncTasks)
+      .values({ status: 'error', type: 'chunk', userId: OWNER })
+      .returning();
+    await serverDB
+      .insert(files)
+      .values({ ...file('file_r5drawing001', OWNER, 'plan.dwg'), chunkTaskId: previous.id });
 
     const res = await call('/files/file_r5drawing001/parses/retry', { key: KEYS.fileWrite });
 
     expect(res.status).toBe(422);
+    expect((await json(res)).message).toContain('plan.dwg');
+    expect(
+      await serverDB.query.asyncTasks.findFirst({ where: (t, { eq }) => eq(t.id, previous.id) }),
+    ).toBeDefined();
+    expect(asyncCalls.parseFileToChunks).not.toHaveBeenCalled();
+  });
+
+  it('answers 403 for a file in a restricted knowledge base, for embedding too', async () => {
+    holder.restricted.add(KB);
+
+    expect((await call(`/files/${FILE_CODE}/parses/retry`, { key: KEYS.fileWrite })).status).toBe(
+      403,
+    );
+    expect((await call(`/files/${FILE_DESIGN}/embeddings`, { key: KEYS.fileWrite })).status).toBe(
+      403,
+    );
+    expect(asyncCalls.parseFileToChunks).not.toHaveBeenCalled();
+    expect(asyncCalls.embeddingChunks).not.toHaveBeenCalled();
   });
 
   it("answers 404 for another user's file and 403 for a read-only key", async () => {

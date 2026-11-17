@@ -50,6 +50,9 @@ const {
   messages,
   topics,
   userMemories,
+  userMemoriesActivities,
+  userMemoriesContexts,
+  userMemoriesExperiences,
   userMemoriesIdentities,
   userMemoriesPreferences,
   userPersonaDocumentHistories,
@@ -135,6 +138,9 @@ const createIdentity = async (key: string = KEYS.write) => {
 beforeEach(async () => {
   workflow.triggerProcessUsers.mockReset().mockResolvedValue({ workflowRunId: 'wfr_1' });
   for (const table of [
+    userMemoriesActivities,
+    userMemoriesContexts,
+    userMemoriesExperiences,
     userMemoriesIdentities,
     userMemoriesPreferences,
     userMemories,
@@ -205,6 +211,51 @@ describe('POST /memories/{category}', () => {
     const { data } = await json(res);
     expect(MemoryPreferenceSchema.safeParse(data).success).toBe(true);
     expect(data.conclusionDirectives).toBe(preferenceBody.conclusionDirectives);
+  });
+
+  it.each([
+    [
+      'contexts',
+      {
+        description: 'Migrating the billing service',
+        summary: 'Billing migration',
+        title: 'Billing',
+      },
+      'description',
+    ],
+    [
+      'activities',
+      { narrative: 'Met the design team about onboarding', summary: 'Design sync', title: 'Sync' },
+      'narrative',
+    ],
+    [
+      'experiences',
+      { situation: 'Flaky CI on Fridays', summary: 'Pin the runner image', title: 'CI lesson' },
+      'situation',
+    ],
+  ])('writes a %s entry and reads it back', async (category, body, field) => {
+    const res = await call(`/memories/${category}`, { body, key: KEYS.write });
+
+    expect(res.status).toBe(201);
+    const { data } = await json(res);
+    expect(typeof data.id).toBe('string');
+    expect(data[field]).toBe((body as Record<string, string>)[field]);
+    expect(Object.keys(data).some((key) => key.endsWith('Vector'))).toBe(false);
+  });
+
+  it("writes the user's personal memory through a workspace-bound key", async () => {
+    const res = await call('/memories/identities', {
+      body: identityBody,
+      key: KEYS.workspace,
+      workspaceId: WORKSPACE,
+    });
+
+    expect(res.status).toBe(201);
+    const { data } = await json(res);
+    const found = await json(
+      await call('/memories/search', { body: { queries: ['coffee'] }, key: KEYS.read }),
+    );
+    expect(found.data.identities.map((item: { id: string }) => item.id)).toContain(data.id);
   });
 
   it('answers 401 without a key', async () => {
@@ -293,6 +344,21 @@ describe('POST /memories/search', () => {
     expect(MemorySearchResultSchema.safeParse(data).success).toBe(true);
     expect(data.identities.map((item: { id: string }) => item.id)).toContain(entry.id);
     expect(data.identities[0]).not.toHaveProperty('userId');
+  });
+
+  it('searches the same personal memory through a workspace-bound key', async () => {
+    const entry = await createIdentity();
+
+    const res = await call('/memories/search', {
+      body: { queries: ['coffee'] },
+      key: KEYS.workspace,
+      workspaceId: WORKSPACE,
+    });
+
+    expect(res.status).toBe(200);
+    expect((await json(res)).data.identities.map((item: { id: string }) => item.id)).toContain(
+      entry.id,
+    );
   });
 
   it("does not return another user's memories", async () => {

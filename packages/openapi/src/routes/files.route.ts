@@ -444,8 +444,8 @@ app.post(
   routeDoc({
     data: FileSearchResultSchema,
     description:
-      'Embeds `query` with the deployment embedding model and ranks the chunks of `fileIds` by cosine similarity. Files must be parsed and embedded first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST /files/{id}/embeddings`). Answers 404 when any file is not visible to the caller and 502 when the embedding provider fails.',
-    errors: [404, 502],
+      'Embeds `query` with the deployment embedding model and ranks the chunks of `fileIds` by cosine similarity. Files must be parsed and embedded first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST /files/{id}/embeddings`). Answers 404 when any file is not visible to the caller, 403 when a file sits in a knowledge base restricted for the caller, 401 / 429 when the embedding provider rejects the deployment key or quota, and 502 when the provider fails otherwise.',
+    errors: [404, 429, 502],
     operationId: 'files.search',
     summary: 'Semantic search across files',
     tags: ['files'],
@@ -462,6 +462,10 @@ app.post(
 /**
  * Queue embedding of a file's chunks
  * POST /files/:id/embeddings
+ *
+ * Gated on `file:write` like the other file-indexing routes here
+ * (`POST /files/:id/chunks`, `/parses`), not on the `knowledge:*` scope the
+ * tRPC `chunk` router uses: indexing is a write to the file itself.
  */
 app.post(
   '/:id/embeddings',
@@ -493,7 +497,7 @@ app.post(
   routeDoc({
     data: FileTaskAcceptedSchema,
     description:
-      'Discards the previous chunking task (typically a failed one) and queues a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for `chunkingStatus`. Answers 422 when the file type cannot be chunked.',
+      'Discards the previous chunking task (typically a failed one) and queues a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for `chunkingStatus`. Answers 422, without discarding the previous task, when no loader supports the file extension; 403 when the file sits in a knowledge base restricted for the caller.',
     errors: [404, 422],
     operationId: 'files.retryParse',
     status: 202,

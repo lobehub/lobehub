@@ -1092,7 +1092,7 @@ export class Files extends HeyApiClient {
     /**
      * Semantic search across files
      *
-     * Embeds `query` with the deployment embedding model and ranks the chunks of `fileIds` by cosine similarity. Files must be parsed and embedded first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST /files/{id}/embeddings`). Answers 404 when any file is not visible to the caller and 502 when the embedding provider fails.
+     * Embeds `query` with the deployment embedding model and ranks the chunks of `fileIds` by cosine similarity. Files must be parsed and embedded first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST /files/{id}/embeddings`). Answers 404 when any file is not visible to the caller, 403 when a file sits in a knowledge base restricted for the caller, 401 / 429 when the embedding provider rejects the deployment key or quota, and 502 when the provider fails otherwise.
      *
      * **API key scopes:** `file:read`.
      */
@@ -1123,7 +1123,7 @@ export class Files extends HeyApiClient {
     /**
      * Retry parsing a file into chunks
      *
-     * Discards the previous chunking task (typically a failed one) and queues a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for `chunkingStatus`. Answers 422 when the file type cannot be chunked.
+     * Discards the previous chunking task (typically a failed one) and queues a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for `chunkingStatus`. Answers 422, without discarding the previous task, when no loader supports the file extension; 403 when the file sits in a knowledge base restricted for the caller.
      *
      * **API key scopes:** `file:write`.
      */
@@ -1446,7 +1446,7 @@ export class KnowledgeBases extends HeyApiClient {
     /**
      * Semantic search in a knowledge base
      *
-     * Embeds `query` and ranks the chunks of every file in the knowledge base by cosine similarity (`chunks`, grouped per file in `files`), and runs a full-text search over the documents stored in it (`documents`). Answers 404 when the knowledge base is not visible to the caller, 403 when it is restricted for the caller, and 502 when the embedding provider fails and nothing matched.
+     * Embeds `query` and ranks the chunks of every file in the knowledge base by cosine similarity (`chunks`, grouped per file in `files`), and runs a full-text search over the documents stored in it (`documents`). Answers 404 when the knowledge base is not visible to the caller, 403 when it is restricted for the caller, 401 / 429 when the embedding provider rejects the deployment key or quota, and 502 when the provider fails otherwise and nothing matched.
      *
      * **API key scopes:** `knowledge:read`.
      */
@@ -1578,7 +1578,7 @@ export class Memories extends HeyApiClient {
     /**
      * Search memories
      *
-     * Embeds `queries` and ranks every memory layer by semantic, keyword and recency signals (the retrieval the agent memory tool uses). Send `topicId` instead to retrieve the memories relevant to a conversation topic; the other filters then do not apply. A failing embedding provider yields empty layers rather than an error.
+     * Embeds `queries` and ranks every memory layer by semantic, keyword and recency signals (the retrieval the agent memory tool uses). Send `topicId` instead to retrieve the memories relevant to a conversation topic; the other filters then do not apply. A failing embedding provider yields empty layers rather than an error. Memory belongs to the user, not to a workspace: a workspace-bound key searches the same personal memory.
      *
      * **API key scopes:** `user:read`.
      */
@@ -1638,7 +1638,7 @@ export class Memories extends HeyApiClient {
     /**
      * Create a identity memory
      *
-     * Writes a identity memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry.
+     * Writes a identity memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry. Memory belongs to the user, not to a workspace: a workspace-bound key writes the same personal memory.
      *
      * **API key scopes:** `user:write`.
      */
@@ -1654,6 +1654,8 @@ export class Memories extends HeyApiClient {
     /**
      * Update a identity memory
      *
+     * Patches a identity memory the caller owns. Memory belongs to the user, not to a workspace, so a workspace-bound key edits the same personal memory.
+     *
      * **API key scopes:** `user:write`.
      */
     public updateIdentity<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MemoriesIdentitiesByIdData, ThrowOnError>): RequestResult<PatchApiV1MemoriesIdentitiesByIdResponses, PatchApiV1MemoriesIdentitiesByIdErrors, ThrowOnError> {
@@ -1668,7 +1670,7 @@ export class Memories extends HeyApiClient {
     /**
      * Create a preference memory
      *
-     * Writes a preference memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry.
+     * Writes a preference memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry. Memory belongs to the user, not to a workspace: a workspace-bound key writes the same personal memory.
      *
      * **API key scopes:** `user:write`.
      */
@@ -1684,6 +1686,8 @@ export class Memories extends HeyApiClient {
     /**
      * Update a preference memory
      *
+     * Patches a preference memory the caller owns. Memory belongs to the user, not to a workspace, so a workspace-bound key edits the same personal memory.
+     *
      * **API key scopes:** `user:write`.
      */
     public updatePreference<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MemoriesPreferencesByIdData, ThrowOnError>): RequestResult<PatchApiV1MemoriesPreferencesByIdResponses, PatchApiV1MemoriesPreferencesByIdErrors, ThrowOnError> {
@@ -1698,7 +1702,7 @@ export class Memories extends HeyApiClient {
     /**
      * Create a context memory
      *
-     * Writes a context memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry.
+     * Writes a context memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry. Memory belongs to the user, not to a workspace: a workspace-bound key writes the same personal memory.
      *
      * **API key scopes:** `user:write`.
      */
@@ -1714,6 +1718,8 @@ export class Memories extends HeyApiClient {
     /**
      * Update a context memory
      *
+     * Patches a context memory the caller owns. Memory belongs to the user, not to a workspace, so a workspace-bound key edits the same personal memory.
+     *
      * **API key scopes:** `user:write`.
      */
     public updateContext<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MemoriesContextsByIdData, ThrowOnError>): RequestResult<PatchApiV1MemoriesContextsByIdResponses, PatchApiV1MemoriesContextsByIdErrors, ThrowOnError> {
@@ -1728,7 +1734,7 @@ export class Memories extends HeyApiClient {
     /**
      * Create a activity memory
      *
-     * Writes a activity memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry.
+     * Writes a activity memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry. Memory belongs to the user, not to a workspace: a workspace-bound key writes the same personal memory.
      *
      * **API key scopes:** `user:write`.
      */
@@ -1744,6 +1750,8 @@ export class Memories extends HeyApiClient {
     /**
      * Update a activity memory
      *
+     * Patches a activity memory the caller owns. Memory belongs to the user, not to a workspace, so a workspace-bound key edits the same personal memory.
+     *
      * **API key scopes:** `user:write`.
      */
     public updateActivity<ThrowOnError extends boolean = false>(options: Options<PatchApiV1MemoriesActivitiesByIdData, ThrowOnError>): RequestResult<PatchApiV1MemoriesActivitiesByIdResponses, PatchApiV1MemoriesActivitiesByIdErrors, ThrowOnError> {
@@ -1758,7 +1766,7 @@ export class Memories extends HeyApiClient {
     /**
      * Create a experience memory
      *
-     * Writes a experience memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry.
+     * Writes a experience memory and embeds its text so `POST /memories/search` can find it; answers with the stored entry. Memory belongs to the user, not to a workspace: a workspace-bound key writes the same personal memory.
      *
      * **API key scopes:** `user:write`.
      */
@@ -1773,6 +1781,8 @@ export class Memories extends HeyApiClient {
     
     /**
      * Update a experience memory
+     *
+     * Patches a experience memory the caller owns. Memory belongs to the user, not to a workspace, so a workspace-bound key edits the same personal memory.
      *
      * **API key scopes:** `user:write`.
      */

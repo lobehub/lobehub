@@ -60,11 +60,6 @@ const project = <T>(schema: Shape, row: object): T => {
   return Object.fromEntries(keys.map((key) => [key, source[key] ?? null])) as T;
 };
 
-/** A save that the shared procedure reported as failed (it never throws). */
-const assertSaved = (result: { message: string; success: boolean }) => {
-  if (!result.success) throw new ApiException(500, 'internal_error', result.message);
-};
-
 type MemoryEntryOf<S extends Shape> = z.infer<S>;
 
 const searchItem = MemorySearchResultSchema.shape;
@@ -107,6 +102,17 @@ export class MemoryWriteRestService extends BaseService {
     return userMemoriesRouter.createCaller(this.ctx);
   }
 
+  /**
+   * The shared write procedures catch every failure and report it as
+   * `{ success: false, message }`; that message is raw database / embedding
+   * text, so it is logged rather than returned.
+   */
+  private assertSaved(result: { message: string; success: boolean }) {
+    if (result.success) return;
+    this.log('error', 'Memory write failed', { message: result.message });
+    throw new ApiException(500, 'internal_error', 'Failed to save the memory entry');
+  }
+
   private async readBack<S extends Shape>(
     schema: S,
     find: (id: string) => Promise<object | undefined>,
@@ -140,7 +146,7 @@ export class MemoryWriteRestService extends BaseService {
         type: body.type ?? 'personal',
       },
     });
-    assertSaved(result);
+    this.assertSaved(result);
     return this.readBack(MemoryIdentitySchema, this.identityModel.findById, result.identityId);
   }
 
@@ -164,7 +170,7 @@ export class MemoryWriteRestService extends BaseService {
         type: body.memoryType ?? TypesEnum.Preference,
       },
     });
-    assertSaved(result);
+    this.assertSaved(result);
     return this.readBack(
       MemoryPreferenceSchema,
       this.preferenceModel.findById,
@@ -193,7 +199,7 @@ export class MemoryWriteRestService extends BaseService {
         type: body.type ?? 'project',
       },
     });
-    assertSaved(result);
+    this.assertSaved(result);
     return this.readBack(MemoryContextSchema, this.contextModel.findById, result.contextId);
   }
 
@@ -217,7 +223,7 @@ export class MemoryWriteRestService extends BaseService {
         type: body.type,
       },
     });
-    assertSaved(result);
+    this.assertSaved(result);
     return this.readBack(MemoryActivitySchema, this.activityModel.findById, result.activityId);
   }
 
@@ -243,7 +249,7 @@ export class MemoryWriteRestService extends BaseService {
         type: body.memoryType ?? TypesEnum.Fact,
       },
     });
-    assertSaved(result);
+    this.assertSaved(result);
     return this.readBack(
       MemoryExperienceSchema,
       this.experienceModel.findById,
