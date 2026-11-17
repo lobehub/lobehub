@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 
 import {
+  MAX_BATCH_IMPORT_SKILLS,
+  type ParsedBatchSkill,
   type ParsedSkill,
+  type ParsedSkillBatch,
   type ParsedZipSkill,
   type SkillManifest,
   skillManifestSchema,
@@ -27,6 +30,15 @@ export interface ParseSkillMdOptions {
 
 /** Max length of a description derived from SKILL.md body text */
 const DERIVED_DESCRIPTION_MAX_LENGTH = 300;
+
+/**
+ * Batch archives come straight from a user, so unlike a single skill package
+ * they can be arbitrarily wide. These caps bound the memory a preview can use;
+ * a legitimate archive of dozens of skills stays far below them.
+ */
+const MAX_BATCH_ARCHIVE_BYTES = 100 * 1024 * 1024;
+const MAX_BATCH_ARCHIVE_ENTRIES = 2000;
+const MAX_BATCH_ARCHIVE_FILE_BYTES = 20 * 1024 * 1024;
 
 export interface ParseZipOptions extends ParseSkillMdOptions {
   /**
@@ -175,6 +187,95 @@ export class SkillParser {
   }
 
   /**
+   * Parse an archive that holds several skill folders, one skill per
+   * `SKILL.md` at any depth. Each skill is repacked on its own so its resources
+   * and `zipHash` are scoped to that skill instead of the whole archive.
+   *
+   * A `SKILL.md` nested inside another skill folder belongs to that skill's
+   * resources (for example a shipped example), so only the shallowest
+   * `SKILL.md` of a branch becomes a skill. Invalid folders are reported in
+   * `failures` rather than failing the whole archive.
+   */
+  async parseZipPackageBatch(buffer: Buffer): Promise<ParsedSkillBatch> {
+    try {
+      const unzipped = await this.unzipBatchBuffer(buffer);
+      const entries: Record<string, Uint8Array> = {};
+      for (const [path, data] of Object.entries(unzipped)) {
+        const normalized = this.normalizeArchivePath(path);
+        if (normalized) entries[normalized] = data;
+      }
+
+      const skillMdPaths = Object.keys(entries).filter(
+        (path) => path === 'SKILL.md' || path.endsWith('/SKILL.md'),
+      );
+
+      if (skillMdPaths.length === 0) {
+        throw new SkillParseError('SKILL.md not found in zip package');
+      }
+
+      const skillDirs = skillMdPaths.map((path) =>
+        path === 'SKILL.md' ? '' : path.slice(0, -'/SKILL.md'.length),
+      );
+      // Lexicographic order is the order the importer reports; `duplicateOf` on
+      // a preview then points at the candidate the importer really writes first.
+      const selectedDirs = skillDirs
+        .filter(
+          (dir) => !skillDirs.some((parent) => parent !== dir && this.isDirInside(dir, parent)),
+        )
+        .sort((a, b) => a.localeCompare(b));
+
+      if (selectedDirs.length > MAX_BATCH_IMPORT_SKILLS) {
+        throw new SkillParseError(
+          `The archive holds ${selectedDirs.length} skills; ` +
+            `import at most ${MAX_BATCH_IMPORT_SKILLS} at a time`,
+        );
+      }
+
+      const decoder = new TextDecoder();
+      const skills: ParsedBatchSkill[] = [];
+      const failures: ParsedSkillBatch['failures'] = [];
+
+      for (const dir of selectedDirs) {
+        const skillMdPath = dir ? `${dir}/SKILL.md` : 'SKILL.md';
+        const dirName = dir ? dir.split('/').at(-1) : undefined;
+
+        try {
+          const parsed = this.parseSkillMd(decoder.decode(entries[skillMdPath]), {
+            fallbackName: dirName,
+          });
+          const resources = new Map<string, Buffer>();
+          for (const [path, data] of this.extractResources(entries, skillMdPath)) {
+            const normalized = this.normalizeArchivePath(path);
+            if (normalized) resources.set(normalized, data);
+          }
+
+          const skillZipBuffer = await this.repackSkillZip(parsed.raw, resources);
+          const zipHash = sha256(skillZipBuffer);
+
+          skills.push({
+            content: parsed.content,
+            manifest: parsed.manifest,
+            path: dir,
+            resources,
+            skillZipBuffer,
+            zipHash,
+          });
+        } catch (error) {
+          failures.push({
+            message: error instanceof Error ? error.message : String(error),
+            path: dir,
+          });
+        }
+      }
+
+      return { failures, skills };
+    } catch (error) {
+      if (error instanceof SkillParseError || error instanceof SkillManifestError) throw error;
+      throw new SkillParseError('Failed to parse ZIP package', error as Error);
+    }
+  }
+
+  /**
    * Some exported skills prepend an HTML comment (e.g.
    * `<!-- AUTO-GENERATED ... -->`) before the `---` front-matter block, which
    * makes gray-matter miss the front-matter entirely. Strip leading BOM /
@@ -288,6 +389,95 @@ export class SkillParser {
         else resolve(unzipped);
       });
     });
+  }
+
+  /**
+   * Unzip a user-supplied batch archive while bounding the bytes and entries
+   * that are actually decompressed. Unsafe or hidden entries are skipped
+   * before decompression, so they never reach the parser or storage.
+   */
+  private unzipBatchBuffer(buffer: Buffer): Promise<Record<string, Uint8Array>> {
+    return new Promise((resolve, reject) => {
+      let entryCount = 0;
+      let totalBytes = 0;
+      let limitError: SkillParseError | undefined;
+
+      fflateUnzip(
+        new Uint8Array(buffer),
+        {
+          filter: (file) => {
+            if (file.name.endsWith('/') || !this.normalizeArchivePath(file.name)) return false;
+
+            const size = file.originalSize ?? 0;
+            entryCount += 1;
+            totalBytes += size;
+
+            if (size > MAX_BATCH_ARCHIVE_FILE_BYTES) {
+              limitError ??= new SkillParseError(
+                `A file in the archive is larger than ${MAX_BATCH_ARCHIVE_FILE_BYTES / 1024 / 1024} MB`,
+              );
+              return false;
+            }
+            if (entryCount > MAX_BATCH_ARCHIVE_ENTRIES) {
+              limitError ??= new SkillParseError(
+                `The archive holds more than ${MAX_BATCH_ARCHIVE_ENTRIES} files`,
+              );
+              return false;
+            }
+            if (totalBytes > MAX_BATCH_ARCHIVE_BYTES) {
+              limitError ??= new SkillParseError(
+                `The archive expands to more than ${MAX_BATCH_ARCHIVE_BYTES / 1024 / 1024} MB`,
+              );
+              return false;
+            }
+
+            return true;
+          },
+        },
+        (error, unzipped) => {
+          if (error) reject(new SkillParseError('Failed to unzip buffer', error));
+          else if (limitError) reject(limitError);
+          else resolve(unzipped);
+        },
+      );
+    });
+  }
+
+  /**
+   * Normalize an archive path and reject anything that could escape a skill
+   * folder or name a hidden / macOS metadata entry. Returns `null` when the
+   * entry must be ignored.
+   */
+  private normalizeArchivePath(path: string): string | null {
+    if (path.endsWith('/')) return null;
+
+    const normalized = path
+      .replaceAll('\\', '/')
+      .replace(/^\.\/+/, '')
+      .replaceAll(/\/+/g, '/');
+    if (!normalized || normalized.startsWith('/')) return null;
+
+    const segments = normalized.split('/');
+    if (
+      segments.some(
+        (segment) =>
+          !segment ||
+          segment === '.' ||
+          segment === '..' ||
+          segment === '__MACOSX' ||
+          segment.startsWith('.'),
+      )
+    ) {
+      return null;
+    }
+
+    return normalized;
+  }
+
+  /** Whether `dir` sits below `parent` (`''` is the archive root). */
+  private isDirInside(dir: string, parent: string): boolean {
+    if (!parent) return dir !== '';
+    return dir.startsWith(`${parent}/`);
   }
 
   /**

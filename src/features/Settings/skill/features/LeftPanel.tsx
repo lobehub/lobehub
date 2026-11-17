@@ -4,12 +4,13 @@ import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui'
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
+import { FileArchive, Grid2x2Plus, Layers, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import { createSkillStoreModal } from '@/features/SkillStore';
+import { openBatchImportModal } from '@/features/SkillStore/SkillList/BatchImportModal';
 import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
@@ -214,6 +215,19 @@ const LeftPanel = memo<LeftPanelProps>(
                         </Flexbox>
                       ),
                       onClick: () => openUploadSkillModal(),
+                    },
+                    {
+                      icon: <Icon icon={Layers} />,
+                      key: 'batchImport',
+                      label: (
+                        <Flexbox gap={2}>
+                          <span>{t('tab.batchImport')}</span>
+                          <Text style={{ fontSize: 12 }} type="secondary">
+                            {t('tab.batchImport.desc')}
+                          </Text>
+                        </Flexbox>
+                      ),
+                      onClick: () => openBatchImportModal(),
                     },
                   ]}
                 >

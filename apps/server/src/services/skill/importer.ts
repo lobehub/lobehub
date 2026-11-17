@@ -3,11 +3,20 @@ import { readFile } from 'node:fs/promises';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
+  type BatchImportCandidate,
+  type BatchImportInput,
+  type BatchImportItemResult,
+  type BatchImportPreview,
+  type BatchImportResult,
+  type BatchImportSummary,
   type CreateSkillInput,
   type ImportGitHubInput,
   type ImportUrlInput,
   type ImportZipInput,
+  type ParsedBatchSkill,
+  type ParsedSkillBatch,
   type SkillImportResult,
+  type SkillItem,
   type SkillManifest,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -17,11 +26,17 @@ import { AgentSkillModel } from '@/database/models/agentSkill';
 import { GitHub, GitHubNotFoundError, GitHubParseError } from '@/server/modules/GitHub';
 import { FileService } from '@/server/services/file';
 
-import { SkillImportError, SkillManifestError } from './errors';
+import { SkillImportError, SkillManifestError, SkillParseError } from './errors';
 import { SkillParser } from './parser';
 import { SkillResourceService } from './resource';
 
 const log = debug('lobe-chat:service:skill-importer');
+
+interface ParsedBatchArchive {
+  cleanup: () => void;
+  failures: ParsedSkillBatch['failures'];
+  skills: ParsedBatchSkill[];
+}
 
 export class SkillImporter {
   private skillModel: AgentSkillModel;
@@ -158,6 +173,224 @@ export class SkillImporter {
       await cleanup();
       log('importFromZip: cleaned up temp file');
     }
+  }
+
+  /**
+   * Inspect an archive that holds several skill folders without writing
+   * anything. The caller uses the result to decide which skills to import and
+   * how to handle name collisions.
+   */
+  async previewBatchImport(input: ImportZipInput): Promise<BatchImportPreview> {
+    log('previewBatchImport: starting with zipFileId=%s', input.zipFileId);
+    const { cleanup, failures, skills } = await this.parseBatchArchive(input.zipFileId);
+
+    try {
+      const seenNames = new Map<string, string>();
+      const skillCandidates = await Promise.all(
+        skills.map(async (skill): Promise<BatchImportCandidate> => {
+          // `skills` is in path order and this callback runs synchronously
+          // until the lookup, so the first folder with a name wins `duplicateOf`.
+          const nameKey = skill.manifest.name.toLowerCase();
+          const duplicateOf = seenNames.get(nameKey);
+          if (!seenNames.has(nameKey)) seenNames.set(nameKey, skill.path);
+
+          const existing = await this.skillModel.findByName(skill.manifest.name);
+          return {
+            ...(existing && {
+              conflict: {
+                id: existing.id,
+                identifier: existing.identifier,
+                name: existing.name,
+                source: existing.source,
+                updatedAt: existing.updatedAt,
+              },
+            }),
+            description: skill.manifest.description,
+            duplicateOf,
+            name: skill.manifest.name,
+            path: skill.path,
+            resourceCount: skill.resources.size,
+          };
+        }),
+      );
+
+      const candidates: BatchImportCandidate[] = [
+        ...failures.map((failure) => ({
+          error: failure.message,
+          name: failure.path ? failure.path.split('/').at(-1)! : 'SKILL.md',
+          path: failure.path,
+          resourceCount: 0,
+        })),
+        ...skillCandidates,
+      ].sort((a, b) => a.path.localeCompare(b.path));
+
+      return {
+        candidates,
+        conflictCount: candidates.filter((candidate) => candidate.conflict).length,
+        invalidCount: candidates.filter((candidate) => candidate.error).length,
+      };
+    } finally {
+      cleanup();
+    }
+  }
+
+  /**
+   * Import the selected skills from a batch archive. Every candidate is
+   * reported, so the caller can show what was created, overwritten, skipped,
+   * left unchanged or failed without a second request.
+   */
+  async importFromZipBatch(input: BatchImportInput): Promise<BatchImportResult> {
+    log(
+      'importFromZipBatch: starting with zipFileId=%s, selected=%d',
+      input.zipFileId,
+      input.skills.length,
+    );
+    const { cleanup, failures, skills } = await this.parseBatchArchive(input.zipFileId);
+
+    try {
+      const choices = new Map(input.skills.map((choice) => [choice.path, choice.onConflict]));
+      const failureByPath = new Map(failures.map((failure) => [failure.path, failure.message]));
+      const skillByPath = new Map(skills.map((skill) => [skill.path, skill]));
+      const paths = [...new Set([...skillByPath.keys(), ...failureByPath.keys()])].sort((a, b) =>
+        a.localeCompare(b),
+      );
+
+      const results: BatchImportItemResult[] = [];
+
+      for (const path of paths) {
+        const skill = skillByPath.get(path);
+        const failure = failureByPath.get(path);
+        const onConflict = choices.get(path);
+        const name = skill?.manifest.name || (path ? path.split('/').at(-1)! : 'SKILL.md');
+
+        if (!onConflict) {
+          results.push({ name, path, status: 'skipped' });
+          continue;
+        }
+
+        if (failure) {
+          results.push({ error: failure, name, path, status: 'failed' });
+          continue;
+        }
+
+        if (!skill) continue;
+
+        try {
+          const existing = await this.skillModel.findByName(skill.manifest.name);
+
+          if (existing) {
+            if (onConflict === 'skip') {
+              results.push({ name, path, skillId: existing.id, status: 'skipped' });
+              continue;
+            }
+
+            this.assertCanOverwrite(existing);
+
+            if (existing.content === skill.content && existing.zipFileHash === skill.zipHash) {
+              results.push({ name, path, skillId: existing.id, status: 'unchanged' });
+              continue;
+            }
+
+            log('importFromZipBatch: updating existing skill id=%s', existing.id);
+            const updated = await this.persistBatchSkill(skill, existing);
+            results.push({ name, path, skillId: updated.id, status: 'updated' });
+            continue;
+          }
+
+          log('importFromZipBatch: creating skill name=%s', skill.manifest.name);
+          const created = await this.persistBatchSkill(skill);
+          results.push({ name, path, skillId: created.id, status: 'created' });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          log('importFromZipBatch: failed path=%s: %s', path, message);
+          results.push({ error: message, name, path, status: 'failed' });
+        }
+      }
+
+      const summary = this.summarizeBatchResults(results);
+      log('importFromZipBatch: completed summary=%o', summary);
+      return { results, summary };
+    } finally {
+      cleanup();
+    }
+  }
+
+  private async parseBatchArchive(zipFileId: string): Promise<ParsedBatchArchive> {
+    const { filePath, cleanup } = await this.fileService.downloadFileToLocal(zipFileId);
+
+    try {
+      const buffer = await readFile(filePath);
+      const parsed = await this.parser.parseZipPackageBatch(buffer);
+      return { cleanup, ...parsed };
+    } catch (error) {
+      cleanup();
+      if (error instanceof SkillParseError || error instanceof SkillManifestError) {
+        throw new SkillImportError(error.message, 'INVALID_PACKAGE');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Write the per-skill package, resources and row. The per-skill ZIP hash is
+   * used as the resource prefix so two skills in one archive cannot overwrite
+   * each other's files in object storage.
+   */
+  private async persistBatchSkill(
+    skill: ParsedBatchSkill,
+    existing?: SkillItem,
+  ): Promise<SkillItem> {
+    const resources = await this.resourceService.storeResources(skill.zipHash, skill.resources);
+
+    const zipKey = `skills/zip/${skill.zipHash}.zip`;
+    await this.fileService.uploadBuffer(zipKey, skill.skillZipBuffer, 'application/zip');
+    await this.fileService.createGlobalFile({
+      fileHash: skill.zipHash,
+      fileType: 'application/zip',
+      metadata: {
+        dirname: 'skills/zip',
+        filename: `${skill.zipHash}.zip`,
+        path: zipKey,
+      },
+      size: skill.skillZipBuffer.length,
+      url: zipKey,
+    });
+
+    if (existing) {
+      return this.skillModel.update(existing.id, {
+        content: skill.content,
+        description: skill.manifest.description,
+        manifest: skill.manifest,
+        name: skill.manifest.name,
+        resources,
+        zipFileHash: skill.zipHash,
+      });
+    }
+
+    return this.skillModel.create({
+      content: skill.content,
+      description: skill.manifest.description,
+      identifier: `user.${nanoid(12)}`,
+      manifest: skill.manifest,
+      name: skill.manifest.name,
+      resources,
+      source: 'user',
+      zipFileHash: skill.zipHash,
+    });
+  }
+
+  private summarizeBatchResults(results: BatchImportItemResult[]): BatchImportSummary {
+    const summary: BatchImportSummary = {
+      created: 0,
+      failed: 0,
+      skipped: 0,
+      unchanged: 0,
+      updated: 0,
+    };
+
+    for (const result of results) summary[result.status] += 1;
+
+    return summary;
   }
 
   /**

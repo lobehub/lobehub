@@ -1,4 +1,7 @@
 import type {
+  BatchImportInput,
+  BatchImportPreview,
+  BatchImportResult,
   CreateSkillInput,
   ImportGitHubInput,
   ImportUrlInput,
@@ -35,6 +38,10 @@ class AgentSkillService {
     return lambdaClient.agentSkills.importFromZip.mutate(params);
   }
 
+  async importFromZipBatch(params: BatchImportInput): Promise<BatchImportResult | undefined> {
+    return lambdaClient.agentSkills.importFromZipBatch.mutate(params);
+  }
+
   async importFromMarket(identifier: string): Promise<SkillImportResult | undefined> {
     return lambdaClient.agentSkills.importFromMarket.mutate({ identifier });
   }
@@ -63,6 +70,10 @@ class AgentSkillService {
 
   async getByName(name: string): Promise<SkillItem | undefined> {
     return lambdaClient.agentSkills.getByName.query({ name });
+  }
+
+  async previewBatchImport(params: ImportZipInput): Promise<BatchImportPreview | undefined> {
+    return lambdaClient.agentSkills.previewBatchImport.query(params);
   }
 
   async list(source?: SkillSource): Promise<{ data: SkillListItem[]; total: number }> {
