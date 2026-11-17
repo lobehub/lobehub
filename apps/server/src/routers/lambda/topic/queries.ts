@@ -19,8 +19,8 @@ import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { assertCanUseConversationTargets } from '../_helpers/conversationResourceGuard';
 import { batchResolveAgentIdFromSessions, resolveContext } from '../_helpers/resolveContext';
+import { readTopicTranscript, topicTranscriptInput } from '../_helpers/topicTranscript';
 import { guardCtx, topicProcedure, topicSearchProcedure } from './procedures';
-import { readTopicTranscript, topicTranscriptInput } from './transcript';
 
 export const queryRouter = router({
   getTopicDetail: topicProcedure

@@ -482,3 +482,59 @@ describe('POST /:id/read and PATCH /:id model pin', () => {
     );
   });
 });
+
+describe('server guard refusals keep their status', () => {
+  const VISITOR_TOPIC = 'tpc_branch_visitor';
+
+  beforeEach(async () => {
+    // An agent-share visitor conversation: stored under the creator, sent by the visitor.
+    await db.insert(topics).values({
+      agentId: AGENT,
+      id: VISITOR_TOPIC,
+      senderId: OTHER,
+      title: 'Visitor',
+      userId: USER,
+    });
+  });
+
+  it("404s copying, sharing or pinning a share visitor's topic instead of a 400", async () => {
+    expect((await post(`/${VISITOR_TOPIC}/clone`, {})).status).toBe(404);
+    expect((await post(`/${VISITOR_TOPIC}/read`, undefined)).status).toBe(404);
+    expect((await post(`/${VISITOR_TOPIC}/share`, { visibility: 'link' })).status).toBe(404);
+    expect(
+      (
+        await request(`/${VISITOR_TOPIC}`, {
+          body: { model: 'gpt-x', provider: 'openai' },
+          method: 'PATCH',
+        })
+      ).status,
+    ).toBe(404);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, VISITOR_TOPIC));
+    expect(topic.model).toBeNull();
+    expect(
+      await db.select().from(topicShares).where(eq(topicShares.topicId, VISITOR_TOPIC)),
+    ).toHaveLength(0);
+  });
+});
+
+describe('GET /search pages with cursors', () => {
+  it('walks the ranked matches', async () => {
+    await db
+      .insert(topics)
+      .values(
+        [1, 2].map((i) => ({ id: `tpc_branch_more_${i}`, title: `Pelican ${i}`, userId: USER })),
+      );
+    const first = TopicSearchResultSchema.parse(
+      await data(await request('/search?q=Pelican&limit=2')),
+    );
+    expect(first.items).toHaveLength(2);
+    expect(first).toMatchObject({ hasMore: true, total: 3 });
+
+    const second = TopicSearchResultSchema.parse(
+      await data(await request(`/search?q=Pelican&limit=2&cursor=${first.nextCursor}`)),
+    );
+    expect(second.items).toHaveLength(1);
+    expect(second).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(new Set([...first.items, ...second.items].map((topic) => topic.id)).size).toBe(3);
+  });
+});

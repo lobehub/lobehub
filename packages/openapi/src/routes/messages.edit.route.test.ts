@@ -376,3 +376,46 @@ describe('GET / pages with cursors', () => {
     expect((await request(`/?topicId=${TOPIC}&cursor=not-a-cursor`)).status).toBe(400);
   });
 });
+
+describe('PATCH /:id edge cases', () => {
+  it('refuses a tool call id shared by two results before writing anything', async () => {
+    await db.insert(messages).values({
+      content: 'duplicate result',
+      id: 'msg_tool_dup',
+      parentId: 'msg_assistant',
+      role: 'tool',
+      topicId: TOPIC,
+      userId: USER,
+    });
+    await db
+      .insert(messagePlugins)
+      .values({ id: 'msg_tool_dup', toolCallId: 'call_1', userId: USER });
+
+    const res = await request('/msg_tool', {
+      body: { content: 'changed', toolArguments: { arguments: '{}', toolCallId: 'call_1' } },
+      method: 'PATCH',
+    });
+    expect(res.status).toBe(409);
+    const [tool] = await db.select().from(messages).where(eq(messages.id, 'msg_tool'));
+    expect(tool.content).toBe('pelicans are large water birds');
+  });
+
+  it("404s a share visitor's message instead of a 400", async () => {
+    await db
+      .insert(topics)
+      .values({ id: 'tpc_msg_visitor', senderId: OTHER, title: 'Visitor', userId: USER });
+    await db.insert(messages).values({
+      content: 'hi',
+      id: 'msg_visitor',
+      role: 'user',
+      topicId: 'tpc_msg_visitor',
+      userId: USER,
+    });
+
+    expect(
+      (await request('/msg_visitor', { body: { content: 'x' }, method: 'PATCH' })).status,
+    ).toBe(404);
+    const [message] = await db.select().from(messages).where(eq(messages.id, 'msg_visitor'));
+    expect(message.content).toBe('hi');
+  });
+});

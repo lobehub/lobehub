@@ -14363,6 +14363,14 @@ export type GetApiV1TopicsSearchData = {
          * Keywords matched against titles and messages.
          */
         q: string;
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
     };
     url: '/api/v1/topics/search';
 };
@@ -14399,6 +14407,8 @@ export type GetApiV1TopicsSearchResponses = {
     200: {
         data: {
             items: Array<TopicSummary>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             total: PageTotal;
         };
         message?: string;

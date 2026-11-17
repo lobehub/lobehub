@@ -39375,10 +39375,16 @@ paths:
                         type: array
                         items:
                           $ref: "#/components/schemas/TopicSummary"
+                      hasMore:
+                        $ref: "#/components/schemas/PageHasMore"
+                      nextCursor:
+                        $ref: "#/components/schemas/PageNextCursor"
                       total:
                         $ref: "#/components/schemas/PageTotal"
                     required:
                       - items
+                      - hasMore
+                      - nextCursor
                       - total
                     additionalProperties: false
                   message:
@@ -39512,6 +39518,21 @@ paths:
             maxLength: 200
           required: true
           description: Keywords matched against titles and messages.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+          description: Opaque cursor from the previous page's `nextCursor`. Omit for the
+            first page.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size, 1–100. Defaults to 20.
         - $ref: "#/components/parameters/WorkspaceId"
   /api/v1/topics/import:
     post:

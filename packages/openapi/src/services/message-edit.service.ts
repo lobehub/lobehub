@@ -1,4 +1,6 @@
+import { TOPIC_MESSAGE_SEARCH_LIMIT } from '@lobechat/const';
 import { omitServerOwnedMessageMetadata } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
@@ -35,6 +37,12 @@ export class MessageEditService extends BaseService {
     super(db, userId, workspaceId);
   }
 
+  /** Server guards throw `TRPCError`; the controller maps its code to the HTTP status. */
+  private fail(error: unknown, operation: string): never {
+    if (error instanceof TRPCError) throw error;
+    this.handleServiceError(error, operation);
+  }
+
   private get guardCtx() {
     return { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
   }
@@ -57,14 +65,8 @@ export class MessageEditService extends BaseService {
     const conditions = [eq(messages.id, messageId), this.buildWorkspaceWhere(messages)];
 
     const [row] = await this.db
-      .select({
-        id: messages.id,
-        role: messages.role,
-        toolCallId: messagePlugins.toolCallId,
-        tools: messages.tools,
-      })
+      .select({ id: messages.id, role: messages.role, tools: messages.tools })
       .from(messages)
-      .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .where(and(...conditions))
       .limit(1);
     if (!row) throw this.createNotFoundError('Message not found');
@@ -75,6 +77,46 @@ export class MessageEditService extends BaseService {
     return row;
   }
 
+  /**
+   * The single stored tool result `toolCallId` resolves to, once it is tied to
+   * `message` (the call it made, or the call it answers). The model rewrites
+   * arguments by `toolCallId` alone, so an id shared by two results is refused
+   * rather than letting the write land on a pair this request never guarded.
+   */
+  private async assertToolCallOfMessage(
+    message: { id: string; role: string; tools: unknown },
+    toolCallId: string,
+  ) {
+    const results = await this.db
+      .select({ id: messagePlugins.id, parentId: messages.parentId })
+      .from(messagePlugins)
+      .innerJoin(messages, eq(messages.id, messagePlugins.id))
+      .where(and(eq(messagePlugins.toolCallId, toolCallId), this.buildWorkspaceWhere(messages)))
+      .limit(2);
+
+    if (results.length > 1) {
+      throw this.createConflictError(
+        `Tool call id ${toolCallId} is shared by several tool results and cannot be edited`,
+      );
+    }
+
+    const calls = Array.isArray(message.tools) ? (message.tools as { id?: string }[]) : [];
+    const [result] = results;
+    const owned =
+      message.role === 'tool'
+        ? result?.id === message.id
+        : calls.some((tool) => tool.id === toolCallId) && result?.parentId === message.id;
+    if (!owned) {
+      throw this.createValidationError(
+        `Tool call ${toolCallId} has no stored result made or answered by this message`,
+      );
+    }
+  }
+
+  /**
+   * Applies every field of the patch. All checks run before the first write,
+   * and a tool message's fields commit in one transaction (`updateToolMessage`).
+   */
   async updateMessage(messageId: string, patch: MessageUpdateRequest): Promise<void> {
     try {
       const row = await this.findWritableMessage(messageId);
@@ -85,40 +127,39 @@ export class MessageEditService extends BaseService {
           '`pluginState` and `pluginError` apply to tool messages only',
         );
       }
-
       if (patch.toolArguments) {
-        const { toolCallId } = patch.toolArguments;
-        const calls = Array.isArray(row.tools) ? (row.tools as { id?: string }[]) : [];
-        const ownsCall = isTool
-          ? row.toolCallId === toolCallId
-          : calls.some((tool) => tool.id === toolCallId);
-        if (!ownsCall) {
-          throw this.createValidationError(
-            `Tool call ${toolCallId} is neither made nor answered by this message`,
-          );
-        }
+        await this.assertToolCallOfMessage(row, patch.toolArguments.toolCallId);
       }
 
       const core = this.core;
-      if (patch.content !== undefined)
-        await core.updateMessage(messageId, { content: patch.content }, {});
-      if (patch.metadata) {
-        await core.updateMetadata(messageId, omitServerOwnedMessageMetadata(patch.metadata));
+      const metadata = patch.metadata && omitServerOwnedMessageMetadata(patch.metadata);
+
+      if (isTool) {
+        const { content, pluginError, pluginState } = patch;
+        if ([content, metadata, pluginError, pluginState].some((field) => field !== undefined)) {
+          const result = await core.updateToolMessage(messageId, {
+            content,
+            metadata,
+            pluginError,
+            pluginState,
+          });
+          if (!result.success) throw this.createNotFoundError('Message not found');
+        }
+      } else {
+        if (patch.content !== undefined) {
+          await core.updateMessage(messageId, { content: patch.content }, {});
+        }
+        if (metadata) await core.updateMetadata(messageId, metadata);
       }
-      if (patch.pluginState) await core.updatePluginState(messageId, patch.pluginState, {});
-      if (patch.pluginError !== undefined)
-        await core.updatePluginError(messageId, patch.pluginError);
+
       if (patch.toolArguments) {
-        const result = await core.updateToolArguments(
+        await core.updateToolArguments(
           patch.toolArguments.toolCallId,
           patch.toolArguments.arguments,
         );
-        if (!result.success) {
-          throw this.createBusinessError('The tool call has no stored result to update yet');
-        }
       }
     } catch (error) {
-      this.handleServiceError(error, 'Update message');
+      this.fail(error, 'Update message');
     }
   }
 
@@ -131,7 +172,7 @@ export class MessageEditService extends BaseService {
         throw this.createBusinessError('Files could not be attached; check that every file exists');
       }
     } catch (error) {
-      this.handleServiceError(error, 'Attach files to message');
+      this.fail(error, 'Attach files to message');
     }
   }
 
@@ -151,7 +192,9 @@ export class MessageEditService extends BaseService {
 
       if (query.topicId) {
         await assertCanViewTopicTargets(this.guardCtx, [query.topicId]);
-        // `searchInTopic` has no offset: read up to the end of this page and slice.
+        // `searchInTopic` has no offset: read up to the end of this page and slice,
+        // never past the first TOPIC_MESSAGE_SEARCH_LIMIT matches the UI's find also stops at.
+        const windowEnd = Math.min(window.offset + window.limit, TOPIC_MESSAGE_SEARCH_LIMIT);
         const model = new MessageModel(this.db, this.userId, this.workspaceId);
         const [topic, matches] = await Promise.all([
           this.db
@@ -160,13 +203,9 @@ export class MessageEditService extends BaseService {
             .where(and(eq(topics.id, query.topicId), this.buildWorkspaceWhere(topics)))
             .limit(1)
             .then(([row]) => row),
-          model.searchInTopic({
-            keyword: query.q,
-            limit: window.offset + window.limit + 1,
-            topicId: query.topicId,
-          }),
+          model.searchInTopic({ keyword: query.q, limit: windowEnd + 1, topicId: query.topicId }),
         ]);
-        const page = matches.slice(window.offset, window.offset + window.limit);
+        const page = matches.slice(window.offset, windowEnd);
         const topicId = query.topicId;
         const items: MessageSearchHit[] = page.map((match) => ({
           agentId: null,
@@ -179,7 +218,7 @@ export class MessageEditService extends BaseService {
           topicId,
           topicTitle: topic?.title ?? null,
         }));
-        const hasMore = matches.length > window.offset + window.limit;
+        const hasMore = windowEnd < TOPIC_MESSAGE_SEARCH_LIMIT && matches.length > windowEnd;
         return { items, ...this.pageInfo(window, items.length, hasMore) };
       }
 
@@ -213,7 +252,7 @@ export class MessageEditService extends BaseService {
       }));
       return { items, ...this.pageInfo(window, items.length, result.hasMore) };
     } catch (error) {
-      this.handleServiceError(error, 'Search messages');
+      this.fail(error, 'Search messages');
     }
   }
 
@@ -234,7 +273,7 @@ export class MessageEditService extends BaseService {
 
       return new MessageModel(this.db, this.userId, this.workspaceId).topicMessageStats(query);
     } catch (error) {
-      this.handleServiceError(error, 'Message statistics');
+      this.fail(error, 'Message statistics');
     }
   }
 }

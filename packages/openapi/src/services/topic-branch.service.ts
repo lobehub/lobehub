@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
@@ -5,7 +6,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { TopicRepository } from '@/database/repositories/topic';
-import { TopicImporterRepo } from '@/database/repositories/topicImporter';
+import { type ImportTopicParams, TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { agents, messagePlugins, messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
@@ -20,14 +21,14 @@ import { assertCreatorTopicTargets } from '@/server/routers/lambda/_helpers/shar
 import {
   assertCanManageTopicShare,
   recordTopicShareAudit,
-} from '@/server/routers/lambda/topic/share';
-import { readTopicTranscript } from '@/server/routers/lambda/topic/transcript';
+} from '@/server/routers/lambda/_helpers/topicShareGuard';
+import { readTopicTranscript } from '@/server/routers/lambda/_helpers/topicTranscript';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { GoalTopicHandoffService } from '@/server/services/goal/topicHandoff';
 import { TrashService } from '@/server/services/trash';
 
 import { BaseService } from '../common/base.service';
-import { buildPageInfo, decodeOffsetCursor } from '../helpers/pagination';
+import { buildPageInfo, decodeOffsetCursor, resolvePagination } from '../helpers/pagination';
 import { projectPublicTopic } from '../helpers/public-fields';
 import { renderTranscriptMarkdown } from '../helpers/transcript-markdown';
 import type {
@@ -69,6 +70,12 @@ const compact = <T extends Record<string, unknown>>(value: T) =>
 export class TopicBranchService extends BaseService {
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
+  }
+
+  /** Server guards throw `TRPCError`; the controller maps its code to the HTTP status. */
+  private fail(error: unknown, operation: string): never {
+    if (error instanceof TRPCError) throw error;
+    this.handleServiceError(error, operation);
   }
 
   private get guardCtx() {
@@ -141,7 +148,7 @@ export class TopicBranchService extends BaseService {
       );
       return this.topics().getTopicById(topic.id);
     } catch (error) {
-      this.handleServiceError(error, 'Clone topic');
+      this.fail(error, 'Clone topic');
     }
   }
 
@@ -156,7 +163,7 @@ export class TopicBranchService extends BaseService {
       );
       return this.topics().getTopicById(topic.id);
     } catch (error) {
-      this.handleServiceError(error, 'Fork topic');
+      this.fail(error, 'Fork topic');
     }
   }
 
@@ -175,7 +182,7 @@ export class TopicBranchService extends BaseService {
         topic: await this.topics().getTopicById(branch.topic.id),
       };
     } catch (error) {
-      this.handleServiceError(error, 'Branch topic');
+      this.fail(error, 'Branch topic');
     }
   }
 
@@ -234,7 +241,7 @@ export class TopicBranchService extends BaseService {
       }
       return { ...pageInfo, format: 'json', items, topic, total };
     } catch (error) {
-      this.handleServiceError(error, 'Read topic transcript');
+      this.fail(error, 'Read topic transcript');
     }
   }
 
@@ -321,7 +328,7 @@ export class TopicBranchService extends BaseService {
         version: '2.0' as const,
       }) as ExportedTopicPayload;
     } catch (error) {
-      this.handleServiceError(error, 'Export topic');
+      this.fail(error, 'Export topic');
     }
   }
 
@@ -350,20 +357,20 @@ export class TopicBranchService extends BaseService {
         this.db,
         this.userId,
         this.workspaceId,
-      ).importTopic({ agentId, data: data as any, groupId });
+      ).importTopic({ agentId, data: data as ImportTopicParams['data'], groupId });
 
       return {
         messageCount: result.messageCount,
         topic: await this.topics().getTopicById(result.topicId),
       };
     } catch (error) {
-      this.handleServiceError(error, 'Import topic');
+      this.fail(error, 'Import topic');
     }
   }
 
   // ==================== Search ====================
 
-  async search({ agentId, groupId, onlyMine, q }: TopicSearchQuery) {
+  async search({ agentId, cursor, groupId, limit, onlyMine, q }: TopicSearchQuery) {
     try {
       const permission = await this.resolveOperationPermission('TOPIC_READ');
       if (!permission.isPermitted) {
@@ -386,10 +393,16 @@ export class TopicBranchService extends BaseService {
         ftsSearchRepo,
       ).queryByKeyword(q, { agentId, groupId }, { onlyMine });
 
-      const items = rows.map(projectPublicTopic);
-      return { items, total: items.length };
+      // The model ranks every match at once; the page is cut from that ranking.
+      const window = resolvePagination({ cursor, limit });
+      const items = rows.slice(window.offset, window.offset + window.limit).map(projectPublicTopic);
+      return {
+        items,
+        total: rows.length,
+        ...buildPageInfo({ ...window, returned: items.length, total: rows.length }),
+      };
     } catch (error) {
-      this.handleServiceError(error, 'Search topics');
+      this.fail(error, 'Search topics');
     }
   }
 
@@ -436,7 +449,7 @@ export class TopicBranchService extends BaseService {
 
       return { action: request.action, count: ids.length, movedGoalIds };
     } catch (error) {
-      this.handleServiceError(error, 'Batch topic action');
+      this.fail(error, 'Batch topic action');
     }
   }
 
@@ -490,7 +503,7 @@ export class TopicBranchService extends BaseService {
         visibility: 'link',
       };
     } catch (error) {
-      this.handleServiceError(error, 'Share topic');
+      this.fail(error, 'Share topic');
     }
   }
 
@@ -503,7 +516,7 @@ export class TopicBranchService extends BaseService {
       );
       return { id: topicId, wasUnread: !!cleared };
     } catch (error) {
-      this.handleServiceError(error, 'Mark topic read');
+      this.fail(error, 'Mark topic read');
     }
   }
 }

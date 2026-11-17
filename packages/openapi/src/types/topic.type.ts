@@ -3,7 +3,12 @@ import { z } from 'zod';
 
 import { THREAD_STATUS, THREAD_TYPE, topics } from '@/database/schemas/topic';
 
-import { pageInfoShape, totalShape } from '../helpers/pagination';
+import {
+  CursorPaginationQuerySchema,
+  pageInfoShape,
+  paginatedListSchema,
+  totalShape,
+} from '../helpers/pagination';
 import type { PublicTopic, PublicUser } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
@@ -400,13 +405,12 @@ export const TopicSearchQuerySchema = z.object({
     .transform((v) => v === 'true')
     .describe('In a workspace, only topics the caller created.'),
   q: z.string().trim().min(1).max(200).describe('Keywords matched against titles and messages.'),
+  ...CursorPaginationQuerySchema.shape,
 });
 
 export type TopicSearchQuery = z.infer<typeof TopicSearchQuerySchema>;
 
-export const TopicSearchResultSchema = z
-  .object({ items: z.array(TopicSummarySchema), total: totalShape.total })
-  .strict();
+export const TopicSearchResultSchema = paginatedListSchema(TopicSummarySchema, { total: true });
 
 export const TopicBatchRequestSchema = z.discriminatedUnion('action', [
   z

@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
@@ -32,6 +33,12 @@ const THREAD_COLUMNS = {
 export class ThreadService extends BaseService {
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
+  }
+
+  /** Server guards throw `TRPCError`; the controller maps its code to the HTTP status. */
+  private fail(error: unknown, operation: string): never {
+    if (error instanceof TRPCError) throw error;
+    this.handleServiceError(error, operation);
   }
 
   private get guardCtx() {
@@ -144,7 +151,7 @@ export class ThreadService extends BaseService {
         thread: await this.getThread(topicId, thread.id).then(({ userId: _, ...row }) => row),
       };
     } catch (error) {
-      this.handleServiceError(error, 'Create thread');
+      this.fail(error, 'Create thread');
     }
   }
 
@@ -158,7 +165,7 @@ export class ThreadService extends BaseService {
       const { userId: _, ...thread } = await this.getThread(topicId, threadId);
       return thread;
     } catch (error) {
-      this.handleServiceError(error, 'Update thread');
+      this.fail(error, 'Update thread');
     }
   }
 
@@ -170,7 +177,7 @@ export class ThreadService extends BaseService {
       await this.threadModel.delete(threadId);
       return { deleted: true as const, id: threadId };
     } catch (error) {
-      this.handleServiceError(error, 'Delete thread');
+      this.fail(error, 'Delete thread');
     }
   }
 }

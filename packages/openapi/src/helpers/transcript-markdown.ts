@@ -27,7 +27,8 @@ export const renderTranscriptMarkdown = (
   rows: TranscriptRow[],
   { first }: { first: boolean },
 ): string => {
-  const lines: string[] = first ? [`# ${title || 'Untitled topic'}`, ''] : [];
+  const heading = title?.replaceAll(/\s+/g, ' ').trim() || 'Untitled topic';
+  const lines: string[] = first ? [`# ${heading}`, ''] : [];
 
   for (const row of rows) {
     const label = ROLE_LABEL[row.role] ?? row.role;
@@ -36,7 +37,12 @@ export const renderTranscriptMarkdown = (
     const text = row.content?.trim();
     if (row.role === 'tool') {
       lines.push(`> Result of \`${row.toolCallId ?? 'unknown call'}\``, '');
-      if (text) lines.push('```', text, '```', '');
+      if (text) {
+        // A fence longer than any backtick run inside, so the result cannot close it early.
+        const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+        const fence = '`'.repeat(Math.max(3, longestRun + 1));
+        lines.push(fence, text, fence, '');
+      }
       continue;
     }
 
