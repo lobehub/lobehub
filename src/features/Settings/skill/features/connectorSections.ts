@@ -6,6 +6,7 @@ import {
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
 import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
+import type { TFunction } from 'i18next';
 
 export type IntegrationItem =
   | { builtinAgentSkill: BuiltinSkillManifest; type: 'builtinAgent' }
@@ -141,6 +142,50 @@ export const matchesConnectorKeyword = (
   const needle = keyword?.trim().toLowerCase();
   if (!needle) return true;
   return fields.some((field) => !!field && field.toLowerCase().includes(needle));
+};
+
+export const matchesIntegrationKeyword = (
+  item: IntegrationItem,
+  keyword: string | undefined,
+  t: TFunction<'setting'>,
+): boolean => {
+  switch (item.type) {
+    case 'builtin': {
+      const tool = item.builtinTool;
+      return matchesConnectorKeyword(keyword, [
+        t(`tools.builtins.${tool.identifier}.title`, {
+          defaultValue: tool.title || tool.identifier,
+        }),
+        tool.identifier,
+        t(`tools.builtins.${tool.identifier}.description`, {
+          defaultValue: tool.description ?? '',
+        }),
+      ]);
+    }
+    case 'lobehub': {
+      return matchesConnectorKeyword(keyword, [
+        item.provider.label,
+        item.provider.id,
+        item.provider.description,
+        t(`tools.lobehubSkill.providers.${item.provider.id}.description`, {
+          defaultValue: item.provider.description,
+        }),
+      ]);
+    }
+    case 'composio': {
+      return matchesConnectorKeyword(keyword, [
+        item.serverType.label,
+        item.serverType.identifier,
+        item.serverType.description,
+        t(`tools.composio.servers.${item.serverType.identifier}.description`, {
+          defaultValue: item.serverType.description,
+        }),
+      ]);
+    }
+    default: {
+      return true;
+    }
+  }
 };
 
 /**

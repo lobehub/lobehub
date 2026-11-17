@@ -38,6 +38,7 @@ import {
   type IntegrationItem,
   isIntegrationConnected,
   matchesConnectorKeyword,
+  matchesIntegrationKeyword,
   partitionByInstalled,
 } from './connectorSections';
 import LobehubSkillItem from './LobehubSkillItem';
@@ -281,35 +282,9 @@ const SkillList = memo<SkillListProps>(
       t(`tools.builtins.${tool.identifier}.title`, {
         defaultValue: tool.title || tool.identifier,
       });
-    const builtinDescription = (tool: { description?: string; identifier: string }) =>
-      t(`tools.builtins.${tool.identifier}.description`, {
-        defaultValue: tool.description ?? '',
-      });
 
-    const integrationMatches = (item: IntegrationItem) => {
-      switch (item.type) {
-        case 'builtin': {
-          return match(
-            builtinTitle(item.builtinTool),
-            item.builtinTool.identifier,
-            builtinDescription(item.builtinTool),
-          );
-        }
-        case 'lobehub': {
-          return match(item.provider.label, item.provider.id, item.provider.description);
-        }
-        case 'composio': {
-          return match(
-            item.serverType.label,
-            item.serverType.identifier,
-            item.serverType.description,
-          );
-        }
-        default: {
-          return true;
-        }
-      }
-    };
+    const integrationMatches = (item: IntegrationItem) =>
+      matchesIntegrationKeyword(item, keyword, t);
 
     const builtinToolItems = integrations.filter(
       (i) => i.type === 'builtin' && integrationMatches(i),

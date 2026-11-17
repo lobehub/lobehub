@@ -1,11 +1,14 @@
-import { RecommendedSkillType } from '@lobechat/const';
+import { getConnectorCatalog, RecommendedSkillType } from '@lobechat/const';
 import type { LobeBuiltinTool } from '@lobechat/types';
+import { createInstance } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
+import zhSetting from '../../../../../locales/zh-CN/setting.json';
 import {
   buildIntegrationItems,
   getVisibleSectionItems,
   matchesConnectorKeyword,
+  matchesIntegrationKeyword,
   partitionByInstalled,
   SECTION_PREVIEW_LIMIT,
 } from './connectorSections';
@@ -85,6 +88,48 @@ describe('matchesConnectorKeyword', () => {
   it('matches everything when the keyword is empty', () => {
     expect(matchesConnectorKeyword('', [])).toBe(true);
     expect(matchesConnectorKeyword(undefined, ['x'])).toBe(true);
+  });
+});
+
+describe('matchesIntegrationKeyword', () => {
+  const catalog = getConnectorCatalog({ composio: true, lobehub: true });
+
+  it.each([
+    ['电子邮件', ['gmail']],
+    ['版本控制', ['github']],
+    ['free email service', ['gmail']],
+    ['version control', ['github']],
+    ['  GMAIL  ', ['gmail']],
+    ['google-calendar', ['google-calendar']],
+    ['不存在的连接器', []],
+  ])(
+    'searches localized descriptions, original descriptions and names: %s',
+    async (keyword, ids) => {
+      const i18n = createInstance();
+      await i18n.init({ lng: 'zh-CN', resources: { 'zh-CN': { setting: zhSetting } } });
+
+      const matches = catalog.filter((item) =>
+        matchesIntegrationKeyword(item, keyword, i18n.getFixedT('zh-CN', 'setting')),
+      );
+
+      expect(
+        matches.map((item) =>
+          item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
+        ),
+      ).toEqual(ids);
+    },
+  );
+
+  it('keeps catalog descriptions searchable when translations are unavailable', async () => {
+    const i18n = createInstance();
+    await i18n.init({ lng: 'en-US', resources: {} });
+    const t = i18n.getFixedT('en-US', 'setting');
+
+    for (const item of catalog) {
+      const description =
+        item.type === 'lobehub' ? item.provider.description : item.serverType.description;
+      expect(matchesIntegrationKeyword(item, description, t)).toBe(true);
+    }
   });
 });
 
