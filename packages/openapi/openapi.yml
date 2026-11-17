@@ -9723,12 +9723,15 @@ components:
             - string
             - "null"
         role:
-          type: string
-          enum:
-            - owner
-            - admin
-            - member
-            - viewer
+          anyOf:
+            - type: string
+              enum:
+                - owner
+                - admin
+                - member
+                - viewer
+            - type: "null"
+          description: "`null` when no role could be resolved"
         title:
           type:
             - string
@@ -9800,11 +9803,13 @@ components:
         reusable:
           type: boolean
         role:
-          type: string
-          enum:
-            - admin
-            - member
-            - viewer
+          anyOf:
+            - type: string
+              enum:
+                - admin
+                - member
+                - viewer
+            - type: "null"
         status:
           type: string
           description: "`pending`, `accepted`, `revoked` or `expired`"
@@ -41948,7 +41953,7 @@ paths:
       description: |-
         Pending invitations of the workspace. Admin or higher.
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: List pending invitations
       tags:
         - workspaces
@@ -42133,7 +42138,7 @@ paths:
           description: Page size, 1–100. Defaults to 20.
         - $ref: "#/components/parameters/WorkspaceId"
       x-required-scopes:
-        - workspace:read
+        - "*"
     post:
       operationId: workspaces.createInvitation
       description: >-
@@ -42682,10 +42687,9 @@ paths:
           name: cursor
           schema:
             type: string
-            minLength: 1
-            maxLength: 512
-          description: Opaque cursor from the previous page's `nextCursor`. Omit for the
-            first page.
+            format: date-time
+            pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+          description: The previous page's `nextCursor`. Omit for the first page.
         - in: query
           name: limit
           schema:
@@ -42737,7 +42741,7 @@ paths:
         answer) or the initiator (to track or withdraw).
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: List my transfer requests
       tags:
         - transfer-requests
@@ -42868,7 +42872,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: query
           name: cursor
@@ -43619,7 +43623,8 @@ paths:
       description: >-
         Turns on the public link of a topic, page or agent — re-enabling keeps
         an agent link’s id and slug — or publishes an artifact from a message.
-        Calling it again on a shared resource returns the same link.
+        Calling it again on a shared resource returns the same link. Agents and
+        artifacts need a full-access API key.
 
 
         **API key scopes:** `share:write`.
@@ -43838,8 +43843,12 @@ paths:
   /api/v1/share-links/{resourceType}/{resourceId}:
     get:
       operationId: shareLinks.get
-      description: |-
-        Whether the resource has a public link, and its URL.
+      description: >-
+        Whether the resource has a public link, and its URL. A topic, page or
+        agent the caller does not own (or cannot manage) reads as not shared
+        rather than 404, so the answer never reveals whether someone else shared
+        it.
+
 
         **API key scopes:** `share:read`.
       summary: Get a share link
@@ -44197,7 +44206,7 @@ paths:
         workspace owner only.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: List collaborators of a agent group
       tags:
         - collaborators
@@ -44343,7 +44352,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -44558,7 +44567,7 @@ paths:
         caller may change it.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Get the general access of a agent group
       tags:
         - collaborators
@@ -44687,7 +44696,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -45024,7 +45033,7 @@ paths:
         owner only.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: List collaborators of a agent
       tags:
         - collaborators
@@ -45170,7 +45179,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -45385,7 +45394,7 @@ paths:
         may change it.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Get the general access of a agent
       tags:
         - collaborators
@@ -45514,7 +45523,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -45851,7 +45860,7 @@ paths:
         owner only.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: List collaborators of a document
       tags:
         - collaborators
@@ -45997,7 +46006,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -46212,7 +46221,7 @@ paths:
         caller may change it.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Get the general access of a document
       tags:
         - collaborators
@@ -46341,7 +46350,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -46678,7 +46687,7 @@ paths:
         workspace owner only.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: List collaborators of a knowledge base
       tags:
         - collaborators
@@ -46824,7 +46833,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId
@@ -47039,7 +47048,7 @@ paths:
         caller may change it.
 
 
-        **API key scopes:** `workspace:read`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Get the general access of a knowledge base
       tags:
         - collaborators
@@ -47168,7 +47177,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - workspace:read
+        - "*"
       parameters:
         - in: path
           name: resourceId

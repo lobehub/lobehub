@@ -2799,7 +2799,10 @@ export type Workspace = {
 export type WorkspaceMember = {
     joinedAt: string;
     responsibilities: string | null;
-    role: 'owner' | 'admin' | 'member' | 'viewer';
+    /**
+     * `null` when no role could be resolved
+     */
+    role: 'owner' | 'admin' | 'member' | 'viewer' | null;
     title: string | null;
     user: UserProfile | null;
     userId: string;
@@ -2823,7 +2826,7 @@ export type WorkspaceInvitation = {
     id: string;
     inviterId: string | null;
     reusable: boolean;
-    role: 'admin' | 'member' | 'viewer';
+    role: 'admin' | 'member' | 'viewer' | null;
     /**
      * `pending`, `accepted`, `revoked` or `expired`
      */
@@ -15586,7 +15589,7 @@ export type GetApiV1WorkspacesByIdAuditLogsData = {
     };
     query?: {
         /**
-         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         * The previous page's `nextCursor`. Omit for the first page.
          */
         cursor?: string;
         /**

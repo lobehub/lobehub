@@ -145,7 +145,7 @@ export class AgentGroups extends HeyApiClient {
      *
      * Members explicitly granted access to this agent group. Creator or workspace owner only.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listCollaborators<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentGroupsByResourceIdCollaboratorsData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsByResourceIdCollaboratorsResponses, GetApiV1AgentGroupsByResourceIdCollaboratorsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentGroupsByResourceIdCollaboratorsResponses, GetApiV1AgentGroupsByResourceIdCollaboratorsErrors, ThrowOnError>({
@@ -176,7 +176,7 @@ export class AgentGroups extends HeyApiClient {
      *
      * What every workspace member gets on this agent group, and whether the caller may change it.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public getGeneralAccess<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentGroupsByResourceIdCollaboratorsGeneralAccessData, ThrowOnError>): RequestResult<GetApiV1AgentGroupsByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1AgentGroupsByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentGroupsByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1AgentGroupsByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError>({
@@ -390,7 +390,7 @@ export class Agents extends HeyApiClient {
      *
      * Members explicitly granted access to this agent. Creator or workspace owner only.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listCollaborators<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByResourceIdCollaboratorsData, ThrowOnError>): RequestResult<GetApiV1AgentsByResourceIdCollaboratorsResponses, GetApiV1AgentsByResourceIdCollaboratorsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentsByResourceIdCollaboratorsResponses, GetApiV1AgentsByResourceIdCollaboratorsErrors, ThrowOnError>({
@@ -421,7 +421,7 @@ export class Agents extends HeyApiClient {
      *
      * What every workspace member gets on this agent, and whether the caller may change it.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public getGeneralAccess<ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentsByResourceIdCollaboratorsGeneralAccessData, ThrowOnError>): RequestResult<GetApiV1AgentsByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1AgentsByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1AgentsByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1AgentsByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError>({
@@ -1556,7 +1556,7 @@ export class KnowledgeBases extends HeyApiClient {
      *
      * Members explicitly granted access to this knowledge base. Creator or workspace owner only.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listCollaborators<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByResourceIdCollaboratorsData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByResourceIdCollaboratorsResponses, GetApiV1KnowledgeBasesByResourceIdCollaboratorsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByResourceIdCollaboratorsResponses, GetApiV1KnowledgeBasesByResourceIdCollaboratorsErrors, ThrowOnError>({
@@ -1587,7 +1587,7 @@ export class KnowledgeBases extends HeyApiClient {
      *
      * What every workspace member gets on this knowledge base, and whether the caller may change it.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public getGeneralAccess<ThrowOnError extends boolean = false>(options: Options<GetApiV1KnowledgeBasesByResourceIdCollaboratorsGeneralAccessData, ThrowOnError>): RequestResult<GetApiV1KnowledgeBasesByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1KnowledgeBasesByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1KnowledgeBasesByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1KnowledgeBasesByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError>({
@@ -2905,7 +2905,7 @@ export class Workspaces extends HeyApiClient {
      *
      * Pending invitations of the workspace. Admin or higher.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listInvitations<ThrowOnError extends boolean = false>(options: Options<GetApiV1WorkspacesByIdInvitationsData, ThrowOnError>): RequestResult<GetApiV1WorkspacesByIdInvitationsResponses, GetApiV1WorkspacesByIdInvitationsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1WorkspacesByIdInvitationsResponses, GetApiV1WorkspacesByIdInvitationsErrors, ThrowOnError>({
@@ -2968,7 +2968,7 @@ export class TransferRequests extends HeyApiClient {
      *
      * Pending requests in the workspace where the caller is the recipient (to answer) or the initiator (to track or withdraw).
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public list<ThrowOnError extends boolean = false>(options?: Options<GetApiV1TransferRequestsData, ThrowOnError>): RequestResult<GetApiV1TransferRequestsResponses, GetApiV1TransferRequestsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetApiV1TransferRequestsResponses, GetApiV1TransferRequestsErrors, ThrowOnError>({
@@ -3044,7 +3044,7 @@ export class ShareLinks extends HeyApiClient {
     /**
      * Enable a share link
      *
-     * Turns on the public link of a topic, page or agent — re-enabling keeps an agent link’s id and slug — or publishes an artifact from a message. Calling it again on a shared resource returns the same link.
+     * Turns on the public link of a topic, page or agent — re-enabling keeps an agent link’s id and slug — or publishes an artifact from a message. Calling it again on a shared resource returns the same link. Agents and artifacts need a full-access API key.
      *
      * **API key scopes:** `share:write`.
      */
@@ -3075,7 +3075,7 @@ export class ShareLinks extends HeyApiClient {
     /**
      * Get a share link
      *
-     * Whether the resource has a public link, and its URL.
+     * Whether the resource has a public link, and its URL. A topic, page or agent the caller does not own (or cannot manage) reads as not shared rather than 404, so the answer never reveals whether someone else shared it.
      *
      * **API key scopes:** `share:read`.
      */
@@ -3094,7 +3094,7 @@ export class Documents extends HeyApiClient {
      *
      * Members explicitly granted access to this document. Creator or workspace owner only.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public listCollaborators<ThrowOnError extends boolean = false>(options: Options<GetApiV1DocumentsByResourceIdCollaboratorsData, ThrowOnError>): RequestResult<GetApiV1DocumentsByResourceIdCollaboratorsResponses, GetApiV1DocumentsByResourceIdCollaboratorsErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1DocumentsByResourceIdCollaboratorsResponses, GetApiV1DocumentsByResourceIdCollaboratorsErrors, ThrowOnError>({
@@ -3125,7 +3125,7 @@ export class Documents extends HeyApiClient {
      *
      * What every workspace member gets on this document, and whether the caller may change it.
      *
-     * **API key scopes:** `workspace:read`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public getGeneralAccess<ThrowOnError extends boolean = false>(options: Options<GetApiV1DocumentsByResourceIdCollaboratorsGeneralAccessData, ThrowOnError>): RequestResult<GetApiV1DocumentsByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1DocumentsByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetApiV1DocumentsByResourceIdCollaboratorsGeneralAccessResponses, GetApiV1DocumentsByResourceIdCollaboratorsGeneralAccessErrors, ThrowOnError>({
