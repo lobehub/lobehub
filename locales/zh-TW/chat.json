@@ -1550,6 +1550,7 @@
   "heteroAgent.executionTarget.switchTopic.content": "此主題已在 {{name}} 上運行，其工作目錄和代理會話已保留。切換後，其下一回合將在新環境中啟動一個新會話。新主題也將使用此選擇。",
   "heteroAgent.executionTarget.switchTopic.ok": "切換",
   "heteroAgent.executionTarget.switchTopic.title": "將此主題移至另一個環境？",
+  "heteroAgent.executionTarget.temporarySandbox": "臨時沙盒",
   "heteroAgent.executionTarget.title": "執行環境",
   "heteroAgent.executionTarget.topicTag": "此主題",
   "heteroAgent.executionTarget.unknownDevice": "未知設備",

@@ -978,6 +978,7 @@ export default {
   'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
   'heteroAgent.executionTarget.persistentSandboxDesc':
     'Keeps results and work on your drive, for everyday tasks',
+  'heteroAgent.executionTarget.temporarySandbox': 'Temporary Sandbox',
   'heteroAgent.executionTarget.temporarySandboxDesc':
     'Discarded after use, for coding and one-off data processing',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',

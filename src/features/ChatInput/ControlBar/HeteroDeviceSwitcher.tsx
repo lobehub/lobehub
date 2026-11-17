@@ -555,7 +555,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
-  let chipLabel = t('heteroAgent.executionTarget.sandbox');
+  // Next to the persistent sandbox the plain one is named for what sets it
+  // apart: it is discarded after use. Without a drive on offer there is only
+  // one sandbox, and it keeps its usual name.
+  const sandboxLabel = t(
+    offersPersistentSandbox
+      ? 'heteroAgent.executionTarget.temporarySandbox'
+      : 'heteroAgent.executionTarget.sandbox',
+  );
+  let chipLabel = sandboxLabel;
   if (chipExecutionTarget === 'sandbox' && sandboxMode.persistent) {
     chipIcon = <Icon icon={HardDriveIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.persistentSandbox');
@@ -816,7 +824,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         active={isActive('sandbox') && !sandboxMode.persistent}
         disabled={!supportsSandbox}
         icon={<ExecutionTargetIcon target={'sandbox'} />}
-        label={t('heteroAgent.executionTarget.sandbox')}
+        label={sandboxLabel}
         desc={t(
           !supportsSandbox
             ? 'heteroAgent.executionTarget.sandboxUnsupported'
