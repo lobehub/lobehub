@@ -41,7 +41,7 @@ import { gitService } from '@/services/git';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors } from '@/store/chat/selectors';
+import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
@@ -56,6 +56,7 @@ import ProgressSection from '../ProgressSection';
 import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
 import { BackgroundTasksSection } from './BackgroundTasks';
 import DeviceStatusSection from './DeviceStatusSection';
+import KeptWorktreeRows from './KeptWorktreeRows';
 import {
   collectChangeStats,
   isLinkedWorktreeCheckout,
@@ -126,6 +127,8 @@ const Overview = memo<OverviewProps>(
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
     const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
+    const topicStatus = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.status);
+    const topicMetadata = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.metadata);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
       getAllWorkSummaries(dbMessageSelectors.activeDbMessages(s), threadId),
@@ -446,6 +449,12 @@ const Overview = memo<OverviewProps>(
               onClick={() => onOpenTab('files')}
             />
             <Flexbox className={sectionStyles.section}>
+              {/* A worktree the archive cleanup kept for its uncommitted work. */}
+              <KeptWorktreeRows
+                metadata={topicMetadata}
+                status={topicStatus}
+                topicId={topicId ?? undefined}
+              />
               {workspaceSection}
               {/* Outside the git rows: a dev server runs in plain folders too. */}
               {tunnelsEnabled && deviceId && (

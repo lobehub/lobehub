@@ -19,7 +19,7 @@ import type { TopicModelContext } from './context';
 export interface OwnedWorktreeTopicRow {
   id: string;
   isDeleted: boolean | null;
-  metadata: ChatTopicMetadata | null;
+  metadata: ChatTopicMetadata | null | undefined;
   status: string | null;
   userId: string;
 }

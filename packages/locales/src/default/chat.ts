@@ -3924,6 +3924,22 @@ export default {
   'workingPanel.overview.execution.device': 'Connected device',
   'workingPanel.overview.execution.local': 'This device',
   'workingPanel.overview.files': 'Files',
+  'workingPanel.overview.keptWorktree.discard': 'Discard changes and delete',
+  'workingPanel.overview.keptWorktree.discardConfirm':
+    "This deletes the worktree and everything uncommitted in it, including ignored files. This can't be undone. Commits on its branch are kept.",
+  'workingPanel.overview.keptWorktree.discardConfirmTitle':
+    'Discard changes and delete the worktree?',
+  'workingPanel.overview.keptWorktree.discardFailed': 'Could not delete the worktree',
+  'workingPanel.overview.keptWorktree.discardPending':
+    "The device is offline. The worktree will be deleted when it's back online.",
+  'workingPanel.overview.keptWorktree.discarded': 'Worktree deleted. Its branch was kept.',
+  'workingPanel.overview.keptWorktree.discarding': 'Deleting the worktree…',
+  'workingPanel.overview.keptWorktree.keep': 'Keep',
+  'workingPanel.overview.keptWorktree.keepFailed': 'Could not keep the worktree',
+  'workingPanel.overview.keptWorktree.keptToast':
+    "Worktree kept. It won't be cleaned up automatically.",
+  'workingPanel.overview.keptWorktree.title_one': 'Worktree kept: {{count}} uncommitted file',
+  'workingPanel.overview.keptWorktree.title_other': 'Worktree kept: {{count}} uncommitted files',
   'workingPanel.overview.outputs': 'Outputs',
   'workingPanel.overview.ports.copied': 'Link copied',
   'workingPanel.overview.ports.copy': 'Copy link',

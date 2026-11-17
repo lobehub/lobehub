@@ -1,0 +1,161 @@
+'use client';
+
+import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
+import { resolveOwnedWorktrees } from '@lobechat/types';
+import { Button, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
+import { TriangleAlertIcon } from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useClientDataSWR } from '@/libs/swr';
+import { discardOwnedWorktree, keepOwnedWorktree } from '@/services/ownedWorktree';
+import { topicService } from '@/services/topic';
+
+import { OverviewRow } from './OverviewRow';
+
+/** States in flight on the server: refresh until they settle. */
+const SETTLING = new Set(['pending', 'running']);
+
+/**
+ * The topic's owned worktrees as the server has them now. The topic list row
+ * can predate the cleanup (it runs after the archive response), so this reads
+ * the topic itself; `status` is in the key so an archive re-reads it.
+ */
+export const useOwnedWorktrees = (
+  topicId: string | undefined,
+  status?: string | null,
+  enabled = true,
+) =>
+  useClientDataSWR(
+    topicId && enabled ? ['topic-owned-worktrees', topicId, status ?? ''] : null,
+    async () => resolveOwnedWorktrees((await topicService.getTopicDetail(topicId!))?.metadata),
+    {
+      refreshInterval: (data?: OwnedWorktree[]) =>
+        data?.some((entry) => entry.cleanup && SETTLING.has(entry.cleanup.state)) ? 3000 : 0,
+    },
+  );
+
+interface KeptWorktreeRowsProps {
+  /** The topic row as the list has it; only a topic that owns a worktree is read. */
+  metadata?: ChatTopicMetadata | null;
+  status?: string | null;
+  topicId?: string;
+}
+
+/**
+ * A worktree the cleanup kept because it held uncommitted work. Archiving
+ * never asks; the choice is offered here instead: discard the work and delete
+ * the worktree (its branch's commits are kept), or keep it for good.
+ */
+const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ metadata, status, topicId }) => {
+  const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
+  const ownsWorktree = resolveOwnedWorktrees(metadata).length > 0;
+  const { data, mutate } = useOwnedWorktrees(topicId, status, ownsWorktree);
+  const [busy, setBusy] = useState<string>();
+
+  const kept = (data ?? []).filter((entry) => entry.cleanup?.state === 'keptDirty');
+
+  const handleDiscard = useCallback(
+    (entry: OwnedWorktree) => {
+      if (!topicId) return;
+      confirmModal({
+        cancelText: tCommon('cancel'),
+        content: t('workingPanel.overview.keptWorktree.discardConfirm'),
+        okButtonProps: { danger: true },
+        okText: t('workingPanel.overview.keptWorktree.discard'),
+        title: t('workingPanel.overview.keptWorktree.discardConfirmTitle'),
+        // Closes at once; a large worktree can take a while to delete.
+        onOk: () => {
+          setBusy(entry.path);
+          const pending = toast.loading(t('workingPanel.overview.keptWorktree.discarding'));
+          void (async () => {
+            try {
+              const written = await discardOwnedWorktree(topicId, entry);
+              const state = written?.cleanup?.state;
+              if (state === 'removed')
+                toast.success(t('workingPanel.overview.keptWorktree.discarded'));
+              else if (state === 'pending')
+                toast.info(t('workingPanel.overview.keptWorktree.discardPending'));
+              else
+                toast.error(
+                  written?.cleanup?.reason || t('workingPanel.overview.keptWorktree.discardFailed'),
+                );
+            } catch (error) {
+              toast.error(
+                (error as Error)?.message || t('workingPanel.overview.keptWorktree.discardFailed'),
+              );
+            } finally {
+              pending.close();
+              setBusy(undefined);
+              await mutate();
+            }
+          })();
+        },
+      });
+    },
+    [mutate, t, tCommon, topicId],
+  );
+
+  const handleKeep = useCallback(
+    async (entry: OwnedWorktree) => {
+      if (!topicId) return;
+      setBusy(entry.path);
+      try {
+        await keepOwnedWorktree(topicId, entry);
+        toast.success(t('workingPanel.overview.keptWorktree.keptToast'));
+        await mutate();
+      } catch (error) {
+        toast.error(
+          (error as Error)?.message || t('workingPanel.overview.keptWorktree.keepFailed'),
+        );
+      } finally {
+        setBusy(undefined);
+      }
+    },
+    [mutate, t, topicId],
+  );
+
+  if (kept.length === 0) return null;
+
+  return (
+    <>
+      {kept.map((entry) => (
+        <Flexbox key={entry.path}>
+          <OverviewRow
+            icon={TriangleAlertIcon}
+            iconColor={cssVar.colorWarning}
+            iconSize={14}
+            title={entry.path}
+            value={t('workingPanel.overview.keptWorktree.title', {
+              count: entry.cleanup?.dirtyFiles ?? 0,
+            })}
+          />
+          <Flexbox horizontal gap={4} justify={'flex-end'} paddingInline={8}>
+            <Button
+              disabled={busy === entry.path}
+              size={'small'}
+              type={'text'}
+              onClick={() => void handleKeep(entry)}
+            >
+              {t('workingPanel.overview.keptWorktree.keep')}
+            </Button>
+            <Button
+              danger
+              loading={busy === entry.path}
+              size={'small'}
+              type={'text'}
+              onClick={() => handleDiscard(entry)}
+            >
+              {t('workingPanel.overview.keptWorktree.discard')}
+            </Button>
+          </Flexbox>
+        </Flexbox>
+      ))}
+    </>
+  );
+});
+
+KeptWorktreeRows.displayName = 'KeptWorktreeRows';
+
+export default KeptWorktreeRows;

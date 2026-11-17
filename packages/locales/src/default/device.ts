@@ -140,6 +140,10 @@ export default {
   'workingDirectory.removeWorktreePending': 'Deleting worktree “{{name}}”…',
   'workingDirectory.removeWorktreeSuccess': 'Worktree deleted',
   'workingDirectory.removeWorktreeTitle': 'Delete worktree',
+  'workingDirectory.worktreeRestore.branchMissing': "Can't restore the worktree",
+  'workingDirectory.worktreeRestore.branchMissingDesc':
+    'The branch {{branch}} no longer exists, so this conversation continues in the source repository.',
+  'workingDirectory.worktreeRestore.failed': "Couldn't restore the worktree",
   'workingDirectory.worktreeSearchPlaceholder': 'Search worktrees',
   'workingDirectory.worktreeUnavailable': 'unavailable',
   'workingDirectory.worktreesEmpty': 'No worktrees found',
