@@ -281,11 +281,9 @@ const QueueTray = memo(() => {
           setSendingId(msg.id);
           try {
             const outcome = await sendQueuedMessageNow({
-              chat: useChatStore.getState(),
               context,
               contextKey,
-              isQueued: (id) =>
-                !!useChatStore.getState().queuedMessages[contextKey]?.some((q) => q.id === id),
+              getChat: useChatStore.getState,
               msg,
               withdraw: (queued) => withdrawQueuedMessage(contextKey, queued.id),
             });
