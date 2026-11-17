@@ -292,3 +292,89 @@ describe('search', () => {
     expect(added).toMatchObject({ relation: 'contact' });
   });
 });
+
+describe('contact edge cases', () => {
+  it('treats a bare @ as no handle at all', () => {
+    expect(parseContactHandle('@')).toBeUndefined();
+  });
+
+  it('reports a person already in the address book as a contact', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(await aliceModel.relationTo(bob)).toBe('contact');
+  });
+
+  it('lists a request in both directions', async () => {
+    await aliceModel.sendRequest(bob);
+
+    const [outgoing] = await aliceModel.listRequests();
+    expect(outgoing).toMatchObject({ direction: 'outgoing', user: { id: bob } });
+
+    const [incoming] = await bobModel.listRequests();
+    expect(incoming).toMatchObject({ direction: 'incoming', user: { id: alice } });
+  });
+
+  it('declines a pending request without creating a contact', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+
+    await bobModel.declineRequest(requestId);
+
+    expect(await aliceModel.list()).toEqual([]);
+    expect(await aliceModel.relationTo(bob)).toBe('none');
+    const [row] = await serverDB
+      .select({ status: userContactRequests.status })
+      .from(userContactRequests)
+      .where(eq(userContactRequests.id, requestId));
+    expect(row.status).toBe('declined');
+  });
+
+  it('rejects a request to somebody who does not exist', async () => {
+    await expect(aliceModel.sendRequest('contact-test-missing')).rejects.toThrow('User not found');
+  });
+
+  it('rejects a request id that is not a uuid', async () => {
+    await expect(aliceModel.cancelRequest('not-a-uuid')).rejects.toThrow('Request not found');
+    await expect(bobModel.acceptRequest('not-a-uuid')).rejects.toThrow('Request not found');
+    await expect(bobModel.declineRequest('not-a-uuid')).rejects.toThrow('Request not found');
+  });
+
+  it('refuses to add an Agent when the handle names nothing', async () => {
+    await expect(aliceModel.addAgent('@')).rejects.toThrow('Agent not found');
+    expect(await aliceModel.search('@')).toEqual([]);
+  });
+
+  it('removes a shared Agent from the address book', async () => {
+    await aliceModel.addAgent('bob-helper');
+
+    await aliceModel.removeAgent(bobAgent);
+
+    expect(await aliceModel.list()).toEqual([]);
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+  });
+
+  it('reports an Agent that has no title as having none', async () => {
+    await serverDB.insert(agents).values({ id: 'agt_contact_untitled', userId: bob });
+    await serverDB.insert(agentShares).values({
+      agentId: 'agt_contact_untitled',
+      shareConfig: { monthlySpendLimit: 1, slug: 'untitled-helper' },
+      visibility: 'link',
+    });
+
+    const [found] = await aliceModel.search('untitled-helper');
+
+    expect(found.type).toBe('agent');
+    expect(found.agent?.title).toBeNull();
+  });
+
+  it('marks your own Agent share as your own', async () => {
+    await serverDB
+      .update(agentShares)
+      .set({ shareConfig: { monthlySpendLimit: 1, slug: 'alice-helper' } })
+      .where(eq(agentShares.agentId, aliceAgent));
+
+    const [own] = await aliceModel.search('alice-helper');
+
+    expect(own).toMatchObject({ agent: { agentId: aliceAgent }, relation: 'self', type: 'agent' });
+  });
+});
