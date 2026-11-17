@@ -4,16 +4,14 @@ import { type ReactNode } from 'react';
 import { useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    margin-block-end: ${cssVar.marginLG};
-  `,
-
   header: css`
     cursor: pointer;
 
     display: flex;
     align-items: center;
 
+    /* Same block padding as a Form.Field, so the row sits one field-gap from its neighbours */
+    padding-block: var(--lobe-form-item-padding-block, ${cssVar.padding});
     border-radius: ${cssVar.borderRadius};
 
     color: ${cssVar.colorTextTertiary};
@@ -37,6 +35,9 @@ interface CollapsibleSectionProps {
   children: ReactNode;
   /** Whether expanded by default */
   defaultExpanded?: boolean;
+  /** Controlled expanded state; pair with `onExpandedChange` */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
   /** Title text */
   title: string;
 }
@@ -45,12 +46,20 @@ const CollapsibleSection = ({
   title,
   children,
   defaultExpanded = false,
+  expanded,
+  onExpandedChange,
 }: CollapsibleSectionProps) => {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const [innerExpanded, setInnerExpanded] = useState(defaultExpanded);
+  const isExpanded = expanded ?? innerExpanded;
+
+  const toggle = () => {
+    setInnerExpanded(!isExpanded);
+    onExpandedChange?.(!isExpanded);
+  };
 
   return (
-    <div className={styles.container}>
-      <div className={cx(styles.header)} onClick={() => setIsExpanded(!isExpanded)}>
+    <div>
+      <div className={cx(styles.header)} onClick={toggle}>
         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <span className={styles.title}>{title}</span>
       </div>
