@@ -1,19 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { prepareComposerGitSend } from './index';
-import { prepareDraftGitSend, resolveDraftGitTarget } from './prepareSend';
+import { prepareDraftGitSend, snapshotDraftGit } from './prepareSend';
 
 vi.mock('./prepareSend', () => ({
   prepareDraftGitSend: vi.fn(),
-  resolveDraftGitTarget: vi.fn(),
+  snapshotDraftGit: vi.fn(),
 }));
 vi.mock('./sendPrompts', () => ({ draftGitSendPrompts: {} }));
 
-const target = (agentId: string) => ({
-  agentId,
-  isGithub: true,
-  path: '/repo',
-  sourcePath: '/repo',
+const snap = (agentId: string) => ({
+  picked: 'feat',
+  target: { agentId, isGithub: true, path: '/repo', sourcePath: '/repo' },
+  worktreeMode: false,
 });
 
 beforeEach(() => {
@@ -23,8 +22,8 @@ beforeEach(() => {
 describe('prepareComposerGitSend', () => {
   it('passes a send with nothing to prepare without waiting on another composer', async () => {
     let release!: (value: { ok: true }) => void;
-    vi.mocked(resolveDraftGitTarget).mockImplementation((context) =>
-      context.agentId === 'agent-a' ? target('agent-a') : undefined,
+    vi.mocked(snapshotDraftGit).mockImplementation((context) =>
+      context.agentId === 'agent-a' ? snap('agent-a') : undefined,
     );
     vi.mocked(prepareDraftGitSend).mockReturnValue(new Promise((resolve) => (release = resolve)));
 
@@ -40,7 +39,7 @@ describe('prepareComposerGitSend', () => {
 
   it('refuses a second send from the same composer while its git step runs', async () => {
     let release!: (value: { ok: true }) => void;
-    vi.mocked(resolveDraftGitTarget).mockReturnValue(target('agent-a'));
+    vi.mocked(snapshotDraftGit).mockReturnValue(snap('agent-a'));
     vi.mocked(prepareDraftGitSend).mockReturnValue(new Promise((resolve) => (release = resolve)));
 
     const first = prepareComposerGitSend({ agentId: 'agent-a', topicId: null });
@@ -55,5 +54,26 @@ describe('prepareComposerGitSend', () => {
     await expect(prepareComposerGitSend({ agentId: 'agent-a', topicId: null })).resolves.toEqual({
       ok: true,
     });
+  });
+
+  it('uses the snapshot taken at send time, not the composer as it is later', async () => {
+    vi.mocked(prepareDraftGitSend).mockResolvedValue({ acted: true, ok: true });
+    const snapshot = snap('agent-a');
+
+    await prepareComposerGitSend({ agentId: 'agent-a', topicId: null }, { snapshot });
+
+    expect(snapshotDraftGit).not.toHaveBeenCalled();
+    expect(prepareDraftGitSend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ snapshot }),
+    );
+  });
+
+  it('does nothing when there was nothing to prepare at send time', async () => {
+    await expect(
+      prepareComposerGitSend({ agentId: 'agent-a', topicId: null }, { snapshot: null }),
+    ).resolves.toEqual({ ok: true });
+    expect(snapshotDraftGit).not.toHaveBeenCalled();
+    expect(prepareDraftGitSend).not.toHaveBeenCalled();
   });
 });

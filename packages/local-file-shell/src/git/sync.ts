@@ -151,7 +151,9 @@ export const pushGitBranch = async (payload: {
   if (branch !== undefined && (!branch.trim() || isInvalidBranchRef(branch)))
     return { error: `Invalid branch name: ${branch}`, success: false };
 
-  const refspec = branch ?? 'HEAD';
+  // A named branch is spelled as its full ref: a tag sharing the name would
+  // otherwise make the refspec match more than one source.
+  const refspec = branch ? `refs/heads/${branch}` : 'HEAD';
   try {
     const { stderr } = await execFileAsync('git', ['push', '-u', 'origin', refspec], {
       cwd: dirPath,

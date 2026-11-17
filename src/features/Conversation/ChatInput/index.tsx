@@ -16,7 +16,7 @@ import {
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
-import { prepareComposerGitSend } from '@/features/ChatInput/ControlBar/DraftGit';
+import { prepareComposerGitSend, snapshotDraftGit } from '@/features/ChatInput/ControlBar/DraftGit';
 import { resolveComposerHandoff } from '@/features/ChatInput/ControlBar/DraftGit/composerHandoff';
 import {
   type SendButtonHandler,
@@ -402,7 +402,7 @@ const ChatInput = memo<ChatInputProps>(
         // A new topic's first send acts on the branch picked in the composer
         // (switch, or fork a worktree) before any message exists. Cancelled or
         // failed, nothing is sent and the draft stays.
-        const gitPrep = await prepareComposerGitSend(sendContext, editorData);
+        const gitPrep = await prepareComposerGitSend(sendContext, { editorData });
         if (!gitPrep.ok) return;
 
         // Clear content immediately for responsive UX — unless a git step ran
@@ -461,6 +461,11 @@ const ChatInput = memo<ChatInputProps>(
           return false;
         }
 
+        // Read the branch pick and worktree switch now: the send runs after
+        // upload and transcription, by when the composer may show another
+        // conversation.
+        const gitSnapshot = snapshotDraftGit(context) ?? null;
+
         return Boolean(
           useChatStore.getState().sendVoiceMessage({
             canSend: canSendVoiceMessage,
@@ -471,7 +476,8 @@ const ChatInput = memo<ChatInputProps>(
                 context: targetContext,
                 optimisticUserMessageId: messageId,
                 // The same send-time git step as a typed first message.
-                prepare: () => prepareComposerGitSend(targetContext ?? context),
+                prepare: () =>
+                  prepareComposerGitSend(targetContext ?? context, { snapshot: gitSnapshot }),
                 signal,
                 ...(isVoiceMessageTranscribed(targetContext)
                   ? {

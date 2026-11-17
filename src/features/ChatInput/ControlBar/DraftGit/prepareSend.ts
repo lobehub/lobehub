@@ -247,24 +247,50 @@ const switchInPlace = async (
  * Any failure or cancellation returns `ok: false`: the caller does not send
  * and keeps the draft.
  */
+/**
+ * What the send will act on, read from the composer at the moment the user
+ * sends. A send that runs later (a voice turn, after upload and transcription)
+ * takes this snapshot along: by then the composer may show another
+ * conversation and have dropped this directory's registration.
+ */
+export interface DraftGitSnapshot {
+  picked?: string;
+  target: DraftGitTarget;
+  worktreeMode: boolean;
+}
+
+export const snapshotDraftGit = (
+  context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
+  editorData?: Record<string, any>,
+): DraftGitSnapshot | undefined => {
+  const target = resolveDraftGitTarget(context, editorData);
+  if (!target) return;
+  return {
+    picked: getDraftBranch(draftBranchKey(target)),
+    target,
+    worktreeMode: isWorktreeModeOn(worktreeModeKeyOf(target.keyDeviceId, target.path)),
+  };
+};
+
 export const prepareDraftGitSend = async (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
   {
     editorData,
     prompts,
+    snapshot,
     t,
   }: {
     editorData?: Record<string, any>;
     prompts: DraftGitSendPrompts;
+    /** Taken when the user sent; read from the composer now when absent. */
+    snapshot?: DraftGitSnapshot;
     t: TFunction<'device'>;
   },
 ): Promise<DraftGitSendResult> => {
-  const target = resolveDraftGitTarget(context, editorData);
-  if (!target) return PASS;
-
+  const snap = snapshot ?? snapshotDraftGit(context, editorData);
+  if (!snap) return PASS;
+  const { picked, target, worktreeMode } = snap;
   const key = draftBranchKey(target);
-  const picked = getDraftBranch(key);
-  const worktreeMode = isWorktreeModeOn(worktreeModeKeyOf(target.keyDeviceId, target.path));
   if (!picked && !worktreeMode) return PASS;
 
   // Act on what the directory is on now, not on the bar's last read.

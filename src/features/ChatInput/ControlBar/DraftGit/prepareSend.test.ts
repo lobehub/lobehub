@@ -15,7 +15,7 @@ import {
   setDraftBranch,
   useDraftGitStore,
 } from './draftGitStore';
-import { type DraftGitSendPrompts, prepareDraftGitSend } from './prepareSend';
+import { type DraftGitSendPrompts, prepareDraftGitSend, snapshotDraftGit } from './prepareSend';
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => null,
@@ -164,6 +164,23 @@ describe('prepareDraftGitSend — direct @Agent route', () => {
     expect(result).toEqual({ ok: true });
     expect(gitService.addGitWorktree).not.toHaveBeenCalled();
     expect(gitService.checkoutGitBranch).not.toHaveBeenCalled();
+  });
+});
+
+describe('prepareDraftGitSend — snapshot taken at send time', () => {
+  it('acts on the snapshot even after the composer dropped the directory', async () => {
+    pick('feat');
+    const snapshot = snapshotDraftGit(context)!;
+    // The user moved to another topic: the bar unregistered, the pick is gone.
+    useDraftGitStore.setState({ selections: {}, targets: {} });
+
+    expect(await prepareDraftGitSend(context, { prompts: prompts(), snapshot, t })).toEqual({
+      acted: true,
+      ok: true,
+    });
+    expect(gitService.checkoutGitBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'feat', path: '/code/lobehub' }),
+    );
   });
 });
 

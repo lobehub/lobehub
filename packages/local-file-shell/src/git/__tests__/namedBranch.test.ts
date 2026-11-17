@@ -260,4 +260,19 @@ describe('pushGitBranch for a named branch', () => {
     expect(result).toEqual({ branch: 'feature', noop: false, success: true });
     expect(git(origin, 'rev-parse', 'feature')).toBe(git(repo, 'rev-parse', 'feature'));
   });
+
+  it('pushes a branch that shares its name with a tag', async () => {
+    git(repo, 'tag', 'feature', 'main');
+    git(repo, 'checkout', 'feature');
+    await commit(repo, 'f.txt', 'tagged name\n');
+    git(repo, 'checkout', 'main');
+
+    expect(await pushGitBranch({ branch: 'feature', path: repo })).toMatchObject({
+      branch: 'feature',
+      success: true,
+    });
+    expect(git(origin, 'rev-parse', 'refs/heads/feature')).toBe(
+      git(repo, 'rev-parse', 'refs/heads/feature'),
+    );
+  });
 });

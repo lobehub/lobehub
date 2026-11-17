@@ -1,7 +1,12 @@
 import type { ConversationContext } from '@lobechat/types';
 import i18next from 'i18next';
 
-import { type DraftGitSendResult, prepareDraftGitSend, resolveDraftGitTarget } from './prepareSend';
+import {
+  type DraftGitSendResult,
+  type DraftGitSnapshot,
+  prepareDraftGitSend,
+  snapshotDraftGit,
+} from './prepareSend';
 import { draftGitSendPrompts } from './sendPrompts';
 
 /** Agents whose new-topic composer is switching a branch or creating a worktree now. */
@@ -14,18 +19,31 @@ const inFlight = new Set<string>();
  * from the same composer while its git step runs is refused, rather than
  * racing it.
  */
+export { snapshotDraftGit } from './prepareSend';
+
 export const prepareComposerGitSend = async (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
-  editorData?: Record<string, any>,
+  options: {
+    editorData?: Record<string, any>;
+    /**
+     * Taken when the user sent, for a send that runs later (a voice turn);
+     * `null` means there was nothing to prepare then. Omitted, it is read now.
+     */
+    snapshot?: DraftGitSnapshot | null;
+  } = {},
 ): Promise<DraftGitSendResult> => {
-  const target = resolveDraftGitTarget(context, editorData);
-  if (!target) return { ok: true };
+  const { editorData } = options;
+  const snapshot =
+    options.snapshot === undefined ? snapshotDraftGit(context, editorData) : options.snapshot;
+  if (!snapshot) return { ok: true };
+  const { target } = snapshot;
   if (inFlight.has(target.agentId)) return { ok: false };
   inFlight.add(target.agentId);
   try {
     return await prepareDraftGitSend(context, {
       editorData,
       prompts: draftGitSendPrompts,
+      snapshot,
       t: i18next.getFixedT(null, 'device'),
     });
   } finally {
