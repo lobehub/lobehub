@@ -5,7 +5,7 @@ import type * as WorkServiceModule from '@/services/work';
 import { workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 
-import { createHandler, createMockStore, flush, makeEvent } from './testUtils';
+import { createHandler, createMockStore, flush, makeEvent } from '../testUtils';
 
 vi.mock('@/services/message', () => ({
   messageService: {

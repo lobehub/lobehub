@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as WorkServiceModule from '@/services/work';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
-import { createHandler, createMockStore, flush, makeEvent } from './testUtils';
+import { createHandler, createMockStore, flush, makeEvent } from '../testUtils';
 
 vi.mock('@/services/message', () => ({
   messageService: {

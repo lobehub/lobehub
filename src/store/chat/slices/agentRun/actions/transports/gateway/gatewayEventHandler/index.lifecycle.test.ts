@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import type * as WorkServiceModule from '@/services/work';
 
-import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
-import { createGatewayEventHandler } from './gatewayEventHandler';
-import { createHandler, createMockStore, flush, makeEvent } from './testUtils';
+import { buildRunLifecycle } from '../../../lifecycle/buildRunLifecycle';
+import { createHandler, createMockStore, flush, makeEvent } from '../testUtils';
+import { createGatewayEventHandler } from './index';
 
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -333,7 +333,7 @@ describe('createGatewayEventHandler — run lifecycle characterization', () => {
   });
 
   describe('waiting_for_async_tool parked characterization (lifecycle refactor regression net)', () => {
-    // CURRENT BEHAVIOR (gatewayEventHandler.ts:568-589): the `agent_runtime_end`
+    // CURRENT BEHAVIOR (gatewayEventHandler/index.ts): the `agent_runtime_end`
     // message-reconciliation branch special-cases BOTH `reason='interrupted'`
     // and `reason='waiting_for_async_tool'` together, gated by
     // `hasStreamedContent`. A `waiting_for_async_tool` terminal is a deferred-

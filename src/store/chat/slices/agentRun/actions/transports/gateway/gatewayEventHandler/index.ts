@@ -36,18 +36,18 @@ import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { applyMessagePatch } from './messagePatch';
+import { applyMessagePatch } from '../messagePatch';
 import {
   findTerminalAssistantError,
   isCompletedRuntimeEnd,
   resolveRuntimeEndStatus,
-} from './runtimeEndReason';
-import { applyStepMetrics } from './stepMetrics';
-import { resolveStepSideEvent } from './stepSideEvent';
-import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
+} from '../runtimeEndReason';
+import { applyStepMetrics } from '../stepMetrics';
+import { resolveStepSideEvent } from '../stepSideEvent';
+import { insertStreamStartSeeds, streamStartOperationMetadata } from '../streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
-//   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
+//   gateway.ts → gatewayEventHandler/index.ts → executors/index.ts (which pulls in
 //   tool client barrels that import `@/store/chat/store`) → chat store
 //   creation → `new GatewayActionImpl(...)` while gateway.ts is still
 //   mid-evaluation, so the class binding is undefined.
