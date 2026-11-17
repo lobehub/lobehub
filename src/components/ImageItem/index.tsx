@@ -68,9 +68,14 @@ const ImageItem = memo<ImageItemProps>(
      * A message bubble is as wide as its content, and an image that has not loaded yet has no
      * width, so the box would show as a small grey strip and then jump to the image's size.
      * The known intrinsic width sizes it up front (the grid still caps it), and the ratio on the
-     * `<img>` itself gives it that box while loading. Editable thumbnails keep their fixed square.
+     * `<img>` itself gives it that box while loading. Inside a grid the width is also capped by
+     * the cell's height cap times the ratio, so a tall image stays whole instead of being
+     * cropped to a square. Editable thumbnails keep their fixed square.
      */
-    const placeholderWidth = !editable && aspectRatio && width && width > 0 ? width : undefined;
+    const placeholderWidth =
+      !editable && aspectRatio && width && width > 0
+        ? `min(${width}px, calc(var(--galley-grid-cell-max, ${width / aspectRatio}px) * ${aspectRatio}))`
+        : undefined;
 
     return (
       <Image
@@ -105,9 +110,7 @@ const ImageItem = memo<ImageItemProps>(
           // the grid's min-height and row stretch would push wide images past their ratio, leaving a blank strip
           alignSelf: aspectRatio ? 'start' : undefined,
           minHeight: aspectRatio ? 'auto' : undefined,
-          ...(placeholderWidth
-            ? { maxWidth: '100%', width: `${placeholderWidth}px` }
-            : { width: '100%' }),
+          ...(placeholderWidth ? { maxWidth: '100%', width: placeholderWidth } : { width: '100%' }),
           ...style,
         }}
       />

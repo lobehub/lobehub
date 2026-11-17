@@ -63,8 +63,53 @@ describe('flySentImages', () => {
     expect(animations[0].keyframes.at(-1)).toMatchObject({ left: '300px', top: '100px' });
 
     animations[0].finish();
+    vi.advanceTimersByTime(20);
     expect(ghosts()).toHaveLength(0);
     expect(target.style.visibility).toBe('');
+  });
+
+  it('follows the message image while the list scrolls', () => {
+    mountThumbnail('blob:a');
+    flySentImages([image()]);
+
+    let top = 100;
+    const target = document.createElement('img');
+    target.src = 'https://cdn/image.png';
+    Object.defineProperty(target, 'complete', { get: () => false });
+    target.getBoundingClientRect = () => rect(300, top, 200);
+    document.body.append(target);
+    vi.advanceTimersByTime(100);
+
+    top = -200;
+    animations[0].finish();
+    vi.advanceTimersByTime(20);
+    expect(ghosts()[0].style.translate).toBe('0px -300px');
+  });
+
+  it('moves onto the image a re-rendered message list shows', () => {
+    mountThumbnail('blob:a');
+    flySentImages([image()]);
+
+    const render = (top: number, complete: boolean) => {
+      const img = document.createElement('img');
+      img.src = 'https://cdn/image.png';
+      Object.defineProperty(img, 'complete', { get: () => complete });
+      img.getBoundingClientRect = () => rect(300, top, 200);
+      document.body.append(img);
+      return img;
+    };
+    const first = render(100, false);
+    vi.advanceTimersByTime(100);
+    animations[0].finish();
+
+    first.remove();
+    vi.advanceTimersByTime(100);
+    expect(ghosts()).toHaveLength(1);
+
+    const second = render(40, false);
+    vi.advanceTimersByTime(20);
+    expect(second.style.visibility).toBe('hidden');
+    expect(ghosts()[0].style.translate).toBe('0px -60px');
   });
 
   it('keeps the landed copy on top until the message image has downloaded', () => {

@@ -65,28 +65,62 @@ const fadeOut = (ghost: HTMLElement) => {
   animation.oncancel = () => ghost.remove();
 };
 
-const fly = (flight: Flight, target: HTMLImageElement, to: DOMRect, delay: number) => {
-  const { from, ghost, radius } = flight;
-  const targetRadius = getComputedStyle(target).borderRadius || radius;
+const fly = (
+  flight: Flight,
+  initialTarget: HTMLImageElement,
+  to: DOMRect,
+  delay: number,
+  ignored: Set<Element>,
+) => {
+  const { from, ghost, radius, url } = flight;
+  const targetRadius = getComputedStyle(initialTarget).borderRadius || radius;
+  let target = initialTarget;
+  let previousVisibility = '';
   // Hidden while its copy flies in, so the image is not shown twice.
-  const previousVisibility = target.style.visibility;
-  target.style.visibility = 'hidden';
+  const hide = (img: HTMLImageElement) => {
+    previousVisibility = img.style.visibility;
+    img.style.visibility = 'hidden';
+  };
+  hide(target);
 
   const reveal = () => {
     target.style.visibility = previousVisibility;
     ghost.remove();
   };
+  /**
+   * The list keeps moving after launch: it scrolls as the reply streams in, and a new topic
+   * re-renders the whole message list once its route settles. The copy follows the target's
+   * current position (as an offset, so it composes with the flight) and moves onto the
+   * re-rendered image; false while no image is rendered.
+   */
+  const follow = () => {
+    if (!target.isConnected) {
+      const next = findTarget(url, ignored);
+      if (!next) return false;
+      target = next;
+      hide(target);
+    }
+    const rect = target.getBoundingClientRect();
+    ghost.style.translate = `${rect.left - to.left}px ${rect.top - to.top}px`;
+    return true;
+  };
   // The message shows the uploaded file's URL, which may still be downloading when the copy
   // lands; the copy stays on top until it has loaded, so no empty grey box shows in between.
+  // `complete` is also true for a failed load, which then shows its own fallback.
   let landedAt = 0;
-  const finish = () => {
+  const step = () => {
+    const present = follow();
+    if (landedAt && present && target.complete) return reveal();
+    if (landedAt && performance.now() - landedAt > LOAD_TIMEOUT_MS) {
+      if (present) reveal();
+      else fadeOut(ghost);
+      return;
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  const land = () => {
     landedAt ||= performance.now();
-    // `complete` is also true for a failed load, which then shows its own fallback; a target
-    // re-rendered away leaves nothing to cover.
-    const settled =
-      target.complete || !target.isConnected || performance.now() - landedAt > LOAD_TIMEOUT_MS;
-    if (settled) reveal();
-    else requestAnimationFrame(finish);
   };
   // Left/top/width/height rather than a transform: the thumbnail is a square crop and the
   // message image keeps its aspect ratio, so scaling would stretch it; `object-fit: cover`
@@ -110,8 +144,8 @@ const fly = (flight: Flight, target: HTMLImageElement, to: DOMRect, delay: numbe
     ],
     { delay, duration: FLIGHT_MS, easing: FLIGHT_EASING, fill: 'both' },
   );
-  animation.onfinish = finish;
-  animation.oncancel = finish;
+  animation.onfinish = land;
+  animation.oncancel = land;
 };
 
 const createGhost = (source: HTMLImageElement, rect: DOMRect, radius: string) => {
@@ -183,7 +217,7 @@ export const flySentImages = (files: UploadFileItem[]): void => {
       if (!last || !sameRect(last, rect)) continue;
 
       pending.delete(flight);
-      fly(flight, target, rect, launched * FLIGHT_STAGGER_MS);
+      fly(flight, target, rect, launched * FLIGHT_STAGGER_MS, ignored);
       launched += 1;
     }
 
