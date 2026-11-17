@@ -2,14 +2,18 @@ import type { Writable } from 'node:stream';
 
 import { ClaudeCodeAdapter } from '@lobechat/heterogeneous-agents';
 import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
-import { ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
+import {
+  ClaudeCodeLiveInput,
+  resolveClaudeCodeLiveRuntimeEnd,
+} from '@lobechat/heterogeneous-agents/spawn';
 
 /*
- * Claude Code spawned on this machine with its input kept open (Follow-up
- * behavior: Steer), so a message the user sends mid-run reaches the running
- * session instead of waiting for it to end. The driver adds
- * `--replay-user-messages`: the replay of a delivered message is how it is
- * known to be read.
+ * Claude Code spawned on this machine keeps its input open, like under
+ * `lh hetero exec`, whatever the Follow-up mode: it carries control requests
+ * (stop one background task) and, in Steer mode, the messages the user sends
+ * mid-run. The driver adds `--replay-user-messages`: the replay of a delivered
+ * message is how it is known to be read. The run ends at process exit, by the
+ * rule shared with `lh` (`resolveClaudeCodeLiveRuntimeEnd`).
  */
 
 /**
@@ -35,9 +39,10 @@ export const writeCliPrompt = (
 };
 
 /**
- * A live session can run more turns after its first `result` (the one a steer
- * interrupts, and the one answering it), so the runtime ends once, at process
- * exit — the way the SDK transport and `lh hetero exec` report it.
+ * A live session can run more turns after its first `result` (the one a
+ * background task's completion wakes, the one answering a steer), so the
+ * runtime ends once, at process exit — the way the SDK transport and
+ * `lh hetero exec` report it.
  */
 export const createLiveCliAdapter = () =>
   new ClaudeCodeAdapter({
@@ -46,25 +51,17 @@ export const createLiveCliAdapter = () =>
   });
 
 /**
- * The runtime end a live session reports at process exit: complete, or
- * interrupted when its last turn was stopped. Only a clean exit after a
- * finished turn ends the run here; anything else is the exit path's to report.
- * Print mode exits 1 when its last turn was an interrupt.
+ * The runtime end a live session reports at a process exit the host did not
+ * cause, by the rule `lh hetero exec` uses (`resolveClaudeCodeLiveRuntimeEnd`):
+ * complete, or interrupted when its last turn was stopped — print mode exits 1
+ * then, and the run still ends cleanly. Empty when the run does not end here
+ * (a crash, an error the run already reported, no finished turn).
  */
-export const completeLiveCliRuntime = (
+export const endLiveCliRun = (
   pipeline: { completeRuntime: (data: Record<string, unknown>) => AgentStreamEvent[] },
   input: ClaudeCodeLiveInput | undefined,
-  exit: { cancelledByUs: boolean; code: number | null; signal: NodeJS.Signals | null },
+  exit: { code: number | null; sawError: boolean; signal: NodeJS.Signals | null },
 ): AgentStreamEvent[] => {
-  const lastTurn = input?.lastTurn;
-  if (!lastTurn || exit.cancelledByUs) return [];
-
-  const cleanExit =
-    exit.code === 0 || (lastTurn.aborted && exit.code === 1 && exit.signal === null);
-  if (!cleanExit) return [];
-
-  const end = lastTurn.aborted
-    ? { kind: 'aborted', reason: 'interrupted', terminalReason: lastTurn.terminalReason }
-    : { reason: 'complete' };
-  return pipeline.completeRuntime({ ...end, transport: 'cli-live' });
+  const end = resolveClaudeCodeLiveRuntimeEnd(input?.lastTurn, { ...exit, killedByHost: false });
+  return end ? pipeline.completeRuntime(end) : [];
 };

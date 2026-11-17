@@ -2,7 +2,7 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
+import { ClaudeCodeLiveInput, resolveClaudeCodeLiveRuntimeEnd } from './claudeCodeLiveInput';
 
 const userLine = (text: string) =>
   `${JSON.stringify({ message: { content: [{ text, type: 'text' }], role: 'user' }, type: 'user' })}\n`;
@@ -411,5 +411,41 @@ describe('ClaudeCodeLiveInput', () => {
     live.observe(result.slice(5));
 
     expect(live.isOpen).toBe(false);
+  });
+});
+
+describe('resolveClaudeCodeLiveRuntimeEnd', () => {
+  const finished = { aborted: false, terminalReason: 'completed' };
+  const exit = { code: 0, killedByHost: false, sawError: false, signal: null };
+
+  it('ends the run complete at a clean exit after a finished turn', () => {
+    expect(resolveClaudeCodeLiveRuntimeEnd(finished, exit)).toEqual({
+      reason: 'complete',
+      transport: 'cli-live',
+    });
+  });
+
+  it('ends an interrupted last turn as aborted, though print mode exits 1', () => {
+    expect(
+      resolveClaudeCodeLiveRuntimeEnd(
+        { aborted: true, terminalReason: 'aborted_streaming' },
+        { ...exit, code: 1 },
+      ),
+    ).toEqual({
+      kind: 'aborted',
+      reason: 'interrupted',
+      terminalReason: 'aborted_streaming',
+      transport: 'cli-live',
+    });
+  });
+
+  it('leaves the end to the exit path for a crash, a host kill, a reported error or no turn', () => {
+    expect(resolveClaudeCodeLiveRuntimeEnd(finished, { ...exit, code: 2 })).toBeUndefined();
+    expect(resolveClaudeCodeLiveRuntimeEnd(finished, { ...exit, code: 1 })).toBeUndefined();
+    expect(
+      resolveClaudeCodeLiveRuntimeEnd(finished, { ...exit, killedByHost: true }),
+    ).toBeUndefined();
+    expect(resolveClaudeCodeLiveRuntimeEnd(finished, { ...exit, sawError: true })).toBeUndefined();
+    expect(resolveClaudeCodeLiveRuntimeEnd(undefined, exit)).toBeUndefined();
   });
 });

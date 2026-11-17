@@ -39,6 +39,44 @@ export interface ClaudeCodeTurnOutcome {
 const isAbortedResult = (message: any): boolean =>
   !!message.is_error && String(message.terminal_reason ?? '').startsWith('aborted');
 
+/** How a live session's process ended, as its host saw it. */
+export interface ClaudeCodeLiveExit {
+  code: number | null;
+  /** The host killed the process (cancel, stop, quit): its own path reports that end. */
+  killedByHost: boolean;
+  /** The run already reported an error event: that error is its end. */
+  sawError: boolean;
+  signal: NodeJS.Signals | null;
+}
+
+/**
+ * The runtime end a live session (stdin kept open, see `ClaudeCodeLiveInput`)
+ * reports once, at process exit: complete, or interrupted when its last turn
+ * was stopped. Only a clean exit after a finished turn ends the run here — a
+ * crash after a result is a failure, not a completion. Print mode exits 1 when
+ * its last turn was an error result, which an interrupt is.
+ *
+ * Shared by every host of a live CLI (`lh hetero exec`, the desktop's local
+ * spawn) so they end a run by the same rule.
+ *
+ * @returns the `completeRuntime` data, or undefined when the run does not end here
+ */
+export const resolveClaudeCodeLiveRuntimeEnd = (
+  lastTurn: ClaudeCodeTurnOutcome | undefined,
+  exit: ClaudeCodeLiveExit,
+): Record<string, unknown> | undefined => {
+  if (!lastTurn || exit.killedByHost || exit.sawError) return;
+
+  const cleanExit =
+    exit.code === 0 || (lastTurn.aborted && exit.code === 1 && exit.signal === null);
+  if (!cleanExit) return;
+
+  const end = lastTurn.aborted
+    ? { kind: 'aborted', reason: 'interrupted', terminalReason: lastTurn.terminalReason }
+    : { reason: 'complete' };
+  return { ...end, transport: 'cli-live' };
+};
+
 /**
  * The `request` of a stream-json `control_request` line, e.g.
  * `{ subtype: 'interrupt' }`. Claude Code answers each one with a
