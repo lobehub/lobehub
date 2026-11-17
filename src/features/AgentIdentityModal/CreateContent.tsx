@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { useAgentCharacterTab } from '@/components/AgentAvatar/CharacterTab';
 import EmojiPicker from '@/components/EmojiPicker';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -36,6 +37,7 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
       },
       visibility,
     });
+    const characterTab = useAgentCharacterTab(form.avatar);
 
     return (
       <Flexbox gap={20} padding={20}>
@@ -43,6 +45,7 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
           <EmojiPicker
             allowUpload
             allowDelete={!!form.avatar}
+            customTabs={[characterTab]}
             loading={form.uploading}
             locale={locale}
             popupProps={{ placement: 'bottom' }}

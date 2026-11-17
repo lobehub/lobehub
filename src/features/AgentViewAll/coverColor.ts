@@ -1,7 +1,7 @@
 import type { SidebarAgentItem } from '@lobechat/types';
 import { type AgentAvatarColor, cssVar, getAgentAvatarTraits } from '@lobehub/ui';
 
-import { isDefaultAgentAvatar } from '@/components/AgentAvatar';
+import { isGeneratedAgentAvatar } from '@/components/AgentAvatar';
 import { remoteAvatarSrc } from '@/components/Avatar/fallback';
 
 /**
@@ -61,7 +61,7 @@ export const coverPattern = (item: SidebarAgentItem): AgentCoverPattern =>
 /** The uploaded image worth sampling, if the avatar is one. */
 export const coverImageSrc = (item: SidebarAgentItem): string | undefined => {
   const { avatar } = item;
-  if (typeof avatar !== 'string' || isDefaultAgentAvatar(avatar)) return undefined;
+  if (typeof avatar !== 'string' || isGeneratedAgentAvatar(avatar)) return undefined;
 
   return remoteAvatarSrc(avatar);
 };

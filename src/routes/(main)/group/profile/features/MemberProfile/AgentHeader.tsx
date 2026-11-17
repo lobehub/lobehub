@@ -8,7 +8,9 @@ import { PaletteIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { isDefaultAgentAvatar } from '@/components/AgentAvatar/resolve';
+import AgentAvatar from '@/components/AgentAvatar';
+import { useAgentCharacterTab } from '@/components/AgentAvatar/CharacterTab';
+import { isGeneratedAgentAvatar } from '@/components/AgentAvatar/resolve';
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { usePermission } from '@/hooks/usePermission';
@@ -46,6 +48,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
   // File upload
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const [uploading, setUploading] = useState(false);
+  const characterTab = useAgentCharacterTab(agentMeta.avatar);
 
   // Local state for inputs (to avoid stuttering during typing)
   const [localTitle, setLocalTitle] = useState(agentMeta.title || '');
@@ -176,18 +179,24 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
             ? agentMeta.backgroundColor
             : undefined
         }
+        // A member without an emoji or image draws its generated character —
+        // the picked one, else its own — as every other agent avatar does.
         customRender={
-          !isDefaultAgentAvatar(agentMeta.avatar)
+          !isGeneratedAgentAvatar(agentMeta.avatar)
             ? undefined
-            : () => {
-                return (
-                  <Block clickable height={72} width={72}>
-                    <SupervisorAvatar size={72} />
-                  </Block>
-                );
-              }
+            : () => (
+                <Block clickable height={72} width={72}>
+                  <AgentAvatar
+                    agentId={agentId}
+                    avatar={agentMeta.avatar}
+                    name={agentMeta.title}
+                    size={72}
+                  />
+                </Block>
+              )
         }
         customTabs={[
+          characterTab,
           {
             label: (
               <Tooltip title={t('settingAgent.backgroundColor.title', { ns: 'setting' })}>

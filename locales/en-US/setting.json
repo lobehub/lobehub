@@ -1553,6 +1553,8 @@
   "settingAgent.artwork.studio.title": "Agent Appearance",
   "settingAgent.artwork.styleMenu": "Generation style",
   "settingAgent.artwork.uploadFailed": "Could not upload the image. Try again.",
+  "settingAgent.avatar.character": "Character {{index}}",
+  "settingAgent.avatar.characters": "Characters",
   "settingAgent.avatar.sizeExceeded": "Image size exceeds 1MB limit, please choose a smaller image",
   "settingAgent.avatar.title": "Avatar",
   "settingAgent.backgroundColor.title": "Background Color",
