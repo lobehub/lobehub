@@ -14,6 +14,7 @@ import {
   ChannelHistoryRepository,
   ChannelRepository,
   memberEnvironment,
+  usesOwnAgent,
 } from '@/database/repositories/channel';
 import { channelMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -161,29 +162,37 @@ export class ChannelMessagingService {
       throw new ChannelError('BAD_REQUEST', 'You cannot send a message to yourself');
 
     const directory = await this.channels.directory();
+    let channelId = params.channelId;
     // One Agent is always asked in the conversation between the two Agents, wherever it was
     // found, so neither a person's conversation nor a group Channel carries the exchange. A bot
     // run has no Channel for the conclusion to come back to, so it relays like a group message.
-    if (run.channelRun && agentIds.length === 1)
-      return this.askAgent(
-        run.channelRun,
-        findAgent(directory, agentIds[0], params.channelId),
-        content,
-        requestId,
-      );
+    if (run.channelRun && agentIds.length === 1) {
+      const other = findAgent(directory, agentIds[0], params.channelId);
+      if (
+        await usesOwnAgent(
+          this.db,
+          { userId: this.userId, workspaceId: this.workspaceId },
+          other.agentId,
+        )
+      )
+        return this.askAgent(run.channelRun, other, content, requestId);
+      // Another person's Agent reached through its share runs only in its shared direct
+      // conversation, as that person's visitor: relay there instead.
+      channelId = other.channelId;
+    }
 
-    if (!params.channelId)
+    if (!channelId)
       throw new ChannelError(
         'BAD_REQUEST',
         'Give channelId to address several Agents in one group Channel',
       );
-    const target = directory.find(({ channel }) => channel.id === params.channelId);
+    const target = directory.find(({ channel }) => channel.id === channelId);
     if (!target)
       throw new ChannelError(
         'NOT_FOUND',
         'Channel not found among the Channels you can post in; use listChannels',
       );
-    if (params.channelId === run.origin?.channelId)
+    if (channelId === run.origin?.channelId)
       throw new ChannelError(
         'BAD_REQUEST',
         'That is the Channel you are answering in; your final answer is posted there',

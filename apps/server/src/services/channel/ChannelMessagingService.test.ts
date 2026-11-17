@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelMessagingService } from './ChannelMessagingService';
 
-const { directory, openAgentPair, relaySource, send } = vi.hoisted(() => ({
+const { directory, openAgentPair, relaySource, send, usesOwnAgent } = vi.hoisted(() => ({
   directory: vi.fn(),
   openAgentPair: vi.fn(),
   relaySource: vi.fn(),
   send: vi.fn(),
+  usesOwnAgent: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
@@ -18,6 +19,7 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     directory = directory;
     openAgentPair = openAgentPair;
   },
+  usesOwnAgent,
 }));
 vi.mock('@/database/models/workspace', () => ({
   WorkspaceModel: class {
@@ -82,6 +84,7 @@ describe('ChannelMessagingService', () => {
     relaySource.mockResolvedValue(run());
     directory.mockResolvedValue([current, lobehub]);
     send.mockResolvedValue({ id: 'message-sent' });
+    usesOwnAgent.mockResolvedValue(true);
   });
   const service = () =>
     new ChannelMessagingService(db as never, 'user-1', 'op-current', 'workspace-1');
@@ -189,6 +192,26 @@ describe('ChannelMessagingService', () => {
     // No channelId at all: found through listChannels' directory.
     await service().sendMessage({ agentIds: ['agent-lobehub'], content: 'And T-2?' }, 'call-2');
     expect(send.mock.calls[1][0]).toBe('channel-pair');
+  });
+
+  it("relays to another person's shared Agent in its shared conversation", async () => {
+    directory.mockResolvedValue([current, otherDirect]);
+    usesOwnAgent.mockResolvedValue(false);
+
+    const sent = await service().sendMessage(
+      { agentIds: ['agent-lobehub'], content: 'Is T-1 fixed?' },
+      'call-1',
+    );
+    // A shared Agent cannot join a conversation between Agents; it runs where its share is.
+    expect(openAgentPair).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(
+      'channel-direct',
+      expect.objectContaining({
+        mentions: ['member-direct'],
+        metadata: { via: expect.objectContaining({ agentId: 'agent-self' }) },
+      }),
+    );
+    expect(sent).toMatchObject({ channelId: 'channel-direct' });
   });
 
   it('refuses relays that would loop, target the current Channel or miss the Agent', async () => {

@@ -62,7 +62,7 @@ import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from 
 import { createChannelThread, readChannelView } from './view';
 
 export type { ChannelAddAgentInput } from './agent';
-export { memberEnvironment } from './agent';
+export { memberEnvironment, usesOwnAgent } from './agent';
 export {
   CHANNEL_ROUTING_BATCH_SIZE,
   CHANNEL_ROUTING_LEASE_MS,

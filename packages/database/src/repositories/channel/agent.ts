@@ -13,7 +13,7 @@ import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
 import { agents, agentShares, channelMembers, userSettings } from '../../schemas';
-import type { Transaction } from '../../type';
+import type { LobeChatDatabase, Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
@@ -106,6 +106,28 @@ export const findSharedChannelAgent = async (
  */
 const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: string) =>
   channel.agentId === agentId;
+
+/**
+ * Whether an Agent is usable by the person in this scope on its own, not only through another
+ * person's link share. A shared Agent runs only in its shared direct conversation.
+ */
+export const usesOwnAgent = async (
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string | null },
+  agentId: string,
+): Promise<boolean> => {
+  const [agent] = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(
+      agentUsableByWhere(agentId, {
+        userId: scope.userId,
+        workspaceId: scope.workspaceId ?? undefined,
+      }),
+    )
+    .limit(1);
+  return !!agent;
+};
 
 /** Check Agent scope and hold it through creation of the Channel/member reference. */
 export const requireChannelAgent = async (
