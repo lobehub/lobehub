@@ -59,8 +59,8 @@ const containsEntry = (entry: Record<string, unknown>) =>
 
 /**
  * Topics with a cleanup waiting on `deviceId` — or, with `deviceId` undefined,
- * on a desktop that never registered with the gateway (records without one).
- * Trashed topics included; the caller re-checks each before running it.
+ * on a desktop that never registered with the gateway (records without one,
+ * the caller's own only). Trashed topics included; the caller re-checks each before running it.
  */
 export const findPendingOwnedWorktreeTopics = async (
   ctx: TopicModelContext,
@@ -72,7 +72,10 @@ export const findPendingOwnedWorktreeTopics = async (
     .where(
       and(
         ctx.trashScope(),
-        eq(topics.userId, ctx.userId),
+        // A device-bound cleanup belongs to whoever may operate that device —
+        // every member of a workspace that shares it. One without a device
+        // only ever ran on its creator's own desktop.
+        deviceId ? undefined : eq(topics.userId, ctx.userId),
         or(
           containsEntry({
             cleanup: { state: 'pending' },

@@ -195,12 +195,17 @@ export interface OwnedWorktreeCleanupResult {
 
 /** What a device reports for one `restoreOwnedWorktree` call. */
 export interface OwnedWorktreeRestoreResult {
+  /** With `needsLocal`: the branch to check out, as the server last recorded it. */
+  branch?: string;
   error?: string;
   /**
    * `branchMissing`: the branch is gone (deleted after a merge); nothing was
-   * created. `unreachable` (server side only): the device could not be reached.
+   * created. Server side only: `unreachable` (the device could not be reached),
+   * `busy` (a cleanup is deleting the folder right now; ask again shortly) and
+   * `needsLocal` (the desktop runs the re-checkout itself over IPC).
    */
-  outcome: 'branchMissing' | 'error' | 'refused' | 'restored' | 'unreachable';
+  outcome:
+    'branchMissing' | 'busy' | 'error' | 'needsLocal' | 'refused' | 'restored' | 'unreachable';
   outdated?: boolean;
 }
 

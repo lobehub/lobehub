@@ -1,12 +1,10 @@
-import { isDesktop } from '@lobechat/const';
 import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
 import { getTopicWorktreePaths, resolveOwnedWorktrees } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
-import { isLocalOwnedWorktree, restoreOwnedWorktree } from '@/services/ownedWorktree';
+import { restoreOwnedWorktree } from '@/services/ownedWorktree';
 import type { ChatTopic } from '@/types/topic';
-import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 /**
  * The worktree the app created for this topic that its next turn runs in (its
@@ -18,14 +16,29 @@ const worktreeForRun = (metadata: ChatTopicMetadata | undefined): OwnedWorktree 
   return resolveOwnedWorktrees(metadata).find((entry) => paths.includes(entry.path));
 };
 
-/** Whether the folder is there, checked on this desktop without a round trip. */
-const existsLocally = async (path: string): Promise<boolean | undefined> => {
-  if (!isDesktop) return;
+/** How long a turn waits for a cleanup that is deleting its worktree right now. */
+const BUSY_WAIT_MS = 120_000;
+const BUSY_POLL_MS = 2000;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Ask until the worktree is no longer mid-cleanup: a topic restored while its
+ * archive cleanup is still deleting the folder waits for that to finish, then
+ * checks it out again — it never starts its turn in a folder about to vanish.
+ */
+const restoreWhenSettled = async (topicId: string, entry: OwnedWorktree) => {
+  const deadline = Date.now() + BUSY_WAIT_MS;
+  let waiting: { close: () => void } | undefined;
   try {
-    const stat = await ensureElectronIpc().workspace.statPath({ path });
-    return stat.exists && stat.isDirectory;
-  } catch {
-    return;
+    for (;;) {
+      const result = await restoreOwnedWorktree(topicId, entry);
+      if (result.outcome !== 'busy' || Date.now() > deadline) return result;
+      waiting ??= toast.loading(t('worktreeRestore.waiting', { ns: 'chat' }));
+      await sleep(BUSY_POLL_MS);
+    }
+  } finally {
+    waiting?.close();
   }
 };
 
@@ -60,13 +73,10 @@ export const ensureOwnedWorktreeForRun = async (
   const entry = worktreeForRun(metadata);
   if (!topic || !metadata || !entry) return topic;
 
-  const local = await isLocalOwnedWorktree(entry);
-  // On this desktop a present folder needs nothing; elsewhere the server
-  // answers from its record without touching the device unless it was removed.
-  if (local && (await existsLocally(entry.path)) !== false) return topic;
-
   try {
-    const result = await restoreOwnedWorktree(topic.id, entry);
+    // The server answers from its record, touching the device only for a
+    // folder that was removed.
+    const result = await restoreWhenSettled(topic.id, entry);
     if (result.outcome === 'restored') return topic;
     if (result.outcome === 'branchMissing') {
       toast.warning({
@@ -85,7 +95,10 @@ export const ensureOwnedWorktreeForRun = async (
       return next;
     }
     toast.error({
-      description: result.error,
+      description:
+        result.outcome === 'busy'
+          ? t('worktreeRestore.stillCleaning', { ns: 'chat' })
+          : result.error,
       title: t('worktreeRestore.failed', { ns: 'chat' }),
     });
   } catch (error) {

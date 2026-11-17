@@ -150,27 +150,30 @@ export const restoreOwnedWorktree = async (
   topicId: string,
   entry: OwnedWorktree,
 ): Promise<OwnedWorktreeRestoreResult> => {
-  if (!(await isLocalOwnedWorktree(entry)))
-    return lambdaClient.topic.restoreOwnedWorktree.mutate({ path: entry.path, topicId });
+  const local = await isLocalOwnedWorktree(entry);
+  // The server's record decides: a cleanup still running (`busy`), one that
+  // never ran (cancelled), or a removed folder to check out again.
+  const answer = await lambdaClient.topic.restoreOwnedWorktree.mutate({
+    local,
+    path: entry.path,
+    topicId,
+  });
+  if (answer.outcome !== 'needsLocal') return answer;
 
   let result: OwnedWorktreeRestoreResult;
-  if (!entry.branch) {
-    result = { outcome: 'branchMissing' };
-  } else {
-    try {
-      result = await electronGitService.restoreOwnedWorktree({
-        branch: entry.branch,
-        sourcePath: entry.sourcePath,
-        worktreePath: entry.path,
-      });
-    } catch (error) {
-      return { error: (error as Error)?.message, outcome: 'error' };
-    }
+  try {
+    result = await electronGitService.restoreOwnedWorktree({
+      branch: answer.branch ?? entry.branch ?? '',
+      sourcePath: entry.sourcePath,
+      worktreePath: entry.path,
+    });
+  } catch (error) {
+    return { error: (error as Error)?.message, outcome: 'error' };
   }
-  if (result.outcome === 'error' || result.outcome === 'refused') return result;
+  if (result.outcome !== 'branchMissing' && result.outcome !== 'restored') return result;
   return lambdaClient.topic.restoreOwnedWorktree.mutate({
     path: entry.path,
-    result: { error: result.error, outcome: result.outcome as 'branchMissing' | 'restored' },
+    result: { error: result.error, outcome: result.outcome },
     topicId,
   });
 };

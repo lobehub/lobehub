@@ -4,7 +4,7 @@ import type { ChatTopicMetadata, OwnedWorktreeCleanupResult } from '@lobechat/ty
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { topics, users } from '@/database/schemas';
+import { topics, users, workspaces } from '@/database/schemas';
 
 import { STALE_CLAIM_MS, WorktreeCleanupService } from './index';
 
@@ -32,7 +32,7 @@ const autoCreated = (extra: Partial<ChatTopicMetadata> = {}): ChatTopicMetadata 
 const insert = (
   id: string,
   metadata: ChatTopicMetadata,
-  extra: { isDeleted?: boolean; status?: Status } = {},
+  extra: { isDeleted?: boolean; status?: Status; userId?: string; workspaceId?: string } = {},
 ) =>
   db.insert(topics).values({
     deletedAt: extra.isDeleted ? new Date() : null,
@@ -40,7 +40,8 @@ const insert = (
     isDeleted: extra.isDeleted ?? null,
     metadata,
     status: extra.status ?? 'completed',
-    userId,
+    userId: extra.userId ?? userId,
+    workspaceId: extra.workspaceId ?? null,
   });
 
 const entryOf = async (id: string) =>
@@ -344,7 +345,9 @@ describe('restore', () => {
 
   it('records a restore the desktop ran over IPC without calling the device', async () => {
     await insert('t-ipc', removed({ boundDeviceId: undefined }), { status: 'active' });
-    await expect(service().restore('t-ipc', WT, { outcome: 'restored' })).resolves.toEqual({
+    await expect(
+      service().restore('t-ipc', WT, { result: { outcome: 'restored' } }),
+    ).resolves.toEqual({
       outcome: 'restored',
     });
     expect(gateway.restoreOwnedWorktree).not.toHaveBeenCalled();
@@ -371,5 +374,133 @@ describe('restore', () => {
     await insert('t-live', autoCreated(), { status: 'active' });
     await expect(service().restore('t-live', WT)).resolves.toEqual({ outcome: 'restored' });
     expect(gateway.restoreOwnedWorktree).not.toHaveBeenCalled();
+  });
+});
+
+describe('review follow-ups', () => {
+  const memberId = 'worktree-cleanup-member';
+  const workspaceId = 'worktree-cleanup-ws';
+  const removedOn = (extra: Partial<ChatTopicMetadata> = {}) =>
+    autoCreated({
+      ownedWorktrees: [
+        {
+          branch: BRANCH,
+          cleanup: { at: now.toISOString(), state: 'running', trigger: 'archived' },
+          createdAt: 'y',
+          deviceId: 'dev-1',
+          path: WT,
+          sourcePath: '/code/repo',
+        },
+      ],
+      ...extra,
+    });
+
+  it('records the branch the device reports, not a stale one from creation', async () => {
+    await insert('t-renamed', autoCreated());
+    answers({ branch: 'lobehub/renamed', outcome: 'removed' });
+    await service().retireTopics(['t-renamed'], 'archived');
+    expect((await entryOf('t-renamed'))?.branch).toBe('lobehub/renamed');
+  });
+
+  it('makes a restore wait while a cleanup is still deleting the folder', async () => {
+    await insert('t-busy', removedOn(), { status: 'active' });
+    await expect(service().restore('t-busy', WT)).resolves.toEqual({ outcome: 'busy' });
+    expect(gateway.restoreOwnedWorktree).not.toHaveBeenCalled();
+
+    // The cleanup lands; the next ask checks the worktree out again.
+    await service().recordCleanupResult('t-busy', WT, 'archived', { outcome: 'removed' });
+    gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'restored' });
+    await expect(service().restore('t-busy', WT)).resolves.toEqual({ outcome: 'restored' });
+    expect(gateway.restoreOwnedWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a cleanup that never ran when the topic comes back', async () => {
+    await insert('t-cancel', autoCreated(), { status: 'active' });
+    await db
+      .update(topics)
+      .set({
+        metadata: autoCreated({
+          ownedWorktrees: [
+            {
+              branch: BRANCH,
+              cleanup: { at: 'x', state: 'pending', trigger: 'archived' },
+              createdAt: 'y',
+              deviceId: 'dev-1',
+              path: WT,
+              sourcePath: '/code/repo',
+            },
+          ],
+        }),
+      })
+      .where(eq(topics.id, 't-cancel'));
+    await expect(service().restore('t-cancel', WT)).resolves.toEqual({ outcome: 'restored' });
+    expect((await entryOf('t-cancel'))?.cleanup).toBeUndefined();
+    gateway.cleanupOwnedWorktree.mockClear();
+    await service().runPendingForDevice('dev-1');
+    expect(gateway.cleanupOwnedWorktree).not.toHaveBeenCalled();
+  });
+
+  it('hands a removed worktree on this desktop back for an IPC re-checkout', async () => {
+    await insert(
+      't-local',
+      autoCreated({
+        ownedWorktrees: [
+          {
+            branch: 'lobehub/renamed',
+            cleanup: { at: 'x', state: 'removed', trigger: 'trashed' },
+            createdAt: 'y',
+            deviceId: 'dev-1',
+            path: WT,
+            sourcePath: '/code/repo',
+          },
+        ],
+      }),
+      { status: 'active' },
+    );
+    await expect(service().restore('t-local', WT, { local: true })).resolves.toEqual({
+      branch: 'lobehub/renamed',
+      outcome: 'needsLocal',
+    });
+    expect(gateway.restoreOwnedWorktree).not.toHaveBeenCalled();
+  });
+
+  it("drains a workspace device's pending cleanups for every member's topics", async () => {
+    await db.insert(users).values({ id: memberId });
+    await db
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+    try {
+      const pending = (deviceId?: string) =>
+        autoCreated({
+          ownedWorktrees: [
+            {
+              branch: BRANCH,
+              cleanup: { at: 'x', state: 'pending', trigger: 'archived' },
+              createdAt: 'y',
+              ...(deviceId && { deviceId }),
+              path: WT,
+              sourcePath: '/code/repo',
+            },
+          ],
+        });
+      // A teammate archived a topic on the shared device while it was offline.
+      await insert('t-member', pending('dev-ws'), { userId: memberId, workspaceId });
+      // A teammate's desktop-only record never runs on this machine.
+      await insert('t-member-local', pending(), { userId: memberId, workspaceId });
+      answers({ outcome: 'removed' });
+
+      const enroller = new WorktreeCleanupService(db, userId, workspaceId, {
+        gateway: gateway as any,
+        now: () => now,
+      });
+      expect((await enroller.runPendingForDevice('dev-ws')).results).toEqual({
+        [`t-member:${WT}`]: 'removed',
+      });
+      expect(await enroller.claimLocalCleanups(undefined)).toEqual([]);
+    } finally {
+      await db.delete(topics).where(eq(topics.workspaceId, workspaceId));
+      await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+      await db.delete(users).where(eq(users.id, memberId));
+    }
   });
 });

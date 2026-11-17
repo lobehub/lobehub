@@ -4021,5 +4021,7 @@
   "worktreeRestore.branchMissing": "无法恢复 worktree",
   "worktreeRestore.branchMissingDesc": "分支 {{branch}} 已不存在，这个对话改在源仓库目录中继续。",
   "worktreeRestore.failed": "无法恢复 worktree",
+  "worktreeRestore.stillCleaning": "worktree 仍在清理中，请稍后再发送。",
+  "worktreeRestore.waiting": "正在等待 worktree 清理完成后再恢复…",
   "you": "你"
 }

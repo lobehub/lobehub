@@ -98,6 +98,18 @@ describe('cleanupOwnedWorktree — clean / dirty', () => {
     await expect(run()).resolves.toMatchObject({ dirtyFiles: 3, outcome: 'dirty' });
   });
 
+  it('keeps a worktree whose submodule holds uncommitted work', async () => {
+    const lib = await tempDir('owt-lib-');
+    await initRepo(lib);
+    git(worktree, '-c', 'protocol.file.allow=always', 'submodule', 'add', lib, 'lib');
+    git(worktree, 'commit', '-m', 'add submodule');
+    await expect(countUncommittedFiles(worktree)).resolves.toBe(0);
+
+    await writeFile(path.join(worktree, 'lib', 'scratch.txt'), 'only here');
+    await expect(run()).resolves.toMatchObject({ dirtyFiles: 1, outcome: 'dirty' });
+    expect(existsSync(path.join(worktree, 'lib', 'scratch.txt'))).toBe(true);
+  });
+
   it('counts a staged rename once', async () => {
     git(worktree, 'mv', 'a.txt', 'renamed.txt');
     await expect(countUncommittedFiles(worktree)).resolves.toBe(1);
@@ -260,6 +272,27 @@ describe('restoreOwnedWorktree', () => {
       }),
     ).resolves.toEqual({ outcome: 'branchMissing' });
     expect(existsSync(worktree)).toBe(false);
+  });
+
+  it('reports an unreadable source repository as an error, never as a missing branch', async () => {
+    await run();
+    await rm(path.join(repo, '.git'), { force: true, recursive: true });
+    await expect(
+      restoreOwnedWorktree({
+        branch: BRANCH,
+        rootDir: root,
+        sourcePath: repo,
+        worktreePath: worktree,
+      }),
+    ).resolves.toMatchObject({ outcome: 'error' });
+    await expect(
+      restoreOwnedWorktree({
+        branch: BRANCH,
+        rootDir: root,
+        sourcePath: path.join(repo, 'unmounted'),
+        worktreePath: worktree,
+      }),
+    ).resolves.toMatchObject({ outcome: 'error' });
   });
 
   it('refuses a path outside the root', async () => {

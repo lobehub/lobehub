@@ -102,9 +102,18 @@ export const ownedWorktreeRouter = router({
    * Runs on the device unless the desktop already did it and passes `result`.
    */
   restoreOwnedWorktree: ownedWorktreeProcedure
-    .input(target.extend({ result: restoreResultSchema.optional() }))
+    .input(
+      target.extend({
+        /** The worktree is on the calling desktop: answer `needsLocal` instead of the RPC. */
+        local: z.boolean().optional(),
+        result: restoreResultSchema.optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       await assertTopic(ctx, input.topicId);
-      return ctx.worktreeCleanup.restore(input.topicId, input.path, input.result);
+      return ctx.worktreeCleanup.restore(input.topicId, input.path, {
+        local: input.local,
+        result: input.result,
+      });
     }),
 });

@@ -134,7 +134,9 @@ export class WorktreeCleanupService {
     result: OwnedWorktreeCleanupResult,
   ): Promise<OwnedWorktree | undefined> {
     return this.topicModel.updateOwnedWorktree(topicId, path, (entry) => {
-      const branch = entry.branch ?? result.branch;
+      // The device reads the branch the worktree is on now: it wins over the
+      // one recorded at creation, which a later rename leaves stale.
+      const branch = result.branch ?? entry.branch;
       const next = { ...entry, ...(branch && { branch }) };
       switch (result.outcome) {
         case 'removed': {
@@ -398,24 +400,45 @@ export class WorktreeCleanupService {
   }
 
   /**
-   * Bring a cleaned-up worktree back for a restored topic: run the device's
-   * `git worktree add <path> <branch>` (unless the desktop already did, over
-   * IPC, and passes its `result`), then record it. A branch that is gone sends
-   * the topic back to its source repository.
+   * Make a restored topic's worktree usable before its next turn. The record
+   * decides, never the folder alone (a running cleanup may not have deleted
+   * it yet):
+   *
+   * - `running`: a cleanup is deleting it now → `busy`; the caller waits.
+   * - `pending`: it never ran → cancelled, the folder is still there.
+   * - `removed`: run the device's `git worktree add <path> <branch>`; with
+   *   `local`, answer `needsLocal` so the desktop runs it over IPC and reports
+   *   its `result`. A branch that is gone sends the topic back to its source.
+   * - otherwise the folder is there → `restored`.
    */
   async restore(
     topicId: string,
     path: string,
-    result?: OwnedWorktreeRestoreResult,
+    { local, result }: { local?: boolean; result?: OwnedWorktreeRestoreResult } = {},
   ): Promise<OwnedWorktreeRestoreResult> {
     const [row] = await this.topicModel.findOwnedWorktreeTopics([topicId]);
     const entry = resolveOwnedWorktrees(row?.metadata).find((item) => item.path === path);
     if (!row || !entry) return { error: 'Unknown worktree', outcome: 'refused' };
-    if (entry.cleanup?.state !== 'removed') return { outcome: 'restored' };
+
+    if (!result) {
+      const state = entry.cleanup?.state;
+      if (state === 'running' && !this.isStaleClaim(entry.cleanup)) return { outcome: 'busy' };
+      if (state === 'pending' || state === 'running') {
+        // Cancel only what is still waiting: a claim taken meanwhile wins.
+        const cancelled = await this.topicModel.updateOwnedWorktree(topicId, path, (current) => {
+          if (current.cleanup?.state !== state) return undefined;
+          const { cleanup: _drop, ...rest } = current;
+          return rest;
+        });
+        return cancelled ? { outcome: 'restored' } : { outcome: 'busy' };
+      }
+      if (state !== 'removed') return { outcome: 'restored' };
+    }
 
     let answer = result;
     if (!answer) {
       if (!entry.branch) answer = { outcome: 'branchMissing' };
+      else if (local) return { branch: entry.branch, outcome: 'needsLocal' };
       else if (!entry.deviceId)
         return { error: 'Restore it from the desktop app', outcome: 'unreachable' };
       else

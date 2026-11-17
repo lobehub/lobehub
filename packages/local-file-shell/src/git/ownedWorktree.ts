@@ -131,8 +131,9 @@ const assertGitFilePointsToSource = async (sourcePath: string, worktreePath: str
 
 /**
  * Uncommitted work that would be lost: tracked changes (staged or not) and
- * untracked files. Ignored files (`node_modules`, build output) do not count,
- * and neither do unpushed commits — the branch is always kept.
+ * untracked files — inside submodules too, whose working trees the removal
+ * deletes with the worktree. Ignored files (`node_modules`, build output) do
+ * not count, and neither do unpushed commits — the branch is always kept.
  */
 export const countUncommittedFiles = async (worktreePath: string): Promise<number> => {
   const stdout = await git(worktreePath, [
@@ -140,7 +141,8 @@ export const countUncommittedFiles = async (worktreePath: string): Promise<numbe
     '--porcelain=v1',
     '-z',
     '--untracked-files=all',
-    '--ignore-submodules=dirty',
+    // Overrides any `submodule.<name>.ignore` config: a dirty submodule is dirty.
+    '--ignore-submodules=none',
   ]);
   const tokens = stdout.split('\0');
   let count = 0;
@@ -263,6 +265,24 @@ export const cleanupOwnedWorktree = (
     outcome: 'error',
   }));
 
+/**
+ * Whether the branch exists in the source repository. Only git's own "no such
+ * ref" answer (`show-ref` exit 1) means missing: a source that cannot be read
+ * (an unmounted drive, a moved repo) throws, so it is never mistaken for a
+ * deleted branch — which would send the topic back to its source for good.
+ */
+const branchExists = async (sourcePath: string, branch: string): Promise<boolean> => {
+  // Throws when the source is not a readable repository.
+  await commonGitDir(sourcePath);
+  try {
+    await git(sourcePath, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]);
+    return true;
+  } catch (error: any) {
+    if (error?.code === 1) return false;
+    throw error;
+  }
+};
+
 export interface RestoreOwnedWorktreeParams {
   branch: string;
   /** The worktree root; tests only. Device RPCs never pass it. */
@@ -298,15 +318,7 @@ export const restoreOwnedWorktree = async ({
       return { error: `Folder already exists: ${worktreePath}`, outcome: 'refused' };
     }
 
-    const exists = await git(sourcePath, [
-      'rev-parse',
-      '--verify',
-      '--quiet',
-      `refs/heads/${branch}`,
-    ])
-      .then(() => true)
-      .catch(() => false);
-    if (!exists) return { outcome: 'branchMissing' };
+    if (!(await branchExists(sourcePath, branch))) return { outcome: 'branchMissing' };
 
     // A registration left behind for this path would make `add` refuse.
     await prune(sourcePath);

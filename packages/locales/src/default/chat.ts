@@ -4506,6 +4506,9 @@ export default {
   'worktreeRestore.branchMissingDesc':
     'The branch {{branch}} no longer exists, so this conversation continues in the source repository.',
   'worktreeRestore.failed': "Couldn't restore the worktree",
+  'worktreeRestore.stillCleaning':
+    'The worktree is still being cleaned up. Try sending again in a moment.',
+  'worktreeRestore.waiting': 'Waiting for the worktree cleanup to finish before restoring it…',
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',

@@ -8,10 +8,10 @@ import { ensureOwnedWorktreeForRun } from './ownedWorktreeRestore';
 const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   isDesktop: true,
-  isLocal: vi.fn(),
   restore: vi.fn(),
-  statPath: vi.fn(),
+  toastClose: vi.fn(),
   toastError: vi.fn(),
+  toastLoading: vi.fn(),
   toastWarning: vi.fn(),
 }));
 
@@ -22,14 +22,17 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 vi.mock('@lobehub/ui', () => ({
-  toast: { error: mocks.toastError, warning: mocks.toastWarning },
+  toast: {
+    error: mocks.toastError,
+    loading: (...args: unknown[]) => {
+      mocks.toastLoading(...args);
+      return { close: mocks.toastClose };
+    },
+    warning: mocks.toastWarning,
+  },
 }));
 vi.mock('@/services/ownedWorktree', () => ({
-  isLocalOwnedWorktree: mocks.isLocal,
   restoreOwnedWorktree: mocks.restore,
-}));
-vi.mock('@/utils/electron/ipc', () => ({
-  ensureElectronIpc: () => ({ workspace: { statPath: mocks.statPath } }),
 }));
 vi.mock('@/store/chat', () => ({
   getChatStoreState: () => ({ internal_dispatchTopic: mocks.dispatch }),
@@ -75,40 +78,39 @@ describe('ensureOwnedWorktreeForRun', () => {
     expect(mocks.restore).not.toHaveBeenCalled();
   });
 
-  it('does nothing when the worktree is still on this desktop', async () => {
-    mocks.isLocal.mockResolvedValue(true);
-    mocks.statPath.mockResolvedValue({ exists: true, isDirectory: true });
-    const subject = restoredTopic();
-    await expect(ensureOwnedWorktreeForRun(subject)).resolves.toBe(subject);
-    expect(mocks.restore).not.toHaveBeenCalled();
-  });
-
-  it('rebuilds a removed worktree before the turn and keeps the session path', async () => {
-    mocks.isLocal.mockResolvedValue(true);
-    mocks.statPath.mockResolvedValue({ exists: false, isDirectory: false });
+  it('runs the turn as is when the server says the worktree is there', async () => {
     mocks.restore.mockResolvedValue({ outcome: 'restored' });
     const subject = restoredTopic();
-
-    const out = await ensureOwnedWorktreeForRun(subject);
-
+    await expect(ensureOwnedWorktreeForRun(subject)).resolves.toBe(subject);
     expect(mocks.restore).toHaveBeenCalledWith(
       'tpc_1',
       expect.objectContaining({ branch: 'lobehub/quiet-hill', path: WT }),
     );
-    expect(out).toBe(subject);
-    expect(out?.metadata?.workingDirectoryConfig?.sessionPath).toBe(WT);
+    expect(subject.metadata?.workingDirectoryConfig?.sessionPath).toBe(WT);
   });
 
-  it('asks the server for a worktree on a remote device', async () => {
-    mocks.isLocal.mockResolvedValue(false);
-    mocks.restore.mockResolvedValue({ outcome: 'restored' });
-    await ensureOwnedWorktreeForRun(restoredTopic());
-    expect(mocks.statPath).not.toHaveBeenCalled();
-    expect(mocks.restore).toHaveBeenCalledTimes(1);
+  it('waits while the archive cleanup is still deleting the folder, then restores it', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.restore
+        .mockResolvedValueOnce({ outcome: 'busy' })
+        .mockResolvedValueOnce({ outcome: 'busy' })
+        .mockResolvedValueOnce({ outcome: 'restored' });
+      const subject = restoredTopic();
+      const pending = ensureOwnedWorktreeForRun(subject);
+      await vi.runAllTimersAsync();
+
+      await expect(pending).resolves.toBe(subject);
+      expect(mocks.restore).toHaveBeenCalledTimes(3);
+      expect(mocks.toastLoading).toHaveBeenCalledTimes(1);
+      expect(mocks.toastClose).toHaveBeenCalledTimes(1);
+      expect(mocks.toastError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to the source repository when the branch is gone, and says so', async () => {
-    mocks.isLocal.mockResolvedValue(false);
     mocks.restore.mockResolvedValue({ outcome: 'branchMissing' });
 
     const out = await ensureOwnedWorktreeForRun(restoredTopic());
@@ -126,7 +128,6 @@ describe('ensureOwnedWorktreeForRun', () => {
   });
 
   it('never blocks the turn on a failed restore', async () => {
-    mocks.isLocal.mockResolvedValue(false);
     mocks.restore.mockResolvedValue({ error: 'fatal: boom', outcome: 'error' });
     const subject = restoredTopic();
     await expect(ensureOwnedWorktreeForRun(subject)).resolves.toBe(subject);

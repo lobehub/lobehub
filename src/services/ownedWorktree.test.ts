@@ -131,27 +131,37 @@ describe('discardOwnedWorktree', () => {
 });
 
 describe('restoreOwnedWorktree', () => {
-  it('re-adds a local worktree over IPC and records it', async () => {
+  it('lets the server decide, then re-adds a worktree on this desktop over IPC', async () => {
+    mocks.restore
+      .mockResolvedValueOnce({ branch: 'lobehub/renamed', outcome: 'needsLocal' })
+      .mockResolvedValueOnce({ outcome: 'restored' });
     mocks.ipcRestore.mockResolvedValue({ outcome: 'restored' });
-    mocks.restore.mockResolvedValue({ outcome: 'restored' });
 
     await expect(restoreOwnedWorktree('t1', entry())).resolves.toEqual({ outcome: 'restored' });
+    expect(mocks.restore).toHaveBeenNthCalledWith(1, { local: true, path: WT, topicId: 't1' });
+    // The branch the server last recorded wins over the stale list row.
     expect(mocks.ipcRestore).toHaveBeenCalledWith({
-      branch: 'lobehub/quiet-hill',
+      branch: 'lobehub/renamed',
       sourcePath: '/code/repo',
       worktreePath: WT,
     });
-    expect(mocks.restore).toHaveBeenCalledWith({
+    expect(mocks.restore).toHaveBeenNthCalledWith(2, {
       path: WT,
       result: { error: undefined, outcome: 'restored' },
       topicId: 't1',
     });
   });
 
-  it('asks the server for a remote worktree', async () => {
+  it('passes a busy or already-restored answer straight through', async () => {
+    mocks.restore.mockResolvedValue({ outcome: 'busy' });
+    await expect(restoreOwnedWorktree('t1', entry())).resolves.toEqual({ outcome: 'busy' });
+    expect(mocks.ipcRestore).not.toHaveBeenCalled();
+  });
+
+  it('asks the server to run it on a remote device', async () => {
     mocks.restore.mockResolvedValue({ outcome: 'restored' });
     await restoreOwnedWorktree('t1', entry('dev-remote'));
     expect(mocks.ipcRestore).not.toHaveBeenCalled();
-    expect(mocks.restore).toHaveBeenCalledWith({ path: WT, topicId: 't1' });
+    expect(mocks.restore).toHaveBeenCalledWith({ local: false, path: WT, topicId: 't1' });
   });
 });
