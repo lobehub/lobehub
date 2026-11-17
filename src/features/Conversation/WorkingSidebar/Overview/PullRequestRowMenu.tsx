@@ -1,13 +1,11 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { ActionIcon, copyToClipboard, DropdownMenu, toast } from '@lobehub/ui';
 import { EllipsisIcon } from 'lucide-react';
-import { type MouseEvent, useState } from 'react';
+import { type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TopicPullRequestView } from '@/features/TopicPullRequests/pullRequestView';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
-import { scmService } from '@/services/scm';
-import { workService } from '@/services/work';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import {
@@ -15,6 +13,7 @@ import {
   type PullRequestMenuTranslate,
   resolveAutoFixAvailability,
 } from './pullRequestMenuItems';
+import { useAutoFixToggle } from './useAutoFixToggle';
 
 // The menu sits inside a clickable row, and React bubbles portal events
 // through the component tree: without this, picking an item opens the PR too.
@@ -32,22 +31,11 @@ interface PullRequestRowMenuProps {
 const PullRequestRowMenu = ({ onDismiss, topicId, view }: PullRequestRowMenuProps) => {
   const { t } = useTranslation('chat');
   const router = useQueryRoute();
-  // Ahead of the refreshed list, so the check mark follows the click at once.
-  const [pendingAutoFix, setPendingAutoFix] = useState<boolean>();
   const availability = resolveAutoFixAvailability(view.autoFix, topicId);
   const name = `#${view.number}`;
-
-  const toggleAutoFix = async (enabled: boolean) => {
-    if (availability.kind !== 'own') return;
-    setPendingAutoFix(enabled);
-    try {
-      await scmService.setChangeRequestAutoFix({
-        changeRequestId: availability.changeRequestId,
-        enabled,
-      });
-    } catch {
-      // Not saved: the check mark goes back, and the person is told.
-      setPendingAutoFix(undefined);
+  const autoFix = useAutoFixToggle({
+    changeRequestId: availability.kind === 'own' ? availability.changeRequestId : undefined,
+    onFailed: (enabled) =>
       toast.error(
         t(
           enabled
@@ -55,19 +43,12 @@ const PullRequestRowMenu = ({ onDismiss, topicId, view }: PullRequestRowMenuProp
             : 'workingPanel.overview.pr.autoFix.disableFailed',
           { name },
         ),
-      );
-      return;
-    }
-    // Saved: hold the new state until the list carries it (and the reset count).
-    try {
-      await workService.refreshTopicPullRequests(topicId);
-    } finally {
-      setPendingAutoFix(undefined);
-    }
-  };
+      ),
+    topicId,
+  });
 
   const items = buildPullRequestMenuItems({
-    autoFixChecked: pendingAutoFix,
+    autoFixChecked: autoFix.pending,
     availability,
     onCopyLink: async () => {
       await copyToClipboard(view.url);
@@ -78,7 +59,7 @@ const PullRequestRowMenu = ({ onDismiss, topicId, view }: PullRequestRowMenuProp
     onOpenOwnerTopic: (topic) => {
       if (topic.agentId) router.push(AGENT_CHAT_TOPIC_URL(topic.agentId, topic.id));
     },
-    onToggleAutoFix: (enabled) => void toggleAutoFix(enabled),
+    onToggleAutoFix: (enabled) => void autoFix.toggle(enabled),
     t: t as unknown as PullRequestMenuTranslate,
   });
 
