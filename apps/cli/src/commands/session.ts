@@ -86,7 +86,7 @@ export function registerSessionCommand(program: Command) {
     .option('--title <title>', 'Title (default: taken from the message)')
     .option(
       '--where <mode>',
-      'Working directory: inherit (default, this conversation’s directory), new-worktree (a fresh git worktree and branch), none (the agent default)',
+      'Working directory: inherit (default, this conversation’s directory), new-worktree (a fresh git worktree and branch), none (no directory; still this conversation’s device)',
     )
     .option('--base-branch <branch>', 'With --where new-worktree: the branch to fork from')
     .option('--device <target>', 'Device to run on — an id from `lh device list`, or "local"')

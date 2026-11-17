@@ -146,7 +146,7 @@ describe('SubSessionService.start', () => {
     expect(deps.execAgent).not.toHaveBeenCalled();
   });
 
-  it('runs with the agent defaults when asked for no workspace', async () => {
+  it('sets no directory when asked for no workspace, but stays on the opener device', async () => {
     await new SubSessionService(deps).start({
       openerTopicId: 'tpc_parent',
       prompt: 'x',
@@ -155,7 +155,8 @@ describe('SubSessionService.start', () => {
 
     const params = deps.execAgent.mock.calls[0][0] as any;
     expect(params.appContext).toBeUndefined();
-    expect(params.deviceId).toBeUndefined();
+    // A device-bound agent (Claude Code) has nowhere else to run.
+    expect(params.deviceId).toBe('dev_mac');
   });
 });
 

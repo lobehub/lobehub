@@ -41,7 +41,7 @@ export const SessionManifest: BuiltinToolManifest = {
           title: { description: 'Short title (under 60 characters).', type: 'string' },
           workspace: {
             description:
-              '"inherit" (default): work in this conversation\'s directory, sharing uncommitted files. "new-worktree": a fresh git worktree and branch cut from this conversation\'s repository, so changes stay isolated. "none": the agent\'s own default.',
+              '"inherit" (default): work in this conversation\'s directory, sharing uncommitted files. "new-worktree": a fresh git worktree and branch cut from this conversation\'s repository, so changes stay isolated. "none": no working directory (the agent\'s own default); it still runs on this conversation\'s device.',
             enum: ['inherit', 'new-worktree', 'none'],
             type: 'string',
           },

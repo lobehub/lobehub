@@ -235,7 +235,10 @@ export class SubSessionService {
     const result = await this.deps.execAgent({
       agentId,
       ...(initialTopicMetadata && { appContext: { initialTopicMetadata } }),
-      ...(deviceId && workspace !== 'none' && { deviceId }),
+      // `workspace` only decides the directory: a sub-session stays on the opener's
+      // device (or the one asked for) either way — a device-bound agent such as
+      // Claude Code has nowhere else to run.
+      ...(deviceId && { deviceId }),
       openedByTopicId: opener.id,
       prompt: input.prompt,
       ...(input.sourceOperationId && { sourceOperationId: input.sourceOperationId }),
