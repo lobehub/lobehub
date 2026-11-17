@@ -377,8 +377,12 @@ export class AgentDocumentModel {
     return queries.listBindingStatesByRefs(this.ctx, agentId, refs);
   }
 
-  async isDeletedFromAllAgents(documentId: string): Promise<boolean> {
-    return queries.isDeletedFromAllAgents(this.ctx, documentId);
+  async listDeletedFromAllAgents(documentIds: string[]): Promise<string[]> {
+    return queries.listDeletedFromAllAgents(this.ctx, documentIds);
+  }
+
+  async listKnowledgeBaseMemberIds(documentIds: string[]): Promise<string[]> {
+    return queries.listKnowledgeBaseMemberIds(this.ctx, documentIds);
   }
 
   async hasByAgent(agentId: string): Promise<boolean> {

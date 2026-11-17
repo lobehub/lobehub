@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentDocuments, agents, documents, users } from '../../../schemas';
+import { agentDocuments, agents, documents, knowledgeBases, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { AgentDocumentModel } from '../agentDocument';
 
@@ -54,17 +54,34 @@ describe('AgentDocumentModel binding states', () => {
     expect(await model.listBindingStatesByRefs(agentId, [])).toEqual([]);
   });
 
-  it('reports a document deleted from every agent it was bound to', async () => {
+  it('reports documents deleted from every agent they were bound to, in one batch', async () => {
     const doc = await model.create(agentId, 'rules.md', 'rules');
-    expect(await model.isDeletedFromAllAgents(doc.documentId)).toBe(false);
+    const other = await model.create(agentId, 'other.md', 'other');
+    expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
 
     const copy = await model.associate({ agentId: secondAgentId, documentId: doc.documentId });
     await model.delete(doc.id);
     // Still live on the second agent.
-    expect(await model.isDeletedFromAllAgents(doc.documentId)).toBe(false);
+    expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
 
     await model.delete(copy.id);
-    expect(await model.isDeletedFromAllAgents(doc.documentId)).toBe(true);
+    await model.delete(other.id);
+    expect(
+      (await model.listDeletedFromAllAgents([doc.documentId, other.documentId, doc.id])).sort(),
+    ).toEqual([doc.documentId, other.documentId].sort());
+  });
+
+  it('keeps a deleted agent document that is still a knowledge-base page', async () => {
+    const [kb] = await serverDB.insert(knowledgeBases).values({ name: 'KB', userId }).returning();
+    const doc = await model.create(agentId, 'kb-page.md', 'kb page');
+    await serverDB
+      .update(documents)
+      .set({ knowledgeBaseId: kb.id })
+      .where(eq(documents.id, doc.documentId));
+    await model.delete(doc.id);
+
+    expect(await model.listKnowledgeBaseMemberIds([doc.documentId])).toEqual([doc.documentId]);
+    expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
   });
 
   it('never reports a plain document that no agent was bound to', async () => {
@@ -81,7 +98,7 @@ describe('AgentDocumentModel binding states', () => {
       })
       .returning();
 
-    expect(await model.isDeletedFromAllAgents(doc.id)).toBe(false);
+    expect(await model.listDeletedFromAllAgents([doc.id])).toEqual([]);
     expect(
       await serverDB.select().from(agentDocuments).where(eq(agentDocuments.documentId, doc.id)),
     ).toEqual([]);

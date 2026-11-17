@@ -1,6 +1,11 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
 
-import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../../schemas';
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  agentDocuments,
+  documents,
+  knowledgeBaseFiles,
+} from '../../../schemas';
 import { isUuid } from '../../../utils/uuid';
 import { deriveAgentDocumentFields } from '../deriveFields';
 import { parseLoadRules } from '../policy';
@@ -298,26 +303,70 @@ export async function listBindingStatesByRefs(
 }
 
 /**
- * Whether a backing document was an agent document whose every binding is now soft-deleted.
+ * Which backing documents are knowledge-base items: filed directly under a knowledge base or
+ * backed by a file added to one.
  *
  * Use when:
- * - A generic document read (e.g. the knowledge-base `readKnowledge` tool on a `docs_*` id)
- *   must not resurrect a document the user deleted from every agent, while documents that
- *   were never agent documents stay readable.
+ * - Removing a document from an agent must not revoke the same document where it is still a
+ *   live knowledge-base page.
  *
  * Returns:
- * - `true` only when at least one binding exists and all of them are deleted.
+ * - The subset of `documentIds` that belong to a knowledge base, in one query.
  */
-export async function isDeletedFromAllAgents(
+export async function listKnowledgeBaseMemberIds(
   ctx: AgentDocumentContext,
-  documentId: string,
-): Promise<boolean> {
-  const bindings = await ctx.db
-    .select({ deletedAt: agentDocuments.deletedAt })
-    .from(agentDocuments)
-    .where(and(agentDocOwnership(ctx), eq(agentDocuments.documentId, documentId)));
+  documentIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(documentIds)].filter((id) => id.length > 0 && !isUuid(id));
+  if (ids.length === 0) return [];
 
-  return bindings.length > 0 && bindings.every((binding) => binding.deletedAt !== null);
+  const rows = await ctx.db
+    .selectDistinct({ id: documents.id })
+    .from(documents)
+    .leftJoin(knowledgeBaseFiles, eq(documents.fileId, knowledgeBaseFiles.fileId))
+    .where(
+      and(
+        documentOwnership(ctx),
+        inArray(documents.id, ids),
+        or(isNotNull(documents.knowledgeBaseId), isNotNull(knowledgeBaseFiles.fileId)),
+      ),
+    );
+
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Which backing documents were agent documents whose every binding is now soft-deleted, and
+ * that are not knowledge-base items either.
+ *
+ * Use when:
+ * - A generic document read (e.g. the knowledge-base `readKnowledge` tool on `docs_*` ids)
+ *   must not resurrect a document the user deleted from every agent, while documents that were
+ *   never agent documents, or that are still knowledge-base pages, stay readable.
+ *
+ * Returns:
+ * - The matching subset of `documentIds`, resolved with a constant number of queries.
+ */
+export async function listDeletedFromAllAgents(
+  ctx: AgentDocumentContext,
+  documentIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(documentIds)].filter((id) => id.length > 0 && !isUuid(id));
+  if (ids.length === 0) return [];
+
+  const bindings = await ctx.db
+    .select({ deletedAt: agentDocuments.deletedAt, documentId: agentDocuments.documentId })
+    .from(agentDocuments)
+    .where(and(agentDocOwnership(ctx), inArray(agentDocuments.documentId, ids)));
+
+  const live = new Set(bindings.filter((row) => !row.deletedAt).map((row) => row.documentId));
+  const candidates = [
+    ...new Set(bindings.map((row) => row.documentId).filter((id) => !live.has(id))),
+  ];
+  if (candidates.length === 0) return [];
+
+  const knowledgeBaseMembers = new Set(await listKnowledgeBaseMemberIds(ctx, candidates));
+  return candidates.filter((id) => !knowledgeBaseMembers.has(id));
 }
 
 export async function listByDocumentIds(

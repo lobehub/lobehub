@@ -42,7 +42,7 @@ describe('KnowledgeBaseSearchService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    agentDocumentModelMock = { isDeletedFromAllAgents: vi.fn().mockResolvedValue(false) };
+    agentDocumentModelMock = { listDeletedFromAllAgents: vi.fn().mockResolvedValue([]) };
     chunkModelMock = { semanticSearchForChat: vi.fn() };
     documentModelMock = { findById: vi.fn(), findByFileId: vi.fn() };
     fileModelMock = { findById: vi.fn() };
@@ -175,11 +175,15 @@ describe('KnowledgeBaseSearchService', () => {
         id: 'docs_deleted',
         title: 'rules',
       });
-      agentDocumentModelMock.isDeletedFromAllAgents.mockResolvedValue(true);
+      agentDocumentModelMock.listDeletedFromAllAgents.mockResolvedValue(['docs_deleted']);
 
       const result = await service.getFileContents(['docs_deleted']);
 
-      expect(agentDocumentModelMock.isDeletedFromAllAgents).toHaveBeenCalledWith('docs_deleted');
+      // One batched lookup for every docs_* id in the call.
+      expect(agentDocumentModelMock.listDeletedFromAllAgents).toHaveBeenCalledTimes(1);
+      expect(agentDocumentModelMock.listDeletedFromAllAgents).toHaveBeenCalledWith([
+        'docs_deleted',
+      ]);
       expect(result).toEqual([
         {
           content: '',

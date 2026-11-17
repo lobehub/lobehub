@@ -290,15 +290,21 @@ export class KnowledgeBaseSearchService {
     return this.readScopedContents(ids);
   }
 
-  private async isDeletedAgentDocument(documentId: string): Promise<boolean> {
-    return new AgentDocumentModel(
-      this.serverDB,
-      this.userId,
-      this.workspaceId,
-    ).isDeletedFromAllAgents(documentId);
-  }
-
   private async readScopedContents(ids: string[]): Promise<FileContentResult[]> {
+    // A document deleted from every agent it was bound to keeps its row for recovery;
+    // reading it here would hand the removed content straight back. Resolved for the
+    // whole batch up front.
+    const docIds = ids.filter((id) => id.startsWith('docs_'));
+    const deletedAgentDocuments = new Set(
+      docIds.length > 0
+        ? await new AgentDocumentModel(
+            this.serverDB,
+            this.userId,
+            this.workspaceId,
+          ).listDeletedFromAllAgents(docIds)
+        : [],
+    );
+
     return pMap(
       ids,
       async (id) => {
@@ -306,9 +312,7 @@ export class KnowledgeBaseSearchService {
         // KB inline documents (custom/document) have no S3 file.
         if (id.startsWith('docs_')) {
           const doc = await this.documentModel.findById(id);
-          // A document deleted from every agent it was bound to keeps its row for
-          // recovery; reading it here would hand the removed content straight back.
-          if (!doc || (await this.isDeletedAgentDocument(id))) {
+          if (!doc || deletedAgentDocuments.has(id)) {
             return {
               content: '',
               error: 'Document not found',

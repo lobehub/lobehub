@@ -151,13 +151,15 @@ export const createServerContextFactProviders = ({
     },
 
     findRevokedAgentDocumentIds: async (agentId, documentIds) => {
-      const bindings = await new AgentDocumentModel(
-        db,
-        userId,
-        workspaceId,
-        documentAccessScope,
-      ).listBindingStatesByRefs(agentId, documentIds);
-      return revokedAgentDocumentRefs(documentIds, bindings);
+      const model = new AgentDocumentModel(db, userId, workspaceId, documentAccessScope);
+      const revoked = revokedAgentDocumentRefs(
+        documentIds,
+        await model.listBindingStatesByRefs(agentId, documentIds),
+      );
+      // A page that is still a knowledge-base item stays readable there, so its
+      // earlier reads keep their content.
+      const knowledgeBaseMembers = new Set(await model.listKnowledgeBaseMemberIds(revoked));
+      return revoked.filter((id) => !knowledgeBaseMembers.has(id));
     },
 
     findTopic: async (topicId) => {
