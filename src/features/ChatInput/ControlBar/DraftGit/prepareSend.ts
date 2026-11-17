@@ -165,6 +165,8 @@ const createWorktree = async (
           autoCreatedAt: new Date().toISOString(),
           branch,
           isWorktree: true,
+          // The send created this branch: the run end may look its PR up.
+          ownBranch: branch,
         },
         path: target.sourcePath,
         repoType: target.isGithub ? 'github' : 'git',

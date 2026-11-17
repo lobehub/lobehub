@@ -143,6 +143,7 @@ class WorkService {
   linkPushedPullRequests = async (params: {
     pullRequests: {
       headRefName: string;
+      headRepoFullName?: string;
       isDraft?: boolean;
       number: number;
       state?: string;
@@ -152,6 +153,29 @@ class WorkService {
     toolCallId: string;
     topicId: string;
   }) => lambdaClient.work.linkPushedPullRequests.mutate(params);
+
+  /**
+   * Better Coding Experience: keep a PR on the topic itself — found on its own
+   * branch (`branch`) or linked by hand (`manual`). Display-only links: they
+   * never feed the SCM links that accept deliveries or wake agents.
+   */
+  linkTopicPullRequest = async (params: {
+    headRefName?: string;
+    source: 'branch' | 'manual';
+    title?: string;
+    topicId: string;
+    url: string;
+    vouched?: boolean;
+  }): Promise<{ identifier: string; linked: boolean }> =>
+    lambdaClient.work.linkTopicPullRequest.mutate(params);
+
+  /** Better Coding Experience: remove a PR from the topic's lists, or bring it back. */
+  setTopicPullRequestDismissed = async (params: {
+    dismissed: boolean;
+    identifier: string;
+    topicId: string;
+  }): Promise<{ updated: boolean }> =>
+    lambdaClient.work.setTopicPullRequestDismissed.mutate(params);
 
   /** Revalidate a topic's linked pull requests (mounted reads only). */
   refreshTopicPullRequests = async (topicId?: string | null) => {

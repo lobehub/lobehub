@@ -11,6 +11,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { getUserStoreState } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { applyOwnBranchToConfig, parseCreatedBranch } from './ownBranch';
 import { linkPushedPullRequests } from './pushedPullRequests';
 import {
   applyBranchToConfig,
@@ -977,6 +978,10 @@ export const recordGitCommandEffects = async (params: {
     nextConfig = applyPushToConfig(nextConfig, source, pushUpstream);
   }
 
+  // A branch the agent created is the conversation's own: its PR may be looked up.
+  if (betterCoding)
+    nextConfig = applyOwnBranchToConfig(nextConfig, parseCreatedBranch(resultContent));
+
   const prCreate = betterCoding ? undefined : parseGhPrCreate(command, resultContent);
   if (prCreate) {
     nextConfig = applyPullRequestToConfig(nextConfig, source, prCreate);
@@ -1061,7 +1066,9 @@ export const recordWorktreeEnter = async (params: {
   const worktreeInfo = parseWorktreeEnterInfo(content);
   if (!worktreeInfo || !source || worktreeInfo.path === source) return;
 
-  const nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
+  let nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
+  if (labPreferSelectors.enableBetterCodingExperience(getUserStoreState()))
+    nextConfig = applyOwnBranchToConfig(nextConfig, parseCreatedBranch(content))!;
 
   if (isEqual(currentConfig, nextConfig)) return;
   await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });

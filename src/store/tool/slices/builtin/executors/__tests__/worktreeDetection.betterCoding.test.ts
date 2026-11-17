@@ -139,4 +139,30 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
       expect.objectContaining({ branch: 'feat/x', toolCallId: 'call-push' }),
     );
   });
+
+  it("records a branch the agent created as the topic's own", async () => {
+    await recordGitCommandEffects({
+      command: 'git switch -c feat/new',
+      resultContent: "Switched to a new branch 'feat/new'",
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git).toMatchObject(
+      { branch: 'feat/new', ownBranch: 'feat/new' },
+    );
+  });
+
+  it('does not own a branch it only switched to', async () => {
+    await recordGitCommandEffects({
+      command: 'git switch main',
+      resultContent: "Switched to branch 'main'",
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(
+      chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git,
+    ).not.toHaveProperty('ownBranch');
+  });
 });
