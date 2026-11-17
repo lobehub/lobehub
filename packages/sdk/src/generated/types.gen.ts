@@ -891,6 +891,83 @@ export type BatchGetFilesResult = {
     total: number;
 };
 
+export type FileSearchResult = {
+    /**
+     * Matching chunks, most similar first.
+     */
+    chunks: Array<SearchChunk>;
+    /**
+     * The same chunks grouped by source file.
+     */
+    files: Array<SearchFileResult>;
+    /**
+     * Number of chunks returned.
+     */
+    total: number;
+};
+
+export type SearchChunk = {
+    /**
+     * The source file.
+     */
+    fileId: string | null;
+    fileName: string | null;
+    /**
+     * Chunk id.
+     */
+    id: string;
+    /**
+     * Position of the chunk inside its file.
+     */
+    index: number | null;
+    /**
+     * Cosine similarity to the query, 0–1 (higher is closer).
+     */
+    similarity: number;
+    text: string | null;
+};
+
+export type SearchFileResult = {
+    fileId: string;
+    fileName: string;
+    /**
+     * Mean similarity of the file’s top three chunks.
+     */
+    relevanceScore: number;
+    topChunks: Array<{
+        id: string;
+        similarity: number;
+        text: string;
+    }>;
+};
+
+export type FileSearchRequest = {
+    /**
+     * The files to search; every one must be visible to the caller.
+     */
+    fileIds: Array<string>;
+    /**
+     * Natural-language query; it is embedded and matched against chunk vectors.
+     */
+    query: string;
+    /**
+     * Maximum number of chunks (and documents) to return. Defaults to 20.
+     */
+    topK?: number;
+};
+
+export type FileTaskAccepted = {
+    fileId: string;
+    /**
+     * Initial task status; poll `GET /files/{id}/chunks`.
+     */
+    status: 'error' | 'pending' | 'processing' | 'success';
+    /**
+     * Async task id.
+     */
+    taskId: string;
+};
+
 export type GoalList = {
     hasMore: PageHasMore;
     nextCursor: PageNextCursor;
@@ -1285,6 +1362,46 @@ export type KnowledgeBaseFileOperationResult = {
     successed: Array<string>;
 };
 
+export type KnowledgeBaseSearchResult = {
+    /**
+     * Matching chunks, most similar first.
+     */
+    chunks: Array<SearchChunk>;
+    /**
+     * The same chunks grouped by source file.
+     */
+    files: Array<SearchFileResult>;
+    /**
+     * Chunks plus documents returned.
+     */
+    total: number;
+    /**
+     * Full-text matches on documents stored in the knowledge base.
+     */
+    documents: Array<SearchDocumentHit>;
+};
+
+export type SearchDocumentHit = {
+    documentId: string;
+    fileId: string | null;
+    knowledgeBaseId: string;
+    relevance: number;
+    snippet: string;
+    title: string;
+    updatedAt: string;
+};
+
+export type KnowledgeBaseSearchRequest = {
+    /**
+     * Natural-language query; it is embedded and matched against chunk vectors.
+     */
+    query: string;
+    /**
+     * Maximum number of chunks (and documents) to return. Defaults to 20.
+     */
+    topK?: number;
+};
+
 export type McpServer = {
     createdAt: string;
     description: string | null;
@@ -1329,12 +1446,256 @@ export type MemoryPersonaVersion = {
     snapshotTagline: string | null;
 };
 
-export type DeletedResources = {
-    count: number;
-    deleted: true;
+export type MemorySearchResult = {
+    activities: Array<{
+        accessedAt: string;
+        capturedAt: string;
+        createdAt: string;
+        id: string;
+        metadata: {
+            [key: string]: unknown;
+        } | null;
+        tags: Array<string> | null;
+        type: string;
+        updatedAt: string;
+        associatedLocations: Array<{
+            address?: string;
+            name?: string;
+            tags?: Array<string>;
+            type?: string;
+        }> | null;
+        associatedObjects: Array<{
+            extra?: {
+                [key: string]: unknown;
+            };
+            name?: string;
+            type?: string;
+        }> | null;
+        associatedSubjects: Array<{
+            extra?: {
+                [key: string]: unknown;
+            };
+            name?: string;
+            type?: string;
+        }> | null;
+        dossierId: string | null;
+        endsAt: string | null;
+        feedback: string | null;
+        injectable: boolean;
+        narrative: string | null;
+        notes: string | null;
+        startsAt: string | null;
+        status: string;
+        timezone: string | null;
+        userMemoryId: string | null;
+    }>;
+    contexts: Array<{
+        accessedAt: string;
+        capturedAt: string;
+        createdAt: string;
+        id: string;
+        metadata: {
+            [key: string]: unknown;
+        } | null;
+        tags: Array<string> | null;
+        type: string | null;
+        updatedAt: string;
+        associatedObjects: Array<{
+            extra?: {
+                [key: string]: unknown;
+            };
+            name?: string;
+            type?: string;
+        }> | null;
+        associatedSubjects: Array<{
+            extra?: {
+                [key: string]: unknown;
+            };
+            name?: string;
+            type?: string;
+        }> | null;
+        currentStatus: string | null;
+        description: string | null;
+        firstSeenAt: string | null;
+        lastEvidenceAt: string | null;
+        nextSteps: Array<string> | null;
+        now: string | null;
+        openQuestions: Array<string> | null;
+        scoreImpact: number | null;
+        scoreUrgency: number | null;
+        synthesizedAt: string | null;
+        title: string | null;
+        userMemoryId: string | null;
+        userMemoryIds: Array<string> | null;
+    }>;
+    experiences: Array<{
+        accessedAt: string;
+        capturedAt: string;
+        createdAt: string;
+        id: string;
+        metadata: {
+            [key: string]: unknown;
+        } | null;
+        tags: Array<string> | null;
+        type: string | null;
+        updatedAt: string;
+        action: string | null;
+        keyLearning: string | null;
+        possibleOutcome: string | null;
+        reasoning: string | null;
+        scoreConfidence: number | null;
+        situation: string | null;
+        userMemoryId: string | null;
+    }>;
+    identities: Array<{
+        accessedAt: string;
+        capturedAt: string;
+        createdAt: string;
+        id: string;
+        metadata: {
+            [key: string]: unknown;
+        } | null;
+        tags: Array<string> | null;
+        type: string | null;
+        updatedAt: string;
+        description: string | null;
+        entityId: string | null;
+        episodicDate: string | null;
+        relationship: string | null;
+        role: string | null;
+        userMemoryId: string | null;
+    }>;
+    meta: {
+        appliedQueries: Array<string>;
+        layers: {
+            activities: {
+                hasMore: boolean;
+                returned: number;
+                total: number;
+            };
+            contexts: {
+                hasMore: boolean;
+                returned: number;
+                total: number;
+            };
+            experiences: {
+                hasMore: boolean;
+                returned: number;
+                total: number;
+            };
+            identities: {
+                hasMore: boolean;
+                returned: number;
+                total: number;
+            };
+            preferences: {
+                hasMore: boolean;
+                returned: number;
+                total: number;
+            };
+        };
+    } | null;
+    preferences: Array<{
+        accessedAt: string;
+        capturedAt: string;
+        createdAt: string;
+        id: string;
+        metadata: {
+            [key: string]: unknown;
+        } | null;
+        tags: Array<string> | null;
+        type: string | null;
+        updatedAt: string;
+        appliesToEntityId: string | null;
+        conclusionDirectives: string | null;
+        evidenceCount: number;
+        evidenceSource: 'stated' | 'reported' | 'inferred' | null;
+        holderEntityId: string | null;
+        lastEvidenceAt: string | null;
+        scope: string | null;
+        scorePriority: number | null;
+        suggestions: string | null;
+        userMemoryId: string | null;
+    }>;
 };
 
-export type MemoryCategoryEntries = Array<MemoryIdentity> | Array<MemoryPreference> | Array<MemoryContext> | Array<MemoryActivity> | Array<MemoryExperience>;
+export type MemorySearchRequest = {
+    categories?: Array<string>;
+    /**
+     * Retrieval depth; defaults to the user’s memory setting.
+     */
+    effort?: 'low' | 'medium' | 'high';
+    /**
+     * Limit to these layers.
+     */
+    layers?: Array<'activity' | 'context' | 'experience' | 'identity' | 'preference'>;
+    /**
+     * Natural-language queries; required unless `topicId` is sent.
+     */
+    queries?: Array<string>;
+    tags?: Array<string>;
+    /**
+     * Retrieve the memories relevant to a conversation topic, using its user messages as the query. Mutually exclusive with `queries`.
+     */
+    topicId?: string;
+    /**
+     * Per-layer result caps.
+     */
+    topK?: {
+        activities?: number;
+        contexts?: number;
+        experiences?: number;
+        identities?: number;
+        preferences?: number;
+    };
+};
+
+export type MemoryExtractionTask = {
+    /**
+     * True when an extraction was already running and that task is returned instead.
+     */
+    deduped: boolean;
+    error: {
+        message: string;
+        name: string;
+    } | null;
+    /**
+     * Async task id; poll `GET /memories/extractions/{id}`.
+     */
+    id: string;
+    progress: {
+        completedTopics: number;
+        totalTopics: number | null;
+    };
+    range: {
+        from: string | null;
+        to: string | null;
+    };
+    status: 'error' | 'pending' | 'processing' | 'success';
+};
+
+export type StartMemoryExtraction = {
+    /**
+     * Only topics updated at or after this time.
+     */
+    fromDate?: string;
+    /**
+     * Only topics updated at or before this time.
+     */
+    toDate?: string;
+};
+
+export type RestoredPersona = {
+    /**
+     * The version that was restored.
+     */
+    historyId: string;
+    persona: MemoryPersona;
+    /**
+     * Version number of the new current persona.
+     */
+    version: number;
+};
 
 export type MemoryIdentity = {
     accessedAt: string;
@@ -1354,6 +1715,53 @@ export type MemoryIdentity = {
     relationship: string | null;
     role: string | null;
     userMemoryId: string | null;
+};
+
+export type CreateMemoryIdentity = {
+    /**
+     * Free-form memory category, e.g. `work`, `health`. Defaults to `general`.
+     */
+    category?: string;
+    /**
+     * Longer supporting notes.
+     */
+    details?: string;
+    /**
+     * What kind of fact this is. Each layer has its own default.
+     */
+    memoryType?: 'activity' | 'context' | 'event' | 'fact' | 'location' | 'other' | 'people' | 'preference' | 'technology' | 'topic';
+    /**
+     * One-paragraph overview; it is embedded.
+     */
+    summary: string;
+    tags?: Array<string>;
+    /**
+     * Short headline.
+     */
+    title: string;
+    /**
+     * Who this person is to the user.
+     */
+    description: string;
+    /**
+     * When the identity fact became true.
+     */
+    episodicDate?: string;
+    /**
+     * Relationship to the user; `self` (default) describes the user.
+     */
+    relationship?: 'self' | 'father' | 'mother' | 'son' | 'daughter' | 'brother' | 'sister' | 'sibling' | 'husband' | 'wife' | 'spouse' | 'partner' | 'couple' | 'friend' | 'colleague' | 'coworker' | 'classmate' | 'mentor' | 'mentee' | 'manager' | 'teammate' | 'grandfather' | 'grandmother' | 'grandson' | 'granddaughter' | 'uncle' | 'aunt' | 'nephew' | 'niece' | 'other';
+    role?: string;
+    type?: 'personal' | 'professional' | 'demographic';
+};
+
+export type UpdateMemoryIdentity = {
+    description?: string;
+    episodicDate?: string;
+    relationship?: 'self' | 'father' | 'mother' | 'son' | 'daughter' | 'brother' | 'sister' | 'sibling' | 'husband' | 'wife' | 'spouse' | 'partner' | 'couple' | 'friend' | 'colleague' | 'coworker' | 'classmate' | 'mentor' | 'mentee' | 'manager' | 'teammate' | 'grandfather' | 'grandmother' | 'grandson' | 'granddaughter' | 'uncle' | 'aunt' | 'nephew' | 'niece' | 'other';
+    role?: string;
+    tags?: Array<string>;
+    type?: 'personal' | 'professional' | 'demographic';
 };
 
 export type MemoryPreference = {
@@ -1378,6 +1786,47 @@ export type MemoryPreference = {
     scorePriority: number | null;
     suggestions: string | null;
     userMemoryId: string | null;
+};
+
+export type CreateMemoryPreference = {
+    /**
+     * Free-form memory category, e.g. `work`, `health`. Defaults to `general`.
+     */
+    category?: string;
+    /**
+     * Longer supporting notes.
+     */
+    details?: string;
+    /**
+     * What kind of fact this is. Each layer has its own default.
+     */
+    memoryType?: 'activity' | 'context' | 'event' | 'fact' | 'location' | 'other' | 'people' | 'preference' | 'technology' | 'topic';
+    /**
+     * One-paragraph overview; it is embedded.
+     */
+    summary: string;
+    tags?: Array<string>;
+    /**
+     * Short headline.
+     */
+    title: string;
+    /**
+     * The instruction an assistant should follow, in the user’s words.
+     */
+    conclusionDirectives: string;
+    /**
+     * 0–1; higher is more important to respect.
+     */
+    scorePriority?: number;
+    suggestions?: Array<string>;
+};
+
+export type UpdateMemoryPreference = {
+    conclusionDirectives?: string;
+    /**
+     * Newline-separated suggestions.
+     */
+    suggestions?: string;
 };
 
 export type MemoryContext = {
@@ -1419,6 +1868,50 @@ export type MemoryContext = {
     title: string | null;
     userMemoryId: string | null;
     userMemoryIds: Array<string> | null;
+};
+
+export type CreateMemoryContext = {
+    /**
+     * Free-form memory category, e.g. `work`, `health`. Defaults to `general`.
+     */
+    category?: string;
+    /**
+     * Longer supporting notes.
+     */
+    details?: string;
+    /**
+     * What kind of fact this is. Each layer has its own default.
+     */
+    memoryType?: 'activity' | 'context' | 'event' | 'fact' | 'location' | 'other' | 'people' | 'preference' | 'technology' | 'topic';
+    /**
+     * One-paragraph overview; it is embedded.
+     */
+    summary: string;
+    tags?: Array<string>;
+    /**
+     * Short headline.
+     */
+    title: string;
+    /**
+     * Defaults to `ongoing`.
+     */
+    currentStatus?: 'aborted' | 'cancelled' | 'completed' | 'ongoing' | 'on_hold' | 'planned';
+    /**
+     * The situation or project.
+     */
+    description: string;
+    scoreImpact?: number;
+    scoreUrgency?: number;
+    /**
+     * Archetype, e.g. `project`, `goal`.
+     */
+    type?: string;
+};
+
+export type UpdateMemoryContext = {
+    currentStatus?: string;
+    description?: string;
+    title?: string;
 };
 
 export type MemoryActivity = {
@@ -1465,6 +1958,59 @@ export type MemoryActivity = {
     userMemoryId: string | null;
 };
 
+export type CreateMemoryActivity = {
+    /**
+     * Free-form memory category, e.g. `work`, `health`. Defaults to `general`.
+     */
+    category?: string;
+    /**
+     * Longer supporting notes.
+     */
+    details?: string;
+    /**
+     * What kind of fact this is. Each layer has its own default.
+     */
+    memoryType?: 'activity' | 'context' | 'event' | 'fact' | 'location' | 'other' | 'people' | 'preference' | 'technology' | 'topic';
+    /**
+     * One-paragraph overview; it is embedded.
+     */
+    summary: string;
+    tags?: Array<string>;
+    /**
+     * Short headline.
+     */
+    title: string;
+    endsAt?: string;
+    /**
+     * How it went or felt.
+     */
+    feedback?: string;
+    /**
+     * What happened.
+     */
+    narrative: string;
+    notes?: string;
+    startsAt?: string;
+    /**
+     * Defaults to `pending`.
+     */
+    status?: string;
+    /**
+     * IANA zone, e.g. `Asia/Shanghai`.
+     */
+    timezone?: string;
+    /**
+     * e.g. `meeting`, `call`. Defaults to `other`.
+     */
+    type?: string;
+};
+
+export type UpdateMemoryActivity = {
+    narrative?: string;
+    notes?: string;
+    status?: string;
+};
+
 export type MemoryExperience = {
     accessedAt: string;
     capturedAt: string;
@@ -1485,6 +2031,52 @@ export type MemoryExperience = {
     situation: string | null;
     userMemoryId: string | null;
 };
+
+export type CreateMemoryExperience = {
+    /**
+     * Free-form memory category, e.g. `work`, `health`. Defaults to `general`.
+     */
+    category?: string;
+    /**
+     * Longer supporting notes.
+     */
+    details?: string;
+    /**
+     * What kind of fact this is. Each layer has its own default.
+     */
+    memoryType?: 'activity' | 'context' | 'event' | 'fact' | 'location' | 'other' | 'people' | 'preference' | 'technology' | 'topic';
+    /**
+     * One-paragraph overview; it is embedded.
+     */
+    summary: string;
+    tags?: Array<string>;
+    /**
+     * Short headline.
+     */
+    title: string;
+    action?: string;
+    keyLearning?: string;
+    possibleOutcome?: string;
+    reasoning?: string;
+    scoreConfidence?: number;
+    /**
+     * The situation that was faced.
+     */
+    situation: string;
+};
+
+export type UpdateMemoryExperience = {
+    action?: string;
+    keyLearning?: string;
+    situation?: string;
+};
+
+export type DeletedResources = {
+    count: number;
+    deleted: true;
+};
+
+export type MemoryCategoryEntries = Array<MemoryIdentity> | Array<MemoryPreference> | Array<MemoryContext> | Array<MemoryActivity> | Array<MemoryExperience>;
 
 export type MessageTranslationWrite = {
     content?: string;
@@ -7877,6 +8469,202 @@ export type PostApiV1FilesQueriesResponses = {
 
 export type PostApiV1FilesQueriesResponse = PostApiV1FilesQueriesResponses[keyof PostApiV1FilesQueriesResponses];
 
+export type PostApiV1FilesSearchData = {
+    body: FileSearchRequest;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/files/search';
+};
+
+export type PostApiV1FilesSearchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1FilesSearchError = PostApiV1FilesSearchErrors[keyof PostApiV1FilesSearchErrors];
+
+export type PostApiV1FilesSearchResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: FileSearchResult;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1FilesSearchResponse = PostApiV1FilesSearchResponses[keyof PostApiV1FilesSearchResponses];
+
+export type PostApiV1FilesByIdEmbeddingsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/files/{id}/embeddings';
+};
+
+export type PostApiV1FilesByIdEmbeddingsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1FilesByIdEmbeddingsError = PostApiV1FilesByIdEmbeddingsErrors[keyof PostApiV1FilesByIdEmbeddingsErrors];
+
+export type PostApiV1FilesByIdEmbeddingsResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data: FileTaskAccepted;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1FilesByIdEmbeddingsResponse = PostApiV1FilesByIdEmbeddingsResponses[keyof PostApiV1FilesByIdEmbeddingsResponses];
+
+export type PostApiV1FilesByIdParsesRetryData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/files/{id}/parses/retry';
+};
+
+export type PostApiV1FilesByIdParsesRetryErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1FilesByIdParsesRetryError = PostApiV1FilesByIdParsesRetryErrors[keyof PostApiV1FilesByIdParsesRetryErrors];
+
+export type PostApiV1FilesByIdParsesRetryResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data: FileTaskAccepted;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1FilesByIdParsesRetryResponse = PostApiV1FilesByIdParsesRetryResponses[keyof PostApiV1FilesByIdParsesRetryResponses];
+
 export type GetApiV1GoalsData = {
     body?: never;
     headers?: {
@@ -9337,6 +10125,72 @@ export type PostApiV1KnowledgeBasesByIdFilesMoveResponses = {
 
 export type PostApiV1KnowledgeBasesByIdFilesMoveResponse = PostApiV1KnowledgeBasesByIdFilesMoveResponses[keyof PostApiV1KnowledgeBasesByIdFilesMoveResponses];
 
+export type PostApiV1KnowledgeBasesByIdSearchData = {
+    body: KnowledgeBaseSearchRequest;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/knowledge-bases/{id}/search';
+};
+
+export type PostApiV1KnowledgeBasesByIdSearchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PostApiV1KnowledgeBasesByIdSearchError = PostApiV1KnowledgeBasesByIdSearchErrors[keyof PostApiV1KnowledgeBasesByIdSearchErrors];
+
+export type PostApiV1KnowledgeBasesByIdSearchResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: KnowledgeBaseSearchResult;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1KnowledgeBasesByIdSearchResponse = PostApiV1KnowledgeBasesByIdSearchResponses[keyof PostApiV1KnowledgeBasesByIdSearchResponses];
+
 export type GetApiV1McpServersData = {
     body?: never;
     headers?: {
@@ -9835,6 +10689,816 @@ export type GetApiV1MemoriesPersonaVersionsResponses = {
 };
 
 export type GetApiV1MemoriesPersonaVersionsResponse = GetApiV1MemoriesPersonaVersionsResponses[keyof GetApiV1MemoriesPersonaVersionsResponses];
+
+export type PostApiV1MemoriesSearchData = {
+    body: MemorySearchRequest;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/search';
+};
+
+export type PostApiV1MemoriesSearchErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesSearchError = PostApiV1MemoriesSearchErrors[keyof PostApiV1MemoriesSearchErrors];
+
+export type PostApiV1MemoriesSearchResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemorySearchResult;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesSearchResponse = PostApiV1MemoriesSearchResponses[keyof PostApiV1MemoriesSearchResponses];
+
+export type PostApiV1MemoriesExtractionsData = {
+    body: StartMemoryExtraction;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/extractions';
+};
+
+export type PostApiV1MemoriesExtractionsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesExtractionsError = PostApiV1MemoriesExtractionsErrors[keyof PostApiV1MemoriesExtractionsErrors];
+
+export type PostApiV1MemoriesExtractionsResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data: MemoryExtractionTask;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesExtractionsResponse = PostApiV1MemoriesExtractionsResponses[keyof PostApiV1MemoriesExtractionsResponses];
+
+export type GetApiV1MemoriesExtractionsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/extractions/{id}';
+};
+
+export type GetApiV1MemoriesExtractionsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1MemoriesExtractionsByIdError = GetApiV1MemoriesExtractionsByIdErrors[keyof GetApiV1MemoriesExtractionsByIdErrors];
+
+export type GetApiV1MemoriesExtractionsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemoryExtractionTask;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1MemoriesExtractionsByIdResponse = GetApiV1MemoriesExtractionsByIdResponses[keyof GetApiV1MemoriesExtractionsByIdResponses];
+
+export type PostApiV1MemoriesPersonaVersionsByIdRestoreData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/persona/versions/{id}/restore';
+};
+
+export type PostApiV1MemoriesPersonaVersionsByIdRestoreErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesPersonaVersionsByIdRestoreError = PostApiV1MemoriesPersonaVersionsByIdRestoreErrors[keyof PostApiV1MemoriesPersonaVersionsByIdRestoreErrors];
+
+export type PostApiV1MemoriesPersonaVersionsByIdRestoreResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: RestoredPersona;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesPersonaVersionsByIdRestoreResponse = PostApiV1MemoriesPersonaVersionsByIdRestoreResponses[keyof PostApiV1MemoriesPersonaVersionsByIdRestoreResponses];
+
+export type PostApiV1MemoriesIdentitiesData = {
+    body: CreateMemoryIdentity;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/identities';
+};
+
+export type PostApiV1MemoriesIdentitiesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesIdentitiesError = PostApiV1MemoriesIdentitiesErrors[keyof PostApiV1MemoriesIdentitiesErrors];
+
+export type PostApiV1MemoriesIdentitiesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: MemoryIdentity;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesIdentitiesResponse = PostApiV1MemoriesIdentitiesResponses[keyof PostApiV1MemoriesIdentitiesResponses];
+
+export type PatchApiV1MemoriesIdentitiesByIdData = {
+    body: UpdateMemoryIdentity;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/identities/{id}';
+};
+
+export type PatchApiV1MemoriesIdentitiesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1MemoriesIdentitiesByIdError = PatchApiV1MemoriesIdentitiesByIdErrors[keyof PatchApiV1MemoriesIdentitiesByIdErrors];
+
+export type PatchApiV1MemoriesIdentitiesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemoryIdentity;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1MemoriesIdentitiesByIdResponse = PatchApiV1MemoriesIdentitiesByIdResponses[keyof PatchApiV1MemoriesIdentitiesByIdResponses];
+
+export type PostApiV1MemoriesPreferencesData = {
+    body: CreateMemoryPreference;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/preferences';
+};
+
+export type PostApiV1MemoriesPreferencesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesPreferencesError = PostApiV1MemoriesPreferencesErrors[keyof PostApiV1MemoriesPreferencesErrors];
+
+export type PostApiV1MemoriesPreferencesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: MemoryPreference;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesPreferencesResponse = PostApiV1MemoriesPreferencesResponses[keyof PostApiV1MemoriesPreferencesResponses];
+
+export type PatchApiV1MemoriesPreferencesByIdData = {
+    body: UpdateMemoryPreference;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/preferences/{id}';
+};
+
+export type PatchApiV1MemoriesPreferencesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1MemoriesPreferencesByIdError = PatchApiV1MemoriesPreferencesByIdErrors[keyof PatchApiV1MemoriesPreferencesByIdErrors];
+
+export type PatchApiV1MemoriesPreferencesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemoryPreference;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1MemoriesPreferencesByIdResponse = PatchApiV1MemoriesPreferencesByIdResponses[keyof PatchApiV1MemoriesPreferencesByIdResponses];
+
+export type PostApiV1MemoriesContextsData = {
+    body: CreateMemoryContext;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/contexts';
+};
+
+export type PostApiV1MemoriesContextsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesContextsError = PostApiV1MemoriesContextsErrors[keyof PostApiV1MemoriesContextsErrors];
+
+export type PostApiV1MemoriesContextsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: MemoryContext;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesContextsResponse = PostApiV1MemoriesContextsResponses[keyof PostApiV1MemoriesContextsResponses];
+
+export type PatchApiV1MemoriesContextsByIdData = {
+    body: UpdateMemoryContext;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/contexts/{id}';
+};
+
+export type PatchApiV1MemoriesContextsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1MemoriesContextsByIdError = PatchApiV1MemoriesContextsByIdErrors[keyof PatchApiV1MemoriesContextsByIdErrors];
+
+export type PatchApiV1MemoriesContextsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemoryContext;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1MemoriesContextsByIdResponse = PatchApiV1MemoriesContextsByIdResponses[keyof PatchApiV1MemoriesContextsByIdResponses];
+
+export type PostApiV1MemoriesActivitiesData = {
+    body: CreateMemoryActivity;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/activities';
+};
+
+export type PostApiV1MemoriesActivitiesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesActivitiesError = PostApiV1MemoriesActivitiesErrors[keyof PostApiV1MemoriesActivitiesErrors];
+
+export type PostApiV1MemoriesActivitiesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: MemoryActivity;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesActivitiesResponse = PostApiV1MemoriesActivitiesResponses[keyof PostApiV1MemoriesActivitiesResponses];
+
+export type PatchApiV1MemoriesActivitiesByIdData = {
+    body: UpdateMemoryActivity;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/activities/{id}';
+};
+
+export type PatchApiV1MemoriesActivitiesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1MemoriesActivitiesByIdError = PatchApiV1MemoriesActivitiesByIdErrors[keyof PatchApiV1MemoriesActivitiesByIdErrors];
+
+export type PatchApiV1MemoriesActivitiesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemoryActivity;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1MemoriesActivitiesByIdResponse = PatchApiV1MemoriesActivitiesByIdResponses[keyof PatchApiV1MemoriesActivitiesByIdResponses];
+
+export type PostApiV1MemoriesExperiencesData = {
+    body: CreateMemoryExperience;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/experiences';
+};
+
+export type PostApiV1MemoriesExperiencesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1MemoriesExperiencesError = PostApiV1MemoriesExperiencesErrors[keyof PostApiV1MemoriesExperiencesErrors];
+
+export type PostApiV1MemoriesExperiencesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: MemoryExperience;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1MemoriesExperiencesResponse = PostApiV1MemoriesExperiencesResponses[keyof PostApiV1MemoriesExperiencesResponses];
+
+export type PatchApiV1MemoriesExperiencesByIdData = {
+    body: UpdateMemoryExperience;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/experiences/{id}';
+};
+
+export type PatchApiV1MemoriesExperiencesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1MemoriesExperiencesByIdError = PatchApiV1MemoriesExperiencesByIdErrors[keyof PatchApiV1MemoriesExperiencesByIdErrors];
+
+export type PatchApiV1MemoriesExperiencesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: MemoryExperience;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1MemoriesExperiencesByIdResponse = PatchApiV1MemoriesExperiencesByIdResponses[keyof PatchApiV1MemoriesExperiencesByIdResponses];
 
 export type DeleteApiV1MemoriesData = {
     body?: never;

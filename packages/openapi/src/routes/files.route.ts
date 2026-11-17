@@ -11,6 +11,7 @@ import {
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { FileController } from '../controllers/file.controller';
+import { RetrievalController } from '../controllers/retrieval.controller';
 import { requireAnyPermission } from '../middleware';
 import { requireAuth } from '../middleware/auth';
 import { DeletedResourceSchema } from '../types/common.type';
@@ -31,6 +32,11 @@ import {
   FileUrlResponseSchema,
   UpdateFileSchema,
 } from '../types/file.type';
+import {
+  FileSearchRequestSchema,
+  FileSearchResultSchema,
+  FileTaskAcceptedSchema,
+} from '../types/retrieval.type';
 
 const app = new Hono();
 
@@ -424,6 +430,83 @@ app.post(
     const fileController = new FileController();
     return await fileController.queries(c);
   },
+);
+
+/**
+ * Semantic search over a set of files
+ * POST /files/search
+ *
+ * Embeds `query` and returns the closest chunks of the listed files, with their
+ * similarity and source file — the retrieval step of RAG.
+ */
+app.post(
+  '/search',
+  routeDoc({
+    data: FileSearchResultSchema,
+    description:
+      'Embeds `query` with the deployment embedding model and ranks the chunks of `fileIds` by cosine similarity. Files must be parsed and embedded first (`POST /files/{id}/chunks` with `autoEmbedding`, or `POST /files/{id}/embeddings`). Answers 404 when any file is not visible to the caller and 502 when the embedding provider fails.',
+    errors: [404, 502],
+    operationId: 'files.search',
+    summary: 'Semantic search across files',
+    tags: ['files'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('FILE_READ'),
+    'You do not have permission to search files',
+  ),
+  zValidator('json', FileSearchRequestSchema),
+  async (c) => new RetrievalController().searchFiles(c),
+);
+
+/**
+ * Queue embedding of a file's chunks
+ * POST /files/:id/embeddings
+ */
+app.post(
+  '/:id/embeddings',
+  routeDoc({
+    data: FileTaskAcceptedSchema,
+    description:
+      'Vectorizes the chunks of an already-parsed file so it becomes searchable. Runs asynchronously; poll `GET /files/{id}/chunks` for `embeddingStatus`. Answers 409 when the file has no chunks yet.',
+    errors: [404, 409],
+    operationId: 'files.embed',
+    status: 202,
+    summary: 'Start a file embedding task',
+    tags: ['files'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPDATE'),
+    'You do not have permission to embed this file',
+  ),
+  zValidator('param', FileIdParamSchema),
+  async (c) => new RetrievalController().embedFile(c),
+);
+
+/**
+ * Retry parsing a file into chunks
+ * POST /files/:id/parses/retry
+ */
+app.post(
+  '/:id/parses/retry',
+  routeDoc({
+    data: FileTaskAcceptedSchema,
+    description:
+      'Discards the previous chunking task (typically a failed one) and queues a new one. Runs asynchronously; poll `GET /files/{id}/chunks` for `chunkingStatus`. Answers 422 when the file type cannot be chunked.',
+    errors: [404, 422],
+    operationId: 'files.retryParse',
+    status: 202,
+    summary: 'Retry parsing a file into chunks',
+    tags: ['files'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('FILE_UPDATE'),
+    'You do not have permission to parse this file',
+  ),
+  zValidator('param', FileIdParamSchema),
+  async (c) => new RetrievalController().retryParse(c),
 );
 
 export default app;
