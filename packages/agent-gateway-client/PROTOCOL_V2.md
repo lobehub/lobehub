@@ -42,6 +42,9 @@ canonical conversation at every step boundary:
 - After the step is durable, an `agent_event` with `event.type: 'message_patch'` carries
   `{ revision, deletes, upserts }`. Each upsert contains the canonical top-level
   `UIChatMessage` plus its immediate predecessor as `afterId` (`null` for the first row).
+  When the next step runs in the same server invocation, the patch is published at that
+  step's entry, after `step_complete` and before the next `step_start`. It then also
+  carries what other writers changed between the two steps.
 - `agent_runtime_end.data` carries `{ messagePatchMode: true, messageRevision }` and omits
   both `uiMessages` and `finalState`. The client settles only after it has that revision.
 - A missing revision or insertion anchor falls back to the existing authorized full-message

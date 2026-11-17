@@ -25,7 +25,6 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     args,
     cliVersion,
     helpers,
-    liveInput,
     mcpConfigPath,
     promptInput,
     resumeSessionId,
@@ -45,12 +44,17 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
         // does not accept inline JSON for `--mcp-config`.
         ...(mcpConfigPath ? ['--mcp-config', mcpConfigPath] : []),
         ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
-        // A live session replays each message it reads: how a steer is known to be picked up.
-        ...(liveInput ? ['--replay-user-messages'] : []),
+        // Input stays open (see `liveInput` below), and a live session replays
+        // each message it reads: how a delivered message is known to be picked up.
+        '--replay-user-messages',
         ...lobeHubCli.args,
         ...args,
       ],
-      ...(liveInput && { liveInput: true }),
+      // Like `lh hetero exec`, Claude Code always keeps its input open: it is
+      // the control channel (stop one background task, deliver a steer) and
+      // what keeps background tasks alive past the turn. Whether queued
+      // messages are written mid-run is the Follow-up mode's call, not this.
+      liveInput: true,
       stdinPayload,
     };
   },

@@ -21,14 +21,11 @@ const buildParams = (
 });
 
 describe('claudeCodeDriver', () => {
-  it('keeps a Steer-mode run live: input stays open and each read message is replayed', async () => {
-    const live = await claudeCodeDriver.buildSpawnPlan(buildParams({ liveInput: true }));
-    const oneShot = await claudeCodeDriver.buildSpawnPlan(buildParams());
+  it('keeps every run live, as `lh hetero exec` does: input stays open and each read message is replayed', async () => {
+    const plan = await claudeCodeDriver.buildSpawnPlan(buildParams());
 
-    expect(live.args).toContain('--replay-user-messages');
-    expect(live.liveInput).toBe(true);
-    expect(oneShot.args).not.toContain('--replay-user-messages');
-    expect(oneShot.liveInput).toBeUndefined();
+    expect(plan.args).toContain('--replay-user-messages');
+    expect(plan.liveInput).toBe(true);
   });
 
   it('prepares the namespaced server-default model without persisting the operation token', async () => {

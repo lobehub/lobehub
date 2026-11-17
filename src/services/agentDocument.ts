@@ -146,6 +146,10 @@ class AgentDocumentService {
     return result;
   };
 
+  listRevokedDocumentReads = async (params: { agentId: string; documentIds: string[] }) => {
+    return lambdaClient.agentDocument.listRevokedDocumentReads.query(params);
+  };
+
   readDocument = async (params: {
     agentId: string;
     format?: 'xml' | 'markdown' | 'both';

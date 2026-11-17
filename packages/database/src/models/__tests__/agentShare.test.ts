@@ -389,6 +389,8 @@ describe('AgentShareModel', () => {
         allowCreatorViewSessions: false,
         allowReadMemory: false,
         demoCases: [],
+        deviceAccess: 'none',
+        deviceAllowEmails: [],
         featuredWorkIds: [],
         maxFileStorage: 512 * 1024 * 1024,
         maxTopicsPerVisitor: 5,
@@ -407,6 +409,8 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        deviceAccess: 'allowlist',
+        deviceAllowEmails: ['alice@example.com'],
         maxFileStorage: 256 * 1024 * 1024,
         maxTopicsPerVisitor: 10,
         maxTurnsPerTopic: 40,

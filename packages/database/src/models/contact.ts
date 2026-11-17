@@ -6,6 +6,7 @@ import type {
   ContactRequestItem,
   ContactSearchResult,
   ContactUserItem,
+  ContactUserProfile,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
@@ -23,6 +24,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
+import { ilikeContains } from '../utils/like';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 
@@ -298,6 +300,52 @@ export class ContactModel {
       .where(eq(users.id, userId))
       .limit(1);
     return user;
+  };
+
+  /**
+   * People the caller can talk to one-on-one in this scope, the ones a conversation between two
+   * people opens with: personal contacts; in a workspace, its other members, then the external
+   * contacts paired with the caller; for an external contact, the members paired with them.
+   * `query` narrows by a case-insensitive part of the display name or @handle.
+   */
+  listPeople = async (options: {
+    limit: number;
+    query?: string;
+  }): Promise<{ hasMore: boolean; people: ContactUserProfile[] }> => {
+    const role = await this.scopeRole();
+    // A handle is matched without its `@`.
+    const query = options.query?.trim().replace(/^@/, '').toLowerCase() || undefined;
+    const matches = (person: ContactUserProfile) =>
+      !query ||
+      [person.fullName, person.username].some((value) => value?.toLowerCase().includes(query));
+
+    const contacts =
+      role === 'member'
+        ? (await this.listExternals()).filter((item) => item.external?.openedToMe)
+        : await this.listOwnPeople(role);
+    const members =
+      role === 'member'
+        ? await this.db
+            .select(userProfileColumns)
+            .from(workspaceMembers)
+            .innerJoin(users, eq(users.id, workspaceMembers.userId))
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, this.workspaceId!),
+                isNull(workspaceMembers.deletedAt),
+                not(eq(workspaceMembers.userId, this.userId)),
+                query
+                  ? or(ilikeContains(users.fullName, query), ilikeContains(users.username, query))
+                  : undefined,
+              ),
+            )
+            .orderBy(users.fullName, users.username)
+            // One more than asked tells whether more matched.
+            .limit(options.limit + 1)
+        : [];
+
+    const people = [...members, ...contacts.map((item) => item.user).filter(matches)];
+    return { hasMore: people.length > options.limit, people: people.slice(0, options.limit) };
   };
 
   relationTo = async (otherUserId: string): Promise<ContactRelation> => {

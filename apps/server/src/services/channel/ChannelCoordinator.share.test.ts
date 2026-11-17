@@ -155,6 +155,8 @@ describe('dispatching a contact’s shared Agent', () => {
     const [params] = execAgent.mock.calls[0];
     expect(params.shareGate).toEqual({
       agentId: 'agt_shared',
+      // The live share sets no `deviceAccess`, so the Channel visitor gets no device.
+      canUseDevice: false,
       shareConfig: liveShare.shareConfig,
       shareId: 'share-1',
       visitorUserId: 'visitor',

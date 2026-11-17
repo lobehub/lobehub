@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveAccountView, matchesKeyword, meterWindows, sortAccounts } from './accountView';
+import {
+  accountVisibilityTab,
+  deriveAccountView,
+  matchesKeyword,
+  meterWindows,
+  sortAccounts,
+} from './accountView';
 
 const NOW = Date.UTC(2026, 9, 24, 12);
 const HOUR = 60 * 60 * 1000;
@@ -146,5 +152,17 @@ describe('matchesKeyword', () => {
 
     expect(matchesKeyword(ultra, 'ultra')).toBe(true);
     expect(matchesKeyword(ultra, 'max')).toBe(false);
+  });
+});
+
+describe('accountVisibilityTab', () => {
+  it('lists a private account under Private and a shared one under Workspace', () => {
+    expect(accountVisibilityTab({ visibility: 'private' })).toBe('private');
+    expect(accountVisibilityTab({ visibility: 'public' })).toBe('public');
+  });
+
+  it('lists an account without a stored visibility under Workspace', () => {
+    expect(accountVisibilityTab({ visibility: null })).toBe('public');
+    expect(accountVisibilityTab({})).toBe('public');
   });
 });
