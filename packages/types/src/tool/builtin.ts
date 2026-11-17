@@ -378,6 +378,12 @@ export interface BuiltinToolResolveContext {
    * to the operation/message scope unions.
    */
   scope?: string;
+  /**
+   * The run's tool mode (`agent` / `chat` / `custom`). A tool the chat-mode
+   * whitelist admits only for one purpose (e.g. `lobe-agent` when the user
+   * @mentions agents) trims itself to that purpose here.
+   */
+  toolMode?: string;
 }
 
 /**
@@ -958,6 +964,11 @@ export interface RunSubAgentParams {
   inheritMessages?: boolean;
   /** Detailed instruction/prompt for the sub-agent execution */
   instruction: string;
+  /**
+   * Another agent to run instead of a copy of the caller (`callSubAgent`'s
+   * `agentId`). It runs on its own configuration.
+   */
+  targetAgentId?: string;
   /** Optional timeout in milliseconds */
   timeout?: number;
   /** The tool message ID that spawned this sub-agent (anchors the isolation thread) */

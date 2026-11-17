@@ -54,6 +54,14 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - \`cancelSubAgent({ subAgentId })\` stops a sub-agent that is still running (typically a background one). Use it when its result is no longer needed (the user changed their mind, another result already answered it). No result is delivered for a cancelled sub-agent.
 - Do not cancel a sub-agent just because it is taking a while.
 
+**Handing work to another agent (\`agentId\`):**
+- Without \`agentId\` the sub-agent is a copy of you. Pass \`agentId\` to hand the work to one of the user's other agents instead — from \`<available_agents>\`, \`<mentioned_agents>\` or \`searchAgent\` — including external agents such as Claude Code or Codex. It runs with its own model, tools and instructions, so write the instruction for someone who has not seen this conversation.
+- Pick another agent when the request clearly matches what it is set up for; otherwise use a copy of yourself. Never pass your own agent id.
+- When the user @mentions agents, delegate their part of the request to those agents this way.
+- Everything else works the same for it: wait for its result or run it in the background, continue it with \`subAgentId\` (it keeps the agent it was started with — do not pass \`agentId\` again), steer it, or cancel it.
+
+**Which hand-off to use:** \`callSubAgent\` is for work done now whose result comes back to you in this conversation. Work that should be tracked on its own, outlive this conversation or run on a schedule belongs in a task, not a sub-agent.
+
 **Use sub-agents when:**
 - **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
 - **The task involves multiple steps**: The request cannot be answered in one simple response - it requires searching, reading, analyzing, and summarizing.
@@ -267,6 +275,21 @@ ${multimodalAnalysisSection}
 ${askUserQuestionSection}
 ${planTodoSection}
 ${ventSection}`;
+
+const delegationSection = `
+<delegate_to_agents>
+You can hand work to the user's other agents with \`callSubAgent\`. Pass the agent's id as \`agentId\` (from \`<mentioned_agents>\` or \`<available_agents>\`), a short \`description\` and a self-contained \`instruction\`: the agent runs with its own model, tools and instructions, and has not seen this conversation. Its answer comes back to you as the tool result; use it to reply to the user.
+- When the user @mentions agents, delegate their part of the request to those agents instead of answering it yourself. Several independent agents can run in parallel: emit one call each in the same turn.
+- Every result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` (without \`agentId\`) to send the same agent a follow-up; it keeps its earlier work.
+- \`runInBackground: true\` returns at once; the answer arrives later as a new message. Use it only when you have other work to do meanwhile — never poll for it.
+</delegate_to_agents>`;
+
+/**
+ * Prompt for the delegation-only manifest: just `callSubAgent` with a target
+ * agent, offered where the rest of `lobe-agent` is not (chat mode, @mentions
+ * injected into a run that does not otherwise carry the tool).
+ */
+export const delegationSystemPrompt = delegationSection.trim();
 
 /** Full prompt, including sub-agent dispatch (callSubAgent) guidance. */
 export const systemPrompt = `${baseSystemPrompt}
