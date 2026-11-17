@@ -1547,6 +1547,7 @@
   "heteroAgent.executionTarget.sandbox": "Sandbox na nuvem",
   "heteroAgent.executionTarget.sandboxDesc": "Executar em um sandbox efêmero na nuvem",
   "heteroAgent.executionTarget.sandboxGroup": "Sandboxes",
+  "heteroAgent.executionTarget.sandboxGroupDesc": "Executar em um ambiente isolado",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} atualmente funciona apenas em um dispositivo local ou conectado",
   "heteroAgent.executionTarget.switchProjectTopic.content": "Este tópico será executado no diretório do projeto \"{{directory}}\" em {{device}}. Sua próxima execução iniciará uma nova sessão lá.",
   "heteroAgent.executionTarget.switchTopic.content": "Este tópico está sendo executado em {{name}}, onde seu diretório de trabalho e sessão do agente são mantidos. Após a troca, sua próxima etapa iniciará uma nova sessão no novo ambiente. Novos tópicos também usarão esta escolha.",

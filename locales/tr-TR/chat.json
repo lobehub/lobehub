@@ -1549,6 +1549,7 @@
   "heteroAgent.executionTarget.sandbox": "Bulut sandbox",
   "heteroAgent.executionTarget.sandboxDesc": "Geçici bir bulut sandbox'ında çalıştır",
   "heteroAgent.executionTarget.sandboxGroup": "Sandbox'lar",
+  "heteroAgent.executionTarget.sandboxGroupDesc": "Yalıtılmış bir ortamda çalıştır",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} şu anda yalnızca yerel veya bağlı bir cihazda çalışıyor",
   "heteroAgent.executionTarget.switchProjectTopic.content": "Bu konu, \"{{directory}}\" proje dizininde {{device}} üzerinde çalışacak. Bir sonraki adımda orada yeni bir oturum başlatılacak.",
   "heteroAgent.executionTarget.switchTopic.content": "Bu konu {{name}} üzerinde çalışıyor, burada çalışma dizini ve ajan oturumu tutuluyor. Geçişten sonra, bir sonraki tur yeni ortamda yeni bir oturum başlatır. Yeni konular da bu seçimi kullanır.",

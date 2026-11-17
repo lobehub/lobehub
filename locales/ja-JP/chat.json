@@ -1549,6 +1549,7 @@
   "heteroAgent.executionTarget.sandbox": "クラウドサンドボックス",
   "heteroAgent.executionTarget.sandboxDesc": "一時的なクラウドサンドボックスで実行",
   "heteroAgent.executionTarget.sandboxGroup": "サンドボックス",
+  "heteroAgent.executionTarget.sandboxGroupDesc": "隔離された環境で実行",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} は現在、ローカルまたは接続されたデバイスでのみ動作します",
   "heteroAgent.executionTarget.switchProjectTopic.content": "このトピックはプロジェクトディレクトリ「{{directory}}」で{{device}}上で実行されます。次のターンではそこで新しいセッションが開始されます。",
   "heteroAgent.executionTarget.switchTopic.content": "このトピックは {{name}} で実行されており、その作業ディレクトリとエージェントセッションが保持されています。切り替え後、次のターンは新しい環境で新しいセッションを開始します。新しいトピックもこの選択を使用します。",

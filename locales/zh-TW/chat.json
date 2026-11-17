@@ -1549,6 +1549,7 @@
   "heteroAgent.executionTarget.sandbox": "雲端沙盒",
   "heteroAgent.executionTarget.sandboxDesc": "在臨時雲端沙盒中運行",
   "heteroAgent.executionTarget.sandboxGroup": "沙盒",
+  "heteroAgent.executionTarget.sandboxGroupDesc": "在隔離環境中執行",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} 目前僅能在本地或連接的設備上運行",
   "heteroAgent.executionTarget.switchProjectTopic.content": "此主題將在 {{device}} 的專案目錄 \"{{directory}}\" 中運行。其下一回合將在那裡開始一個新的會話。",
   "heteroAgent.executionTarget.switchTopic.content": "此主題已在 {{name}} 上運行，其工作目錄和代理會話已保留。切換後，其下一回合將在新環境中啟動一個新會話。新主題也將使用此選擇。",

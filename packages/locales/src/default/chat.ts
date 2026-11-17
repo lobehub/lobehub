@@ -984,6 +984,7 @@ export default {
   'heteroAgent.executionTarget.deviceGroupSummary': '{{online}} online · {{total}} total',
   'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
   'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
+  'heteroAgent.executionTarget.sandboxGroupDesc': 'Run in an isolated environment',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',

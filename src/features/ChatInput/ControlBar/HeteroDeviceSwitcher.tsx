@@ -734,6 +734,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {showLocalRow ? (
         <OptionRow
           active={isActive('local')}
+          desc={t('heteroAgent.executionTarget.localDesc')}
           icon={<ExecutionTargetIcon target={'local'} />}
           label={t('heteroAgent.executionTarget.local')}
           tags={tagsFor(isActive('local'))}
@@ -744,14 +745,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           `local` is still the pick) it keeps its machine name, so two rows
           never both read "This computer". */}
       {thisComputerDevices.map((d) => renderDeviceRow(d, { thisComputer: !showLocalRow }))}
-      {/* The first level is one plain list of titles, with no section labels:
-          the choices that run nowhere in particular (no device, auto), then a
-          row per group — sandboxes, then devices — whose choices open beside
-          it. What each choice means is said where it is picked, one level
-          down. A heterogeneous agent has neither of the first two rows. */}
+      {/* The first level is one plain list with no section labels: the choices
+          that run nowhere in particular (no device, auto), then a row per group
+          — sandboxes, then devices — whose choices open beside it. Every row
+          keeps a one-line description, so the list reads evenly. A
+          heterogeneous agent has neither of the first two rows. */}
       {isHetero ? null : (
         <OptionRow
           active={isActive('none')}
+          desc={t('heteroAgent.executionTarget.noneDesc')}
           icon={<ExecutionTargetIcon target={'none'} />}
           label={t('heteroAgent.executionTarget.none')}
           onClick={() => void handleSelect('none')}
@@ -760,6 +762,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {isHetero ? null : (
         <OptionRow
           active={isActive('auto')}
+          desc={t('heteroAgent.executionTarget.autoDesc')}
           icon={<ExecutionTargetIcon target={'auto'} />}
           label={t('heteroAgent.executionTarget.auto')}
           onClick={() => void handleSelect('auto')}
@@ -767,6 +770,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       )}
       <GroupSubmenu
         active={!!activeSandboxLabel}
+        desc={t('heteroAgent.executionTarget.sandboxGroupDesc')}
         hint={activeSandboxLabel}
         icon={<Icon icon={BoxesIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandboxGroup')}

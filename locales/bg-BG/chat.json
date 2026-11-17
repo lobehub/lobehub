@@ -1549,6 +1549,7 @@
   "heteroAgent.executionTarget.sandbox": "Облачен пясъчник",
   "heteroAgent.executionTarget.sandboxDesc": "Изпълнява се в временен облачен пясъчник",
   "heteroAgent.executionTarget.sandboxGroup": "Пясъчници",
+  "heteroAgent.executionTarget.sandboxGroupDesc": "Изпълнение в изолирана среда",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} в момента работи само на локално или свързано устройство",
   "heteroAgent.executionTarget.switchProjectTopic.content": "Тази тема ще се изпълнява в директорията на проекта \"{{directory}}\" на {{device}}. Следващият й ход започва нова сесия там.",
   "heteroAgent.executionTarget.switchTopic.content": "Тази тема се изпълнява на {{name}}, където се съхраняват нейната работна директория и сесията на агента. След превключване, следващият ѝ ход започва нова сесия в новата среда. Новите теми също ще използват този избор.",
