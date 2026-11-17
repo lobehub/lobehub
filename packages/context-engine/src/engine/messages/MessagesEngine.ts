@@ -229,7 +229,14 @@ export class MessagesEngine {
     // Anything else — system role, knowledge bases, memory, web-browsing tool
     // prompts — remains untouched.
     const isAgentMode = enableAgentMode !== false;
-    const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
+    // Chat mode keeps only the @mentioned agents: the delegation-only
+    // `lobe-agent` is offered there exactly so they can be delegated to.
+    const effectiveAgentManagementContext = isAgentMode
+      ? agentManagementContext
+      : agentManagementContext?.mentionedAgents?.length
+        ? { mentionedAgents: agentManagementContext.mentionedAgents }
+        : undefined;
+    const isAgentManagementEnabled = !!effectiveAgentManagementContext;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // Runtime message state is authoritative, including an empty clear tombstone.
@@ -439,7 +446,7 @@ export class MessagesEngine {
       // Agent Management context (available models and plugins)
       new AgentManagementContextInjector({
         enabled: isAgentManagementEnabled,
-        context: agentManagementContext,
+        context: effectiveAgentManagementContext,
       }),
       // Group Agent Builder context (current group config/members for editing)
       new GroupAgentBuilderContextInjector({

@@ -81,7 +81,7 @@ export interface AvailablePluginInfo {
  */
 export interface AgentManagementContext {
   /**
-   * User's recently updated agents — surfaced so the model can callAgent without
+   * User's recently updated agents — surfaced so the model can delegate to one without
    * searchAgent first. The current/responding agent is NEVER included here, so
    * the model has no exposure to its own id from this section and cannot
    * accidentally delegate to itself. Filtering happens at the caller side
@@ -100,7 +100,7 @@ export interface AgentManagementContext {
    * installPlugin, etc.) to manage itself when the user asks to modify the current agent.
    */
   currentAgent?: { id: string; name?: string; title?: string };
-  /** Agents @mentioned by the user — supervisor should delegate to these via callAgent */
+  /** Agents @mentioned by the user — delegated to via `callSubAgent({ agentId })` */
   mentionedAgents?: RuntimeMentionedAgent[];
 }
 
@@ -239,7 +239,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   const instructionParts: string[] = [];
   if (context.currentAgent) {
     instructionParts.push(
-      'The `current_agent` tag is YOU — your own agent ID. When the user asks to modify your settings (model, plugins, system prompt, etc.), use this ID with updateAgent, getAgentDetail, installPlugin, or other Agent Management tools to manage yourself. Do NOT call yourself via callAgent.',
+      'The `current_agent` tag is YOU — your own agent ID. When the user asks to modify your settings (model, plugins, system prompt, etc.), use this ID with updateAgent, getAgentDetail, installPlugin, or other Agent Management tools to manage yourself. Never pass it as the `agentId` of callSubAgent — a copy of yourself needs no agentId.',
     );
   }
   if (hasModelsOrPlugins) {
@@ -249,7 +249,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   }
   if (hasAgents) {
     instructionParts.push(
-      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may delegate to it via the Agent Management `callAgent` tool (activating the tool first if it is not already enabled). If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may hand the work to it with the `callSubAgent` tool and its id as `agentId`. If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
     );
   }
 
@@ -261,7 +261,7 @@ ${parts.join('\n')}
 
 /**
  * Format mentioned agents as delegation context for injection after the user message.
- * Instructs the AI to delegate to the mentioned agent(s) via callAgent.
+ * Instructs the AI to delegate to the mentioned agent(s) via `callSubAgent({ agentId })`.
  */
 const formatMentionedAgentsContext = (mentionedAgents: RuntimeMentionedAgent[]): string => {
   const agentsXml = mentionedAgents
@@ -269,7 +269,7 @@ const formatMentionedAgentsContext = (mentionedAgents: RuntimeMentionedAgent[]):
     .join('\n');
 
   return `<mentioned_agents>
-<instruction>The user has @mentioned the following agent(s) in their message. You MUST call the \`lobe-agent-management____callAgent\` tool to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — call the agent and let them respond.</instruction>
+<instruction>The user has @mentioned the following agent(s) in their message. You MUST call the \`lobe-agent____callSubAgent\` tool with the agent's id as \`agentId\` to delegate the user's request to the mentioned agent. Do NOT attempt to handle the request yourself — hand it to the agent and relay its answer.</instruction>
 ${agentsXml}
 </mentioned_agents>`;
 };

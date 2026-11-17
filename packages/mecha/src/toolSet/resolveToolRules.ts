@@ -5,6 +5,7 @@ import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
+import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
@@ -80,8 +81,12 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
 
   // Chat mode: a strict outer whitelist. No always-on tools, no runtime
   // injection, no activator — each entry still passes its own gate.
+  // @mentioned agents are delegated to through `lobe-agent` (delegation-only
+  // in chat mode, see its manifest resolver).
+  const mentionDelegation = request.hasMentionedAgents === true && model.canUseFC;
   const chatModeRules = {
     [AttachmentsManifest.identifier]: attachmentsEnabled,
+    ...(mentionDelegation && { [LobeAgentManifest.identifier]: true }),
     [ImageGenerationManifest.identifier]: imageGenerationEnabled,
     [VideoGenerationManifest.identifier]: videoGenerationEnabled,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
@@ -142,7 +147,10 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
       toolMode === 'custom'
         ? [...pinnedPluginIds]
         : toolMode === 'chat'
-          ? [...chatModeAllowedToolIds]
+          ? [
+              ...chatModeAllowedToolIds,
+              ...(mentionDelegation ? [LobeAgentManifest.identifier] : []),
+            ]
           : [
               ...defaultToolIds,
               ...(request.hasIdentityAccount ? [AgentAccountManifest.identifier] : []),

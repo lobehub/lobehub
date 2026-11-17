@@ -1005,9 +1005,9 @@ export class GatewayActionImpl {
     selectedToolIds?: string[];
     /**
      * Agents the user @-mentioned in this message (multi-mention). Forwarded to
-     * the server so the supervisor run enables the callAgent tool and injects the
-     * mentioned-agents delegation context — mirrors the client runtime's
-     * `initialContext.mentionedAgents` + injected callAgent manifest. Without
+     * the server so the supervisor run enables lobe-agent's callSubAgent and injects
+     * the mentioned-agents delegation context — mirrors the client runtime's
+     * `initialContext.mentionedAgents` + injected delegation manifest. Without
      * this the gateway supervisor never sees the mention and answers itself
      * instead of delegating.
      */

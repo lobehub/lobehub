@@ -137,7 +137,7 @@ describe('AgentManagementContextInjector', () => {
       expect(delegationMsg.content).toContain('agt_designer');
       expect(delegationMsg.content).toContain('Designer Agent');
       expect(delegationMsg.content).toContain(
-        'MUST call the `lobe-agent-management____callAgent` tool',
+        "MUST call the `lobe-agent____callSubAgent` tool with the agent's id as `agentId`",
       );
       expect(delegationMsg.meta.injectType).toBe('agent-mention-delegation');
     });

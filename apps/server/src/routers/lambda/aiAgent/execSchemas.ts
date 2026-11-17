@@ -289,10 +289,10 @@ export const ExecAgentFieldsSchema = z.object({
   selectedSkillIds: z.array(z.string()).optional(),
   /**
    * Agents the user @-mentioned in this message (multi-mention). When present
-   * (and non-group), the run enables the callAgent tool and injects the
-   * mentioned-agents delegation context so the supervisor delegates to them
-   * instead of answering itself. Mirrors the client runtime's
-   * `initialContext.mentionedAgents` + injected callAgent manifest.
+   * (and non-group), the run enables lobe-agent's `callSubAgent` (delegation-only
+   * in chat mode) and injects the mentioned-agents delegation context so the
+   * supervisor delegates to them instead of answering itself. Mirrors the client
+   * runtime's `initialContext.mentionedAgents` + injected delegation manifest.
    */
   mentionedAgents: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
   /** The agent slug to run (either agentId or slug is required) */

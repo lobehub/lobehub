@@ -472,7 +472,7 @@ const gatherGroupAgentBuilderContext = async (
  *   providers and plugins are theirs, and the share gate has already removed
  *   the tool that could act on them.
  * - no delegation facts (`availableAgents` / `mentionedAgents`) inside a
- *   sub-agent run: the executor rejects nested `callAgent` there and the
+ *   sub-agent run: the executor rejects nested `callSubAgent` there and the
  *   manifest already hides it, so inviting delegation only sends the model
  *   to a tool call that can never succeed.
  */

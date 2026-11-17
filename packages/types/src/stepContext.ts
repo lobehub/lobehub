@@ -186,7 +186,7 @@ export interface RuntimeMentionedAgent {
 }
 
 /**
- * A slim tool manifest injected at runtime by callers (e.g. @mention → callAgent).
+ * A slim tool manifest injected at runtime by callers (e.g. @mention → delegation-only lobe-agent).
  * Structurally compatible with LobeToolManifest from @lobechat/context-engine
  * without requiring a cross-package import.
  */
@@ -229,7 +229,7 @@ export interface RuntimeInitialContext {
   /**
    * Agents explicitly @mentioned by the user in the input editor.
    * When present in a non-group conversation, the current agent acts as
-   * supervisor and can delegate to the mentioned agents via callAgent.
+   * supervisor and can delegate to the mentioned agents via `callSubAgent({ agentId })`.
    */
   mentionedAgents?: RuntimeMentionedAgent[];
   /**

@@ -237,7 +237,7 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   maxSteps?: number;
   /**
    * Agents the user @-mentioned in this message (multi-mention). When present
-   * (and non-group), the run enables the callAgent tool and persists the mentioned
+   * (and non-group), the run enables lobe-agent's callSubAgent and persists the mentioned
    * agents into the runtime `initialContext` so the context engine injects the
    * delegation context at step time — making the supervisor delegate to them
    * instead of answering itself. Mirrors the client runtime's mention wiring.
