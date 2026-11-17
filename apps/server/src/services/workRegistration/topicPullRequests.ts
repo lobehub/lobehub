@@ -209,7 +209,11 @@ export const linkPushedPullRequests = async (params: {
         resourceType: 'github_pull_request',
         status: status ?? null,
         title: pr.title,
-        toolCallId: record.toolCallId ?? params.toolCallId,
+        // Its own dedupe key: the completion scan registers this same push again
+        // with the run's provenance (rootOperationId / agent), which is what makes
+        // it render as the run's Work card — sharing the call id would make that
+        // later version a no-op and the card would never show it.
+        toolCallId: `${record.toolCallId ?? params.toolCallId}#push-link`,
         toolIdentifier: record.identifier ?? 'unknown',
         toolName: record.apiName ?? 'unknown',
         topicId: params.topicId,

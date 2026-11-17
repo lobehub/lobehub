@@ -184,7 +184,7 @@ describe('linkPushedPullRequests', () => {
         patchFields: ['identifier', 'url', 'title', 'status'],
         resourceId: 'lobehub/lobehub#12',
         status: 'open',
-        toolCallId: 'toolu_1',
+        toolCallId: 'toolu_1#push-link',
         toolIdentifier: 'claude-code',
         toolName: 'Bash',
         topicId: 't1',

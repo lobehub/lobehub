@@ -115,4 +115,13 @@ describe('parseGitPushResult', () => {
       }),
     ).toEqual({ branches: ['feat'], repoFullName: 'a/b' });
   });
+
+  it('ignores a dry run, which reports the table without publishing', () => {
+    const output = 'To github.com:a/b.git\n * [new branch]      feat -> feat';
+    expect(parseGitPushResult({ command: 'git push --dry-run origin feat', output })).toBeNull();
+    expect(parseGitPushResult({ command: 'git push -un origin feat', output })).toBeNull();
+    expect(
+      parseGitPushResult({ command: 'git push -n origin feat && git push origin feat', output }),
+    ).toEqual({ branches: ['feat'], repoFullName: 'a/b' });
+  });
 });

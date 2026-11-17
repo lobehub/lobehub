@@ -11,6 +11,11 @@ export interface GitPushResult {
 /** `git` global options that consume the following token (`git -C dir push`). */
 const GIT_GLOBAL_VALUE_FLAGS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace']);
 
+/** `-n` / `--dry-run`, also inside a short-flag cluster (`-un`): git prints the table but publishes nothing. */
+const isDryRunFlag = (token: string) =>
+  token === '--dry-run' || /^-[a-zA-Z]*n[a-zA-Z]*$/.test(token);
+
+/** A `git push` that publishes — a dry run reports the same table without pushing. */
 const isGitPushSegment = (segment: string[]): boolean => {
   if (segment[0] !== 'git' && !segment[0]?.endsWith('/git')) return false;
 
@@ -21,7 +26,7 @@ const isGitPushSegment = (segment: string[]): boolean => {
       continue;
     }
     if (token.startsWith('-')) continue;
-    return token === 'push';
+    return token === 'push' && !segment.slice(i + 1).some(isDryRunFlag);
   }
   return false;
 };
