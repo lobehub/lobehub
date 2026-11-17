@@ -406,6 +406,10 @@ class AiAgentService {
     return createWorkspaceLambdaClient(workspaceId).aiAgent.submitWorktreeTurn.mutate(params);
   }
 
+  async cancelWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.cancelWorktreeTurn.mutate({ topicId });
+  }
+
   async retryWorktreeTurn(topicId: string) {
     return lambdaClient.aiAgent.retryWorktreeTurn.mutate({ topicId });
   }

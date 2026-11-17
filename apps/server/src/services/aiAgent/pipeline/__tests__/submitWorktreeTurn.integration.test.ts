@@ -101,6 +101,45 @@ describe('submitWorktreeTurn', () => {
     expect(await operationModel.findById(`op_worktree_${input.topicId}`)).toBeNull();
   });
 
+  it('cancels an offline wait without deleting the message or allowing a late dispatch', async () => {
+    const input = request();
+    await submitWorktreeTurn(deps, input);
+    const { topicId, userMessageId } = input;
+    const operationId = `op_worktree_${topicId}`;
+    const now = new Date();
+    const claim = {
+      claimedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 5000).toISOString(),
+      id: 'offline-check',
+    };
+    await expect(TopicModel.claimScheduledTopic(db, topicId, claim, now)).resolves.toBe(true);
+    await expect(topicModel.cancelWorktreeStart(topicId)).resolves.toBe('busy');
+
+    const retryAt = new Date(now.getTime() + 30_000);
+    await TopicModel.finishWorktreeStart(db, topicId, claim.id, {
+      retryAt: retryAt.toISOString(),
+      success: false,
+    });
+    await expect(new TopicModel(db, 'foreign-user').cancelWorktreeStart(topicId)).resolves.toBe(
+      'unchanged',
+    );
+    await expect(topicModel.cancelWorktreeStart(topicId)).resolves.toBe('cancelled');
+    await expect(topicModel.cancelWorktreeStart(topicId)).resolves.toBe('unchanged');
+    expect(await TopicModel.getDueScheduledTopics(db, retryAt, topicId)).toHaveLength(0);
+    await expect(TopicModel.claimScheduledTopic(db, topicId, claim, retryAt)).resolves.toBe(false);
+    await expect(topicModel.findById(topicId)).resolves.toMatchObject({
+      metadata: { scheduledRun: null },
+      status: 'active',
+    });
+    await expect(messageModel.findById(userMessageId)).resolves.toMatchObject({
+      content: input.prompt,
+      role: 'user',
+    });
+    await expect(operationModel.findById(operationId)).resolves.toMatchObject({
+      status: 'interrupted',
+    });
+  });
+
   it('leases a pending turn to one background worker and keeps it due after the device reconnects', async () => {
     const { topic } = await submitWorktreeTurn(deps, request());
     const now = new Date();

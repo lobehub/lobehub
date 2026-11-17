@@ -31,6 +31,7 @@ const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
   const { t: tDevice } = useTranslation('device');
   const { t: tCommon } = useTranslation('common');
   const topicId = useConversationStore((s) => s.context.topicId);
+  const [cancelling, setCancelling] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
   const run = useChatStore((s) => {
@@ -48,6 +49,30 @@ const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
   });
 
   const cancelScheduledRun = useConversationStore((s) => s.cancelScheduledRun);
+  const cancelWorktree = async () => {
+    if (!topicId) return;
+    setCancelling(true);
+    try {
+      const outcome = await aiAgentService.cancelWorktreeTurn(topicId);
+      if (outcome === 'cancelled') {
+        toast.success(tDevice('workingDirectory.worktreeSendCancelled'));
+      } else {
+        toast.info(tDevice('workingDirectory.worktreeCancelTooLate'));
+      }
+      await useChatStore
+        .getState()
+        .refreshTopicDetail(topicId, true)
+        .catch((error) => {
+          console.error('[ScheduledRunFooter] refresh after cancellation failed', error);
+        });
+    } catch (error) {
+      console.error('[ScheduledRunFooter] cancel worktree send failed', error);
+      toast.error(tDevice('workingDirectory.worktreeCancelFailed'));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const retryWorktree = async () => {
     if (!topicId) return;
     setRetrying(true);
@@ -89,20 +114,18 @@ const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
     }
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        gap={6}
-        justify={'flex-end'}
-        paddingBlock={4}
-        role="status"
-      >
+      <Flexbox horizontal align={'center'} gap={6} justify={'flex-end'} paddingBlock={4}>
         <Icon spin icon={LoaderCircleIcon} size={14} />
-        <Text style={{ fontSize: 12 }} type={'secondary'}>
+        <Text role={'status'} style={{ fontSize: 12 }} type={'secondary'}>
           {run.waitingForDevice
             ? tDevice('workingDirectory.worktreeWaitingForDevice')
             : tDevice('workingDirectory.preparingWorktree')}
         </Text>
+        {!run.claim && (
+          <Button loading={cancelling} size={'small'} type={'text'} onClick={cancelWorktree}>
+            {tDevice('workingDirectory.cancelWorktreeSend')}
+          </Button>
+        )}
       </Flexbox>
     );
   }

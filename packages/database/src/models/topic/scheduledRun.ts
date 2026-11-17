@@ -6,7 +6,7 @@ import {
 } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
 
-import { type TopicItem, topics } from '../../schemas';
+import { agentOperations, type TopicItem, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import type { TopicModelContext } from './context';
@@ -68,6 +68,39 @@ export const armScheduledRun = async (
       .where(and(eq(topics.id, id), ctx.ownership()));
   });
 };
+
+/** Withdraw a queued worktree send while preserving the conversation and its user message. */
+export const cancelWorktreeStart = async (ctx: TopicModelContext, id: string) =>
+  ctx.db.transaction(async (tx) => {
+    const ownedTopic = and(eq(topics.id, id), eq(topics.userId, ctx.userId), ctx.ownership());
+    const [row] = await tx
+      .select({ metadata: topics.metadata, status: topics.status })
+      .from(topics)
+      .where(ownedTopic)
+      .for('update');
+
+    const run = row?.metadata?.scheduledRun;
+    if (row?.status !== 'scheduled' || run?.kind !== 'worktree_start') return 'unchanged' as const;
+    // A worker holding a claim may already be touching Git or starting the agent.
+    if (run.claim) return 'busy' as const;
+
+    await tx
+      .update(agentOperations)
+      .set({ completedAt: new Date(), completionReason: 'interrupted', status: 'interrupted' })
+      .where(
+        and(
+          eq(agentOperations.id, run.operationId),
+          eq(agentOperations.topicId, id),
+          eq(agentOperations.userId, ctx.userId),
+          eq(agentOperations.status, 'idle'),
+        ),
+      );
+    await tx
+      .update(topics)
+      .set({ metadata: { ...row.metadata, scheduledRun: null }, status: 'active' })
+      .where(ownedTopic);
+    return 'cancelled' as const;
+  });
 
 /** Re-arm the same persisted turn and reservation after a failed checkout. */
 export const retryWorktreeStart = async (ctx: TopicModelContext, id: string) =>

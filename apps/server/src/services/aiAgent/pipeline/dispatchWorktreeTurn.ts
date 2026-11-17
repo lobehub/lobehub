@@ -137,6 +137,7 @@ export const dispatchWorktreeTurn = async (
       mentionedAgents: job.mentionedAgents,
       markTopicRunning: true,
       parentMessageId: message.id,
+      persistedUserMessageId: message.id,
       prompt: message.content ?? '',
       requireDevice: true,
       reservedAssistantMessageId: job.assistantMessageId,

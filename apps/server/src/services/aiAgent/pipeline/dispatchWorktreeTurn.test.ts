@@ -184,6 +184,7 @@ describe('dispatchWorktreeTurn', () => {
         appContext: { topicId: topic.id },
         deviceId: request.deviceId,
         parentMessageId: run.userMessageId,
+        persistedUserMessageId: run.userMessageId,
         prompt: 'Use the selected branch',
         requireDevice: true,
         reservedOperationId: run.operationId,

@@ -455,6 +455,10 @@ export const execRouter = router({
       return result;
     }),
 
+  cancelWorktreeTurn: aiAgentWriteProcedure
+    .input(z.object({ topicId: z.string() }))
+    .mutation(({ ctx, input }) => ctx.topicModel.cancelWorktreeStart(input.topicId)),
+
   retryWorktreeTurn: aiAgentWriteProcedure
     .input(z.object({ topicId: z.string() }))
     .mutation(async ({ ctx, input }) => {

@@ -359,6 +359,7 @@ export interface TurnSetupInput {
   modelOverride?: string;
   operationTaskId?: string;
   parentMessageId?: string;
+  persistedUserMessageId?: string;
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
@@ -472,6 +473,7 @@ export const setupTurn = async (
     modelOverride,
     operationTaskId,
     parentMessageId,
+    persistedUserMessageId,
     prompt,
     providerOverride,
     requestedDeviceId,
@@ -1159,6 +1161,6 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
-    userMessageId: userMessageRecord?.id,
+    userMessageId: userMessageRecord?.id ?? persistedUserMessageId,
   };
 };

@@ -451,6 +451,12 @@ export const execAgentTurn = async (
         modelOverride,
         operationTaskId,
         parentMessageId,
+        persistedUserMessageId:
+          suppressUserMessage &&
+          !effectiveResume &&
+          params.persistedUserMessageId === parentMessageId
+            ? params.persistedUserMessageId
+            : undefined,
         prompt,
         providerOverride,
         requestedDeviceId,

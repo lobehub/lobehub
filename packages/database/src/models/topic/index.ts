@@ -212,6 +212,7 @@ export class TopicModel {
   // **************** Scheduled run *************** //
 
   cancelRateLimitContinuation = this.withContext(scheduledRun.cancelRateLimitContinuation);
+  cancelWorktreeStart = this.withContext(scheduledRun.cancelWorktreeStart);
   armScheduledRun = this.withContext(scheduledRun.armScheduledRun);
   retryWorktreeStart = this.withContext(scheduledRun.retryWorktreeStart);
 
