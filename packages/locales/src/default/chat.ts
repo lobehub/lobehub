@@ -932,7 +932,6 @@ export default {
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
-  'heteroAgent.executionTarget.builtinGroup': 'Built-in',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
   'heteroAgent.executionTarget.fixedTip':
@@ -983,7 +982,6 @@ export default {
     'Discarded after use, for coding and one-off data processing',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.deviceGroupSummary': '{{online}} online · {{total}} total',
-  'heteroAgent.executionTarget.devicesGroup': 'Devices',
   'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
   'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',

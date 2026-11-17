@@ -1517,7 +1517,6 @@
   "heteroAgent.executionTarget.auto": "Otomatik",
   "heteroAgent.executionTarget.autoDesc": "Birden fazla cihaz mevcut olduğunda, otomatik olarak bir çevrimiçi cihaz seçin",
   "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} çevrimiçi · toplam {{total}}",
-  "heteroAgent.executionTarget.devicesGroup": "Cihazlar",
   "heteroAgent.executionTarget.downloadDesktop": "Masaüstü Uygulamasını Edinin",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Bilgisayarınıza erişimi olan ajanları çalıştırın",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Masaüstü uygulamasını edinin",

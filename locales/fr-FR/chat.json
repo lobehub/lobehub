@@ -1517,7 +1517,6 @@
   "heteroAgent.executionTarget.auto": "Auto",
   "heteroAgent.executionTarget.autoDesc": "Utiliser automatiquement un appareil en ligne, en choisissant un lorsqu'il y en a plusieurs disponibles",
   "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} en ligne · {{total}} au total",
-  "heteroAgent.executionTarget.devicesGroup": "Appareils",
   "heteroAgent.executionTarget.downloadDesktop": "Obtenir l'application de bureau",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Exécutez des agents avec accès à votre ordinateur",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Obtenir l'application de bureau",
