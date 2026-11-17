@@ -8,6 +8,7 @@ import {
   createSubTopicService,
   readLatestSubTopicTranscript,
 } from '@/server/routers/lambda/subTopic';
+import { resolveDeviceAccessPolicy } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { readSubTopicsEnabled } from '@/server/services/subTopic/labGate';
 
 import type { ServerRuntimeRegistration } from './types';
@@ -25,23 +26,29 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
     const userId = context.userId;
     const workspaceId = context.workspaceId ?? undefined;
     const service = createSubTopicService({ serverDB: db, userId, workspaceId });
-    // The tool acts only on sub-topics of the conversation it runs in, never
-    // on any other topic the account can see.
-    const ownSubTopic = async (topicId: string) => {
-      if (!context.topicId || !(await service.isOpenedBy(topicId, context.topicId))) {
+    // A sub-topic turn runs as the account owner, without the IM sender's
+    // provenance, so it would get the owner's devices. A sender this
+    // conversation denies devices (an external one in a bot chat) must not
+    // start one — the scoping to this conversation's own sub-topics is
+    // enforced by the runtime itself.
+    // A shared-agent visitor's run is the creator's identity too; it never starts one.
+    const assertMayStartRuns = () => {
+      if (context.agentShareVisitor) {
+        throw new Error('Sub-topics cannot be started from a shared agent conversation.');
+      }
+      if (
+        context.botContext &&
+        !resolveDeviceAccessPolicy({ botContext: context.botContext }).canUseDevice
+      ) {
         throw new Error(
-          `${topicId} is not a sub-topic of this conversation; use listTopics to see the ones it opened.`,
+          'Sub-topics can only be started or continued by the bot owner or a trusted sender in this chat.',
         );
       }
     };
 
     const adapter: SubTopicToolService = {
-      archive: async (topicId) => {
-        await ownSubTopic(topicId);
-        return service.retire({ action: 'archive', mode: 'self', topicId });
-      },
+      archive: (topicId) => service.retire({ action: 'archive', mode: 'self', topicId }),
       get: async (topicId) => {
-        await ownSubTopic(topicId);
         const subTopic = await service.get(topicId);
         return {
           agentId: subTopic.agentId,
@@ -51,25 +58,22 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
           topicId,
         };
       },
+      isOpenedBy: (topicId, openerTopicId) => service.isOpenedBy(topicId, openerTopicId),
       list: (openerTopicId) => service.list(openerTopicId),
-      read: async (topicId, limit) => {
-        await ownSubTopic(topicId);
-        return readLatestSubTopicTranscript({ db, userId, workspaceId }, { limit, topicId }) as any;
-      },
+      read: async (topicId, limit) =>
+        readLatestSubTopicTranscript({ db, userId, workspaceId }, { limit, topicId }) as any,
       send: async (params) => {
-        await ownSubTopic(params.topicId);
+        assertMayStartRuns();
         return service.send(params);
       },
       open: async (params) => {
         if (!(await readSubTopicsEnabled(db, userId))) {
           throw new Error('Sub-topics need Labs → Better Coding Experience, which is off.');
         }
+        assertMayStartRuns();
         return service.open(params);
       },
-      stop: async (topicId) => {
-        await ownSubTopic(topicId);
-        return service.stop(topicId);
-      },
+      stop: (topicId) => service.stop(topicId),
     };
 
     return new TopicToolExecutionRuntime(adapter, {

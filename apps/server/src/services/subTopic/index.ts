@@ -11,6 +11,7 @@ import type {
 } from '@lobechat/types';
 
 import type { OpenedTopicItem } from '@/database/models/topic';
+import { pickSandboxPlacement } from '@/server/services/aiAgent/pipeline/sandboxPlacement';
 
 /**
  * Sub-topics: a real topic another topic opened, linked by
@@ -85,9 +86,16 @@ export interface SubTopicDeps {
     branch: string;
     deviceId: string;
     path: string;
+    ownerToken?: string;
     sourcePath?: string;
     startPoint?: string;
-  }) => Promise<{ error?: string; success: boolean; worktreePath?: string }>;
+  }) => Promise<{
+    error?: string;
+    /** The creation receipt the device recorded, echoed back. */
+    ownerToken?: string;
+    success: boolean;
+    worktreePath?: string;
+  }>;
   /** Append a follow-up behind a live run; `idle` when nothing is running. */
   appendFollowUp: (params: {
     id: string;
@@ -108,6 +116,8 @@ export interface SubTopicDeps {
   findLiveRunIds: (topicId: string) => Promise<string[]>;
   findTopic: (topicId: string) => Promise<TopicRow | null | undefined>;
   interrupt: (operationId: string) => Promise<unknown>;
+  /** A server-signed creation receipt for a worktree about to be made; none without a server secret. */
+  issueWorktreeReceipt: () => { nonce: string; token: string } | undefined;
   listDescendants: (topicId: string) => Promise<OpenedTopicItem[]>;
   listOpened: (openerTopicIds: string[]) => Promise<OpenedTopicItem[]>;
   readLastReply: (topicId: string) => Promise<string | undefined>;
@@ -146,22 +156,36 @@ export interface OpenSubTopicInput {
   workspace?: SubTopicWorkspace;
 }
 
-/** The opener's directory, shared rather than owned: the child must never clean it up. */
+/**
+ * The opener's place to work, shared rather than owned: its device directory
+ * (without the claims that make a cleanup or a PR lookup treat it as the
+ * child's own) and its cloud-sandbox placement, so the child sees the same
+ * files whichever side the opener runs on.
+ */
 const inheritWorkingDirectory = (metadata: ChatTopicMetadata | null | undefined) => {
   const config = metadata?.workingDirectoryConfig;
   const workingDirectory =
     metadata?.workingDirectory ?? config?.git?.activeWorktree ?? config?.path;
-  if (!workingDirectory && !config) return;
+  const sandbox = pickSandboxPlacement(metadata ?? undefined);
 
-  const shared: WorkingDirConfig | undefined = config
-    ? {
-        ...config,
-        ...(config.git && {
-          git: { ...config.git, autoCreated: undefined, autoCreatedAt: undefined },
-        }),
-      }
-    : undefined;
+  let shared: WorkingDirConfig | undefined;
+  if (config) {
+    shared = { ...config };
+    if (config.git) {
+      const git = { ...config.git };
+      // The opener created that worktree / branch; the child must never clean
+      // it up, and it is not the child's branch to find a PR for.
+      delete git.autoCreated;
+      delete git.autoCreatedAt;
+      delete git.ownBranch;
+      delete git.ownerNonce;
+      delete git.ownerToken;
+      shared.git = git;
+    }
+  }
+  if (!workingDirectory && !shared && Object.keys(sandbox).length === 0) return;
   return {
+    ...sandbox,
     ...(workingDirectory && { workingDirectory }),
     ...(shared && { workingDirectoryConfig: shared }),
   };
@@ -233,9 +257,14 @@ export class SubTopicService {
       }
       branch = generateWorktreeBranchName();
       const sourcePath = config?.path ?? repoPath;
+      // The creation receipt, signed for this user: the device writes it into
+      // the worktree, and only a cleanup presenting it may later force-remove
+      // the folder (e.g. "discard changes and delete" on a kept dirty one).
+      const receipt = this.deps.issueWorktreeReceipt();
       const created = await this.deps.addGitWorktree({
         branch,
         deviceId,
+        ...(receipt && { ownerToken: receipt.token }),
         path: repoPath,
         sourcePath,
         startPoint: input.baseBranch,
@@ -255,8 +284,16 @@ export class SubTopicService {
             activeWorktree: created.worktreePath,
             autoCreated: true,
             autoCreatedAt: new Date().toISOString(),
+            // Only what the device confirms it recorded.
+            ...(receipt &&
+              created.ownerToken === receipt.token && {
+                ownerNonce: receipt.nonce,
+                ownerToken: receipt.token,
+              }),
             branch,
             isWorktree: true,
+            // This sub-topic created the branch: its run end may look its PR up.
+            ownBranch: branch,
           },
           path: sourcePath,
           repoType: config?.repoType ?? 'git',

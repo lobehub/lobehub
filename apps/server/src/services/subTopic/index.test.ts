@@ -16,6 +16,9 @@ const opener = {
         autoCreatedAt: '2026-11-17T00:00:00.000Z',
         branch: 'lobehub/quiet-hill',
         isWorktree: true,
+        ownBranch: 'lobehub/quiet-hill',
+        ownerNonce: 'nonce-parent',
+        ownerToken: 'token-parent',
       },
       path: '/Users/me/repo',
       repoType: 'github',
@@ -26,10 +29,12 @@ const opener = {
 
 const createDeps = () =>
   ({
-    addGitWorktree: vi.fn().mockResolvedValue({
+    addGitWorktree: vi.fn(async (params: { ownerToken?: string }) => ({
+      // The device echoes the receipt it recorded.
+      ownerToken: params.ownerToken,
       success: true,
       worktreePath: '/Users/me/.lobehub/worktrees/repo/brave-river',
-    }),
+    })),
     appendFollowUp: vi.fn().mockResolvedValue({ queued: false, reason: 'idle' }),
     archiveTopic: vi.fn().mockResolvedValue(undefined),
     assertCanOpen: vi.fn().mockResolvedValue(undefined),
@@ -55,6 +60,7 @@ const createDeps = () =>
       return undefined;
     }),
     interrupt: vi.fn().mockResolvedValue(undefined),
+    issueWorktreeReceipt: vi.fn(() => ({ nonce: 'nonce-child', token: 'token-child' })),
     listDescendants: vi.fn().mockResolvedValue([]),
     listOpened: vi.fn().mockResolvedValue([]),
     readLastReply: vi.fn().mockResolvedValue('Done.'),
@@ -95,8 +101,13 @@ describe('SubTopicService.open', () => {
     expect(params.appContext.initialTopicMetadata.workingDirectory).toBe(
       '/Users/me/.lobehub/worktrees/repo/quiet-hill',
     );
-    // The opener owns that worktree; the child must never clean it up.
+    // The opener owns that worktree and its branch; the child must never clean
+    // it up, force-delete it with the opener's receipt, or claim its PR.
     expect(config.git.autoCreated).toBeUndefined();
+    expect(config.git.ownerToken).toBeUndefined();
+    expect(config.git.ownerNonce).toBeUndefined();
+    expect(config.git.ownBranch).toBeUndefined();
+    expect(config.git.branch).toBe('lobehub/quiet-hill');
     expect(config.git.activeWorktree).toBe('/Users/me/.lobehub/worktrees/repo/quiet-hill');
   });
 
@@ -112,6 +123,7 @@ describe('SubTopicService.open', () => {
     expect(deps.addGitWorktree).toHaveBeenCalledWith({
       branch: expect.stringMatching(/^lobehub\//),
       deviceId: 'dev_mac',
+      ownerToken: 'token-child',
       path: '/Users/me/.lobehub/worktrees/repo/quiet-hill',
       sourcePath: '/Users/me/repo',
       startPoint: 'canary',
@@ -127,11 +139,55 @@ describe('SubTopicService.open', () => {
           autoCreatedAt: expect.any(String),
           branch: result.branch,
           isWorktree: true,
+          ownBranch: result.branch,
+          // The receipt the device confirmed, so the normal discard flow can remove it.
+          ownerNonce: 'nonce-child',
+          ownerToken: 'token-child',
         },
         path: '/Users/me/repo',
         repoType: 'github',
         sessionPath: '/Users/me/.lobehub/worktrees/repo/brave-river',
       },
+    });
+  });
+
+  it('records no receipt the device did not confirm', async () => {
+    deps.addGitWorktree.mockResolvedValueOnce({
+      ownerToken: undefined,
+      success: true,
+      worktreePath: '/Users/me/.lobehub/worktrees/repo/brave-river',
+    });
+
+    await new SubTopicService(deps).open({
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+      workspace: 'new-worktree',
+    });
+
+    const git = (deps.execAgent.mock.calls[0][0] as any).appContext.initialTopicMetadata
+      .workingDirectoryConfig.git;
+    expect(git.autoCreated).toBe(true);
+    expect(git.ownerToken).toBeUndefined();
+    expect(git.ownerNonce).toBeUndefined();
+  });
+
+  it("inherits a cloud-sandbox parent's placement, so the child shares its files", async () => {
+    deps.findTopic.mockResolvedValueOnce({
+      agentId: 'agt_lobe',
+      id: 'tpc_parent',
+      metadata: {
+        sandboxDrive: 'personal',
+        sandboxEnvironmentId: 'env_web',
+        sandboxInstanceId: 'inst_web',
+      },
+    });
+
+    await new SubTopicService(deps).open({ openerTopicId: 'tpc_parent', prompt: 'x' });
+
+    expect((deps.execAgent.mock.calls[0][0] as any).appContext.initialTopicMetadata).toEqual({
+      sandboxDrive: 'personal',
+      sandboxEnvironmentId: 'env_web',
+      sandboxInstanceId: 'inst_web',
     });
   });
 

@@ -10,6 +10,7 @@ const createService = (): SubTopicToolService => ({
     title: 'Fix CI',
     topicId: 'tpc_child',
   }),
+  isOpenedBy: vi.fn().mockResolvedValue(true),
   list: vi
     .fn()
     .mockResolvedValue([

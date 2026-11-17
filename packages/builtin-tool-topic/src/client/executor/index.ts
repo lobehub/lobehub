@@ -30,6 +30,7 @@ const service: SubTopicToolService = {
     const subTopic = await subTopicService.get(topicId);
     return { ...subTopic, state: subTopic.state as any, topicId };
   },
+  isOpenedBy: (topicId, openerTopicId) => subTopicService.isOpenedBy(topicId, openerTopicId),
   list: async (openerTopicId) => (await subTopicService.list(openerTopicId)) as any,
   read: async (topicId, limit) => (await subTopicService.read(topicId, limit)) as any,
   send: (params) => subTopicService.send(params),

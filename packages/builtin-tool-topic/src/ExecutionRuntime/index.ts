@@ -15,6 +15,8 @@ import type {
 export interface SubTopicToolService {
   archive: (topicId: string) => Promise<unknown>;
   get: (topicId: string) => Promise<GetTopicState>;
+  /** Whether `topicId` is a live sub-topic (at any depth) of `openerTopicId`. */
+  isOpenedBy: (topicId: string, openerTopicId: string) => Promise<boolean>;
   list: (openerTopicId: string) => Promise<SubTopicSummary[]>;
   open: (
     params: OpenTopicParams & { openerTopicId: string; sourceOperationId?: string },
@@ -58,6 +60,20 @@ export class TopicToolExecutionRuntime {
       throw new Error('Sub-topics can only be opened from a conversation (no current topic).');
     }
     return this.context.topicId;
+  }
+
+  /**
+   * The tool acts only on sub-topics of the conversation it runs in — never on
+   * any other topic the account can see — whichever host (client or server)
+   * runs it.
+   */
+  private async requireOwnSubTopic(topicId: string): Promise<void> {
+    const opener = this.context.topicId;
+    if (!opener || !(await this.service.isOpenedBy(topicId, opener))) {
+      throw new Error(
+        `${topicId} is not a sub-topic of this conversation; use listTopics to see the ones it opened.`,
+      );
+    }
   }
 
   async openTopic(params: OpenTopicParams): Promise<BuiltinServerRuntimeOutput> {
@@ -110,6 +126,7 @@ export class TopicToolExecutionRuntime {
 
   async getTopic({ topicId }: TopicIdParams): Promise<BuiltinServerRuntimeOutput> {
     try {
+      await this.requireOwnSubTopic(topicId);
       const subTopic = await this.service.get(topicId);
       const reply = subTopic.lastReply ? `\n\nLast reply:\n${subTopic.lastReply}` : '';
       return {
@@ -124,6 +141,7 @@ export class TopicToolExecutionRuntime {
 
   async readTopic({ limit = 30, topicId }: ReadTopicParams): Promise<BuiltinServerRuntimeOutput> {
     try {
+      await this.requireOwnSubTopic(topicId);
       const { items } = await this.service.read(topicId, limit);
       const lines = items
         .filter((item) => typeof item.content === 'string' && item.content.trim())
@@ -148,6 +166,7 @@ export class TopicToolExecutionRuntime {
 
   async sendToTopic({ message, topicId }: SendToTopicParams): Promise<BuiltinServerRuntimeOutput> {
     try {
+      await this.requireOwnSubTopic(topicId);
       const { delivery } = await this.service.send({
         message,
         sourceOperationId: this.context.operationId,
@@ -168,6 +187,7 @@ export class TopicToolExecutionRuntime {
 
   async stopTopic({ topicId }: TopicIdParams): Promise<BuiltinServerRuntimeOutput> {
     try {
+      await this.requireOwnSubTopic(topicId);
       const { stopped } = await this.service.stop(topicId);
       return {
         content:
@@ -182,6 +202,7 @@ export class TopicToolExecutionRuntime {
 
   async archiveTopic({ topicId }: TopicIdParams): Promise<BuiltinServerRuntimeOutput> {
     try {
+      await this.requireOwnSubTopic(topicId);
       await this.service.archive(topicId);
       return { content: `Archived sub-topic ${topicId}.`, state: { topicId }, success: true };
     } catch (error) {

@@ -12,6 +12,7 @@ vi.mock('@/services/subTopic', () => ({
   subTopicService: {
     archive: vi.fn(),
     get: vi.fn(),
+    isOpenedBy: vi.fn(),
     list: vi.fn(),
     open: vi.fn(),
     read: vi.fn(),
@@ -27,6 +28,7 @@ const ctx = { operationId: 'op_parent', topicId: 'tpc_parent' } as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(subTopicService.isOpenedBy).mockResolvedValue(true);
 });
 
 describe('topicToolExecutor', () => {
@@ -86,5 +88,31 @@ describe('topicToolExecutor', () => {
     });
 
     expect(refreshSubTopics).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a topic that is not a sub-topic of the calling conversation', async () => {
+    vi.mocked(subTopicService.isOpenedBy).mockResolvedValue(false);
+
+    for (const api of [
+      TopicToolApiName.archiveTopic,
+      TopicToolApiName.getTopic,
+      TopicToolApiName.readTopic,
+      TopicToolApiName.stopTopic,
+    ]) {
+      const result = await topicToolExecutor.invoke(api, { topicId: 'tpc_other' }, ctx);
+      expect(result.success).toBe(false);
+      expect(result.content).toMatch(/not a sub-topic of this conversation/);
+    }
+    const sent = await topicToolExecutor.invoke(
+      TopicToolApiName.sendToTopic,
+      { message: 'hi', topicId: 'tpc_other' },
+      ctx,
+    );
+    expect(sent.success).toBe(false);
+
+    expect(subTopicService.isOpenedBy).toHaveBeenCalledWith('tpc_other', 'tpc_parent');
+    for (const fn of ['archive', 'get', 'read', 'send', 'stop'] as const)
+      expect(subTopicService[fn]).not.toHaveBeenCalled();
+    expect(refreshSubTopics).not.toHaveBeenCalled();
   });
 });

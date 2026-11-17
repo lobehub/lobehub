@@ -31,6 +31,9 @@ class SubTopicService {
 
   get = (topicId: string) => lambdaClient.subTopic.get.query({ topicId });
 
+  isOpenedBy = (topicId: string, openerTopicId: string) =>
+    lambdaClient.subTopic.isOpenedBy.query({ openerTopicId, topicId });
+
   read = (topicId: string, limit: number) => lambdaClient.subTopic.read.query({ limit, topicId });
 
   send = (params: { message: string; sourceOperationId?: string; topicId: string }) =>

@@ -20,6 +20,7 @@ import {
   SubTopicService,
   toSubTopicState,
 } from '@/server/services/subTopic';
+import { issueWorktreeReceipt } from '@/server/services/worktreeCleanup/receipt';
 
 import { agentSteerQueueRouter } from './agentSteerQueue';
 import { assertCanUseAgentRunConversation } from './aiAgent/guards';
@@ -57,6 +58,7 @@ export const createSubTopicService = (ctx: CallerCtx) => {
         .createCaller(callerCtx)
         .addGitWorktree({ ...params, stripBranchPrefix: true })) as {
         error?: string;
+        ownerToken?: string;
         success: boolean;
         worktreePath?: string;
       },
@@ -76,7 +78,7 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       await assertCanUseWorkspaceAgent({ agentId, db, userId: ctx.userId, workspaceId });
       await assertCanUseAgentRunConversation({
         db,
-        topicId: openerTopicId,
+        openedByTopicId: openerTopicId,
         userId: ctx.userId,
         workspaceId,
       });
@@ -88,6 +90,7 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       findOwnLiveRuns({ db, workspaceId }, { threadId: null, topicId, userId: ctx.userId }),
     findLatestRunStatus: (topicId) => topicModel.getLatestRunStatus(topicId),
     findTopic: (topicId) => topicModel.findById(topicId) as any,
+    issueWorktreeReceipt: () => issueWorktreeReceipt(ctx.userId),
     interrupt: (operationId) =>
       new AiAgentService(db, ctx.userId, { workspaceId }).interruptTask({ operationId }),
     listDescendants: (topicId) =>
@@ -215,6 +218,13 @@ export const subTopicRouter = router({
   get: subTopicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(({ ctx, input }) => run(() => createSubTopicService(ctx).get(input.topicId))),
+
+  /** Whether `topicId` is a live sub-topic (any depth) of `openerTopicId` — the tool's scope check. */
+  isOpenedBy: subTopicProcedure
+    .input(z.object({ openerTopicId: z.string(), topicId: z.string() }))
+    .query(({ ctx, input }) =>
+      run(() => createSubTopicService(ctx).isOpenedBy(input.topicId, input.openerTopicId)),
+    ),
 
   list: subTopicProcedure
     .input(z.object({ openerTopicId: z.string() }))
