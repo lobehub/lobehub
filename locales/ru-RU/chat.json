@@ -1543,6 +1543,7 @@
   "heteroAgent.executionTarget.reconnectFailed": "Не удалось переподключить это устройство. Убедитесь, что настольное приложение запущено, затем попробуйте снова.",
   "heteroAgent.executionTarget.sandbox": "Облачная песочница",
   "heteroAgent.executionTarget.sandboxDesc": "Запуск в временной облачной песочнице",
+  "heteroAgent.executionTarget.sandboxGroup": "Песочницы",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} в настоящее время работает только на локальном или подключенном устройстве",
   "heteroAgent.executionTarget.switchProjectTopic.content": "Эта тема будет выполняться в директории проекта \"{{directory}}\" на {{device}}. Следующий ход начнет новую сессию там.",
   "heteroAgent.executionTarget.switchTopic.content": "Эта тема выполняется на {{name}}, где сохраняются ее рабочая директория и сессия агента. После переключения следующий ход начнет новую сессию в новой среде. Новые темы также будут использовать этот выбор.",

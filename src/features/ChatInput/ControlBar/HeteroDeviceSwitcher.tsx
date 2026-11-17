@@ -637,6 +637,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const activeDeviceId = executionTarget === 'device' ? boundDeviceId : undefined;
   const hasDeviceSection =
     privateDevices.length + workspaceDevices.length + personalOnlyDevices.length > 0;
+  const showSectionLabels = isDesktop || hasDeviceSection;
   const renderDeviceRow = (d: DeviceListItem, { thisComputer = false } = {}) => (
     <DeviceOptionRow
       active={isActive('device', d.deviceId)}
@@ -710,11 +711,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           `local` is still the pick) it keeps its machine name, so two rows
           never both read "This computer". */}
       {thisComputerDevices.map((d) => renderDeviceRow(d, { thisComputer: !showLocalRow }))}
-      {/* Desktop always splits This computer from Built-in. On web Built-in is
-          labelled once a Devices section follows: with Persistent and Cloud
-          Sandbox side by side, the device directories below would otherwise
-          read as a third sandbox. */}
-      {isDesktop || hasDeviceSection ? (
+      {/* Built-in keeps the two choices that pick no sandbox (no device, auto);
+          the sandboxes get a section of their own below. Desktop always labels
+          the sections, as This computer sits above them. On web they are
+          labelled once a Devices section follows, so the device directories
+          don't read as one more sandbox. A heterogeneous agent has neither
+          built-in row, so only the Sandboxes label is left. */}
+      {showSectionLabels && !isHetero ? (
         <div {...stylex.props(styles.groupLabel)}>
           {t('heteroAgent.executionTarget.builtinGroup')}
         </div>
@@ -737,6 +740,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
+      {showSectionLabels ? (
+        <div {...stylex.props(styles.groupLabel)}>
+          {t('heteroAgent.executionTarget.sandboxGroup')}
+        </div>
+      ) : null}
       {/* This machine, fenced: writes confined to the working
           directory, network denied unless the switch opens the registry
           allowlist. Shown even when the host can't provide a sandbox — disabled,

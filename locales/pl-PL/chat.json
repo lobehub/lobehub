@@ -1543,6 +1543,7 @@
   "heteroAgent.executionTarget.reconnectFailed": "Nie udało się ponownie połączyć tego urządzenia. Upewnij się, że aplikacja na komputerze działa, a następnie spróbuj ponownie.",
   "heteroAgent.executionTarget.sandbox": "Chmurowa piaskownica",
   "heteroAgent.executionTarget.sandboxDesc": "Uruchom w efemerycznej chmurowej piaskownicy",
+  "heteroAgent.executionTarget.sandboxGroup": "Piaskownice",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} działa obecnie tylko na urządzeniu lokalnym lub podłączonym",
   "heteroAgent.executionTarget.switchProjectTopic.content": "Ten temat będzie działał w katalogu projektu \"{{directory}}\" na {{device}}. Jego następna tura rozpocznie nową sesję tam.",
   "heteroAgent.executionTarget.switchTopic.content": "Ten temat działa na {{name}}, gdzie przechowywany jest jego katalog roboczy i sesja agenta. Po przełączeniu jego następna tura rozpocznie nową sesję w nowym środowisku. Nowe tematy również będą korzystać z tego wyboru.",
