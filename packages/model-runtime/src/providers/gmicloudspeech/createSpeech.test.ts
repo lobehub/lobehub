@@ -231,6 +231,23 @@ describe('createGmicloudSpeech', () => {
     ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.InvalidProviderAPIKey });
   });
 
+  it('reports usage through the onUsage hook', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ outcome: { audio_url: 'https://a/x.mp3' }, request_id: 'r', status: 'success' }),
+      )
+      .mockResolvedValueOnce(audioResponse());
+
+    const onUsage = vi.fn();
+    await createGmicloudSpeech(
+      { input: 'hello', model: 'inworld-tts-2', voice: 'Dennis' },
+      { ...options, onUsage },
+    );
+
+    expect(onUsage).toHaveBeenCalledTimes(1);
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ inputCharacters: 5 }));
+  });
+
   it('rejects an input over the character limit without a request', async () => {
     await expect(
       createGmicloudSpeech(

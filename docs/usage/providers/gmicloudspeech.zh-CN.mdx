@@ -47,8 +47,8 @@ lh generate tts "Hello from LobeHub" -m gmicloudspeech/inworld-tts-2 -o hello.mp
 ```
 
 - **音色** — 未指定音色时使用系列默认音色（Inworld 为 `Dennis`，MiniMax 为 `English_expressive_narrator`）。用 `--voice <voice id>` 可指定模型系列支持的其他音色。
-- **格式** — 支持 WAV 和 MP3 输出；默认 MP3。
+- **格式** — LobeHub TTS API 为该服务商输出 MP3（内联响应格式为 `mp3`、`opus` 和 `aac`；GMI Cloud 生成 MP3 或 WAV）。
 
 <Callout type={'warning'}>
-  仅支持 WAV 和 MP3 输出。GMI Cloud 上的 Chatterbox 模型需要 Resemble 音色 UUID，未在 LobeHub 中列出。
+  LobeHub TTS API 为该服务商输出 MP3。GMI Cloud 上的 Chatterbox 模型需要 Resemble 音色 UUID，未在 LobeHub 中列出。
 </Callout>

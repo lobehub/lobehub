@@ -47,8 +47,9 @@ lh generate tts "Hello from LobeHub" -m gmicloudspeech/inworld-tts-2 -o hello.mp
 ```
 
 - **Voice** — when no voice is given, the family default voice is used (`Dennis` for Inworld, `English_expressive_narrator` for MiniMax). Pass `--voice <voice id>` to use another voice supported by the model family.
-- **Format** — WAV and MP3 output are supported; MP3 is the default.
+- **Format** — the LobeHub TTS API serves MP3 for this provider (the inline response
+  formats are `mp3`, `opus` and `aac`; GMI Cloud produces MP3 or WAV).
 
 <Callout type={'warning'}>
-  Only WAV and MP3 output are supported. Chatterbox models on GMI Cloud require a Resemble voice UUID and are not listed in LobeHub.
+  The LobeHub TTS API serves MP3 for this provider. Chatterbox models on GMI Cloud require a Resemble voice UUID and are not listed in LobeHub.
 </Callout>

@@ -301,6 +301,7 @@ export async function createGmicloudSpeech(
 
     const usage = convertTextToSpeechUsage(request.input, pricing);
     result = { audio, format, usage };
+    await options.onUsage?.(result.usage!);
   } catch (error) {
     log('createGmicloudSpeech error: %O', error);
 
