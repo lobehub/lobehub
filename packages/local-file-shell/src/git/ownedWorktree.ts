@@ -86,6 +86,7 @@ interface ListedWorktree {
   branch?: string;
   locked?: boolean;
   path: string;
+  prunable?: boolean;
 }
 
 /**
@@ -95,12 +96,19 @@ interface ListedWorktree {
 const findLinkedWorktree = async (
   sourcePath: string,
   worktreePath: string,
+  approvedRoot?: string,
 ): Promise<ListedWorktree | undefined> => {
   const stdout = await git(sourcePath, ['worktree', 'list', '--porcelain', '-z']);
   const [main, ...linked] = parseGitWorktreeList(stdout);
   const target = await safeRealpath(worktreePath);
-  if (main && (await safeRealpath(main.path)) === target)
-    throw new GuardError('Refusing to remove the main worktree');
+  const mainPath = main && (await safeRealpath(main.path));
+  if (
+    approvedRoot &&
+    (!mainPath || (mainPath !== approvedRoot && !isStrictlyInside(approvedRoot, mainPath)))
+  ) {
+    throw new GuardError('The source repository is outside the approved workspace');
+  }
+  if (mainPath === target) throw new GuardError('Refusing to remove the main worktree');
   for (const entry of linked) {
     if (entry.bare) continue;
     if ((await safeRealpath(entry.path)) === target) return entry;
@@ -165,6 +173,20 @@ const assertGitFilePointsToSource = async (sourcePath: string, worktreePath: str
   const worktreesDir = path.join(await commonGitDir(sourcePath), 'worktrees');
   if (!isStrictlyInside(worktreesDir, gitdir))
     throw new GuardError('Worktree .git does not point back to the source repository');
+};
+
+/** Confirm a live linked checkout of an approved source before accessing its files. */
+export const assertLinkedWorktree = async (
+  sourcePath: string,
+  worktreePath: string,
+  approvedRoot: string,
+) => {
+  const stat = await lstat(worktreePath);
+  const linked =
+    stat.isDirectory() && (await findLinkedWorktree(sourcePath, worktreePath, approvedRoot));
+  if (!linked || linked.prunable)
+    throw new GuardError('Directory is not a registered worktree of the approved repository');
+  await assertGitFilePointsToSource(sourcePath, worktreePath);
 };
 
 /**
