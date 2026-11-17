@@ -10,6 +10,7 @@ import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
 import ImRoutes from './im.route';
 import KnowledgeBasesRoutes from './knowledge-bases.route';
+import McpRoutes from './mcp.route';
 import McpServersRoutes from './mcp-servers.route';
 import MemoriesRoutes from './memories.route';
 import MessageTranslationsRoutes from './message-translations.route';
@@ -44,6 +45,7 @@ export default {
   'goals': GoalsRoutes,
   'im': ImRoutes,
   'knowledge-bases': KnowledgeBasesRoutes,
+  'mcp': McpRoutes,
   'mcp-servers': McpServersRoutes,
   'memories': MemoriesRoutes,
   'message-translations': MessageTranslationsRoutes,
