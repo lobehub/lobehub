@@ -94,6 +94,18 @@ describe('stopLaneRuns', () => {
     await expect(stopLaneRuns(fake.ctx, laneNodes(['task_a']))).resolves.toEqual(['tpc_late']);
   });
 
+  it('reports a claim that could not be withdrawn so the wrap-up is retried', async () => {
+    const fake = fakeCtx({
+      runs: [[]],
+      withdraw: async () => {
+        throw new Error('statement timeout while the Task row was locked');
+      },
+    });
+
+    // The claim is still there, so a run can still be recorded against it.
+    await expect(stopLaneRuns(fake.ctx, laneNodes(['task_a']))).resolves.toEqual(['task_a']);
+  });
+
   it('leaves a Task that is no longer running alone', async () => {
     const fake = fakeCtx({ runs: [[]], withdraw: async () => null });
 

@@ -130,6 +130,12 @@ const stopRecordedRuns = async (
  * started once the claim is gone, so the lane cannot execute after the wrap-up
  * resolved its node. Leaving the claim behind would also hold the slot a
  * single-lane swarm's promotion needs to start.
+ *
+ * A withdrawal that rejects leaves that claim in place, exactly like a run that
+ * refuses to cancel: the pending start can still record a run against the Task,
+ * so committing the wrap-up anyway would resolve the lane under it and nothing
+ * would ever retry the interruption. It is reported as stuck for the same
+ * reason, and the deadline stays on the goal so the next advance comes back.
  */
 export const stopLaneRuns = async (
   ctx: GoalServiceContext,
@@ -141,12 +147,18 @@ export const stopLaneRuns = async (
     const recorded = await stopRecordedRuns(ctx, node.taskId);
     stuck.push(...recorded.stuck);
     if (recorded.live) continue;
-    const withdrawn = await ctx.taskModel
-      .updateStatusIfCurrent(node.taskId, 'running', 'backlog', { error: null })
-      .catch((error) => {
-        console.error('[GoalService.swarm] failed to withdraw a pending lane start:', error);
-        return null;
+    let withdrawn: unknown;
+    try {
+      withdrawn = await ctx.taskModel.updateStatusIfCurrent(node.taskId, 'running', 'backlog', {
+        error: null,
       });
+    } catch (error) {
+      console.error('[GoalService.swarm] failed to withdraw a pending lane start:', error);
+      // The claim survived the failed withdrawal, so `runTask` may still record a
+      // run for it. Retry the wrap-up instead of resolving the lane underneath it.
+      stuck.push(node.taskId);
+      continue;
+    }
     if (!withdrawn) continue;
     // The start may have recorded its run between that read and the withdrawal:
     // stop it too, since the Task is no longer running to do it for us.
@@ -236,7 +248,7 @@ const wrapUp = async (
   if (stuck.length)
     return {
       goalId: graph.goal.id,
-      message: `Swarm deadline reached; ${stuck.length} lane run(s) still running, retrying the wrap-up`,
+      message: `Swarm deadline reached; ${stuck.length} lane run(s) or start(s) still owned, retrying the wrap-up`,
       outcome: 'waiting_external',
     };
   for (const node of laneNodes)
