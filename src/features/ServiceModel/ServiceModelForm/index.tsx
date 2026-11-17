@@ -73,12 +73,19 @@ const TIERS: { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[] =
 /** Speech-to-text follows no tier; it is its own row after the tiers. */
 const ASR_ROW = 'asr' satisfies RowKey;
 
-/** A settings card: one per tier, plus voice. */
-type Section = ServiceModelTier | 'channelRouting' | 'voice';
+/**
+ * File and knowledge-base embedding follows no tier either: a tier change must
+ * not move indexing to a model the files already embedded were not built with.
+ */
+const FILE_EMBEDDING_ROW = 'fileEmbedding' satisfies RowKey;
+
+/** A settings card: one per tier, plus file embedding and voice. */
+type Section = ServiceModelTier | 'channelRouting' | typeof FILE_EMBEDDING_ROW | 'voice';
 
 const sectionOf = (row: RowKey | UserServiceModelConfigKey): Section => {
   if (row === DEFAULT_AGENT_ROW) return 'main';
   if (row === ASR_ROW) return 'voice';
+  if (row === FILE_EMBEDDING_ROW) return FILE_EMBEDDING_ROW;
   if (row === 'channelRouting') return 'channelRouting';
   return tierOfSlot(row) ?? 'main';
 };
@@ -213,7 +220,8 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
   };
 
   const followLabelOf = (row: RowKey) => {
-    if (row === DEFAULT_AGENT_ROW || row === ASR_ROW) return t('serviceModel.systemRecommended');
+    if (row === DEFAULT_AGENT_ROW || row === ASR_ROW || row === FILE_EMBEDDING_ROW)
+      return t('serviceModel.systemRecommended');
     const tier = TIERS.find(({ key }) => SERVICE_MODEL_TIER_SLOTS[key].includes(row));
     return tier ? t(`serviceModel.tier.${tier.key}.title`) : t('serviceModel.systemRecommended');
   };
@@ -393,7 +401,8 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
 
   // One settings group per model kind, like 生图 below: each tier is its own
   // card with its picker on top and the tasks that follow it in a lighter
-  // 「高级」 under it. Voice follows no tier, so it is a card of its own.
+  // 「高级」 under it. File embedding and voice follow no tier, so each is a
+  // card of its own.
   const groups: FormGroupItem[] = [
     ...tiers.map(({ key, modelKind, rows }, index): FormGroupItem => {
       const title = t(`serviceModel.tier.${key}.title`);
@@ -429,6 +438,35 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
         ),
       };
     }),
+    {
+      children: (
+        <>
+          <Form.Field label={t('serviceModel.tierPicker')}>
+            <SlotRow
+              canDisable={false}
+              disabled={!canManage}
+              followLabel={followLabelOf(FILE_EMBEDDING_ROW)}
+              followModel={followModelOf(FILE_EMBEDDING_ROW)}
+              modelKind={'embedding'}
+              state={rowState(FILE_EMBEDDING_ROW)}
+              title={t(`systemAgent.${FILE_EMBEDDING_ROW}.title`)}
+              onChange={(choice) => writeSlot(FILE_EMBEDDING_ROW, choice)}
+            />
+          </Form.Field>
+          <span {...stylex.props(styles.sectionDesc, styles.note)}>
+            {t(`systemAgent.${FILE_EMBEDDING_ROW}.reindexHint`)}
+          </span>
+        </>
+      ),
+      collapsible: false,
+      desc: withReason(t(`systemAgent.${FILE_EMBEDDING_ROW}.modelDesc`)),
+      extra: saveHint(FILE_EMBEDDING_ROW),
+      title: (
+        <SettingsSearchAnchor id={`service-model-${FILE_EMBEDDING_ROW}`}>
+          {t(`systemAgent.${FILE_EMBEDDING_ROW}.title`)}
+        </SettingsSearchAnchor>
+      ),
+    },
     {
       children: (
         <Form.Field

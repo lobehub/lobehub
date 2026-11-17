@@ -22,6 +22,7 @@ interface MockGlobalConfigOptions {
   enableAgentGateway?: boolean;
   enablePageCollab?: boolean;
   enableWorkspacePageCollab?: boolean;
+  filesConfigEnv?: string;
   toolNameMaxLengthEnv?: string;
 }
 
@@ -81,7 +82,7 @@ const mockGlobalConfigDependencies = (
 
   vi.doMock('@/envs/knowledge', () => ({
     knowledgeEnv: {
-      DEFAULT_FILES_CONFIG: undefined,
+      DEFAULT_FILES_CONFIG: options.filesConfigEnv,
     },
   }));
 
@@ -116,7 +117,10 @@ const mockGlobalConfigDependencies = (
   }));
 
   vi.doMock('./parseFilesConfig', () => ({
-    parseFilesConfig: vi.fn(() => ({})),
+    parseFilesConfig: vi.fn((envString?: string) => {
+      if (envString === 'invalid') throw new Error('Invalid environment variable format.');
+      return envString ? { embeddingModel: { model: envString, provider: 'ollama' } } : {};
+    }),
   }));
 
   vi.doMock('./parseMemoryExtractionConfig', () => ({
@@ -312,6 +316,18 @@ describe('getServerGlobalConfig', () => {
     const config = await loadServerConfig(false);
     expect(config.deviceGatewayConfigured).toBe(true);
     expect(config.deviceGatewayUrl).toBeUndefined();
+  });
+
+  it('should show the DEFAULT_FILES_CONFIG embedding model as the file embedding default', async () => {
+    const config = await loadServerConfig(false, { filesConfigEnv: 'bge-m3' });
+
+    expect(config.systemAgent?.fileEmbedding).toEqual({ model: 'bge-m3', provider: 'ollama' });
+  });
+
+  it('should not fail the client config on an invalid DEFAULT_FILES_CONFIG', async () => {
+    const config = await loadServerConfig(false, { filesConfigEnv: 'invalid' });
+
+    expect(config.systemAgent?.fileEmbedding).toBeUndefined();
   });
 
   it('should omit the OIDC issuer when APP_URL is not configured', async () => {
