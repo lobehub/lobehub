@@ -50,7 +50,7 @@ describe('ProjectModel coverage', () => {
         ),
       );
 
-      expect(await model.delete('t863-proj-race')).toBeNull();
+      expect(await repo.delete('t863-proj-race')).toBeNull();
     });
   });
 
@@ -145,6 +145,24 @@ describe('ProjectModel coverage', () => {
     });
   });
 
+  describe('hasAgent', () => {
+    it('counts the main agent and bound members of a readable project, nothing else', async () => {
+      const project = await repo.create({ name: 'Crew' });
+      await serverDB.insert(agents).values([
+        { id: 't863-proj-member', userId },
+        { id: 't863-proj-outsider', userId },
+      ]);
+      await model.addAgent(project.id, { agentId: 't863-proj-member' });
+      const stranger = new ProjectModel(serverDB, otherUserId);
+
+      expect(await model.hasAgent(project.id, project.coordinatorAgentId!)).toBe(true);
+      expect(await model.hasAgent(project.id, 't863-proj-member')).toBe(true);
+      expect(await model.hasAgent(project.id, 't863-proj-outsider')).toBe(false);
+      expect(await model.hasAgent('t863-proj-missing', 't863-proj-member')).toBe(false);
+      expect(await stranger.hasAgent(project.id, 't863-proj-member')).toBe(false);
+    });
+  });
+
   describe('listTasks', () => {
     it("lists a visible project's tasks", async () => {
       const project = await repo.create({ name: 'With tasks' });
@@ -177,7 +195,7 @@ describe('ProjectModel coverage', () => {
         name: 'Legacy project',
       });
 
-      await model.delete(project.id);
+      await repo.delete(project.id);
 
       expect(await serverDB.select().from(agents).where(eq(agents.id, legacy.id))).toEqual([]);
     });
@@ -190,7 +208,7 @@ describe('ProjectModel coverage', () => {
         name: 'Picked project',
       });
 
-      await model.delete(project.id);
+      await repo.delete(project.id);
 
       expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
     });

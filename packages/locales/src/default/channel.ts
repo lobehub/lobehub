@@ -25,7 +25,7 @@ export default {
   'create.onlyYou': 'Only you for now. Create it and invite members whenever you like.',
   'agents': 'Agents',
   'otherAgents': 'Other Agents',
-  'projectAgents': 'Project members',
+  'projectAgents': 'Project Agents',
   'searchAgents': 'Search Agents',
   'unnamedAgent': 'Unnamed Agent',
   'person': 'Person',
@@ -115,6 +115,7 @@ export default {
   'outgoing.retry': 'Retry',
   'outgoing.sending': 'Sending…',
   'composer': 'Message #{{name}}',
+  'composerToJoin': 'Message #{{name}} to join',
   'directComposer': 'Message {{name}}',
   'threadComposer': 'Reply in thread',
   'composer.actions': 'More actions',
@@ -138,7 +139,7 @@ export default {
     'Mention Agents to choose who replies. Without a mention, every Agent here replies.',
   'mentionInvite.failed': "Couldn't add {{name}} to the channel. Try again.",
   'mentionInvite.failedReason': "Couldn't add {{name}} to the channel: {{reason}}",
-  'mentionInvite.section': 'Not in this channel · mention to add',
+  'mentionInvite.section': 'Not in this channel · mention to invite',
   'attachments.upload': 'Attach files',
   'date.yesterday': 'Yesterday',
   'attachments.failed': 'Upload failed. Try again.',
@@ -310,4 +311,32 @@ export default {
   'settings.visibility.title': 'Public channel',
   'visibilityFailed': 'Could not change who can see the channel. Try again.',
   'visibilityForbidden': 'Only the channel owner or an administrator can change who can see it.',
+  'invite.outsideProject': 'Other Agents · they join the project too',
+  'invite.outsideProjectLocked':
+    'Only the project creator or a workspace admin can add another Agent to this project',
+  'invite.joinProjectNotice':
+    '{{names}} will join the project “{{project}}” first, then this channel.',
+  'invite.joinProjectNoticeUnnamed': '{{names}} will join this project first, then this channel.',
+  'member.remove': 'Remove from channel',
+  'member.removeNamed': 'Remove {{name}} from the channel',
+  'member.removeConfirmTitle': 'Remove {{name}} from the channel?',
+  'member.removeConfirmPerson':
+    'They will no longer see this channel unless an admin invites them again.',
+  'member.removeConfirmAgent':
+    'Its replies in progress here stop. It stays in the project and can be invited again.',
+  'member.removeConfirmAgentStandalone':
+    'Its replies in progress here stop. You can invite it again later.',
+  'member.removeFailed': "Couldn't remove {{name}}. Try again.",
+  'leave': 'Leave channel',
+  'leaveConfirmTitle': 'Leave “{{title}}”?',
+  'leaveConfirm': 'You will no longer see this channel unless someone invites you again.',
+  'leaveConfirmProject': 'You can join again from the project at any time.',
+  'leaveFailed': "Couldn't leave the channel. Try again.",
+  'leaveSuccess': 'You left the channel',
+  'mentionInvite.confirmTitle': 'Invite {{name}} to this channel?',
+  'mentionInvite.confirmPerson': 'They will see the whole conversation in this channel.',
+  'mentionInvite.confirmAgent': 'It will read this channel and can reply here.',
+  'mentionInvite.confirmAgentProject':
+    'It is not in the project “{{project}}” yet: it joins the project first, then this channel.',
+  'mentionInvite.confirmOk': 'Invite and mention',
 };

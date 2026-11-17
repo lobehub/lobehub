@@ -7,7 +7,7 @@ import type {
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, isNull, notExists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
@@ -22,7 +22,6 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
-import { ilikeContains } from '../../utils/like';
 import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
@@ -38,16 +37,19 @@ import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { channelLastMessages } from './lastMessage';
+import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
 import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
-import {
-  addChannelUser,
-  channelUserCandidates,
-  newChannelUserCandidates,
-  requireWorkspaceMember,
-} from './people';
+import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
 import { postAgentMessage } from './post';
+import {
+  findOpenChannel,
+  joinOpenChannel,
+  listUnjoinedOpenChannels,
+  readOpenChannel,
+} from './projectAccess';
+import { joinPublicChannel, listJoinableChannels } from './publicAccess';
 import { retryJob } from './retry';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
@@ -74,6 +76,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export { removeAgentFromProjectChannels } from './membership';
 export type { ChannelOpeningCandidate, ChannelOpeningDecision } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
@@ -416,112 +419,47 @@ export class ChannelRepository {
     );
 
   /** Public group Channels in this workspace the caller has not joined, newest first. */
-  listJoinable = async (search?: string) => {
-    const { workspaceId } = this;
-    if (!workspaceId) return [];
-    const query = search?.trim();
-    return this.db.transaction(async (tx) => {
-      await requireWorkspaceMember(tx, workspaceId, this.userId);
-      return tx
-        .select({
-          createdAt: channels.createdAt,
-          id: channels.id,
-          // Qualified by hand: a single-table select renders columns without their table.
-          memberCount: sql<number>`(
-            SELECT count(*)::int FROM channel_members m
-            WHERE m.channel_id = "channels"."id" AND m.actor_type = 'user' AND m.status = 'active'
-          )`,
-          projectId: channels.projectId,
-          title: channels.title,
-        })
-        .from(channels)
-        .where(
-          and(
-            eq(channels.workspaceId, workspaceId),
-            eq(channels.visibility, 'public'),
-            eq(channels.status, 'active'),
-            isNull(channels.agentId),
-            isNull(channels.peerUserId),
-            notTrashed(channels.isDeleted),
-            query ? ilikeContains(channels.title, query) : undefined,
-            notExists(
-              tx
-                .select({ id: channelMembers.id })
-                .from(channelMembers)
-                .where(
-                  and(
-                    eq(channelMembers.channelId, channels.id),
-                    eq(channelMembers.userId, this.userId),
-                    eq(channelMembers.status, 'active'),
-                  ),
-                ),
-            ),
-          ),
-        )
-        .orderBy(desc(channels.createdAt))
-        .limit(100);
-    });
-  };
+  listJoinable = async (search?: string) =>
+    listJoinableChannels(this.db, this.userId, this.workspaceId, search);
 
   /**
-   * Joins a public group Channel of this workspace as a plain member. A person who left or was
-   * removed can come back, the same as being added again.
+   * Joins a group Channel the caller can see without belonging to it, or returns their membership
+   * when they already belong: an open project Channel (see {@link joinOpenChannel}), else a public
+   * one of this workspace.
    */
   join = async (channelId: string): Promise<ChannelAccess> => {
-    const { workspaceId } = this;
-    if (!workspaceId) throw new ChannelError('NOT_FOUND', 'Channel not found');
-    return this.db.transaction(async (tx) => {
-      await lockChannel(tx, channelId);
-      const [channel] = await tx
-        .select()
-        .from(channels)
-        .where(
-          and(
-            eq(channels.id, channelId),
-            eq(channels.workspaceId, workspaceId),
-            eq(channels.visibility, 'public'),
-            isNull(channels.agentId),
-            isNull(channels.peerUserId),
-            notTrashed(channels.isDeleted),
-          ),
-        )
-        .limit(1);
-      // A private channel answers the same as a missing one, so its existence does not leak.
-      if (!channel) throw new ChannelError('NOT_FOUND', 'Channel not found');
-      if (channel.status === 'archived') throw new ChannelError('CONFLICT', 'Channel is archived');
-      await requireWorkspaceMember(tx, workspaceId, this.userId);
-
-      const [existing] = await tx
-        .select()
-        .from(channelMembers)
-        .where(
-          and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, this.userId)),
-        );
-      if (existing?.status === 'active') return { channel, member: existing };
-      // History is there to read, but it is not unread: a joiner starts caught up.
-      const [member] = existing
-        ? await tx
-            .update(channelMembers)
-            .set({ lastReadSequence: channel.sequence, role: 'member', status: 'active' })
-            .where(eq(channelMembers.id, existing.id))
-            .returning()
-        : await tx
-            .insert(channelMembers)
-            .values({
-              actorType: 'user',
-              channelId,
-              lastReadSequence: channel.sequence,
-              role: 'member',
-              userId: this.userId,
-            })
-            .returning();
-      await audit(tx, channelId, 'member_joined', member.id, { userId: this.userId });
-      return { channel, member };
-    });
+    try {
+      return await this.write(channelId, async (_tx, access) => access, { joinOpen: true });
+    } catch (error) {
+      if (!(error instanceof ChannelError) || error.code !== 'NOT_FOUND') throw error;
+    }
+    return joinPublicChannel(this.db, this.userId, this.workspaceId, channelId);
   };
 
   addUser = async (channelId: string, userId: string) =>
     this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
+
+  /** Removes a person or an Agent; returns the writers still to stop. See {@link removeChannelMember}. */
+  removeMember = async (channelId: string, memberId: string): Promise<ChannelJobItem[]> =>
+    this.write(channelId, (tx, access) => removeChannelMember(tx, access, memberId), {
+      allowArchived: true,
+      minRole: 'admin',
+    });
+
+  /**
+   * The caller leaves a group Channel. See {@link leaveChannel}. `readable` says whether they can
+   * still open it: only an active open project Channel stays readable without a seat.
+   */
+  leave = async (channelId: string): Promise<{ readable: boolean }> =>
+    this.write(
+      channelId,
+      async (tx, access) => {
+        await leaveChannel(tx, access);
+        const open = await findOpenChannel(tx, this.userId, this.workspaceId, channelId);
+        return { readable: !!open };
+      },
+      { allowArchived: true },
+    );
 
   /** People a new Channel in this workspace can start with. */
   newChannelUserCandidates = async (search?: string) => {
@@ -538,8 +476,10 @@ export class ChannelRepository {
       minRole: 'admin',
     });
 
-  detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) =>
-    this.write(
+  detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) => {
+    if (!(await this.findAccess(channelId)))
+      return readOpenChannel(this.db, this.userId, this.workspaceId, channelId, options);
+    return this.write(
       channelId,
       async (tx, access) => {
         if (access.channel.isDeleted) throw new ChannelError('NOT_FOUND', 'Channel not found');
@@ -547,6 +487,7 @@ export class ChannelRepository {
         const view = await readChannelView(tx, channelId, options, this.userId);
         return {
           channel: { ...access.channel, canDelete: admin },
+          joined: true,
           ...view,
           jobs: view.jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
             ...job,
@@ -560,9 +501,10 @@ export class ChannelRepository {
       },
       { allowArchived: true, allowTrashed: true },
     );
+  };
 
   createThread = async (channelId: string, input: Parameters<typeof createChannelThread>[2]) =>
-    this.write(channelId, (tx) => createChannelThread(tx, channelId, input));
+    this.write(channelId, (tx) => createChannelThread(tx, channelId, input), { joinOpen: true });
 
   markRead = async (channelId: string, sequence: number) =>
     this.write(
@@ -583,15 +525,19 @@ export class ChannelRepository {
 
   /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
-   * included with their `status`, so they stay readable outside the active list.
+   * included with their `status`, so they stay readable outside the active list. Active open
+   * project Channels the caller has not joined follow with `joined: false`.
    */
   list = async (): Promise<
     Array<
       ChannelItem & {
         agentIds: string[];
         canDelete: boolean;
+        /** False for an open project Channel the caller can read but has not joined. */
+        joined: boolean;
         lastMessage: ChannelLastMessage | null;
         memberAvatars: ChannelAvatarMember[];
+        memberRole: ChannelMemberRole | null;
         mentionCount: number;
         replyJobs: ChannelReplyJob[];
         sharedAgentHandle: string | null;
@@ -617,11 +563,10 @@ export class ChannelRepository {
       .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
+    const open = await listUnjoinedOpenChannels(this.db, this.userId, this.workspaceId);
+    const previewIds = [...rows.map(({ channel }) => channel.id), ...open.map(({ id }) => id)];
 
-    const lastMessageOf = await channelLastMessages(
-      this.db,
-      rows.map(({ channel }) => channel.id),
-    );
+    const lastMessageOf = await channelLastMessages(this.db, previewIds);
 
     // Main-conversation replies the list row shows as in progress: ones that can still publish,
     // and stopped ones whose writer has not exited yet.
@@ -689,24 +634,17 @@ export class ChannelRepository {
 
     // A group Channel's list avatar pictures its first members; a direct one, its Agent or the
     // other person, which also pictures a shared Agent the caller has no sidebar row for.
-    const avatarsOf = await channelAvatarMembers(
-      this.db,
-      rows.map(({ channel }) => channel.id),
-      this.userId,
-    );
+    const avatarsOf = await channelAvatarMembers(this.db, previewIds, this.userId);
 
     // Every active Agent member, so a page about one Agent can list the Channels it takes part in;
     // the avatars above are capped and leave later members out.
-    const agentMembers = rows.length
+    const agentMembers = previewIds.length
       ? await this.db
           .select({ agentId: channelMembers.agentId, channelId: channelMembers.channelId })
           .from(channelMembers)
           .where(
             and(
-              inArray(
-                channelMembers.channelId,
-                rows.map(({ channel }) => channel.id),
-              ),
+              inArray(channelMembers.channelId, previewIds),
               eq(channelMembers.actorType, 'agent'),
               eq(channelMembers.status, 'active'),
               isNotNull(channelMembers.agentId),
@@ -721,7 +659,7 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    return rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
+    const joined = rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
       const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
       return {
         ...channel,
@@ -730,14 +668,35 @@ export class ChannelRepository {
         // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
         sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
         canDelete: hasRole(role, 'admin'),
+        joined: true,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
+        memberRole: role,
         mentionCount: mentionCountOf.get(channel.id) ?? 0,
         peerUserId: peerOf(channel, this.userId),
         replyJobs: replyJobsOf.get(channel.id) ?? [],
         unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
       };
     });
+    return [
+      ...joined,
+      // Not joined: nothing is unread or pending for the caller yet.
+      ...open.map((channel) => ({
+        ...channel,
+        agentIds: agentIdsOf.get(channel.id) ?? [],
+        sharedAgent: false,
+        sharedAgentHandle: null,
+        canDelete: false,
+        joined: false,
+        lastMessage: lastMessageOf.get(channel.id) ?? null,
+        memberAvatars: avatarsOf.get(channel.id) ?? [],
+        memberRole: null,
+        mentionCount: 0,
+        peerUserId: peerOf(channel, this.userId),
+        replyJobs: [],
+        unreadCount: 0,
+      })),
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   };
 
   /**
@@ -885,11 +844,16 @@ export class ChannelRepository {
         .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
         .where(and(eq(channels.id, channelId), this.membershipWhere()))
         .limit(1);
-      if (!row) throw new ChannelError('NOT_FOUND', 'Channel not found');
-      const access: ChannelAccess = {
+      let access: ChannelAccess | undefined = row && {
         channel: row.channel,
         member: { ...row.member, role: row.role },
       };
+      if (!access && options.joinOpen) {
+        // Joining is itself a write, so a trashed or archived Channel stays closed to newcomers.
+        const open = await findOpenChannel(tx, this.userId, this.workspaceId, channelId);
+        if (open) access = await joinOpenChannel(tx, open, this.userId);
+      }
+      if (!access) throw new ChannelError('NOT_FOUND', 'Channel not found');
 
       const minRole = options.minRole ?? 'member';
       if (!hasRole(access.member.role, minRole))
@@ -913,8 +877,9 @@ export class ChannelRepository {
     this.write(channelId, (tx) => postAgentMessage(tx, channelId, input));
 
   /** Posts a message as the caller. See {@link sendMessage} for routing. */
+  /** Sending into an open project Channel joins it first. */
   send = async (channelId: string, input: ChannelSendInput): Promise<ChannelMessageItem> =>
-    this.write(channelId, (tx, access) => sendMessage(tx, access, input));
+    this.write(channelId, (tx, access) => sendMessage(tx, access, input), { joinOpen: true });
 
   /**
    * Stops one job (its requester or an admin) or a branch: everything for admins, only the

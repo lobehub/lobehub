@@ -203,7 +203,7 @@
   "members.more": "更多",
   "members.noResponsibility": "还没有设置职责",
   "members.remove": "移出项目",
-  "members.removeConfirmDescription": "它在项目中已有的任务和话题不受影响。",
+  "members.removeConfirmDescription": "它在项目中已有的任务和话题不受影响，同时会退出项目里的频道。",
   "members.removeConfirmTitle": "将「{{name}}」移出项目？",
   "members.removeFailed": "移出 Agent 失败",
   "members.replaceCoordinator": "更换主 Agent",

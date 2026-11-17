@@ -17,6 +17,7 @@ import {
 import { WakeConfigInputSchema } from '@/server/services/conversationWake/config';
 import { pickWakeJudgeScore } from '@/server/services/conversationWake/judgeScore';
 
+import { projectModelOptions } from './_helpers/projectRights';
 import { channelHistoryProcedures } from './channelHistory';
 
 const channelId = z.string().regex(/^chn_[\dA-Za-z]{12}$/);
@@ -36,7 +37,12 @@ const channelProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx,
     });
   const result = await next({
     ctx: {
-      channelService: new ChannelService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      channelService: new ChannelService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+        projectModelOptions(ctx),
+      ),
     },
   });
   if (!result.ok && result.error.cause instanceof ChannelError) {
@@ -67,10 +73,13 @@ export const channelRouter = router({
       await ctx.channelService.archiveThread(input.channelId, input.threadId);
       return { success: true };
     }),
+  /** In a project Channel, `joinProject` seats an Agent from outside in the project first. */
   addAgent: channelProcedure
-    .input(z.object({ channelId, agent: agentSelection }))
+    .input(z.object({ channelId, agent: agentSelection, joinProject: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => ({
-      data: await ctx.channelService.addAgent(input.channelId, input.agent),
+      data: await ctx.channelService.addAgent(input.channelId, input.agent, {
+        joinProject: input.joinProject,
+      }),
       success: true,
     })),
   agentEnvironment: channelProcedure
@@ -184,6 +193,7 @@ export const channelRouter = router({
     .input(
       z.object({
         agents: z.array(agentSelection).max(20).default([]),
+        joinProject: z.boolean().optional(),
         projectId: z.string().min(1).optional(),
         title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
         userIds: z.array(z.string().min(1)).max(100).default([]),
@@ -252,9 +262,15 @@ export const channelRouter = router({
     .query(async ({ ctx, input }) => ({
       data: await ctx.channelService.repository.listJoinable(input?.search),
     })),
+  /** Joins an open project Channel or a public one the caller can join. */
   join: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
     const { channel } = await ctx.channelService.join(input.channelId);
     return { data: channel, success: true };
+  }),
+  /** The caller leaves a group Channel; its owner cannot. */
+  leave: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
+    const { readable } = await ctx.channelService.leave(input.channelId);
+    return { readable, success: true };
   }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
@@ -288,6 +304,13 @@ export const channelRouter = router({
       data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
       success: true,
     })),
+  /** An admin removes a person or an Agent from a group Channel. */
+  removeMember: channelProcedure
+    .input(z.object({ channelId, memberId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.removeMember(input.channelId, input.memberId);
+      return { success: true };
+    }),
   rename: channelProcedure
     .input(z.object({ channelId, title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength) }))
     .mutation(async ({ ctx, input }) => ({

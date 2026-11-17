@@ -1,45 +1,54 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, max, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
-import { agents } from '../schemas/agent';
-import { channelMembers } from '../schemas/channel';
-import { chatGroupsAgents } from '../schemas/chatGroup';
-import { environments } from '../schemas/environment';
-import { knowledgeBases } from '../schemas/file';
+import { agents } from '../../schemas/agent';
+import { channelMembers } from '../../schemas/channel';
+import { chatGroupsAgents } from '../../schemas/chatGroup';
+import { environments } from '../../schemas/environment';
+import { knowledgeBases } from '../../schemas/file';
 import {
   projectAgents,
   projectCompletionReviews,
   projectKnowledgeBases,
   projects,
-} from '../schemas/project';
-import { projectEnvironments } from '../schemas/projectEnvironment';
-import { projectWorks } from '../schemas/projectWork';
-import { agentsToSessions } from '../schemas/relations';
-import { tasks } from '../schemas/task';
-import { topics } from '../schemas/topic';
-import { works } from '../schemas/work';
-import type { LobeChatDatabase } from '../type';
-import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
-import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
-import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
-import { notChannelTopic } from '../utils/topicVisibility';
+} from '../../schemas/project';
+import { projectEnvironments } from '../../schemas/projectEnvironment';
+import { projectWorks } from '../../schemas/projectWork';
+import { agentsToSessions } from '../../schemas/relations';
+import { tasks } from '../../schemas/task';
+import { topics } from '../../schemas/topic';
+import { works } from '../../schemas/work';
+import type { LobeChatDatabase } from '../../type';
+import { isUserKnowledgeBase } from '../../utils/knowledgeBaseType';
+import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
+import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import {
   buildWorkspacePayload,
   buildWorkspaceWhere,
   normalizeWorkspaceId,
-} from '../utils/workspace';
-import { AgentModel } from './agent';
-import { EnvironmentModel } from './environment';
+} from '../../utils/workspace';
+import { AgentModel } from '../agent';
+import { EnvironmentModel } from '../environment';
 import {
   isProjectIdentifierConflict,
   normalizeProjectIdentifier,
   ProjectIdentifierTakenError,
-} from './projectIdentifier';
-import { topicHasGoal } from './topicGoal';
+} from '../projectIdentifier';
+import { topicHasGoal } from '../topicGoal';
+import type { ProjectAgentInput, ProjectAgentPatch } from './agents';
+import {
+  deleteProjectAgent,
+  hasProjectAgentBinding,
+  seatCoordinator,
+  updateProjectAgent,
+  upsertProjectAgent,
+} from './agents';
 
-export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from './projectIdentifier';
+export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from '../projectIdentifier';
+export type { ProjectAgentInput, ProjectAgentPatch } from './agents';
 
 export interface CreateProjectInput {
   avatar?: string;
@@ -80,16 +89,6 @@ export interface UpdateProjectInput {
   slug?: string | null;
   visibility?: ProjectVisibility;
 }
-
-export interface ProjectAgentInput {
-  agentId: string;
-  enabled?: boolean;
-  responsibility?: string | null;
-  role?: string | null;
-  sortOrder?: number;
-}
-
-export type ProjectAgentPatch = Partial<Omit<ProjectAgentInput, 'agentId'>>;
 
 export interface ProjectKnowledgeBaseInput {
   enabled?: boolean;
@@ -246,34 +245,16 @@ export class ProjectModel {
     }
   }
 
-  async delete(id: string) {
-    return this.db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ coordinatorAgentId: projects.coordinatorAgentId })
-        .from(projects)
-        .where(and(eq(projects.id, id), this.manageable()))
-        .limit(1);
-      if (!project) return null;
-
-      const [deleted] = await tx
-        .delete(projects)
-        .where(and(eq(projects.id, id), this.manageable()))
-        .returning();
-      if (project.coordinatorAgentId) {
-        await this.deleteDedicatedCoordinator(tx as LobeChatDatabase, project.coordinatorAgentId);
-      }
-      return deleted ?? null;
-    });
-  }
-
   /**
-   * Remove a coordinator only when it was provisioned for this project: a
-   * virtual, non-builtin agent no other project still uses. Reusable agents
-   * (user agents, LobeAI) stay with their sessions intact.
+   * Deletes the project row only. `ProjectRepository.delete` also retires a
+   * coordinator provisioned for it, which belongs to another aggregate.
    */
-  private async deleteDedicatedCoordinator(db: LobeChatDatabase, agentId: string) {
-    if (!(await this.isDedicatedCoordinator(agentId, { db }))) return;
-    await new AgentModel(db, this.userId, this.workspaceId).delete(agentId);
+  async delete(id: string) {
+    const [deleted] = await this.db
+      .delete(projects)
+      .where(and(eq(projects.id, id), this.manageable()))
+      .returning();
+    return deleted ?? null;
   }
 
   /**
@@ -611,6 +592,14 @@ export class ProjectModel {
     return agent ?? null;
   }
 
+  /** Whether an Agent belongs to a readable project: its main Agent or a bound member. */
+  async hasAgent(projectId: string, agentId: string) {
+    const project = await this.findById(projectId);
+    if (!project) return false;
+    if (project.coordinatorAgentId === agentId) return true;
+    return hasProjectAgentBinding(this.db, projectId, agentId);
+  }
+
   async addAgent(projectId: string, input: ProjectAgentInput) {
     const project = await this.findMembersManageableById(projectId);
     if (!project) return null;
@@ -625,26 +614,11 @@ export class ProjectModel {
       'A shared project only takes shared agents',
     );
 
-    const [binding] = await this.db
-      .insert(projectAgents)
-      .values({
-        ...input,
-        addedByUserId: this.userId,
-        projectId,
-        workspaceId: this.workspaceId ?? null,
-      })
-      .onConflictDoUpdate({
-        set: {
-          enabled: input.enabled,
-          responsibility: input.responsibility,
-          role: input.role,
-          sortOrder: input.sortOrder,
-          updatedAt: new Date(),
-        },
-        target: [projectAgents.projectId, projectAgents.agentId],
-      })
-      .returning();
-    return binding;
+    return upsertProjectAgent(this.db, this.bindingScope(projectId), input);
+  }
+
+  private bindingScope(projectId: string) {
+    return { addedByUserId: this.userId, projectId, workspaceId: this.workspaceId ?? null };
   }
 
   async updateAgent(projectId: string, agentId: string, patch: ProjectAgentPatch) {
@@ -653,12 +627,7 @@ export class ProjectModel {
     if (project.coordinatorAgentId === agentId) {
       throw new Error('The project coordinator is managed by the project');
     }
-    const [binding] = await this.db
-      .update(projectAgents)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))
-      .returning();
-    return binding ?? null;
+    return updateProjectAgent(this.db, projectId, agentId, patch);
   }
 
   async removeAgent(projectId: string, agentId: string) {
@@ -667,11 +636,7 @@ export class ProjectModel {
     if (project.coordinatorAgentId === agentId) {
       throw new Error('The project coordinator cannot be removed');
     }
-    const deleted = await this.db
-      .delete(projectAgents)
-      .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))
-      .returning({ id: projectAgents.id });
-    return deleted.length > 0;
+    return deleteProjectAgent(this.db, projectId, agentId);
   }
 
   /**
@@ -690,16 +655,7 @@ export class ProjectModel {
     if (!project) return null;
     if (project.coordinatorAgentId === agentId) return { previousId: null, project };
 
-    const [agent] = await this.db
-      .select({ id: agents.id, visibility: agents.visibility })
-      .from(agents)
-      .where(
-        and(
-          eq(agents.id, agentId),
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
-        ),
-      )
-      .limit(1);
+    const agent = await this.findAccessibleAgent(this.db, agentId);
     if (!agent) throw new Error('Agent not found');
     this.assertSharedResource(
       project,
@@ -712,33 +668,8 @@ export class ProjectModel {
       .set({ coordinatorAgentId: agentId, updatedAt: new Date() })
       .where(eq(projects.id, projectId))
       .returning();
-    await this.db
-      .insert(projectAgents)
-      .values({
-        addedByUserId: this.userId,
-        agentId,
-        projectId,
-        workspaceId: this.workspaceId ?? null,
-      })
-      .onConflictDoUpdate({
-        set: { enabled: true, updatedAt: new Date() },
-        target: [projectAgents.projectId, projectAgents.agentId],
-      });
-
     const previousId = project.coordinatorAgentId;
-    if (previousId) {
-      // The project role belonged to the main agent; as a member it reads like any other.
-      await this.db
-        .update(projectAgents)
-        .set({ role: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(projectAgents.projectId, projectId),
-            eq(projectAgents.agentId, previousId),
-            eq(projectAgents.role, 'coordinator'),
-          ),
-        );
-    }
+    await seatCoordinator(this.db, { ...this.bindingScope(projectId), agentId, previousId });
     return { previousId, project: updated };
   }
 
@@ -967,49 +898,23 @@ export class ProjectModel {
     return this.setStatus(id, 'reviewing', project.startedAt);
   }
 
-  async reviewCompletion(id: string, decision: 'accepted' | 'rejected', comment?: string) {
-    return this.db.transaction(async (tx) => {
-      const [project] = await tx
-        .select()
-        .from(projects)
-        .where(and(eq(projects.id, id), this.manageable()))
-        .for('update')
-        .limit(1);
-      if (!project) return null;
-      if (project.status !== 'reviewing') throw new Error('Project is not awaiting review');
-
-      const [{ value: lastRound }] = await tx
-        .select({ value: max(projectCompletionReviews.round) })
-        .from(projectCompletionReviews)
-        .where(eq(projectCompletionReviews.projectId, id));
-      const [review] = await tx
-        .insert(projectCompletionReviews)
-        .values({
-          comment,
-          decision,
-          projectId: id,
-          reviewerUserId: this.userId,
-          round: (lastRound ?? 0) + 1,
-          workspaceId: this.workspaceId ?? null,
-        })
-        .returning();
-      const now = new Date();
-      const [updated] = await tx
-        .update(projects)
-        .set(
-          decision === 'accepted'
-            ? {
-                completedAt: now,
-                completedReviewId: review.id,
-                status: 'completed',
-                updatedAt: now,
-              }
-            : { completedAt: null, completedReviewId: null, status: 'active', updatedAt: now },
-        )
-        .where(eq(projects.id, id))
-        .returning();
-      return { project: updated, review };
-    });
+  /**
+   * Settles a completion review on the project row: an accepted review completes
+   * it, a rejected one sends it back to active. `ProjectRepository.reviewCompletion`
+   * locks the row and records the review in the same transaction.
+   */
+  async applyCompletionReview(id: string, decision: 'accepted' | 'rejected', reviewId: string) {
+    const now = new Date();
+    const [updated] = await this.db
+      .update(projects)
+      .set(
+        decision === 'accepted'
+          ? { completedAt: now, completedReviewId: reviewId, status: 'completed', updatedAt: now }
+          : { completedAt: null, completedReviewId: null, status: 'active', updatedAt: now },
+      )
+      .where(eq(projects.id, id))
+      .returning();
+    return updated;
   }
 
   async listCompletionReviews(projectId: string) {
@@ -1037,12 +942,13 @@ export class ProjectModel {
     return project ?? null;
   }
 
-  async findManageableById(id: string) {
-    const [project] = await this.db
+  async findManageableById(id: string, { lock = false }: { lock?: boolean } = {}) {
+    const query = this.db
       .select()
       .from(projects)
       .where(and(eq(projects.id, id), this.manageable()))
       .limit(1);
+    const [project] = lock ? await query.for('update') : await query;
     return project ?? null;
   }
 
