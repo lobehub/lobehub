@@ -467,7 +467,11 @@ export const resolveTopicCheckoutConfiguration = async (
     Omit<SandboxSessionConfigInput, 'serverDB' | 'topicId'>,
 ): Promise<PlacementCheckout | undefined> => {
   const placement = await resolvePlacementDecision(input);
-  if (placement.mode === 'persistent') return placement.instanceCheckout;
+  // A persistent run works in its instance's checkout only once the build made
+  // one; a pending or failed build runs in the volume directory, where nothing
+  // clones the snapshot — so there is no checkout to name.
+  if (placement.mode === 'persistent')
+    return placement.workingDir ? placement.instanceCheckout : undefined;
 
   return resolveTopicEnvironment(input);
 };

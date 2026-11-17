@@ -5,6 +5,7 @@ import {
   buildHeteroProjectContext,
   buildRunProjectContextPrompt,
   resolveSandboxRepository,
+  runReachesCloudSandbox,
   toCredentialFreeRepositoryUrl,
 } from './projectContext';
 
@@ -211,5 +212,23 @@ describe('toCredentialFreeRepositoryUrl', () => {
   it('refuses what it cannot read as a repository URL', () => {
     expect(toCredentialFreeRepositoryUrl('not a url')).toBeUndefined();
     expect(toCredentialFreeRepositoryUrl('file:///etc/passwd')).toBeUndefined();
+  });
+});
+
+describe('runReachesCloudSandbox', () => {
+  it('counts the Cloud Sandbox tool whether or not a device is routed', () => {
+    expect(
+      runReachesCloudSandbox({ deviceRouted: true, enabledToolIds: ['lobe-cloud-sandbox'] }),
+    ).toBe(true);
+  });
+
+  it('counts Skills only while no device is routed, since a device runs its commands', () => {
+    expect(runReachesCloudSandbox({ deviceRouted: false, enabledToolIds: ['lobe-skills'] })).toBe(
+      true,
+    );
+    expect(runReachesCloudSandbox({ deviceRouted: true, enabledToolIds: ['lobe-skills'] })).toBe(
+      false,
+    );
+    expect(runReachesCloudSandbox({ deviceRouted: false, enabledToolIds: [] })).toBe(false);
   });
 });

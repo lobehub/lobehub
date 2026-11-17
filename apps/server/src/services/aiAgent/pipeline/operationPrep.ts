@@ -1,9 +1,7 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
-import { CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
-import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
@@ -42,7 +40,7 @@ import type {
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
-import { buildRunProjectContextPrompt } from './projectContext';
+import { buildRunProjectContextPrompt, runReachesCloudSandbox } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
 import { buildViewedGoalOverview } from './viewedGoalContext';
@@ -752,8 +750,13 @@ export const prepareOperation = async (
   // Page-scoped context (the viewed task or goal) and the project the run is in.
   // Delegation rules name the task tool, so they follow its presence in the final set;
   // the repository checkout is in the cloud sandbox, so it follows the tools that open it:
-  // the Cloud Sandbox tool, or the always-on Skills tool whose runCommand / execScript
-  // open the same session in the same directory (see `gatherContextFacts`).
+  // the Cloud Sandbox tool always does, while the always-on Skills tool's runCommand /
+  // execScript open the same session only when no device is routed — a routed (or waking)
+  // device runs them in its own working directory (see `gatherContextFacts`).
+  const reachesCloudSandbox = runReachesCloudSandbox({
+    deviceRouted: !!activeDeviceId || executionPlan?.kind === 'device-wakeable',
+    enabledToolIds: toolsResult.enabledToolIds,
+  });
   const [taskManagerPrompt, goalOverview, projectPrompt] = await Promise.all([
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
@@ -764,11 +767,7 @@ export const prepareOperation = async (
       {
         channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
         coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
-        sandboxTopicId:
-          toolsResult.enabledToolIds?.includes(CloudSandboxIdentifier) ||
-          toolsResult.enabledToolIds?.includes(SkillsIdentifier)
-            ? topicId
-            : undefined,
+        sandboxTopicId: reachesCloudSandbox ? topicId : undefined,
       },
     ),
   ]);

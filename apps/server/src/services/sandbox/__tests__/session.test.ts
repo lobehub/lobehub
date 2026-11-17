@@ -795,7 +795,30 @@ describe('resolveTopicCheckoutConfiguration', () => {
   // An instance keeps the specification it was built from: a run placed in it
   // works in that checkout even after its environment was pointed elsewhere.
   it('reads a persistent run from its instance snapshot, not the edited environment', async () => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: snapshot,
+      id: INSTANCE_ID,
+      name: 'Built',
+      status: 'ready',
+      workingDirectory: 'projects/atlas',
+    });
+
     await expect(checkout()).resolves.toEqual({ configuration: snapshot, name: 'Built' });
+    expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
+  });
+
+  // A pending or failed build runs in the volume directory, where nothing
+  // clones the snapshot: there is no checkout to name.
+  it.each(['pending', 'error'])('names no checkout for a %s build', async (status) => {
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: snapshot,
+      id: INSTANCE_ID,
+      name: 'Built',
+      status,
+      workingDirectory: 'projects/atlas',
+    });
+
+    await expect(checkout()).resolves.toBeUndefined();
     expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
   });
 

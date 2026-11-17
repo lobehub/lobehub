@@ -1,3 +1,5 @@
+import { CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { ProjectContextRepository } from '@lobechat/prompts';
 import { buildProjectContextPrompt } from '@lobechat/prompts';
@@ -18,6 +20,23 @@ export interface ProjectContextDeps {
   userId: string;
   workspaceId?: string;
 }
+
+/**
+ * Whether the run's commands land in the cloud sandbox, where a project
+ * repository is checked out. The Cloud Sandbox tool always runs there; the
+ * always-on Skills tool's runCommand / execScript open the same session only
+ * when no device is routed — a routed (or waking) device runs them in its own
+ * working directory, not in a cloud checkout.
+ */
+export const runReachesCloudSandbox = ({
+  deviceRouted,
+  enabledToolIds,
+}: {
+  deviceRouted: boolean;
+  enabledToolIds?: string[];
+}): boolean =>
+  !!enabledToolIds?.includes(CloudSandboxIdentifier) ||
+  (!deviceRouted && !!enabledToolIds?.includes(SkillsIdentifier));
 
 /**
  * A repository URL with nothing secret left in it, or `undefined` when it
