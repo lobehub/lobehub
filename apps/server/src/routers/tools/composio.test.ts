@@ -18,6 +18,24 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
 
+// The cloud role gate, mirrored: the OSS stub lets every role through
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
+  const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
+  const rank: Record<string, number> = { admin: 2, member: 1, owner: 3, viewer: 0 };
+  return {
+    requireWorkspaceRoleWhenScoped: (minRole: string) =>
+      mod.trpc.middleware(async (opts: any) => {
+        const { workspaceId, workspaceRole } = opts.ctx;
+        if (workspaceId && (rank[workspaceRole] ?? -1) < rank[minRole]) {
+          const { TRPCError } = await import('@trpc/server');
+          throw new TRPCError({ code: 'FORBIDDEN', message: `Requires ${minRole}` });
+        }
+        return opts.next();
+      }),
+    wsCompatProcedure: mod.trpc.procedure,
+  };
+});
+
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(function () {
     return { existsById: mocks.agentExistsById };
@@ -272,6 +290,24 @@ describe('composioToolsRouter.executeAction', () => {
     mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
 
     await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeAction role gate', () => {
+  it('refuses a workspace viewer before resolving any account', async () => {
+    // Regression: a viewer named a public agent and ran its owner's
+    // agent-scoped Composio connection (e.g. GMAIL_SEND_EMAIL).
+    const viewer = composioToolsRouter.createCaller({
+      userId: 'viewer-1',
+      workspaceId: 'ws-1',
+      workspaceRole: 'viewer',
+    } as any);
+
+    await expect(viewer.executeAction({ ...input, agentId: 'agt-public' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(mocks.connectorResolveByIdentifiers).not.toHaveBeenCalled();
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,10 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -52,6 +55,10 @@ const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
 
 export const composioToolsRouter = router({
   executeAction: composioProcedure
+    // Executes tools with side effects as the connection's linker (an agent's
+    // owner, for its agent-owned row): workspace viewers are read-only, as for
+    // MCP `callTool`.
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(
       z.object({
         /** The agent the call runs for (its agent-owned connection first). */
