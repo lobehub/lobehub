@@ -751,6 +751,8 @@ components:
                   - file:write
                   - knowledge:read
                   - knowledge:write
+                  - generation:read
+                  - generation:write
                   - mcp:read
                   - mcp:write
                   - usage:read
@@ -817,6 +819,8 @@ components:
                   - file:write
                   - knowledge:read
                   - knowledge:write
+                  - generation:read
+                  - generation:write
                   - mcp:read
                   - mcp:write
                   - usage:read
@@ -840,6 +844,15 @@ components:
         - scopes
         - updatedAt
         - key
+      additionalProperties: false
+    Transcription:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The transcript.
+      required:
+        - text
       additionalProperties: false
     ChatResponse:
       type: object
@@ -9649,6 +9662,127 @@ components:
         - spent
         - usageByType
       additionalProperties: false
+    Generation:
+      type: object
+      properties:
+        asset:
+          anyOf:
+            - $ref: "#/components/schemas/GenerationAsset"
+            - type: "null"
+          description: The output; `null` until it succeeded.
+        batchId:
+          type: string
+          description: The request (batch) this generation belongs to.
+        createdAt:
+          type: string
+          description: ISO 8601 timestamp.
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/GenerationError"
+            - type: "null"
+          description: Why it failed; `null` unless `error`.
+        fileId:
+          description: Library file the output was saved as, once it succeeded.
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        model:
+          type: string
+        prompt:
+          type: string
+        provider:
+          type: string
+        seed:
+          type:
+            - number
+            - "null"
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - success
+            - error
+          description: "`pending` → `processing` → `success` | `error`. The last two are
+            final."
+        topicId:
+          type: string
+          description: The generation topic the request was added to.
+        type:
+          type: string
+          enum:
+            - image
+            - video
+            - music
+      required:
+        - asset
+        - batchId
+        - createdAt
+        - error
+        - fileId
+        - id
+        - model
+        - prompt
+        - provider
+        - seed
+        - status
+        - topicId
+        - type
+      additionalProperties: false
+    GenerationAsset:
+      type: object
+      properties:
+        coverUrl:
+          description: Video cover image URL.
+          type:
+            - string
+            - "null"
+        duration:
+          description: Video length in seconds.
+          type:
+            - number
+            - "null"
+        height:
+          type:
+            - number
+            - "null"
+        thumbnailUrl:
+          description: Resized preview URL.
+          type:
+            - string
+            - "null"
+        url:
+          description: Full-size asset URL.
+          type:
+            - string
+            - "null"
+        width:
+          type:
+            - number
+            - "null"
+      required:
+        - coverUrl
+        - duration
+        - height
+        - thumbnailUrl
+        - url
+        - width
+      additionalProperties: false
+    GenerationError:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Human-readable failure reason.
+        name:
+          type: string
+          description: Error type, for example `ServerError` or `Timeout`.
+      required:
+        - message
+        - name
+      additionalProperties: false
   securitySchemes:
     bearerAuth:
       bearerFormat: API Key (sk-lh-...) or OIDC JWT
@@ -13289,6 +13423,8 @@ paths:
                           - file:write
                           - knowledge:read
                           - knowledge:write
+                          - generation:read
+                          - generation:write
                           - mcp:read
                           - mcp:write
                           - usage:read
@@ -13755,13 +13891,14 @@ paths:
         call `audio.speech.create`. `model` takes `provider/model` (for example
         `lobehub/speech-2.8-hd`) or a bare model id; the optional `provider` and
         `params` (emotion, pitch, volume, sampleRate) are LobeHub extensions.
-        Returns the audio bytes; usage is reported in `X-LobeHub-*` headers.
-        Synthesis errors use OpenAI's `{ error: { message, type, code, param }
-        }` body; authentication and permission errors use the platform
-        `ApiError` envelope.
+        Returns the audio bytes; usage is reported in `X-LobeHub-*` headers. API
+        keys need the `generation:write` scope (keys issued with `model:invoke`
+        are also accepted). Synthesis errors use OpenAI's `{ error: { message,
+        type, code, param } }` body; authentication and permission errors use
+        the platform `ApiError` envelope.
 
 
-        **API key scopes:** `model:invoke`.
+        **API key scopes:** `generation:write`.
       responses:
         "200":
           content:
@@ -14005,7 +14142,193 @@ paths:
       tags:
         - audio
       x-required-scopes:
-        - model:invoke
+        - generation:write
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/audio/transcriptions:
+    post:
+      operationId: audio.createTranscription
+      description: >-
+        OpenAI-compatible speech-to-text: upload the audio as
+        multipart/form-data and get `{ text }` back, so an OpenAI SDK pointed at
+        `/api/v1` can call `audio.transcriptions.create`. Send the clip as
+        `file` (up to 3 MB), or the id of an uploaded file as `fileId` (the key
+        then also needs `file:read`). `provider` (default `openai`) is a LobeHub
+        extension. Billing follows the provider configuration, like the in-app
+        voice input. The transcript is always returned as JSON `{ text }`,
+        whatever `response_format` asks of the provider.
+
+
+        **API key scopes:** `generation:write`.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                file:
+                  description: The audio clip.
+                  format: binary
+                  type: string
+                fileId:
+                  description: An uploaded audio file, instead of `file`.
+                  type: string
+                language:
+                  description: ISO-639-1 language code, e.g. `en`.
+                  type: string
+                model:
+                  description: Transcription model, e.g. `whisper-1`.
+                  type: string
+                prompt:
+                  description: Text to guide the model's style.
+                  type: string
+                provider:
+                  description: Provider id; defaults to `openai`.
+                  type: string
+                response_format:
+                  enum:
+                    - json
+                    - text
+                    - srt
+                    - verbose_json
+                    - vtt
+                  type: string
+              required:
+                - model
+              type: object
+        required: true
+      summary: Create a transcription
+      tags:
+        - audio
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transcription"
+              example:
+                text: Remind me to water the plants at six.
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Payload too large
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:write
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -40387,3 +40710,1114 @@ paths:
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
       description: "**API key scopes:** `usage:read`."
+  /api/v1/generations:
+    get:
+      operationId: generations.list
+      description: >-
+        Lists the image, video and music generations the caller can see, newest
+        first. Filter by `type`; page with `cursor` / `limit`.
+
+
+        **API key scopes:** `generation:read`.
+      summary: List generations
+      tags:
+        - generations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Generation"
+                      hasMore:
+                        $ref: "#/components/schemas/PageHasMore"
+                      nextCursor:
+                        $ref: "#/components/schemas/PageNextCursor"
+                      total:
+                        $ref: "#/components/schemas/PageTotal"
+                    required:
+                      - items
+                      - hasMore
+                      - nextCursor
+                      - total
+                    additionalProperties: false
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  hasMore: false
+                  items:
+                    - asset:
+                        coverUrl: null
+                        duration: null
+                        height: 1024
+                        thumbnailUrl: https://files.lobehub.com/generations/thumb_2xN8kq.webp
+                        url: https://files.lobehub.com/generations/2xN8kq.png
+                        width: 1024
+                      batchId: gb_q7PzJ2mXc4Ld
+                      createdAt: 2026-01-15T08:30:00.000Z
+                      error: null
+                      fileId: file_8HsW1nVb3QkE
+                      id: gen_3KdLx9TzQw7v
+                      model: gpt-image-1
+                      prompt: A lighthouse on a cliff at dawn, watercolor
+                      provider: openai
+                      seed: 42
+                      status: success
+                      topicId: gt_Vb5nR2kLp8Ws
+                      type: image
+                  nextCursor: null
+                  total: 1
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:read
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+          description: Opaque cursor from the previous page's `nextCursor`. Omit for the
+            first page.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+          description: Page size, 1–100. Defaults to 20.
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - image
+              - video
+              - music
+          description: Only generations of this kind.
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/generations/{id}:
+    get:
+      operationId: generations.get
+      description: >-
+        Reports one generation: its `status` (`pending`, `processing`, `success`
+        or `error`), the asset URLs once it succeeded, or the failure reason.
+        Poll until the status is `success` or `error` — the SDK does this in
+        `generations.wait(id)`.
+
+
+        **API key scopes:** `generation:read`.
+      summary: Get a generation
+      tags:
+        - generations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Generation"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  asset:
+                    coverUrl: null
+                    duration: null
+                    height: 1024
+                    thumbnailUrl: https://files.lobehub.com/generations/thumb_2xN8kq.webp
+                    url: https://files.lobehub.com/generations/2xN8kq.png
+                    width: 1024
+                  batchId: gb_q7PzJ2mXc4Ld
+                  createdAt: 2026-01-15T08:30:00.000Z
+                  error: null
+                  fileId: file_8HsW1nVb3QkE
+                  id: gen_3KdLx9TzQw7v
+                  model: gpt-image-1
+                  prompt: A lighthouse on a cliff at dawn, watercolor
+                  provider: openai
+                  seed: 42
+                  status: success
+                  topicId: gt_Vb5nR2kLp8Ws
+                  type: image
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+    delete:
+      operationId: generations.delete
+      description: >-
+        Deletes a generation record and its thumbnail. The library file it was
+        saved as is kept. In a workspace only the creator or a workspace owner
+        may delete it.
+
+
+        **API key scopes:** `generation:write`.
+      summary: Delete a generation
+      tags:
+        - generations
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DeletedResource"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  deleted: true
+                  id: gen_3KdLx9TzQw7v
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/images/generations:
+    post:
+      operationId: images.generate
+      description: >-
+        Generates `n` images from a prompt with an image model (the account's
+        default when `model` is omitted). Billing and quota follow the Image
+        page. By default the request waits up to `waitTimeoutSeconds` and
+        returns the finished images with their URLs; any still running come back
+        with their current status — poll `GET /generations/{id}` or call
+        `generations.wait(id)` in the SDK. With `wait: false` it answers as soon
+        as the work is queued. Each request is added to `topicId`, or to a new
+        generation topic.
+
+
+        **API key scopes:** `generation:write`.
+      summary: Generate images
+      tags:
+        - images
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      batchId:
+                        type: string
+                      generations:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Generation"
+                      topicId:
+                        type: string
+                    required:
+                      - batchId
+                      - generations
+                      - topicId
+                    additionalProperties: false
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  batchId: gb_q7PzJ2mXc4Ld
+                  generations:
+                    - asset:
+                        coverUrl: null
+                        duration: null
+                        height: 1024
+                        thumbnailUrl: https://files.lobehub.com/generations/thumb_2xN8kq.webp
+                        url: https://files.lobehub.com/generations/2xN8kq.png
+                        width: 1024
+                      batchId: gb_q7PzJ2mXc4Ld
+                      createdAt: 2026-01-15T08:30:00.000Z
+                      error: null
+                      fileId: file_8HsW1nVb3QkE
+                      id: gen_3KdLx9TzQw7v
+                      model: gpt-image-1
+                      prompt: A lighthouse on a cliff at dawn, watercolor
+                      provider: openai
+                      seed: 42
+                      status: success
+                      topicId: gt_Vb5nR2kLp8Ws
+                      type: image
+                  topicId: gt_Vb5nR2kLp8Ws
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "402":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Payment required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cfg:
+                  description: Guidance scale, for models that accept one.
+                  type: number
+                height:
+                  description: Image height in pixels.
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                imageUrls:
+                  description: Reference images (URLs) for image-to-image models.
+                  maxItems: 10
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                model:
+                  description: Image model id. Omit to use the account's default image model.
+                  type: string
+                  minLength: 1
+                n:
+                  default: 1
+                  description: Number of images to generate, 1–8. Defaults to 1.
+                  type: integer
+                  minimum: 1
+                  maximum: 8
+                params:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties:
+                    anyOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                      - type: array
+                        items:
+                          type: string
+                      - type: "null"
+                  description: Model-specific parameters beyond the named fields (for example
+                    `quality` or `size`). Parameters the model does not declare
+                    are rejected with 400.
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                  description: What to generate.
+                provider:
+                  description: Provider id. Omit to use the first enabled provider serving
+                    `model`.
+                  type: string
+                  minLength: 1
+                seed:
+                  description: Seed; omit for a random one per image.
+                  anyOf:
+                    - type: integer
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: "null"
+                steps:
+                  description: Sampling steps.
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+                topicId:
+                  type: string
+                  minLength: 1
+                  description: Generation topic to add this request to. Omit to start a new topic,
+                    as `lh generate` does.
+                wait:
+                  default: true
+                  description: Wait for the images before answering (up to `waitTimeoutSeconds`).
+                    Generations still running at the deadline come back with
+                    their current status; poll `GET /generations/{id}` for the
+                    rest. Set `false` to answer as soon as the work is queued.
+                  type: boolean
+                waitTimeoutSeconds:
+                  default: 60
+                  description: How long `wait` may hold the request, 1–120 seconds. Defaults to
+                    60.
+                  type: integer
+                  minimum: 1
+                  maximum: 120
+                width:
+                  description: Image width in pixels.
+                  type: integer
+                  exclusiveMinimum: 0
+                  maximum: 9007199254740991
+              required:
+                - prompt
+              additionalProperties: false
+            example:
+              model: gpt-image-1
+              n: 1
+              prompt: A lighthouse on a cliff at dawn, watercolor
+              provider: openai
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/videos/generations:
+    post:
+      operationId: videos.generate
+      description: >-
+        Starts a video generation and answers 202 with the generation id while
+        it runs; videos take minutes. Poll `GET /generations/{id}` until the
+        status is `success` or `error`, or call `generations.wait(id)` in the
+        SDK. Billing and quota follow the Video page. Each request is added to
+        `topicId`, or to a new generation topic.
+
+
+        **API key scopes:** `generation:write`.
+      summary: Generate a video
+      tags:
+        - videos
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      batchId:
+                        type: string
+                      generations:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Generation"
+                      topicId:
+                        type: string
+                    required:
+                      - batchId
+                      - generations
+                      - topicId
+                    additionalProperties: false
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  batchId: gb_q7PzJ2mXc4Ld
+                  generations:
+                    - asset: null
+                      batchId: gb_q7PzJ2mXc4Ld
+                      createdAt: 2026-01-15T08:30:00.000Z
+                      error: null
+                      fileId: null
+                      id: gen_3KdLx9TzQw7v
+                      model: seedance-1-0-pro
+                      prompt: Waves rolling onto a beach at sunset, slow pan
+                      provider: volcengine
+                      seed: 42
+                      status: pending
+                      topicId: gt_Vb5nR2kLp8Ws
+                      type: video
+                  topicId: gt_Vb5nR2kLp8Ws
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "402":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Payment required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - generation:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                aspectRatio:
+                  description: Aspect ratio, for example `16:9`.
+                  type: string
+                  minLength: 1
+                cameraFixed:
+                  description: Keep the camera still, where supported.
+                  type: boolean
+                duration:
+                  description: Video length in seconds.
+                  type: number
+                  exclusiveMinimum: 0
+                endImageUrl:
+                  description: Last frame (URL), where supported.
+                  anyOf:
+                    - type: string
+                      format: uri
+                    - type: "null"
+                generateAudio:
+                  description: Generate a soundtrack, where supported.
+                  type: boolean
+                imageUrl:
+                  description: First frame (URL) for image-to-video.
+                  anyOf:
+                    - type: string
+                      format: uri
+                    - type: "null"
+                model:
+                  type: string
+                  minLength: 1
+                  description: Video model id.
+                params:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties:
+                    anyOf:
+                      - type: string
+                      - type: number
+                      - type: boolean
+                      - type: array
+                        items:
+                          type: string
+                      - type: "null"
+                  description: Model-specific parameters beyond the named fields (for example
+                    `quality` or `size`). Parameters the model does not declare
+                    are rejected with 400.
+                previousGenerationId:
+                  description: A video generation to edit, for models that support conversational
+                    editing.
+                  type: string
+                  minLength: 1
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                  description: What to generate.
+                provider:
+                  type: string
+                  minLength: 1
+                  description: Provider id serving `model`.
+                resolution:
+                  description: Output resolution, for example `720p`.
+                  type: string
+                  minLength: 1
+                seed:
+                  description: Seed; omit for a random one.
+                  anyOf:
+                    - type: integer
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    - type: "null"
+                topicId:
+                  type: string
+                  minLength: 1
+                  description: Generation topic to add this request to. Omit to start a new topic,
+                    as `lh generate` does.
+              required:
+                - model
+                - prompt
+                - provider
+              additionalProperties: false
+            example:
+              aspectRatio: 16:9
+              duration: 5
+              model: seedance-1-0-pro
+              prompt: Waves rolling onto a beach at sunset, slow pan
+              provider: volcengine
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
