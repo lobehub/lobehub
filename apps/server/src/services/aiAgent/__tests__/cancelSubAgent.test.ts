@@ -204,6 +204,18 @@ describe('cancelSubAgentThreadRun', () => {
     expect(result.error).toContain('was not found in this conversation');
   });
 
+  // Agent A's sub-agent may run as agent B; B running in the same topic must
+  // not take it over just because the thread runs as B.
+  it('refuses a thread that runs as the caller but another agent dispatched', async () => {
+    messageModel.findById.mockResolvedValue({ agentId: 'agent-2', id: 'placeholder-1' });
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(deps.interruptTask).not.toHaveBeenCalled();
+    expect(result.status).toBe('failed');
+    expect(result.error).toContain('was not found in this conversation');
+  });
+
   it('refuses a thread that callSubAgent did not start', async () => {
     messageModel.findMessagePlugin.mockResolvedValue({
       apiName: 'speak',
@@ -261,7 +273,10 @@ describe('continuing a sub-agent that is still stopping', () => {
       agentOperationModel: { findById: vi.fn().mockResolvedValue({ status: 'running' }) },
       agentRuntimeService: { isOperationInterrupted },
       execAgent: vi.fn(),
-      messageModel: { findMessagePlugin: vi.fn().mockResolvedValue(callSubAgentPlugin) },
+      messageModel: {
+        findById: vi.fn().mockResolvedValue({ agentId: 'agent-1', id: 'placeholder-1' }),
+        findMessagePlugin: vi.fn().mockResolvedValue(callSubAgentPlugin),
+      },
       threadModel: { claimForRun: vi.fn(), findById: vi.fn().mockResolvedValue(subAgentThread()) },
       userId: 'user-1',
     } as unknown as SubAgentRunDeps;

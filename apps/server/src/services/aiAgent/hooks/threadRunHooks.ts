@@ -60,6 +60,19 @@ export const pickThreadCarryOver = (metadata?: ThreadMetadata | null): ThreadCar
   totalToolCalls: metadata?.totalToolCalls,
 });
 
+/** Best-effort read of the native session an external agent bound to the thread. */
+const readLiveHeteroSessionId = async (
+  threadModel: ThreadModel,
+  threadId: string,
+): Promise<string | undefined> => {
+  try {
+    const metadata = (await threadModel.findById(threadId))?.metadata as ThreadMetadata | null;
+    return metadata?.heteroSessionId;
+  } catch {
+    return undefined;
+  }
+};
+
 const addUsage = (baseline?: number, run?: number): number | undefined =>
   baseline === undefined ? run : baseline + (run ?? 0);
 
@@ -303,13 +316,17 @@ export function createThreadHooks(
           }
 
           const formattedError = formatErrorForMetadata(finalState.error);
+          // An external agent records its native session on the thread while it
+          // runs; the claim-time copy predates it. Keep the live one, or a run
+          // ended without `heteroFinish` (watchdog abandon) loses its resume.
+          const liveSessionId = await readLiveHeteroSessionId(threadModel, threadId);
 
           await threadModel.update(threadId, {
             metadata: {
               completedAt,
               duration,
               error: formattedError,
-              heteroSessionId: carryOver.heteroSessionId,
+              heteroSessionId: liveSessionId ?? carryOver.heteroSessionId,
               operationId: finalState.operationId,
               sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,

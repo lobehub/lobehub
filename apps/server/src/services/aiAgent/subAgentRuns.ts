@@ -132,9 +132,8 @@ type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
  * Accepts threads spawned by `callSubAgent` — a copy of the dispatcher, or a
  * named target agent — and by the legacy `callAgent`. Refuses threads outside
  * the topic, threads of other kinds (group members, …), and threads another
- * agent dispatched: a copy's thread runs as the dispatcher itself, while a
- * named target's thread runs as the target and is anchored on the
- * dispatcher's tool call. `agentId`, when given, is the agent the next run
+ * agent dispatched: the thread is anchored on the dispatcher's tool call,
+ * whether it runs as a copy of the dispatcher or as a named target. `agentId`, when given, is the agent the next run
  * executes as and must be the one the thread runs as.
  */
 const findCallSubAgentThread = async (
@@ -163,12 +162,16 @@ const findCallSubAgentThread = async (
     return { error: `"${threadId}" is not a sub-agent started by callSubAgent.` };
   }
 
-  if (thread.agentId !== dispatcherAgentId) {
-    const source = thread.sourceMessageId
-      ? await deps.messageModel.findById(thread.sourceMessageId)
-      : undefined;
-    if (source?.agentId !== dispatcherAgentId) return notFound;
-  }
+  // The spawning tool call is the proof of who dispatched it — also when the
+  // thread runs as the caller: agent A's sub-agent running as agent B must not
+  // be taken over by B in the same topic. A source row without an agent only
+  // vouches for a copy of the caller.
+  const source = thread.sourceMessageId
+    ? await deps.messageModel.findById(thread.sourceMessageId)
+    : undefined;
+  const dispatchedBy =
+    source?.agentId ?? (thread.agentId === dispatcherAgentId ? thread.agentId : undefined);
+  if (dispatchedBy !== dispatcherAgentId) return notFound;
 
   return { thread };
 };
