@@ -18,9 +18,9 @@ import type { ShareGateToolSet } from './types';
  * (`systemPromptWithoutSubAgent`, also used by its own context-aware
  * `resolveManifest`).
  *
- * `lobe-agent-management`'s dispatch API (`callAgent`) does NOT need an entry
- * here: the whole tool — dispatch included — is simply absent from
- * `SHARE_VISITOR_ALLOWED_IDENTIFIERS`, so it never survives that gate.
+ * This covers handing work to other agents too (`callSubAgent` with
+ * `agentId`). The legacy `lobe-agent-management.callAgent` alias needs no entry:
+ * the whole tool is absent from `SHARE_VISITOR_ALLOWED_IDENTIFIERS`.
  */
 export const SUB_AGENT_DISPATCH_APIS: Record<
   string,

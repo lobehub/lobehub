@@ -19,6 +19,18 @@ describe('shouldShowCustomToolRender', () => {
     ).toBe(true);
   });
 
+  // History keeps `callAgent` rows; the alias now forwards to callSubAgent too.
+  it('keeps the custom renderer for a failed legacy callAgent with a thread', () => {
+    expect(
+      shouldShowCustomToolRender({
+        apiName: 'callAgent',
+        identifier: 'lobe-agent-management',
+        result: { error: { message: 'Child failed' }, state: { threadId: 'thd_saved' } },
+        showCustomToolRender: true,
+      }),
+    ).toBe(true);
+  });
+
   it('uses the generic error renderer when there is no child thread to open', () => {
     expect(shouldShowCustomToolRender({ ...subAgent, result: { error: 'Child failed' } })).toBe(
       false,
