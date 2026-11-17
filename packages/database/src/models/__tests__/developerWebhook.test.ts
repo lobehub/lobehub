@@ -1,0 +1,254 @@
+// @vitest-environment node
+import { eq, inArray } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getTestDB } from '../../core/getTestDB';
+import { type DatabaseEventListener, setDatabaseEventListener } from '../../events';
+import { users, webhookEndpoints, workspaces } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { WebhookDeliveryWorkerModel, WebhookEndpointModel } from '../developerWebhook';
+import { GoalModel } from '../goal';
+import { MessageModel } from '../message';
+import { NotificationModel } from '../notification';
+import { TaskModel } from '../task';
+import { TopicModel } from '../topic';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'developer-webhook-model-user';
+const otherUserId = 'developer-webhook-model-other';
+const workspaceId = 'developer-webhook-model-ws';
+
+const endpointInput = (url = 'https://example.com/hook') => ({
+  events: ['task.status_changed' as const, 'message.created' as const],
+  secret: 'cipher:secret',
+  secretHint: 'cret',
+  url,
+});
+
+beforeEach(async () => {
+  await serverDB.delete(users).where(inArray(users.id, [userId, otherUserId]));
+  await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Webhook workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
+});
+
+afterEach(async () => {
+  setDatabaseEventListener(undefined);
+  await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
+  await serverDB.delete(users).where(inArray(users.id, [userId, otherUserId]));
+});
+
+describe('WebhookEndpointModel', () => {
+  it('never returns the encrypted secret', async () => {
+    const created = await new WebhookEndpointModel(serverDB, userId).create(endpointInput());
+    expect(created).not.toHaveProperty('secret');
+    expect(created).toMatchObject({ enabled: true, secretHint: 'cret', userId, workspaceId: null });
+    expect(created.id).toMatch(/^whk_/);
+
+    const [row] = await serverDB
+      .select()
+      .from(webhookEndpoints)
+      .where(eq(webhookEndpoints.id, created.id));
+    expect(row.secret).toBe('cipher:secret');
+  });
+
+  it('isolates endpoints by owner and by space', async () => {
+    const personal = new WebhookEndpointModel(serverDB, userId);
+    const inWorkspace = new WebhookEndpointModel(serverDB, userId, workspaceId);
+    const other = new WebhookEndpointModel(serverDB, otherUserId);
+    const otherInWorkspace = new WebhookEndpointModel(serverDB, otherUserId, workspaceId);
+
+    const mine = await personal.create(endpointInput('https://a.example.com'));
+    const mineInWs = await inWorkspace.create(endpointInput('https://b.example.com'));
+
+    expect((await personal.list({ limit: 10, offset: 0 })).items.map((e) => e.id)).toEqual([
+      mine.id,
+    ]);
+    expect((await inWorkspace.list({ limit: 10, offset: 0 })).items.map((e) => e.id)).toEqual([
+      mineInWs.id,
+    ]);
+    // Another member of the workspace, or another user, sees nothing and can change nothing.
+    expect(await otherInWorkspace.findById(mineInWs.id)).toBeUndefined();
+    expect(await other.findById(mine.id)).toBeUndefined();
+    expect(await other.update(mine.id, { enabled: false })).toBeUndefined();
+    expect(await otherInWorkspace.delete(mineInWs.id)).toBe(false);
+    // The personal model cannot reach the workspace endpoint either.
+    expect(await personal.findById(mineInWs.id)).toBeUndefined();
+  });
+
+  it('finds only enabled endpoints that subscribe to the event type', async () => {
+    const model = new WebhookEndpointModel(serverDB, userId);
+    const subscribed = await model.create(endpointInput());
+    await model.create({ ...endpointInput(), events: ['goal.status_changed'] });
+    const disabled = await model.create(endpointInput());
+    await model.update(disabled.id, { enabled: false });
+
+    const found = await model.findSubscribed('task.status_changed');
+    expect(found.map((e) => e.id)).toEqual([subscribed.id]);
+  });
+
+  it('records why an endpoint was disabled and clears it on re-enable', async () => {
+    const model = new WebhookEndpointModel(serverDB, userId);
+    const endpoint = await model.create(endpointInput());
+
+    expect(await model.update(endpoint.id, { enabled: false })).toMatchObject({
+      disabledReason: 'manual',
+      enabled: false,
+    });
+
+    const worker = new WebhookDeliveryWorkerModel(serverDB);
+    await model.update(endpoint.id, { enabled: true });
+    expect(await worker.markEndpointFailed(endpoint.id, 2)).toBe(false);
+    expect(await worker.markEndpointFailed(endpoint.id, 2)).toBe(true);
+    expect(await model.findById(endpoint.id)).toMatchObject({
+      consecutiveFailures: 2,
+      disabledReason: 'consecutive_failures',
+      enabled: false,
+    });
+
+    expect(await model.update(endpoint.id, { enabled: true })).toMatchObject({
+      consecutiveFailures: 0,
+      disabledReason: null,
+      enabled: true,
+    });
+  });
+
+  it('lists deliveries of an endpoint newest first, only for its owner', async () => {
+    const model = new WebhookEndpointModel(serverDB, userId);
+    const endpoint = await model.create(endpointInput());
+    const envelope = (id: string) =>
+      ({
+        createdAt: new Date().toISOString(),
+        data: { message: 'hi', webhookId: endpoint.id },
+        id,
+        type: 'webhook.test',
+        workspaceId: null,
+      }) as const;
+    const first = await model.createDelivery(endpoint, envelope('evt_1'));
+    const second = await model.createDelivery(endpoint, envelope('evt_2'), {
+      redeliveryOf: first.id,
+    });
+
+    const { items, total } = await model.listDeliveries(endpoint.id, { limit: 10, offset: 0 });
+    expect(total).toBe(2);
+    expect(items.map((d) => d.id)).toEqual([second.id, first.id]);
+    expect(second).toMatchObject({ attempts: 0, redeliveryOf: first.id, status: 'pending' });
+    expect(
+      await new WebhookEndpointModel(serverDB, otherUserId).findDelivery(endpoint.id, first.id),
+    ).toBeUndefined();
+  });
+});
+
+describe('domain events announced by models', () => {
+  const capture = () => {
+    const listener = vi.fn<DatabaseEventListener>();
+    setDatabaseEventListener(listener);
+    return listener;
+  };
+
+  it('task.status_changed with the previous status, only on a real change', async () => {
+    const tasks = new TaskModel(serverDB, userId, workspaceId);
+    const task = await tasks.create({ instruction: 'Ship webhooks' });
+    const listener = capture();
+
+    await tasks.updateStatus(task.id, 'running');
+    await tasks.updateStatus(task.id, 'running');
+    await tasks.updateStatusIfCurrent(task.id, 'running', 'completed');
+
+    expect(listener.mock.calls.map(([, scope, type, data]) => [scope, type, data])).toEqual([
+      [
+        { userId, workspaceId },
+        'task.status_changed',
+        {
+          identifier: task.identifier,
+          previousStatus: task.status,
+          status: 'running',
+          taskId: task.id,
+        },
+      ],
+      [
+        { userId, workspaceId },
+        'task.status_changed',
+        {
+          identifier: task.identifier,
+          previousStatus: 'running',
+          status: 'completed',
+          taskId: task.id,
+        },
+      ],
+    ]);
+  });
+
+  it('goal.status_changed', async () => {
+    const goals = new GoalModel(serverDB, userId);
+    const goal = await goals.create({ title: 'Public API' });
+    const listener = capture();
+
+    await goals.updateStatus(goal.id, 'running');
+
+    expect(listener).toHaveBeenCalledWith(
+      serverDB,
+      { userId, workspaceId: undefined },
+      'goal.status_changed',
+      { goalId: goal.id, previousStatus: goal.status, status: 'running' },
+    );
+  });
+
+  it('message.created and topic.created', async () => {
+    const listener = capture();
+    const topic = await new TopicModel(serverDB, userId).create({ title: 'Hello' });
+    const message = await new MessageModel(serverDB, userId).create({
+      content: 'hi',
+      role: 'user',
+      topicId: topic.id,
+    });
+
+    expect(listener.mock.calls.map(([, , type, data]) => [type, data])).toEqual([
+      ['topic.created', { agentId: null, title: 'Hello', topicId: topic.id }],
+      [
+        'message.created',
+        { agentId: null, messageId: message.id, role: 'user', threadId: null, topicId: topic.id },
+      ],
+    ]);
+  });
+
+  it('notification.created, but not for a deduplicated insert', async () => {
+    const notifications = new NotificationModel(serverDB, userId);
+    const listener = capture();
+    const input = {
+      category: 'system',
+      content: 'Body',
+      dedupeKey: 'webhook-model-test',
+      title: 'Title',
+      type: 'test',
+    };
+
+    const created = await notifications.create(input as never);
+    await notifications.create(input as never);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][2]).toBe('notification.created');
+    expect(listener.mock.calls[0][3]).toEqual({
+      category: 'system',
+      notificationId: created!.id,
+      title: 'Title',
+      type: 'test',
+    });
+  });
+
+  it('a throwing listener never fails the write', async () => {
+    setDatabaseEventListener(() => {
+      throw new Error('boom');
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const topic = await new TopicModel(serverDB, userId).create({ title: 'Still saved' });
+    expect(topic.id).toBeDefined();
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});

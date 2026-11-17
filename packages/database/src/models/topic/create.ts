@@ -1,5 +1,6 @@
 import { runTimedSinkStage as runTimedStage } from '@lobechat/utils';
 
+import { emitDatabaseEvent } from '../../events';
 import { type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspacePayload } from '../../utils/workspace';
@@ -53,6 +54,14 @@ export const create = async (
 
   if (topic?.projectId && topic.agentId)
     await joinTopicAgentsToProjects(ctx.db, { topicIds: [topic.id] });
+
+  if (topic)
+    emitDatabaseEvent(
+      ctx.db,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'topic.created',
+      { agentId: topic.agentId ?? null, title: topic.title ?? null, topicId: topic.id },
+    );
 
   return topic;
 };

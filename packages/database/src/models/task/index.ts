@@ -11,6 +11,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
+import { emitDatabaseEvent, hasDatabaseEventListener } from '../../events';
 import type {
   NewTaskActivity,
   NewTaskComment,
@@ -326,12 +327,32 @@ export class TaskModel {
 
   // ========== Status ==========
 
+  /** Announce one status transition to the data layer's event outlet (developer webhooks). */
+  private announceStatusChange(task: TaskItem, previousStatus: string | null) {
+    if (previousStatus === task.status) return;
+    emitDatabaseEvent(
+      this.ctx.db,
+      { userId: this.ctx.userId, workspaceId: this.ctx.workspaceId },
+      'task.status_changed',
+      {
+        identifier: task.identifier ?? null,
+        previousStatus,
+        status: task.status,
+        taskId: task.id,
+      },
+    );
+  }
+
   async updateStatus(
     id: string,
     status: string,
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
-    return this.update(id, { status, ...extra });
+    // The prior status is read only when someone listens for the transition.
+    const before = hasDatabaseEventListener() ? await this.findById(id) : null;
+    const task = await this.update(id, { status, ...extra });
+    if (task && before) this.announceStatusChange(task, before.status);
+    return task;
   }
 
   async updateStatusIfCurrent(
@@ -340,7 +361,9 @@ export class TaskModel {
     status: string,
     extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
-    return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
+    const task = await rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
+    if (task) this.announceStatusChange(task, currentStatus);
+    return task;
   }
 
   async updateStatusIfCurrentForIds(
@@ -367,7 +390,13 @@ export class TaskModel {
     status: string,
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem[]> {
-    return rows.updateStatusForIds(this.ctx, ids, status, extra);
+    const before = hasDatabaseEventListener()
+      ? new Map((await this.findByIds(ids)).map((task) => [task.id, task.status]))
+      : undefined;
+    const updated = await rows.updateStatusForIds(this.ctx, ids, status, extra);
+    if (before)
+      for (const task of updated) this.announceStatusChange(task, before.get(task.id) ?? null);
+    return updated;
   }
 
   async lockForBulkEdit(ids: string[]) {

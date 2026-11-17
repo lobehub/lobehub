@@ -1,13 +1,45 @@
 import type { WebhookEventData, WebhookEventEnvelope, WebhookEventType } from '@lobechat/types';
 import debug from 'debug';
 
-import { WebhookEndpointModel } from '@/database/models/developerWebhook';
+import {
+  WebhookDeliveryWorkerModel,
+  WebhookEndpointModel,
+} from '@/database/models/developerWebhook';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 import { DeveloperWebhookWorkflow } from '@/server/workflows/developerWebhook';
 
 const log = debug('lobe-server:developer-webhook:emit');
+
+/**
+ * Hand one delivery to the queue. If the queue refuses it, the delivery is recorded
+ * as failed instead of staying `pending` with nothing left to send it.
+ */
+export const dispatchWebhookDelivery = async (
+  db: LobeChatDatabase,
+  delivery: { endpointId: string; id: string },
+): Promise<boolean> => {
+  try {
+    await DeveloperWebhookWorkflow.triggerDeliver({
+      deliveryId: delivery.id,
+      endpointId: delivery.endpointId,
+    });
+    return true;
+  } catch (error) {
+    console.error('[developerWebhook] cannot queue delivery', delivery.id, error);
+    await new WebhookDeliveryWorkerModel(db).recordAttempt(delivery.id, {
+      attempts: 0,
+      durationMs: null,
+      error: 'Could not queue the delivery',
+      nextAttemptAt: null,
+      responseBody: null,
+      responseStatus: null,
+      status: 'failed',
+    });
+    return false;
+  }
+};
 
 export interface WebhookEventScope {
   userId: string;
@@ -41,10 +73,7 @@ export const emitWebhookEvent = async <T extends WebhookEventType>(
   const ids: string[] = [];
   for (const endpoint of endpoints) {
     const delivery = await model.createDelivery(endpoint, envelope as WebhookEventEnvelope);
-    await DeveloperWebhookWorkflow.triggerDeliver({
-      deliveryId: delivery.id,
-      endpointId: endpoint.id,
-    });
+    await dispatchWebhookDelivery(db, delivery);
     ids.push(delivery.id);
   }
   log('%s %s → %d endpoint(s)', type, envelope.id, ids.length);

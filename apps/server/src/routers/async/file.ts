@@ -19,6 +19,7 @@ import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
+import { publishWebhookEvent } from '@/server/services/developerWebhook';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { isSharedLimitFailure, toAsyncTaskErrorType } from '@/server/services/fileParse/failure';
@@ -528,13 +529,28 @@ export const fileRouter = router({
         });
       }, ASYNC_TASK_TIMEOUT / 2);
 
+      const announceParsed = (error: string | null) =>
+        publishWebhookEvent(ctx.serverDB, { userId: ctx.userId, workspaceId }, 'file.parsed', {
+          error,
+          fileId: input.fileId,
+          name: file.name ?? null,
+          status: error === null ? 'success' : 'error',
+        });
+
       try {
-        return await withParseSlot(async (slot) => {
+        const result = await withParseSlot(async (slot) => {
           clearInterval(heartbeat);
           // Drain an in-flight refresh before parsing changes this task's status or clock.
           await refreshing;
           return parse(slot);
         });
+        // The chunking result races a timeout, so its type is only known at runtime.
+        const outcome = result as { message?: string; success?: boolean } | undefined;
+        if (outcome) announceParsed(outcome.success ? null : (outcome.message ?? 'Parsing failed'));
+        return result;
+      } catch (error) {
+        announceParsed((error as Error)?.message ?? 'Parsing failed');
+        throw error;
       } finally {
         clearInterval(heartbeat);
       }

@@ -1,5 +1,6 @@
 import { and, count, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 
+import { emitDatabaseEvent } from '../events';
 import type { NewNotification, NewNotificationDelivery } from '../schemas/notification';
 import { notificationDeliveries, notifications } from '../schemas/notification';
 import type { LobeChatDatabase } from '../type';
@@ -206,6 +207,20 @@ export class NotificationModel {
         target: [notifications.userId, notifications.dedupeKey],
       })
       .returning();
+
+    // A dedupe hit inserts nothing and announces nothing.
+    if (result)
+      emitDatabaseEvent(
+        this.db,
+        { userId: this.userId, workspaceId: result.workspaceId ?? this.workspaceId },
+        'notification.created',
+        {
+          category: result.category,
+          notificationId: result.id,
+          title: result.title ?? null,
+          type: result.type,
+        },
+      );
 
     return result ?? null;
   }

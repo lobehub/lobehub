@@ -12,9 +12,9 @@ import {
 import type { WebhookDeliveryRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
-import { DeveloperWebhookWorkflow } from '@/server/workflows/developerWebhook';
 
 import { attemptWebhookDelivery } from './deliver';
+import { dispatchWebhookDelivery } from './emit';
 import { createSealedWebhookSecret } from './secretVault';
 
 export { emitWebhookEvent, publishWebhookEvent, type WebhookEventScope } from './emit';
@@ -150,10 +150,9 @@ export class DeveloperWebhookService {
     const delivery = await this.model.createDelivery(endpoint, original.payload, {
       redeliveryOf: original.id,
     });
-    await DeveloperWebhookWorkflow.triggerDeliver({
-      deliveryId: delivery.id,
-      endpointId: endpoint.id,
-    });
+    // A refused dispatch is recorded on the delivery itself; return its final state.
+    if (!(await dispatchWebhookDelivery(this.db, delivery)))
+      return (await this.model.findDelivery(id, delivery.id)) ?? delivery;
     return delivery;
   };
 }

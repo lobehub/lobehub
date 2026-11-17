@@ -10,6 +10,7 @@ import { MessageModel } from '@/database/models/message';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { publishRunStartedWebhook } from '@/server/services/developerWebhook/runEvents';
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
@@ -162,6 +163,15 @@ export class CompletionLifecycle {
         log('[%s] Failed to record operation start (non-fatal)', params.operationId);
       else log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }
+
+    if (persisted)
+      publishRunStartedWebhook(this.serverDB, {
+        agentId: params.agentId,
+        operationId: params.operationId,
+        topicId: params.topicId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
 
     // Auto-instantiate the task's verify plan at run start so the completion gate
     // fires. Only for a top-level task operation — repair / verifier sub-agents

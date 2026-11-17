@@ -13,6 +13,7 @@ import type {
 import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
+import { emitDatabaseEvent } from '../events';
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
 import { goalEdges, goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
@@ -491,6 +492,13 @@ export class GoalModel {
       { archivedKeepsStatus: status },
     );
     if (!row && (await this.findById(id))?.archivedAt) throw new GoalArchivedError(id);
+    if (row && existing.status !== status)
+      emitDatabaseEvent(
+        this.db,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        'goal.status_changed',
+        { goalId: id, previousStatus: existing.status ?? null, status },
+      );
     return row;
   };
 

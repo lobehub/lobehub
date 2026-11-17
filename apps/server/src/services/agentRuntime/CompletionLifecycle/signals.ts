@@ -9,6 +9,7 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { parseAgentSignalMarker } from '@/server/services/agentSignal/operationMarker';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
+import { publishRunCompletionWebhook } from '@/server/services/developerWebhook/runEvents';
 
 import { buildLifecycleEvent, extractErrorMessage } from './lifecycleEvent';
 import type { CompletionLifecycleDeps, SignalEvent } from './types';
@@ -78,6 +79,18 @@ export async function emitSignalEvents(
       );
       return [];
     }
+
+    // Developer webhooks ride the same completion outlet as the Agent Signal events below.
+    publishRunCompletionWebhook(deps.serverDB, reason, {
+      agentId: runOrigin.agentId,
+      assistantMessageId,
+      error: reason === 'error' ? extractErrorMessage(state?.error) : null,
+      operationId,
+      steps: getLlmCallCount(state),
+      topicId: runOrigin.topicId,
+      userId: runOrigin.userId || deps.userId,
+      workspaceId: deps.workspaceId,
+    });
 
     let selfIteration =
       reason === 'error' ? undefined : extractSelfIterationCompletionPayload(state);
