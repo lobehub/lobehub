@@ -133,6 +133,45 @@ describe('direct Channel identity', () => {
     expect(await replyJobs()).toEqual([]);
   });
 
+  // The header said the Agent was working while its row kept the last message: the Agent was
+  // replying in a Thread, and the row only knew the main conversation's replies.
+  it('lists a direct Channel’s pending Thread replies too, but not a group’s', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const root = await repository.send(channel.id, sendInput);
+    await publish(channel.id, root.id);
+    const reply = await repository.send(channel.id, {
+      ...sendInput,
+      requestKey: 'thread-reply',
+      rootMessageId: root.id,
+    });
+    const [job] = await jobsOf(db, reply.id);
+    expect((await repository.list()).find((item) => item.id === channel.id)?.replyJobs).toEqual([
+      expect.objectContaining({ id: job.id, status: 'queued', threadId: reply.threadId }),
+    ]);
+
+    const team = await fixture.createTeamChannel();
+    const helper = await fixture.addAgent(team.channel.id, 'Helper');
+    const teamRoot = await team.asOwner.send(team.channel.id, {
+      content: 'Hello',
+      requestKey: 'team-root',
+      routing: 'fallback',
+    });
+    const teamReply = await team.asOwner.send(team.channel.id, {
+      content: 'In the thread',
+      mentions: [helper.id],
+      requestKey: 'team-thread',
+      rootMessageId: teamRoot.id,
+      routing: 'fallback',
+    });
+    expect(await jobsOf(db, teamReply.id)).toHaveLength(1);
+    const teamJobs = (await team.asOwner.list()).find(
+      (item) => item.id === team.channel.id,
+    )?.replyJobs;
+    expect(teamJobs?.some((entry) => entry.threadId)).toBe(false);
+  });
+
   it.each([null, fixture.workspaceId])(
     'creates a private user/Agent conversation in scope %s',
     async (workspaceId) => {

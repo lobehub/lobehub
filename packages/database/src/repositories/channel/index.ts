@@ -585,8 +585,12 @@ export class ChannelRepository {
 
     const lastMessageOf = await channelLastMessages(this.db, previewIds);
 
-    // Main-conversation replies the list row shows as in progress: ones that can still publish,
-    // and stopped ones whose writer has not exited yet.
+    // Replies the list row shows as in progress: ones that can still publish, and stopped ones
+    // whose writer has not exited yet. A group's row tracks its main conversation only; a direct
+    // Channel's row speaks for its one Agent, so it also carries the replies in its Threads.
+    const directIds = rows
+      .filter(({ channel }) => channel.agentId)
+      .map(({ channel }) => channel.id);
     const pending = rows.length
       ? await this.db
           .select({
@@ -606,7 +610,9 @@ export class ChannelRepository {
                 channelJobs.channelId,
                 rows.map(({ channel }) => channel.id),
               ),
-              isNull(channelJobs.threadId),
+              directIds.length
+                ? or(isNull(channelJobs.threadId), inArray(channelJobs.channelId, directIds))
+                : isNull(channelJobs.threadId),
               or(
                 and(
                   eq(channelJobs.publicationRevoked, false),

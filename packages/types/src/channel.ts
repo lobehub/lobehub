@@ -567,8 +567,9 @@ export interface ChannelListItem {
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   /**
-   * Main-conversation replies still pending (queued, running, or stopping), so a list row can
-   * show them without loading the conversation; set by the Channel list.
+   * Replies still pending (queued, running, or stopping), so a list row can show them without
+   * loading the conversation; set by the Channel list. The main conversation's only, except a
+   * direct Channel's, which also carries its Threads' (`threadId` set).
    */
   replyJobs?: ChannelReplyJob[];
   sequence: number;
