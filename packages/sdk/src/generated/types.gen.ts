@@ -15190,10 +15190,6 @@ export type PostApiV1ImagesGenerationsErrors = {
      */
     401: ApiError;
     /**
-     * Payment required
-     */
-    402: ApiError;
-    /**
      * Insufficient permission
      */
     403: ApiError;
@@ -15316,10 +15312,6 @@ export type PostApiV1VideosGenerationsErrors = {
      * Authentication required
      */
     401: ApiError;
-    /**
-     * Payment required
-     */
-    402: ApiError;
     /**
      * Insufficient permission
      */

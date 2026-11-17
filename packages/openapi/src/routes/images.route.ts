@@ -32,8 +32,8 @@ ImageRoutes.post(
   routeDoc({
     data: GenerationBatchCreatedSchema,
     description:
-      "Generates `n` images from a prompt with an image model (the account's default when `model` is omitted). Billing and quota follow the Image page. By default the request waits up to `waitTimeoutSeconds` and returns the finished images with their URLs; any still running come back with their current status — poll `GET /generations/{id}` or call `generations.wait(id)` in the SDK. With `wait: false` it answers as soon as the work is queued. Each request is added to `topicId`, or to a new generation topic.",
-    errors: [400, 402, 404],
+      "Generates `n` images from a prompt with an image model (the account's default when `model` is omitted). Billing and quota follow the Image page. By default the request waits up to `waitTimeoutSeconds` and returns the finished images with their URLs; any still running come back with their current status — poll `GET /generations/{id}` or call `generations.wait(id)` in the SDK. With `wait: false` it answers as soon as the work is queued. Each request is added to `topicId`, or to a new generation topic. A request the plan or budget refuses (insufficient credits, plan limit) is recorded as generations that already failed: they come back with `status: 'error'` and the reason in `error`, as on the Image page.",
+    errors: [400, 404],
     operationId: 'images.generate',
     requestExample: example(CreateImageGenerationRequestSchema, {
       model: 'gpt-image-1',

@@ -36,9 +36,18 @@ vi.mock('@/server/services/file', async (importOriginal) => ({
   },
 }));
 
-/** Writes what the real create procedures write; prompts containing "instant" finish at once. */
+/**
+ * Writes what the real create procedures write. Prompts containing "instant"
+ * finish at once; "broke" is refused by the budget check, which (like the cloud
+ * `chargeBeforeGenerate`) records generations that already failed; "reject" is
+ * refused outright, as an unsupported parameter is.
+ */
 const fakeCreate = async (kind: 'image' | 'video', ctx: any, input: any) => {
   holder.createCalls.push({ ctx, input, kind });
+  if (String(input.params.prompt).includes('reject')) {
+    const { TRPCError } = await import('@trpc/server');
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unsupported parameters for model' });
+  }
   const { asyncTasks, generationBatches, generations } = await import('@/database/schemas');
   const db = holder.serverDB as any;
   const owner = { userId: ctx.userId, workspaceId: ctx.workspaceId ?? null };
@@ -55,11 +64,21 @@ const fakeCreate = async (kind: 'image' | 'video', ctx: any, input: any) => {
     .returning();
 
   const instant = String(input.params.prompt).includes('instant');
+  const broke = String(input.params.prompt).includes('broke');
   const created = [];
   for (let i = 0; i < (input.imageNum ?? 1); i++) {
     const [task] = await db
       .insert(asyncTasks)
-      .values({ ...owner, status: instant ? 'success' : 'pending', type: kind })
+      .values({
+        ...owner,
+        ...(broke
+          ? {
+              error: { body: { detail: 'Not enough credits' }, name: 'InsufficientBudget' },
+              status: 'error',
+            }
+          : { status: instant ? 'success' : 'pending' }),
+        type: kind,
+      })
       .returning();
     const [generation] = await db
       .insert(generations)
@@ -357,7 +376,11 @@ describe('image generation', () => {
 
     // The shared procedure got the REST fields in its own shape.
     const [{ ctx, input }] = holder.createCalls;
-    expect(ctx).toEqual({ userId: OWNER, workspaceId: undefined });
+    expect(ctx).toEqual({
+      spendOrigin: { trigger: 'api' },
+      userId: OWNER,
+      workspaceId: undefined,
+    });
     expect(input).toEqual({
       generationTopicId: created.topicId,
       imageNum: 2,
@@ -386,6 +409,43 @@ describe('image generation', () => {
     const res = await call(`/generations/${generation.id}`, { key: KEYS.ownerRead });
     expect(res.status).toBe(200);
     expect(GenerationSchema.parse((await json(res)).data)).toEqual(generation);
+  });
+
+  it('reports a budget refusal as failed generations, not an HTTP error', async () => {
+    const created = await generateImages({ n: 2, prompt: 'broke cat' });
+
+    expect(created.generations).toHaveLength(2);
+    for (const generation of created.generations) {
+      expect(generation).toMatchObject({
+        asset: null,
+        error: { message: 'Not enough credits', name: 'InsufficientBudget' },
+        status: 'error',
+      });
+    }
+  });
+
+  it('removes the topic it created when the request is refused', async () => {
+    const res = await call('/images/generations', {
+      body: { prompt: 'reject this' },
+      key: KEYS.ownerWrite,
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(400);
+    expect((await json(res)).message).toBe('Unsupported parameters for model');
+    expect(await serverDB.select().from(generationTopics)).toEqual([]);
+
+    // A caller's own topic stays.
+    const { topicId } = await generateImages({ prompt: 'instant keep' });
+    const again = await call('/images/generations', {
+      body: { prompt: 'reject again', topicId },
+      key: KEYS.ownerWrite,
+      method: 'POST',
+    });
+    expect(again.status).toBe(400);
+    expect((await serverDB.select().from(generationTopics)).map((topic) => topic.id)).toEqual([
+      topicId,
+    ]);
   });
 
   it('adds a request to an existing topic of the caller', async () => {
@@ -500,7 +560,7 @@ describe('ownership and workspace isolation', () => {
 
   it('keeps workspace and personal generations apart', async () => {
     const shared = await generateImages({ prompt: 'instant team' }, KEYS.workspace);
-    expect(holder.createCalls[0].ctx).toEqual({ userId: OWNER, workspaceId: WORKSPACE });
+    expect(holder.createCalls[0].ctx).toMatchObject({ userId: OWNER, workspaceId: WORKSPACE });
     const { id } = shared.generations[0];
 
     // The same user's personal key cannot see the workspace row, and vice versa.

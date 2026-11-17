@@ -20,6 +20,8 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
  * the one that burns money (chat/completions, image, video, music, asr).
+ * On the public REST API, image / video generation, speech and transcription
+ * spend credits under `generation:write` instead.
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)

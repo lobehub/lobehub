@@ -2648,7 +2648,7 @@ export class Images extends HeyApiClient {
     /**
      * Generate images
      *
-     * Generates `n` images from a prompt with an image model (the account's default when `model` is omitted). Billing and quota follow the Image page. By default the request waits up to `waitTimeoutSeconds` and returns the finished images with their URLs; any still running come back with their current status — poll `GET /generations/{id}` or call `generations.wait(id)` in the SDK. With `wait: false` it answers as soon as the work is queued. Each request is added to `topicId`, or to a new generation topic.
+     * Generates `n` images from a prompt with an image model (the account's default when `model` is omitted). Billing and quota follow the Image page. By default the request waits up to `waitTimeoutSeconds` and returns the finished images with their URLs; any still running come back with their current status — poll `GET /generations/{id}` or call `generations.wait(id)` in the SDK. With `wait: false` it answers as soon as the work is queued. Each request is added to `topicId`, or to a new generation topic. A request the plan or budget refuses (insufficient credits, plan limit) is recorded as generations that already failed: they come back with `status: 'error'` and the reason in `error`, as on the Image page.
      *
      * **API key scopes:** `generation:write`.
      */
@@ -2666,7 +2666,7 @@ export class Videos extends HeyApiClient {
     /**
      * Generate a video
      *
-     * Starts a video generation and answers 202 with the generation id while it runs; videos take minutes. Poll `GET /generations/{id}` until the status is `success` or `error`, or call `generations.wait(id)` in the SDK. Billing and quota follow the Video page. Each request is added to `topicId`, or to a new generation topic.
+     * Starts a video generation and answers 202 with the generation id while it runs; videos take minutes. Poll `GET /generations/{id}` until the status is `success` or `error`, or call `generations.wait(id)` in the SDK. Billing and quota follow the Video page. Each request is added to `topicId`, or to a new generation topic. A request the plan or budget refuses (insufficient credits, plan limit) is recorded as a generation that already failed: it comes back with the status `error` and the reason in the `error` field.
      *
      * **API key scopes:** `generation:write`.
      */
