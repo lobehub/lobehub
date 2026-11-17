@@ -573,6 +573,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
         })
       : undefined;
 
+  // A swarm lane starts in `<workspace>/.lanes/<key>`, a directory that only
+  // exists once the workspace has been copied there. Resolve it before picking a
+  // runtime: the DSH branch below spawns the harness itself and would otherwise
+  // launch it in a directory that is not there yet, failing before any lane work.
+  const laneCwd = await prepareSwarmLane(options.cwd || process.cwd());
+
   // DSH is a protocol runtime (its `acp` profile) with no CLI descriptor. Keep
   // it on the same public `hetero exec` surface, but drive its ACP session
   // directly instead of passing it through `spawnAgent`.
@@ -610,7 +616,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         args: options.agentArg,
         clientVersion: 'lobehub-cli',
         command: options.command,
-        cwd: options.cwd || process.cwd(),
+        cwd: laneCwd,
         // Same identity echo as the CLI agents, so the harness's `lh` can name this run.
         env: buildAgentProcessEnv({
           operationId: serverIngest ? operationId : undefined,
@@ -1202,7 +1208,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     askUserBridge: askBridge,
     command: resolvedCommand.command,
     commandVersion: resolvedCommand.version,
-    cwd: await prepareSwarmLane(options.cwd || process.cwd()),
+    cwd: laneCwd,
     detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
     env: commandEnv,
     extraArgs,
