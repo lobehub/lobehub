@@ -371,6 +371,14 @@ export interface AgentRunRequestMessage {
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   /**
+   * Present when the run's workspace issues the requester's GitHub credential on
+   * this shared device: the device wires `lh git credential` into git and `gh`,
+   * blocks its own GitHub logins and sets the requester as commit author. An
+   * older device ignores it, which is why the server only sends it to a CLI
+   * that advertises the `scm-credential` tool.
+   */
+  scmCredential?: { gitEmail?: string; gitName?: string };
+  /**
    * Static context injected before the user prompt (workspace conventions,
    * selected context). The desktop sends it to `lh hetero exec` as the first
    * text block of a content-block array. Optional — omitted for older servers

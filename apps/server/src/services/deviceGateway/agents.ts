@@ -188,6 +188,7 @@ export async function dispatchAgentRun(
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
+    scmCredential?: { gitEmail?: string; gitName?: string };
     systemContext?: string;
     topicId: string;
     userId: string;

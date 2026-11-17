@@ -4,6 +4,7 @@ import debug from 'debug';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
+import { isRequesterCredentialEnforced } from '@/server/services/scm/requester/enforcement';
 
 import {
   humanizeHeteroDispatchError,
@@ -85,6 +86,25 @@ export const dispatchToPlatformDevice = async (
         error: 'No bound device',
         message: 'Platform agent requires a local or connected device',
       },
+    );
+  }
+
+  // Platform agents run through `runHeteroTask`, which cannot carry the
+  // requester's GitHub credential; on a shared node that would push as the device.
+  if (
+    await isRequesterCredentialEnforced(deps.db, {
+      deviceId: remoteDeviceId,
+      ownerUserId: remoteDeviceUserId,
+      workspaceId: remoteDeviceWorkspaceId,
+    })
+  ) {
+    const detail =
+      'This workspace pushes to GitHub as the member who started a run, which openclaw and hermes agents cannot do yet. Run them on a personal or private device.';
+    return failHeteroDispatch(
+      deps,
+      run,
+      { detail, message: 'Platform agent blocked on a shared device' },
+      { error: 'Requester GitHub credential unsupported', message: detail },
     );
   }
 

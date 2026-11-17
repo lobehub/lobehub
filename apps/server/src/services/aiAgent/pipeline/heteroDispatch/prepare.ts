@@ -30,6 +30,7 @@ import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cl
 import type { UnansweredUserTurn } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { collectUnansweredUserTurns } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox/session';
+import type { RunRequesterInput } from '@/server/services/scm/requester/resolveRunRequester';
 
 import { supportsCloudHeterogeneousSandbox } from '../../helpers/heteroErrors';
 import type { ExecRunContext } from '../../types';
@@ -100,24 +101,32 @@ export const prepareHeteroRun = async (
 
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
-  const signOperationJwt = async () => {
+  const signOperationJwt = async (requesterCredential?: {
+    deviceId: string;
+    requesterUserId: string;
+  }) => {
     try {
+      const capabilities = heteroOperationCapabilities(prompt, {
+        channel: isChannelOperation,
+        ownerBotTurn: isOwnerBotOperation,
+        taskId: operationTaskId,
+        // A scheduled run replays the user's own message off history, so it has
+        // no fresh user row; server-started `chat` deliveries have none either.
+        userTurn:
+          (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
+          ctx.trigger === RequestTrigger.Scheduled,
+      });
       return await signHeteroOperationJWT({
         // A run the user sent also gets `goal:manage` so it can create
         // the goal the agent supervises; the server still derives the agent and
         // topic from this operation, never from the CLI. A Task run also gets
         // `acceptance:evidence` for its own verification round.
-        capabilities: heteroOperationCapabilities(prompt, {
-          channel: isChannelOperation,
-          ownerBotTurn: isOwnerBotOperation,
-          taskId: operationTaskId,
-          // A scheduled run replays the user's own message off history, so it has
-          // no fresh user row; server-started `chat` deliveries have none either.
-          userTurn:
-            (ctx.trigger === RequestTrigger.Chat && !!ctx.userMessageId) ||
-            ctx.trigger === RequestTrigger.Scheduled,
-        }),
+        capabilities: requesterCredential
+          ? [...capabilities, 'scm:github-credential']
+          : capabilities,
+        deviceId: requesterCredential?.deviceId,
         operationId,
+        requesterUserId: requesterCredential?.requesterUserId,
         userId: deps.userId,
         workspaceId: deps.workspaceId,
       });
@@ -180,7 +189,7 @@ export const prepareHeteroRun = async (
     traceHeteroStage('resume_session', () =>
       heteroService.getHeterogeneousResumeSessionId(topicId),
     ),
-    traceHeteroStage('sign_operation_jwt', signOperationJwt),
+    traceHeteroStage('sign_operation_jwt', () => signOperationJwt()),
     // Read repos from topic metadata for sandbox setup (web/cloud only).
     traceHeteroStage('topic', () => deps.topicModel.findById(topicId)),
   ]);
@@ -391,11 +400,25 @@ export const prepareHeteroRun = async (
     userId: deps.userId,
   };
 
+  const externalOrigin = userMessageMetadata?.externalOrigin;
+  const requesterInput: RunRequesterInput = {
+    botIsOwner: ctx.botContext?.isOwner === true,
+    botSender: userMessageMetadata?.botSender
+      ? { id: userMessageMetadata.botSender.id, platform: userMessageMetadata.botSender.platform }
+      : undefined,
+    ownerUserId: deps.userId,
+    scmChangeRequestId: ctx.trigger === RequestTrigger.Scm ? externalOrigin?.resourceId : undefined,
+    shareVisitorUserId: ctx.shareGate?.visitorUserId,
+    trigger: ctx.trigger,
+  };
+
   return {
     agentSystemContext,
     conversationHistory,
     heteroExecArgs,
     heteroParams,
+    requesterInput,
+    resignOperationJwt: signOperationJwt,
     resumeSessionId,
     sandbox,
     topic,

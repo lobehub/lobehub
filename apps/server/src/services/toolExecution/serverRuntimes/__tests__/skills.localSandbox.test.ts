@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => {
     preprocessLhCommand: vi.fn(),
     readResource: vi.fn(),
     resolveContentWorkspaceId: vi.fn(),
+    resolveContextScmCredential: vi.fn(),
     resolveRunWorkspaceId: vi.fn(),
     sandboxService,
   };
@@ -141,6 +142,10 @@ vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
     mocks.executeToolCall(...args),
 }));
 
+vi.mock('../scmCredential', () => ({
+  resolveContextScmCredential: mocks.resolveContextScmCredential,
+}));
+
 vi.mock('../resolveWorkspaceScope', () => ({
   resolveContentWorkspaceId: mocks.resolveContentWorkspaceId,
   resolveRunWorkspaceId: mocks.resolveRunWorkspaceId,
@@ -205,6 +210,7 @@ describe('skillsRuntime execScript Local Sandbox fence (device path)', () => {
     );
     mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
     mocks.prepareSkillDirectory.mockResolvedValue({ extractedDir: EXTRACTED_DIR, success: true });
+    mocks.resolveContextScmCredential.mockResolvedValue({ kind: 'off' });
     mocks.executeToolCall.mockResolvedValue({
       content: 'ok',
       state: { exitCode: 0, stdout: 'ok', success: true },
@@ -271,5 +277,37 @@ describe('skillsRuntime execScript Local Sandbox fence (device path)', () => {
     await runOnDevice({});
 
     expect(dispatchedArgs()).toEqual({ command: 'echo hi > /etc/owned', cwd: EXTRACTED_DIR });
+  });
+
+  it('hands the requester credential to a skill script on a shared device', async () => {
+    mocks.resolveContextScmCredential.mockResolvedValue({
+      arg: { gitEmail: 'e@users.noreply.github.com', gitName: 'Arvin Xu', jwt: 'jwt-5m' },
+      kind: 'issue',
+    });
+
+    await runOnDevice({});
+
+    expect(dispatchedArgs()).toEqual({
+      __scmCredential: {
+        gitEmail: 'e@users.noreply.github.com',
+        gitName: 'Arvin Xu',
+        jwt: 'jwt-5m',
+      },
+      command: 'echo hi > /etc/owned',
+      cwd: EXTRACTED_DIR,
+    });
+  });
+
+  it('refuses a skill script when the shared device cannot get the requester credential', async () => {
+    mocks.resolveContextScmCredential.mockResolvedValue({
+      detail: 'Update lh on the device.',
+      kind: 'refuse',
+    });
+
+    const result = await runOnDevice({});
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Update lh on the device.');
+    expect(mocks.executeToolCall).not.toHaveBeenCalled();
   });
 });

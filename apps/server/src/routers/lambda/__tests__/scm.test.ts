@@ -1,16 +1,20 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ScmChangeRequestModel,
+  ScmCredentialGrantModel,
   ScmIdentityModel,
   ScmInstallationModel,
 } from '@/database/models/scm';
 import {
+  scmCredentialGrants,
   scmWebhookDeliveries,
   topics,
   users,
+  workspaceAuditLogs,
   workspaceMembers,
   workspaces,
 } from '@/database/schemas';
@@ -21,13 +25,18 @@ const serverDB = await getTestDB();
 const userId = 'scm-router-user';
 const otherUserId = 'scm-router-user-2';
 
-const scmEnv = vi.hoisted(() => ({ ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' }));
+const scmEnv = vi.hoisted(() => ({
+  ENABLED_GITHUB_APP: true,
+  ENABLED_GITHUB_APP_OAUTH: true,
+  GITHUB_APP_SLUG: 'lobehub-dev',
+}));
 vi.mock('@/envs/scm', () => ({ scmEnv }));
 
 const mocks = vi.hoisted(() => ({
   consumeClaim: vi.fn(),
   fetchInstallation: vi.fn(),
   listRepositories: vi.fn(),
+  revokeToken: vi.fn(),
 }));
 vi.mock('@/server/services/scm/oauth/stateStore', () => ({
   consumeScmInstallClaim: mocks.consumeClaim,
@@ -35,18 +44,25 @@ vi.mock('@/server/services/scm/oauth/stateStore', () => ({
 vi.mock('@/server/services/scm/github/app', () => ({
   fetchGitHubInstallation: mocks.fetchInstallation,
   listGitHubInstallationRepositoryDetails: mocks.listRepositories,
+  revokeGitHubUserToken: mocks.revokeToken,
+}));
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: { initWithEnvKey: async () => undefined },
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
   const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
-  return { wsCompatProcedure: mod.trpc.procedure };
+  return {
+    requireWorkspaceRoleWhenScoped: () => mod.trpc.middleware((opts: any) => opts.next()),
+    wsCompatProcedure: mod.trpc.procedure,
+  };
 });
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async (opts: any) => opts.next({ ctx: { ...opts.ctx, serverDB } }),
 }));
 
-const caller = (ctx: { userId: string; workspaceId?: string | null }) =>
+const caller = (ctx: { userId: string; workspaceId?: string | null; workspaceRole?: string }) =>
   scmRouter.createCaller({ ...ctx, serverDB } as any);
 
 const bind = (installationId: string, scope: { userId: string; workspaceId?: string | null }) =>
@@ -65,6 +81,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(scmCredentialGrants);
   await serverDB.delete(scmWebhookDeliveries);
   await serverDB.delete(workspaces);
   await serverDB.delete(users);
@@ -75,10 +92,36 @@ describe('scmRouter', () => {
     expect(await caller({ userId }).getConfig()).toEqual({
       github: {
         appSlug: 'lobehub-dev',
+        authorizeEnabled: true,
+        authorizePath: '/api/webhooks/github/authorize',
         enabled: true,
         installPath: '/api/webhooks/github/install',
       },
     });
+  });
+
+  it("disconnects the caller's own GitHub identity and revokes its token", async () => {
+    await ScmIdentityModel.upsert(serverDB, {
+      credentials: { accessToken: 'ghu_mine' },
+      externalLogin: 'mine',
+      externalUserId: 'ext-mine',
+      provider: 'github',
+      userId,
+    });
+    await ScmIdentityModel.upsert(serverDB, {
+      externalLogin: 'theirs',
+      externalUserId: 'ext-theirs',
+      provider: 'github',
+      userId: otherUserId,
+    });
+
+    await expect(caller({ userId }).disconnectIdentity({ provider: 'github' })).resolves.toEqual({
+      disconnected: true,
+    });
+
+    expect(await ScmIdentityModel.findByUser(serverDB, 'github', userId)).toBeNull();
+    expect(await ScmIdentityModel.findByUser(serverDB, 'github', otherUserId)).not.toBeNull();
+    expect(mocks.revokeToken).toHaveBeenCalledWith('ghu_mine');
   });
 
   it('returns the identity without credentials, or null', async () => {
@@ -97,9 +140,29 @@ describe('scmRouter', () => {
       avatarUrl: 'https://a/b.png',
       externalLogin: 'arvinxx',
       externalUserId: '42',
+      needsReauthorization: true,
       provider: 'github',
     });
     expect(JSON.stringify(identity)).not.toContain('secret');
+  });
+
+  it('reports an identity with a live refreshable token as ready', async () => {
+    await ScmIdentityModel.upsert(serverDB, {
+      credentials: {
+        accessToken: 'ghu_live',
+        refreshToken: 'ghr_live',
+        refreshTokenExpiresAt: '2099-01-01T00:00:00.000Z',
+      },
+      externalLogin: 'arvinxx',
+      externalUserId: '42',
+      provider: 'github',
+      tokenExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+      userId,
+    });
+
+    await expect(caller({ userId }).getIdentity({ provider: 'github' })).resolves.toMatchObject({
+      needsReauthorization: false,
+    });
   });
 
   it('lists only the installations and change requests in the caller scope', async () => {
@@ -393,5 +456,122 @@ describe('scmRouter', () => {
         code: 'BAD_GATEWAY',
       });
     });
+  });
+});
+
+describe('scmRouter requester credential policy', () => {
+  const workspaceId = 'scm-policy-ws';
+
+  beforeEach(async () => {
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Policy', primaryOwnerId: userId, slug: 'scm-policy' });
+  });
+
+  it('reads the policy as off for a member who cannot change it', async () => {
+    await expect(
+      caller({
+        userId: otherUserId,
+        workspaceId,
+        workspaceRole: 'member',
+      } as any).getRequesterCredentialPolicy(),
+    ).resolves.toEqual({ canEdit: false, enabled: false });
+  });
+
+  it('lets an admin turn the policy on and records it in the audit log', async () => {
+    const admin = caller({ userId, workspaceId, workspaceRole: 'admin' } as any);
+
+    await expect(admin.updateRequesterCredentialPolicy({ enabled: true })).resolves.toEqual({
+      enabled: true,
+    });
+    await expect(admin.getRequesterCredentialPolicy()).resolves.toEqual({
+      canEdit: true,
+      enabled: true,
+    });
+
+    const logs = await serverDB.select().from(workspaceAuditLogs);
+    expect(logs).toEqual([
+      expect.objectContaining({
+        action: 'security.policy_updated',
+        metadata: { policy: 'scm.requester_credential', previous: false, value: true },
+        workspaceId,
+      }),
+    ]);
+  });
+
+  it('refuses a member who tries to change the policy', async () => {
+    await expect(
+      caller({
+        userId: otherUserId,
+        workspaceId,
+        workspaceRole: 'member',
+      } as any).updateRequesterCredentialPolicy({
+        enabled: true,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('has no policy outside a workspace', async () => {
+    await expect(
+      caller({ userId }).updateRequesterCredentialPolicy({ enabled: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('scmRouter.listCredentialGrants', () => {
+  const workspaceId = 'scm-grants-ws';
+
+  beforeEach(async () => {
+    await serverDB
+      .update(users)
+      .set({ avatar: 'https://avatars.example.com/2.png', fullName: 'Member Two' })
+      .where(eq(users.id, otherUserId));
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Grants', primaryOwnerId: userId, slug: 'scm-grants' });
+    const grant = (requesterUserId: string, operationId: string, at: string) =>
+      ScmCredentialGrantModel.create(serverDB, {
+        createdAt: new Date(at),
+        deviceId: 'device-jp-1',
+        operationId,
+        path: 'hetero',
+        repo: 'lobehub/lobehub',
+        requesterUserId,
+        result: 'issued',
+        workspaceId,
+      });
+    await grant(userId, 'op-admin', '2026-11-17T01:00:00Z');
+    await grant(otherUserId, 'op-member', '2026-11-17T02:00:00Z');
+  });
+
+  it('shows an admin every grant in the workspace with who requested it', async () => {
+    const rows = await caller({
+      userId,
+      workspaceId,
+      workspaceRole: 'admin',
+    } as any).listCredentialGrants({});
+
+    expect(rows.map((row) => row.operationId)).toEqual(['op-member', 'op-admin']);
+    expect(rows[0]).toMatchObject({
+      repo: 'lobehub/lobehub',
+      requester: {
+        avatar: 'https://avatars.example.com/2.png',
+        id: otherUserId,
+        name: 'Member Two',
+      },
+      result: 'issued',
+    });
+  });
+
+  it("keeps a member to their own grants even when they ask for someone else's", async () => {
+    const member = caller({ userId: otherUserId, workspaceId, workspaceRole: 'member' } as any);
+
+    await expect(member.listCredentialGrants({ requesterUserId: userId })).resolves.toEqual([
+      expect.objectContaining({ operationId: 'op-member' }),
+    ]);
+  });
+
+  it('returns nothing outside a workspace', async () => {
+    await expect(caller({ userId }).listCredentialGrants({})).resolves.toEqual([]);
   });
 });

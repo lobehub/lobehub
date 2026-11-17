@@ -1,16 +1,26 @@
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { TRPCError } from '@trpc/server';
+import { inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import {
   ScmChangeRequestModel,
+  ScmCredentialGrantModel,
   ScmIdentityModel,
   ScmInstallationModel,
 } from '@/database/models/scm';
+import { WorkspaceModel } from '@/database/models/workspace';
+import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
+import { users } from '@/database/schemas';
 import { scmEnv } from '@/envs/scm';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { fetchGitHubInstallation } from '@/server/services/scm/github/app';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { fetchGitHubInstallation, revokeGitHubUserToken } from '@/server/services/scm/github/app';
 import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 import { consumeScmInstallClaim } from '@/server/services/scm/oauth/stateStore';
 import {
@@ -19,8 +29,11 @@ import {
 } from '@/server/services/scm/repositories';
 import { canWriteScmScope } from '@/server/services/scm/scope';
 
+import { isWorkspaceConnectorAdmin } from './_helpers/connectorManagePolicy';
+
 /** Path the "Connect GitHub" button navigates to; the server route owns the redirect. */
 export const GITHUB_INSTALL_PATH = '/api/webhooks/github/install';
+export const GITHUB_AUTHORIZE_PATH = '/api/webhooks/github/authorize';
 
 const scmProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -97,25 +110,148 @@ export const scmRouter = router({
       });
     }),
 
+  disconnectIdentity: scmProcedure
+    .input(z.object({ provider: z.enum(['github']) }))
+    .mutation(async ({ ctx, input }) => {
+      const identity = await ScmIdentityModel.findByUser(
+        ctx.serverDB,
+        input.provider,
+        ctx.userId,
+        await KeyVaultsGateKeeper.initWithEnvKey(),
+      );
+      if (!identity) return { disconnected: false };
+
+      await ScmIdentityModel.deleteByUser(ctx.serverDB, input.provider, ctx.userId);
+      if (identity.credentials?.accessToken) {
+        try {
+          await revokeGitHubUserToken(identity.credentials.accessToken);
+        } catch {
+          // The row is gone either way; an unrevoked token still expires within eight hours.
+        }
+      }
+      return { disconnected: true };
+    }),
+
   /** What the client needs to render the connect button. */
   getConfig: scmProcedure.query(async () => ({
     github: {
       appSlug: scmEnv.GITHUB_APP_SLUG ?? null,
+      authorizeEnabled: scmEnv.ENABLED_GITHUB_APP && !!scmEnv.ENABLED_GITHUB_APP_OAUTH,
+      authorizePath: GITHUB_AUTHORIZE_PATH,
       enabled: scmEnv.ENABLED_GITHUB_APP,
       installPath: GITHUB_INSTALL_PATH,
     },
   })),
 
+  getRequesterCredentialPolicy: scmProcedure.query(async ({ ctx }) => {
+    if (!ctx.workspaceId) return { canEdit: false, enabled: false };
+
+    const enabled = await new WorkspaceModel(ctx.serverDB, ctx.userId).getScmRequesterCredential(
+      ctx.workspaceId,
+    );
+    return { canEdit: isWorkspaceConnectorAdmin(ctx), enabled };
+  }),
+
+  updateRequesterCredentialPolicy: scmProcedure
+    .use(requireWorkspaceRoleWhenScoped('admin'))
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Requester GitHub credentials apply to workspaces only',
+        });
+      }
+      if (!isWorkspaceConnectorAdmin(ctx)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only workspace owners and admins can change this policy',
+        });
+      }
+      if (ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Restricted API keys cannot change this policy',
+        });
+      }
+
+      const workspaceModel = new WorkspaceModel(ctx.serverDB, ctx.userId);
+      const previous = await workspaceModel.getScmRequesterCredential(ctx.workspaceId);
+      await workspaceModel.updateScmRequesterCredential(ctx.workspaceId, input.enabled);
+      await new WorkspaceAuditLogModel(ctx.serverDB).create({
+        action: 'security.policy_updated',
+        metadata: { policy: 'scm.requester_credential', previous, value: input.enabled },
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return { enabled: input.enabled };
+    }),
+
+  listCredentialGrants: scmProcedure
+    .input(
+      z.object({
+        before: z.date().optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+        repo: z.string().optional(),
+        requesterUserId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return [];
+
+      const grants = await ScmCredentialGrantModel.list(ctx.serverDB, {
+        ...input,
+        requesterUserId: isWorkspaceConnectorAdmin(ctx) ? input.requesterUserId : ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      const requesterIds = [...new Set(grants.map((grant) => grant.requesterUserId))];
+      const requesters = requesterIds.length
+        ? await ctx.serverDB
+            .select({
+              avatar: users.avatar,
+              fullName: users.fullName,
+              id: users.id,
+              username: users.username,
+            })
+            .from(users)
+            .where(inArray(users.id, requesterIds))
+        : [];
+      const byId = new Map(requesters.map((user) => [user.id, user]));
+
+      return grants.map((grant) => {
+        const user = byId.get(grant.requesterUserId);
+        return {
+          ...grant,
+          requester: {
+            avatar: user?.avatar ?? null,
+            id: grant.requesterUserId,
+            name: user?.fullName || user?.username || null,
+          },
+        };
+      });
+    }),
+
   /** The caller's own provider identity, without credentials. */
   getIdentity: scmProcedure
     .input(z.object({ provider: z.enum(['github']) }))
     .query(async ({ ctx, input }) => {
-      const identity = await ScmIdentityModel.findByUser(ctx.serverDB, input.provider, ctx.userId);
+      const identity = await ScmIdentityModel.findByUser(
+        ctx.serverDB,
+        input.provider,
+        ctx.userId,
+        await KeyVaultsGateKeeper.initWithEnvKey(),
+      );
       if (!identity) return null;
+      const refreshExpiresAt = identity.credentials?.refreshTokenExpiresAt;
       return {
         avatarUrl: identity.metadata.avatarUrl ?? null,
         externalLogin: identity.externalLogin,
         externalUserId: identity.externalUserId,
+        // Mirrors when the credential exchange answers `reauthorize`.
+        needsReauthorization:
+          !identity.tokenExpiresAt ||
+          !identity.credentials?.refreshToken ||
+          (!!refreshExpiresAt && Date.parse(refreshExpiresAt) <= Date.now()),
         provider: identity.provider,
       };
     }),

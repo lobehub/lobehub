@@ -133,6 +133,7 @@ describe('webhooks hono routes', () => {
     const paths = app.routes.filter((route) => route.method === 'GET').map((route) => route.path);
 
     expect([...new Set(paths)].sort()).toEqual([
+      '/api/webhooks/github/authorize',
       '/api/webhooks/github/install',
       '/api/webhooks/github/oauth/callback',
       '/api/webhooks/github/setup',

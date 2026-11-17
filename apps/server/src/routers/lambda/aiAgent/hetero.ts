@@ -451,9 +451,11 @@ export const heteroRouter = router({
       const claims = ctx.heteroOperation;
       const jwt = await signHeteroOperationJWT({
         capabilities: claims.capabilities,
+        deviceId: claims.device_id,
         model: claims.model,
         operationId: claims.operation_id,
         providerId: claims.provider_id,
+        requesterUserId: claims.requester,
         userId: claims.sub,
         workspaceId: claims.workspace_id,
       });
