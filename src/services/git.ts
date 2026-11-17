@@ -83,6 +83,8 @@ export interface GitLinkedPRSummary {
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  /** `owner/repo` of the GitHub remote the branch publishes to. */
+  remoteRepoFullName?: string;
   upstream?: DeviceGitUpstreamRef;
 }
 
@@ -302,11 +304,14 @@ class GitService {
     deviceId,
     path,
     pullRequestNumber,
+    state,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
     pullRequestNumber?: number;
+    /** `open`: discovery of a branch's open PR; default lists every state. */
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
       ? await lambdaClient.device.gitLinkedPullRequest.query({
@@ -314,14 +319,21 @@ class GitService {
           deviceId,
           path,
           pullRequestNumber,
+          ...(state ? { state } : {}),
         })
-      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
+      : await electronGitService.getLinkedPullRequest({
+          branch,
+          path,
+          pullRequestNumber,
+          ...(state ? { state } : {}),
+        });
     if (!pr) return undefined;
     return {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
       pullRequestStatus: pr.status,
+      remoteRepoFullName: pr.remoteRepoFullName,
       upstream: pr.upstream,
     };
   }

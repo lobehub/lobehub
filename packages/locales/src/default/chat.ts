@@ -3920,6 +3920,18 @@ export default {
   'workingPanel.overview.changes': 'Changes',
   'workingPanel.overview.changes.none': 'No changes',
   'workingPanel.overview.ci.failure': 'Failed',
+  'workingPanel.overview.pr.dismiss': 'Remove from this topic',
+  'workingPanel.overview.pr.dismissFailed': "Couldn't remove {{name}} from this topic",
+  'workingPanel.overview.pr.dismissed': 'Removed {{name}} from this topic',
+  'workingPanel.overview.pr.link': 'Link a pull request',
+  'workingPanel.overview.pr.linkAction': 'Link',
+  'workingPanel.overview.pr.linkFailed': "Couldn't link the pull request",
+  'workingPanel.overview.pr.linkInvalid':
+    'Paste a GitHub pull request link, like https://github.com/owner/repo/pull/123',
+  'workingPanel.overview.pr.linkPlaceholder': 'Paste a GitHub pull request link',
+  'workingPanel.overview.pr.linked': 'Linked {{name}} to this topic',
+  'workingPanel.overview.pr.unvouched':
+    "Can't confirm this PR comes from this topic's branch, so merging and closing are locked",
   'workingPanel.overview.ci.pending': 'Running',
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',

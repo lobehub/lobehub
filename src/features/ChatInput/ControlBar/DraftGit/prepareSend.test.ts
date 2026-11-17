@@ -380,6 +380,8 @@ describe('prepareDraftGitSend — new worktree', () => {
           autoCreatedAt: expect.any(String),
           branch: call.branch,
           isWorktree: true,
+          // The send created the branch: the run end may look its PR up.
+          ownBranch: call.branch,
         },
         path: '/code/lobehub',
         repoType: 'github',

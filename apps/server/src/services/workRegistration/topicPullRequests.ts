@@ -3,12 +3,15 @@ import type {
   ScmCiStatus,
   ScmReviewDecision,
   TopicPullRequestItem,
+  TopicPullRequestLinkMeta,
   TopicPullRequestScmState,
+  TopicPullRequestWork,
 } from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessageModel } from '@/database/models/message';
 import { ScmChangeRequestModel } from '@/database/models/scm';
+import type { TopicModel } from '@/database/models/topic';
 import { parseGitPushResult, type WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -17,6 +20,7 @@ import {
   isBetterCodingExperienceEnabled,
 } from './pullRequestLinking';
 import { readShellCommandRecord } from './shellWorkRegistration';
+import { parsePullRequestUrl } from './topicPullRequestLinks';
 
 const log = debug('lobe-server:topic-pull-requests');
 
@@ -43,38 +47,79 @@ const toScmState = (row: ScmChangeRequestState): TopicPullRequestScmState => ({
   updatedAt: row.updatedAt,
 });
 
+const toLinkItem = (link: TopicPullRequestLinkMeta): TopicPullRequestWork | null => {
+  const parsed = parsePullRequestUrl(link.url);
+  if (!parsed) return null;
+  return {
+    ...(link.headRefName ? { headBranch: link.headRefName } : {}),
+    identifier: parsed.identifier,
+    linkedAt: new Date(link.linkedAt),
+    number: parsed.number,
+    repoFullName: parsed.repoFullName,
+    source: link.source,
+    status: null,
+    title: link.title ?? null,
+    url: parsed.url,
+    workId: null,
+  };
+};
+
 /**
- * Pull requests linked to a topic (its `github_pull_request` Work rows), each
- * with the GitHub App's state when an installation the scope can see tracks
- * the repository. `scm: null` means "not confirmed here": the client then asks
- * the execution device, and only confirmed data may enable merge / close.
+ * Pull requests linked to a topic — its `github_pull_request` Work rows plus
+ * the links kept on the topic (branch match, by hand), minus the ones removed
+ * from it — latest link first, each with the GitHub App's state when an
+ * installation the scope can see tracks the repository. `scm: null` means "not
+ * confirmed here": the client then asks the execution device, and only
+ * confirmed, vouched data may enable merge / close.
  */
 export const listTopicPullRequestsWithStatus = async (params: {
   db: LobeChatDatabase;
   topicId: string;
+  topicModel: TopicModel;
   userId: string;
   workModel: WorkModel;
   workspaceId?: string | null;
 }): Promise<TopicPullRequestItem[]> => {
-  const items = await params.workModel.listTopicPullRequests(params.topicId);
+  const [works, topic] = await Promise.all([
+    params.workModel.listTopicPullRequests(params.topicId),
+    params.topicModel.findById(params.topicId),
+  ]);
+  const meta = topic?.metadata?.pullRequests;
+  const dismissed = new Set((meta?.dismissed ?? []).map((id) => id.toLowerCase()));
+  const fromWorks = new Set(works.map((item) => item.identifier.toLowerCase()));
+
+  const items = [
+    // Work rows were parsed by the server from the run's own tool messages.
+    ...works.map((item) => ({ item, vouched: true })),
+    ...(meta?.links ?? []).flatMap((link) => {
+      const item = toLinkItem(link);
+      return item && !fromWorks.has(item.identifier.toLowerCase())
+        ? [{ item, vouched: link.vouched }]
+        : [];
+    }),
+  ]
+    .filter(({ item }) => !dismissed.has(item.identifier.toLowerCase()))
+    .sort((a, b) => b.item.linkedAt.getTime() - a.item.linkedAt.getTime());
   if (items.length === 0) return [];
 
   const rows = await ScmChangeRequestModel.listByIdentities(
     params.db,
     { userId: params.userId, workspaceId: params.workspaceId ?? null },
-    items.map(({ number, repoFullName }) => ({ number, repoFullName })),
+    items.map(({ item }) => ({ number: item.number, repoFullName: item.repoFullName })),
   );
   const byIdentity = new Map(rows.map((row) => [identityKey(row.repoFullName, row.number), row]));
 
-  return items.map((item) => {
+  return items.map(({ item, vouched }) => {
     const row = byIdentity.get(identityKey(item.repoFullName, item.number));
-    return { ...item, scm: row ? toScmState(row) : null };
+    return { ...item, scm: row ? toScmState(row) : null, vouched };
   });
 };
 
 /** One pull request the execution device found for a pushed branch (`gh pr list --head`). */
 export interface DeviceReportedPullRequest {
   headRefName: string;
+  /** `owner/repo` of the PR's head branch, from devices that report it. */
+  headRepoFullName?: string;
   isDraft?: boolean;
   number: number;
   state?: string;
@@ -167,7 +212,11 @@ export const linkPushedPullRequests = async (params: {
           const match = PULL_URL_RE.exec(pr.url);
           if (!match || Number(match[3]) !== pr.number) return [];
           const repoFullName = `${match[1]}/${match[2]}`;
-          if (repoFullName.toLowerCase() !== push.repoFullName.toLowerCase()) return [];
+          // The push went to the PR's head repository: the PR's own repository,
+          // or — for a fork PR — the fork its head lives in.
+          const pushed = push.repoFullName.toLowerCase();
+          const headRepo = (pr.headRepoFullName ?? repoFullName).toLowerCase();
+          if (headRepo !== pushed) return [];
           if (!branches.has(pr.headRefName)) return [];
           return [
             {
@@ -198,7 +247,10 @@ export const linkPushedPullRequests = async (params: {
         changeType: 'updated',
         identifier,
         messageId: record.id,
-        ...(pr.headRef ? { metadata: { headBranch: pr.headRef } } : {}),
+        metadata: {
+          ...(pr.headRef ? { headBranch: pr.headRef } : {}),
+          pullRequestLink: 'push',
+        },
         patchFields: [
           'identifier',
           'url',

@@ -74,6 +74,7 @@ export const gitRouter = router({
         deviceId: z.string(),
         path: z.string(),
         pullRequestNumber: z.number().optional(),
+        state: z.enum(['all', 'open']).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -82,6 +83,7 @@ export const gitRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         pullRequestNumber: input.pullRequestNumber,
+        state: input.state,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });

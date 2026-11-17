@@ -20,6 +20,13 @@ export type DeviceGitPullRequestCiStatus = 'failure' | 'pending' | 'success' | '
 /** A GitHub pull request linked to a branch. */
 export interface DeviceGitLinkedPullRequest {
   ciStatus?: DeviceGitPullRequestCiStatus;
+  /** The PR's head branch on GitHub. */
+  headRefName?: string;
+  /**
+   * `owner/repo` the PR's head branch lives in — differs from the PR's own
+   * repository for a fork PR. Absent from devices that predate it.
+   */
+  headRepoFullName?: string;
   isDraft?: boolean;
   mergeable?: string;
   mergedAt?: string | null;
@@ -89,6 +96,14 @@ export interface WorkingDirGitState {
    * the source path itself.
    */
   isWorktree?: boolean;
+  /**
+   * A branch this conversation created — the worktree branch made on its first
+   * send (Better Coding Experience), or one its agent created
+   * (`git switch -c`, `git worktree add -b`). Only while the topic is on it does
+   * the run end ask GitHub which PR the branch has: another branch may carry
+   * someone else's PR.
+   */
+  ownBranch?: string;
   /** The nonce the server signed {@link ownerToken} with, for the creator only. */
   ownerNonce?: string;
   /**
@@ -180,6 +195,8 @@ export const getWorkingDirSessionPath = (
 
 const gitLinkedPullRequestSchema = z.object({
   ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
+  headRefName: z.string().optional(),
+  headRepoFullName: z.string().optional(),
   isDraft: z.boolean().optional(),
   mergeable: z.string().optional(),
   mergeStateStatus: z.string().optional(),
@@ -208,6 +225,7 @@ export const workingDirConfigSchema = z.object({
         })
         .optional(),
       isWorktree: z.boolean().optional(),
+      ownBranch: z.string().optional(),
       ownerNonce: z.string().max(64).optional(),
       ownerToken: z.string().max(128).optional(),
       // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely

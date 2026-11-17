@@ -353,6 +353,12 @@ export interface DeviceGitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch. */
   pullRequest: DeviceGitLinkedPullRequest | null;
+  /**
+   * `owner/repo` of the GitHub remote the branch publishes to. A PR whose head
+   * repository is this one was pushed from here; a same-named branch in
+   * another fork was not. Absent from devices that predate it.
+   */
+  remoteRepoFullName?: string;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
