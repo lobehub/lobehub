@@ -162,10 +162,11 @@ export interface SpawnAgentHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   /**
-   * (Claude Code `liveInput` only) Deliver a user message into the running
-   * session; Claude Code reads it at its next tool boundary, or starts a turn
-   * for it when idle. Resolves false once input has closed — the caller then
-   * runs the message as a new turn instead.
+   * (Claude Code `liveInput`, native Codex) Deliver a user message into the
+   * running session; Claude Code reads it at its next tool boundary, or starts
+   * a turn for it when idle; Codex adds it to the active turn (`turn/steer`).
+   * Resolves false once the session takes no input — the caller then runs the
+   * message as a new turn instead.
    */
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
   /**

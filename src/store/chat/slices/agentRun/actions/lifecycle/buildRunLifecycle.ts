@@ -21,7 +21,7 @@ import {
 } from '@/store/chat/utils/topicTitle';
 import { getUserStoreState } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
@@ -263,7 +263,7 @@ export const buildRunLifecycle = (
           return;
         }
         const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-        const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
+        const title = toTitleText(firstUserText).slice(0, 80) || 'New Topic';
         // `internal_updateTopic` already balances its own loading owner. For a
         // new client-runtime topic like "阅读下面...", an extra `false` here would
         // consume the runtime's loading owner and hide the sidebar spinner early.

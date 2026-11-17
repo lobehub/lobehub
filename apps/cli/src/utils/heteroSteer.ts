@@ -109,13 +109,14 @@ const isMainStreamStart = (event: { data?: any; type: string }) =>
   event.type === 'stream_start' && !event.data?.subagent;
 
 /**
- * Stream a Claude Code run's events while typing the follow-ups the user
- * queues behind it into the live session (steer), instead of leaving them for
- * the next turn.
+ * Stream a Claude Code or native Codex run's events while typing the
+ * follow-ups the user queues behind it into the live session (steer), instead
+ * of leaving them for the next turn.
  *
  * Polls `aiAgent.waitHeteroSteer` for as long as the run streams and its
  * session takes input; a message the session refuses goes back with
- * `aiAgent.returnHeteroSteer`. Claude Code replays every message it picks up:
+ * `aiAgent.returnHeteroSteer`. The agent reports every message it picks up
+ * (Claude Code replays it, Codex echoes its client id):
  * the replay of a delivery is forwarded for the server to write the message
  * into the conversation; any other replay (the run's own prompt) is dropped.
  * Once the server answered, the next main `stream_start` carries `liveSteer`
