@@ -406,8 +406,9 @@ const connectorCoreRouter = router({
     };
 
     // Idempotent on (scope, visibility, identifier): re-adding or
-    // re-authorizing the same connector updates the existing row. Status resets to `disconnected` — the OAuth callback / tool sync promotes
-    // it back to `connected` on success.
+    // re-authorizing the same connector updates the existing row. Status
+    // resets to `disconnected` — the OAuth callback / tool sync promotes it
+    // back to `connected` on success.
     //
     // `sourceType` is honored on update so the legacy customPlugin → connector
     // migration can promote a half-baked `marketplace` row left behind by the
@@ -474,7 +475,16 @@ const connectorCoreRouter = router({
       visibility: ConnectorVisibility;
     }) => {
       await assertWritable(existing);
-      const updated = await ctx.connectorModel.update(existing.id, row);
+      // The row keeps its server-owned metadata (its Composio account, its
+      // mount): the client never authors it, and dropping the account here
+      // would leave its legacy plugin projection as the only holder, which
+      // publishes a private connection to the workspace again.
+      const metadata =
+        withServerOwnedMetadata(row.metadata ?? {}, existing.metadata) ?? row.metadata;
+      const updated = await ctx.connectorModel.update(existing.id, {
+        ...row,
+        metadata: metadata && Object.keys(metadata).length > 0 ? metadata : null,
+      });
       return updated ? { id: existing.id, isNew: false } : undefined;
     };
 

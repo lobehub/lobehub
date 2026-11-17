@@ -169,6 +169,32 @@ describe('connectorRouter visibility', () => {
         expect.objectContaining({ visibility: 'public' }),
       );
     });
+    it("keeps a re-added row's Composio account, so its legacy projection stays withheld", async () => {
+      // Regression: re-adding a private Composio connector cleared its account
+      // block. The legacy plugin projection then held the account alone, and
+      // workspace agents ran the private connection through the fallback.
+      const composio = { connectedAccountId: 'acc-private', linkedByUserId: 'me' };
+      connectorModelMock.findScopedByIdentifier.mockResolvedValue({
+        agentId: null,
+        id: 'mine',
+        metadata: { avatar: '🔌', composio },
+        userId: 'me',
+        visibility: 'private',
+      });
+      connectorModelMock.update.mockResolvedValue({ id: 'mine' });
+
+      await member().create({
+        ...createInput,
+        metadata: { avatar: '🛠', composio: { connectedAccountId: 'acc-forged' } },
+        visibility: 'private',
+      });
+
+      expect(connectorModelMock.update).toHaveBeenCalledWith(
+        'mine',
+        expect.objectContaining({ metadata: { avatar: '🛠', composio } }),
+      );
+    });
+
     it('claims a private row within its visibility and re-adds over the holder it finds', async () => {
       // A concurrent add of the same private connector won the claim: this add
       // rewrites that row instead of inserting a second one.
