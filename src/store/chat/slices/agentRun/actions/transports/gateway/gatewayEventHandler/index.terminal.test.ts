@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
 import type * as WorkServiceModule from '@/services/work';
 import { workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { createHandler, createMockStore, flush, makeEvent } from './testUtils';
+import { createHandler, createMockStore, flush, makeEvent } from '../testUtils';
 
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -35,6 +36,35 @@ vi.mock('@/store/tool/slices/builtin/executors', () => ({
   getExecutor: (...args: unknown[]) => getExecutorMock(...args),
   registerBuiltinToolExecutors: vi.fn().mockResolvedValue(undefined),
 }));
+
+/** Starts a follow-up send in the same conversation, which then owns it. */
+const startNewerSend = (store: ReturnType<typeof createMockStore>) => {
+  const context = { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any;
+  Object.assign(store.operations['op-1'], {
+    id: 'op-1',
+    status: 'running',
+    type: 'execServerAgentRuntime',
+  });
+  store.operations['op-2'] = {
+    context,
+    id: 'op-2',
+    metadata: { startTime: 1 },
+    status: 'running',
+    type: 'sendMessage',
+  };
+  store.operationsByContext = { [messageMapKey(context)]: ['op-1', 'op-2'] };
+};
+
+/** Holds the next conversation read open until the test resolves it. */
+const holdNextRead = () => {
+  let resolve!: (messages: any[]) => void;
+  vi.mocked(messageService.getMessages).mockReturnValueOnce(
+    new Promise((r) => {
+      resolve = r;
+    }) as any,
+  );
+  return (messages: any[]) => resolve(messages);
+};
 
 describe('createGatewayEventHandler — terminal and error events', () => {
   beforeEach(() => {
@@ -169,6 +199,167 @@ describe('createGatewayEventHandler — terminal and error events', () => {
         context: expect.any(Object),
       });
       expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    // Protocol v2: a step that continues inline publishes its message patch
+    // only from the next step's entry read, so a Stop between the two steps
+    // can end the run before that patch arrives. Step 0's patch (revision 1)
+    // has been applied; a Stop after step 1 is saved ends with revision 3.
+    describe('interrupted in message patch mode', () => {
+      // A one-shot reply these tests queue must not leak into the next test.
+      afterEach(() => {
+        vi.mocked(messageService.getMessages).mockReset().mockResolvedValue([]);
+      });
+
+      const startStreamedRun = async () => {
+        const store = createMockStore();
+        const handler = createHandler(store);
+        handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-server' } }));
+        handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial answer' }));
+        handler(makeEvent('message_patch', { deletes: [], revision: 1, upserts: [] }));
+        await flush();
+        vi.mocked(messageService.getMessages).mockClear();
+        store.replaceMessages.mockClear();
+        return { handler, store };
+      };
+
+      const interruptedEnd = (messageRevision: number) =>
+        makeEvent('agent_runtime_end', {
+          messagePatchMode: true,
+          messageRevision,
+          reason: 'interrupted',
+        });
+
+      it('reads the finished step whose patch the Stop overtook', async () => {
+        const { handler, store } = await startStreamedRun();
+        const persisted = [{ content: 'summary', id: 'group-1', role: 'compressedGroup' }];
+        vi.mocked(messageService.getMessages).mockResolvedValueOnce(persisted as any);
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).toHaveBeenCalledWith(persisted, {
+          context: expect.any(Object),
+          preserveWorks: undefined,
+        });
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps the streamed text when the Stop lands mid-step', async () => {
+        const { handler, store } = await startStreamedRun();
+
+        handler(interruptedEnd(2));
+        await flush();
+
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps the streamed text when a Stop mid-step follows a failed step_start read', async () => {
+        const { handler, store } = await startStreamedRun();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // Revision 2's patch never arrived and the step_start read fails, so
+        // the last applied patch stays at 1 while step 2 streams.
+        vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('offline'));
+        handler(makeEvent('step_start', { messageRevision: 2 }));
+        handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' more' }));
+        await flush();
+        vi.mocked(messageService.getMessages).mockClear();
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+        consoleError.mockRestore();
+      });
+
+      it('skips that read when a newer send owns the conversation', async () => {
+        const { handler, store } = await startStreamedRun();
+        startNewerSend(store);
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('drops that read when a newer send starts before it returns', async () => {
+        const { handler, store } = await startStreamedRun();
+        const resolveRead = holdNextRead();
+
+        handler(interruptedEnd(3));
+        await flush();
+        startNewerSend(store);
+        resolveRead([{ content: 'summary', id: 'group-1', role: 'compressedGroup' }]);
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps the messages it has and still settles when that read fails', async () => {
+        const { handler, store } = await startStreamedRun();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('offline'));
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+        consoleError.mockRestore();
+      });
+    });
+
+    // A send can start while a terminal read is in flight; that read's list
+    // predates the send and would erase its optimistic rows.
+    describe('a newer send that starts during the terminal read', () => {
+      afterEach(() => {
+        vi.mocked(messageService.getMessages).mockReset().mockResolvedValue([]);
+      });
+
+      it('keeps its list when a completed patch-mode run reads the missing revision', async () => {
+        const store = createMockStore();
+        const handler = createHandler(store);
+        handler(makeEvent('message_patch', { deletes: [], revision: 1, upserts: [] }));
+        await flush();
+        store.replaceMessages.mockClear();
+        const resolveRead = holdNextRead();
+
+        handler(makeEvent('agent_runtime_end', { messagePatchMode: true, messageRevision: 3 }));
+        await flush();
+        startNewerSend(store);
+        resolveRead([{ content: 'final', id: 'msg-1', role: 'assistant' }]);
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps its list when the fallback read returns', async () => {
+        const store = createMockStore();
+        const handler = createHandler(store);
+        const resolveRead = holdNextRead();
+
+        handler(makeEvent('agent_runtime_end'));
+        await flush();
+        startNewerSend(store);
+        resolveRead([{ content: 'final', id: 'msg-1', role: 'assistant' }]);
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
     });
   });
 

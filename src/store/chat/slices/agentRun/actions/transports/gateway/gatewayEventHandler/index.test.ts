@@ -7,7 +7,7 @@ import * as agentSignalBridge from '@/store/chat/slices/agentRun/actions/lifecyc
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { createGatewayEventHandler } from './gatewayEventHandler';
+import { createGatewayEventHandler } from './index';
 
 const executorMocks = vi.hoisted(() => ({
   onAfterCall: vi.fn(),
