@@ -45,6 +45,7 @@ interface PullRequestProps {
   onOpenTab: (tab: string) => void;
   /** Re-run the branch / linked-PR reads that confirm `number`. */
   onRetryConfirm?: () => void;
+  repositoryPath?: string;
   summary?: DeviceGitLinkedPullRequest;
   url?: string;
   workingDirectory: string;
@@ -59,31 +60,37 @@ const PullRequest = memo<PullRequestProps>(
     number,
     onOpenTab,
     onRetryConfirm,
+    repositoryPath,
     summary,
     url,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
+    const readPath = repositoryPath ?? workingDirectory;
     const {
       data,
       error: fetchError,
       isConfirmed: detailConfirmed,
       isLoading,
       mutate,
-    } = useFetchGitPullRequestDetail(deviceId, workingDirectory, number, { active });
+    } = useFetchGitPullRequestDetail(deviceId, readPath, number, { active });
+    // A number is only unique within a repository. Do not act on another
+    // repository's PR if the source checkout resolves a different remote.
+    const matches = !url || data?.detail?.url.toLowerCase() === url.toLowerCase();
+    const coreDetail = matches ? data?.detail : undefined;
     const activity = useFetchGitPullRequestActivity(
       deviceId,
-      workingDirectory,
-      data?.detail?.number,
-      active && data?.detail?.state === 'open',
+      readPath,
+      coreDetail?.number,
+      active && coreDetail?.state === 'open',
     );
     const {
       data: cachedContext,
       error: contextError,
       isConfirmed: contextConfirmed,
       mutate: mutateContext,
-    } = useFetchGitPullRequestMergeContext(deviceId, workingDirectory, data?.detail ?? undefined);
+    } = useFetchGitPullRequestMergeContext(deviceId, readPath, coreDetail ?? undefined);
     const { data: aheadBehind } = useFetchGitAheadBehind(deviceId, workingDirectory);
     // Stale content stays paintable; actions wait for the live reads.
     const {
@@ -98,7 +105,7 @@ const PullRequest = memo<PullRequestProps>(
       context: cachedContext,
       contextConfirmed,
       contextError,
-      detailConfirmed,
+      detailConfirmed: detailConfirmed && matches,
       detailError: fetchError,
     });
     const actions = usePullRequestActions({
@@ -107,11 +114,13 @@ const PullRequest = memo<PullRequestProps>(
       policyLocked,
       mutateDetail: mutate,
       number,
+      repositoryPath: readPath,
+      url: coreDetail?.url,
       workingDirectory,
     });
 
     const detail = useMemo(() => {
-      const core = data?.detail ? { ...data.detail, ...activity.data } : undefined;
+      const core = coreDetail ? { ...coreDetail, ...activity.data } : undefined;
       if (!core || !context) return core ?? undefined;
       const required = new Set(context.requiredChecks);
       return {
@@ -121,7 +130,7 @@ const PullRequest = memo<PullRequestProps>(
         viewerCanBypass: context.viewerCanBypass,
         viewerCanWrite: context.viewerCanWrite,
       };
-    }, [data?.detail, context, activity.data]);
+    }, [coreDetail, context, activity.data]);
     const externalUrl = detail?.url ?? url;
     const loadError = (error: unknown, onRetry: () => void) => (
       <Flexbox {...sectionProps()}>

@@ -117,6 +117,7 @@ export const DEVICE_RPC_METHODS = [
   'getPullRequestActivity',
   'getPullRequestMergeContext',
   'runPullRequestAction',
+  'runPullRequestActionByUrl',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
   'getGitWorkingTreePatches',
@@ -410,6 +411,12 @@ export const executeDeviceRpc = async (
     case 'runPullRequestAction': {
       return runPullRequestAction(
         params as { action: GitPullRequestAction; number: number; path: string },
+      );
+    }
+
+    case 'runPullRequestActionByUrl': {
+      return runPullRequestAction(
+        params as { action: GitPullRequestAction; number: number; path: string; url: string },
       );
     }
 

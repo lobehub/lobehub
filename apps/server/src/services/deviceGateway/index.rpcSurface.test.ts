@@ -660,6 +660,56 @@ describe('DeviceGateway RPC surface', () => {
     await expectFailure(c.call(new DeviceGateway()), c.failure, NET_DOWN);
   });
 
+  describe('PR actions with an explicit URL', () => {
+    const url = 'https://github.com/owner/repo/pull/5';
+    const run = () =>
+      new DeviceGateway().runGitPullRequestAction({
+        ...base,
+        action: prAction,
+        number: 5,
+        path: '/approved/repo',
+        url,
+      });
+    const unsupported = {
+      error: 'Unknown device RPC method: runPullRequestActionByUrl',
+      success: false,
+    };
+
+    it('revalidates the URL in the approved repository for older devices', async () => {
+      configureGateway();
+      mockClient.invokeRpc.mockResolvedValueOnce(unsupported);
+      mockClient.invokeRpc.mockResolvedValueOnce({ data: { detail: { url } }, success: true });
+      mockClient.invokeRpc.mockResolvedValueOnce({ data: { success: true }, success: true });
+
+      await expect(run()).resolves.toEqual({ success: true });
+      expect(mockClient.invokeRpc.mock.calls.map(([, payload]) => payload.method)).toEqual([
+        'runPullRequestActionByUrl',
+        'getPullRequestDetail',
+        'runPullRequestAction',
+      ]);
+    });
+
+    it('does not fall back if the older device resolves a different PR', async () => {
+      configureGateway();
+      mockClient.invokeRpc.mockResolvedValueOnce(unsupported);
+      mockClient.invokeRpc.mockResolvedValueOnce({
+        data: { detail: { url: 'https://github.com/owner/wrong/pull/5' } },
+        success: true,
+      });
+
+      await expect(run()).resolves.toMatchObject({ success: false });
+      expect(mockClient.invokeRpc).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not repeat a mutation after an ambiguous device failure', async () => {
+      configureGateway();
+      mockClient.invokeRpc.mockResolvedValueOnce({ error: 'RPC timed out', success: false });
+
+      await expect(run()).resolves.toEqual({ error: 'RPC timed out', success: false });
+      expect(mockClient.invokeRpc).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('listHeterogeneousAgentModels', () => {
     const call = (type: 'antigravity' | 'codex' = 'codex') =>
       new DeviceGateway().listHeterogeneousAgentModels({
