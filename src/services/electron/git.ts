@@ -85,6 +85,7 @@ class ElectronGitService {
     action: GitPullRequestAction;
     number: number;
     path: string;
+    url?: string;
   }): Promise<GitPullRequestActionResult> {
     return this.ipc.git.runPullRequestAction(params);
   }

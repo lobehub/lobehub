@@ -107,6 +107,7 @@ export default class GitController extends ControllerModule {
     action: GitPullRequestAction;
     number: number;
     path: string;
+    url?: string;
   }): Promise<GitPullRequestActionResult> {
     const { runPullRequestAction: runPullRequestActionRpc } = await loadGit();
     return runPullRequestActionRpc(payload);
