@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { AiProviderConfig, AiProviderSettings } from '@/types/aiProvider';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicProvider } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
@@ -138,5 +138,5 @@ export const ProviderSchema = z
   .meta({ id: 'Provider' });
 
 export const ProviderListSchema = z
-  .object({ ...pageInfoShape, providers: z.array(ProviderSchema), total: z.number().int().min(0) })
+  .object({ ...pageInfoShape, providers: z.array(ProviderSchema), ...totalShape })
   .strict();

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import { dateTimeSchema } from './common.type';
 
 // ==================== Response Schemas ====================
@@ -24,7 +24,7 @@ export const InstalledPluginListSchema = z
   .object({
     ...pageInfoShape,
     plugins: z.array(InstalledPluginSchema),
-    total: z.number().int().min(0),
+    ...totalShape,
   })
   .strict()
   .meta({ id: 'InstalledPluginList' });

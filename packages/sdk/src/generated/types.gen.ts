@@ -54,6 +54,21 @@ export type AgentGroup = {
     updatedAt: string;
 };
 
+/**
+ * Whether another page follows this one.
+ */
+export type PageHasMore = boolean;
+
+/**
+ * Pass as `cursor` to fetch the next page; `null` on the last page.
+ */
+export type PageNextCursor = string | null;
+
+/**
+ * Number of items across all pages.
+ */
+export type PageTotal = number;
+
 export type CreatedAgentGroup = {
     id: string;
 };
@@ -64,16 +79,10 @@ export type DeletedResource = {
 };
 
 export type AgentList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     agents: Array<Agent>;
-    total: number;
+    total: PageTotal;
 };
 
 export type Agent = {
@@ -253,16 +262,10 @@ export type ChatGenerateReplyResponse = {
 };
 
 export type ChatGroupList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     chatGroups: Array<ChatGroup>;
-    total: number;
+    total: PageTotal;
 };
 
 export type ChatGroup = {
@@ -731,16 +734,10 @@ export type EvalReportReceipt = {
 };
 
 export type InstalledPluginList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     plugins: Array<InstalledPlugin>;
-    total: number;
+    total: PageTotal;
 };
 
 export type InstalledPlugin = {
@@ -751,16 +748,10 @@ export type InstalledPlugin = {
 };
 
 export type FileList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     files: Array<FileListItem>;
-    total: number;
+    total: PageTotal;
     totalSize: string;
 };
 
@@ -901,16 +892,10 @@ export type BatchGetFilesResult = {
 };
 
 export type GoalList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     goals: Array<GoalListItem>;
-    total: number;
+    total: PageTotal;
 };
 
 export type GoalListItem = {
@@ -1251,16 +1236,10 @@ export type ImReadResult = {
 };
 
 export type KnowledgeBaseList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     knowledgeBases: Array<KnowledgeBaseListItem>;
-    total: number;
+    total: PageTotal;
 };
 
 export type KnowledgeBaseListItem = {
@@ -1752,16 +1731,10 @@ export type NotificationCategoryCount = {
 };
 
 export type PermissionList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     permissions: Array<Permission>;
-    total: number;
+    total: PageTotal;
 };
 
 export type Permission = {
@@ -1932,16 +1905,10 @@ export type ResponseUsage = {
 };
 
 export type RoleList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     roles: Array<Role>;
-    total: number;
+    total: PageTotal;
 };
 
 export type Role = {
@@ -1956,16 +1923,10 @@ export type Role = {
 };
 
 export type RolePermissionList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     permissions: Array<RolePermission>;
-    total: number;
+    total: PageTotal;
 };
 
 export type RolePermission = {
@@ -2139,16 +2100,10 @@ export type AgentSignalReceipt = {
 };
 
 export type TaskList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
     tasks: Array<TaskListItem>;
-    total: number;
+    total: PageTotal;
 };
 
 export type TaskListItem = {
@@ -2661,15 +2616,9 @@ export type UserIdentity = {
 };
 
 export type UserList = {
-    /**
-     * Whether another page follows this one.
-     */
-    hasMore: boolean;
-    /**
-     * Pass as `cursor` to fetch the next page; `null` on the last page.
-     */
-    nextCursor: string | null;
-    total: number;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    total: PageTotal;
     users: Array<User>;
 };
 
@@ -2788,18 +2737,9 @@ export type GetApiV1AgentGroupsResponses = {
     200: {
         data: {
             items: Array<AgentGroup>;
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
-            /**
-             * Number of items across all pages.
-             */
-            total: number;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -3933,18 +3873,9 @@ export type GetApiV1ApiKeysResponses = {
     200: {
         data: {
             items: Array<ApiKey>;
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
-            /**
-             * Number of items across all pages.
-             */
-            total: number;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -4952,16 +4883,10 @@ export type GetApiV1EvalRunsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             runs: Array<EvalRun>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -5121,17 +5046,11 @@ export type GetApiV1EvalRunsByIdTopicsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             runId: string;
             topics: Array<EvalRunTopic>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -5264,17 +5183,11 @@ export type GetApiV1EvalRunsByIdResultsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             results: Array<EvalRunResult>;
             runId: string;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -5422,16 +5335,10 @@ export type GetApiV1EvalBenchmarksResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             benchmarks: Array<EvalBenchmark>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -5868,16 +5775,10 @@ export type GetApiV1EvalDatasetsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             datasets: Array<EvalDataset>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -6203,16 +6104,10 @@ export type GetApiV1EvalDatasetsByDatasetIdTestCasesResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             testCases: Array<EvalTestCase>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -8887,18 +8782,9 @@ export type GetApiV1McpServersResponses = {
     200: {
         data: {
             items: Array<McpServer>;
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
-            /**
-             * Number of items across all pages.
-             */
-            total: number;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -9824,16 +9710,10 @@ export type GetApiV1MessagesResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             messages: Array<Message>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -10152,16 +10032,10 @@ export type GetApiV1ModelsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             models: Array<Model>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -11205,16 +11079,10 @@ export type GetApiV1ProvidersResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             providers: Array<Provider>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -12954,16 +12822,10 @@ export type GetApiV1TopicsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             topics: Array<Topic>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;
@@ -13268,16 +13130,10 @@ export type GetApiV1TopicsByTopicIdThreadsResponses = {
      */
     200: {
         data: {
-            /**
-             * Whether another page follows this one.
-             */
-            hasMore: boolean;
-            /**
-             * Pass as `cursor` to fetch the next page; `null` on the last page.
-             */
-            nextCursor: string | null;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
             threads: Array<TopicThread>;
-            total: number;
+            total: PageTotal;
         };
         message?: string;
         success: true;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicPermission, PublicRole } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, PaginationQuerySchema } from './common.type';
@@ -124,7 +124,7 @@ export const RoleSchema = z
   .meta({ id: 'Role' });
 
 export const RoleListSchema = z
-  .object({ ...pageInfoShape, roles: z.array(RoleSchema), total: z.number().int().min(0) })
+  .object({ ...pageInfoShape, roles: z.array(RoleSchema), ...totalShape })
   .strict()
   .meta({ id: 'RoleList' });
 
@@ -145,7 +145,7 @@ export const RolePermissionListSchema = z
   .object({
     ...pageInfoShape,
     permissions: z.array(RolePermissionSchema),
-    total: z.number().int().min(0),
+    ...totalShape,
   })
   .strict()
   .meta({ id: 'RolePermissionList' });

@@ -43,6 +43,7 @@ import {
   CursorPaginationQuerySchema,
   legacyOffsetQueryShape,
   pageInfoShape,
+  totalShape,
 } from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
 
@@ -315,7 +316,7 @@ export const GoalListItemSchema = z
   .meta({ id: 'GoalListItem' });
 
 export const GoalListResponseSchema = z
-  .object({ ...pageInfoShape, goals: z.array(GoalListItemSchema), total: z.number().int() })
+  .object({ ...pageInfoShape, goals: z.array(GoalListItemSchema), ...totalShape })
   .strict()
   .meta({ id: 'GoalList' });
 

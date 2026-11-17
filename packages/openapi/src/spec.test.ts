@@ -240,6 +240,34 @@ describe('generated OpenAPI document', () => {
     expect(legacy.filter(({ deprecated }) => !deprecated)).toEqual([]);
   });
 
+  it('shapes every list through the shared page components', () => {
+    const lists = [
+      '/api/v1/agents',
+      '/api/v1/agent-groups',
+      '/api/v1/api-keys',
+      '/api/v1/mcp-servers',
+      '/api/v1/tasks',
+      '/api/v1/topics',
+    ];
+    for (const path of lists) {
+      const body = (spec.paths as Record<string, any>)[path].get.responses['200'].content[
+        'application/json'
+      ].schema;
+      const data = payloadOf(spec, body).properties as Record<string, Schema>;
+      expect({
+        path,
+        hasMore: data.hasMore,
+        nextCursor: data.nextCursor,
+        total: data.total,
+      }).toEqual({
+        hasMore: { $ref: '#/components/schemas/PageHasMore' },
+        nextCursor: { $ref: '#/components/schemas/PageNextCursor' },
+        path,
+        total: { $ref: '#/components/schemas/PageTotal' },
+      });
+    }
+  });
+
   it('keeps the OpenResponses error shape on POST /responses', () => {
     const op = (spec.paths as Record<string, any>)['/api/v1/responses'].post;
     const schema = op.responses['400'].content['application/json'].schema;

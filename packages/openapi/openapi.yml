@@ -186,6 +186,19 @@ components:
         - sort
         - updatedAt
       additionalProperties: false
+    PageHasMore:
+      type: boolean
+      description: Whether another page follows this one.
+    PageNextCursor:
+      description: Pass as `cursor` to fetch the next page; `null` on the last page.
+      type:
+        - string
+        - "null"
+    PageTotal:
+      type: integer
+      minimum: 0
+      maximum: 9007199254740991
+      description: Number of items across all pages.
     CreatedAgentGroup:
       type: object
       properties:
@@ -210,21 +223,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         agents:
           type: array
           items:
             $ref: "#/components/schemas/Agent"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -864,21 +871,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         chatGroups:
           type: array
           items:
             $ref: "#/components/schemas/ChatGroup"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -2295,21 +2296,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         plugins:
           type: array
           items:
             $ref: "#/components/schemas/InstalledPlugin"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -2342,21 +2337,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         files:
           type: array
           items:
             $ref: "#/components/schemas/FileListItem"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
         totalSize:
           type: string
       required:
@@ -2829,21 +2818,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         goals:
           type: array
           items:
             $ref: "#/components/schemas/GoalListItem"
         total:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -4136,21 +4119,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         knowledgeBases:
           type: array
           items:
             $ref: "#/components/schemas/KnowledgeBaseListItem"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -5863,21 +5840,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         permissions:
           type: array
           items:
             $ref: "#/components/schemas/Permission"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -6483,21 +6454,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         roles:
           type: array
           items:
             $ref: "#/components/schemas/Role"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -6541,21 +6506,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         permissions:
           type: array
           items:
             $ref: "#/components/schemas/RolePermission"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -7140,21 +7099,15 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         tasks:
           type: array
           items:
             $ref: "#/components/schemas/TaskListItem"
         total:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
       required:
         - hasMore
         - nextCursor
@@ -9130,17 +9083,11 @@ components:
       type: object
       properties:
         hasMore:
-          type: boolean
-          description: Whether another page follows this one.
+          $ref: "#/components/schemas/PageHasMore"
         nextCursor:
-          description: Pass as `cursor` to fetch the next page; `null` on the last page.
-          type:
-            - string
-            - "null"
+          $ref: "#/components/schemas/PageNextCursor"
         total:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
+          $ref: "#/components/schemas/PageTotal"
         users:
           type: array
           items:
@@ -9401,18 +9348,11 @@ paths:
                         items:
                           $ref: "#/components/schemas/AgentGroup"
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
-                        description: Number of items across all pages.
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - items
                       - hasMore
@@ -12473,18 +12413,11 @@ paths:
                         items:
                           $ref: "#/components/schemas/ApiKey"
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
-                        description: Number of items across all pages.
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - items
                       - hasMore
@@ -15443,21 +15376,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       runs:
                         type: array
                         items:
                           $ref: "#/components/schemas/EvalRun"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -15648,13 +15575,9 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       runId:
                         type: string
                       topics:
@@ -15662,9 +15585,7 @@ paths:
                         items:
                           $ref: "#/components/schemas/EvalRunTopic"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -15992,13 +15913,9 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       results:
                         type: array
                         items:
@@ -16006,9 +15923,7 @@ paths:
                       runId:
                         type: string
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -16832,21 +16747,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       benchmarks:
                         type: array
                         items:
                           $ref: "#/components/schemas/EvalBenchmark"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -17959,21 +17868,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       datasets:
                         type: array
                         items:
                           $ref: "#/components/schemas/EvalDataset"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -18982,21 +18885,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       testCases:
                         type: array
                         items:
                           $ref: "#/components/schemas/EvalTestCase"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -25654,18 +25551,11 @@ paths:
                         items:
                           $ref: "#/components/schemas/McpServer"
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
-                        description: Number of items across all pages.
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - items
                       - hasMore
@@ -27935,21 +27825,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       messages:
                         type: array
                         items:
                           $ref: "#/components/schemas/Message"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -28963,21 +28847,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       models:
                         type: array
                         items:
                           $ref: "#/components/schemas/Model"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -31678,21 +31556,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       providers:
                         type: array
                         items:
                           $ref: "#/components/schemas/Provider"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -36462,21 +36334,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       topics:
                         type: array
                         items:
                           $ref: "#/components/schemas/Topic"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor
@@ -37242,21 +37108,15 @@ paths:
                     type: object
                     properties:
                       hasMore:
-                        type: boolean
-                        description: Whether another page follows this one.
+                        $ref: "#/components/schemas/PageHasMore"
                       nextCursor:
-                        description: Pass as `cursor` to fetch the next page; `null` on the last page.
-                        type:
-                          - string
-                          - "null"
+                        $ref: "#/components/schemas/PageNextCursor"
                       threads:
                         type: array
                         items:
                           $ref: "#/components/schemas/TopicThread"
                       total:
-                        type: integer
-                        minimum: 0
-                        maximum: 9007199254740991
+                        $ref: "#/components/schemas/PageTotal"
                     required:
                       - hasMore
                       - nextCursor

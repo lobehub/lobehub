@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { THREAD_STATUS, THREAD_TYPE, topics } from '@/database/schemas/topic';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicTopic, PublicUser } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
@@ -159,7 +159,7 @@ export const TopicSchema = TopicSummarySchema.extend({
   .meta({ id: 'Topic' });
 
 export const TopicListSchema = z
-  .object({ ...pageInfoShape, topics: z.array(TopicSchema), total: z.number().int().min(0) })
+  .object({ ...pageInfoShape, topics: z.array(TopicSchema), ...totalShape })
   .strict();
 
 export const TopicThreadSchema = z
@@ -177,5 +177,5 @@ export const TopicThreadSchema = z
   .meta({ id: 'TopicThread' });
 
 export const TopicThreadListSchema = z
-  .object({ ...pageInfoShape, threads: z.array(TopicThreadSchema), total: z.number().int().min(0) })
+  .object({ ...pageInfoShape, threads: z.array(TopicThreadSchema), ...totalShape })
   .strict();

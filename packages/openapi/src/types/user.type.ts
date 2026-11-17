@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { UserRoleItem } from '@/database/schemas';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicRole, PublicUser } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema } from './common.type';
@@ -220,7 +220,7 @@ export const UserIdentitySchema = z
 export const CurrentUserSchema = z.union([UserSchema, UserIdentitySchema]);
 
 export const UserListSchema = z
-  .object({ ...pageInfoShape, total: z.number().int().min(0), users: z.array(UserSchema) })
+  .object({ ...pageInfoShape, ...totalShape, users: z.array(UserSchema) })
   .strict()
   .meta({ id: 'UserList' });
 

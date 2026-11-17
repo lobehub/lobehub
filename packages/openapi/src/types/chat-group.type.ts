@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicChatGroup, PublicChatGroupMember } from '../helpers/public-fields';
 import type { IPaginationQuery } from './common.type';
 import { dateTimeSchema, PaginationQuerySchema } from './common.type';
@@ -106,7 +106,7 @@ export const ChatGroupListSchema = z
   .object({
     ...pageInfoShape,
     chatGroups: z.array(ChatGroupSchema),
-    total: z.number().int().min(0),
+    ...totalShape,
   })
   .strict()
   .meta({ id: 'ChatGroupList' });

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { files } from '@/database/schemas/file';
 import { SESSION_TYPE } from '@/database/schemas/session';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type {
   PublicFile,
   PublicMessage,
@@ -317,7 +317,7 @@ export const MessageSchema = z
   .meta({ id: 'Message' });
 
 export const MessageListSchema = z
-  .object({ ...pageInfoShape, messages: z.array(MessageSchema), total: z.number().int().min(0) })
+  .object({ ...pageInfoShape, messages: z.array(MessageSchema), ...totalShape })
   .strict();
 
 export const MessageCountSchema = z.object({ count: z.number().int().min(0) }).strict();

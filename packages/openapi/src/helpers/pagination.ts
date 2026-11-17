@@ -72,17 +72,27 @@ export const legacyOffsetQueryShape = {
   offset: deprecated(coercedInt(0).optional(), '`cursor`'),
 };
 
-/** What every list response carries next to its items. */
+/**
+ * What every list response carries next to its items. Each field is a shared
+ * spec component (`PageHasMore`, `PageNextCursor`, `PageTotal`), so every list
+ * payload references the same definitions while staying a closed object.
+ */
 export const pageInfoShape = {
-  hasMore: z.boolean().describe('Whether another page follows this one.'),
-  nextCursor: z
-    .string()
-    .nullable()
-    .describe('Pass as `cursor` to fetch the next page; `null` on the last page.'),
+  hasMore: z.boolean().meta({
+    description: 'Whether another page follows this one.',
+    id: 'PageHasMore',
+  }),
+  nextCursor: z.string().nullable().meta({
+    description: 'Pass as `cursor` to fetch the next page; `null` on the last page.',
+    id: 'PageNextCursor',
+  }),
 };
 
 export const totalShape = {
-  total: z.number().int().min(0).describe('Number of items across all pages.'),
+  total: z.number().int().min(0).meta({
+    description: 'Number of items across all pages.',
+    id: 'PageTotal',
+  }),
 };
 
 /**

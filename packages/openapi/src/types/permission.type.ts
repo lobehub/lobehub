@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { pageInfoShape } from '../helpers/pagination';
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PublicPermission } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, PaginationQuerySchema } from './common.type';
@@ -85,7 +85,7 @@ export const PermissionListSchema = z
   .object({
     ...pageInfoShape,
     permissions: z.array(PermissionSchema),
-    total: z.number().int().min(0),
+    ...totalShape,
   })
   .strict()
   .meta({ id: 'PermissionList' });

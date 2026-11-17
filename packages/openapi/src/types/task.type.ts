@@ -25,6 +25,7 @@ import {
   CursorPaginationQuerySchema,
   legacyOffsetQueryShape,
   pageInfoShape,
+  totalShape,
 } from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
 
@@ -215,7 +216,7 @@ export const TaskListItemSchema = z
   .meta({ id: 'TaskListItem' });
 
 export const TaskListResponseSchema = z
-  .object({ ...pageInfoShape, tasks: z.array(TaskListItemSchema), total: z.number().int() })
+  .object({ ...pageInfoShape, tasks: z.array(TaskListItemSchema), ...totalShape })
   .strict()
   .meta({ id: 'TaskList' });
 
