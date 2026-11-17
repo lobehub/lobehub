@@ -50,6 +50,7 @@ import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerWebhookCommand } from './commands/webhook';
 import { registerWidgetCommand } from './commands/widget';
+import { registerWorkCommand } from './commands/work';
 import { registerWorkspaceCommand } from './commands/workspace';
 import { CLI_DISPLAY_NAME, CLI_PRIMARY_BIN, CLI_PRODUCT_NAME } from './constants/identity';
 import { cliVersion } from './pkg';
@@ -114,6 +115,7 @@ export function createProgram() {
   registerTaskCommand(program);
   registerThreadCommand(program);
   registerTopicCommand(program);
+  registerWorkCommand(program);
   registerTraceCommand(program);
   registerMessageCommand(program);
   registerModelCommand(program);

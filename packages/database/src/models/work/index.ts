@@ -44,7 +44,7 @@ import {
   type RegisterGoalReportWorkParams,
 } from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
-import { listTopicPullRequests } from './pullRequests';
+import { listTopicPullRequests, listTopicsByPullRequest } from './pullRequests';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
 import type { ExternalToolWorkOperation } from './toolResultParsing';
@@ -233,4 +233,6 @@ export class WorkModel {
 
   /** See {@link listTopicPullRequests}. */
   listTopicPullRequests = (topicId: string) => listTopicPullRequests(this.ctx, topicId);
+
+  listTopicsByPullRequest = (identifier: string) => listTopicsByPullRequest(this.ctx, identifier);
 }
