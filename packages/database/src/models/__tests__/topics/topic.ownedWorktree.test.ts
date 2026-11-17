@@ -197,6 +197,23 @@ describe('cleanup lookups', () => {
     ).toBe(2);
   });
 
+  it('still counts an archived or trashed topic whose run is going on in the folder', async () => {
+    const running = {
+      runningOperation: { assistantMessageId: 'm', operationId: 'op', startedAt: 'x' },
+      workingDirectoryConfig: { git: { activeWorktree: WT }, path: '/code/repo' },
+    } as ChatTopicMetadata;
+    await insert('archived-running', running, { status: 'completed' });
+    await insert('trashed-running', running, { isDeleted: true });
+    await insert(
+      'archived-idle',
+      {
+        workingDirectoryConfig: { git: { activeWorktree: WT }, path: '/code/repo' },
+      },
+      { status: 'completed' },
+    );
+    expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(2);
+  });
+
   it('finds the owners of a worktree path, trashed ones included', async () => {
     await insert('o-1', { ...autoCreated(), ...pending('dev-1') }, { isDeleted: true });
     await insert('o-2', { workingDirectoryConfig: { path: '/code/repo' } });

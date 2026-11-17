@@ -755,6 +755,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     });
 
     bindGatewayClientHandlers(wsClient, handlerContext, wsId);
+    // The share has its own device id: drain what waited for it, in its workspace.
+    wsClient.on('connected', () => {
+      const shareDeviceId = wsClient.currentDeviceId;
+      if (shareDeviceId)
+        void createLambdaClient(auth, wsId)
+          .device.drainWorktreeCleanups.mutate({ deviceId: shareDeviceId })
+          .catch((err) =>
+            info(`Worktree cleanup drain failed (${wsId}): ${(err as Error).message}`),
+          );
+    });
 
     const entry: WorkspaceShareConnection = { cancelRefresh: null, client: wsClient };
 

@@ -66,9 +66,10 @@ export interface GatewayAuthContext {
   token: string;
 }
 
-/** Runs each time the personal connection comes up, with the device id it registered. */
+/** Runs each time a connection comes up, with the device id it is connected as. */
 export interface ConnectedHandler {
-  (info: { deviceId: string }): Promise<void>;
+  /** `workspaceId`: a workspace share connection, identified by its own device id. */
+  (info: { deviceId: string; workspaceId?: string }): Promise<void>;
 }
 
 export interface DeviceRegistrar {

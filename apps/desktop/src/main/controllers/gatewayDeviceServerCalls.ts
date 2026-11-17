@@ -72,12 +72,13 @@ export const postDeviceRegistration = async (
  * this returns at once.
  */
 export const requestWorktreeCleanupDrain = async (
-  deviceId: string,
+  { deviceId, workspaceId }: { deviceId: string; workspaceId?: string },
   { serverUrl, token }: ServerAuth,
 ): Promise<void> => {
   const response = await fetch(`${serverUrl}/trpc/lambda/device.drainWorktreeCleanups`, {
     body: JSON.stringify({ json: { deviceId } }),
-    headers: authedHeaders(token),
+    // A share connection's cleanups live in its workspace.
+    headers: authedHeaders(token, workspaceId),
     method: 'POST',
     signal: AbortSignal.timeout(10_000),
   });

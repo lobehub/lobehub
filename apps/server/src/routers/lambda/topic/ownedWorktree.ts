@@ -1,11 +1,19 @@
+import { resolveOwnedWorktrees } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { type WorkspaceRole } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { DeviceModel } from '@/database/models/device';
+import type { TopicModel } from '@/database/models/topic';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { WorktreeCleanupService } from '@/server/services/worktreeCleanup';
 
+import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { assertCanUseTopicTargets } from '../_helpers/conversationResourceGuard';
 import { assertCreatorTopicTargets } from '../_helpers/shareVisitorTargetGuard';
+import { assertDeviceOperable } from '../device/guards';
 import { guardCtx, topicProcedure } from './procedures';
 
 /**
@@ -49,16 +57,59 @@ const assertTopic = async (ctx: Parameters<typeof guardCtx>[0], topicId: string)
   await assertCreatorTopicTargets(guardCtx(ctx), [topicId]);
 };
 
+interface OwnedWorktreeCtx {
+  serverDB: LobeChatDatabase;
+  topicModel: TopicModel;
+  userId: string;
+  workspaceId?: string | null;
+  workspaceRole?: WorkspaceRole;
+}
+
+/** The topic row (recycle bin included) and its record for `path`. */
+const loadOwnedWorktree = async (ctx: OwnedWorktreeCtx, topicId: string, path: string) => {
+  const [row] = await ctx.topicModel.findOwnedWorktreeTopics([topicId]);
+  const entry = resolveOwnedWorktrees(row?.metadata).find((item) => item.path === path);
+  if (!row || !entry) throw new TRPCError({ code: 'NOT_FOUND', message: 'Unknown worktree.' });
+  return { entry, row };
+};
+
+/**
+ * The device a worktree lives on must be one the caller may operate: the
+ * service dispatches to it directly, past `deviceProcedure`'s own guard.
+ */
+const assertWorktreeDevice = async (ctx: OwnedWorktreeCtx, deviceId: string | undefined) => {
+  if (!deviceId) return;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  await assertDeviceOperable(
+    {
+      deviceModel: new DeviceModel(ctx.serverDB, ctx.userId, workspaceId),
+      userId: ctx.userId,
+      workspaceId,
+      workspaceRole: ctx.workspaceRole,
+    },
+    deviceId,
+    'remove or restore a worktree',
+  );
+};
+
+/** Destructive or settling actions belong to the topic's creator (or a workspace owner). */
+const assertTopicCreator = (ctx: OwnedWorktreeCtx, topicUserId: string) =>
+  assertWorkspaceRowManageable(ctx, topicUserId, 'topic');
+
 export const ownedWorktreeRouter = router({
   /**
-   * Discard a kept worktree's changes and delete it. `local`: the desktop
-   * runs it over IPC, so only the claim is taken here and the result arrives
-   * with `reportOwnedWorktreeCleanup`.
+   * Discard a kept worktree's changes and delete it — the topic creator's
+   * call, on a device they may operate. `local`: the desktop runs it over IPC,
+   * so only the claim is taken here and the result arrives with
+   * `reportOwnedWorktreeCleanup`.
    */
   discardOwnedWorktree: ownedWorktreeProcedure
     .input(target.extend({ local: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       await assertTopic(ctx, input.topicId);
+      const { entry, row } = await loadOwnedWorktree(ctx, input.topicId, input.path);
+      assertTopicCreator(ctx, row.userId);
+      await assertWorktreeDevice(ctx, entry.deviceId);
       return (
         (await ctx.worktreeCleanup.discard(input.topicId, input.path, { local: input.local })) ??
         null
@@ -67,6 +118,8 @@ export const ownedWorktreeRouter = router({
 
   keepOwnedWorktree: ownedWorktreeProcedure.input(target).mutation(async ({ ctx, input }) => {
     await assertTopic(ctx, input.topicId);
+    const { row } = await loadOwnedWorktree(ctx, input.topicId, input.path);
+    assertTopicCreator(ctx, row.userId);
     return (await ctx.worktreeCleanup.keep(input.topicId, input.path)) ?? null;
   }),
 
@@ -76,8 +129,16 @@ export const ownedWorktreeRouter = router({
    */
   claimLocalWorktreeCleanups: ownedWorktreeProcedure
     .input(z.object({ deviceId: z.string().optional() }))
-    .mutation(async ({ ctx, input }) => ctx.worktreeCleanup.claimLocalCleanups(input.deviceId)),
+    .mutation(async ({ ctx, input }) => {
+      await assertWorktreeDevice(ctx, input.deviceId);
+      return ctx.worktreeCleanup.claimLocalCleanups(input.deviceId);
+    }),
 
+  /**
+   * A desktop's IPC result. Accepted from the topic's creator, or from whoever
+   * operates the device the worktree is on (a shared workspace device runs its
+   * teammates' cleanups).
+   */
   reportOwnedWorktreeCleanup: ownedWorktreeProcedure
     .input(
       target.extend({
@@ -86,7 +147,9 @@ export const ownedWorktreeRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertTopic(ctx, input.topicId);
+      const { entry, row } = await loadOwnedWorktree(ctx, input.topicId, input.path);
+      if (entry.deviceId) await assertWorktreeDevice(ctx, entry.deviceId);
+      else assertTopicCreator(ctx, row.userId);
       return (
         (await ctx.worktreeCleanup.recordCleanupResult(
           input.topicId,
@@ -98,8 +161,9 @@ export const ownedWorktreeRouter = router({
     }),
 
   /**
-   * Check a cleaned-up worktree out again before a restored topic's next turn.
-   * Runs on the device unless the desktop already did it and passes `result`.
+   * Check a cleaned-up worktree out again before a restored topic's next turn
+   * (any member who may use the topic and operate its device). Runs on the
+   * device unless the desktop runs it (`local`) and reports its `result`.
    */
   restoreOwnedWorktree: ownedWorktreeProcedure
     .input(
@@ -111,6 +175,8 @@ export const ownedWorktreeRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await assertTopic(ctx, input.topicId);
+      const { entry } = await loadOwnedWorktree(ctx, input.topicId, input.path);
+      await assertWorktreeDevice(ctx, entry.deviceId);
       return ctx.worktreeCleanup.restore(input.topicId, input.path, {
         local: input.local,
         result: input.result,

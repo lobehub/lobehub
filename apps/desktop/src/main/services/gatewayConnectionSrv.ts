@@ -702,6 +702,12 @@ export default class GatewayConnectionService extends ServiceModule {
       // client's late success says nothing about the current one.
       if (scope) {
         this.workspaceAuthRetried.delete(client);
+        // A share connection has its own device id: drain what waited for it.
+        const deviceId = client.currentDeviceId;
+        if (deviceId)
+          void this.connectedHandler?.({ deviceId, workspaceId: scope.workspaceId }).catch(
+            (error) => logger.warn(`Connected handler failed: ${(error as Error).message}`),
+          );
       } else if (this.client === client) {
         this.authRecoveryAttempted = false;
       }

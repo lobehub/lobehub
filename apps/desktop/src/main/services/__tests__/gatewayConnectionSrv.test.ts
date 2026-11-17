@@ -150,6 +150,23 @@ describe('GatewayConnectionService system_info_request', () => {
     expect(handler).toHaveBeenLastCalledWith({ deviceId: 'device-1' });
   });
 
+  /** @example A workspace share connection drains the cleanups waiting on its own device id. */
+  it('runs the connected handler for a workspace share connection with its workspace', async () => {
+    const handler = vi.fn(async () => {});
+    service.setConnectedHandler(handler);
+    const listeners: Record<string, () => void> = {};
+    const shareClient = {
+      currentDeviceId: 'ws-device-1',
+      on: (event: string, listener: () => void) => {
+        listeners[event] = listener;
+      },
+    };
+    service['setupClientEvents'](shareClient as any, { workspaceId: 'ws-1' });
+
+    listeners.connected();
+    expect(handler).toHaveBeenCalledWith({ deviceId: 'ws-device-1', workspaceId: 'ws-1' });
+  });
+
   /** @example Updating or removing Codex changes the capability after reconnecting. */
   it('revokes native support when a reconnect probe fails', async () => {
     getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });

@@ -519,6 +519,28 @@ describe('connect command', () => {
       });
     });
 
+    it('drains the worktree cleanups of a workspace share in its own workspace', async () => {
+      vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
+      getGlobalConfig.mockResolvedValue({
+        serverConfig: { deviceGatewayUrl: 'https://gw.example.com' },
+      });
+      await connect();
+      await clientEventHandlers['rpc_request']?.({
+        method: 'enrollWorkspace',
+        params: { token: 'ws-token', workspaceId: 'ws-1' },
+        requestId: 'rpc-1',
+        type: 'rpc_request',
+      });
+      createLambdaClientMock.mockClear();
+      drainWorktreeCleanups.mockClear();
+
+      // `clientEventHandlers` now belongs to the share connection.
+      clientEventHandlers.connected?.();
+
+      expect(createLambdaClientMock).toHaveBeenCalledWith(expect.anything(), 'ws-1');
+      expect(drainWorktreeCleanups).toHaveBeenCalledWith({ deviceId: 'mock-device-id' });
+    });
+
     it('passes --gateway through to the daemon child, which resolves the same way', async () => {
       await connect('--daemon', '--gateway', 'https://gateway.example.com');
 

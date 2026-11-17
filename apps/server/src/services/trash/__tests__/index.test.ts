@@ -161,6 +161,39 @@ describe('TrashService', () => {
       expect(outcome.failed).toEqual([{ code: 'notFound', id: root.id }]);
     });
 
+    it('keeps a topic in the bin while its worktree cleanup waits for an offline device', async () => {
+      const WT = '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill';
+      const pending = (at: string) => ({
+        ownedWorktrees: [
+          {
+            branch: 'lobehub/quiet-hill',
+            cleanup: { at, state: 'pending' as const, trigger: 'trashed' as const },
+            createdAt: 'y',
+            deviceId: 'dev-1',
+            path: WT,
+            sourcePath: '/code/repo',
+          },
+        ],
+      });
+      const topic = await topicModel.create({ title: 'Worktree topic' });
+      const [root] = await service.trashTopics([topic.id]);
+      await serverDB
+        .update(topics)
+        .set({ metadata: pending(new Date().toISOString()) })
+        .where(eq(topics.id, topic.id));
+
+      // Purging now would lose the only record of the folder to delete.
+      expect(await service.purge([root.id])).toEqual({ blocked: [root.id], purged: 0 });
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(1);
+
+      // A device gone for longer than the hold no longer keeps it.
+      await serverDB
+        .update(topics)
+        .set({ metadata: pending(new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()) })
+        .where(eq(topics.id, topic.id));
+      expect(await service.purge([root.id])).toEqual({ blocked: [], purged: 1 });
+    });
+
     it('bulk sweeps become one restorable root per topic', async () => {
       const agent = await agentModel.create({ title: 'Bot' });
       await topicModel.create({ agentId: agent.id, title: 'a' });

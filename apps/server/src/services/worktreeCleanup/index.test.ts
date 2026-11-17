@@ -306,6 +306,13 @@ describe('discard / keep', () => {
     expect(gateway.cleanupOwnedWorktree).not.toHaveBeenCalled();
   });
 
+  it('never discards a live worktree the cleanup has not set aside', async () => {
+    await insert('t-live-discard', autoCreated(), { status: 'active' });
+    await expect(service().discard('t-live-discard', WT)).resolves.toBeUndefined();
+    expect(gateway.cleanupOwnedWorktree).not.toHaveBeenCalled();
+    expect((await entryOf('t-live-discard'))?.cleanup).toBeUndefined();
+  });
+
   it('keep stops every later automatic cleanup', async () => {
     await insert('t-keep', keptDirty());
     expect((await service().keep('t-keep', WT))?.cleanup?.state).toBe('kept');

@@ -1,9 +1,10 @@
 import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
 import { claimAutoCreatedWorktree, resolveOwnedWorktrees } from '@lobechat/types';
-import { and, eq, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 
 import { topics } from '../../schemas';
 import type { TopicModelContext } from './context';
+import { isInFlight } from './inFlight';
 
 /**
  * Persistence for `metadata.ownedWorktrees` — the worktrees the app created for
@@ -126,9 +127,11 @@ export const findOwnersOfWorktree = async (
 
 /**
  * How many other topics still use `path` as their working directory or CLI
- * start folder and are neither archived nor in the recycle bin. A worktree
- * shared like that (a handoff continuing in it) is not cleaned up yet.
- * Spans every member's topics in a workspace, which share its devices.
+ * start folder. A worktree shared like that (a handoff continuing in it) is
+ * not cleaned up yet. "Still" means not archived and not in the recycle bin —
+ * or archived or trashed with a run still going there, since retiring a topic
+ * does not stop its run. Spans every member's topics in a workspace, which
+ * share its devices.
  */
 export const countLiveTopicsUsingWorktree = async (
   ctx: TopicModelContext,
@@ -136,17 +139,13 @@ export const countLiveTopicsUsingWorktree = async (
 ): Promise<number> => {
   const variants = [...new Set([path, path.replace(/[/\\]+$/, '')])];
   const rows = await ctx.db
-    .select({ id: topics.id })
+    .select({ isDeleted: topics.isDeleted, metadata: topics.metadata, status: topics.status })
     .from(topics)
     .where(
       and(
-        // `workspaceScope` keeps trashed rows out.
-        ctx.workspaceScope(),
+        // Recycle bin included: a trashed topic may still be running there.
+        ctx.trashScope(),
         excludeIds.length > 0 ? notInArray(topics.id, excludeIds) : undefined,
-        or(
-          sql`${topics.status} IS NULL`,
-          and(ne(topics.status, 'completed'), ne(topics.status, 'archived')),
-        ),
         or(
           inArray(
             sql<string>`${topics.metadata} -> 'workingDirectoryConfig' -> 'git' ->> 'activeWorktree'`,
@@ -159,7 +158,10 @@ export const countLiveTopicsUsingWorktree = async (
         ),
       ),
     );
-  return rows.length;
+  return rows.filter((row) => {
+    const retired = !!row.isDeleted || row.status === 'completed' || row.status === 'archived';
+    return !retired || isInFlight(row);
+  }).length;
 };
 
 /**

@@ -382,9 +382,11 @@ export class WorktreeCleanupService {
       topicId,
       path,
       'discarded',
+      // Only a worktree the cleanup already set aside (kept, kept dirty,
+      // failed) or a discard still waiting on its device: never a live one.
       (entry) =>
-        !entry.cleanup ||
-        ['failed', 'kept', 'keptDirty', 'pending'].includes(entry.cleanup.state) ||
+        ['failed', 'kept', 'keptDirty'].includes(entry.cleanup?.state ?? '') ||
+        (entry.cleanup?.state === 'pending' && entry.cleanup.trigger === 'discarded') ||
         this.isStaleClaim(entry.cleanup),
     );
     if (!claimed || local) return claimed;

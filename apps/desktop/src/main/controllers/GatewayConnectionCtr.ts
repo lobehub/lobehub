@@ -233,7 +233,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Back online: the server runs the worktree cleanups that waited for this
     // device (topics archived or trashed while it was offline).
-    srv.setConnectedHandler(({ deviceId }) => this.drainWorktreeCleanups(deviceId));
+    srv.setConnectedHandler(({ deviceId, workspaceId }) =>
+      this.drainWorktreeCleanups(deviceId, workspaceId),
+    );
 
     // Wire up the workspace-share hooks: connect-token minting (startup restore
     // + token expiry) and the "row still registered?" probe that keeps a share
@@ -1217,12 +1219,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * archived or trashed while it was offline). Best-effort: anything missed
    * waits for the next connect, or for the renderer's drain on startup.
    */
-  private async drainWorktreeCleanups(deviceId: string): Promise<void> {
+  private async drainWorktreeCleanups(deviceId: string, workspaceId?: string): Promise<void> {
     const [serverUrl, token] = await Promise.all([
       this.remoteServerConfigCtr.getRemoteServerUrl(),
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
-    if (serverUrl && token) await requestWorktreeCleanupDrain(deviceId, { serverUrl, token });
+    if (serverUrl && token)
+      await requestWorktreeCleanupDrain({ deviceId, workspaceId }, { serverUrl, token });
   }
 
   /**
