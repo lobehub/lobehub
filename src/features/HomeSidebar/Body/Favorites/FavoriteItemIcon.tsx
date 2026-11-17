@@ -14,9 +14,9 @@ const ICON_SIZE = 14;
 /**
  * Leading icon of a favorite row. A task wears its status, the way Recents
  * shows it: the open task detail wins so a change made on the page shows at
- * once, the listed status covers every other task (the list refreshes when a
- * favorited task's page closes), and a task with neither (deleted, moved)
- * keeps the plain type icon.
+ * once, the listed status covers every other task (kept current by
+ * `useTaskFavoritesRefresh`), and a task with neither (deleted, moved) keeps
+ * the plain type icon.
  */
 const FavoriteItemIcon = memo<{ item: FavoriteItem }>(({ item }) => {
   const isTask = item.type === 'task';

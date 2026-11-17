@@ -2,13 +2,14 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useRefreshOnTaskLeave } from './useRefreshOnTaskLeave';
+import { RUNNING_TASK_REFRESH_MS, useTaskFavoritesRefresh } from './useTaskFavoritesRefresh';
 
 const state = vi.hoisted(() => ({
   activeTaskId: undefined as string | undefined,
   favoriteTaskIds: new Set<string>(),
+  list: [] as { status?: string; type: string }[],
   refreshFavorites: vi.fn(async () => {}),
 }));
 
@@ -26,20 +27,27 @@ vi.mock('@/store/home', () => {
 });
 vi.mock('@/store/home/selectors', () => ({
   favoriteSelectors: {
+    favoriteList: () => state.list,
     isFavorite: (_type: string, id: string) => () => state.favoriteTaskIds.has(id),
   },
 }));
 
-describe('useRefreshOnTaskLeave', () => {
+describe('useTaskFavoritesRefresh', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     state.activeTaskId = undefined;
     state.favoriteTaskIds = new Set(['task_fav']);
+    state.list = [{ status: 'paused', type: 'task' }];
     state.refreshFavorites.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('refreshes the favorites when a favorited task page closes', () => {
     state.activeTaskId = 'task_fav';
-    const { rerender } = renderHook(() => useRefreshOnTaskLeave());
+    const { rerender } = renderHook(() => useTaskFavoritesRefresh());
     expect(state.refreshFavorites).not.toHaveBeenCalled();
 
     state.activeTaskId = undefined;
@@ -50,11 +58,28 @@ describe('useRefreshOnTaskLeave', () => {
 
   it('leaves the favorites alone for a task that is not favorited', () => {
     state.activeTaskId = 'task_other';
-    const { rerender } = renderHook(() => useRefreshOnTaskLeave());
+    const { rerender } = renderHook(() => useTaskFavoritesRefresh());
 
     state.activeTaskId = undefined;
     rerender();
 
     expect(state.refreshFavorites).not.toHaveBeenCalled();
+  });
+
+  it('polls only while a favorited task is running', () => {
+    const { rerender } = renderHook(() => useTaskFavoritesRefresh());
+    vi.advanceTimersByTime(RUNNING_TASK_REFRESH_MS * 2);
+    expect(state.refreshFavorites).not.toHaveBeenCalled();
+
+    state.list = [{ status: 'running', type: 'task' }];
+    rerender();
+    vi.advanceTimersByTime(RUNNING_TASK_REFRESH_MS * 2);
+    expect(state.refreshFavorites).toHaveBeenCalledTimes(2);
+
+    // The run finished: the next list has no running task, so polling stops.
+    state.list = [{ status: 'completed', type: 'task' }];
+    rerender();
+    vi.advanceTimersByTime(RUNNING_TASK_REFRESH_MS * 2);
+    expect(state.refreshFavorites).toHaveBeenCalledTimes(2);
   });
 });
