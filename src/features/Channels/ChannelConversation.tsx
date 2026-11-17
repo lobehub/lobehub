@@ -22,7 +22,7 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { hasReplyActivity } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
-import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { channelJoinEvents, channelTimeline, isSelfJoinable } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
@@ -129,7 +129,9 @@ const Timeline = ({
         outgoing.length
           ? [...detail.messages, ...outgoing.map((item) => item.message)]
           : detail.messages,
-        threadId || direct ? [] : channelJoinEvents(detail.members),
+        threadId || direct
+          ? []
+          : channelJoinEvents(detail.members, { selfJoinable: isSelfJoinable(detail.channel) }),
         !detail.hasMore && before === undefined,
       )
     : [];

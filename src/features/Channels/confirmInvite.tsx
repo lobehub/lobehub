@@ -37,7 +37,9 @@ const ConfirmBody = ({
 
 /**
  * Asks before someone outside the Channel is brought in. Resolves false however the dialog
- * closes without confirming (Cancel, ✕, Esc or the mask), so a waiting send never hangs.
+ * closes without confirming (Cancel, ✕, Esc or the mask), so a waiting send never hangs. Cancel
+ * closes through the modal context, which does not report `onOpenChange`; the close completing
+ * does, whatever closed it.
  */
 export const confirmInvite = ({ title, ...body }: ConfirmInviteOptions) =>
   new Promise<boolean>((resolve) => {
@@ -53,6 +55,9 @@ export const confirmInvite = ({ title, ...body }: ConfirmInviteOptions) =>
       title,
       width: 420,
       onOpenChange: (open) => {
+        if (!open) settle(false);
+      },
+      onOpenChangeComplete: (open) => {
         if (!open) settle(false);
       },
     });

@@ -1,7 +1,7 @@
 import type { ChannelPublicMember, ChannelPublicMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { channelJoinEvents, channelTimeline, isSelfJoinable } from './joinEvents';
 
 const member = (id: string, joinedAt: number, patch: Partial<ChannelPublicMember> = {}) =>
   ({
@@ -28,6 +28,22 @@ describe('channelJoinEvents', () => {
       ['c'],
     ]);
     expect(events.every((event) => event.inviter === owner)).toBe(true);
+  });
+
+  it('names no inviter where people join by themselves', () => {
+    const [event] = channelJoinEvents([owner, member('a', 60_000, { actorType: 'user' })], {
+      selfJoinable: true,
+    });
+    expect(event.inviter).toBeUndefined();
+  });
+
+  it.each([
+    [{ projectId: 'prj_1', visibility: 'private', workspaceId: 'ws' }, true],
+    [{ projectId: null, visibility: 'public', workspaceId: 'ws' }, true],
+    [{ projectId: null, visibility: 'private', workspaceId: 'ws' }, false],
+    [{ projectId: 'prj_1', visibility: 'private', workspaceId: null }, false],
+  ] as const)('tells which Channels take self-joins: %o → %s', (channel, expected) => {
+    expect(isSelfJoinable(channel)).toBe(expected);
   });
 
   it('does not guess the inviter when an admin could have added members', () => {
