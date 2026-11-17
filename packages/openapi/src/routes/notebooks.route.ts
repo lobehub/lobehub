@@ -146,7 +146,9 @@ NotebookRoutes.delete(
   '/:id',
   routeDoc({
     data: DeletedResourceSchema,
-    errors: [404],
+    description:
+      'Deletes a notebook note. Pages attached to a notebook answer 422; delete them through `/documents/{id}`.',
+    errors: [404, 422],
     operationId: 'notebooks.delete',
     summary: 'Delete a notebook document',
     tags: TAGS,

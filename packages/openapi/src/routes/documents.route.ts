@@ -316,7 +316,7 @@ DocumentRoutes.post(
   routeDoc({
     data: DocumentVersionSavedSchema,
     description:
-      'Stores the document as it is now as a manual version, including unsaved edits of members editing it live.',
+      'Stores the document as it is now as a manual version, including unsaved edits of members editing it live. 403 when the caller may view but not edit the page.',
     errors: [404, 409],
     operationId: 'documents.saveVersion',
     status: 201,

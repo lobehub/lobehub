@@ -2739,7 +2739,7 @@ export class Documents extends HeyApiClient {
     /**
      * Save a document version
      *
-     * Stores the document as it is now as a manual version, including unsaved edits of members editing it live.
+     * Stores the document as it is now as a manual version, including unsaved edits of members editing it live. 403 when the caller may view but not edit the page.
      *
      * **API key scopes:** `document:write`.
      */
@@ -2969,6 +2969,8 @@ export class Notebooks extends HeyApiClient {
     
     /**
      * Delete a notebook document
+     *
+     * Deletes a notebook note. Pages attached to a notebook answer 422; delete them through `/documents/{id}`.
      *
      * **API key scopes:** `document:write`.
      */

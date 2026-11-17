@@ -380,7 +380,8 @@ export class DocumentRestService extends BaseService {
       permission: 'read',
       url:
         visibility === 'link' && appEnv.APP_URL
-          ? new URL(`/share/page/${documentId}`, appEnv.APP_URL).toString()
+          ? // The same link the editor's share popover copies: the id without its `docs_` prefix.
+            new URL(`/share/page/${documentId.replace(/^docs_/, '')}`, appEnv.APP_URL).toString()
           : null,
       visibility,
     };

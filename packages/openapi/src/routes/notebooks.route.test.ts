@@ -278,7 +278,7 @@ describe('notebook boundary', () => {
     expect(after.data.content).toBe('Page body');
   });
 
-  it('refuses a Markdown-only write to a page attached to a notebook', async () => {
+  it('refuses a Markdown-only write or a delete on a page attached to a notebook', async () => {
     const page = await createPage();
     await call('/notebooks/associate', {
       body: { documentId: page.id, topicId: TOPIC },
@@ -294,6 +294,11 @@ describe('notebook boundary', () => {
     });
     expect(res.status).toBe(422);
     expect((await json(res)).code).toBe('unprocessable_entity');
+
+    // Nor does a notebook delete destroy the attached page.
+    const removed = await call(`/notebooks/${page.id}`, { key: KEYS.ownerWrite, method: 'DELETE' });
+    expect(removed.status).toBe(422);
+    expect((await call(`/documents/${page.id}`, { key: KEYS.ownerRead })).status).toBe(200);
   });
 });
 

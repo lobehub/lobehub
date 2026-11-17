@@ -42844,7 +42844,8 @@ paths:
       operationId: documents.saveVersion
       description: >-
         Stores the document as it is now as a manual version, including unsaved
-        edits of members editing it live.
+        edits of members editing it live. 403 when the caller may view but not
+        edit the page.
 
 
         **API key scopes:** `document:write`.
@@ -45793,6 +45794,12 @@ paths:
                   maxLength: 1000
     delete:
       operationId: notebooks.delete
+      description: >-
+        Deletes a notebook note. Pages attached to a notebook answer 422; delete
+        them through `/documents/{id}`.
+
+
+        **API key scopes:** `document:write`.
       summary: Delete a notebook document
       tags:
         - notebooks
@@ -45888,6 +45895,21 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "429":
           content:
             application/json:
@@ -45930,4 +45952,3 @@ paths:
             minLength: 1
           required: true
         - $ref: "#/components/parameters/WorkspaceId"
-      description: "**API key scopes:** `document:write`."

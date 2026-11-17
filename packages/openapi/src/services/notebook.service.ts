@@ -118,24 +118,33 @@ export class NotebookRestService extends BaseService {
     return toNotebookDocument(document);
   }
 
-  async updateDocument(id: string, body: UpdateNotebookDocumentRequest) {
-    const current = await this.requireDocument(id);
-    // The notebook write stores Markdown only. A Page attached to a notebook keeps
-    // editor state (and maybe a live room) that such a write would leave stale.
-    if (!NotebookDocumentTypeSchema.safeParse(current.fileType).success) {
+  /**
+   * A notebook note, not a Page attached to the notebook. The notebook write
+   * stores Markdown only (a page's editor state and live room would go stale),
+   * and the notebook delete removes the document itself, which for an attached
+   * page would destroy it in every other place it is used.
+   */
+  private async requireNote(id: string, action: 'delete' | 'update') {
+    const document = await this.requireDocument(id);
+    if (!NotebookDocumentTypeSchema.safeParse(document.fileType).success) {
       throw new ApiException(
         422,
         'unprocessable_entity',
-        'This document is a page, not a notebook note; update it with PATCH /api/v1/documents/{id}',
+        `This document is a page attached to a notebook, not a notebook note; ${action} it through /api/v1/documents/{id}`,
       );
     }
+    return document;
+  }
+
+  async updateDocument(id: string, body: UpdateNotebookDocumentRequest) {
+    await this.requireNote(id, 'update');
     const document = await this.notebook.updateDocument({ ...body, id });
     if (!document) throw this.createNotFoundError('Notebook document not found');
     return toNotebookDocument(document);
   }
 
   async deleteDocument(id: string): Promise<DeletedResource> {
-    await this.requireDocument(id);
+    await this.requireNote(id, 'delete');
     await this.notebook.deleteDocument({ id });
     return { deleted: true, id };
   }
