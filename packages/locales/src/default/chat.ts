@@ -3944,6 +3944,8 @@ export default {
   'workingPanel.overview.keptWorktree.removed': 'Worktree cleaned up · branch {{branch}} kept',
   'workingPanel.overview.keptWorktree.removedHint':
     'It was removed when this topic was archived or moved to the recycle bin. Sending a message checks the branch out again at the same path.',
+  'workingPanel.overview.keptWorktree.submoduleTitle':
+    'Worktree kept: a submodule has commits no remote holds',
   'workingPanel.overview.keptWorktree.title_one': 'Worktree kept: {{count}} uncommitted file',
   'workingPanel.overview.keptWorktree.title_other': 'Worktree kept: {{count}} uncommitted files',
   'workingPanel.overview.outputs': 'Outputs',

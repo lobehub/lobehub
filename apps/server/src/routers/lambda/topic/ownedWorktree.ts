@@ -30,6 +30,7 @@ const cleanupResultSchema = z.object({
   dirtyFiles: z.number().int().nonnegative().optional(),
   error: z.string().max(2000).optional(),
   outcome: z.enum(['dirty', 'error', 'locked', 'refused', 'removed']),
+  unpushedSubmodules: z.number().int().nonnegative().optional(),
 });
 
 const restoreResultSchema = z.object({

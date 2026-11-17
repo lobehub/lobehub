@@ -1,7 +1,11 @@
 'use client';
 
 import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
-import { isRetiredTopicStatus, resolveOwnedWorktrees } from '@lobechat/types';
+import {
+  isRetiredTopicStatus,
+  resolveOwnedWorktrees,
+  SUBMODULE_COMMITS_REASON,
+} from '@lobechat/types';
 import { Button, confirmModal, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { GitBranchIcon, TriangleAlertIcon } from 'lucide-react';
@@ -175,9 +179,11 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
             value={
               entry.cleanup?.state === 'failed'
                 ? t('workingPanel.overview.keptWorktree.failedTitle')
-                : t('workingPanel.overview.keptWorktree.title', {
-                    count: entry.cleanup?.dirtyFiles ?? 0,
-                  })
+                : entry.cleanup?.reason === SUBMODULE_COMMITS_REASON
+                  ? t('workingPanel.overview.keptWorktree.submoduleTitle')
+                  : t('workingPanel.overview.keptWorktree.title', {
+                      count: entry.cleanup?.dirtyFiles ?? 0,
+                    })
             }
           />
           {entry.cleanup?.state === 'failed' &&

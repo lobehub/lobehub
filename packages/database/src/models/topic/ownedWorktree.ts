@@ -105,6 +105,34 @@ export const findPendingOwnedWorktreeTopics = async (
 };
 
 /**
+ * Topics under these agents / legacy sessions whose worktree cleanup is still
+ * waiting (`pending` / `running`), trashed ones included: purging the parent
+ * would cascade them away with the only record of the folder to delete.
+ */
+export const findWaitingCleanupTopicsUnder = async (
+  ctx: TopicModelContext,
+  { agentIds, sessionIds }: { agentIds: string[]; sessionIds: string[] },
+): Promise<OwnedWorktreeTopicRow[]> => {
+  if (agentIds.length === 0 && sessionIds.length === 0) return [];
+  return ctx.db
+    .select(rowColumns)
+    .from(topics)
+    .where(
+      and(
+        ctx.trashScope(),
+        or(
+          agentIds.length > 0 ? inArray(topics.agentId, agentIds) : undefined,
+          sessionIds.length > 0 ? inArray(topics.sessionId, sessionIds) : undefined,
+        ),
+        or(
+          containsEntry({ cleanup: { state: 'pending' } }),
+          containsEntry({ cleanup: { state: 'running' } }),
+        ),
+      ),
+    );
+};
+
+/**
  * Topics that own the worktree at `path` — by their record, or (for topics
  * that predate it) by the markers `resolveOwnedWorktrees` backfills from.
  * Trashed ones included; the caller filters for retired topics.

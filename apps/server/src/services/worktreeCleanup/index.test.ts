@@ -116,6 +116,16 @@ describe('retireTopics — cleaning up', () => {
     });
   });
 
+  it("records a worktree kept for its submodules' unpushed commits", async () => {
+    await insert('t-sub', autoCreated());
+    answers({ branch: BRANCH, dirtyFiles: 0, outcome: 'dirty', unpushedSubmodules: 1 });
+    await service().retireTopics(['t-sub'], 'archived');
+    expect((await entryOf('t-sub'))?.cleanup).toMatchObject({
+      reason: 'submoduleCommits',
+      state: 'keptDirty',
+    });
+  });
+
   it('leaves a locked worktree unmanaged', async () => {
     await insert('t-lock', autoCreated());
     answers({ outcome: 'locked' });

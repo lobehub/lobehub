@@ -194,6 +194,31 @@ describe('TrashService', () => {
       expect(await service.purge([root.id])).toEqual({ blocked: [], purged: 1 });
     });
 
+    it("holds an agent's purge while one of its topics still has a worktree cleanup waiting", async () => {
+      const agent = await agentModel.create({ title: 'Bot' });
+      const topic = await topicModel.create({ agentId: agent.id, title: 'Worktree topic' });
+      const root = await service.trashAgent(agent.id);
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            ownedWorktrees: [
+              {
+                cleanup: { at: new Date().toISOString(), state: 'pending', trigger: 'trashed' },
+                createdAt: 'y',
+                deviceId: 'dev-1',
+                path: '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill',
+                sourcePath: '/code/repo',
+              },
+            ],
+          },
+        })
+        .where(eq(topics.id, topic.id));
+
+      expect(await service.purge([root!.id])).toEqual({ blocked: [root!.id], purged: 0 });
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(1);
+    });
+
     it('bulk sweeps become one restorable root per topic', async () => {
       const agent = await agentModel.create({ title: 'Bot' });
       await topicModel.create({ agentId: agent.id, title: 'a' });

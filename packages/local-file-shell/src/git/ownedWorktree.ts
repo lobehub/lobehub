@@ -194,6 +194,30 @@ export const countUncommittedFiles = async (worktreePath: string): Promise<numbe
   return count;
 };
 
+/**
+ * Submodules whose checked-out commit no remote branch holds. A linked
+ * worktree keeps its submodules' repositories inside its own git admin dir
+ * (`<common>/worktrees/<name>/modules/`), so removing the worktree would take
+ * such commits with it — a clean status says nothing about them.
+ */
+export const countSubmodulesWithLocalCommits = async (worktreePath: string): Promise<number> => {
+  const status = await git(worktreePath, ['submodule', 'status', '--recursive']).catch(() => '');
+  let count = 0;
+  for (const line of status.split('\n')) {
+    // `-` marks a submodule that is not checked out: nothing local to lose.
+    if (!line.trim() || line.startsWith('-')) continue;
+    const subPath = line.slice(1).trim().split(/\s+/)[1];
+    if (!subPath) continue;
+    const dir = path.join(worktreePath, subPath);
+    const head = (await git(dir, ['rev-parse', 'HEAD'])).trim();
+    const held = (
+      await git(dir, ['for-each-ref', '--count=1', '--contains', head, 'refs/remotes'])
+    ).trim();
+    if (!held) count += 1;
+  }
+  return count;
+};
+
 const prune = async (sourcePath: string) => {
   await git(sourcePath, ['worktree', 'prune']).catch((error) =>
     warn('git worktree prune failed in %s: %O', sourcePath, error),
@@ -224,7 +248,7 @@ const withTimeout = async <T>(work: Promise<T>, ms: number, onTimeout: () => T):
 };
 
 /**
- * Removals still running on this device, by resolved path. The cleanup's
+ * Cleanups still running on this device, by resolved path. The cleanup's
  * overall budget can expire while a large delete goes on; until it actually
  * stops, a restore (or another cleanup) of the same path waits for it rather
  * than writing into a folder that is still disappearing.
@@ -279,7 +303,6 @@ const runCleanup = async ({
 
   try {
     assertLexicallyInsideRoot(root, worktreePath);
-    await waitForDeletion(worktreePath);
 
     // Gone already (deleted by hand, or a cleanup that finished after its
     // report was lost): only the stale registration is left to drop.
@@ -300,19 +323,20 @@ const runCleanup = async ({
     if (!discard) {
       const dirtyFiles = await countUncommittedFiles(worktreePath);
       if (dirtyFiles > 0) return { branch, dirtyFiles, outcome: 'dirty' };
+      const unpushedSubmodules = await countSubmodulesWithLocalCommits(worktreePath);
+      if (unpushedSubmodules > 0)
+        return { branch, dirtyFiles: 0, outcome: 'dirty', unpushedSubmodules };
     }
 
     if (!branch) branch = await keepDetachedCommits(sourcePath, worktreePath);
 
-    await trackDeletion(worktreePath, async () => {
-      try {
-        await gitRemove(sourcePath, listed.path);
-      } catch (error) {
-        warn('git worktree remove failed for %s, removing the folder: %O', worktreePath, error);
-        await deleteFolder(worktreePath);
-      }
-      await prune(sourcePath);
-    });
+    try {
+      await gitRemove(sourcePath, listed.path);
+    } catch (error) {
+      warn('git worktree remove failed for %s, removing the folder: %O', worktreePath, error);
+      await deleteFolder(worktreePath);
+    }
+    await prune(sourcePath);
 
     if (existsSync(worktreePath))
       return { branch, error: 'The worktree folder could not be removed', outcome: 'error' };
@@ -328,13 +352,19 @@ const runCleanup = async ({
  * (or `discard` says to drop it). The branch is never touched. Returns what
  * happened instead of throwing, so the caller can record it as is.
  */
-export const cleanupOwnedWorktree = (
+export const cleanupOwnedWorktree = async (
   params: CleanupOwnedWorktreeParams,
-): Promise<GitOwnedWorktreeCleanupResult> =>
-  withTimeout(runCleanup(params), CLEANUP_TIMEOUT_MS, () => ({
-    error: 'Worktree cleanup timed out',
-    outcome: 'error',
-  }));
+): Promise<GitOwnedWorktreeCleanupResult> => {
+  // One cleanup per folder at a time, and the whole of it is tracked — from
+  // its first check to the end of the delete, past the answer's time budget —
+  // so a restore of the same folder never runs in between.
+  await waitForDeletion(params.worktreePath);
+  return withTimeout(
+    trackDeletion(params.worktreePath, () => runCleanup(params)),
+    CLEANUP_TIMEOUT_MS,
+    () => ({ error: 'Worktree cleanup timed out', outcome: 'error' }),
+  );
+};
 
 /**
  * Whether the branch exists in the source repository. Only git's own "no such

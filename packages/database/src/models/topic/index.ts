@@ -143,6 +143,7 @@ export class TopicModel {
   findOwnedWorktreeTopics = this.withContext(ownedWorktree.findOwnedWorktreeTopics);
   findPendingOwnedWorktreeTopics = this.withContext(ownedWorktree.findPendingOwnedWorktreeTopics);
   findOwnersOfWorktree = this.withContext(ownedWorktree.findOwnersOfWorktree);
+  findWaitingCleanupTopicsUnder = this.withContext(ownedWorktree.findWaitingCleanupTopicsUnder);
   countLiveTopicsUsingWorktree = this.withContext(ownedWorktree.countLiveTopicsUsingWorktree);
   updateOwnedWorktree = this.withContext(ownedWorktree.updateOwnedWorktree);
 

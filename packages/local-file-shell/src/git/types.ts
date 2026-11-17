@@ -356,6 +356,8 @@ export interface GitOwnedWorktreeCleanupResult {
   dirtyFiles?: number;
   error?: string;
   outcome: 'dirty' | 'error' | 'locked' | 'refused' | 'removed';
+  /** With `dirty`: submodules whose commits no remote holds (they would go with the worktree). */
+  unpushedSubmodules?: number;
 }
 
 /** See `restoreOwnedWorktree`; mirrors `OwnedWorktreeRestoreResult` in `@lobechat/types`. */

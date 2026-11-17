@@ -74,6 +74,7 @@ const PUBLIC_METHODS = [
   'findRunInitiators',
   'findShareVisitorTopicIds',
   'findTrashedByIds',
+  'findWaitingCleanupTopicsUnder',
   'getCronTopicsGroupedByCronJob',
   'isRunningOperationAlive',
   'listTopicsForMemoryExtractor',

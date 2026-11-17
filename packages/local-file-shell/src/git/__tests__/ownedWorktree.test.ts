@@ -118,6 +118,31 @@ describe('cleanupOwnedWorktree — clean / dirty', () => {
     expect(existsSync(path.join(worktree, 'lib', 'scratch.txt'))).toBe(true);
   });
 
+  it('keeps a worktree whose submodule holds commits no remote has, until they are pushed', async () => {
+    const lib = await tempDir('owt-lib-');
+    await initRepo(lib);
+    git(worktree, '-c', 'protocol.file.allow=always', 'submodule', 'add', lib, 'lib');
+    git(worktree, 'commit', '-m', 'add submodule');
+    // A commit made only inside the worktree's submodule, recorded by the parent.
+    const sub = path.join(worktree, 'lib');
+    git(sub, 'config', 'user.email', 'test@example.com');
+    git(sub, 'config', 'user.name', 'Test');
+    git(sub, 'config', 'commit.gpgsign', 'false');
+    await writeFile(path.join(sub, 'local.txt'), 'only here\n');
+    git(sub, 'add', 'local.txt');
+    git(sub, 'commit', '-m', 'local submodule work');
+    git(worktree, 'commit', '-am', 'bump submodule');
+    await expect(countUncommittedFiles(worktree)).resolves.toBe(0);
+
+    await expect(run()).resolves.toMatchObject({ outcome: 'dirty', unpushedSubmodules: 1 });
+    expect(existsSync(path.join(sub, 'local.txt'))).toBe(true);
+
+    // Once a remote branch holds it, nothing would be lost.
+    git(sub, 'push', 'origin', 'HEAD:refs/heads/side');
+    git(sub, 'fetch', 'origin');
+    await expect(run()).resolves.toMatchObject({ outcome: 'removed' });
+  });
+
   it('counts a staged rename once', async () => {
     git(worktree, 'mv', 'a.txt', 'renamed.txt');
     await expect(countUncommittedFiles(worktree)).resolves.toBe(1);

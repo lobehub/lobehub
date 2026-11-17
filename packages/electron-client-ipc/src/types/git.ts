@@ -350,6 +350,7 @@ export interface GitOwnedWorktreeCleanupResult {
   dirtyFiles?: number;
   error?: string;
   outcome: 'dirty' | 'error' | 'locked' | 'refused' | 'removed';
+  unpushedSubmodules?: number;
 }
 
 /** `restoreOwnedWorktree`: an app-created worktree checked out again at its path. */

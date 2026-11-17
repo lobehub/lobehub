@@ -209,7 +209,12 @@ export interface OwnedWorktreeCleanupResult {
   outcome: OwnedWorktreeCleanupOutcome;
   /** With `unreachable`: the device answered, but predates the owned-worktree RPCs. */
   outdated?: boolean;
+  /** With `dirty`: submodules whose commits no remote holds. */
+  unpushedSubmodules?: number;
 }
+
+/** `cleanup.reason` of a worktree kept for its submodules' unpushed commits. */
+export const SUBMODULE_COMMITS_REASON = 'submoduleCommits';
 
 /** What a device reports for one `restoreOwnedWorktree` call. */
 export interface OwnedWorktreeRestoreResult {

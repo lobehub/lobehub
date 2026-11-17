@@ -62,6 +62,7 @@ const runLocalCleanup = async (
       dirtyFiles: result.dirtyFiles,
       error: result.error,
       outcome,
+      unpushedSubmodules: result.unpushedSubmodules,
     },
     topicId,
     trigger,

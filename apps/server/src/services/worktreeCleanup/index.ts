@@ -12,6 +12,7 @@ import {
   isRetiredTopicStatus,
   OWNED_WORKTREE_HOLD_STATUSES,
   resolveOwnedWorktrees,
+  SUBMODULE_COMMITS_REASON,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -146,7 +147,12 @@ export class WorktreeCleanupService {
         case 'dirty': {
           return {
             ...next,
-            cleanup: this.stamp({ dirtyFiles: result.dirtyFiles, state: 'keptDirty', trigger }),
+            cleanup: this.stamp({
+              dirtyFiles: result.dirtyFiles,
+              ...(result.unpushedSubmodules && { reason: SUBMODULE_COMMITS_REASON }),
+              state: 'keptDirty',
+              trigger,
+            }),
           };
         }
         case 'locked': {

@@ -39,25 +39,31 @@ export const topicCascades = (topics: TopicItem[], removeFiles?: boolean): Trash
  */
 export const PENDING_WORKTREE_PURGE_HOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** Whether any of these topics still has a worktree cleanup waiting on its device. */
+export const hasWaitingWorktreeCleanup = (
+  rows: { metadata?: Parameters<typeof resolveOwnedWorktrees>[0] }[],
+  now = Date.now(),
+) =>
+  rows.some((row) =>
+    resolveOwnedWorktrees(row.metadata).some(
+      (entry) =>
+        (entry.cleanup?.state === 'pending' || entry.cleanup?.state === 'running') &&
+        now - new Date(entry.cleanup.at).getTime() < PENDING_WORKTREE_PURGE_HOLD_MS,
+    ),
+  );
+
+export const WORKTREE_CLEANUP_WAITING_MESSAGE =
+  'The worktree cleanup is waiting for its device to connect';
+
 /**
  * The cleanup of the worktree the app created for a topic lives only in the
  * topic's metadata. Purging the topic while that cleanup still waits on its
  * device would leave the folder untracked for good, so the purge waits for it
  * (the root stays in the bin and the next purge or sweep retries).
  */
-const assertNoPendingWorktreeCleanup = async (
-  topicModel: TopicModel,
-  topicId: string,
-  now = Date.now(),
-) => {
-  const [row] = await topicModel.findOwnedWorktreeTopics([topicId]);
-  const waiting = resolveOwnedWorktrees(row?.metadata).some(
-    (entry) =>
-      (entry.cleanup?.state === 'pending' || entry.cleanup?.state === 'running') &&
-      now - new Date(entry.cleanup.at).getTime() < PENDING_WORKTREE_PURGE_HOLD_MS,
-  );
-  if (waiting)
-    throw new TrashPurgeBlockedError('The worktree cleanup is waiting for its device to connect');
+const assertNoPendingWorktreeCleanup = async (topicModel: TopicModel, topicId: string) => {
+  if (hasWaitingWorktreeCleanup(await topicModel.findOwnedWorktreeTopics([topicId])))
+    throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
 };
 
 export const topicHandler: TrashHandler = {
