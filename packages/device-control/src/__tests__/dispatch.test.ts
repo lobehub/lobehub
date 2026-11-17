@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
@@ -122,6 +123,112 @@ describe('executeDeviceRpc', () => {
     await expect(executeDeviceRpc('nope', {}, makeDeps())).rejects.toThrow(
       'Unknown device RPC method: nope',
     );
+  });
+
+  describe('session worktree files', () => {
+    let repo: string;
+    let first: string;
+    let second: string;
+
+    beforeAll(async () => {
+      const base = await realpath(root);
+      repo = path.join(base, 'repo');
+      first = path.join(base, 'first-worktree');
+      second = path.join(base, 'second-worktree');
+      await mkdir(repo);
+      const git = (...args: string[]) =>
+        execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
+      git('init', '-q');
+      await writeFile(path.join(repo, 'notes.txt'), 'original');
+      git('add', 'notes.txt');
+      git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'seed');
+      git('worktree', 'add', '-b', 'first', first);
+      git('worktree', 'add', '-b', 'second', second);
+    });
+
+    const run = (
+      worktreePath: string,
+      method: string,
+      params: Record<string, unknown>,
+      sourcePath = repo,
+    ) =>
+      executeDeviceRpc(
+        'runWorktreeFileOperation',
+        { approvedRoot: repo, rpc: { method, params }, sourcePath, worktreePath },
+        makeDeps(),
+      );
+
+    it('reads and writes two sibling Git worktrees without registering their paths', async () => {
+      for (const checkout of [first, second]) {
+        const filePath = path.join(checkout, 'notes.txt');
+        const content = path.basename(checkout);
+        await expect(
+          run(checkout, 'writeLocalFile', { content, path: filePath, workspaceRoot: checkout }),
+        ).resolves.toEqual({ success: true });
+        await expect(
+          run(checkout, 'getLocalFilePreview', { path: filePath, workingDirectory: checkout }),
+        ).resolves.toMatchObject({ preview: { content, type: 'text' }, success: true });
+      }
+      expect(await readFile(path.join(repo, 'notes.txt'), 'utf8')).toBe('original');
+    });
+
+    it('refuses an unrelated directory and a source symlink that escapes the registered root', async () => {
+      const unrelated = path.join(root, 'unrelated');
+      const escapedSource = path.join(repo, 'escape');
+      await mkdir(unrelated);
+      await symlink(first, escapedSource, 'dir');
+      await expect(
+        run(unrelated, 'writeLocalFile', {
+          content: 'must not write',
+          path: path.join(unrelated, 'notes.txt'),
+          workspaceRoot: unrelated,
+        }),
+      ).rejects.toThrow('not a registered worktree');
+      await expect(
+        run(
+          second,
+          'getLocalFilePreview',
+          {
+            path: path.join(second, 'notes.txt'),
+            workingDirectory: second,
+          },
+          escapedSource,
+        ),
+      ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+      expect(await readdir(unrelated)).toEqual([]);
+    });
+
+    it('refuses to inherit access to worktrees from a registered subdirectory of the source', async () => {
+      const approvedRoot = path.join(repo, 'registered-subdirectory');
+      await mkdir(approvedRoot);
+
+      await expect(
+        executeDeviceRpc(
+          'runWorktreeFileOperation',
+          {
+            approvedRoot,
+            rpc: {
+              method: 'getLocalFilePreview',
+              params: { path: path.join(first, 'notes.txt'), workingDirectory: first },
+            },
+            sourcePath: approvedRoot,
+            worktreePath: first,
+          },
+          makeDeps(),
+        ),
+      ).rejects.toThrow('The source repository is outside the approved workspace');
+    });
+
+    it('refuses preview and write through a symlink to a sibling worktree', async () => {
+      const link = path.join(first, 'linked.txt');
+      await symlink(path.join(second, 'notes.txt'), link, 'file');
+      await expect(
+        run(first, 'getLocalFilePreview', { path: link, workingDirectory: first }),
+      ).resolves.toMatchObject({ code: 'forbidden', success: false });
+      await expect(
+        run(first, 'writeLocalFile', { content: 'blocked', path: link, workspaceRoot: first }),
+      ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+    });
   });
 
   describe('app update', () => {

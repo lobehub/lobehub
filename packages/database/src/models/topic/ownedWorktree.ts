@@ -1,5 +1,15 @@
-import type { ChatTopicMetadata, OwnedWorktree, OwnedWorktreeTopicRow } from '@lobechat/types';
-import { claimAutoCreatedWorktree, resolveOwnedWorktrees } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  OwnedWorktree,
+  OwnedWorktreeTopicRow,
+  WorkingDirConfig,
+} from '@lobechat/types';
+import {
+  claimAutoCreatedWorktree,
+  getWorkingDirEffectivePath,
+  isRetiredTopicStatus,
+  resolveOwnedWorktrees,
+} from '@lobechat/types';
 import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
 
 import { topics } from '../../schemas';
@@ -48,6 +58,64 @@ export const carriedOwnedWorktrees = (
   const owned = resolveOwnedWorktrees(existing);
   return owned.length > 0 ? { ownedWorktrees: owned } : {};
 };
+
+/** Attach a checkout under the dispatch claim, or record it for cleanup if the topic retired meanwhile. */
+export const recordFirstSendWorktreeCheckout = async (
+  ctx: TopicModelContext,
+  id: string,
+  {
+    claimId,
+    deviceId,
+    workingDirectoryConfig,
+  }: { claimId?: string; deviceId: string; workingDirectoryConfig: WorkingDirConfig },
+): Promise<{ canDispatch: boolean; cleanupTrigger?: 'archived' | 'trashed' }> =>
+  ctx.db.transaction(async (tx) => {
+    const ownedTopic = and(eq(topics.id, id), eq(topics.userId, ctx.userId), ctx.trashScope());
+    const [row] = await tx.select(rowColumns).from(topics).where(ownedTopic).for('update');
+    if (!row) return { canDispatch: false };
+
+    const run = row.metadata?.scheduledRun;
+    const ownsClaim = !!claimId && run?.kind === 'worktree_start' && run.claim?.id === claimId;
+    const cleanupTrigger: 'archived' | 'trashed' | undefined = row.isDeleted
+      ? 'trashed'
+      : isRetiredTopicStatus(row.status)
+        ? 'archived'
+        : undefined;
+    const canDispatch = !cleanupTrigger && ownsClaim && row.status === 'scheduled';
+    const checkout = claimAutoCreatedWorktree({
+      ...row.metadata,
+      ...carriedOwnedWorktrees(row.metadata),
+      boundDeviceId: deviceId,
+      workingDirectory: getWorkingDirEffectivePath(workingDirectoryConfig),
+      workingDirectoryConfig,
+    });
+    const ownedWorktrees = checkout.ownedWorktrees?.map((entry) =>
+      cleanupTrigger && !entry.cleanup && entry.path === workingDirectoryConfig.git?.activeWorktree
+        ? {
+            ...entry,
+            cleanup: {
+              at: new Date().toISOString(),
+              state: 'pending' as const,
+              trigger: cleanupTrigger,
+            },
+          }
+        : entry,
+    );
+    await tx
+      .update(topics)
+      .set({
+        metadata: {
+          ...(canDispatch ? checkout : row.metadata),
+          ...(ownedWorktrees && { ownedWorktrees }),
+          ...(cleanupTrigger && ownsClaim && { scheduledRun: null }),
+        },
+        ...(cleanupTrigger === 'trashed' &&
+          ownsClaim &&
+          row.status === 'scheduled' && { status: 'active' as const }),
+      })
+      .where(ownedTopic);
+    return { canDispatch, cleanupTrigger };
+  });
 
 /** Topics by id with their owned-worktree data, trashed ones included. */
 export const findOwnedWorktreeTopics = async (

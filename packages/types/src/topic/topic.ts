@@ -618,6 +618,23 @@ const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
   userMessageId: z.string(),
 });
 
+export const firstSendWorktreeSchema = z.object({
+  baseBranch: z.string().min(1).max(1024).optional(),
+  deviceId: z.string().min(1).max(256),
+  path: z.string().min(1).max(4096),
+  repoType: z.enum(['git', 'github']),
+  sourcePath: z.string().min(1).max(4096),
+});
+
+const worktreeStartRunSchema = topicScheduledRunBaseSchema.extend({
+  error: z.string().optional(),
+  kind: z.literal('worktree_start'),
+  operationId: z.string(),
+  retryable: z.boolean().optional(),
+  userMessageId: z.string(),
+  waitingForDevice: z.boolean().optional(),
+});
+
 /**
  * A deferred agent run on a topic: *when* to run (`runAt`), a lease so only one
  * replica dispatches it (`claim`), and *what* to run (the `kind` variant).
@@ -632,11 +649,14 @@ const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
 export const topicScheduledRunSchema = z.discriminatedUnion('kind', [
   resumeAfterRateLimitRunSchema,
   delayedStartRunSchema,
+  worktreeStartRunSchema,
 ]);
 
 export type TopicScheduledRunClaim = z.infer<typeof topicScheduledRunClaimSchema>;
 export type ResumeAfterRateLimitRun = z.infer<typeof resumeAfterRateLimitRunSchema>;
 export type DelayedStartRun = z.infer<typeof delayedStartRunSchema>;
+export type FirstSendWorktree = z.infer<typeof firstSendWorktreeSchema>;
+export type WorktreeStartRun = z.infer<typeof worktreeStartRunSchema>;
 export type TopicScheduledRun = z.infer<typeof topicScheduledRunSchema>;
 
 /**
