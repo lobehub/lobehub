@@ -33,13 +33,18 @@ import type { WorkContext } from './context';
 import { registerDocumentWork } from './document';
 import { registerExternalWork } from './external';
 import { findFileWorkVersionByToolCall, registerFileWork } from './file';
-import { normalizeGithubShellToolResult, normalizeGithubToolResult } from './githubToolResult';
+import {
+  type GithubShellNormalizeOptions,
+  normalizeGithubShellToolResult,
+  normalizeGithubToolResult,
+} from './githubToolResult';
 import {
   findLatestGoalReportVersion,
   registerGoalReportWork,
   type RegisterGoalReportWorkParams,
 } from './goalReport';
 import { normalizeLinearToolResult } from './linearToolResult';
+import { listTopicPullRequests } from './pullRequests';
 import * as queries from './queries';
 import { registerTaskWork } from './task';
 import type { ExternalToolWorkOperation } from './toolResultParsing';
@@ -65,6 +70,9 @@ const SKILL_TOOL_RESULT_NORMALIZERS = {
  * module, keeping the polymorphic Work registry logic split by provider type
  * without changing the public API surface.
  */
+export type { GithubShellNormalizeOptions } from './githubToolResult';
+export { type GitPushResult, parseGithubRemoteUrl, parseGitPushResult } from './gitPushResult';
+
 export class WorkModel {
   private readonly ctx: WorkContext;
 
@@ -164,10 +172,11 @@ export class WorkModel {
    */
   registerShellGithubResult = async (
     params: SkillToolResultWorkInput & { toolIdentifier: string },
+    options?: GithubShellNormalizeOptions,
   ): Promise<WorkItem | null> => {
     const { toolIdentifier, ...rest } = params;
 
-    const operation = normalizeGithubShellToolResult(rest);
+    const operation = normalizeGithubShellToolResult(rest, options);
     if (!operation) return null;
 
     return this.registerExternal({ ...operation.params, toolIdentifier });
@@ -221,4 +230,7 @@ export class WorkModel {
     queries.listByWorkspace(this.ctx, params);
 
   listVersions = (workId: string) => queries.listVersions(this.ctx, workId);
+
+  /** See {@link listTopicPullRequests}. */
+  listTopicPullRequests = (topicId: string) => listTopicPullRequests(this.ctx, topicId);
 }

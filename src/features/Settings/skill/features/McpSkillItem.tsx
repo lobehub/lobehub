@@ -16,6 +16,7 @@ import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
+import { RowMoreMenu } from './RowActions';
 import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -35,7 +36,8 @@ interface McpSkillItemProps {
 const McpSkillItem = memo<McpSkillItemProps>(
   ({ identifier, title, avatar, description, type, runtimeType, author, isSelected, onSelect }) => {
     const { t } = useTranslation('plugin');
-    const iconSize = useSkillListVariant() === 'page' ? 20 : 18;
+    const isPage = useSkillListVariant() === 'page';
+    const iconSize = isPage ? 20 : 18;
     const isMCP = runtimeType === 'mcp';
     const isCustomPlugin = type === 'customPlugin';
     const isCommunityMCP = isMCP && !isCustomPlugin;
@@ -71,6 +73,8 @@ const McpSkillItem = memo<McpSkillItemProps>(
         <SkillListRow
           active={isSelected}
           description={description}
+          extra={isPage ? <RowMoreMenu onOpenDetail={onSelect} /> : undefined}
+          summary={isPage ? author : undefined}
           title={title}
           icon={() =>
             avatar && avatar !== 'MCP_AVATAR' ? (
@@ -106,6 +110,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
                 <Icon icon={McpIcon} size={16} />
               )}
             </div>
+            {/* lobe-design-ignore LOBE-DIV-CLICK: legacy compact row; its Actions menu is the keyboard path to the same detail */}
             <span {...stylex.props(styles.title)} onClick={onSelect ? undefined : openDetail}>
               {title}
             </span>

@@ -18,6 +18,7 @@ vi.mock('@/services/work', async (importOriginal) => {
     ...actual,
     workService: {
       refreshConversationViews: vi.fn().mockResolvedValue(undefined),
+      refreshTopicPullRequests: vi.fn().mockResolvedValue(undefined),
     },
   };
 });

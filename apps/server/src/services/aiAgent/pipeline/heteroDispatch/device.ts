@@ -124,6 +124,8 @@ export const dispatchToCliDevice = async (
     topicRepos,
     unansweredUserTurns,
   } = prepared;
+  // The resolved GitHub credential is for the cloud sandbox only: a device may belong to another member.
+  const { githubToken: _sandboxGithubToken, ...deviceHeteroParams } = heteroParams;
   const { agentId: resolvedAgentId, operationId, topicId } = run;
 
   const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
@@ -281,7 +283,7 @@ export const dispatchToCliDevice = async (
     ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
     : await traceHeteroStage('device gateway_dispatch', () =>
         deviceGateway.dispatchAgentRun({
-          ...heteroParams,
+          ...deviceHeteroParams,
           agentId: resolvedAgentId,
           // Only a live client advertising the native protocol receives these wrapper flags.
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,

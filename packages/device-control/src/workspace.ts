@@ -152,6 +152,7 @@ const listSkillFilesRecursive = async (dir: string): Promise<string[]> => {
 
 interface SkillFrontmatterFields {
   description?: string;
+  disableModelInvocation?: boolean;
   name?: string;
 }
 
@@ -169,6 +170,7 @@ const parseSkillFrontmatter = (raw: string): SkillFrontmatterFields => {
     const { data } = matter(raw) as { data: Record<string, unknown> };
     return {
       description: readStringField(data, 'description'),
+      disableModelInvocation: data['disable-model-invocation'] === true,
       name: readStringField(data, 'name'),
     };
   } catch {
@@ -206,6 +208,7 @@ const scanSkillsInSource = async ({
           const files = await listSkillFilesRecursive(skillDir);
           return {
             description: fields.description || undefined,
+            disableModelInvocation: fields.disableModelInvocation,
             fileCount: files.length,
             files,
             name: fields.name || entry.name,
