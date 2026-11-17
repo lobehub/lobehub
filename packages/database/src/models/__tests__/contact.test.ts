@@ -121,7 +121,7 @@ describe('contact requests', () => {
     await expect(carolModel.declineRequest(requestId)).rejects.toThrow('Request not found');
     await expect(bobModel.cancelRequest(requestId)).rejects.toThrow('Request not found');
 
-    await aliceModel.cancelRequest(requestId);
+    await expect(aliceModel.cancelRequest(requestId)).resolves.toEqual({ addresseeId: bob });
     expect(await bobModel.listRequests()).toEqual([]);
     // A new request may follow a cancelled one.
     expect((await aliceModel.sendRequest(bob)).status).toBe('pending');
@@ -430,7 +430,7 @@ describe('contact edge cases', () => {
   it('declines a pending request without creating a contact', async () => {
     const { requestId } = await aliceModel.sendRequest(bob);
 
-    await bobModel.declineRequest(requestId);
+    await expect(bobModel.declineRequest(requestId)).resolves.toEqual({ requesterId: alice });
 
     expect(await aliceModel.list()).toEqual([]);
     expect(await aliceModel.relationTo(bob)).toBe('none');
