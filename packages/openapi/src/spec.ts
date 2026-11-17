@@ -14,11 +14,10 @@ interface OperationObject {
   tags?: string[];
 }
 
-const {
-  $schema: _,
-  id: __,
-  ...apiErrorJsonSchema
-} = z.toJSONSchema(ApiErrorSchema) as Record<string, unknown>;
+const { $schema: _, ...apiErrorJsonSchema } = z.toJSONSchema(ApiErrorSchema) as Record<
+  string,
+  unknown
+>;
 
 /**
  * Build the OpenAPI 3.1 document from the live Hono app.
