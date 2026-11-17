@@ -226,5 +226,9 @@ describe('A conversation between Agents', () => {
     // The person who asked owns the conversation between the Agents; another member does not.
     expect(await receiptFor(team.asOwner)).toMatchObject({ canOpen: true });
     expect(await receiptFor(team.asMember)).toMatchObject({ canOpen: false });
+
+    // Once the person moves it to the recycle bin, it no longer opens.
+    await new ChannelRepository(db, fixture.ownerId, fixture.workspaceId).remove(pair.channel.id);
+    expect(await receiptFor(team.asOwner)).toMatchObject({ canOpen: false });
   });
 });

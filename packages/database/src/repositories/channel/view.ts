@@ -21,6 +21,7 @@ import {
   channelJobs,
   channelMembers,
   channelMessages,
+  channels,
   channelThreads,
   files as fileTable,
   topics,
@@ -127,12 +128,15 @@ const openableReceiptChannels = async (
     ...new Set(rows.flatMap((row) => channelMessageReceipt(row.metadata)?.channelId ?? [])),
   ];
   if (!viewerUserId || !ids.length) return new Set<string>();
+  // A Channel in the recycle bin no longer opens, though its memberships remain.
   const found = await tx
     .select({ channelId: channelMembers.channelId })
     .from(channelMembers)
+    .innerJoin(channels, eq(channels.id, channelMembers.channelId))
     .where(
       and(
         inArray(channelMembers.channelId, ids),
+        notTrashed(channels.isDeleted),
         eq(channelMembers.actorType, 'user'),
         eq(channelMembers.userId, viewerUserId),
         eq(channelMembers.status, 'active'),
