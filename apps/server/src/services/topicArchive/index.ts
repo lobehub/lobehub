@@ -1,7 +1,6 @@
 import { isRetiredTopicStatus } from '@lobechat/types';
 
 import { TopicModel } from '@/database/models/topic';
-import type { TopicItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { scheduleWorktreeCleanup } from '@/server/services/worktreeCleanup';
 
@@ -20,6 +19,9 @@ import { scheduleWorktreeCleanup } from '@/server/services/worktreeCleanup';
  * Authorization stays with the caller (the router checks General access and
  * share-visitor guards before calling).
  */
+/** The fields `TopicModel.update` writes. */
+type TopicUpdate = Parameters<TopicModel['update']>[1];
+
 export class TopicArchiveService {
   private readonly topicModel: TopicModel;
 
@@ -36,7 +38,7 @@ export class TopicArchiveService {
    * status, the archive's follow-up work is scheduled after the write, with
    * the status it replaced (a run that was still live holds the cleanup).
    */
-  async updateTopic(id: string, value: Partial<TopicItem>): Promise<TopicItem[]> {
+  async updateTopic(id: string, value: TopicUpdate) {
     const archiving = isRetiredTopicStatus(value.status);
     const previous = archiving ? await this.topicModel.findById(id) : undefined;
     const updated = await this.topicModel.update(id, value);
@@ -54,8 +56,8 @@ export class TopicArchiveService {
   }
 
   /** Archive topics, each through {@link updateTopic}. */
-  async archiveTopics(ids: string[]): Promise<TopicItem[]> {
-    const archived: TopicItem[] = [];
+  async archiveTopics(ids: string[]) {
+    const archived: Awaited<ReturnType<TopicModel['update']>> = [];
     for (const id of ids) {
       archived.push(
         ...(await this.updateTopic(id, { completedAt: new Date(), status: 'completed' })),

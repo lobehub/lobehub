@@ -70,11 +70,11 @@ export const ensureOwnedWorktreeForRun = async (
     if (result.outcome === 'restored') return topic;
     if (result.outcome === 'branchMissing') {
       toast.warning({
-        description: t('workingDirectory.worktreeRestore.branchMissingDesc', {
+        description: t('worktreeRestore.branchMissingDesc', {
           branch: entry.branch ?? '',
-          ns: 'device',
+          ns: 'chat',
         }),
-        title: t('workingDirectory.worktreeRestore.branchMissing', { ns: 'device' }),
+        title: t('worktreeRestore.branchMissing', { ns: 'chat' }),
       });
       const next = { ...topic, metadata: sourceFallback(metadata, entry) };
       const { getChatStoreState } = await import('@/store/chat');
@@ -86,7 +86,7 @@ export const ensureOwnedWorktreeForRun = async (
     }
     toast.error({
       description: result.error,
-      title: t('workingDirectory.worktreeRestore.failed', { ns: 'device' }),
+      title: t('worktreeRestore.failed', { ns: 'chat' }),
     });
   } catch (error) {
     console.warn('[ensureOwnedWorktreeForRun] restore failed:', error);

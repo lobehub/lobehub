@@ -190,6 +190,6 @@ export const updateOwnedWorktree = async (
     await tx
       .update(topics)
       .set({ metadata: { ...row.metadata, ownedWorktrees } as ChatTopicMetadata })
-      .where(eq(topics.id, topicId));
+      .where(and(eq(topics.id, topicId), ctx.trashScope()));
     return next;
   });

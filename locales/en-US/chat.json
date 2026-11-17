@@ -4018,5 +4018,8 @@
   "workingPanel.works.versionError": "Failed to load versions",
   "workingPanel.works.viewMode.history": "Version history",
   "workingPanel.works.viewMode.summary": "Summary cards",
+  "worktreeRestore.branchMissing": "Can't restore the worktree",
+  "worktreeRestore.branchMissingDesc": "The branch {{branch}} no longer exists, so this conversation continues in the source repository.",
+  "worktreeRestore.failed": "Couldn't restore the worktree",
   "you": "You"
 }

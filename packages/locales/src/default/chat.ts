@@ -4502,6 +4502,10 @@ export default {
   'userFeedbackCard.count_one': '{{count}} comment',
   'userFeedbackCard.count_other': '{{count}} comments',
   'userFeedbackCard.title': 'User feedback',
+  'worktreeRestore.branchMissing': "Can't restore the worktree",
+  'worktreeRestore.branchMissingDesc':
+    'The branch {{branch}} no longer exists, so this conversation continues in the source repository.',
+  'worktreeRestore.failed': "Couldn't restore the worktree",
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',
