@@ -5,6 +5,7 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { toolSetsFrom } from '@/server/services/aiAgent/__tests__/helpers/connectorToolSets';
 
 import { connectorRouter } from './connector';
 
@@ -95,7 +96,7 @@ describe('connectorRouter.getForRun', () => {
       return { existsById } as never;
     });
     vi.mocked(ConnectorModel).mockImplementation(function () {
-      return { resolveByIdentifiers } as never;
+      return { resolveByIdentifiers, resolveToolSets: toolSetsFrom(resolveByIdentifiers) } as never;
     });
     vi.mocked(ConnectorToolModel).mockImplementation(function () {
       return { queryByConnector } as never;
@@ -160,7 +161,7 @@ describe('connectorRouter.resolveForRun', () => {
       return { existsById } as never;
     });
     vi.mocked(ConnectorModel).mockImplementation(function () {
-      return { resolveByIdentifiers } as never;
+      return { resolveByIdentifiers, resolveToolSets: toolSetsFrom(resolveByIdentifiers) } as never;
     });
     vi.mocked(ConnectorToolModel).mockImplementation(function () {
       return { queryByConnector } as never;
@@ -195,6 +196,7 @@ describe('connectorRouter.resolveForRun', () => {
       metadata: {},
       sourceType: undefined,
       status: undefined,
+      toolIdentifier: 'local-mcp',
       tools,
     });
     expect(resolveByIdentifiers).toHaveBeenCalledWith(['local-mcp'], {
@@ -225,7 +227,11 @@ describe('connectorRouter.resolveForRun', () => {
       getLinkModel: () => personalLinks,
     };
     vi.mocked(ConnectorModel).mockImplementation(function () {
-      return { forRow: () => personalModel, resolveByIdentifiers } as never;
+      return {
+        forRow: () => personalModel,
+        resolveByIdentifiers,
+        resolveToolSets: toolSetsFrom(resolveByIdentifiers),
+      } as never;
     });
     resolveByIdentifiers.mockResolvedValue([
       {
@@ -360,6 +366,7 @@ describe('connectorRouter.getLocalCallToken', () => {
           row.workspaceId === null ? personalModel : model,
         getLinkModel: () => workspaceLinks,
         resolveByIdentifiers,
+        resolveToolSets: toolSetsFrom(resolveByIdentifiers),
       };
       return model as never;
     });
