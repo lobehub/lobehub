@@ -110,3 +110,72 @@ export const ChatGroupListSchema = z
   })
   .strict()
   .meta({ id: 'ChatGroupList' });
+
+// ==================== Advanced group operations ====================
+
+export const ChatGroupMemberParamSchema = z.object({
+  agentId: z.string().min(1, 'Agent ID cannot be empty'),
+  id: z.string().min(1, 'Chat group ID cannot be empty'),
+});
+
+export const DuplicateChatGroupRequestSchema = z
+  .object({
+    /** Title of the copy. Defaults to the original title with a copy suffix. */
+    title: z.string().trim().min(1, 'Title cannot be empty').max(255).optional(),
+  })
+  .strict();
+
+/**
+ * One member agent to create inside a group. Created members are virtual: they
+ * belong to the group and do not appear in the agent list on their own.
+ */
+const GroupMemberAgentInputSchema = z
+  .object({
+    avatar: z.string().max(2048).optional(),
+    backgroundColor: z.string().max(64).optional(),
+    description: z.string().max(5000).optional(),
+    model: z.string().max(255).optional(),
+    provider: z.string().max(255).optional(),
+    systemRole: z.string().max(100_000).optional(),
+    tags: z.array(z.string().max(100)).max(50).optional(),
+    title: z.string().trim().min(1, 'Title cannot be empty').max(255),
+  })
+  .strict();
+
+export const BatchCreateChatGroupAgentsRequestSchema = z
+  .object({
+    agents: z
+      .array(GroupMemberAgentInputSchema)
+      .min(1, 'At least one agent is required')
+      .max(20, 'At most 20 agents per request'),
+  })
+  .strict();
+
+export const UpdateChatGroupMemberRequestSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    order: z.number().int().min(0).optional(),
+    role: z.enum(CHAT_GROUP_MEMBER_ROLES).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Provide at least one of enabled, order or role',
+  });
+
+export type DuplicateChatGroupRequest = z.infer<typeof DuplicateChatGroupRequestSchema>;
+export type BatchCreateChatGroupAgentsRequest = z.infer<
+  typeof BatchCreateChatGroupAgentsRequestSchema
+>;
+export type UpdateChatGroupMemberRequest = z.infer<typeof UpdateChatGroupMemberRequestSchema>;
+
+export const CreatedChatGroupAgentsSchema = z
+  .object({
+    /** Ids of the member agents just created, in request order. */
+    agentIds: z.array(z.string()),
+    /** The group after the members were added. */
+    chatGroup: ChatGroupSchema,
+  })
+  .strict()
+  .meta({ id: 'CreatedChatGroupAgents' });
+
+export type CreatedChatGroupAgents = z.infer<typeof CreatedChatGroupAgentsSchema>;

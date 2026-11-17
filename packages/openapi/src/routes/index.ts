@@ -1,4 +1,5 @@
 import AgentGroupsRoutes from './agent-groups.route';
+import AgentLabelsRoutes from './agent-labels.route';
 import AgentsRoutes from './agents.route';
 import AnthropicRoutes from './anthropic.route';
 import ApiKeysRoutes from './api-keys.route';
@@ -23,6 +24,7 @@ import ProvidersRoutes from './providers.route';
 import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
+import SessionGroupsRoutes from './session-groups.route';
 import AgentSignalsRoutes from './signals.route';
 import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
@@ -31,6 +33,7 @@ import UsersRoutes from './users.route';
 
 export default {
   'agent-groups': AgentGroupsRoutes,
+  'agent-labels': AgentLabelsRoutes,
   'agents': AgentsRoutes,
   'anthropic': AnthropicRoutes,
   'api-keys': ApiKeysRoutes,
@@ -55,6 +58,7 @@ export default {
   'push-tokens': PushTokenRoutes,
   'responses': ResponsesRoutes,
   'roles': RolesRoutes,
+  'session-groups': SessionGroupsRoutes,
   'signals': AgentSignalsRoutes,
   'tasks': TasksRoutes,
   'topics': TopicsRoutes,

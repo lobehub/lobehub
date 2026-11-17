@@ -1,5 +1,7 @@
 export * from './agent.controller';
+export * from './agent-advanced.controller';
 export * from './agent-group.controller';
+export * from './agent-label.controller';
 export * from './api-key.controller';
 export * from './chat.controller';
 export * from './chat-group.controller';
@@ -12,6 +14,7 @@ export * from './model.controller';
 export * from './permission.controller';
 export * from './provider.controller';
 export * from './role.controller';
+export * from './session-group.controller';
 export * from './topic.controller';
 export * from './usage.controller';
 export * from './user.controller';

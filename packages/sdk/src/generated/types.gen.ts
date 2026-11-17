@@ -78,6 +78,24 @@ export type DeletedResource = {
     id: string;
 };
 
+export type AgentLabelList = {
+    items: Array<AgentLabel>;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    total: PageTotal;
+};
+
+export type AgentLabel = {
+    archived: boolean;
+    color: string | null;
+    createdAt: string;
+    description: string | null;
+    id: string;
+    name: string;
+    updatedAt: string;
+    usageCount: number;
+};
+
 export type AgentList = {
     hasMore: PageHasMore;
     nextCursor: PageNextCursor;
@@ -219,6 +237,39 @@ export type AgentAccountCapabilities = {
     sign?: boolean;
 };
 
+export type AgentKnowledge = {
+    files: Array<AgentFile>;
+    knowledgeBases: Array<AgentKnowledgeBase>;
+};
+
+export type AgentPinState = {
+    id: string;
+    pinned: boolean;
+};
+
+export type AgentLabelSet = {
+    items: Array<AgentLabel>;
+};
+
+export type AgentVisibilityState = {
+    /**
+     * What workspace members may do with a public agent: `view`, `use` or `edit`.
+     */
+    accessLevel: 'view' | 'use' | 'edit';
+    canManage: boolean;
+    creatorId: string;
+    generalAccess: 'editor' | 'viewer';
+    visibility: 'private' | 'public';
+};
+
+export type ResourceTransferResult = {
+    id: string;
+    requestId: string | null;
+    slug: string | null;
+    status: 'pending' | 'transferred';
+    transferJobId: string | null;
+};
+
 export type ApiKey = {
     createdAt: string;
     enabled: boolean | null;
@@ -226,7 +277,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'agent:transfer' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     updatedAt: string;
 };
 
@@ -237,7 +288,7 @@ export type CreatedApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'agent:transfer' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     updatedAt: string;
     key: string;
 };
@@ -286,6 +337,11 @@ export type ChatGroupMember = {
     enabled: boolean | null;
     order: number | null;
     role: 'supervisor' | 'participant' | 'assistant' | null;
+};
+
+export type CreatedChatGroupAgents = {
+    agentIds: Array<string>;
+    chatGroup: ChatGroup;
 };
 
 export type EvalRun = {
@@ -2062,6 +2118,31 @@ export type RolePermissionsUpdateResult = {
     roleId: string;
 };
 
+export type SessionGroupList = {
+    items: Array<SessionGroup>;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+    total: PageTotal;
+};
+
+export type SessionGroup = {
+    createdAt: string;
+    id: string;
+    name: string;
+    sort: number | null;
+    updatedAt: string;
+    visibility: 'private' | 'public';
+};
+
+export type ReorderedSessionGroups = {
+    items: Array<SessionGroup>;
+};
+
+export type SessionGroupAgentMove = {
+    agentIds: Array<string>;
+    sessionGroupId: string | null;
+};
+
 export type AgentSignalEmission = {
     accepted: boolean;
     scopeKey: string;
@@ -3106,6 +3187,314 @@ export type PatchApiV1AgentGroupsByIdResponses = {
 
 export type PatchApiV1AgentGroupsByIdResponse = PatchApiV1AgentGroupsByIdResponses[keyof PatchApiV1AgentGroupsByIdResponses];
 
+export type GetApiV1AgentLabelsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/agent-labels';
+};
+
+export type GetApiV1AgentLabelsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentLabelsError = GetApiV1AgentLabelsErrors[keyof GetApiV1AgentLabelsErrors];
+
+export type GetApiV1AgentLabelsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabelList;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentLabelsResponse = GetApiV1AgentLabelsResponses[keyof GetApiV1AgentLabelsResponses];
+
+export type PostApiV1AgentLabelsData = {
+    body: {
+        color?: string;
+        description?: string;
+        name: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/agent-labels';
+};
+
+export type PostApiV1AgentLabelsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentLabelsError = PostApiV1AgentLabelsErrors[keyof PostApiV1AgentLabelsErrors];
+
+export type PostApiV1AgentLabelsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: AgentLabel;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentLabelsResponse = PostApiV1AgentLabelsResponses[keyof PostApiV1AgentLabelsResponses];
+
+export type DeleteApiV1AgentLabelsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agent-labels/{id}';
+};
+
+export type DeleteApiV1AgentLabelsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1AgentLabelsByIdError = DeleteApiV1AgentLabelsByIdErrors[keyof DeleteApiV1AgentLabelsByIdErrors];
+
+export type DeleteApiV1AgentLabelsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1AgentLabelsByIdResponse = DeleteApiV1AgentLabelsByIdResponses[keyof DeleteApiV1AgentLabelsByIdResponses];
+
+export type GetApiV1AgentLabelsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agent-labels/{id}';
+};
+
+export type GetApiV1AgentLabelsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentLabelsByIdError = GetApiV1AgentLabelsByIdErrors[keyof GetApiV1AgentLabelsByIdErrors];
+
+export type GetApiV1AgentLabelsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabel;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentLabelsByIdResponse = GetApiV1AgentLabelsByIdResponses[keyof GetApiV1AgentLabelsByIdResponses];
+
+export type PatchApiV1AgentLabelsByIdData = {
+    body: {
+        archived?: boolean;
+        color?: string | null;
+        description?: string | null;
+        name?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agent-labels/{id}';
+};
+
+export type PatchApiV1AgentLabelsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1AgentLabelsByIdError = PatchApiV1AgentLabelsByIdErrors[keyof PatchApiV1AgentLabelsByIdErrors];
+
+export type PatchApiV1AgentLabelsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabel;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1AgentLabelsByIdResponse = PatchApiV1AgentLabelsByIdResponses[keyof PatchApiV1AgentLabelsByIdResponses];
+
 export type GetApiV1AgentsData = {
     body?: never;
     headers?: {
@@ -4036,6 +4425,934 @@ export type PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses = {
 
 export type PutApiV1AgentsByIdAccountsByAccountIdCredentialResponse = PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses[keyof PutApiV1AgentsByIdAccountsByAccountIdCredentialResponses];
 
+export type GetApiV1AgentsBySlugBySlugData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/by-slug/{slug}';
+};
+
+export type GetApiV1AgentsBySlugBySlugErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentsBySlugBySlugError = GetApiV1AgentsBySlugBySlugErrors[keyof GetApiV1AgentsBySlugBySlugErrors];
+
+export type GetApiV1AgentsBySlugBySlugResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentDetail;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentsBySlugBySlugResponse = GetApiV1AgentsBySlugBySlugResponses[keyof GetApiV1AgentsBySlugBySlugResponses];
+
+export type GetApiV1AgentsByIdKnowledgeData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge';
+};
+
+export type GetApiV1AgentsByIdKnowledgeErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentsByIdKnowledgeError = GetApiV1AgentsByIdKnowledgeErrors[keyof GetApiV1AgentsByIdKnowledgeErrors];
+
+export type GetApiV1AgentsByIdKnowledgeResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentsByIdKnowledgeResponse = GetApiV1AgentsByIdKnowledgeResponses[keyof GetApiV1AgentsByIdKnowledgeResponses];
+
+export type PostApiV1AgentsByIdKnowledgeFilesData = {
+    body: {
+        enabled?: boolean;
+        fileIds: Array<string>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge/files';
+};
+
+export type PostApiV1AgentsByIdKnowledgeFilesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentsByIdKnowledgeFilesError = PostApiV1AgentsByIdKnowledgeFilesErrors[keyof PostApiV1AgentsByIdKnowledgeFilesErrors];
+
+export type PostApiV1AgentsByIdKnowledgeFilesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentsByIdKnowledgeFilesResponse = PostApiV1AgentsByIdKnowledgeFilesResponses[keyof PostApiV1AgentsByIdKnowledgeFilesResponses];
+
+export type DeleteApiV1AgentsByIdKnowledgeFilesByFileIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        fileId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge/files/{fileId}';
+};
+
+export type DeleteApiV1AgentsByIdKnowledgeFilesByFileIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1AgentsByIdKnowledgeFilesByFileIdError = DeleteApiV1AgentsByIdKnowledgeFilesByFileIdErrors[keyof DeleteApiV1AgentsByIdKnowledgeFilesByFileIdErrors];
+
+export type DeleteApiV1AgentsByIdKnowledgeFilesByFileIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1AgentsByIdKnowledgeFilesByFileIdResponse = DeleteApiV1AgentsByIdKnowledgeFilesByFileIdResponses[keyof DeleteApiV1AgentsByIdKnowledgeFilesByFileIdResponses];
+
+export type PatchApiV1AgentsByIdKnowledgeFilesByFileIdData = {
+    body: {
+        enabled: boolean;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        fileId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge/files/{fileId}';
+};
+
+export type PatchApiV1AgentsByIdKnowledgeFilesByFileIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1AgentsByIdKnowledgeFilesByFileIdError = PatchApiV1AgentsByIdKnowledgeFilesByFileIdErrors[keyof PatchApiV1AgentsByIdKnowledgeFilesByFileIdErrors];
+
+export type PatchApiV1AgentsByIdKnowledgeFilesByFileIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1AgentsByIdKnowledgeFilesByFileIdResponse = PatchApiV1AgentsByIdKnowledgeFilesByFileIdResponses[keyof PatchApiV1AgentsByIdKnowledgeFilesByFileIdResponses];
+
+export type PostApiV1AgentsByIdKnowledgeKnowledgeBasesData = {
+    body: {
+        enabled?: boolean;
+        knowledgeBaseId: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge/knowledge-bases';
+};
+
+export type PostApiV1AgentsByIdKnowledgeKnowledgeBasesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentsByIdKnowledgeKnowledgeBasesError = PostApiV1AgentsByIdKnowledgeKnowledgeBasesErrors[keyof PostApiV1AgentsByIdKnowledgeKnowledgeBasesErrors];
+
+export type PostApiV1AgentsByIdKnowledgeKnowledgeBasesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentsByIdKnowledgeKnowledgeBasesResponse = PostApiV1AgentsByIdKnowledgeKnowledgeBasesResponses[keyof PostApiV1AgentsByIdKnowledgeKnowledgeBasesResponses];
+
+export type DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+        knowledgeBaseId: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge/knowledge-bases/{knowledgeBaseId}';
+};
+
+export type DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdError = DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdErrors[keyof DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdErrors];
+
+export type DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponse = DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponses[keyof DeleteApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponses];
+
+export type PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdData = {
+    body: {
+        enabled: boolean;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+        knowledgeBaseId: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/knowledge/knowledge-bases/{knowledgeBaseId}';
+};
+
+export type PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdError = PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdErrors[keyof PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdErrors];
+
+export type PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentKnowledge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponse = PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponses[keyof PatchApiV1AgentsByIdKnowledgeKnowledgeBasesByKnowledgeBaseIdResponses];
+
+export type PostApiV1AgentsByIdPinData = {
+    body: {
+        pinned?: boolean;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/pin';
+};
+
+export type PostApiV1AgentsByIdPinErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentsByIdPinError = PostApiV1AgentsByIdPinErrors[keyof PostApiV1AgentsByIdPinErrors];
+
+export type PostApiV1AgentsByIdPinResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentPinState;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentsByIdPinResponse = PostApiV1AgentsByIdPinResponses[keyof PostApiV1AgentsByIdPinResponses];
+
+export type GetApiV1AgentsByIdLabelsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/labels';
+};
+
+export type GetApiV1AgentsByIdLabelsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1AgentsByIdLabelsError = GetApiV1AgentsByIdLabelsErrors[keyof GetApiV1AgentsByIdLabelsErrors];
+
+export type GetApiV1AgentsByIdLabelsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabelSet;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1AgentsByIdLabelsResponse = GetApiV1AgentsByIdLabelsResponses[keyof GetApiV1AgentsByIdLabelsResponses];
+
+export type PutApiV1AgentsByIdLabelsData = {
+    body: {
+        labelIds: Array<string>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/labels';
+};
+
+export type PutApiV1AgentsByIdLabelsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1AgentsByIdLabelsError = PutApiV1AgentsByIdLabelsErrors[keyof PutApiV1AgentsByIdLabelsErrors];
+
+export type PutApiV1AgentsByIdLabelsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabelSet;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1AgentsByIdLabelsResponse = PutApiV1AgentsByIdLabelsResponses[keyof PutApiV1AgentsByIdLabelsResponses];
+
+export type DeleteApiV1AgentsByIdLabelsByLabelIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+        labelId: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/labels/{labelId}';
+};
+
+export type DeleteApiV1AgentsByIdLabelsByLabelIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1AgentsByIdLabelsByLabelIdError = DeleteApiV1AgentsByIdLabelsByLabelIdErrors[keyof DeleteApiV1AgentsByIdLabelsByLabelIdErrors];
+
+export type DeleteApiV1AgentsByIdLabelsByLabelIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabelSet;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1AgentsByIdLabelsByLabelIdResponse = DeleteApiV1AgentsByIdLabelsByLabelIdResponses[keyof DeleteApiV1AgentsByIdLabelsByLabelIdResponses];
+
+export type PutApiV1AgentsByIdLabelsByLabelIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+        labelId: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/labels/{labelId}';
+};
+
+export type PutApiV1AgentsByIdLabelsByLabelIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1AgentsByIdLabelsByLabelIdError = PutApiV1AgentsByIdLabelsByLabelIdErrors[keyof PutApiV1AgentsByIdLabelsByLabelIdErrors];
+
+export type PutApiV1AgentsByIdLabelsByLabelIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentLabelSet;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1AgentsByIdLabelsByLabelIdResponse = PutApiV1AgentsByIdLabelsByLabelIdResponses[keyof PutApiV1AgentsByIdLabelsByLabelIdResponses];
+
+export type PatchApiV1AgentsByIdVisibilityData = {
+    body: {
+        /**
+         * What workspace members may do with a public agent: `view`, `use` or `edit`.
+         */
+        accessLevel?: 'view' | 'use' | 'edit';
+        visibility: 'private' | 'public';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/visibility';
+};
+
+export type PatchApiV1AgentsByIdVisibilityErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1AgentsByIdVisibilityError = PatchApiV1AgentsByIdVisibilityErrors[keyof PatchApiV1AgentsByIdVisibilityErrors];
+
+export type PatchApiV1AgentsByIdVisibilityResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: AgentVisibilityState;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1AgentsByIdVisibilityResponse = PatchApiV1AgentsByIdVisibilityResponses[keyof PatchApiV1AgentsByIdVisibilityResponses];
+
+export type PostApiV1AgentsByIdTransferData = {
+    body: {
+        /**
+         * What workspace members may do with a public agent: `view`, `use` or `edit`.
+         */
+        targetAccessLevel?: 'view' | 'use' | 'edit';
+        targetMemberId?: string;
+        targetVisibility?: 'private' | 'public';
+        targetWorkspaceId?: string | null;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/transfer';
+};
+
+export type PostApiV1AgentsByIdTransferErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentsByIdTransferError = PostApiV1AgentsByIdTransferErrors[keyof PostApiV1AgentsByIdTransferErrors];
+
+export type PostApiV1AgentsByIdTransferResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: ResourceTransferResult;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentsByIdTransferResponse = PostApiV1AgentsByIdTransferResponses[keyof PostApiV1AgentsByIdTransferResponses];
+
 export type GetApiV1ApiKeysData = {
     body?: never;
     headers?: {
@@ -4112,7 +5429,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'agent:transfer' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     };
     headers?: {
         /**
@@ -5113,6 +6430,206 @@ export type PostApiV1ChatGroupsByIdMembersResponses = {
 };
 
 export type PostApiV1ChatGroupsByIdMembersResponse = PostApiV1ChatGroupsByIdMembersResponses[keyof PostApiV1ChatGroupsByIdMembersResponses];
+
+export type PostApiV1ChatGroupsByIdDuplicateData = {
+    body: {
+        title?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}/duplicate';
+};
+
+export type PostApiV1ChatGroupsByIdDuplicateErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ChatGroupsByIdDuplicateError = PostApiV1ChatGroupsByIdDuplicateErrors[keyof PostApiV1ChatGroupsByIdDuplicateErrors];
+
+export type PostApiV1ChatGroupsByIdDuplicateResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ChatGroupsByIdDuplicateResponse = PostApiV1ChatGroupsByIdDuplicateResponses[keyof PostApiV1ChatGroupsByIdDuplicateResponses];
+
+export type PostApiV1ChatGroupsByIdAgentsData = {
+    body: {
+        agents: Array<{
+            avatar?: string;
+            backgroundColor?: string;
+            description?: string;
+            model?: string;
+            provider?: string;
+            systemRole?: string;
+            tags?: Array<string>;
+            title: string;
+        }>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}/agents';
+};
+
+export type PostApiV1ChatGroupsByIdAgentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ChatGroupsByIdAgentsError = PostApiV1ChatGroupsByIdAgentsErrors[keyof PostApiV1ChatGroupsByIdAgentsErrors];
+
+export type PostApiV1ChatGroupsByIdAgentsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: CreatedChatGroupAgents;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ChatGroupsByIdAgentsResponse = PostApiV1ChatGroupsByIdAgentsResponses[keyof PostApiV1ChatGroupsByIdAgentsResponses];
+
+export type PatchApiV1ChatGroupsByIdMembersByAgentIdData = {
+    body: {
+        enabled?: boolean;
+        order?: number;
+        role?: 'participant' | 'assistant';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        agentId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}/members/{agentId}';
+};
+
+export type PatchApiV1ChatGroupsByIdMembersByAgentIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1ChatGroupsByIdMembersByAgentIdError = PatchApiV1ChatGroupsByIdMembersByAgentIdErrors[keyof PatchApiV1ChatGroupsByIdMembersByAgentIdErrors];
+
+export type PatchApiV1ChatGroupsByIdMembersByAgentIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1ChatGroupsByIdMembersByAgentIdResponse = PatchApiV1ChatGroupsByIdMembersByAgentIdResponses[keyof PatchApiV1ChatGroupsByIdMembersByAgentIdResponses];
 
 export type GetApiV1EvalRunsData = {
     body?: never;
@@ -12985,6 +14502,436 @@ export type PatchApiV1RolesByIdPermissionsResponses = {
 };
 
 export type PatchApiV1RolesByIdPermissionsResponse = PatchApiV1RolesByIdPermissionsResponses[keyof PatchApiV1RolesByIdPermissionsResponses];
+
+export type GetApiV1SessionGroupsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/session-groups';
+};
+
+export type GetApiV1SessionGroupsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1SessionGroupsError = GetApiV1SessionGroupsErrors[keyof GetApiV1SessionGroupsErrors];
+
+export type GetApiV1SessionGroupsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: SessionGroupList;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SessionGroupsResponse = GetApiV1SessionGroupsResponses[keyof GetApiV1SessionGroupsResponses];
+
+export type PostApiV1SessionGroupsData = {
+    body: {
+        name: string;
+        sort?: number;
+        visibility?: 'private' | 'public';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session-groups';
+};
+
+export type PostApiV1SessionGroupsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SessionGroupsError = PostApiV1SessionGroupsErrors[keyof PostApiV1SessionGroupsErrors];
+
+export type PostApiV1SessionGroupsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: SessionGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SessionGroupsResponse = PostApiV1SessionGroupsResponses[keyof PostApiV1SessionGroupsResponses];
+
+export type PostApiV1SessionGroupsReorderData = {
+    body: {
+        items: Array<{
+            id: string;
+            sort: number;
+        }>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session-groups/reorder';
+};
+
+export type PostApiV1SessionGroupsReorderErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SessionGroupsReorderError = PostApiV1SessionGroupsReorderErrors[keyof PostApiV1SessionGroupsReorderErrors];
+
+export type PostApiV1SessionGroupsReorderResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: ReorderedSessionGroups;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SessionGroupsReorderResponse = PostApiV1SessionGroupsReorderResponses[keyof PostApiV1SessionGroupsReorderResponses];
+
+export type PostApiV1SessionGroupsMoveAgentsData = {
+    body: {
+        agentIds: Array<string>;
+        sessionGroupId: string | null;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/session-groups/move-agents';
+};
+
+export type PostApiV1SessionGroupsMoveAgentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SessionGroupsMoveAgentsError = PostApiV1SessionGroupsMoveAgentsErrors[keyof PostApiV1SessionGroupsMoveAgentsErrors];
+
+export type PostApiV1SessionGroupsMoveAgentsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: SessionGroupAgentMove;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SessionGroupsMoveAgentsResponse = PostApiV1SessionGroupsMoveAgentsResponses[keyof PostApiV1SessionGroupsMoveAgentsResponses];
+
+export type DeleteApiV1SessionGroupsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/session-groups/{id}';
+};
+
+export type DeleteApiV1SessionGroupsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1SessionGroupsByIdError = DeleteApiV1SessionGroupsByIdErrors[keyof DeleteApiV1SessionGroupsByIdErrors];
+
+export type DeleteApiV1SessionGroupsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1SessionGroupsByIdResponse = DeleteApiV1SessionGroupsByIdResponses[keyof DeleteApiV1SessionGroupsByIdResponses];
+
+export type GetApiV1SessionGroupsByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/session-groups/{id}';
+};
+
+export type GetApiV1SessionGroupsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1SessionGroupsByIdError = GetApiV1SessionGroupsByIdErrors[keyof GetApiV1SessionGroupsByIdErrors];
+
+export type GetApiV1SessionGroupsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: SessionGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SessionGroupsByIdResponse = GetApiV1SessionGroupsByIdResponses[keyof GetApiV1SessionGroupsByIdResponses];
+
+export type PatchApiV1SessionGroupsByIdData = {
+    body: {
+        name?: string;
+        sort?: number | null;
+        /**
+         * Publish a private folder into the workspace. One-way.
+         */
+        visibility?: 'public';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/session-groups/{id}';
+};
+
+export type PatchApiV1SessionGroupsByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1SessionGroupsByIdError = PatchApiV1SessionGroupsByIdErrors[keyof PatchApiV1SessionGroupsByIdErrors];
+
+export type PatchApiV1SessionGroupsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: SessionGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1SessionGroupsByIdResponse = PatchApiV1SessionGroupsByIdResponses[keyof PatchApiV1SessionGroupsByIdResponses];
 
 export type PostApiV1SignalsSourceEventsData = {
     body: {
