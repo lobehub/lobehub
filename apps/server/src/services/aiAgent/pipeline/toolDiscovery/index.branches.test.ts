@@ -17,6 +17,7 @@ import type * as MechaModule from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import type * as ConnectorAttributionModule from '@/server/utils/connectorAttribution';
 import {
   buildConnectorOwnershipPrompt,
   collectBorrowedConnectors,
@@ -317,6 +318,118 @@ describe('discoverTools — connector permissions and ownership', () => {
     const result = await run().promise;
 
     expect(result.connectorOwnershipNote).toBeUndefined();
+  });
+});
+
+describe('discoverTools — tool surface matches what the run can call', () => {
+  const realAttribution = async () => {
+    const actual = await vi.importActual<typeof ConnectorAttributionModule>(
+      '@/server/utils/connectorAttribution',
+    );
+    vi.mocked(collectBorrowedConnectors).mockImplementation(actual.collectBorrowedConnectors);
+    vi.mocked(buildConnectorOwnershipPrompt).mockImplementation(
+      actual.buildConnectorOwnershipPrompt,
+    );
+  };
+  // A LobeHub Skill row a teammate created in the workspace: no MCP endpoint,
+  // its tools come from the caller's own Market connection.
+  const posthogRow = {
+    id: 'conn-posthog',
+    identifier: 'posthog',
+    mcpServerUrl: null,
+    name: 'PostHog',
+    sourceType: 'marketplace',
+    userId: 'user-2',
+  };
+  const resolveRows = (rows: Array<{ identifier: string }>) => (ids: string[]) =>
+    rows.filter((row) => ids.includes(row.identifier));
+
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  const pinnedToolWarnings = () =>
+    vi
+      .mocked(console.warn)
+      .mock.calls.filter(([message]) => String(message).includes('pinned tools unavailable'));
+
+  it('does not name a teammate-created skill connector that put no tool into the run', async () => {
+    await realAttribution();
+
+    const result = await run({
+      agentConfig: { plugins: ['posthog'] },
+      connectorResolve: resolveRows([posthogRow]),
+    }).promise;
+
+    expect(result.connectorOwnershipNote).toBeUndefined();
+    expect(result.toolsResult.enabledToolIds).not.toContain('posthog');
+  });
+
+  it("does not attribute a skill to the row's creator when it runs on the caller's own connection", async () => {
+    await realAttribution();
+
+    const result = await run({
+      agentConfig: { plugins: ['posthog'] },
+      connectorResolve: resolveRows([posthogRow]),
+      lobehubSkillManifests: [skillManifest('posthog')],
+    }).promise;
+
+    expect(result.toolsResult.enabledToolIds).toContain('posthog');
+    expect(result.connectorOwnershipNote).toBeUndefined();
+  });
+
+  it('still names a Composio connection a teammate linked when its tools are offered', async () => {
+    await realAttribution();
+
+    const result = await run({
+      agentConfig: { plugins: ['gmail'] },
+      composioManifests: [skillManifest('gmail')],
+      connectorResolve: resolveRows([
+        {
+          ...posthogRow,
+          id: 'conn-gmail',
+          identifier: 'gmail',
+          metadata: { composio: { linkedByUserId: 'user-2' } },
+          name: 'Gmail',
+          userId: 'user-1',
+        } as never,
+      ]),
+    }).promise;
+
+    expect(result.connectorOwnershipNote).toContain('- Gmail: authorized by another member');
+  });
+
+  it('warns once when a pinned tool resolves to no manifest', async () => {
+    await run({
+      agentConfig: { plugins: ['posthog', 'lobe-web-browsing'] },
+      connectorResolve: resolveRows([posthogRow]),
+    }).promise;
+
+    expect(pinnedToolWarnings()).toHaveLength(1);
+    expect(pinnedToolWarnings()[0][1]).toMatchObject({
+      agentId: 'agent-1',
+      missingToolIds: ['posthog'],
+      userId: 'user-1',
+    });
+  });
+
+  it('does not warn about a pinned tool the run offers or the user disabled', async () => {
+    await run({
+      agentConfig: { plugins: ['posthog', 'linear'] },
+      input: { disabledPluginIds: ['linear'] },
+      lobehubSkillManifests: [skillManifest('posthog')],
+    }).promise;
+
+    expect(pinnedToolWarnings()).toHaveLength(0);
+  });
+
+  it('offers readAttachment when an attached document reached the model without text', async () => {
+    const without = await run().promise;
+    expect(without.toolsResult.enabledToolIds).not.toContain('lobe-attachments');
+
+    const result = await run({ input: { hasUnextractedAttachments: true } }).promise;
+    expect(result.toolsResult.enabledToolIds).toContain('lobe-attachments');
+    expect(result.toolsResult.enabledToolIds).not.toContain('lobe-knowledge-base');
   });
 });
 

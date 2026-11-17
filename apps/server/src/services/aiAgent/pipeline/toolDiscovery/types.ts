@@ -65,6 +65,12 @@ export interface ToolDiscoveryInput {
   functionTools?: InternalExecAgentParams['functionTools'];
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
+  /**
+   * A document attached to this turn has no extracted text (its parse failed),
+   * so the model would only see its id and name. Enables `readAttachment`,
+   * which parses on first read.
+   */
+  hasUnextractedAttachments?: boolean;
   isFixedDeviceTarget: boolean;
   /** Shared lazy history loader — also consumed by the caller after discovery. */
   loadHistoryMessages: () => Promise<any[]>;

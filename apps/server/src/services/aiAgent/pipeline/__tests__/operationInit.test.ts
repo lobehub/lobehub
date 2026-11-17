@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildOperationInitRequest,
+  hasUnextractedAttachment,
   type OperationInitRequest,
   rehydrateDetachedFileContent,
   toPersistedInitRequest,
@@ -158,5 +159,21 @@ describe('persisted init request', () => {
     // The file whose parse failed at turn setup must not be re-parsed here.
     expect(readFileContent).toHaveBeenCalledTimes(1);
     expect('detachedFileContentIds' in restored).toBe(false);
+  });
+
+  it('flags a turn whose document attachment has no text, before and after a deferred init', async () => {
+    expect(hasUnextractedAttachment(withDocuments())).toBe(true);
+    const restored = await rehydrateDetachedFileContent(
+      toPersistedInitRequest(withDocuments()),
+      async (fileId) => `body of ${fileId}`,
+    );
+    expect(hasUnextractedAttachment(restored)).toBe(true);
+
+    const parsedOnly = withDocuments();
+    parsedOnly.runAttachments.fileList = parsedOnly.runAttachments.fileList?.filter(
+      (file) => file.content !== undefined,
+    );
+    expect(hasUnextractedAttachment(parsedOnly)).toBe(false);
+    expect(hasUnextractedAttachment(buildOperationInitRequest(fullInput()))).toBe(false);
   });
 });

@@ -31,20 +31,30 @@ const log = debug('lobe-server:ai-agent-service');
  * authorized everything (owner runs own agent → empty set), so it costs
  * nothing in the common case.
  *
+ * Only connectors in `offeredIdentifiers` count: the ones whose tools this run
+ * offers and that run on the connector's own credentials (real-MCP connectors
+ * that produced a manifest, active Composio connections). A LobeHub Skill row
+ * stays out even when a teammate created it: its tools are listed from and run
+ * on the caller's OWN Market connection, so the note would name the wrong
+ * account, or promise a tool the run does not have when the caller never
+ * connected the skill.
+ *
  * Returned as run context for the context engine to inject, rather than
  * concatenated onto the agent's systemRole here. Never fails the run.
  */
 export const buildOwnershipNote = async (
   deps: ToolDiscoveryDeps,
   connectors: DecryptedConnector[],
+  offeredIdentifiers: ReadonlySet<string>,
   anonymous = false,
 ): Promise<string | undefined> => {
   try {
+    const offered = connectors.filter((c) => offeredIdentifiers.has(c.identifier));
     const borrowed = collectBorrowedConnectors(
-      connectors.filter((c) => !c.links?.length),
+      offered.filter((c) => !c.links?.length),
       deps.userId!,
     );
-    for (const connector of connectors) {
+    for (const connector of offered) {
       for (const [index, link] of (connector.links ?? []).entries()) {
         if (!link.userId || link.userId === deps.userId) continue;
         borrowed.push({

@@ -63,7 +63,9 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   // Oversized attachments are sent as previews that can be paged with `readAttachment`; only that
   // read-only tool is enabled, not the knowledge-base tool with its search and write APIs. The
   // preview names it only when it survives into the final tool set (see `MessagesEngine`).
-  const attachmentsEnabled = request.hasOversizedFiles ?? false;
+  // An attachment whose text never reached the model is read the same way: `readAttachment`
+  // parses it on first read, so the model is not left with a bare file id.
+  const attachmentsEnabled = !!(request.hasOversizedFiles || request.hasUnextractedFiles);
   const memoryEnabled = request.memoryEnabled ?? false;
   // Image generation is never auto-injected: the user opts in by pinning the
   // tool, and a model with native image output never gets the fallback.
