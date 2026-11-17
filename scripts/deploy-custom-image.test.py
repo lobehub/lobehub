@@ -24,6 +24,60 @@ MODULE = types.ModuleType('deployment_manager')
 exec(compile(SOURCE, str(SCRIPT), 'exec'), MODULE.__dict__)
 
 
+class CallbackRecorder:
+    """Local LobeHub stand-in that verifies internal callback signatures."""
+
+    def __init__(self, secret, token, watchdog_status=200):
+        self.secret = secret
+        self.token = token
+        self.watchdog_status = watchdog_status
+        self.calls = []
+        self.server = ThreadingHTTPServer(('127.0.0.1', 0), self._handler())
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    def _signature_matches(self, handler, body):
+        timestamp, _, mac = handler.headers.get('x-lobe-callback-signature', '').partition('.')
+        key = hmac.new(self.secret.encode(), b'lobehub:internal-callback:v1', hashlib.sha256).digest()
+        message = json.dumps([timestamp, handler.command, handler.path, body], separators=(',', ':'))
+        expected = hmac.new(key, message.encode(), hashlib.sha256).hexdigest()
+        return bool(timestamp) and hmac.compare_digest(mac, expected)
+
+    def _handler(self):
+        recorder = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers.get('Content-Length') or 0)).decode()
+                recorder.calls.append((self.path, dict(self.headers), body))
+                status = 200
+                if self.path.endswith('/watchdog'):
+                    status = recorder.watchdog_status if recorder._signature_matches(self, body) else 401
+                elif self.headers.get('Authorization') != 'Bearer ' + recorder.token:
+                    status = 401
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{}')
+
+        return Handler
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join()
+
+    @property
+    def url(self):
+        return f'http://127.0.0.1:{self.server.server_port}'
+
+
 class DeploymentTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -31,6 +85,7 @@ class DeploymentTests(unittest.TestCase):
         self.compose = self.directory / 'docker-compose.yml'
         self.compose.write_text('services: {}\n')
         self.calls = []
+        self.psql = []
         self.pull_status = self.up_status = self.probe_status = 0
         self.base = {'services': {'lobe': {
             'image': 'lobehub/lobehub:latest',
@@ -41,10 +96,15 @@ class DeploymentTests(unittest.TestCase):
         for item in self.patches:
             item.start()
         MODULE.interactive = False
-        self.output = contextlib.redirect_stdout(io.StringIO())
+        self.stdout_buf = io.StringIO()
+        self.stderr_buf = io.StringIO()
+        self.output = contextlib.redirect_stdout(self.stdout_buf)
         self.output.__enter__()
+        self.error = contextlib.redirect_stderr(self.stderr_buf)
+        self.error.__enter__()
 
     def tearDown(self):
+        self.error.__exit__(None, None, None)
         self.output.__exit__(None, None, None)
         for item in reversed(self.patches):
             item.stop()
@@ -72,6 +132,8 @@ class DeploymentTests(unittest.TestCase):
             status = self.pull_status
         elif 'up' in args:
             status = self.up_status
+        elif 'psql' in args:
+            stdout = self.psql.pop(0) if self.psql else ''
         elif data == MODULE.ONLYBOXES_PROBE:
             status = self.probe_status
         elif '-e' in args:
@@ -237,6 +299,67 @@ class DeploymentTests(unittest.TestCase):
         for url in ['file:///tmp/service', 'http://user:password@host', 'http://host/\nfoo']:
             with self.assertRaises((RuntimeError, ValueError)):
                 MODULE.validate_url(url)
+
+    def settle_fixture(self, recorder):
+        """A deployment with PostgreSQL published on 5432 and a local API stand-in."""
+        self.base['services']['postgresql'] = {
+            'image': 'postgres:17',
+            'ports': [{'mode': 'ingress', 'target': 5432, 'published': '5432'}],
+            'environment': {'POSTGRES_DB': 'lobechat'},
+        }
+        self.base['services']['lobe']['environment'].update({
+            'KEY_VAULTS_SECRET': 'vault-secret',
+            'AGENT_GATEWAY_SERVICE_TOKEN': 'service-token',
+            'INTERNAL_APP_URL': recorder.url,
+        })
+
+    def psql_statements(self):
+        return [args[args.index('-c') + 1] for args, _ in self.calls if 'psql' in args]
+
+    def test_deploy_settles_interrupted_runs_and_residual_chats(self):
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            # 3 in-flight ops, 2 attached to a running task, then the left-over chat op.
+            self.psql = ['3\n', '2\n', '1\n', '1\n', 'op_task_1\nop_task_2\n', '0\n', '0\n', 'op_chat\n']
+            self.manager().deploy(self.desired())
+        statements = self.psql_statements()
+        self.assertTrue(statements[4].startswith('UPDATE agent_operations'))
+        self.assertIn("status = 'interrupted'", statements[4])
+        self.assertIn("interval '20 minutes'", statements[4])
+        self.assertIn("WHERE status = 'running'", statements[4])
+        self.assertEqual([call[0] for call in recorder.calls],
+                         ['/api/workflows/task/watchdog', '/api/agent/finalize-abandoned'])
+        self.assertEqual(json.loads(recorder.calls[1][2]),
+                         {'operationId': 'op_chat', 'reason': 'deploy'})
+        self.assertEqual(recorder.calls[1][1]['Authorization'], 'Bearer service-token')
+        output = self.stdout_buf.getvalue()
+        self.assertIn('已把 2 个运行中的操作标记为 interrupted', output)
+        self.assertIn('残留的聊天操作：已结算 1 个，失败 0 个', output)
+
+    def test_deploy_survives_watchdog_rejection(self):
+        with CallbackRecorder('vault-secret', 'service-token', watchdog_status=503) as recorder:
+            self.settle_fixture(recorder)
+            self.psql = ['3\n', '2\n', '1\n', '1\n', 'op_task_1\n', '1\n', '1\n', 'op_chat\n']
+            self.manager().deploy(self.desired())
+        self.assertIn('警告：任务看护返回 HTTP 503', self.stderr_buf.getvalue())
+        self.assertEqual(len(recorder.calls), 2)
+        self.assertIn('部署完成', self.stdout_buf.getvalue())
+
+    def test_settle_can_be_disabled_or_previewed(self):
+        for value, statements, calls in [('0', 0, 0), ('dry-run', 4, 0), ('off', 0, 0)]:
+            with self.subTest(setting=value):
+                with CallbackRecorder('vault-secret', 'service-token') as recorder:
+                    self.settle_fixture(recorder)
+                    self.psql = ['3\n', '2\n', '1\n', '1\n']
+                    MODULE.os.environ['SETTLE'] = value
+                    self.calls.clear()
+                    self.manager().deploy(self.desired())
+                    self.assertEqual(len(self.psql_statements()), statements)
+                    self.assertEqual(len(recorder.calls), calls)
+                    if value == 'dry-run':
+                        self.assertIn('SETTLE=dry-run', self.stdout_buf.getvalue())
+                    self.assertFalse(any('UPDATE' in item for item in self.psql_statements()))
+                self.base['services']['lobe']['environment'].pop('INTERNAL_APP_URL')
 
 
 @unittest.skipUnless(shutil.which('node'), 'Node.js unavailable; protocol contract tested in CI')

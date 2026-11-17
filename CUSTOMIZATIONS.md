@@ -9,7 +9,7 @@
 | 编号     | 二开功能                            | 用户入口 / 行为                                                                             | 维护位置                                                                     | 状态                                                          |
 | -------- | ----------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | CUST-001 | 自定义 Docker 镜像发布              | main /canary 推送及手动 Actions 发布本 Fork 的 GHCR 镜像；当前 Linux amd64                  | `.github/workflows/publish-custom-image.yml`                                 | 历史已有；本轮增加 TFS curl 构建参数                          |
-| CUST-002 | 单文件安装 / 更新管理器             | `bash deploy-custom-image.sh`；新机安装、切换 main/canary/ 自定义镜像、更新应用或恢复完整栈 | `scripts/deploy-custom-image.sh`、[部署说明](scripts/deploy-custom-image.md) | 历史已有；本轮增加 TFS 缺省地址                               |
+| CUST-002 | 单文件安装 / 更新管理器             | `bash deploy-custom-image.sh`；新机安装、切换 main/canary/ 自定义镜像、更新应用或恢复完整栈 | `scripts/deploy-custom-image.sh`、[部署说明](scripts/deploy-custom-image.md) | 历史已有；本轮增加 TFS 缺省地址、更新后结算运行中任务           |
 | CUST-003 | 部署脚本接入 Onlyboxes / Market     | 菜单切换、保留配置；从一次性应用容器真实探测 Onlyboxes JIT 与 terminalExec                  | 同上；`scripts/deploy-custom-image.test.py`                                  | 历史已有；仅登记脚本接入，Onlyboxes provider 本身不算本项新增 |
 | CUST-004 | Fork 发布工作流隔离                 | 官方专用发布 / 同步任务在 Fork 默认跳过，防止误执行官方发布路径                             | 下方列出的五个 `.github/workflows/` 文件                                     | 历史已有                                                      |
 | CUST-005 | 个人 TFS / Azure DevOps Server 接入 | 设置 → 集成绑定个人身份；从 TFS 建项目；环境 Git 来源；PR / 构建 / 发布 / TFVC 只读浏览     | 独立 `tfs` 模块及现有入口接点；[详细维护说明](TFS_CUSTOMIZATION.md)          | 本次新增，REST / 本机 Git 已实测，产品页面和部署验收待完成    |
@@ -31,6 +31,7 @@
 - 本轮预制 `TFS_COLLECTION_URL=http://dev.tellhowsoft.com/DefaultCollection`、`TFS_API_VERSION=6.0`。首次安装写入 `.env`；更新已有部署仅在 Compose 有效环境未定义对应键时补进托管 override。已有自定义值和空字符串禁用值都保留，不生成共享 TFS 用户名 / 密码。
 - 如果旧安装的缺省值已经写入托管 override，后续改 Collection / 禁用 TFS 要编辑该 override 的对应环境项，或删除这两个项后在 `.env` 配置；override 的优先级高于 `.env`。全程保留文件的托管标记和其他配置。
 - `KEY_VAULTS_SECRET` 是 LobeHub 自己已有的加密密钥，不从 TFS 申请。首次安装脚本用 32 个随机字节生成并写入部署目录 `.env`；也可能来自原先的 `docker-compose/setup.sh`。更新时沿用原值。若缺失应先核查旧配置和备份，不能拿新密钥覆盖旧数据的密钥。
+- 更新已有部署会在 `up -d --wait` 成功后自动结算运行中的任务（`SETTLE=1` 默认；`0` 关闭，`dry-run` 只预览）：把挂在运行中任务上的操作改为 `interrupted` 并回拨 `updated_at` 20 分钟，用 `KEY_VAULTS_SECRET` 自签内部回调触发 `/api/workflows/task/watchdog` 让任务转 `paused`，再逐个 `POST /api/agent/finalize-abandoned`（Bearer `AGENT_GATEWAY_SERVICE_TOKEN`）兜底残留聊天。依赖应用、Gateway 与 PostgreSQL 已就绪；结算失败只告警，不让部署失败，失败项保持 `running` 等下一次看护收敛。首次安装不执行。
 - 历史依据：`e3c84a0ad6`、`d0b8fa56a2`、`20b371eeb8`、`ecd6a41479`、`a574f77ca9`。后两项分别修复 Compose `$` 反转义和终端不可 seek 的输入问题，合并时不要丢。
 - 上游改变服务名、Compose 模板位置、启动命令或健康检查时，同步检查脚本的 `SERVICE`、模板清单和 `--wait` 流程。镜像发布与部署脚本更新是两件事：本地改源码后，服务器拉取旧标签不会得到新功能。
 

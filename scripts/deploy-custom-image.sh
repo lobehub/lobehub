@@ -28,6 +28,7 @@ import contextlib
 import copy
 import datetime
 import getpass
+import hmac
 import json
 import os
 from pathlib import Path
@@ -51,6 +52,14 @@ TFS_DEFAULTS = {'TFS_COLLECTION_URL': 'http://dev.tellhowsoft.com/DefaultCollect
                 'TFS_API_VERSION': '6.0'}
 SANDBOX_KEYS = ('SANDBOX_PROVIDER', 'ONLYBOXES_BASE_URL', 'ONLYBOXES_JIT_SIGNING_KEY',
                 'ONLYBOXES_JIT_ISSUER', 'ONLYBOXES_JIT_TTL_SEC', 'ONLYBOXES_LEASE_TTL_SEC')
+# A container restart leaves these operations without the runtime that could finish them,
+# so a deploy settles them as `interrupted` instead of leaving tasks `running` forever.
+IN_FLIGHT_STATUSES = ('idle', 'running', 'waiting_for_async_tool',
+                      'waiting_for_client', 'waiting_for_human')
+IN_FLIGHT_SQL = '(' + ', '.join("'" + status + "'" for status in IN_FLIGHT_STATUSES) + ')'
+SETTLE_REASON = 'deploy'
+# The task reconciler only adopts an interrupted run older than its grace window (15 min).
+SETTLE_REWIND = '20 minutes'
 
 # Matches the token and terminal request used by the Onlyboxes provider.
 # This runs inside a one-off LobeHub container on the deployment's network.
@@ -125,6 +134,16 @@ def ask(label, default='', secret=False):
 
 def confirm(message):
     return not interactive or ask(message + ' [y/N]').lower() in ('y', 'yes')
+
+
+def settle_mode():
+    """SETTLE=1 (default) settles, 0 skips, dry-run only reports."""
+    value = os.environ.get('SETTLE', '1').strip().lower()
+    if value in ('0', 'off', 'false', 'no', 'none'):
+        return None
+    if value in ('dry-run', 'dry', 'report'):
+        return 'dry-run'
+    return 'run'
 
 
 def write_private(path, content):
@@ -282,6 +301,141 @@ class Manager:
             fail('当前没有选择 Onlyboxes；请先从“切换沙盒”菜单填写地址和密钥。')
         self.probe(self.override if self.override.exists() else None)
 
+    def database(self):
+        """Locate PostgreSQL from the Compose port mapping instead of a fixed name."""
+        for name, service in self.current['services'].items():
+            for port in service.get('ports') or []:
+                if isinstance(port, dict) and str(port.get('target')) == '5432':
+                    environment = service.get('environment') or {}
+                    user = environment.get('POSTGRES_USER') or 'postgres'
+                    return name, user, environment.get('POSTGRES_DB') or user
+        return None
+
+    def query(self, database, statement):
+        service, user, name = database
+        command = self.command(self.override if self.override.exists() else None) + [
+            'exec', '-T', service, 'psql', '-U', user, '-d', name, '--no-psqlrc',
+            '-v', 'ON_ERROR_STOP=1', '-A', '-t', '-F', '\t', '-c', statement]
+        # psql talks over the container's local socket, which the image trusts.
+        output = run(command, capture=True, data='').stdout
+        return [line.split('\t') for line in output.splitlines() if line.strip()]
+
+    def count(self, database, statement):
+        return int(self.query(database, statement)[0][0])
+
+    def application_url(self):
+        environment = self.sandbox_environment()
+        for key in ('INTERNAL_APP_URL', 'APP_URL'):
+            if environment.get(key):
+                return environment[key].rstrip('/')
+        for port in self.current['services'][self.service].get('ports') or []:
+            if isinstance(port, dict) and str(port.get('target')) == '3210' and port.get('published'):
+                return 'http://127.0.0.1:' + str(port['published'])
+        return 'http://127.0.0.1:3210'
+
+    def post(self, url, body, headers):
+        request = urllib.request.Request(url, data=body, method='POST', headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response:
+                return response.status, response.read().decode('utf-8', 'replace')
+        except urllib.error.HTTPError as error:
+            return error.code, error.read().decode('utf-8', 'replace')
+
+    def watchdog(self):
+        secret = self.sandbox_environment().get('KEY_VAULTS_SECRET', '')
+        if not secret:
+            fail('缺少 KEY_VAULTS_SECRET，无法签名任务看护（watchdog）回调。')
+        path = '/api/workflows/task/watchdog'
+        timestamp = str(int(datetime.datetime.now().timestamp() * 1000))
+        # Mirrors signInternalCallback: HMAC over [timestamp, method, pathname, body].
+        key = hmac.new(secret.encode(), b'lobehub:internal-callback:v1', 'sha256').digest()
+        payload = json.dumps([timestamp, 'POST', path, ''], separators=(',', ':'))
+        signature = hmac.new(key, payload.encode(), 'sha256').hexdigest()
+        status, _ = self.post(self.application_url() + path, b'', {
+            'Content-Type': 'application/json',
+            'x-lobe-callback-signature': timestamp + '.' + signature,
+        })
+        return status
+
+    def finalize(self, operation_id):
+        token = self.sandbox_environment().get('AGENT_GATEWAY_SERVICE_TOKEN', '')
+        if not token:
+            fail('缺少 AGENT_GATEWAY_SERVICE_TOKEN，无法结算残留的操作。')
+        body = json.dumps({'operationId': operation_id, 'reason': SETTLE_REASON}).encode()
+        status, text = self.post(self.application_url() + '/api/agent/finalize-abandoned', body, {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json',
+        })
+        return status == 200, text
+
+    def reconcile_runs(self, dry_run=False):
+        database = self.database()
+        if not database:
+            print('未发现 PostgreSQL 服务，跳过运行中任务结算。')
+            return
+        inflight = 'SELECT count(*) FROM agent_operations WHERE status IN ' + IN_FLIGHT_SQL
+        attached = (inflight + ' AND topic_id IN (SELECT topic_id FROM task_topics'
+                    " WHERE status = 'running')")
+        topics = "SELECT count(*) FROM task_topics WHERE status = 'running'"
+        tasks = "SELECT count(*) FROM tasks WHERE status = 'running'"
+        running = self.count(database, inflight)
+        attached_runs = self.count(database, attached)
+        running_topics = self.count(database, topics)
+        running_tasks = self.count(database, tasks)
+        print(f'\n运行中任务结算：进行中的操作 {running}（属于运行中任务 {attached_runs}），'
+              f'运行中的话题 {running_topics}，运行中的任务 {running_tasks}。')
+        if dry_run:
+            print('SETTLE=dry-run：只预览，未修改数据库、未调用结算接口。')
+            return
+        if attached_runs:
+            rows = self.query(database, (
+                "UPDATE agent_operations SET status = 'interrupted',\n"
+                "updated_at = now() - interval '" + SETTLE_REWIND + "'\n"
+                'WHERE status IN ' + IN_FLIGHT_SQL +
+                " AND topic_id IN (SELECT topic_id FROM task_topics WHERE status = 'running')\n"
+                'RETURNING id'))
+            print(f'已把 {len(rows)} 个运行中的操作标记为 interrupted。')
+        if running_topics:
+            status = self.watchdog()
+            if status == 200:
+                print('已触发任务看护（watchdog），运行中的任务交给 interrupted 分支暂停。')
+            else:
+                print(f'警告：任务看护返回 HTTP {status}；运行中的任务会在下一次定时看护时结算。',
+                      file=sys.stderr)
+        left_topics = self.count(database, topics)
+        left_tasks = self.count(database, tasks)
+        if left_topics or left_tasks:
+            print(f'剩余：运行中的话题 {left_topics}，运行中的任务 {left_tasks}；看护会继续收敛。')
+        else:
+            print('任务已结算：没有运行中的话题或任务。')
+        residual = [row[0] for row in self.query(database, (
+            'SELECT id FROM agent_operations WHERE status IN ' + IN_FLIGHT_SQL +
+            ' ORDER BY updated_at'))]
+        if not residual:
+            return
+        if not self.sandbox_environment().get('AGENT_GATEWAY_SERVICE_TOKEN'):
+            print(f'警告：未配置 AGENT_GATEWAY_SERVICE_TOKEN，{len(residual)} 个残留操作未结算。',
+                  file=sys.stderr)
+            return
+        failed = []
+        for operation_id in residual:
+            ok, message = self.finalize(operation_id)
+            if not ok:
+                failed.append(operation_id)
+                print(f'警告：操作 {operation_id} 结算失败：{message.strip()[:200]}', file=sys.stderr)
+        print(f'残留的聊天操作：已结算 {len(residual) - len(failed)} 个，失败 {len(failed)} 个。')
+
+    def settle(self):
+        mode = settle_mode()
+        if mode is None:
+            print('已跳过运行中任务结算（SETTLE=0）。')
+            return
+        try:
+            self.reconcile_runs(dry_run=mode == 'dry-run')
+        except Exception as error:  # The image is already running; never fail the deploy here.
+            print('警告：结算运行中的任务失败：' + str(error), file=sys.stderr)
+            print('新镜像已部署；残留的 running 记录不影响运行，可稍后重跑脚本结算。', file=sys.stderr)
+
     def deploy(self, managed, fresh=False):
         # Explicit values, including an empty URL to disable TFS, win over presets.
         environment = managed['services'][self.service].setdefault('environment', {})
@@ -323,6 +477,9 @@ class Manager:
                 print(f'启动失败，已恢复原覆盖配置，备份位于 {backup}。', file=sys.stderr)
                 print('容器可能已部分更新；请检查 docker compose logs --tail=80，修复后重试。数据库迁移不会自动回滚。', file=sys.stderr)
                 fail('部署未完成。')
+            # The previous container is gone, so nothing can finish its in-flight runs.
+            if not fresh:
+                self.settle()
             print(f'部署完成。选择已保存到 {self.override}；配置备份位于 {backup}。')
             run(self.command(self.override) + ['ps', self.service])
 

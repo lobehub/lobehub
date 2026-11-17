@@ -89,6 +89,23 @@ Onlyboxes 可以部署在同机或其他内网机器；不以本机是否存在�
 每次部署备份 Compose、`.env` 和原 override。**配置备份不是数据库备份，数据库迁移不能靠切换镜像自动撤销。**
 日常更新只重建应用服务；“启动或恢复完整部署” 会启动依赖服务。
 
+## 更新时结算运行中的任务
+
+更新已有部署会替换应用容器，旧进程来不及收尾的运行会永远停在 `running`：任务看起来还在跑，聊天一直转圈。因此 `up -d --wait` 成功后，脚本会自动结算一次，无需逐账号登录：
+
+1. 只读体检：统计进行中的操作、运行中的话题和运行中的任务。
+2. 把挂在运行中任务上的操作改成 `interrupted`，并把 `updated_at` 回拨 20 分钟（超过看护 15 分钟的宽限），让看护按“执行进程已消失”处理。
+3. 用 `KEY_VAULTS_SECRET` 自签内部回调，调用 `/api/workflows/task/watchdog`，由它把任务转为 `paused`；无需配置 `QSTASH_TOKEN`。
+4. 其余残留的聊天操作逐个调用 `/api/agent/finalize-abandoned`（Bearer `AGENT_GATEWAY_SERVICE_TOKEN`）兜底结算。
+5. 打印结算数量与失败清单。
+
+结算依赖应用、Gateway 与 PostgreSQL 已就绪；未发现 PostgreSQL 服务时跳过，不报错。缺少 `AGENT_GATEWAY_SERVICE_TOKEN` 时只跳过聊天兜底并警告。**结算失败不会让部署失败**（镜像已经起来）：失败项保持 `running`，重跑脚本或等下一次定时看护收敛。
+
+```bash
+SETTLE=0 bash deploy-custom-image.sh       # 关闭结算
+SETTLE=dry-run bash deploy-custom-image.sh # 只预览将要结算的数量
+```
+
 ## Fork 的 Actions
 
 上游专用 Branch Synchronization、Deploy Workbench、Release Desktop Canary、Release ModelBank 和 Preview CLI 默认在 Fork 中跳过。
