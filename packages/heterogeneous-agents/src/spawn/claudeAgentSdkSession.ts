@@ -12,10 +12,10 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { CLAUDE_CODE_DISALLOWED_TOOLS } from './claudeCodeDisallowedTools';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
 
-const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 const INPUT_CLOSE_POLL_MS = 1000;
 /** How often the input stream checks for a steered message to hand over. */
@@ -374,7 +374,7 @@ export class ClaudeAgentSdkSession {
       allowDangerouslySkipPermissions: true,
       abortController: this.abortController,
       cwd: this.options.cwd,
-      disallowedTools: [...CLAUDE_SDK_DISALLOWED_TOOLS],
+      disallowedTools: [...CLAUDE_CODE_DISALLOWED_TOOLS],
       env: this.options.env,
       includePartialMessages: true,
       pathToClaudeCodeExecutable: executablePath,
