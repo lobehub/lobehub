@@ -68,6 +68,7 @@ export default {
   'apikey.list.restrictedEmpty.title': 'API Key creation is restricted',
   'apikey.list.title': 'API Key List',
   'apikey.scopes.agentCredential': 'Write account credentials',
+  'apikey.scopes.agentTransfer': 'Transfer agents',
   'apikey.scopes.count': '{{count}} scopes',
   'apikey.scopes.fullAccess': 'Full access',
   'apikey.scopes.grantJoin': ': ',

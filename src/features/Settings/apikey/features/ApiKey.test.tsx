@@ -189,8 +189,8 @@ describe('ApiKey', () => {
     );
 
     const agentGroup = screen.getByText('apikey.scopes.groups.agent').parentElement!;
-    // read + write + the separate high-risk credential tier
-    expect(within(agentGroup).getAllByRole('checkbox')).toHaveLength(3);
+    // read + write + the separate high-risk credential and transfer tiers
+    expect(within(agentGroup).getAllByRole('checkbox')).toHaveLength(4);
 
     fireEvent.click(
       within(agentGroup).getByRole('checkbox', { name: 'apikey.scopes.agentCredential' }),
@@ -201,6 +201,26 @@ describe('ApiKey', () => {
     // non-existent `agent:credential:read`, which the API would reject.
     const [selected] = onSelectedChange.mock.calls.at(-1)!;
     expect([...selected].sort()).toEqual(['agent:credential:write', 'agent:read', 'agent:write']);
+  });
+
+  it('offers the agent-transfer scope as its own tier that brings agent write along', () => {
+    const onSelectedChange = vi.fn();
+    render(
+      <ScopeSelector
+        fullAccess={false}
+        selected={[]}
+        onFullAccessChange={vi.fn()}
+        onSelectedChange={onSelectedChange}
+      />,
+    );
+
+    const agentGroup = screen.getByText('apikey.scopes.groups.agent').parentElement!;
+    fireEvent.click(
+      within(agentGroup).getByRole('checkbox', { name: 'apikey.scopes.agentTransfer' }),
+    );
+
+    const [selected] = onSelectedChange.mock.calls.at(-1)!;
+    expect([...selected].sort()).toEqual(['agent:read', 'agent:transfer', 'agent:write']);
   });
 
   it('shows loading, then empty state when the first fetch returns no keys', async () => {

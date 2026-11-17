@@ -38,6 +38,14 @@ export const API_KEY_SCOPES = [
    * required alongside it, so this can only ever narrow, never widen.
    */
   'agent:credential:write',
+  /**
+   * Moving an agent out of its scope — to another workspace, to the personal
+   * space, or handing it to another member. Its own tier because it removes
+   * the agent (and its conversations) from everyone who could reach it, which
+   * "may edit the agent" must not imply. Like the credential tier it is
+   * required alongside `agent:write`, so it only ever narrows.
+   */
+  'agent:transfer',
   'eval:read',
   'eval:write',
   'chat:read',
