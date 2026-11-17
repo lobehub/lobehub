@@ -170,7 +170,7 @@ export const buildServerCallLlmContext = async ({
     attachmentPreviewFileIds: llmPayload.attachmentPreviewFileIds,
     agentDocumentChanges: facts.agentDocumentChanges,
     agentDocuments: facts.agentDocuments,
-    revokedDocumentIds: facts.revokedDocumentIds,
+    revokedDocumentReads: facts.revokedDocumentReads,
     // Identity lives on the agent row, not in the prompt text — inject it so
     // the model introduces itself by the user-given name.
     agentIdentity: { name: agentConfig.name ?? undefined, title: agentConfig.title ?? undefined },

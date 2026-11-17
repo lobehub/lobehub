@@ -583,66 +583,93 @@ describe('gatherContextFacts — revoked document reads', () => {
     }) as never;
 
   it('asks the host only about documents the history read', async () => {
-    const findRevokedAgentDocumentIds = vi.fn(async () => ['docs_b', 'docs_a']);
+    const findRevokedDocumentReads = vi.fn(async () => ({
+      agentDocumentReadIds: ['docs_kb'],
+      documentIds: ['docs_b', 'docs_a'],
+    }));
     const facts = await gatherContextFacts(
       request({ messages: [message('hi'), readKnowledge(['docs_a', 'docs_b'])] }),
-      { findRevokedAgentDocumentIds },
+      { findRevokedDocumentReads },
     );
 
-    expect(findRevokedAgentDocumentIds).toHaveBeenCalledWith('agt_1', ['docs_a', 'docs_b']);
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_1', ['docs_a', 'docs_b']);
     // Sorted so the filtered prefix is stable whatever order the host returns.
-    expect(facts.revokedDocumentIds).toEqual(['docs_a', 'docs_b']);
+    expect(facts.revokedDocumentReads).toEqual([
+      { agentDocumentReadIds: ['docs_kb'], documentIds: ['docs_a', 'docs_b'] },
+    ]);
   });
 
   it('skips the lookup without a document read, for a share visitor, or without an agent', async () => {
-    const findRevokedAgentDocumentIds = vi.fn(async () => ['docs_a']);
+    const findRevokedDocumentReads = vi.fn(async () => ({ documentIds: ['docs_a'] }));
 
     const noRead = await gatherContextFacts(request({ messages: [message('hi')] }), {
-      findRevokedAgentDocumentIds,
+      findRevokedDocumentReads,
     });
     const visitor = await gatherContextFacts(
       request({
         messages: [readKnowledge(['docs_a'])],
         shareVisitor: { agentId: 'agt_1', visitorUserId: 'u_2' },
       }),
-      { findRevokedAgentDocumentIds },
+      { findRevokedDocumentReads },
     );
     const noAgent = await gatherContextFacts(
       request({ agentId: undefined, messages: [readKnowledge(['docs_a'])] }),
-      { findRevokedAgentDocumentIds },
+      { findRevokedDocumentReads },
     );
 
-    expect(findRevokedAgentDocumentIds).not.toHaveBeenCalled();
-    expect(noRead.revokedDocumentIds).toBeUndefined();
-    expect(visitor.revokedDocumentIds).toBeUndefined();
-    expect(noAgent.revokedDocumentIds).toBeUndefined();
+    expect(findRevokedDocumentReads).not.toHaveBeenCalled();
+    expect(noRead.revokedDocumentReads).toBeUndefined();
+    expect(visitor.revokedDocumentReads).toBeUndefined();
+    expect(noAgent.revokedDocumentReads).toBeUndefined();
   });
 
   it('checks the edited agent while the agent builder is active', async () => {
-    const findRevokedAgentDocumentIds = vi.fn(async () => []);
+    const findRevokedDocumentReads = vi.fn(async () => ({ documentIds: [] }));
     await gatherContextFacts(
       request({
         editingAgentId: 'agt_edit',
         enabledToolIds: ['lobe-agent-builder'],
         messages: [readKnowledge(['docs_a'])],
       }),
-      { findRevokedAgentDocumentIds },
+      { findRevokedDocumentReads },
     );
 
-    expect(findRevokedAgentDocumentIds).toHaveBeenCalledWith('agt_edit', ['docs_a']);
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_edit', ['docs_a']);
   });
 
   it('leaves the fact out when nothing is revoked or the lookup fails', async () => {
     const none = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
-      findRevokedAgentDocumentIds: async () => [],
+      findRevokedDocumentReads: async () => ({ agentDocumentReadIds: [], documentIds: [] }),
     });
     const failed = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
-      findRevokedAgentDocumentIds: async () => {
+      findRevokedDocumentReads: async () => {
         throw new Error('db down');
       },
     });
 
-    expect(none.revokedDocumentIds).toBeUndefined();
-    expect(failed.revokedDocumentIds).toBeUndefined();
+    expect(none.revokedDocumentReads).toBeUndefined();
+    expect(failed.revokedDocumentReads).toBeUndefined();
+  });
+
+  it("checks another group member's reads against that member's bindings", async () => {
+    const findRevokedDocumentReads = vi.fn(async (agentId: string) =>
+      agentId === 'agt_a' ? { documentIds: ['docs_a'] } : { documentIds: [] },
+    );
+    const facts = await gatherContextFacts(
+      request({
+        messages: [
+          { ...readKnowledge(['docs_a']), agentId: 'agt_a' } as never,
+          { ...readKnowledge(['docs_own']), agentId: 'agt_1' } as never,
+        ],
+      }),
+      { findRevokedDocumentReads },
+    );
+
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_a', ['docs_a']);
+    expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_1', ['docs_own']);
+    expect(facts.revokedDocumentReads).toEqual([
+      { agentDocumentReadIds: [], agentId: 'agt_a', documentIds: ['docs_a'] },
+      { agentDocumentReadIds: [], documentIds: [] },
+    ]);
   });
 });

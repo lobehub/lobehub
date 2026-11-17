@@ -77,7 +77,7 @@ describe('MessagesEngine — revoked document reads', () => {
 
   it('drops the body of a deleted document from the same topic history', async () => {
     const result = await new MessagesEngine(
-      createParams({ revokedDocumentIds: [DOC_ID] }),
+      createParams({ revokedDocumentReads: [{ documentIds: [DOC_ID] }] }),
     ).process();
 
     expect(payloadText(result.messages)).not.toContain(RULE_BODY);
@@ -93,9 +93,55 @@ describe('MessagesEngine — revoked document reads', () => {
 
   it('ignores revoked ids that no historical read referenced', async () => {
     const result = await new MessagesEngine(
-      createParams({ revokedDocumentIds: ['docs_other'] }),
+      createParams({ revokedDocumentReads: [{ documentIds: ['docs_other'] }] }),
     ).process();
 
     expect(payloadText(result.messages)).toContain(RULE_BODY);
+  });
+
+  describe('agent-group topic', () => {
+    // Member A read the rule doc; supervisor S answers next. GroupRoleTransform
+    // folds A's tool result into S's view as user text and drops `plugin`.
+    const groupHistory = (): UIChatMessage[] =>
+      historyWithDocumentRead().map((message) =>
+        message.role === 'assistant' || message.role === 'tool'
+          ? ({ ...message, agentId: 'agt_a' } as UIChatMessage)
+          : message,
+      );
+    const agentGroup = {
+      agentMap: {
+        agt_a: { name: 'Member A', role: 'participant' as const },
+        agt_s: { name: 'Supervisor', role: 'supervisor' as const },
+      },
+      currentAgentId: 'agt_s',
+      currentAgentRole: 'supervisor' as const,
+    };
+
+    it("withholds another member's read of a document that member deleted", async () => {
+      const result = await new MessagesEngine(
+        createParams({
+          agentGroup,
+          messages: groupHistory(),
+          revokedDocumentReads: [{ documentIds: [] }, { agentId: 'agt_a', documentIds: [DOC_ID] }],
+        }),
+      ).process();
+
+      const text = payloadText(result.messages);
+      expect(text).not.toContain(RULE_BODY);
+      expect(text).toContain('<revoked_document_content>');
+    });
+
+    it("keeps another member's read while that member's binding is live", async () => {
+      const result = await new MessagesEngine(
+        createParams({
+          agentGroup,
+          messages: groupHistory(),
+          // Only the supervisor lost the document; A still has it.
+          revokedDocumentReads: [{ documentIds: [DOC_ID] }, { agentId: 'agt_a', documentIds: [] }],
+        }),
+      ).process();
+
+      expect(payloadText(result.messages)).toContain(RULE_BODY);
+    });
   });
 });

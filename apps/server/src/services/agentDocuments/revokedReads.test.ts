@@ -70,11 +70,11 @@ describe('findRevokedDocumentReads', () => {
 
     expect(
       await findRevokedDocumentReads(m, 'agt_1', ['docs_gone', 'docs_live', 'file_x']),
-    ).toEqual(['docs_gone']);
+    ).toEqual({ agentDocumentReadIds: [], documentIds: ['docs_gone'] });
     expect(m.listExistingDocumentIds).toHaveBeenCalledWith(['docs_gone', 'docs_live']);
   });
 
-  it('keeps a removed agent document that is still a knowledge-base page', async () => {
+  it('revokes a removed knowledge-base page only for the agent-document read route', async () => {
     const m = model({
       listBindingStatesByRefs: vi.fn(async () => [
         { accessSelf: 31, deletedAt: new Date(), documentId: 'docs_kb', id: 'b-1' },
@@ -83,15 +83,20 @@ describe('findRevokedDocumentReads', () => {
       listKnowledgeBaseMemberIds: vi.fn(async () => ['docs_kb']),
     });
 
-    expect(await findRevokedDocumentReads(m, 'agt_1', ['docs_kb', 'docs_rule'])).toEqual([
-      'docs_rule',
-    ]);
+    // readKnowledge can still return the KB page; the agent's readDocument cannot.
+    expect(await findRevokedDocumentReads(m, 'agt_1', ['docs_kb', 'docs_rule'])).toEqual({
+      agentDocumentReadIds: ['docs_kb'],
+      documentIds: ['docs_rule'],
+    });
   });
 
   it('does no lookups without ids', async () => {
     const m = model();
 
-    expect(await findRevokedDocumentReads(m, 'agt_1', [])).toEqual([]);
+    expect(await findRevokedDocumentReads(m, 'agt_1', [])).toEqual({
+      agentDocumentReadIds: [],
+      documentIds: [],
+    });
     expect(m.listBindingStatesByRefs).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import {
-  collectDocumentReadIds,
+  collectDocumentReads,
   formatRevokedDocumentResult,
   RevokedDocumentResultFilter,
 } from '../RevokedDocumentResultFilter';
@@ -43,8 +43,10 @@ const readDocumentMessage = (id: string) => ({
   tool_call_id: 'call-doc',
 });
 
-const run = async (messages: any[], revokedDocumentIds?: string[]) =>
-  new RevokedDocumentResultFilter({ revokedDocumentIds }).process(createContext(messages));
+const run = async (messages: any[], documentIds?: string[]) =>
+  new RevokedDocumentResultFilter({
+    revokedDocumentReads: documentIds ? [{ documentIds }] : undefined,
+  }).process(createContext(messages));
 
 describe('RevokedDocumentResultFilter', () => {
   it('withholds a historical readKnowledge result of a deleted document', async () => {
@@ -127,9 +129,114 @@ describe('RevokedDocumentResultFilter', () => {
   });
 });
 
-describe('collectDocumentReadIds', () => {
+describe('RevokedDocumentResultFilter — read route', () => {
+  it('keeps a knowledge-base page read through readKnowledge but not through readDocument', async () => {
+    const result = await new RevokedDocumentResultFilter({
+      revokedDocumentReads: [{ agentDocumentReadIds: ['docs_kb'], documentIds: [] }],
+    }).process(createContext([readKnowledgeMessage(['docs_kb']), readDocumentMessage('docs_kb')]));
+
+    expect(result.messages[0].content).toContain(RULE);
+    expect(result.messages[1].content).not.toContain(RULE);
+    expect(result.messages[1].content).toContain('<revoked_document_content>');
+  });
+});
+
+describe('RevokedDocumentResultFilter — group topics', () => {
+  const groupHistory = () => [
+    // Member A (agt_a) read the rules doc in an earlier turn: flat rows.
+    {
+      agentId: 'agt_a',
+      content: '',
+      id: 'a-call',
+      role: 'assistant',
+      tools: [{ apiName: 'readKnowledge', id: 'call-a', identifier: 'lobe-knowledge-base' }],
+    },
+    {
+      ...readKnowledgeMessage(['docs_rule']),
+      agentId: 'agt_a',
+      id: 'a-tool',
+      tool_call_id: 'call-a',
+    },
+    // Member C (agt_c) read the same id; its own binding is still live. The
+    // flattened row carries no agentId, only its caller does.
+    {
+      agentId: 'agt_c',
+      content: '',
+      id: 'c-call',
+      role: 'assistant',
+      tools: [{ apiName: 'readKnowledge', id: 'call-c', identifier: 'lobe-knowledge-base' }],
+    },
+    { ...readKnowledgeMessage(['docs_rule']), id: 'c-tool', tool_call_id: 'call-c' },
+  ];
+
+  it('judges each read against the member that made it', async () => {
+    const result = await new RevokedDocumentResultFilter({
+      revokedDocumentReads: [
+        { documentIds: [] },
+        { agentId: 'agt_a', documentIds: ['docs_rule'] },
+        { agentId: 'agt_c', documentIds: [] },
+      ],
+    }).process(createContext(groupHistory()));
+
+    expect(result.messages[1].content).not.toContain(RULE);
+    expect(result.messages[3].content).toContain(RULE);
+  });
+
+  it("does not apply the current agent's revocations to another member's reads", async () => {
+    const result = await new RevokedDocumentResultFilter({
+      revokedDocumentReads: [
+        { documentIds: ['docs_rule'] },
+        { agentId: 'agt_a', documentIds: [] },
+        { agentId: 'agt_c', documentIds: [] },
+      ],
+    }).process(createContext(groupHistory()));
+
+    expect(result.messages[1].content).toContain(RULE);
+    expect(result.messages[3].content).toContain(RULE);
+  });
+});
+
+describe('collectDocumentReads', () => {
+  it('records the reading agent from the row, its caller or the enclosing group message', () => {
+    const reads = collectDocumentReads([
+      {
+        agentId: 'agt_a',
+        role: 'assistant',
+        tools: [{ apiName: 'readKnowledge', id: 'call-a', identifier: 'lobe-knowledge-base' }],
+      },
+      { ...readKnowledgeMessage(['docs_a']), tool_call_id: 'call-a' },
+      { ...readKnowledgeMessage(['docs_b']), agentId: 'agt_b', tool_call_id: 'call-b' },
+      {
+        agentId: 'agt_g',
+        children: [
+          {
+            tools: [
+              {
+                apiName: 'readDocument',
+                arguments: JSON.stringify({ id: 'docs_g' }),
+                identifier: 'lobe-agent-documents',
+              },
+            ],
+          },
+        ],
+        role: 'assistantGroup',
+      },
+      readKnowledgeMessage(['docs_none']),
+    ]);
+
+    expect(reads).toEqual(
+      expect.arrayContaining([
+        { agentId: 'agt_a', documentId: 'docs_a' },
+        { agentId: 'agt_b', documentId: 'docs_b' },
+        { agentId: 'agt_g', documentId: 'docs_g' },
+        { agentId: undefined, documentId: 'docs_none' },
+      ]),
+    );
+    expect(reads).toHaveLength(4);
+  });
+
   it('collects ids from flat tool rows and nested assistant-group tools', () => {
-    const ids = collectDocumentReadIds([
+    const ids = collectDocumentReads([
       readKnowledgeMessage(['docs_a']),
       readDocumentMessage('docs_b'),
       {
@@ -162,6 +269,12 @@ describe('collectDocumentReadIds', () => {
       }),
     ]);
 
-    expect(ids.sort()).toEqual(['docs_a', 'docs_b', 'docs_c', 'docs_d', 'docs_e']);
+    expect(ids.map((read) => read.documentId).sort()).toEqual([
+      'docs_a',
+      'docs_b',
+      'docs_c',
+      'docs_d',
+      'docs_e',
+    ]);
   });
 });

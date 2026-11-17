@@ -13,6 +13,7 @@ import type {
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
+import type { RevokedDocumentReads } from '../../processors/RevokedDocumentResultFilter';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 import type {
   AgentContextDocument,
@@ -309,11 +310,11 @@ export interface MessagesEngineParams {
    */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
   /**
-   * Document ids whose agent-document binding is no longer live (deleted,
-   * disabled, or unbound from this agent). Historical `readKnowledge` /
-   * `readDocument` results referencing them are withheld from the model.
+   * Documents deleted or disabled since earlier turns read them, per reading
+   * agent. Historical `readKnowledge` / `readDocument` results referencing
+   * them are withheld from the model.
    */
-  revokedDocumentIds?: string[];
+  revokedDocumentReads?: RevokedDocumentReads[];
 
   // ========== Skills ==========
   /** Skills configuration */

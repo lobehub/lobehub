@@ -25,12 +25,13 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentManagementContext,
-  collectDocumentReadIds,
+  collectDocumentReads,
   type DocumentReferenceItem,
   type GroupAgentBuilderContext,
   type PlanTodoConfig,
   resolveDocumentReferences,
   resolveTopicReferences,
+  type RevokedDocumentReads,
   type TopicReferenceItem,
   type WorkspaceContext,
 } from '@lobechat/context-engine';
@@ -157,21 +158,46 @@ const gatherDocumentReferences = async (
  * documents the model reads (the edited agent in the agent builder), only when
  * the history holds a document read, and never for a share visitor.
  */
-const gatherRevokedDocumentIds = async (
+const gatherRevokedDocumentReads = async (
   request: ContextFactRequest,
   providers: ContextFactProviders,
   agentId: string | undefined,
-): Promise<string[] | undefined> => {
-  const { findRevokedAgentDocumentIds } = providers;
-  if (request.shareVisitor || !agentId || !findRevokedAgentDocumentIds) return undefined;
-  const documentIds = collectDocumentReadIds(request.messages);
-  if (documentIds.length === 0) return undefined;
+): Promise<RevokedDocumentReads[] | undefined> => {
+  const { findRevokedDocumentReads } = providers;
+  if (request.shareVisitor || !agentId || !findRevokedDocumentReads) return undefined;
 
-  return attempt('revokedDocumentIds', async () => {
-    const revoked = await findRevokedAgentDocumentIds(agentId, documentIds);
-    const ids = revoked ? [...revoked] : [];
-    return ids.length > 0 ? ids.sort() : undefined;
-  });
+  // In a group topic, other members' reads are judged against their own
+  // bindings; everything else against the agent whose documents the model reads.
+  const idsByMember = new Map<string | undefined, Set<string>>();
+  for (const read of collectDocumentReads(request.messages)) {
+    const member =
+      read.agentId && read.agentId !== request.agentId && read.agentId !== agentId
+        ? read.agentId
+        : undefined;
+    const ids = idsByMember.get(member) ?? new Set<string>();
+    ids.add(read.documentId);
+    idsByMember.set(member, ids);
+  }
+  if (idsByMember.size === 0) return undefined;
+
+  const sets = await Promise.all(
+    [...idsByMember].map(async ([member, ids]): Promise<RevokedDocumentReads> => {
+      const found = await attempt('revokedDocumentReads', () =>
+        findRevokedDocumentReads(member ?? agentId, [...ids].sort()),
+      );
+      // Sorted so the filtered prefix stays stable whatever order the host returns.
+      return {
+        ...(member && { agentId: member }),
+        agentDocumentReadIds: [...(found?.agentDocumentReadIds ?? [])].sort(),
+        documentIds: [...(found?.documentIds ?? [])].sort(),
+      };
+    }),
+  );
+
+  const hasRevocations = sets.some(
+    (set) => set.documentIds.length > 0 || (set.agentDocumentReadIds?.length ?? 0) > 0,
+  );
+  return hasRevocations ? sets : undefined;
 };
 
 /**
@@ -550,7 +576,7 @@ export const gatherContextFacts = async (
     () => gatherGroupAgentBuilderContext(request, providers),
     () => gatherOnboardingContext(request, providers),
     () => gatherPlanTodo(request, providers),
-    () => gatherRevokedDocumentIds(request, providers, docsAgentId),
+    () => gatherRevokedDocumentReads(request, providers, docsAgentId),
     () =>
       attempt('sandboxFiles', () =>
         sandboxEnabled && request.topicId
@@ -582,7 +608,7 @@ export const gatherContextFacts = async (
     groupAgentBuilderContext,
     onboardingContext,
     planTodo,
-    revokedDocumentIds,
+    revokedDocumentReads,
     sandboxFiles,
     sandboxPersistence,
     topic,
@@ -594,7 +620,7 @@ export const gatherContextFacts = async (
   return {
     agentDocumentChanges,
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
-    revokedDocumentIds,
+    revokedDocumentReads,
     step: {
       agentAccountContext,
       agentBuilderContext,

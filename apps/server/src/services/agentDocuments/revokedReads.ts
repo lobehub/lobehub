@@ -30,6 +30,16 @@ export const revokedAgentDocumentRefs = (
     return !matches.some((binding) => !binding.deletedAt && canReadDocument(binding));
   });
 
+export interface RevokedDocumentReadIds {
+  /**
+   * Revoked for `readDocument` only: no live binding is left, but the page is
+   * still a knowledge-base item that `readKnowledge` returns.
+   */
+  agentDocumentReadIds: string[];
+  /** Revoked for every read route. */
+  documentIds: string[];
+}
+
 /**
  * Of the document ids that earlier turns of a conversation read, those whose
  * content must no longer reach the model for `agentId`:
@@ -37,10 +47,13 @@ export const revokedAgentDocumentRefs = (
  * - every binding of the agent is deleted or lost read access, or the binding
  *   id no longer exists ({@link revokedAgentDocumentRefs});
  * - a `docs_*` id whose `documents` row no longer exists at all (permanently
- *   deleted, e.g. trash emptied — no tombstone is left to check);
+ *   deleted, e.g. trash emptied — no tombstone is left to check).
  *
- * minus `docs_*` pages that are still knowledge-base items, which stay readable
- * there. Resolved with a constant number of queries for the whole batch.
+ * A revoked `docs_*` page that is still a knowledge-base item stays visible
+ * through `readKnowledge`, which would still return it today, but not through
+ * the agent's `readDocument`, which would not. Each historical read is thus
+ * kept exactly when the same tool could read the document again. Resolved
+ * with a constant number of queries for the whole batch.
  */
 export const findRevokedDocumentReads = async (
   model: Pick<
@@ -49,9 +62,9 @@ export const findRevokedDocumentReads = async (
   >,
   agentId: string,
   refs: readonly string[],
-): Promise<string[]> => {
+): Promise<RevokedDocumentReadIds> => {
   const ids = [...new Set(refs)].filter((ref) => ref.length > 0);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return { agentDocumentReadIds: [], documentIds: [] };
 
   const documentIds = ids.filter((ref) => ref.startsWith('docs_'));
   const [bindings, existing] = await Promise.all([
@@ -62,10 +75,14 @@ export const findRevokedDocumentReads = async (
   const existingIds = new Set(existing);
   const revoked = new Set(revokedAgentDocumentRefs(ids, bindings));
   for (const id of documentIds) if (!existingIds.has(id)) revoked.add(id);
-  if (revoked.size === 0) return [];
+  if (revoked.size === 0) return { agentDocumentReadIds: [], documentIds: [] };
 
   const knowledgeBaseMembers = new Set(
     await model.listKnowledgeBaseMemberIds([...revoked].filter((id) => existingIds.has(id))),
   );
-  return [...revoked].filter((id) => !knowledgeBaseMembers.has(id)).sort();
+  const sorted = [...revoked].sort();
+  return {
+    agentDocumentReadIds: sorted.filter((id) => knowledgeBaseMembers.has(id)),
+    documentIds: sorted.filter((id) => !knowledgeBaseMembers.has(id)),
+  };
 };

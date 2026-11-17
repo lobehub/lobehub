@@ -150,7 +150,7 @@ export const createServerContextFactProviders = ({
       return doc ? { content: doc.content, title: doc.title } : null;
     },
 
-    findRevokedAgentDocumentIds: async (agentId, documentIds) =>
+    findRevokedDocumentReads: async (agentId, documentIds) =>
       findRevokedDocumentReads(
         new AgentDocumentModel(db, userId, workspaceId, documentAccessScope),
         agentId,

@@ -42,7 +42,7 @@ vi.mock('@/helpers/parserPlaceholder', () => ({
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentService: {
     getDocuments: vi.fn(),
-    listRevokedDocumentReads: vi.fn(async () => []),
+    listRevokedDocumentReads: vi.fn(async () => ({ agentDocumentReadIds: [], documentIds: [] })),
   },
 }));
 
@@ -125,7 +125,10 @@ describe('contextEngineering — revoked document reads', () => {
       },
       { content: 'translate hello', id: 'u2', role: 'user' },
     ] as unknown as UIChatMessage[];
-    vi.mocked(agentDocumentService.listRevokedDocumentReads).mockResolvedValueOnce(['docs_rule']);
+    vi.mocked(agentDocumentService.listRevokedDocumentReads).mockResolvedValueOnce({
+      agentDocumentReadIds: [],
+      documentIds: ['docs_rule'],
+    });
 
     const output = await contextEngineering({
       agentId: 'agent-1',

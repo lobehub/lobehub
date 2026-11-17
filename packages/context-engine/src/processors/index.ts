@@ -33,8 +33,10 @@ export {
 } from './PlaceholderVariables';
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export {
-  collectDocumentReadIds,
+  collectDocumentReads,
+  type DocumentRead,
   formatRevokedDocumentResult,
+  type RevokedDocumentReads,
   RevokedDocumentResultFilter,
   type RevokedDocumentResultFilterConfig,
 } from './RevokedDocumentResultFilter';

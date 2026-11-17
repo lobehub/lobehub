@@ -83,39 +83,79 @@ const toolOfMessage = (message: Record<string, any>): ToolLike | undefined => {
   };
 };
 
-/**
- * Collect every document id that a historical `readKnowledge` / `readDocument`
- * call referenced. Walks both the flat `role: 'tool'` rows and the nested
- * assistant-group shape (`children[].tools[]` with `result.state`), so a host
- * can resolve the ids before the engine flattens the conversation.
- */
-export const collectDocumentReadIds = (messages: readonly unknown[]): string[] => {
-  const ids = new Set<string>();
-  const add = (tool: ToolLike | undefined) => {
-    if (!tool) return;
-    for (const id of documentIdsOfRead(tool)) ids.add(id);
+/** Tool-call id → agent that issued it, from assistant rows (`tools[]` or `tool_calls[]`). */
+const callerAgentsOf = (messages: readonly unknown[]) => {
+  const callers = new Map<string, string>();
+  const visit = (message: Record<string, any> | undefined, inherited?: string) => {
+    if (!message || typeof message !== 'object') return;
+    const agentId = nonEmptyString(message.agentId) ? message.agentId : inherited;
+    if (agentId) {
+      for (const call of [
+        ...(Array.isArray(message.tools) ? message.tools : []),
+        ...(Array.isArray(message.tool_calls) ? message.tool_calls : []),
+      ]) {
+        if (nonEmptyString(call?.id)) callers.set(call.id, agentId);
+      }
+    }
+    if (Array.isArray(message.children))
+      for (const child of message.children) visit(child, agentId);
   };
-  const addNestedTools = (tools: unknown) => {
-    if (!Array.isArray(tools)) return;
-    for (const tool of tools as Record<string, any>[]) {
-      if (!tool) continue;
-      add({
-        apiName: tool.apiName,
-        arguments: tool.arguments,
-        identifier: tool.identifier,
-        state: tool.result?.state,
-      });
+  for (const message of messages) visit(message as Record<string, any>);
+  return callers;
+};
+
+/** The agent whose call produced a tool row; flattened group rows only carry it on the caller. */
+const agentOfToolMessage = (message: Record<string, any>, callers: Map<string, string>) =>
+  (nonEmptyString(message.agentId) ? message.agentId : undefined) ??
+  (nonEmptyString(message.tool_call_id) ? callers.get(message.tool_call_id) : undefined);
+
+export interface DocumentRead {
+  /** Agent that made the read, when the history records it (group topics). */
+  agentId?: string;
+  documentId: string;
+}
+
+/**
+ * Collect every document that a historical `readKnowledge` / `readDocument`
+ * call referenced, with the agent that made the call when the history records
+ * one. Walks both the flat `role: 'tool'` rows and the nested assistant-group
+ * shape (`children[].tools[]` with `result.state`), so a host can resolve the
+ * reads before the engine flattens the conversation.
+ */
+export const collectDocumentReads = (messages: readonly unknown[]): DocumentRead[] => {
+  const callers = callerAgentsOf(messages);
+  const reads = new Map<string, DocumentRead>();
+  const add = (tool: ToolLike | undefined, agentId: string | undefined) => {
+    if (!tool) return;
+    for (const documentId of documentIdsOfRead(tool)) {
+      reads.set(`${agentId ?? ''}\u0000${documentId}`, { agentId, documentId });
     }
   };
-  const visit = (message: Record<string, any> | undefined) => {
+  const visit = (message: Record<string, any> | undefined, inherited?: string) => {
     if (!message || typeof message !== 'object') return;
-    add(toolOfMessage(message));
-    addNestedTools(message.tools);
-    if (Array.isArray(message.children)) for (const child of message.children) visit(child);
+    const agentId = nonEmptyString(message.agentId) ? message.agentId : inherited;
+    const tool = toolOfMessage(message);
+    if (tool) add(tool, agentOfToolMessage(message, callers) ?? inherited);
+    if (Array.isArray(message.tools)) {
+      for (const nested of message.tools as Record<string, any>[]) {
+        if (!nested) continue;
+        add(
+          {
+            apiName: nested.apiName,
+            arguments: nested.arguments,
+            identifier: nested.identifier,
+            state: nested.result?.state,
+          },
+          agentId,
+        );
+      }
+    }
+    if (Array.isArray(message.children))
+      for (const child of message.children) visit(child, agentId);
   };
 
   for (const message of messages) visit(message as Record<string, any>);
-  return [...ids];
+  return [...reads.values()];
 };
 
 /**
@@ -135,13 +175,35 @@ export const formatRevokedDocumentResult = (revokedIds: string[], keptIds: strin
     '</revoked_document_content>',
   ].join('\n');
 
-export interface RevokedDocumentResultFilterConfig {
+/**
+ * Documents whose earlier reads must no longer reach the model, for one agent.
+ */
+export interface RevokedDocumentReads {
   /**
-   * Document ids (`documents.id` or `agent_documents.id`) whose agent-document
-   * binding is no longer live: deleted, read access removed, or no longer bound
-   * to the current agent.
+   * Withheld from `readDocument` results only: the binding is gone, but the
+   * document is still a knowledge-base page that `readKnowledge` returns.
    */
-  revokedDocumentIds?: readonly string[];
+  agentDocumentReadIds?: string[];
+  /**
+   * The group member whose reads this set covers. Omitted for the set that
+   * covers every other read (the conversation's own agent).
+   */
+  agentId?: string;
+  /**
+   * Withheld from both `readKnowledge` and `readDocument` results: the
+   * agent-document binding is deleted, disabled or gone, and no other route
+   * still exposes the document.
+   */
+  documentIds: string[];
+}
+
+export interface RevokedDocumentResultFilterConfig {
+  revokedDocumentReads?: readonly RevokedDocumentReads[];
+}
+
+interface RevokedSet {
+  agentDocumentRead: Set<string>;
+  any: Set<string>;
 }
 
 /**
@@ -150,35 +212,61 @@ export interface RevokedDocumentResultFilterConfig {
  * bindings each turn, but a `readKnowledge` / `readDocument` result persisted
  * in the topic would otherwise keep sending the removed document to the model.
  *
+ * Each read is judged against the agent that made it (group members included)
+ * and the tool that returned it: a knowledge-base page stays visible through
+ * `readKnowledge` but not through an agent's `readDocument`.
+ *
  * Only the payload changes: DB/UI rows keep the original result, and the
  * tool-call pairing stays intact. Must run AFTER the flatten processors (they
  * hoist nested tool results back into `role: 'tool'` rows with plugin /
- * pluginState) and BEFORE ToolCallProcessor.
+ * pluginState) and BEFORE the group role transforms (they fold other members'
+ * results into user text and drop `plugin`) and ToolCallProcessor.
  */
 export class RevokedDocumentResultFilter extends BaseProcessor {
   readonly name = 'RevokedDocumentResultFilter';
 
-  private revokedIds: Set<string>;
+  private byAgent = new Map<string, RevokedSet>();
+  private fallback?: RevokedSet;
+  private hasRevocations = false;
 
   constructor(config: RevokedDocumentResultFilterConfig, options: ProcessorOptions = {}) {
     super(options);
-    this.revokedIds = new Set(config.revokedDocumentIds ?? []);
+    for (const reads of config.revokedDocumentReads ?? []) {
+      const set: RevokedSet = {
+        agentDocumentRead: new Set(reads.agentDocumentReadIds ?? []),
+        any: new Set(reads.documentIds ?? []),
+      };
+      // An empty member set still matters: it keeps that member's reads from
+      // falling back to the conversation agent's revocations.
+      if (reads.agentId) this.byAgent.set(reads.agentId, set);
+      else this.fallback = set;
+      if (set.any.size > 0 || set.agentDocumentRead.size > 0) this.hasRevocations = true;
+    }
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    if (this.revokedIds.size === 0) return this.markAsExecuted(context);
+    if (!this.hasRevocations) return this.markAsExecuted(context);
 
     const clonedContext = this.cloneContext(context);
+    const callers = this.byAgent.size > 0 ? callerAgentsOf(clonedContext.messages) : undefined;
     let filteredMessages = 0;
 
     clonedContext.messages = clonedContext.messages.map((message: Message) => {
       const tool = toolOfMessage(message);
       if (!tool) return message;
 
+      const agentId = callers ? agentOfToolMessage(message, callers) : undefined;
+      const set = (agentId ? this.byAgent.get(agentId) : undefined) ?? this.fallback;
+      if (!set) return message;
+
+      const isAgentDocumentRead = tool.apiName === 'readDocument';
+      const isRevoked = (id: string) =>
+        set.any.has(id) || (isAgentDocumentRead && set.agentDocumentRead.has(id));
+
       const ids = [...documentIdsOfRead(tool)];
-      const revoked = ids.filter((id) => this.revokedIds.has(id));
+      const revoked = ids.filter(isRevoked);
       if (revoked.length === 0) return message;
-      const kept = ids.filter((id) => !this.revokedIds.has(id));
+      const kept = ids.filter((id) => !isRevoked(id));
 
       filteredMessages += 1;
       return {

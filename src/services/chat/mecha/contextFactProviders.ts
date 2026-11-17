@@ -90,7 +90,7 @@ export const createBrowserContextFactProviders = ({
     return doc ? { content: doc.content, title: doc.title } : null;
   },
 
-  findRevokedAgentDocumentIds: (targetAgentId, documentIds) =>
+  findRevokedDocumentReads: (targetAgentId, documentIds) =>
     agentDocumentService.listRevokedDocumentReads({ agentId: targetAgentId, documentIds }),
 
   findTopic: async (topicId) => {
