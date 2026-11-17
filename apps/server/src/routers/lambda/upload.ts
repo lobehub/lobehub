@@ -46,6 +46,16 @@ const CONTENT_ADDRESSED_PATHNAME = /^files\/\d{4}-\d{2}-\d{2}\/[\da-f]{64}(?:\.[
  * quota, bounds the length and refuses a key that already holds an object, and
  * only under a content-addressed key, never a pathname of its choosing.
  */
+/**
+ * Clients built before uploads carried a size (LobeHub Desktop 2.2.15 and older,
+ * still running their bundled renderer) request a signed URL without one. A
+ * reservation needs the size, so the request stays refused; the message is what
+ * those clients show on the failed attachment, so it names the remedy instead of
+ * a schema error.
+ */
+export const OUTDATED_UPLOAD_CLIENT_MESSAGE =
+  'Update LobeHub to the latest version to upload files. This version can no longer upload them.';
+
 const assertOperationTokenUpload = (
   ctx: { heteroOperationScope?: string },
   input: { pathname: string; size?: number },
@@ -254,8 +264,11 @@ export const uploadRouter = router({
 
   createS3PreSignedUrl: uploadProcedure
     .use(withScopedPermission('file:upload'))
-    .input(z.object({ pathname: z.string().min(1), size: uploadSizeSchema }))
+    .input(z.object({ pathname: z.string().min(1), size: uploadSizeSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
+      if (input.size === undefined) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: OUTDATED_UPLOAD_CLIENT_MESSAGE });
+      }
       assertOperationTokenUpload(ctx, input);
       const s3 = new FileS3();
 

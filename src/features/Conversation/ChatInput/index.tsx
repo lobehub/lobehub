@@ -9,6 +9,7 @@ import {
 import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   getBusinessChatInputSendAreaPrefix,
@@ -30,6 +31,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
+import { getFailedUploadNames } from '../../ChatInput/utils/failedUploads';
 import WideScreenContainer from '../../WideScreenContainer';
 import { usePendingInterventions } from '../hooks/usePendingInterventions';
 import InterventionBar from '../InterventionBar';
@@ -206,6 +208,7 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
+    const { t } = useTranslation('chat');
     // ConversationStore state
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -354,6 +357,17 @@ const ChatInput = memo<ChatInputProps>(
 
         if (currentIsUploading) return;
 
+        // A failed upload has no file record, so sending would drop it and the
+        // agent would get the message without it (an empty one when it was the
+        // only content). Keep the draft until the upload is retried or removed.
+        const failedUploadNames = getFailedUploadNames(currentFileList);
+        if (failedUploadNames.length > 0) {
+          toast.error(
+            t('upload.validation.failedUploads', { files: failedUploadNames.join(', ') }),
+          );
+          return;
+        }
+
         // Onboarding-style surfaces opt out of message queuing — pressing Enter
         // while the agent is streaming should be a no-op rather than enqueue.
         if (disableQueue && isInputQueueBlocked) return;
@@ -425,7 +439,7 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked, t],
     );
 
     const sendButtonProps: SendButtonProps = {

@@ -1,11 +1,13 @@
 import type { UploadFileItem } from '@/types/files/upload';
 
+import { isFailedUpload } from './failedUploads';
+
 export const isImageUpload = (item: Pick<UploadFileItem, 'file'>): boolean =>
   item.file.type.startsWith('image');
 
 /** A failed or cancelled upload is not sent with the message, so it takes no number. */
 const isSendableImageUpload = (item: Pick<UploadFileItem, 'file' | 'status'>): boolean =>
-  isImageUpload(item) && item.status !== 'error' && item.status !== 'cancelled';
+  isImageUpload(item) && !isFailedUpload(item);
 
 /**
  * 1-based position of each upload among the draft's image uploads, aligned with `files`

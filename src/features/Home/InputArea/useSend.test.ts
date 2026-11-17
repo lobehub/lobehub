@@ -624,6 +624,33 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.push).toHaveBeenCalledWith('/agent/agt_custom');
   });
 
+  it.each(['error', 'cancelled'])(
+    'keeps the chat draft instead of sending an attachment whose upload is %s',
+    async (status) => {
+      globalState.systemStatus.homeSelectedAgentIdByScope = { [CACHE_SCOPE]: 'agt_custom' };
+      homeState.ungroupedAgents = [{ id: 'agt_custom', type: 'agent' }];
+      agentState.agentMap.agt_custom = {};
+      fileState.chatUploadFileList = [
+        { id: 'upload-1', file: new File(['doc'], 'contract.docx'), status },
+      ] as any;
+
+      const { result } = renderHook(() => useSend('chat'));
+      await act(async () => {
+        await result.current.send({
+          clearContent: vi.fn(),
+          editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+          getEditorData: () => undefined,
+          getMarkdownContent: () => '',
+        });
+      });
+
+      expect(sendMessageMock).not.toHaveBeenCalled();
+      expect(routerMock.push).not.toHaveBeenCalled();
+      expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+      expect(messageErrorMock).toHaveBeenCalledWith('upload.validation.failedUploads');
+    },
+  );
+
   it('captures the active workspace slug in default homepage sends', async () => {
     activeWorkspaceSlugMock.value = 'team';
     const { result } = renderHook(() => useSend());

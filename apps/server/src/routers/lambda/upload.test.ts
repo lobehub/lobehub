@@ -1,7 +1,7 @@
 import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { uploadRouter } from '@/server/routers/lambda/upload';
+import { OUTDATED_UPLOAD_CLIENT_MESSAGE, uploadRouter } from '@/server/routers/lambda/upload';
 
 const routerMocks = vi.hoisted(() => {
   const transactionClient = {};
@@ -163,9 +163,10 @@ describe('uploadRouter', () => {
   });
 
   it('rejects missing-size requests before issuing upload credentials', async () => {
+    // Desktop 2.2.15 and older show this message on the failed attachment.
     await expect(
       caller.createS3PreSignedUrl({ pathname: 'files/legacy.bin' } as any),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: OUTDATED_UPLOAD_CLIENT_MESSAGE });
     await expect(
       caller.createS3MultipartUpload({ pathname: 'files/legacy.bin' } as any),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });

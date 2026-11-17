@@ -3631,6 +3631,8 @@ export default {
   'upload.preview.status.processing': 'Processing file...',
   'upload.preview.status.success': 'Upload complete',
   'upload.preview.status.uploading': 'Uploading file...',
+  'upload.validation.failedUploads':
+    "Retry or remove the attachments that didn't upload, then send again: {{files}}",
   'upload.validation.heteroImageNotSupported':
     "{{name}} can't read images, so {{file}} was not added. Use an agent that supports images instead.",
   'upload.validation.mediaNotSupported':

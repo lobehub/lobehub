@@ -9,6 +9,7 @@ import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { getDraft, saveDraft } from '@/features/ChatInput/draftStorage';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
+import { getFailedUploadNames } from '@/features/ChatInput/utils/failedUploads';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { usePermission } from '@/hooks/usePermission';
@@ -295,6 +296,16 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
           default: {
             if (!selectedAgentId) return;
+
+            // A failed upload has no file record: sending it would reach the agent
+            // as a message without the attachment. Keep the draft on Home instead.
+            const failedUploadNames = getFailedUploadNames(fileList);
+            if (failedUploadNames.length > 0) {
+              toast.error(
+                tChat('upload.validation.failedUploads', { files: failedUploadNames.join(', ') }),
+              );
+              return;
+            }
 
             await ensureAgentConfigLoaded(selectedAgentId);
 
