@@ -36,9 +36,12 @@ components:
         runs, and repeats with the same key and the same request within 24 hours
         get its stored response back (with `Idempotent-Replayed: true`). A
         repeat while the first is still running answers 409, and reusing a key
-        for a different request answers 422 (both `idempotency_conflict`).
-        Server errors and streamed responses are not stored. Keys are scoped to
-        the authenticated user."
+        for a different request (method, path or body) answers 422 (both
+        `idempotency_conflict`). Server errors, 429s and streamed responses are
+        not stored. Keys are scoped to the authenticated user, the credential
+        (API key) and the resolved workspace. A request still running after 5
+        minutes releases its in-flight claim, after which a retry with the same
+        key runs again."
       in: header
       name: Idempotency-Key
       required: false

@@ -23,7 +23,11 @@ export class TaskController extends BaseController {
     try {
       const query = this.getQuery<TaskListQuery>(c);
       const service = await this.service(c);
-      return this.list(c, 'tasks', await service.listTasks(query), query, TASK_LIST_DEFAULT_LIMIT);
+      return this.list(c, 'tasks', await service.listTasks(query), {
+        defaultLimit: TASK_LIST_DEFAULT_LIMIT,
+        message: 'Task list retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

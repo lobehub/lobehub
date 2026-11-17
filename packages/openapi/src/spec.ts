@@ -95,7 +95,7 @@ const SHARED_HEADERS = {
 };
 
 const IDEMPOTENCY_KEY_PARAMETER = {
-  description: `Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with \`${IDEMPOTENT_REPLAYED_HEADER}: true\`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both \`idempotency_conflict\`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.`,
+  description: `Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with \`${IDEMPOTENT_REPLAYED_HEADER}: true\`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both \`idempotency_conflict\`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.`,
   in: 'header',
   name: IDEMPOTENCY_KEY_HEADER,
   required: false,

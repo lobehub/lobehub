@@ -19,7 +19,10 @@ export class ModelController extends BaseController {
 
       const result = await modelService.getModels(query);
 
-      return this.list(c, 'models', result, query);
+      return this.list(c, 'models', result, {
+        message: 'Model list retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

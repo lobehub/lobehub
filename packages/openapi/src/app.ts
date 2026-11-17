@@ -8,7 +8,7 @@ import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { z } from 'zod';
 
-import { errorInitFromException, renderApiError } from './common/errors';
+import { errorInitFromException, getRequestId, renderApiError } from './common/errors';
 import { routeDoc } from './common/openapi';
 import { SCALAR_CUSTOM_CSS } from './docs-theme';
 // Import user authentication middleware (supports both OIDC and API Key authentication)
@@ -52,7 +52,7 @@ app.use('*', idempotencyMiddleware);
 
 // Error handling middleware
 app.onError((error: Error, c) => {
-  console.error('Hono Error:', error);
+  console.error(`Hono Error [${getRequestId(c)}]:`, error);
   // Middleware-thrown HTTPExceptions (e.g. auth 401) must keep their status
   // and catalogue code instead of being flattened to 500, in the same
   // `ApiError` envelope BaseController.handleError produces.

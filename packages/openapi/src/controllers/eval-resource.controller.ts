@@ -21,6 +21,7 @@ export class EvalResourceController extends BaseController {
         c,
         'benchmarks',
         await service.listBenchmarks(this.getQuery<EvalPagination>(c)),
+        { message: 'Eval resource retrieved' },
       );
     } catch (error) {
       return this.handleError(c, error);
@@ -98,6 +99,7 @@ export class EvalResourceController extends BaseController {
         c,
         'datasets',
         await service.listDatasets(this.getQuery<EvalPagination & { benchmarkId?: string }>(c)),
+        { message: 'Eval resource retrieved' },
       );
     } catch (error) {
       return this.handleError(c, error);
@@ -176,6 +178,7 @@ export class EvalResourceController extends BaseController {
         c,
         'testCases',
         await service.listTestCases(datasetId, this.getQuery<EvalPagination>(c)),
+        { message: 'Eval resource retrieved' },
       );
     } catch (error) {
       return this.handleError(c, error);

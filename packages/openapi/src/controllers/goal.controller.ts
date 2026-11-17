@@ -24,7 +24,11 @@ export class GoalController extends BaseController {
     try {
       const query = this.getQuery<GoalListQuery>(c);
       const service = await this.service(c);
-      return this.list(c, 'goals', await service.listGoals(query), query, GOAL_LIST_DEFAULT_LIMIT);
+      return this.list(c, 'goals', await service.listGoals(query), {
+        defaultLimit: GOAL_LIST_DEFAULT_LIMIT,
+        message: 'Goal list retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

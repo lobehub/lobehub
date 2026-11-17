@@ -24,7 +24,10 @@ export class ChatGroupController extends BaseController {
     try {
       const request = this.getQuery<GetChatGroupsRequest>(c);
       const service = await this.getService(c);
-      return this.list(c, 'chatGroups', await service.listChatGroups(request), request);
+      return this.list(c, 'chatGroups', await service.listChatGroups(request), {
+        message: 'Chat groups retrieved',
+        pagination: request,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

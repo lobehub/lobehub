@@ -43,7 +43,10 @@ export class ProviderController extends BaseController {
         }));
       }
 
-      return this.list(c, 'providers', result, query);
+      return this.list(c, 'providers', result, {
+        message: 'Provider list retrieved successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

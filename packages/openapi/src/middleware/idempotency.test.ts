@@ -12,7 +12,7 @@ const openapi = vi.hoisted(() => ({
       const entry = store.get(key);
       if (!entry) {
         store.set(key, { fingerprint: scope.fingerprint, state: 'pending' });
-        return { state: 'claimed' };
+        return { state: 'claimed', token: `t-${key}` };
       }
       const sameRequest = entry.fingerprint === scope.fingerprint;
       return entry.state === 'completed'
@@ -35,10 +35,19 @@ vi.mock('@/server/services/redis', () => ({ redisService: { openapi } }));
 
 let created = 0;
 
-const createApp = (userId: string | null = 'user-1') => {
+interface Caller {
+  apiKeyId?: string;
+  userId?: string | null;
+  workspaceId?: string;
+}
+
+const createApp = ({ apiKeyId = 'key-1', userId = 'user-1', workspaceId }: Caller = {}) => {
   const app = new Hono();
   app.use('*', async (c, next) => {
     c.set('userId', userId);
+    c.set('authType', 'apikey');
+    c.set('authData', { apiKeyId });
+    c.set('workspaceId', workspaceId);
     await next();
   });
   app.use('*', idempotencyMiddleware);
@@ -97,20 +106,39 @@ describe('idempotencyMiddleware', () => {
   });
 
   it('scopes keys to the user', async () => {
-    await createApp('user-1').request('/items', post({ name: 'a' }, 'k1'));
-    await createApp('user-2').request('/items', post({ name: 'a' }, 'k1'));
+    await createApp({ userId: 'user-1' }).request('/items', post({ name: 'a' }, 'k1'));
+    await createApp({ userId: 'user-2' }).request('/items', post({ name: 'a' }, 'k1'));
     expect(created).toBe(2);
+  });
+
+  it('never replays across API keys or workspaces of the same user', async () => {
+    const first = await createApp().request('/items', post({ name: 'a' }, 'k1'));
+    // A second (e.g. scope-restricted) key must go through its own route guards,
+    // not receive the first key's stored response.
+    const otherKey = await createApp({ apiKeyId: 'key-2' }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+    const otherWorkspace = await createApp({ workspaceId: 'ws-1' }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+
+    expect(otherKey.headers.get('Idempotent-Replayed')).toBeNull();
+    expect(otherWorkspace.headers.get('Idempotent-Replayed')).toBeNull();
+    expect(await otherKey.json()).not.toEqual(await first.json());
+    expect(created).toBe(3);
   });
 
   it('answers 422 idempotency_conflict when the key is reused for a different request', async () => {
     const app = createApp();
     await app.request('/items', post({ name: 'a' }, 'k1'));
 
-    for (const init of [
-      post({ name: 'b' }, 'k1'),
-      post({ name: 'a' }, 'k1', { 'X-Workspace-Id': 'ws_other' }),
-    ]) {
-      const response = await app.request('/items', init);
+    for (const [path, init] of [
+      ['/items', post({ name: 'b' }, 'k1')],
+      ['/items?dryRun=true', post({ name: 'a' }, 'k1')],
+    ] as const) {
+      const response = await app.request(path, init);
       expect(response.status).toBe(422);
       await expect(response.json()).resolves.toMatchObject({ code: 'idempotency_conflict' });
     }
@@ -131,6 +159,9 @@ describe('idempotencyMiddleware', () => {
 
     expect(openapi.completeIdempotency).not.toHaveBeenCalled();
     expect(openapi.releaseIdempotency).toHaveBeenCalledTimes(2);
+    expect(openapi.releaseIdempotency).toHaveBeenCalledWith(
+      expect.objectContaining({ token: expect.stringMatching(/^t-/) }),
+    );
     expect(store.size).toBe(0);
   });
 

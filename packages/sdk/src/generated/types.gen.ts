@@ -2659,7 +2659,7 @@ export type Usage = {
 };
 
 /**
- * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+ * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
  */
 export type IdempotencyKey = string;
 
@@ -2756,7 +2756,7 @@ export type PostApiV1AgentGroupsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -3109,7 +3109,7 @@ export type PostApiV1AgentsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -3392,7 +3392,7 @@ export type PostApiV1AgentsByIdDuplicateData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -3522,7 +3522,7 @@ export type PostApiV1AgentsByIdAccountsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -3893,7 +3893,7 @@ export type PostApiV1ApiKeysData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4105,7 +4105,7 @@ export type PostApiV1AudioSpeechData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4208,7 +4208,7 @@ export type PostApiV1ChatData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4266,7 +4266,7 @@ export type PostApiV1ChatTranslateData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4344,7 +4344,7 @@ export type PostApiV1ChatGenerateReplyData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4474,7 +4474,7 @@ export type PostApiV1ChatGroupsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4761,7 +4761,7 @@ export type PostApiV1ChatGroupsByIdMembersData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -4919,7 +4919,7 @@ export type PostApiV1EvalRunsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -5212,7 +5212,7 @@ export type PostApiV1EvalRunsByIdResultsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -5425,7 +5425,7 @@ export type PostApiV1EvalBenchmarksData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -5805,7 +5805,7 @@ export type PostApiV1EvalDatasetsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -6180,7 +6180,7 @@ export type PostApiV1EvalDatasetsByDatasetIdTestCasesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -6456,7 +6456,7 @@ export type PostApiV1EvalRunsByIdClaimData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -6576,7 +6576,7 @@ export type PostApiV1EvalRunsByIdRetryErrorsData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -6858,7 +6858,7 @@ export type PostApiV1FilesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7110,7 +7110,7 @@ export type PostApiV1FilesByIdParsesData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7217,7 +7217,7 @@ export type PostApiV1FilesByIdChunksData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7278,7 +7278,7 @@ export type PostApiV1FilesBatchesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7332,7 +7332,7 @@ export type PostApiV1FilesQueriesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7469,7 +7469,7 @@ export type PostApiV1GoalsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7753,7 +7753,7 @@ export type PostApiV1GoalsByIdAdvanceData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7811,7 +7811,7 @@ export type PostApiV1GoalsByIdPauseData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7877,7 +7877,7 @@ export type PostApiV1GoalsByIdResumeData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -7945,7 +7945,7 @@ export type PostApiV1GoalsByIdRestartData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -8021,7 +8021,7 @@ export type PostApiV1ImMessagesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -8140,7 +8140,7 @@ export type PostApiV1ImTopicsByTopicIdReadData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -8270,7 +8270,7 @@ export type PostApiV1KnowledgeBasesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -8613,7 +8613,7 @@ export type PostApiV1KnowledgeBasesByIdFilesBatchData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -8674,7 +8674,7 @@ export type PostApiV1KnowledgeBasesByIdFilesMoveData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -8816,7 +8816,7 @@ export type PostApiV1McpServersData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -9045,7 +9045,7 @@ export type PostApiV1McpServersByIdSyncData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -9489,7 +9489,7 @@ export type PostApiV1MessageTranslationsByMessageIdData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -9746,7 +9746,7 @@ export type PostApiV1MessagesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -9921,7 +9921,7 @@ export type PostApiV1MessagesRepliesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -10073,7 +10073,7 @@ export type PostApiV1ModelsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -10534,7 +10534,7 @@ export type PostApiV1NotificationsReadData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -10585,7 +10585,7 @@ export type PostApiV1NotificationsReadAllData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -10632,7 +10632,7 @@ export type PostApiV1NotificationsArchiveAllData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -10679,7 +10679,7 @@ export type PostApiV1NotificationsByIdArchiveData = {
     body?: never;
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -10808,7 +10808,7 @@ export type PostApiV1PermissionsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -11115,7 +11115,7 @@ export type PostApiV1ProvidersData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -11519,7 +11519,7 @@ export type PostApiV1ResponsesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -11682,7 +11682,7 @@ export type PostApiV1RolesData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -12081,7 +12081,7 @@ export type PostApiV1SignalsSourceEventsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -12147,7 +12147,7 @@ export type PostApiV1SignalsTriggerData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -12336,7 +12336,7 @@ export type PostApiV1TasksData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -12695,7 +12695,7 @@ export type PostApiV1TasksByIdRunsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -12845,7 +12845,7 @@ export type PostApiV1TopicsData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };
@@ -13271,7 +13271,7 @@ export type PostApiV1UsersData = {
     };
     headers?: {
         /**
-         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request answers 422 (both `idempotency_conflict`). Server errors and streamed responses are not stored. Keys are scoped to the authenticated user.
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
          */
         'Idempotency-Key'?: string;
     };

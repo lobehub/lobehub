@@ -11,7 +11,7 @@ import type { PaginationRequest } from '../helpers/pagination';
 import { buildPageInfo, resolvePagination } from '../helpers/pagination';
 import type { ApiResponse } from '../types';
 import type { ApiErrorCode } from './errors';
-import { errorInitFromException, renderApiError } from './errors';
+import { errorInitFromException, getRequestId, renderApiError } from './errors';
 
 /**
  * tRPC error codes, mapped to their HTTP equivalents.
@@ -94,14 +94,21 @@ export abstract class BaseController {
     c: Context,
     key: K,
     payload: T,
-    pagination: PaginationRequest = this.getQuery<PaginationRequest>(c) ?? {},
-    defaultLimit?: number,
+    {
+      defaultLimit,
+      message,
+      pagination = this.getQuery<PaginationRequest>(c) ?? {},
+    }: { defaultLimit?: number; message?: string; pagination?: PaginationRequest } = {},
   ): Response {
     const window = resolvePagination(pagination, defaultLimit);
-    return this.success(c, {
-      ...payload,
-      ...buildPageInfo({ ...window, returned: payload[key].length, total: payload.total }),
-    });
+    return this.success(
+      c,
+      {
+        ...payload,
+        ...buildPageInfo({ ...window, returned: payload[key].length, total: payload.total }),
+      },
+      message,
+    );
   }
 
   /**
@@ -128,7 +135,8 @@ export abstract class BaseController {
    * @returns Formatted error response
    */
   protected handleError(c: Context, error: unknown): Response {
-    console.error('Controller Error:', error);
+    // The request id ties this log line to the `requestId` the client received.
+    console.error(`Controller Error [${getRequestId(c)}]:`, error);
 
     // Handle HTTPException (including `ApiException`, which carries its code)
     if (error instanceof HTTPException) {

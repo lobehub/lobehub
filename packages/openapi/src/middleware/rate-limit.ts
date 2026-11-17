@@ -3,6 +3,7 @@ import type { Context, Next } from 'hono';
 import { redisService } from '@/server/services/redis';
 
 import { renderApiError } from '../common/errors';
+import { logFailOpen } from '../helpers/fail-open-log';
 
 export const RATE_LIMIT_HEADERS = {
   limit: 'X-RateLimit-Limit',
@@ -57,7 +58,7 @@ export const rateLimit =
     const window = await redisService.openapi
       .hitRateLimit({ ...policy, identity })
       .catch((error) => {
-        console.error('[openapi] rate limit check failed, admitting request:', error);
+        logFailOpen('rate limit', error);
         return undefined;
       });
     if (!window) return next();

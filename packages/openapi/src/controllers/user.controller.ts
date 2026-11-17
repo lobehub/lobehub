@@ -78,7 +78,10 @@ export class UserController extends BaseController {
 
       const userList = await userService.queryUsers(request);
 
-      return this.list(c, 'users', userList, request);
+      return this.list(c, 'users', userList, {
+        message: 'User list retrieved successfully',
+        pagination: request,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

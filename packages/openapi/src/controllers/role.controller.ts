@@ -29,7 +29,10 @@ export class RoleController extends BaseController {
       const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const roles = await roleService.getRoles(request);
 
-      return this.list(c, 'roles', roles, request);
+      return this.list(c, 'roles', roles, {
+        message: 'Get roles list successfully',
+        pagination: request,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -94,7 +97,10 @@ export class RoleController extends BaseController {
 
       const permissions = await roleService.getRolePermissions({ roleId: id, ...request });
 
-      return this.list(c, 'permissions', permissions, request);
+      return this.list(c, 'permissions', permissions, {
+        message: 'Get role permissions successfully',
+        pagination: request,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }

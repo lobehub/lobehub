@@ -5,7 +5,7 @@ import type { Context, Next } from 'hono';
 import { redisService } from '@/server/services/redis';
 
 import { renderApiError } from '../common/errors';
-import { OPENAPI_WORKSPACE_HEADER } from './workspace';
+import { logFailOpen } from '../helpers/fail-open-log';
 
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 /** Set on a response replayed from the stored first result of its key. */
@@ -41,13 +41,26 @@ const replay = (c: Context, record: IdempotentResponseRecord) => {
 };
 
 /**
+ * Who a stored response belongs to, beyond the user: the credential that sent
+ * the request and the workspace it resolved to. This middleware runs before
+ * route guards, so a replay must never cross either — another (possibly
+ * scope-restricted) API key of the same user, or the same key in another
+ * workspace, gets its own key space instead of the first caller's response.
+ */
+const principalOf = (c: Context) => {
+  const apiKeyId = (c.get('authData') as { apiKeyId?: number | string } | null)?.apiKeyId;
+  return [c.get('authType') ?? '', apiKeyId ?? '', c.get('workspaceId') ?? ''].join(':');
+};
+
+/**
  * `Idempotency-Key` support for POST: the first request with a key runs and
- * its response is stored for 24 hours (per user, in Redis through
- * `redisService.openapi`); a retry with the same key and the same request
- * gets that response back with `Idempotent-Replayed: true` instead of running
- * again. A retry while the first is still running answers 409, and reusing a
- * key for a different request (method, path, workspace or body) answers 422 —
- * both `idempotency_conflict`. Requests without the header are untouched.
+ * its response is stored for 24 hours (in Redis through `redisService.openapi`,
+ * scoped to the user, credential and workspace); a retry with the same key and
+ * the same request gets that response back with `Idempotent-Replayed: true`
+ * instead of running again. A retry while the first is still running answers
+ * 409, and reusing a key for a different request (method, path or body)
+ * answers 422 — both `idempotency_conflict`. Requests without the header are
+ * untouched.
  */
 export const idempotencyMiddleware = async (c: Context, next: Next) => {
   const clientKey = c.req.header(IDEMPOTENCY_KEY_HEADER);
@@ -71,20 +84,13 @@ export const idempotencyMiddleware = async (c: Context, next: Next) => {
   const url = new URL(c.req.url);
   const body = await c.req.raw.clone().arrayBuffer();
   const scope = {
-    fingerprint: sha256(
-      [
-        c.req.method,
-        url.pathname + url.search,
-        c.req.header(OPENAPI_WORKSPACE_HEADER)?.trim() ?? '',
-        sha256(body),
-      ].join('\n'),
-    ),
-    keyHash: sha256(clientKey),
+    fingerprint: sha256([c.req.method, url.pathname + url.search, sha256(body)].join('\n')),
+    keyHash: sha256(`${principalOf(c)}\n${clientKey}`),
     userId,
   };
 
   const claim = await redisService.openapi.claimIdempotency(scope).catch((error) => {
-    console.error('[openapi] idempotency claim failed, running request unguarded:', error);
+    logFailOpen('idempotency', error);
     return undefined;
   });
   if (!claim) return next();
@@ -107,6 +113,7 @@ export const idempotencyMiddleware = async (c: Context, next: Next) => {
     return replay(c, claim.response);
   }
 
+  const owned = { ...scope, token: claim.token };
   let stored = false;
   try {
     await next();
@@ -114,7 +121,7 @@ export const idempotencyMiddleware = async (c: Context, next: Next) => {
     if (isReplayable(c.res)) {
       // The handler already ran: a failed write must not turn its answer into an error.
       stored = await redisService.openapi
-        .completeIdempotency(scope, {
+        .completeIdempotency(owned, {
           body: await c.res.clone().text(),
           contentType: c.res.headers.get('Content-Type'),
           status: c.res.status,
@@ -127,7 +134,7 @@ export const idempotencyMiddleware = async (c: Context, next: Next) => {
     }
   } finally {
     if (!stored) {
-      await redisService.openapi.releaseIdempotency(scope).catch((error) => {
+      await redisService.openapi.releaseIdempotency(owned).catch((error) => {
         console.error('[openapi] failed to release idempotency claim:', error);
       });
     }

@@ -28,7 +28,10 @@ export class PermissionController extends BaseController {
       );
       const permissions = await permissionService.getPermissions(query);
 
-      return this.list(c, 'permissions', permissions, query);
+      return this.list(c, 'permissions', permissions, {
+        message: 'Get permission list successfully',
+        pagination: query,
+      });
     } catch (error) {
       return this.handleError(c, error);
     }
