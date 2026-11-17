@@ -234,8 +234,7 @@ export const applyOpening = async (
     const layout = await planOpening(tx, channelId, job, { ack, title });
 
     let threadId = job.threadId;
-    if (layout === 'underRequest')
-      threadId = await openReplyThread(tx, job, job.messageId, title);
+    if (layout === 'underRequest') threadId = await openReplyThread(tx, job, job.messageId, title);
 
     // The acknowledgement answers the request where the reply continues: in place, or in the
     // Thread just opened (or joined) under the request.
