@@ -124,7 +124,7 @@ export const sendToConversation = async (
  *
  * @throws with a message fit for the user when the device cannot be used
  */
-const resolveTargetDevice = async (client: TrpcClient, device: string): Promise<string> => {
+export const resolveTargetDevice = async (client: TrpcClient, device: string): Promise<string> => {
   const deviceId = device === 'local' ? resolveLocalDeviceId() : device;
   if (!deviceId) {
     throw new Error(

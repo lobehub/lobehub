@@ -16,4 +16,12 @@ describe('lobeHubCliGuide', () => {
     expect(lobeHubCliGuide).toContain('`pnpm --package @lobehub/cli@latest dlx lh …`');
     expect(lobeHubCliGuide).toContain('`npx -y -p @lobehub/cli@latest lh …`');
   });
+
+  it('teaches sub-sessions: start without polling, continue by sending, receipts come back', () => {
+    expect(lobeHubCliGuide).toContain('lh session start -c');
+    expect(lobeHubCliGuide).toContain('--where new-worktree');
+    expect(lobeHubCliGuide).toContain('do not poll');
+    expect(lobeHubCliGuide).toContain('<sub_session_result>');
+    expect(lobeHubCliGuide).toContain('lh session send <tpc_id>');
+  });
 });
