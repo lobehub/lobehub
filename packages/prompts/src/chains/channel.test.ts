@@ -121,6 +121,23 @@ describe('Channel request prompt', () => {
     );
   });
 
+  it('tells a run which other Agents the request asked, so the answers divide the work', () => {
+    const request = [message('current', 'How do we close the SEO-to-revenue loop?', caller)];
+    const prompt = buildChannelPrompt(manifest, request, {
+      boundary: 'b0',
+      peers: ['Analyst (Data analyst)'],
+    });
+
+    expect(prompt).toMatch(
+      /<\/channel_request boundary="b0">\n<channel_peers boundary="b0">\nThis request also asked Analyst \(Data analyst\) to answer\./,
+    );
+    expect(prompt).toContain('answer only the part your own role owns');
+    expect(CHANNEL_INSTRUCTIONS).toContain('channel_peers');
+    expect(buildChannelPrompt(manifest, request, { boundary: 'b0' })).not.toContain(
+      '<channel_peers',
+    );
+  });
+
   it('renders the unseen context and the request as attributed blocks without ids', () => {
     const prompt = buildChannelPrompt(
       manifest,

@@ -15,7 +15,6 @@ import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
-  getConnectorLinkModel,
   loadConnectorLinksMap,
   pickPrimaryLink,
   withLinkCredentials,
@@ -142,13 +141,7 @@ const refreshConnectorTokens = async (
       if (links.length > 1) return { ...connector, credentials: null, links: choices };
       const primary = pickPrimaryLink(links);
       if (primary) {
-        const [fresh] = await refreshExpiredLinkTokens(
-          connector,
-          [primary],
-          getConnectorLinkModel(linksContext),
-          model,
-          { onTimeout },
-        );
+        const [fresh] = await refreshExpiredLinkTokens(connector, [primary], model, { onTimeout });
         return { ...withLinkCredentials(connector, fresh), links: choices };
       }
       return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];

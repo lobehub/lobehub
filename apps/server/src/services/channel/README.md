@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -81,6 +81,9 @@ An unaddressed message has exactly one primary responder; every other member wok
   cover it, then candidate order. A primary woken by its own rules keeps its own `followup` wake.
 - Explicit @mentions are unchanged: every mentioned Agent owes an answer and runs in parallel.
   So are the paired Agent of a one-person group and the all-candidate fallback.
+  Agents @mentioned together answer in one shared Thread under the request: the first opening
+  that chooses a Thread opens and names it, every later acknowledgement and answer joins it, and
+  each run's opener and prompt (`channel_peers`) name the others so they take their own part.
 
 A deferred job is queued as `awaiting_primary` and the claim keeps it there until the primary's
 job settles (completed, silent, failed or cancelled), or the primary is stuck on a device or a

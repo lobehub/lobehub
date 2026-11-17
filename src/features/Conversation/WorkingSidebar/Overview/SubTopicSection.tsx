@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,13 +16,20 @@ import { subTopicSelectors } from '@/store/chat/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import { sectionStyles } from './sectionStyles';
+import { sectionProps, sectionStyles } from './sectionStyles';
 
 /**
  * The conversations this one opened (Better Coding Experience), beside its
  * sub-agents: each with its state, opening on its own agent's route.
  */
-const SubTopicSection = memo<{ agentId?: string; topicId: string }>(({ agentId, topicId }) => {
+interface SubTopicSectionProps {
+  /** Follows a non-section sibling (the empty-workspace state): see `sectionProps`. */
+  afterBreak?: boolean;
+  agentId?: string;
+  topicId: string;
+}
+
+const SubTopicSection = memo<SubTopicSectionProps>(({ afterBreak, agentId, topicId }) => {
   const { t } = useTranslation('topic');
   const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
   const openers = useMemo(() => [topicId], [topicId]);
@@ -32,9 +40,9 @@ const SubTopicSection = memo<{ agentId?: string; topicId: string }>(({ agentId, 
   if (!enabled || nodes.length === 0) return null;
 
   return (
-    <Flexbox className={sectionStyles.section} data-testid="overview-sub-topics">
-      <Flexbox className={sectionStyles.sectionHeader}>
-        <span className={sectionStyles.sectionTitle}>
+    <Flexbox {...sectionProps(afterBreak)} data-testid="overview-sub-topics">
+      <Flexbox {...stylex.props(sectionStyles.sectionHeader)}>
+        <span {...stylex.props(sectionStyles.sectionTitle)}>
           {t('subTopic.sectionTitle', { count: nodes.length })}
         </span>
       </Flexbox>

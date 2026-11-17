@@ -5310,8 +5310,8 @@ When I am ___, I need ___
     'Events arrived too often, so some runs in the last 10 minutes were skipped.',
   'automations.error.insufficient_budget':
     'Not enough credits to run the agent. Later events run once you top up.',
-  'automations.error.access_revoked':
-    'Access was revoked; the subscription ended. Delete it and ask the agent to resubscribe.',
+  'automations.error.reconnectToResubscribe':
+    'Access was revoked and the subscription ended. Reconnect the connector, then delete this subscription and ask the agent to subscribe again.',
   'automations.error.event_unavailable':
     'The connector no longer offers this event, so the subscription ended.',
   'automations.error.server_unreachable': "Could not reach the connector's server.",

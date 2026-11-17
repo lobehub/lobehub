@@ -48,6 +48,10 @@ const decide = async (
           // What people call it: its name, or the title an Agent without one goes by.
           botNames: [agentDisplayName(candidate.agent)].filter((name): name is string => !!name),
           canOpenThread: candidate.canOpenThread,
+          coAddressed: candidate.coAddressed.map((agent) => ({
+            name: agentDisplayName(agent) || undefined,
+            title: agent.title ?? undefined,
+          })),
           message: candidate.request.content,
           recentMessages: candidate.recent.map((message) => describe(message, candidate.agent.id)),
         },

@@ -401,15 +401,31 @@ class GitService {
     deviceId,
     number,
     path,
+    repository,
   }: {
     action: DeviceGitPullRequestAction;
     deviceId?: string;
     number: number;
     path: string;
+    repository?: { path: string; url: string };
   }): Promise<DeviceGitPullRequestActionResult> {
-    return deviceId
-      ? lambdaClient.device.runGitPullRequestAction.mutate({ action, deviceId, number, path })
-      : electronGitService.runPullRequestAction({ action, number, path });
+    if (deviceId) {
+      return lambdaClient.device.runGitPullRequestAction.mutate({
+        action,
+        deviceId,
+        number,
+        path,
+        repository,
+      });
+    }
+
+    const target = action.type === 'merge' && action.deleteBranch ? undefined : repository;
+    return electronGitService.runPullRequestAction({
+      action,
+      number,
+      path: target?.path ?? path,
+      url: target?.url,
+    });
   }
 
   /** Working-tree dirty-file counts for a working directory. */

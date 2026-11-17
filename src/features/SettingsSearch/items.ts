@@ -88,6 +88,14 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.SubscriptionAccounts]: [
+    'subscription accounts',
+    'claude code',
+    'codex',
+    'kimi code',
+    'quota',
+    'load balancing',
+  ],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',

@@ -83,9 +83,24 @@ export const continuationTopic = async (
     (topic.senderId ?? undefined) === scope.senderId &&
     !topic.isDeleted &&
     (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD) &&
-    !(executionConfig.share && (await reachedShareTurnLimit(tx, member.agentId!, topic.id)))
+    !(executionConfig.share && (await reachedShareTurnLimit(tx, member.agentId!, topic.id))) &&
+    // A topic another branch is still writing into stays that run's own. Gathering a running
+    // peer into a Thread changes only its branch, so its topic would otherwise look settled
+    // here: the main timeline would start on it while the gathered run still holds it, and the
+    // start reservation would be retired instead of queued.
+    !(await topicStillHeld(tx, topic.id))
   )
     return topic;
+};
+
+/** Whether some run is still writing into this topic, in any branch of its Agent. */
+const topicStillHeld = async (tx: Transaction, topicId: string) => {
+  const [held] = await tx
+    .select({ id: channelJobs.id })
+    .from(channelJobs)
+    .where(and(eq(channelJobs.topicId, topicId), eq(channelJobs.writerHeld, true)))
+    .limit(1);
+  return !!held;
 };
 
 export const resolveTopic = async (

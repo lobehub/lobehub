@@ -174,6 +174,8 @@ describe('supportsGPTResponsesReasoningEffortNone', () => {
   it('should not support none reasoning effort on GPT-6, which removed it', () => {
     expect(supportsGPTResponsesReasoningEffortNone('gpt-6-astra')).toBe(false);
     expect(supportsGPTResponsesReasoningEffortNone('gpt-6.1-sol')).toBe(false);
+    expect(supportsGPTResponsesReasoningEffortNone('gpt-6.2-astra')).toBe(false);
+    expect(supportsGPTResponsesReasoningEffortNone('gpt-6.2-sol')).toBe(false);
   });
   it('should support none reasoning effort on GPT-6.1 Terra, whose model page lists it', () => {
     expect(supportsGPTResponsesReasoningEffortNone('gpt-6.1-terra')).toBe(true);

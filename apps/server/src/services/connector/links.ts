@@ -88,12 +88,7 @@ export const resolveConnectorAccount = async (
       accountCount: links.length,
       connector: await ensureFreshConnectorToken(connector, ctx.connectorModel),
     };
-  const fresh = await ensureFreshLinkToken(
-    connector,
-    link,
-    getConnectorLinkModel(ctx),
-    ctx.connectorModel,
-  );
+  const fresh = await ensureFreshLinkToken(connector, link, ctx.connectorModel);
   return {
     accountCount: links.length,
     connector: withLinkCredentials(connector, fresh),
@@ -166,12 +161,7 @@ export const resolveLinkedCall = async (
     throw new ConnectorLinkSelectionError(
       `The selected account no longer exists. Current accounts: ${choices}`,
     );
-  const fresh = await ensureFreshLinkToken(
-    connector,
-    link,
-    getConnectorLinkModel(ctx),
-    ctx.connectorModel,
-  );
+  const fresh = await ensureFreshLinkToken(connector, link, ctx.connectorModel);
   return {
     connector: withLinkCredentials(connector, fresh),
     argsStr: split.argsStr,

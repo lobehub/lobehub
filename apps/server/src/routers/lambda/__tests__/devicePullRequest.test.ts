@@ -153,6 +153,49 @@ describe('PR mutation workspace boundary', () => {
     ).resolves.toEqual({ success: true });
   });
 
+  it('routes a ready action by its GitHub URL when the conversation worktree is unregistered', async () => {
+    const repository = { path: '/approved/repo', url: 'https://github.com/owner/repo/pull/42' };
+
+    await expect(
+      caller.runGitPullRequestAction({
+        action: { type: 'ready' },
+        deviceId: 'device',
+        number: 42,
+        path: '/worktrees/unregistered',
+        repository,
+      }),
+    ).resolves.toEqual({ success: true });
+    expect(mocks.runGitPullRequestAction).toHaveBeenCalledWith(
+      expect.objectContaining({ path: repository.path, url: repository.url }),
+    );
+  });
+
+  it('rejects a mismatched PR number in an explicit GitHub URL', async () => {
+    await expect(
+      caller.runGitPullRequestAction({
+        action: { type: 'ready' },
+        deviceId: 'device',
+        number: 42,
+        path: '/worktrees/unregistered',
+        repository: { path: '/approved/repo', url: 'https://github.com/owner/repo/pull/43' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mocks.runGitPullRequestAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps local branch deletion scoped to the checkout', async () => {
+    await expect(
+      caller.runGitPullRequestAction({
+        action: { deleteBranch: true, headRefOid: 'a'.repeat(40), method: 'squash', type: 'merge' },
+        deviceId: 'device',
+        number: 42,
+        path: '/worktrees/unregistered',
+        repository: { path: '/approved/repo', url: 'https://github.com/owner/repo/pull/42' },
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.runGitPullRequestAction).not.toHaveBeenCalled();
+  });
+
   it('rejects a merge without the displayed head commit', async () => {
     await expect(
       caller.runGitPullRequestAction({

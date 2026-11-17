@@ -1,6 +1,7 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
 import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { TriangleAlertIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +11,7 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
+import { sx } from '@/styles/sx';
 
 import { shouldShowCiLabel } from './overviewData';
 import { OverviewRow, rowStyles } from './OverviewRow';
@@ -53,8 +55,10 @@ const PullRequestRow = memo<PullRequestRowProps>(
                   </Tooltip>
                 )}
                 <span
-                  className={sectionStyles.pill}
-                  style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
+                  {...sx(sectionStyles.pill, {
+                    background: `color-mix(in srgb,  12%, transparent)`,
+                    color: ci.color,
+                  })}
                 >
                   <Icon icon={ci.icon} size={12} />
                   {shouldShowCiLabel(ciStatus)
@@ -79,7 +83,7 @@ const PullRequestRow = memo<PullRequestRowProps>(
             }
             value={
               <>
-                <span className={rowStyles.num}>#{pullRequest.number}</span>
+                <span {...stylex.props(rowStyles.num)}>#{pullRequest.number}</span>
                 {pullRequest.title}
               </>
             }

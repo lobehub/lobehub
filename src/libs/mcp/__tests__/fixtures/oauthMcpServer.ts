@@ -6,7 +6,7 @@ export type OAuthMcpVariant = 'idtoken' | 'userinfo' | 'none';
 export const startOAuthMcpServer = async (
   variant: OAuthMcpVariant = 'idtoken',
   port = 0,
-  options: { collidingTool?: boolean } = {},
+  options: { beforeRefreshResponse?: () => Promise<void>; collidingTool?: boolean } = {},
 ) => {
   const requests: {
     authorization: string | null;
@@ -77,7 +77,10 @@ export const startOAuthMcpServer = async (
       if (url.pathname === '/token') {
         const form = new URLSearchParams(raw);
         const refresh = form.get('refresh_token');
-        if (refresh) refreshes.push(refresh);
+        if (refresh) {
+          refreshes.push(refresh);
+          await options.beforeRefreshResponse?.();
+        }
         const account = (refresh ?? form.get('code') ?? 'alice')
           .replace(/^refresh-/, '')
           .split('-')[0];

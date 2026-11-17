@@ -146,10 +146,23 @@ export class ChannelHistoryRepository {
         if (!membership)
           throw new ChannelError('FORBIDDEN', 'Workspace membership is no longer active');
       }
+      // The job's branch is the live one: gathering an already dispatched peer into a Thread moves
+      // `job.threadId` while the frozen input keeps the branch it was claimed in, and everything
+      // this read feeds — history scope, relay and callback origins — belongs to where the run is
+      // now. The frozen input still owns the cutoff and the request it answers.
+      const thread = await findThread(tx, channel.id, job.threadId);
       // An archived branch leaves Agent context even for a run that already started in it.
-      if ((await findThread(tx, channel.id, job.manifest.threadId))?.status === 'archived')
+      if (thread?.status === 'archived')
         throw new ChannelError('CONFLICT', 'Channel operation is no longer active');
-      return fn(tx, channel.id, job.manifest);
+      const manifest: ChannelInputManifest =
+        job.threadId === job.manifest.threadId
+          ? job.manifest
+          : {
+              ...job.manifest,
+              threadId: job.threadId,
+              threadRootSequence: thread?.rootSequence ?? null,
+            };
+      return fn(tx, channel.id, manifest);
     });
   }
 

@@ -17,6 +17,7 @@ import type {
 import { OWNED_WORKTREE_RPC_UNSUPPORTED } from '@lobechat/types';
 import debug from 'debug';
 
+import { gitPullRequestDetail } from './gitRead';
 import type { DeviceClientGetter } from './types';
 
 const log = debug('lobe-server:device-gateway');
@@ -464,19 +465,39 @@ export async function runGitPullRequestAction(
     number: number;
     path: string;
     timeout?: number;
+    url?: string;
     userId: string;
     workspaceId?: string;
   },
 ): Promise<DeviceGitPullRequestActionResult> {
-  const { userId, deviceId, path, number, action, timeout = 65_000, workspaceId } = params;
+  const { userId, deviceId, path, number, action, url, workspaceId } = params;
+  const timeout = params.timeout ?? (url ? 75_000 : 65_000);
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
+    const scope = { deviceId, timeout, userId, workspaceId };
+    const legacy = { method: 'runPullRequestAction', params: { action, number, path } };
     const result = await client.invokeRpc<DeviceGitPullRequestActionResult>(
-      { deviceId, timeout, userId, workspaceId },
-      { method: 'runPullRequestAction', params: { action, number, path } },
+      scope,
+      url ? { method: 'runPullRequestActionByUrl', params: { action, number, path, url } } : legacy,
     );
+
+    // An explicit unknown method means nothing ran. An older device can still
+    // use the approved source checkout once it confirms the same GitHub PR.
+    if (
+      url &&
+      !result.success &&
+      result.error?.includes('Unknown device RPC method: runPullRequestActionByUrl')
+    ) {
+      const confirmed = await gitPullRequestDetail(getClient, { ...params, coreOnly: true });
+      if (confirmed?.detail?.url.toLowerCase() !== url.toLowerCase()) {
+        return { error: 'The pull request does not match the approved repository', success: false };
+      }
+      const fallback = await client.invokeRpc<DeviceGitPullRequestActionResult>(scope, legacy);
+      if (fallback.success && fallback.data) return fallback.data;
+      return { error: fallback.error || 'Pull request action failed', success: false };
+    }
 
     if (!result.success || !result.data) {
       log('runGitPullRequestAction: failed for deviceId=%s — %s', deviceId, result.error);
