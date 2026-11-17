@@ -19,6 +19,9 @@ vi.mock('@/server/services/redis', () => ({
   },
 }));
 
+const { readFollowUpMode } = vi.hoisted(() => ({ readFollowUpMode: vi.fn() }));
+vi.mock('@/server/services/aiAgent/steerQueue/followUpMode', () => ({ readFollowUpMode }));
+
 const stateOf = (overrides: Partial<AgentState> = {}) =>
   ({
     origin: { topicId: 'tpc-1' },
@@ -33,6 +36,55 @@ describe('server-side steer queue in the step loop', () => {
     steerQueueLength.mockResolvedValue(0);
     steerQueueSeal.mockResolvedValue(undefined);
     steerQueueUnseal.mockResolvedValue(undefined);
+    readFollowUpMode.mockResolvedValue('legacy');
+  });
+
+  describe('Follow-up behavior: Queue', () => {
+    beforeEach(() => readFollowUpMode.mockResolvedValue('queue'));
+
+    it('lets the run finish instead of handing its turn back for queued follow-ups', async () => {
+      steerQueueLength.mockResolvedValue(2);
+      const deps = {
+        coordinator: { hasQueuedMessages: vi.fn().mockResolvedValue(true) },
+        userId: 'user-1',
+      } as any;
+
+      await expect(readQueuedMessagesFlag(deps, 'op-1', 1, stateOf())).resolves.toBe(false);
+    });
+
+    it('does not join a person’s follow-ups into the running turn', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = {
+        delegate: { injectQueuedFollowUp: vi.fn().mockResolvedValue({ messageId: 'm' }) },
+        userId: 'user-1',
+      } as any;
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-1', 2, stateOf({ status: 'running' })),
+      ).resolves.toBeUndefined();
+      expect(deps.delegate.injectQueuedFollowUp).not.toHaveBeenCalled();
+    });
+
+    it('still joins a parent’s steer into its running sub-agent', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = {
+        delegate: { injectQueuedFollowUp: vi.fn().mockResolvedValue({ messageId: 'm' }) },
+        userId: 'user-1',
+      } as any;
+      const child = stateOf({
+        origin: {
+          agentId: 'agt-1',
+          lineage: { isSubAgent: true, parentOperationId: 'op-parent' },
+          threadId: 'thd-sub',
+          topicId: 'tpc-1',
+        },
+        status: 'running',
+      });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, child)).resolves.toEqual({
+        messageId: 'm',
+      });
+    });
   });
 
   describe('readQueuedMessagesFlag', () => {

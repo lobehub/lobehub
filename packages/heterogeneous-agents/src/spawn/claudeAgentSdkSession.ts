@@ -18,6 +18,8 @@ import { resolveCliSpawnPlan } from './cliSpawn';
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 const INPUT_CLOSE_POLL_MS = 1000;
+/** How often the input stream checks for a steered message to hand over. */
+const STEER_POLL_MS = 100;
 
 const readTimeoutMs = (name: string, fallback: number) => {
   const raw = process.env[name];
@@ -183,6 +185,11 @@ export interface ClaudeAgentSdkSessionOptions {
   onSessionId: (sessionId: string) => void;
   onStderr: (data: string) => Promise<void> | void;
   operationId: string;
+  /**
+   * Have Claude Code replay every user message it reads (`--replay-user-messages`),
+   * so a message `steer` delivers is known to be picked up.
+   */
+  replayUserMessages?: boolean;
   resumeSessionId?: string;
   sessionId: string;
   stdinPayload: string;
@@ -243,6 +250,10 @@ export class ClaudeAgentSdkSession {
   private pipeline: AgentStreamPipeline;
   private queryHandle: ClaudeAgentSdkQuery | undefined;
   private sawErrorEvent = false;
+  /** Messages `steer` queued for the input stream, not yet handed to the SDK. */
+  private readonly steerQueue: SDKUserMessage[] = [];
+  /** Steered messages Claude Code has not replayed yet; input stays open for them. */
+  private readonly unconsumed = new Set<string>();
   private taskNotificationPending = false;
 
   constructor(private readonly options: ClaudeAgentSdkSessionOptions) {
@@ -313,6 +324,23 @@ export class ClaudeAgentSdkSession {
     }
   }
 
+  /**
+   * Deliver a user message into the running session. Claude Code reads it at
+   * its next tool boundary, so a running tool is never cut short (a message
+   * sent with `priority: 'now'` would abort it). Claude Code replays it under
+   * `uuid` once read (with `replayUserMessages`); until then
+   * input stays open for it.
+   *
+   * @returns false once input has closed, so the caller runs it as a new turn
+   */
+  steer(message: SDKUserMessage, uuid: string): boolean {
+    if (this.closeInput || this.abortController.signal.aborted) return false;
+
+    this.unconsumed.add(uuid);
+    this.steerQueue.push({ ...message, uuid: uuid as SDKUserMessage['uuid'] });
+    return true;
+  }
+
   close(): void {
     this.closedByHost = true;
     this.closeInput = true;
@@ -344,6 +372,9 @@ export class ClaudeAgentSdkSession {
         }),
       ...(this.options.resumeSessionId ? { resume: this.options.resumeSessionId } : {}),
       ...argOptions,
+      ...(this.options.replayUserMessages && {
+        extraArgs: { ...argOptions.extraArgs, 'replay-user-messages': null },
+      }),
       stderr: (data) => {
         void this.options.onStderr(data);
       },
@@ -354,7 +385,12 @@ export class ClaudeAgentSdkSession {
     yield message;
 
     while (!this.closeInput && !this.abortController.signal.aborted) {
-      await sleep(INPUT_CLOSE_POLL_MS);
+      const steered = this.steerQueue.shift();
+      if (steered) {
+        yield steered;
+        continue;
+      }
+      await sleep(this.unconsumed.size > 0 ? STEER_POLL_MS : INPUT_CLOSE_POLL_MS);
     }
   }
 
@@ -362,6 +398,9 @@ export class ClaudeAgentSdkSession {
     this.lastEventAt = Date.now();
     this.armInactivityTimer();
     this.updateTaskState(message);
+    if (message.type === 'user' && 'isReplay' in message && message.isReplay) {
+      this.unconsumed.delete(message.uuid);
+    }
 
     const line = `${JSON.stringify(message)}\n`;
     await this.options.onRawMessage(line);
@@ -429,9 +468,14 @@ export class ClaudeAgentSdkSession {
 
   private maybeCloseInputAfterResult(message: SDKMessage): void {
     if (message.type !== 'result') return;
+    const notificationTurn = message.origin?.kind === 'task-notification';
+    // The notification's turn is over, whether or not input closes now.
+    if (notificationTurn) this.taskNotificationPending = false;
+    // A message written as a cycle ends is read after that cycle's result;
+    // it still has to be read and answered.
+    if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
 
-    if (message.origin?.kind === 'task-notification') {
-      this.taskNotificationPending = false;
+    if (notificationTurn) {
       this.closeInput = true;
       return;
     }

@@ -97,6 +97,26 @@ describe('withHeteroSteer', () => {
     ]);
   });
 
+  it('holds follow-ups while the session waits for the user, and gives back one handed out then', async () => {
+    const { client, giveBack, wait } = createClient([{ content: 'go', messageId: 'msg-1' }]);
+    const sendUserMessage = vi.fn(async () => true);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, isWaitingForUser: () => true, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(giveBack).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
+    expect(wait.mock.calls[0][0]).toMatchObject({ holdSteer: true });
+  });
+
   it('types images pasted into a follow-up in as image blocks', async () => {
     const image = { id: 'file_1', url: 'https://bucket.example.com/1.png?sig=s' };
     const { client } = createClient([

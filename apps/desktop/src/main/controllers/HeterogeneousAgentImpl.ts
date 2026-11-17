@@ -161,6 +161,11 @@ import { createLogger } from '@/utils/logger';
 
 import BrowserControlCtr from './BrowserControlCtr';
 import { sendPromptWithCodexAppServer } from './codexAppServer';
+import {
+  completeLiveCliRuntime,
+  createLiveCliAdapter,
+  writeCliPrompt,
+} from './heterogeneousAgentLiveInput';
 import type { AgentSession, CliTraceSession, SendPromptParams } from './heterogeneousAgentSession';
 import {
   claudeProfileDirOf,
@@ -169,6 +174,12 @@ import {
   interruptActiveAcpSession,
   sendPromptWithAcpSession,
 } from './heterogeneousAgentSession';
+import {
+  steerAgentSession,
+  type SteerSessionParams,
+  type SteerSessionResult,
+} from './heterogeneousAgentSteer';
+import { redactPromptArgs } from './redactPromptArgs';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
@@ -250,27 +261,7 @@ const PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
 
-export const redactPromptArgs = (args: string[], agentType: HeterogeneousAgentType): string[] => {
-  let redactNext = false;
-  const supportsShortPromptFlag = agentType === 'kimi-code';
-
-  return args.map((arg) => {
-    if (redactNext) {
-      redactNext = false;
-      return '[REDACTED]';
-    }
-
-    if (arg === '--prompt' || (supportsShortPromptFlag && arg === '-p')) {
-      redactNext = true;
-      return arg;
-    }
-
-    if (arg.startsWith('--prompt=')) return '--prompt=[REDACTED]';
-    if (supportsShortPromptFlag && arg.startsWith('-p=')) return '-p=[REDACTED]';
-
-    return arg;
-  });
-};
+export { redactPromptArgs };
 
 // ─── IPC types ───
 
@@ -1685,6 +1676,7 @@ export default class HeterogeneousAgentCtr {
             }
           },
         },
+        liveInput: params.liveSteer,
         mcpConfigPath: intervention?.tmpConfigPath,
         promptInput,
         resumeSessionId: session.agentSessionId,
@@ -1981,6 +1973,7 @@ export default class HeterogeneousAgentCtr {
       },
       onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
       operationId: params.operationId,
+      replayUserMessages: params.liveSteer,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
       stdinPayload: input.stdin,
@@ -2387,13 +2380,11 @@ export default class HeterogeneousAgentCtr {
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
-    // In stdin mode, write the prepared payload and close stdin.
+    // In stdin mode, write the prepared payload; close stdin unless the session stays live.
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
-      const stdin = proc.stdin as Writable;
-      stdin.write(spawnPlan.stdinPayload, () => {
-        stdin.end();
-      });
+      const live = !!spawnPlan.liveInput;
+      session.liveInput = writeCliPrompt(proc.stdin as Writable, spawnPlan.stdinPayload, live);
     }
 
     session.process = proc;
@@ -2417,6 +2408,7 @@ export default class HeterogeneousAgentCtr {
     // file-change diff/stat tracker when `agentType === 'codex'`, so this
     // controller stays agent-agnostic.
     const pipeline = new AgentStreamPipeline({
+      ...(session.liveInput && { adapter: createLiveCliAdapter() }),
       agentType: session.agentType,
       cwd,
       env: spawnEnv,
@@ -2493,9 +2485,11 @@ export default class HeterogeneousAgentCtr {
     const stdout = proc.stdout as Readable;
     stdout.on('data', (chunk: Buffer) => {
       void this.appendCliTraceFile(traceSession, 'stdout.jsonl', chunk);
+      session.liveInput?.observe(chunk);
       broadcastPipelineBatch(() => pipeline.push(chunk));
     });
     stdout.on('end', () => {
+      session.liveInput?.finish();
       broadcastPipelineBatch(() => pipeline.flush());
     });
 
@@ -2557,11 +2551,8 @@ export default class HeterogeneousAgentCtr {
           // which the executor calls once its terminal handling and persistence
           // have settled, is the acknowledgement that releases it.
 
-          // If *we* killed it (cancel / stop / before-quit), treat the non-zero
-          // exit as a clean shutdown — surfacing it as an error would make a
-          // user-initiated cancel look like an agent failure, and an Electron
-          // shutdown affecting OTHER running CC sessions would pollute their
-          // topics with a misleading "Agent exited with code 143" message.
+          // If *we* killed it (cancel / stop / before-quit), a non-zero exit is a clean shutdown: as an
+          // error a cancel reads as an agent failure, a quit leaves "exited with code 143" elsewhere.
           if (session.cancelledByUs) {
             // Quit-driven kill: say nothing to the renderer. A `complete`
             // broadcast (or a settled `sendPrompt`) reaching a renderer that
@@ -2575,8 +2566,12 @@ export default class HeterogeneousAgentCtr {
             return;
           }
 
+          const liveInput = session.liveInput;
+          session.liveInput = undefined;
           if (code === 0) {
+            const exit = { cancelledByUs: false, code, signal };
             broadcastStreamEvents(pipeline.validateCompletion());
+            broadcastStreamEvents(completeLiveCliRuntime(pipeline, liveInput, exit));
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
           } else {
@@ -3131,6 +3126,11 @@ export default class HeterogeneousAgentCtr {
    * Throws:
    * - When a CLI process remains active after the bounded SIGKILL escalation.
    */
+  /** Deliver a message into the session's running turn (Follow-up behavior: Steer). */
+  steerSession(params: SteerSessionParams): Promise<SteerSessionResult> {
+    return steerAgentSession(this.sessions.get(params.sessionId), params, this.fileCacheDir);
+  }
+
   async cancelSession(params: CancelSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
