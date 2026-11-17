@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   persistent: false,
   selectTarget: vi.fn(),
   toPersistent: vi.fn(),
+  target: 'sandbox' as string,
   toTemporary: vi.fn(),
 }));
 
@@ -56,7 +57,7 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
-    agencyConfig: { executionTarget: 'sandbox' },
+    agencyConfig: { executionTarget: state.target },
     canDisplayExecutionTarget: true,
     canSelectExecutionTarget: true,
     isPreferenceLoading: false,
@@ -103,6 +104,7 @@ vi.mock('../useSandboxModeSelect', () => ({
 }));
 
 const SANDBOX = 'heteroAgent.executionTarget.sandbox';
+const SWITCH = 'heteroAgent.executionTarget.persistSwitch';
 const TEMPORARY = 'heteroAgent.executionTarget.temporarySandbox';
 const PERSISTENT = 'heteroAgent.executionTarget.persistentSandbox';
 
@@ -110,6 +112,7 @@ beforeEach(() => {
   state.devices = [];
   state.driveStatus = 'ready';
   state.persistent = false;
+  state.target = 'sandbox';
   state.openUpsell.mockReset();
   state.selectTarget.mockReset().mockImplementation(async (...args: unknown[]) => {
     const afterApply = args[3] as (() => Promise<void>) | undefined;
@@ -119,93 +122,97 @@ beforeEach(() => {
   state.toTemporary.mockReset().mockResolvedValue(undefined);
 });
 
-// T-14161: the persistent sandbox is a row of its own in the execution
-// environment, not a folder picked after "Cloud sandbox".
-describe('HeteroDeviceSwitcher — persistent sandbox', () => {
-  it('offers the persistent sandbox next to the temporary one', () => {
+// One cloud sandbox in the execution environment; whether it keeps its files
+// on the drive is a switch inside that row once it is picked.
+describe('HeteroDeviceSwitcher — cloud sandbox persistence', () => {
+  it('offers a single cloud sandbox row, not a persistent and a temporary one', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.getAllByText(TEMPORARY).length).toBeGreaterThan(0);
-    expect(screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc')).toBeTruthy();
-  });
-
-  // Next to the persistent sandbox, the plain one is called the temporary
-  // sandbox, on its row and on the chip.
-  it('names the plain sandbox temporary next to the persistent one', () => {
-    render(<HeteroDeviceSwitcher agentId="agent-1" />);
-
-    expect(screen.getByTestId('chip').textContent).toContain(TEMPORARY);
-    expect(screen.queryByText(SANDBOX)).toBeNull();
-  });
-
-  // The persistent sandbox is where everyday work belongs, so it comes first;
-  // the temporary one is described as the place for coding and one-off work.
-  it('lists the persistent sandbox above the temporary one', () => {
-    render(<HeteroDeviceSwitcher agentId="agent-1" />);
-
-    const persistent = screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc');
-    const temporary = screen.getByText('heteroAgent.executionTarget.temporarySandboxDesc');
-
-    expect(
-      persistent.compareDocumentPosition(temporary) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.executionTarget.sandboxDesc')).toBeNull();
-  });
-
-  it('describes the cloud sandbox as before where there is no drive at all', () => {
-    state.driveStatus = 'hidden';
-    render(<HeteroDeviceSwitcher agentId="agent-1" />);
-
-    expect(screen.getByText('heteroAgent.executionTarget.sandboxDesc')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.executionTarget.temporarySandboxDesc')).toBeNull();
     expect(screen.getAllByText(SANDBOX).length).toBeGreaterThan(0);
+    expect(screen.queryByText(PERSISTENT)).toBeNull();
     expect(screen.queryByText(TEMPORARY)).toBeNull();
   });
 
-  it('names the persistent sandbox on the chip when the conversation keeps its files', () => {
+  it('names the cloud sandbox on the chip, persistent or not', () => {
     state.persistent = true;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.getByTestId('chip').textContent).toContain(PERSISTENT);
+    expect(screen.getByTestId('chip').textContent).toContain(SANDBOX);
   });
 
-  it('switches to the sandbox and onto the drive when the persistent row is picked', async () => {
+  it('shows the persistence switch inside the picked sandbox row', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    fireEvent.click(screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc'));
+    expect(screen.getByText(SWITCH)).toBeTruthy();
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByText('heteroAgent.executionTarget.temporarySandboxDesc')).toBeTruthy();
+  });
+
+  it('reflects a conversation that keeps its files on the drive', () => {
+    state.persistent = true;
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc')).toBeTruthy();
+  });
+
+  it('hides the switch until the sandbox is the pick', () => {
+    state.target = 'none';
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.queryByText(SWITCH)).toBeNull();
+    expect(screen.getByText('heteroAgent.executionTarget.sandboxDesc')).toBeTruthy();
+  });
+
+  it('moves onto the drive when the switch is turned on, without re-picking the target', async () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    fireEvent.click(screen.getByRole('switch'));
     await vi.waitFor(() => expect(state.toPersistent).toHaveBeenCalledTimes(1));
 
-    expect(state.selectTarget.mock.calls[0][0]).toBe('sandbox');
     expect(state.toTemporary).not.toHaveBeenCalled();
+    expect(state.selectTarget).not.toHaveBeenCalled();
   });
 
-  it('switches to the temporary sandbox from the plain row', async () => {
+  it('leaves the drive when the switch is turned off', async () => {
     state.persistent = true;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    fireEvent.click(screen.getByText('heteroAgent.executionTarget.temporarySandboxDesc'));
+    fireEvent.click(screen.getByRole('switch'));
     await vi.waitFor(() => expect(state.toTemporary).toHaveBeenCalledTimes(1));
+
+    expect(state.toPersistent).not.toHaveBeenCalled();
+  });
+
+  it('picks the sandbox target from the row and keeps the placement as it is', async () => {
+    state.target = 'none';
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    fireEvent.click(screen.getByText('heteroAgent.executionTarget.sandboxDesc'));
+    await vi.waitFor(() => expect(state.selectTarget).toHaveBeenCalledTimes(1));
 
     expect(state.selectTarget.mock.calls[0][0]).toBe('sandbox');
     expect(state.toPersistent).not.toHaveBeenCalled();
+    expect(state.toTemporary).not.toHaveBeenCalled();
   });
 
   it('shows a plan without a drive the way to one instead', () => {
     state.driveStatus = 'upgrade';
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    fireEvent.click(screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc'));
+    fireEvent.click(screen.getByRole('switch'));
 
     expect(screen.getByText('pro')).toBeTruthy();
     expect(state.openUpsell).toHaveBeenCalledTimes(1);
-    expect(state.selectTarget).not.toHaveBeenCalled();
+    expect(state.toPersistent).not.toHaveBeenCalled();
   });
 
-  it.each(['hidden', 'loading'] as const)('hides the row while the drive is %s', (driveStatus) => {
+  it.each(['hidden', 'loading'] as const)('has no switch while the drive is %s', (driveStatus) => {
     state.driveStatus = driveStatus;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.queryByText(PERSISTENT)).toBeNull();
+    expect(screen.queryByText(SWITCH)).toBeNull();
+    expect(screen.getByText('heteroAgent.executionTarget.sandboxDesc')).toBeTruthy();
   });
 });
 
@@ -233,11 +240,11 @@ describe('HeteroDeviceSwitcher — sections', () => {
     const builtin = screen.getByText(BUILTIN);
     const auto = screen.getByText('heteroAgent.executionTarget.autoDesc');
     const sandboxes = screen.getByText(SANDBOXES);
-    const persistent = screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc');
+    const sandbox = screen.getByText('heteroAgent.executionTarget.temporarySandboxDesc');
 
     expect(follows(builtin, auto)).toBe(true);
     expect(follows(auto, sandboxes)).toBe(true);
-    expect(follows(sandboxes, persistent)).toBe(true);
+    expect(follows(sandboxes, sandbox)).toBe(true);
   });
 
   it('leaves the sections unlabelled on web without devices', () => {

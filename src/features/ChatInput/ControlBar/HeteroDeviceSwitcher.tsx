@@ -4,13 +4,12 @@ import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { isManagedCloudDevice } from '@lobechat/types';
-import { Button, Flexbox, Icon, Popover, Tag, toast, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Popover, Switch, Tag, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   ExternalLinkIcon,
-  HardDriveIcon,
   InfoIcon,
   MonitorDownIcon,
   SettingsIcon,
@@ -183,6 +182,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: 'color 0.2s',
   },
+  persistLabel: { fontSize: '11px', color: cssVar.colorTextSecondary, whiteSpace: 'nowrap' },
   groupLabel: {
     paddingBlock: '4px',
     paddingInline: '8px',
@@ -370,10 +370,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [selectTarget],
   );
 
-  // The cloud sandbox comes as two rows — temporary, and persistent on the
-  // drive — that share the `sandbox` target and differ in where this
-  // conversation keeps its files. The drive is asked about once the menu could
-  // show it, or the chip has to name it.
+  // One cloud sandbox row on the `sandbox` target. Whether this conversation
+  // keeps its files on the drive is a switch inside that row, shown once the
+  // sandbox is the pick. The drive is asked about once the menu could show the
+  // switch, or the working-directory chip has to name the folder.
   const sandboxMode = useSandboxModeSelect(agentId, {
     enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
     topicId,
@@ -381,19 +381,34 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const offersPersistentSandbox =
     supportsSandbox &&
     (sandboxMode.driveStatus === 'ready' || sandboxMode.driveStatus === 'upgrade');
-  const selectSandbox = useCallback(
-    (persistent: boolean) =>
-      handleSelect('sandbox', undefined, undefined, async () => {
-        try {
-          await (persistent ? sandboxMode.toPersistent() : sandboxMode.toTemporary());
-        } catch {
-          // The target moved but the conversation kept its folder; said rather
-          // than left looking switched.
-          toast.error(t('sandboxEnvironment.saveFailed'));
-        }
-      }),
-    [handleSelect, sandboxMode, t],
+  // Picking the row keeps the placement the conversation already has: the
+  // switch, not the row, is what moves it on or off the drive.
+  const selectSandbox = useCallback(() => handleSelect('sandbox'), [handleSelect]);
+
+  // Like the network switch, flipping persistence leaves the popover open and
+  // the target alone — the row is already the pick. Optimistic, so the switch
+  // answers the click before the placement write lands.
+  const [pendingPersistent, setPendingPersistent] = useState<boolean>();
+  const handleTogglePersistent = useCallback(
+    async (next: boolean) => {
+      if (next && sandboxMode.driveStatus === 'upgrade') {
+        setOpen(false);
+        openSandboxStorageUpsell();
+        return;
+      }
+      setPendingPersistent(next);
+      try {
+        await (next ? sandboxMode.toPersistent() : sandboxMode.toTemporary());
+      } catch {
+        // The conversation kept its folder; said rather than left looking switched.
+        toast.error(t('sandboxEnvironment.saveFailed'));
+      } finally {
+        setPendingPersistent(undefined);
+      }
+    },
+    [sandboxMode, t],
   );
+  const sandboxPersistent = pendingPersistent ?? sandboxMode.persistent;
 
   // Setting up the backend raises an elevation prompt and creates a dedicated
   // OS account, so it only ever happens on this explicit click. The popover
@@ -555,19 +570,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
-  // Next to the persistent sandbox the plain one is named for what sets it
-  // apart: it is discarded after use. Without a drive on offer there is only
-  // one sandbox, and it keeps its usual name.
-  const sandboxLabel = t(
-    offersPersistentSandbox
-      ? 'heteroAgent.executionTarget.temporarySandbox'
-      : 'heteroAgent.executionTarget.sandbox',
-  );
-  let chipLabel = sandboxLabel;
-  if (chipExecutionTarget === 'sandbox' && sandboxMode.persistent) {
-    chipIcon = <Icon icon={HardDriveIcon} size={14} />;
-    chipLabel = t('heteroAgent.executionTarget.persistentSandbox');
-  } else if (chipExecutionTarget === 'none') {
+  // One cloud sandbox, whether or not it keeps its files on the drive: the
+  // working-directory chip beside it names the drive folder when it does.
+  let chipLabel = t('heteroAgent.executionTarget.sandbox');
+  if (chipExecutionTarget === 'none') {
     chipIcon = <ExecutionTargetIcon target={'none'} />;
     chipLabel = t('heteroAgent.executionTarget.none');
   } else if (chipExecutionTarget === 'auto') {
@@ -797,51 +803,54 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('local', undefined, true)}
         />
       ) : null}
-      {/* Two sandboxes on one `sandbox` target, the persistent one first: it is
-          where everyday work belongs, keeping its results and the work behind
-          them on the drive. The temporary one is discarded after use, which
-          suits coding and one-off data processing — a repository's
-          dependencies and build output would only fill the drive. A plan
-          without a drive sees the persistent row in the same place, tagged,
-          as the way to one; with no drive at all only the temporary row is
-          left, described as it always was. */}
-      {offersPersistentSandbox ? (
-        <OptionRow
-          active={isActive('sandbox') && sandboxMode.persistent}
-          desc={t('heteroAgent.executionTarget.persistentSandboxDesc')}
-          icon={<Icon icon={HardDriveIcon} size={14} />}
-          label={t('heteroAgent.executionTarget.persistentSandbox')}
-          badge={
-            sandboxMode.driveStatus === 'upgrade' ? (
-              <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
-                {t('pro', { ns: 'common' })}
-              </Tag>
-            ) : undefined
-          }
-          onClick={() => {
-            if (sandboxMode.driveStatus === 'upgrade') {
-              setOpen(false);
-              openSandboxStorageUpsell();
-              return;
-            }
-            void selectSandbox(true);
-          }}
-        />
-      ) : null}
+      {/* One cloud sandbox. Once it is the pick, a switch inside the row says
+          whether this conversation keeps its results and the work behind them
+          on the drive (persistent) or discards the sandbox after use. A plan
+          without a drive sees the switch tagged Pro, as the way to one; with
+          no drive at all there is no switch. */}
       <OptionRow
-        active={isActive('sandbox') && !sandboxMode.persistent}
+        active={isActive('sandbox')}
         disabled={!supportsSandbox}
         icon={<ExecutionTargetIcon target={'sandbox'} />}
-        label={sandboxLabel}
+        label={t('heteroAgent.executionTarget.sandbox')}
         desc={t(
           !supportsSandbox
             ? 'heteroAgent.executionTarget.sandboxUnsupported'
-            : offersPersistentSandbox
-              ? 'heteroAgent.executionTarget.temporarySandboxDesc'
+            : isActive('sandbox') && offersPersistentSandbox
+              ? sandboxPersistent
+                ? 'heteroAgent.executionTarget.persistentSandboxDesc'
+                : 'heteroAgent.executionTarget.temporarySandboxDesc'
               : 'heteroAgent.executionTarget.sandboxDesc',
           { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
         )}
-        onClick={() => void selectSandbox(false)}
+        extra={
+          isActive('sandbox') && offersPersistentSandbox ? (
+            <Tooltip title={t('heteroAgent.executionTarget.persistSwitchTip')}>
+              <Flexbox horizontal align={'center'} gap={6}>
+                {sandboxMode.driveStatus === 'upgrade' ? (
+                  <Tag
+                    color={'gold'}
+                    size={'small'}
+                    style={{ borderRadius: 999, paddingInline: 8 }}
+                  >
+                    {t('pro', { ns: 'common' })}
+                  </Tag>
+                ) : null}
+                <span {...stylex.props(styles.persistLabel)}>
+                  {t('heteroAgent.executionTarget.persistSwitch')}
+                </span>
+                <Switch
+                  aria-label={t('heteroAgent.executionTarget.persistSwitch')}
+                  loading={pendingPersistent !== undefined}
+                  size={'small'}
+                  value={sandboxPersistent}
+                  onChange={(next) => void handleTogglePersistent(next)}
+                />
+              </Flexbox>
+            </Tooltip>
+          ) : undefined
+        }
+        onClick={() => void selectSandbox()}
       />
       {/* Devices sit one level down, a row per group: the list keeps growing,
           and the built-in environments above should not scroll away with it.

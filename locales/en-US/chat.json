@@ -1583,6 +1583,8 @@
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} connection",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} connections",
   "heteroAgent.executionTarget.otherDevicesGroup": "Other devices",
+  "heteroAgent.executionTarget.persistSwitch": "Persistent",
+  "heteroAgent.executionTarget.persistSwitchTip": "On: results and the work behind them are kept on your drive. Off: the sandbox is discarded after use, which suits coding and one-off data processing.",
   "heteroAgent.executionTarget.persistentSandbox": "Persistent Sandbox",
   "heteroAgent.executionTarget.persistentSandboxDesc": "Keeps results and work on your drive, for everyday tasks",
   "heteroAgent.executionTarget.personalGroup": "Private Devices",

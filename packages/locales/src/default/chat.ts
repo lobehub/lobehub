@@ -975,6 +975,9 @@ export default {
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
+  'heteroAgent.executionTarget.persistSwitch': 'Persistent',
+  'heteroAgent.executionTarget.persistSwitchTip':
+    'On: results and the work behind them are kept on your drive. Off: the sandbox is discarded after use, which suits coding and one-off data processing.',
   'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
   'heteroAgent.executionTarget.persistentSandboxDesc':
     'Keeps results and work on your drive, for everyday tasks',
