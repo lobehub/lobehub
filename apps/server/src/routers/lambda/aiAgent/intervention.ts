@@ -11,6 +11,7 @@ import {
   resolveAgentIntervention,
   resolveAgentInterventionBySource,
 } from '@/business/server/agent-run/agentInterventionReview';
+import type { MessageModel } from '@/database/models/message';
 import { router } from '@/libs/trpc/lambda';
 import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import { assertCanViewMessageTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
@@ -23,6 +24,7 @@ import {
 } from '@/server/routers/lambda/_schema/agentIntervention';
 
 import { assertCanUseAgentRunConversation, assertCanUseOperationAgent } from './guards';
+import type { AgentInterventionDispatchContext } from './interventionDispatch';
 import { dispatchClaimedAgentIntervention } from './interventionDispatch';
 import { aiAgentBaseProcedure, aiAgentWriteProcedure } from './procedures';
 import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
@@ -53,6 +55,83 @@ const ProcessHumanInterventionSchema = z.object({
   toolMessageId: z.string().optional(),
 });
 
+export interface StopPendingApprovalInput {
+  /** Stable sealed batch id stamped on every pending tool row. */
+  batchId: string;
+  /** Exact parked operation to stop; never inferred from topic recency. */
+  operationId: string;
+  /** Pending `role='tool'` message ids to settle — the active batch. */
+  toolMessageIds: string[];
+  topicId: string;
+}
+
+/**
+ * Stop a run parked on tool approval: settle the pending tool rows and end the
+ * operation without executing anything or continuing the model. Shared by
+ * `aiAgent.stopPendingApproval` and the REST `POST /runs/{id}/cancel`.
+ */
+export const stopPendingApprovalBatch = async (
+  ctx: AgentInterventionDispatchContext & { messageModel: MessageModel },
+  input: StopPendingApprovalInput,
+) => {
+  // Same ownership gate the approval resume uses: every target must belong
+  // to the caller before anything is written.
+  await assertCanUseAgentRunConversation({
+    db: ctx.serverDB,
+    messageIds: input.toolMessageIds,
+    topicId: input.topicId,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+
+  const stopPlugins = await pMap(
+    input.toolMessageIds,
+    (id) => ctx.messageModel.findMessagePlugin(id),
+    { concurrency: TOOL_PLUGIN_LOOKUP_CONCURRENCY },
+  );
+  const hasGenericSource = stopPlugins.every(
+    (plugin) =>
+      Boolean(plugin?.toolCallId) &&
+      plugin?.intervention?.operationId === input.operationId &&
+      plugin.intervention.batchId === input.batchId,
+  );
+  if (hasGenericSource) {
+    const sourceResolution = await resolveAgentInterventionBySource({
+      action: { scope: 'operation', type: 'stop' },
+      actorUserId: ctx.userId,
+      batchId: input.batchId,
+      operationId: input.operationId,
+      resolutionRequestId: randomUUID(),
+      targets: stopPlugins.map((plugin, index) => ({
+        toolCallId: plugin!.toolCallId!,
+        toolMessageId: input.toolMessageIds[index],
+      })),
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
+    if (sourceResolution.handled) {
+      if (sourceResolution.state === 'already_resolved') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This approval has already been resolved.',
+        });
+      }
+      await dispatchClaimedAgentIntervention(sourceResolution, ctx);
+      return {
+        operationId: input.operationId,
+        settledToolMessageIds: input.toolMessageIds,
+        success: true,
+      };
+    }
+  }
+
+  return ctx.aiAgentService.stopPendingApproval({
+    batchId: input.batchId,
+    operationId: input.operationId,
+    toolMessageIds: input.toolMessageIds,
+    topicId: input.topicId,
+  });
+};
+
 export const interventionRouter = router({
   /**
    * Interrupt a running task
@@ -80,64 +159,7 @@ export const interventionRouter = router({
         topicId: z.string(),
       }),
     )
-    .mutation(async ({ input, ctx }) => {
-      // Same ownership gate the approval resume uses: every target must belong
-      // to the caller before anything is written.
-      await assertCanUseAgentRunConversation({
-        db: ctx.serverDB,
-        messageIds: input.toolMessageIds,
-        topicId: input.topicId,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
-
-      const stopPlugins = await pMap(
-        input.toolMessageIds,
-        (id) => ctx.messageModel.findMessagePlugin(id),
-        { concurrency: TOOL_PLUGIN_LOOKUP_CONCURRENCY },
-      );
-      const hasGenericSource = stopPlugins.every(
-        (plugin) =>
-          Boolean(plugin?.toolCallId) &&
-          plugin?.intervention?.operationId === input.operationId &&
-          plugin.intervention.batchId === input.batchId,
-      );
-      if (hasGenericSource) {
-        const sourceResolution = await resolveAgentInterventionBySource({
-          action: { scope: 'operation', type: 'stop' },
-          actorUserId: ctx.userId,
-          batchId: input.batchId,
-          operationId: input.operationId,
-          resolutionRequestId: randomUUID(),
-          targets: stopPlugins.map((plugin, index) => ({
-            toolCallId: plugin!.toolCallId!,
-            toolMessageId: input.toolMessageIds[index],
-          })),
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
-        if (sourceResolution.handled) {
-          if (sourceResolution.state === 'already_resolved') {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message: 'This approval has already been resolved.',
-            });
-          }
-          await dispatchClaimedAgentIntervention(sourceResolution, ctx);
-          return {
-            operationId: input.operationId,
-            settledToolMessageIds: input.toolMessageIds,
-            success: true,
-          };
-        }
-      }
-
-      return ctx.aiAgentService.stopPendingApproval({
-        batchId: input.batchId,
-        operationId: input.operationId,
-        toolMessageIds: input.toolMessageIds,
-        topicId: input.topicId,
-      });
-    }),
+    .mutation(({ input, ctx }) => stopPendingApprovalBatch(ctx, input)),
   /**
    * Authenticated v2 review lookup. The opaque token is only a locator: the
    * business implementation must resolve the row, then evaluate view and
