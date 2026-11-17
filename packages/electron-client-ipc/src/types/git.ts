@@ -344,8 +344,25 @@ export interface GitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** `cleanupOwnedWorktree`: an app-created worktree removed, kept dirty, or refused. */
+export interface GitOwnedWorktreeCleanupResult {
+  branch?: string;
+  dirtyFiles?: number;
+  error?: string;
+  outcome: 'dirty' | 'error' | 'locked' | 'refused' | 'removed';
+  unpushedSubmodules?: number;
+}
+
+/** `restoreOwnedWorktree`: an app-created worktree checked out again at its path. */
+export interface GitOwnedWorktreeRestoreResult {
+  error?: string;
+  outcome: 'branchMissing' | 'error' | 'refused' | 'restored';
+}
+
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
   /** Echo of the start point the worktree's branch was cut from, when one was requested. */
   startPoint?: string;
   success: boolean;

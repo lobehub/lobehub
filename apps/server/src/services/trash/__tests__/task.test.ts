@@ -15,7 +15,10 @@ import { TaskBatchService } from '@/server/services/task/batch';
 
 import { TrashService } from '../index';
 
-vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after: vi.fn() }));
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: vi.fn(),
+  afterUnscoped: vi.fn(),
+}));
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(() => ({ deleteFile: vi.fn(), deleteFiles: vi.fn() })),
 }));

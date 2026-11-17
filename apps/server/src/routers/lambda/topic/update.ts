@@ -10,6 +10,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
 import { GoalTopicHandoffService } from '@/server/services/goal/topicHandoff';
+import { TopicArchiveService } from '@/server/services/topicArchive';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
@@ -51,8 +52,15 @@ export const updateRouter = router({
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      // Every archive goes through `TopicArchiveService`, which sets off what
+      // archiving a topic does (cleanup of the worktree the app created).
+      const archive = new TopicArchiveService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
       const { agentId, sessionId, ...restValue } = input.value;
-      if (!agentId && !sessionId) return ctx.topicModel.update(input.id, restValue);
+      if (!agentId && !sessionId) return archive.updateTopic(input.id, restValue);
       const resolved = await resolveContext(
         { agentId, sessionId },
         ctx.serverDB,
@@ -60,7 +68,7 @@ export const updateRouter = router({
         ctx.workspaceId ?? undefined,
       );
       await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
-      return ctx.topicModel.update(input.id, {
+      return archive.updateTopic(input.id, {
         ...restValue,
         agentId: resolved.agentId,
         sessionId: resolved.sessionId,

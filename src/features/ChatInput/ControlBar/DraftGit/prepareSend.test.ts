@@ -43,6 +43,12 @@ vi.mock('@/services/git', async (importOriginal) => {
   };
 });
 
+// The server-signed creation receipt for a new worktree.
+const issueWorktreeReceipt = vi.hoisted(() =>
+  vi.fn(async () => ({ nonce: 'nonce-1', token: 'signed-token-0123456789' })),
+);
+vi.mock('@/services/ownedWorktree', () => ({ issueWorktreeReceipt }));
+
 vi.mock('@/services/device', () => ({
   deviceService: { countRunningTopicsInDirectory: vi.fn() },
 }));
@@ -385,6 +391,37 @@ describe('prepareDraftGitSend — new worktree', () => {
     expect(gitService.checkoutGitBranch).not.toHaveBeenCalled();
     expect(p.confirmSwitchRisks).not.toHaveBeenCalled();
     expect(deviceService.countRunningTopicsInDirectory).not.toHaveBeenCalled();
+  });
+
+  it('records the server-signed receipt only once the device echoes it back', async () => {
+    vi.mocked(gitService.addGitWorktree).mockImplementation(async ({ branch, ownerToken }) => ({
+      ownerToken,
+      success: true,
+      worktreePath: `/Users/me/.lobehub/worktrees/lobehub-0000beef/${branch.split('/').at(-1)}`,
+    }));
+    const recorded = await prepareDraftGitSend(context, { prompts: prompts(), t });
+    expect(vi.mocked(gitService.addGitWorktree).mock.calls[0][0].ownerToken).toBe(
+      'signed-token-0123456789',
+    );
+    expect(recorded.ok && recorded.newTopicWorkingDirectory?.git).toMatchObject({
+      ownerNonce: 'nonce-1',
+      ownerToken: 'signed-token-0123456789',
+    });
+
+    // A device too old to write it echoes nothing: no receipt is claimed.
+    vi.mocked(gitService.addGitWorktree).mockImplementation(async ({ branch }) => ({
+      success: true,
+      worktreePath: `/Users/me/.lobehub/worktrees/lobehub-0000beef/${branch.split('/').at(-1)}`,
+    }));
+    const older = await prepareDraftGitSend(context, { prompts: prompts(), t });
+    expect(older.ok && older.newTopicWorkingDirectory?.git?.ownerToken).toBeUndefined();
+
+    // No receipt from the server: the worktree is still created, without one.
+    issueWorktreeReceipt.mockResolvedValueOnce(undefined as any);
+    vi.mocked(gitService.addGitWorktree).mockClear();
+    const unsigned = await prepareDraftGitSend(context, { prompts: prompts(), t });
+    expect(vi.mocked(gitService.addGitWorktree).mock.calls[0][0].ownerToken).toBeUndefined();
+    expect(unsigned.ok).toBe(true);
   });
 
   it('forks from HEAD without a start point when nothing else was picked', async () => {
