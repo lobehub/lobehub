@@ -702,6 +702,36 @@ describe('AgentDocumentsGroup', () => {
       );
     });
 
+    it.each([
+      { canManage: false, documentMode: false },
+      { canManage: false, documentMode: true },
+      { canManage: true, documentMode: true },
+      { canManage: true, documentMode: false },
+    ])('reports no matching user skills exactly once: %j', async ({ canManage, documentMode }) => {
+      documentListMock.mockReturnValue({ data: [] });
+      userSkillInventory.items = [{ id: 'writing', name: 'Writing skill' }];
+      userSkillInventory.enabledIds = ['writing'];
+      userSkillInventory.canManage = canManage;
+      useParamsMock.mockReturnValue(documentMode ? { docId: 'document' } : {});
+      render(<AgentDocumentsGroup activeFilter="skills" />);
+
+      expect(screen.getByText('Writing skill')).toBeInTheDocument();
+      search('no-such-skill');
+      await waitFor(() =>
+        expect(screen.getAllByText('workingPanel.skills.noSearchResults')).toHaveLength(1),
+      );
+      expect(screen.queryByText('Writing skill')).not.toBeInTheDocument();
+      if (!canManage || documentMode) {
+        expect(
+          screen.queryByRole('button', { name: 'Manage user skills' }),
+        ).not.toBeInTheDocument();
+      }
+
+      search('');
+      await waitFor(() => expect(screen.getByText('Writing skill')).toBeInTheDocument());
+      expect(screen.queryByText('workingPanel.skills.noSearchResults')).not.toBeInTheDocument();
+    });
+
     it('does not keep filtering after the search bar unmounts with the Skills tab', async () => {
       render(<AgentDocumentsGroup />);
 

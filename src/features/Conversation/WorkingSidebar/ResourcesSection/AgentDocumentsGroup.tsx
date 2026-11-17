@@ -330,6 +330,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const navigate = useWorkspaceAwareNavigate();
     const openDocument = useChatStore((s) => s.openDocument);
     const isDocumentMode = !!docId;
+    const canManageSkills = !isDocumentMode && canManageUserSkills;
     const resolvedOpenMode = openMode ?? (isDocumentMode ? 'route' : 'portal');
     const isLocalEnabled = useAgentStore((s) =>
       agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
@@ -362,7 +363,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     // section layout (flat when a single source has items, sectioned otherwise).
     // Both hooks are SWR-deduped against their respective child fetches.
     // Include disabled inventory so the management entry survives disabling every skill.
-    const userSkillItems = useUserSkills(enabled, !isDocumentMode && canManageUserSkills);
+    const userSkillItems = useUserSkills(enabled, canManageSkills);
     const {
       deviceItems: deviceSkillItems,
       error: projectSkillsError,
@@ -593,7 +594,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       return (
         <Flexbox gap={16} style={{ paddingBottom: 16 }}>
           <SkillsSearchBar onSearch={setSkillSearchQuery} />
-          {!hasMatch && !hasUser && (
+          {!hasMatch && !(hasUser && canManageSkills) && (
             <Center flex={1} gap={8} paddingBlock={24}>
               <Empty description={t('workingPanel.skills.noSearchResults')} icon={SkillsIcon} />
             </Center>
@@ -631,11 +632,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
             <UserLevelSkills
               hideHeader={flat}
               searchQuery={skillSearchQuery}
-              onManage={
-                !isDocumentMode && canManageUserSkills
-                  ? () => setManagingSkillsFor(agentId)
-                  : undefined
-              }
+              onManage={canManageSkills ? () => setManagingSkillsFor(agentId) : undefined}
             />
           )}
         </Flexbox>
