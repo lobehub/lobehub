@@ -22,6 +22,7 @@ import {
   channelMembers,
   channelMessages,
   channelThreads,
+  devices,
   files as fileTable,
   topics,
   users,
@@ -261,6 +262,36 @@ const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
     .orderBy(desc(channelJobs.createdAt))
     .limit(limit);
 
+/**
+ * Display names for the devices Agent members run on. A device id is a hash over the machine and
+ * its principal (a person or a workspace), so it names one row without the owner.
+ */
+const memberDeviceNames = async (
+  tx: Transaction,
+  members: { agentId: string | null; deviceId: string | null }[],
+) => {
+  const ids = [
+    ...new Set(
+      members.flatMap((member) => (member.agentId && member.deviceId ? [member.deviceId] : [])),
+    ),
+  ];
+  if (!ids.length) return new Map<string, string>();
+  const rows = await tx
+    .select({
+      deviceId: devices.deviceId,
+      friendlyName: devices.friendlyName,
+      hostname: devices.hostname,
+    })
+    .from(devices)
+    .where(inArray(devices.deviceId, ids));
+  return new Map(
+    rows.flatMap((row) => {
+      const name = row.friendlyName || row.hostname;
+      return name ? [[row.deviceId, name] as const] : [];
+    }),
+  );
+};
+
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
@@ -289,6 +320,8 @@ export const readChannelView = async (
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
         joinedAt: channelMembers.createdAt,
+        deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
+        workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
@@ -344,6 +377,7 @@ export const readChannelView = async (
           THREAD_ACTIVE_JOB_LIMIT,
         ),
   ]);
+  const deviceNames = await memberDeviceNames(tx, members);
   const jobs = [...ownJobs, ...threadJobs].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
@@ -420,7 +454,17 @@ export const readChannelView = async (
     attachments,
     hasMore: reversed.length > limit,
     jobs,
-    members,
+    members: members.map(({ deviceId, workingDirectory, ...member }) => ({
+      ...member,
+      environment:
+        member.agentId && (deviceId || workingDirectory)
+          ? {
+              deviceId,
+              deviceName: (deviceId && deviceNames.get(deviceId)) || null,
+              workingDirectory,
+            }
+          : null,
+    })),
     threads: threads.map((entry) => {
       const title = entry.metadata?.title;
       const named = typeof title === 'string' && title ? { ...entry, title } : entry;

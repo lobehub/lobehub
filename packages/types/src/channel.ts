@@ -627,11 +627,21 @@ export interface ChannelListItem {
   workspaceId: string | null;
 }
 
+/** Where an Agent member runs in this Channel, readable by every member. */
+export interface ChannelMemberEnvironmentPreview {
+  deviceId: string | null;
+  /** The device's friendly name, else its hostname; null when the device row is gone. */
+  deviceName: string | null;
+  workingDirectory: string | null;
+}
+
 export interface ChannelPublicMember {
   actorType: ChannelMemberActorType;
   agentId: string | null;
   avatar: string | null;
   description: string | null;
+  /** Agent members only; null when the Channel sets no device or directory for it. */
+  environment?: ChannelMemberEnvironmentPreview | null;
   id: string;
   joinedAt: Date;
   /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
