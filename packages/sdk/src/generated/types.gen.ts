@@ -226,7 +226,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'device:read' | 'device:operate'> | null;
     updatedAt: string;
 };
 
@@ -237,7 +237,7 @@ export type CreatedApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'device:read' | 'device:operate'> | null;
     updatedAt: string;
     key: string;
 };
@@ -2776,6 +2776,212 @@ export type Usage = {
     }>;
 };
 
+export type Device = {
+    architecture: string | null;
+    /**
+     * Live connections; a device is online while it holds at least one.
+     */
+    channels: Array<{
+        /**
+         * Which client holds the connection, e.g. `desktop` or `cli`.
+         */
+        channel: string | null;
+        /**
+         * When this connection was opened (ISO 8601).
+         */
+        connectedAt: string;
+        hostname: string | null;
+        platform: string | null;
+    }>;
+    /**
+     * Directory runs start in when none is named.
+     */
+    defaultCwd: string | null;
+    /**
+     * Name the user gave the device, if any.
+     */
+    friendlyName: string | null;
+    hostname: string | null;
+    /**
+     * Device id.
+     */
+    id: string;
+    /**
+     * Last time the device was connected (ISO 8601).
+     */
+    lastSeen: string;
+    /**
+     * What the client reported about itself, e.g. `appVersion` or `cliVersion`.
+     */
+    metadata: {
+        [key: string]: string;
+    } | null;
+    online: boolean;
+    platform: string | null;
+    /**
+     * False for a connected device that has not been stored yet (it appears briefly).
+     */
+    registered: boolean;
+    /**
+     * `personal` — the caller’s own machine; `workspace` — enrolled in the workspace.
+     */
+    scope: 'personal' | 'workspace';
+    /**
+     * Workspace devices only: shared with every member, or the enroller’s alone.
+     */
+    visibility: 'private' | 'public' | null;
+    workingDirectories: Array<{
+        /**
+         * Absolute path on the device.
+         */
+        path: string;
+        /**
+         * What kind of repository the directory holds, when known.
+         */
+        repoType: 'git' | 'github' | null;
+    }>;
+};
+
+export type DeviceDetail = {
+    architecture: string | null;
+    /**
+     * Live connections; a device is online while it holds at least one.
+     */
+    channels: Array<{
+        /**
+         * Which client holds the connection, e.g. `desktop` or `cli`.
+         */
+        channel: string | null;
+        /**
+         * When this connection was opened (ISO 8601).
+         */
+        connectedAt: string;
+        hostname: string | null;
+        platform: string | null;
+    }>;
+    /**
+     * Directory runs start in when none is named.
+     */
+    defaultCwd: string | null;
+    /**
+     * Name the user gave the device, if any.
+     */
+    friendlyName: string | null;
+    hostname: string | null;
+    /**
+     * Device id.
+     */
+    id: string;
+    /**
+     * Last time the device was connected (ISO 8601).
+     */
+    lastSeen: string;
+    /**
+     * What the client reported about itself, e.g. `appVersion` or `cliVersion`.
+     */
+    metadata: {
+        [key: string]: string;
+    } | null;
+    online: boolean;
+    platform: string | null;
+    /**
+     * False for a connected device that has not been stored yet (it appears briefly).
+     */
+    registered: boolean;
+    /**
+     * `personal` — the caller’s own machine; `workspace` — enrolled in the workspace.
+     */
+    scope: 'personal' | 'workspace';
+    /**
+     * Workspace devices only: shared with every member, or the enroller’s alone.
+     */
+    visibility: 'private' | 'public' | null;
+    workingDirectories: Array<{
+        /**
+         * Absolute path on the device.
+         */
+        path: string;
+        /**
+         * What kind of repository the directory holds, when known.
+         */
+        repoType: 'git' | 'github' | null;
+    }>;
+    /**
+     * Recent CPU / memory / load / disk, averaged into buckets. Empty points when the device never reported.
+     */
+    metrics: {
+        /**
+         * Width of each point’s bucket.
+         */
+        bucketMs: number;
+        cpuCount: number | null;
+        diskTotalBytes: number | null;
+        /**
+         * Window start, epoch milliseconds.
+         */
+        from: number;
+        memoryTotalBytes: number | null;
+        points: Array<{
+            /**
+             * False when the device was disconnected during the bucket.
+             */
+            connected: boolean;
+            cpuPercent: number | null;
+            diskPercent: number | null;
+            diskUsedBytes: number | null;
+            load1: number | null;
+            memoryPercent: number | null;
+            memoryUsedBytes: number | null;
+            /**
+             * Bucket start, epoch milliseconds.
+             */
+            observedAt: number;
+        }>;
+        /**
+         * Window end, epoch milliseconds.
+         */
+        to: number;
+    };
+    /**
+     * What the device reports about itself; null while it is offline.
+     */
+    systemInfo: {
+        arch: string;
+        /**
+         * Shell `POST /devices/{id}/commands` runs in, when the device reports it.
+         */
+        defaultShell: string | null;
+        homePath: string;
+        workingDirectory: string;
+    } | null;
+};
+
+export type Sandbox = {
+    /**
+     * Why the last build failed; null otherwise.
+     */
+    buildError: string | null;
+    createdAt: string;
+    /**
+     * Which of the caller’s drives the directory is on.
+     */
+    drive: 'personal' | 'public' | null;
+    /**
+     * Code environment the sandbox was built from.
+     */
+    environmentId: string;
+    id: string;
+    name: string;
+    /**
+     * `pending` until its first build settles; commands need `ready`.
+     */
+    status: 'pending' | 'ready' | 'stopped' | 'error';
+    /**
+     * The sandbox’s directory, relative to the drive root.
+     */
+    workingDirectory: string;
+};
+
 /**
  * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
  */
@@ -4112,7 +4318,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'device:read' | 'device:operate'> | null;
     };
     headers?: {
         /**
@@ -14756,3 +14962,1452 @@ export type GetApiV1UsageResponses = {
 };
 
 export type GetApiV1UsageResponse = GetApiV1UsageResponses[keyof GetApiV1UsageResponses];
+
+export type GetApiV1DevicesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/devices';
+};
+
+export type GetApiV1DevicesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1DevicesError = GetApiV1DevicesErrors[keyof GetApiV1DevicesErrors];
+
+export type GetApiV1DevicesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<Device>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesResponse = GetApiV1DevicesResponses[keyof GetApiV1DevicesResponses];
+
+export type GetApiV1DevicesByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * How far back the metrics reach, in milliseconds (1 minute – 2 days). Default 1 hour.
+         */
+        metricsWindowMs?: number;
+    };
+    url: '/api/v1/devices/{id}';
+};
+
+export type GetApiV1DevicesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1DevicesByIdError = GetApiV1DevicesByIdErrors[keyof GetApiV1DevicesByIdErrors];
+
+export type GetApiV1DevicesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeviceDetail;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesByIdResponse = GetApiV1DevicesByIdResponses[keyof GetApiV1DevicesByIdResponses];
+
+export type GetApiV1DevicesByIdFilesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Directory to list, relative to `root`. Empty for the root itself.
+         */
+        path?: string;
+        /**
+         * Absolute path of the project directory on the device.
+         */
+        root: string;
+    };
+    url: '/api/v1/devices/{id}/files';
+};
+
+export type GetApiV1DevicesByIdFilesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type GetApiV1DevicesByIdFilesError = GetApiV1DevicesByIdFilesErrors[keyof GetApiV1DevicesByIdFilesErrors];
+
+export type GetApiV1DevicesByIdFilesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            entries: Array<{
+                /**
+                 * Whether git ignore rules match the entry.
+                 */
+                gitIgnored: boolean;
+                isDirectory: boolean;
+                name: string;
+                /**
+                 * Absolute path on the device.
+                 */
+                path: string;
+                /**
+                 * Path relative to `root`; directories end with `/`.
+                 */
+                relativePath: string;
+            }>;
+            /**
+             * True when the device capped the listing.
+             */
+            truncated: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesByIdFilesResponse = GetApiV1DevicesByIdFilesResponses[keyof GetApiV1DevicesByIdFilesResponses];
+
+export type GetApiV1DevicesByIdFilesContentData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Absolute path of the file on the device.
+         */
+        path: string;
+        /**
+         * One of the device’s working directories; the file must lie inside it.
+         */
+        workingDirectory: string;
+    };
+    url: '/api/v1/devices/{id}/files/content';
+};
+
+export type GetApiV1DevicesByIdFilesContentErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type GetApiV1DevicesByIdFilesContentError = GetApiV1DevicesByIdFilesContentErrors[keyof GetApiV1DevicesByIdFilesContentErrors];
+
+export type GetApiV1DevicesByIdFilesContentResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            /**
+             * Text content (`type: text`) or base64 bytes (`image` / `document`); null otherwise.
+             */
+            content: string | null;
+            contentType: string;
+            encoding: 'base64' | 'utf8' | null;
+            path: string;
+            /**
+             * `binary` / `pdf` / `video` files are too large or not readable as content.
+             */
+            type: 'text' | 'image' | 'document' | 'binary' | 'pdf' | 'video';
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesByIdFilesContentResponse = GetApiV1DevicesByIdFilesContentResponses[keyof GetApiV1DevicesByIdFilesContentResponses];
+
+export type PutApiV1DevicesByIdFilesContentData = {
+    body: {
+        /**
+         * Text content to write, replacing the file.
+         */
+        content: string;
+        /**
+         * Absolute path of the file on the device.
+         */
+        path: string;
+        /**
+         * One of the device’s working directories; the file must lie inside it.
+         */
+        workingDirectory: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/devices/{id}/files/content';
+};
+
+export type PutApiV1DevicesByIdFilesContentErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type PutApiV1DevicesByIdFilesContentError = PutApiV1DevicesByIdFilesContentErrors[keyof PutApiV1DevicesByIdFilesContentErrors];
+
+export type PutApiV1DevicesByIdFilesContentResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            path: string;
+            written: true;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1DevicesByIdFilesContentResponse = PutApiV1DevicesByIdFilesContentResponses[keyof PutApiV1DevicesByIdFilesContentResponses];
+
+export type GetApiV1DevicesByIdGitStatusData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Absolute path of the git working directory on the device, e.g. one of the device’s `workingDirectories`.
+         */
+        path: string;
+    };
+    url: '/api/v1/devices/{id}/git/status';
+};
+
+export type GetApiV1DevicesByIdGitStatusErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type GetApiV1DevicesByIdGitStatusError = GetApiV1DevicesByIdGitStatusErrors[keyof GetApiV1DevicesByIdGitStatusErrors];
+
+export type GetApiV1DevicesByIdGitStatusResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            /**
+             * Commits the branch is ahead of its upstream.
+             */
+            ahead: number | null;
+            /**
+             * Commits the branch is behind its upstream.
+             */
+            behind: number | null;
+            /**
+             * Branch name, or short SHA when detached.
+             */
+            branch: string | null;
+            clean: boolean;
+            counts: {
+                added: number;
+                deleted: number;
+                modified: number;
+                total: number;
+            };
+            detached: boolean;
+            files: {
+                added: Array<string>;
+                deleted: Array<string>;
+                modified: Array<string>;
+            };
+            upstream: string | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesByIdGitStatusResponse = GetApiV1DevicesByIdGitStatusResponses[keyof GetApiV1DevicesByIdGitStatusResponses];
+
+export type GetApiV1DevicesByIdGitLogData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Absolute path of the git working directory on the device, e.g. one of the device’s `workingDirectories`.
+         */
+        path: string;
+        /**
+         * Commits to return, newest first.
+         */
+        limit?: number;
+        /**
+         * Branch, tag or commit to start from. Defaults to HEAD.
+         */
+        ref?: string;
+    };
+    url: '/api/v1/devices/{id}/git/log';
+};
+
+export type GetApiV1DevicesByIdGitLogErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type GetApiV1DevicesByIdGitLogError = GetApiV1DevicesByIdGitLogErrors[keyof GetApiV1DevicesByIdGitLogErrors];
+
+export type GetApiV1DevicesByIdGitLogResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            commits: Array<{
+                authorEmail: string;
+                authorName: string;
+                /**
+                 * Author date (ISO 8601).
+                 */
+                committedAt: string;
+                sha: string;
+                shortSha: string;
+                subject: string;
+            }>;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesByIdGitLogResponse = GetApiV1DevicesByIdGitLogResponses[keyof GetApiV1DevicesByIdGitLogResponses];
+
+export type GetApiV1DevicesByIdGitDiffData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Absolute path of the git working directory on the device, e.g. one of the device’s `workingDirectories`.
+         */
+        path: string;
+        /**
+         * With `against: branch`, the base to diff against; the default branch when omitted.
+         */
+        baseRef?: string;
+        /**
+         * `workingTree` — uncommitted changes; `branch` — the current branch against its base.
+         */
+        against?: 'workingTree' | 'branch';
+    };
+    url: '/api/v1/devices/{id}/git/diff';
+};
+
+export type GetApiV1DevicesByIdGitDiffErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type GetApiV1DevicesByIdGitDiffError = GetApiV1DevicesByIdGitDiffErrors[keyof GetApiV1DevicesByIdGitDiffErrors];
+
+export type GetApiV1DevicesByIdGitDiffResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            baseRef: string | null;
+            headRef: string | null;
+            patches: Array<{
+                additions: number;
+                deletions: number;
+                /**
+                 * Repository-relative path.
+                 */
+                filePath: string;
+                isBinary: boolean;
+                /**
+                 * Unified diff; empty when binary or truncated.
+                 */
+                patch: string;
+                status: 'added' | 'modified' | 'deleted';
+                truncated: boolean;
+            }>;
+            submodules: Array<{
+                name: string;
+                patches: Array<{
+                    additions: number;
+                    deletions: number;
+                    /**
+                     * Repository-relative path.
+                     */
+                    filePath: string;
+                    isBinary: boolean;
+                    /**
+                     * Unified diff; empty when binary or truncated.
+                     */
+                    patch: string;
+                    status: 'added' | 'modified' | 'deleted';
+                    truncated: boolean;
+                }>;
+                relativePath: string;
+            }>;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1DevicesByIdGitDiffResponse = GetApiV1DevicesByIdGitDiffResponses[keyof GetApiV1DevicesByIdGitDiffResponses];
+
+export type PostApiV1DevicesByIdGitOperationsData = {
+    body: {
+        action: 'checkout';
+        branch: string;
+        /**
+         * Create the branch first.
+         */
+        create?: boolean;
+        /**
+         * Absolute path of the git working directory on the device, e.g. one of the device’s `workingDirectories`.
+         */
+        path: string;
+        /**
+         * With `create`, cut the new branch from this ref instead of HEAD.
+         */
+        startPoint?: string;
+    } | {
+        action: 'pull' | 'push';
+        /**
+         * Sync this local branch instead of HEAD.
+         */
+        branch?: string;
+        /**
+         * Absolute path of the git working directory on the device, e.g. one of the device’s `workingDirectories`.
+         */
+        path: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/devices/{id}/git/operations';
+};
+
+export type PostApiV1DevicesByIdGitOperationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type PostApiV1DevicesByIdGitOperationsError = PostApiV1DevicesByIdGitOperationsErrors[keyof PostApiV1DevicesByIdGitOperationsErrors];
+
+export type PostApiV1DevicesByIdGitOperationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            action: 'checkout' | 'pull' | 'push';
+            branch: string | null;
+            error: string | null;
+            /**
+             * True when git reported nothing to do.
+             */
+            noop: boolean;
+            success: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1DevicesByIdGitOperationsResponse = PostApiV1DevicesByIdGitOperationsResponses[keyof PostApiV1DevicesByIdGitOperationsResponses];
+
+export type PostApiV1DevicesByIdCommandsData = {
+    body: {
+        /**
+         * Shell command, run in the device’s shell.
+         */
+        command: string;
+        /**
+         * What the command does; shown wherever the device records it.
+         */
+        description?: string;
+        /**
+         * How long to wait for output. A command still running then keeps running and returns `running: true` with its `shellId`.
+         */
+        timeoutMs?: number;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * Device id, as listed by `GET /devices`.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/devices/{id}/commands';
+};
+
+export type PostApiV1DevicesByIdCommandsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
+};
+
+export type PostApiV1DevicesByIdCommandsError = PostApiV1DevicesByIdCommandsErrors[keyof PostApiV1DevicesByIdCommandsErrors];
+
+export type PostApiV1DevicesByIdCommandsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            /**
+             * Set once the command exited normally.
+             */
+            exitCode: number | null;
+            /**
+             * Combined console output collected during the wait.
+             */
+            output: string;
+            running: boolean;
+            /**
+             * Id of the shell session while the command runs.
+             */
+            shellId: string | null;
+            stderr: string | null;
+            stdout: string | null;
+            success: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1DevicesByIdCommandsResponse = PostApiV1DevicesByIdCommandsResponses[keyof PostApiV1DevicesByIdCommandsResponses];
+
+export type GetApiV1SandboxesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+        /**
+         * Only sandboxes built from this environment.
+         */
+        environmentId?: string;
+    };
+    url: '/api/v1/sandboxes';
+};
+
+export type GetApiV1SandboxesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1SandboxesError = GetApiV1SandboxesErrors[keyof GetApiV1SandboxesErrors];
+
+export type GetApiV1SandboxesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<Sandbox>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SandboxesResponse = GetApiV1SandboxesResponses[keyof GetApiV1SandboxesResponses];
+
+export type PostApiV1SandboxesData = {
+    body: {
+        /**
+         * Code environment to build the sandbox from; must be your own.
+         */
+        environmentId: string;
+        /**
+         * Display name.
+         */
+        name?: string;
+        /**
+         * Directory to create at the drive root. Derived from the environment name when omitted.
+         */
+        workingDirectory?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/sandboxes';
+};
+
+export type PostApiV1SandboxesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Payload too large
+     */
+    413: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SandboxesError = PostApiV1SandboxesErrors[keyof PostApiV1SandboxesErrors];
+
+export type PostApiV1SandboxesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: Sandbox;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SandboxesResponse = PostApiV1SandboxesResponses[keyof PostApiV1SandboxesResponses];
+
+export type GetApiV1SandboxesByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Sandbox (environment instance) id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/sandboxes/{id}';
+};
+
+export type GetApiV1SandboxesByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1SandboxesByIdError = GetApiV1SandboxesByIdErrors[keyof GetApiV1SandboxesByIdErrors];
+
+export type GetApiV1SandboxesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Sandbox;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SandboxesByIdResponse = GetApiV1SandboxesByIdResponses[keyof GetApiV1SandboxesByIdResponses];
+
+export type GetApiV1SandboxesByIdFilesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Sandbox (environment instance) id.
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Directory inside the sandbox; empty for its root.
+         */
+        path?: string;
+        /**
+         * List everything under the directory.
+         */
+        recursive?: 'true' | 'false';
+    };
+    url: '/api/v1/sandboxes/{id}/files';
+};
+
+export type GetApiV1SandboxesByIdFilesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type GetApiV1SandboxesByIdFilesError = GetApiV1SandboxesByIdFilesErrors[keyof GetApiV1SandboxesByIdFilesErrors];
+
+export type GetApiV1SandboxesByIdFilesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            entries: Array<{
+                isDirectory: boolean;
+                modifiedAt: string | null;
+                name: string;
+                /**
+                 * Relative to the sandbox directory.
+                 */
+                path: string;
+                size: number | null;
+            }>;
+            truncated: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SandboxesByIdFilesResponse = GetApiV1SandboxesByIdFilesResponses[keyof GetApiV1SandboxesByIdFilesResponses];
+
+export type GetApiV1SandboxesByIdFilesContentData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Sandbox (environment instance) id.
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * File inside the sandbox.
+         */
+        path: string;
+    };
+    url: '/api/v1/sandboxes/{id}/files/content';
+};
+
+export type GetApiV1SandboxesByIdFilesContentErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type GetApiV1SandboxesByIdFilesContentError = GetApiV1SandboxesByIdFilesContentErrors[keyof GetApiV1SandboxesByIdFilesContentErrors];
+
+export type GetApiV1SandboxesByIdFilesContentResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            content: string;
+            mimeType: string | null;
+            /**
+             * Relative to the sandbox directory.
+             */
+            path: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SandboxesByIdFilesContentResponse = GetApiV1SandboxesByIdFilesContentResponses[keyof GetApiV1SandboxesByIdFilesContentResponses];
+
+export type PutApiV1SandboxesByIdFilesContentData = {
+    body: {
+        /**
+         * Text content (≤ 1 MiB UTF-8), replacing the file; parents are created.
+         */
+        content: string;
+        /**
+         * File inside the sandbox.
+         */
+        path: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Sandbox (environment instance) id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/sandboxes/{id}/files/content';
+};
+
+export type PutApiV1SandboxesByIdFilesContentErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Payload too large
+     */
+    413: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
+};
+
+export type PutApiV1SandboxesByIdFilesContentError = PutApiV1SandboxesByIdFilesContentErrors[keyof PutApiV1SandboxesByIdFilesContentErrors];
+
+export type PutApiV1SandboxesByIdFilesContentResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            path: string;
+            written: true;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1SandboxesByIdFilesContentResponse = PutApiV1SandboxesByIdFilesContentResponses[keyof PutApiV1SandboxesByIdFilesContentResponses];
+
+export type PostApiV1SandboxesByIdCommandsData = {
+    body: {
+        /**
+         * Shell command, run in the sandbox directory.
+         */
+        command: string;
+        timeoutMs?: number;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * Sandbox (environment instance) id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/sandboxes/{id}/commands';
+};
+
+export type PostApiV1SandboxesByIdCommandsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SandboxesByIdCommandsError = PostApiV1SandboxesByIdCommandsErrors[keyof PostApiV1SandboxesByIdCommandsErrors];
+
+export type PostApiV1SandboxesByIdCommandsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            exitCode: number;
+            /**
+             * Standard output.
+             */
+            output: string;
+            stderr: string | null;
+            success: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SandboxesByIdCommandsResponse = PostApiV1SandboxesByIdCommandsResponses[keyof PostApiV1SandboxesByIdCommandsResponses];

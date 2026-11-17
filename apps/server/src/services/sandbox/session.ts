@@ -157,6 +157,14 @@ const hasLocalCheckout = (instance: {
   !!instance.configurationSnapshot?.sources?.some((source) => source.kind === 'git');
 
 interface SandboxSessionConfigInput {
+  /**
+   * Run in this environment instance directly instead of the one the topic is
+   * bound to — for a caller that addresses a sandbox by its instance, with no
+   * conversation behind it (the public REST API). Resolved exactly as a
+   * topic's binding is: the caller's own visibility, the drive the instance
+   * lives on, and the same fallbacks when it cannot be honoured.
+   */
+  instanceId?: string;
   /** See `resolveSandboxStorageClaim` — a visitor run never gets an entitlement. */
   isShareVisitorRun: boolean;
   /**
@@ -193,6 +201,7 @@ interface SandboxSessionConfigInput {
  * uses today.
  */
 const resolvePlacement = async ({
+  instanceId: requestedInstanceId,
   isShareVisitorRun,
   serverDB,
   topicId,
@@ -209,7 +218,7 @@ const resolvePlacement = async ({
   const claimFor = (drive: SandboxDrive) =>
     resolveSandboxStorageClaim({ drive, isShareVisitorRun, userId, workspaceId });
 
-  if (!topicId) {
+  if (!topicId && !requestedInstanceId) {
     const claim = await claimFor(defaultDrive);
     log(
       'Ephemeral without a topic: claim=%s userId=%s workspaceId=%s',
@@ -234,10 +243,10 @@ const resolvePlacement = async ({
     // Scoped to the workspace the run is in: without it the model reads the
     // personal scope (`workspace_id IS NULL`), a workspace topic never
     // resolves, and every workspace run silently loses its placement.
-    const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
-      topicId,
-    );
-    const instanceId = topic?.metadata?.sandboxInstanceId;
+    const topic = topicId
+      ? await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(topicId)
+      : undefined;
+    const instanceId = requestedInstanceId ?? topic?.metadata?.sandboxInstanceId;
     const folder = topic?.metadata?.sandboxWorkingDirectory;
     if (workspaceId && topic?.metadata?.sandboxDrive === 'personal') drive = 'personal';
 
@@ -247,7 +256,7 @@ const resolvePlacement = async ({
       // a shared agent reads published environments only. Personal mode has
       // no such boundary: its agents default to 'public' without meaning it.
       const callerAgentVisibility =
-        workspaceId && topic.agentId
+        workspaceId && topic?.agentId
           ? await new AgentModel(serverDB, userId, workspaceId).getAgentVisibility(topic.agentId)
           : null;
 
@@ -279,7 +288,7 @@ const resolvePlacement = async ({
           'Ignoring unresolvable sandboxInstanceId on topic %s: %o (agentId=%o visibility=%o scope user=%s workspace=%s)',
           topicId,
           instanceId,
-          topic.agentId,
+          topic?.agentId,
           callerAgentVisibility,
           userId,
           workspaceId,

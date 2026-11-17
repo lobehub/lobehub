@@ -5,6 +5,7 @@ import ApiKeysRoutes from './api-keys.route';
 import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
+import DeviceRoutes from './devices.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -23,6 +24,7 @@ import ProvidersRoutes from './providers.route';
 import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
+import SandboxRoutes from './sandboxes.route';
 import AgentSignalsRoutes from './signals.route';
 import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
@@ -60,4 +62,6 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'devices': DeviceRoutes,
+  'sandboxes': SandboxRoutes,
 };

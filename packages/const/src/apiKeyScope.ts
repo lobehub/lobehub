@@ -56,14 +56,69 @@ export const API_KEY_SCOPES = [
   'workspace:write',
   'user:read',
   'user:write',
+  /**
+   * Remote devices and cloud sandboxes the issuer can reach: their list,
+   * status and metrics, project files, and git state. Reading only.
+   */
+  'device:read',
+  /**
+   * Operating those devices and sandboxes: running commands, writing files,
+   * changing git state, creating sandboxes. A key that holds it can do on the
+   * machine whatever its owner could from a terminal, so it is an
+   * {@link API_KEY_EXPLICIT_SCOPES explicit} scope — never implied by full
+   * access, never held by a key issued before it existed.
+   */
+  'device:operate',
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
 const API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
 
+/**
+ * Scopes a key only holds when they are listed on it by name. Full access
+ * (`NULL` or `['*']`) does not imply them, so no key issued before one was
+ * added gains it, and the creator has to tick it on purpose. A full-access key
+ * that also holds one is stored as `['*', '<scope>']`.
+ */
+export const API_KEY_EXPLICIT_SCOPES = ['device:operate'] as const satisfies readonly ApiKeyScope[];
+
+const API_KEY_EXPLICIT_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_EXPLICIT_SCOPES);
+
+export const isExplicitApiKeyScope = (scope: string): boolean =>
+  API_KEY_EXPLICIT_SCOPE_SET.has(scope);
+
+/**
+ * The scope list to store for a key: full access collapses to `['*']`, but
+ * keeps the explicit scopes ticked beside it, since `*` does not carry them.
+ */
+export const normalizeApiKeyScopes = <T extends string>(
+  scopes: T[] | null | undefined,
+): T[] | null | undefined => {
+  if (!scopes?.includes(API_KEY_FULL_ACCESS_SCOPE as T)) return scopes;
+
+  return [
+    API_KEY_FULL_ACCESS_SCOPE as T,
+    ...scopes.filter((scope) => isExplicitApiKeyScope(scope)),
+  ];
+};
+
 export const isValidApiKeyScope = (scope: string): scope is ApiKeyScope =>
   API_KEY_SCOPE_SET.has(scope);
+
+/**
+ * The explicit scopes in `requested` that the issuing API key does not hold
+ * itself. A key — even a full-access one — must not mint or widen a key past
+ * those: full access never carried them, so handing one out would be an
+ * escalation. `issuerScopes` is the calling key's own list.
+ */
+export const explicitScopesBeyondIssuer = (
+  requested: readonly string[] | null | undefined,
+  issuerScopes: readonly string[] | null | undefined,
+): string[] =>
+  (requested ?? []).filter(
+    (scope) => isExplicitApiKeyScope(scope) && !issuerScopes?.includes(scope),
+  );
 
 /**
  * `NULL` (legacy key) and `['*']` both mean full access.
@@ -73,12 +128,14 @@ export const isFullAccessApiKey = (scopes?: string[] | null): boolean =>
 
 /**
  * Does this scope list satisfy `required`? `x:write` implies `x:read` so a
- * write-capable key never has to double-select the read box.
+ * write-capable key never has to double-select the read box. An explicit
+ * scope is satisfied only by naming it — full access does not count.
  */
 export const hasApiKeyScope = (
   scopes: string[] | null | undefined,
   required: ApiKeyScope,
 ): boolean => {
+  if (isExplicitApiKeyScope(required)) return !!scopes?.includes(required);
   if (isFullAccessApiKey(scopes)) return true;
   if (scopes!.includes(required)) return true;
 

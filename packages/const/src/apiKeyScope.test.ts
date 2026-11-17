@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  API_KEY_EXPLICIT_SCOPES,
   API_KEY_SCOPES,
+  explicitScopesBeyondIssuer,
   hasApiKeyScope,
   isFullAccessApiKey,
   isValidApiKeyScope,
+  normalizeApiKeyScopes,
   requiredApiKeyScopeForPermission,
   requiredApiKeyScopeForTrpc,
   TRPC_NAMESPACE_API_KEY_RULES,
@@ -50,6 +53,53 @@ describe('hasApiKeyScope', () => {
 
   it('does not cross domains', () => {
     expect(hasApiKeyScope(['agent:write'], 'chat:read')).toBe(false);
+  });
+
+  it('never grants device:operate through full access — only by naming it', () => {
+    expect(API_KEY_EXPLICIT_SCOPES).toEqual(['device:operate']);
+    // legacy NULL keys, ['*'] keys and every other scope leave it out
+    expect(hasApiKeyScope(null, 'device:operate')).toBe(false);
+    expect(hasApiKeyScope(undefined, 'device:operate')).toBe(false);
+    expect(hasApiKeyScope(['*'], 'device:operate')).toBe(false);
+    expect(hasApiKeyScope(['device:read'], 'device:operate')).toBe(false);
+    expect(
+      hasApiKeyScope(
+        API_KEY_SCOPES.filter((scope) => scope !== 'device:operate'),
+        'device:operate',
+      ),
+    ).toBe(false);
+
+    expect(hasApiKeyScope(['device:operate'], 'device:operate')).toBe(true);
+    expect(hasApiKeyScope(['*', 'device:operate'], 'device:operate')).toBe(true);
+    // full access still reads devices
+    expect(hasApiKeyScope(['*'], 'device:read')).toBe(true);
+  });
+});
+
+describe('explicitScopesBeyondIssuer', () => {
+  it('names the explicit scopes a key would hand out without holding them', () => {
+    expect(explicitScopesBeyondIssuer(['*', 'device:operate'], ['*'])).toEqual(['device:operate']);
+    expect(explicitScopesBeyondIssuer(['device:operate'], null)).toEqual(['device:operate']);
+    expect(explicitScopesBeyondIssuer(['device:operate'], ['*', 'device:operate'])).toEqual([]);
+    // ordinary scopes are left to the existing narrowing rules
+    expect(explicitScopesBeyondIssuer(['*', 'chat:write'], ['chat:read'])).toEqual([]);
+    expect(explicitScopesBeyondIssuer(null, ['*'])).toEqual([]);
+  });
+});
+
+describe('normalizeApiKeyScopes', () => {
+  it('collapses full access but keeps the explicit scopes ticked beside it', () => {
+    expect(normalizeApiKeyScopes(['*', 'chat:read'])).toEqual(['*']);
+    expect(normalizeApiKeyScopes(['chat:read', '*', 'device:operate'])).toEqual([
+      '*',
+      'device:operate',
+    ]);
+    expect(normalizeApiKeyScopes(['chat:read', 'device:operate'])).toEqual([
+      'chat:read',
+      'device:operate',
+    ]);
+    expect(normalizeApiKeyScopes(null)).toBeNull();
+    expect(normalizeApiKeyScopes(undefined)).toBeUndefined();
   });
 });
 

@@ -7,14 +7,14 @@ import { Pencil, Trash } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  API_KEY_FULL_ACCESS_SCOPE,
-  type ApiKeyScope,
-  isFullAccessApiKey,
-} from '@/const/apiKeyScope';
+import { type ApiKeyScope } from '@/const/apiKeyScope';
 import { type ApiKeyItem, type UpdateApiKeyParams } from '@/types/apiKey';
 
-import ScopeSelector, { ScopeOverview } from './ApiKeyModal/ScopeSelector';
+import ScopeSelector, {
+  fromStoredScopes,
+  ScopeOverview,
+  toStoredScopes,
+} from './ApiKeyModal/ScopeSelector';
 import { ApiKeyDisplay, EditableCell } from './index';
 
 const styles = stylex.create({
@@ -50,13 +50,13 @@ interface ApiKeyScopeEditorProps {
 
 const ApiKeyScopeEditor: FC<ApiKeyScopeEditorProps> = ({ apiKey, canEdit, onUpdate }) => {
   const { t } = useTranslation('auth');
-  const initialFullAccess = isFullAccessApiKey(apiKey.scopes);
+  // full access may still carry explicit grants (`device:operate`) beside `*`
+  const initial = fromStoredScopes(apiKey.scopes);
+  const initialFullAccess = initial.fullAccess;
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fullAccess, setFullAccess] = useState(initialFullAccess);
-  const [selected, setSelected] = useState<ApiKeyScope[]>(
-    initialFullAccess ? [] : (apiKey.scopes as ApiKeyScope[]),
-  );
+  const [selected, setSelected] = useState<ApiKeyScope[]>(initial.selected);
   const scopeMissing = !fullAccess && selected.length === 0;
 
   if (editing) {
@@ -73,7 +73,7 @@ const ApiKeyScopeEditor: FC<ApiKeyScopeEditorProps> = ({ apiKey, canEdit, onUpda
             type="text"
             onClick={() => {
               setFullAccess(initialFullAccess);
-              setSelected(initialFullAccess ? [] : (apiKey.scopes as ApiKeyScope[]));
+              setSelected(initial.selected);
               setEditing(false);
             }}
           >
@@ -87,7 +87,7 @@ const ApiKeyScopeEditor: FC<ApiKeyScopeEditorProps> = ({ apiKey, canEdit, onUpda
               setSaving(true);
               try {
                 const success = await onUpdate(apiKey.id, {
-                  scopes: fullAccess ? [API_KEY_FULL_ACCESS_SCOPE] : selected,
+                  scopes: toStoredScopes(fullAccess, selected),
                 });
                 if (success) setEditing(false);
               } catch {
@@ -108,12 +108,15 @@ const ApiKeyScopeEditor: FC<ApiKeyScopeEditorProps> = ({ apiKey, canEdit, onUpda
   return (
     <Flexbox gap={8}>
       {initialFullAccess ? (
-        <Flexbox className={stylex.props(styles.fullAccessCard).className} gap={2}>
-          <Text style={{ fontSize: 14 }}>{t('apikey.scopes.fullAccess')}</Text>
-          <Text style={{ fontSize: 12 }} type={'secondary'}>
-            {t('apikey.form.fields.scopes.fullAccessDescription')}
-          </Text>
-        </Flexbox>
+        <>
+          <Flexbox className={stylex.props(styles.fullAccessCard).className} gap={2}>
+            <Text style={{ fontSize: 14 }}>{t('apikey.scopes.fullAccess')}</Text>
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {t('apikey.form.fields.scopes.fullAccessDescription')}
+            </Text>
+          </Flexbox>
+          {initial.selected.length > 0 && <ScopeOverview scopes={initial.selected} />}
+        </>
       ) : (
         <ScopeOverview scopes={apiKey.scopes!} />
       )}

@@ -7,6 +7,7 @@ import type { ApiKeyScope } from '@/const/apiKeyScope';
 import {
   API_KEY_FULL_ACCESS_SCOPE,
   hasApiKeyScope,
+  isExplicitApiKeyScope,
   isFullAccessApiKey,
   requiredApiKeyScopeForPermission,
 } from '@/const/apiKeyScope';
@@ -76,7 +77,8 @@ const assertApiKeyScopesAllow = (
   if (c.get('authType') !== 'apikey') return;
 
   const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
-  if (isFullAccessApiKey(scopes)) return;
+  // full access never implies an explicit scope, so that one is still checked
+  if (isFullAccessApiKey(scopes) && !(apiKeyScope && isExplicitApiKeyScope(apiKeyScope))) return;
 
   const requiredScopes = apiKeyScope
     ? [apiKeyScope]
@@ -312,7 +314,8 @@ export const requireAnyPermissionWithApiKeyScope = (
 /**
  * Standalone API key scope gate for routes that declare no RBAC permissions
  * (e.g. `POST /responses`). No-op for session/OIDC auth and full-access keys;
- * restricted keys must hold the given scope.
+ * restricted keys must hold the given scope. An explicit scope
+ * (`device:operate`) must be named on the key even when it has full access.
  */
 export const requireApiKeyScope = (scope: ApiKeyScope) => {
   return documentScopes(
@@ -320,7 +323,8 @@ export const requireApiKeyScope = (scope: ApiKeyScope) => {
       if (c.get('authType') !== 'apikey') return next();
 
       const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
-      if (!isFullAccessApiKey(scopes) && !hasApiKeyScope(scopes, scope)) {
+      // `hasApiKeyScope` already lets full access through, except for explicit scopes
+      if (!hasApiKeyScope(scopes, scope)) {
         throw new HTTPException(403, {
           cause: { missingScopes: [scope] },
           message: `insufficient_scope: this API key is missing required scope '${scope}'`,

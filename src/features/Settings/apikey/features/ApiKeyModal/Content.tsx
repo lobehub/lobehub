@@ -19,11 +19,11 @@ import { CheckCircle2 } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { API_KEY_FULL_ACCESS_SCOPE, type ApiKeyScope } from '@/const/apiKeyScope';
+import { type ApiKeyScope } from '@/const/apiKeyScope';
 import { type CreateApiKeyParams } from '@/types/apiKey';
 
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
-import ScopeSelector from './ScopeSelector';
+import ScopeSelector, { toStoredScopes } from './ScopeSelector';
 
 const styles = stylex.create({
   keyBlock: {
@@ -97,7 +97,7 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
       const created = await onSubmit({
         ...values,
         expiresAt: resolveExpiresAt(),
-        scopes: fullAccess ? [API_KEY_FULL_ACCESS_SCOPE] : selectedScopes,
+        scopes: toStoredScopes(fullAccess, selectedScopes),
       } satisfies CreateApiKeyParams);
       if (created?.key) {
         setCreatedKey(created.key);
