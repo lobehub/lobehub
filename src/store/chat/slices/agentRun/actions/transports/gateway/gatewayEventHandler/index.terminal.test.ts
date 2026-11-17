@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
 import type * as WorkServiceModule from '@/services/work';
@@ -169,6 +169,77 @@ describe('createGatewayEventHandler — terminal and error events', () => {
         context: expect.any(Object),
       });
       expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    // Protocol v2: a step that continues inline publishes its message patch
+    // only from the next step's entry read, so a Stop between the two steps
+    // can end the run before that patch arrives. Step 0's patch (revision 1)
+    // has been applied; a Stop after step 1 is saved ends with revision 3.
+    describe('interrupted in message patch mode', () => {
+      // A one-shot reply these tests queue must not leak into the next test.
+      afterEach(() => {
+        vi.mocked(messageService.getMessages).mockReset().mockResolvedValue([]);
+      });
+
+      const startStreamedRun = async () => {
+        const store = createMockStore();
+        const handler = createHandler(store);
+        handler(makeEvent('stream_start', { assistantMessage: { id: 'msg-server' } }));
+        handler(makeEvent('stream_chunk', { chunkType: 'text', content: 'partial answer' }));
+        handler(makeEvent('message_patch', { deletes: [], revision: 1, upserts: [] }));
+        await flush();
+        vi.mocked(messageService.getMessages).mockClear();
+        store.replaceMessages.mockClear();
+        return { handler, store };
+      };
+
+      const interruptedEnd = (messageRevision: number) =>
+        makeEvent('agent_runtime_end', {
+          messagePatchMode: true,
+          messageRevision,
+          reason: 'interrupted',
+        });
+
+      it('reads the finished step whose patch the Stop overtook', async () => {
+        const { handler, store } = await startStreamedRun();
+        const persisted = [{ content: 'summary', id: 'group-1', role: 'compressedGroup' }];
+        vi.mocked(messageService.getMessages).mockResolvedValueOnce(persisted as any);
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).toHaveBeenCalledWith(persisted, {
+          context: expect.any(Object),
+          preserveWorks: undefined,
+        });
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps the streamed text when the Stop lands mid-step', async () => {
+        const { handler, store } = await startStreamedRun();
+
+        handler(interruptedEnd(2));
+        await flush();
+
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps the messages it has and still settles when that read fails', async () => {
+        const { handler, store } = await startStreamedRun();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('offline'));
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+        consoleError.mockRestore();
+      });
     });
   });
 

@@ -45,6 +45,8 @@ import {
 import { applyStepMetrics } from '../stepMetrics';
 import { resolveStepSideEvent } from '../stepSideEvent';
 import { insertStreamStartSeeds, streamStartOperationMetadata } from '../streamStartSeed';
+import type { RuntimeEndData } from './runtimeEndMessages';
+import { reconcileRuntimeEndMessages } from './runtimeEndMessages';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler/index.ts → executors/index.ts (which pulls in
@@ -1204,14 +1206,7 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as
-            | {
-                messagePatchMode?: boolean;
-                messageRevision?: number;
-                reason?: string;
-                uiMessages?: UIChatMessage[];
-              }
-            | undefined;
+          const data = event.data as RuntimeEndData | undefined;
 
           void emitAgentSignal({
             payload: {
@@ -1231,61 +1226,23 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
-          // The terminal snapshot, when the server pushed one — the reconciled
-          // Source of Truth for this run's final assistant text.
-          let terminalMessages: UIChatMessage[] | undefined;
-
           // Reconcile messages FIRST so the terminal run lifecycle's notification
           // (afterRunComplete) can read the final assistant content from the store.
-          //
-          // Terminal step has no later step_start to carry SoT — server
-          // pushes the canonical snapshot directly on this event. Fall back
-          // to a DB refetch only if the snapshot is absent (older server
-          // builds, or push-event delivery edge cases).
-          const isSuperseded = operationSelectors.hasNewerConversationOperation(
-            operationId,
-            context,
-          )(get());
-          if (Array.isArray(data?.uiMessages)) {
-            terminalMessages = data.uiMessages;
-            // `visible_output_end` lets a follow-up start before this terminal
-            // event arrives. Once that happens, this run's snapshot is no longer
-            // the conversation SoT: replacing the list would erase the newer
-            // turn's optimistic rows until refresh. Keep terminalMessages for
-            // this run's notification, but do not mutate its successor's store.
-            if (!isSuperseded) {
-              applyPushedSnapshot(data.uiMessages, {
-                action: 'gateway/agent_runtime_end',
-              });
-            }
-          } else if (data?.reason === 'interrupted' && hasStreamedContent) {
-            // MID-stream cancel. `interruptOperation` publishes this event as
-            // soon as it saves `interrupted`, while the in-flight step persists
-            // the partial text only when it returns afterwards. Any DB read here
-            // (the patch-mode refetch too: a Stop lands mid-step, so its revision
-            // is ahead of the last patch) sees the empty placeholder and wipes
-            // the streamed text, and nothing repairs it: the socket closes on
-            // this frame. Keep what was streamed — the server persists the same.
-            // Without streamed content, the optimistic `tmp_*` rows are all we
-            // have and still need the refetch below.
-          } else if (data?.messagePatchMode) {
-            if (
-              typeof data.messageRevision === 'number' &&
-              data.messageRevision !== lastMessagePatchRevision
-            ) {
-              terminalMessages = await refreshMessagesFromDb();
-              if (terminalMessages) lastMessagePatchRevision = data.messageRevision;
-            } else {
-              terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
-            }
-          } else if (data?.reason === 'waiting_for_async_tool' && hasStreamedContent) {
-            // Deferred-tool pause. The server's
-            // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
-            // for it (as for `interrupted`) so the in-memory streamed content
-            // is preserved here instead of racing the executor's DB write.
-          } else if (!isSuperseded) {
-            await refreshMessagesFromDb().catch(console.error);
-          }
+          const settled = await reconcileRuntimeEndMessages({
+            applySnapshot: (messages) =>
+              applyPushedSnapshot(messages, { action: 'gateway/agent_runtime_end' }),
+            currentMessages: () => get().dbMessagesMap[messageMapKey(context)] ?? [],
+            data,
+            hasStreamedContent,
+            isSuperseded: operationSelectors.hasNewerConversationOperation(
+              operationId,
+              context,
+            )(get()),
+            lastMessagePatchRevision,
+            refresh: () => refreshMessagesFromDb(),
+          });
+          lastMessagePatchRevision = settled.lastMessagePatchRevision;
+          const { terminalMessages } = settled;
 
           if (runtimeType === 'gateway' && shouldRefreshWorkViews) {
             await workService
