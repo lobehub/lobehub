@@ -23,6 +23,11 @@ export const COLLABORATOR_RESOURCES = {
 
 export type CollaboratorResourceSegment = keyof typeof COLLABORATOR_RESOURCES;
 
+const COLLABORATOR_RESOURCE_SEGMENTS = Object.keys(COLLABORATOR_RESOURCES) as [
+  CollaboratorResourceSegment,
+  ...CollaboratorResourceSegment[],
+];
+
 export const ResourceAccessLevelSchema = z
   .enum(RESOURCE_ACCESS_LEVELS)
   .describe(
@@ -33,6 +38,9 @@ export const ResourceAccessLevelSchema = z
 
 export const CollaboratorResourceParamSchema = z.object({
   resourceId: z.string().min(1).describe('Id of the resource'),
+  resourceType: z
+    .enum(COLLABORATOR_RESOURCE_SEGMENTS)
+    .describe('Kind of resource; only resources with a workspace ACL are accepted'),
 });
 export type CollaboratorResourceParam = z.infer<typeof CollaboratorResourceParamSchema>;
 

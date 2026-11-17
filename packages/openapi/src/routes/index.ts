@@ -5,7 +5,7 @@ import ApiKeysRoutes from './api-keys.route';
 import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
-import { collaboratorRouteEntries } from './collaborators.route';
+import CollaboratorRoutes from './collaborators.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -67,5 +67,6 @@ export default {
   'workspaces': WorkspaceRoutes,
   'transfer-requests': TransferRequestRoutes,
   'share-links': ShareLinkRoutes,
-  ...collaboratorRouteEntries,
+  // Last: its leading path parameter only matches `/{type}/{id}/collaborators…`.
+  ':resourceType/:resourceId/collaborators': CollaboratorRoutes,
 };

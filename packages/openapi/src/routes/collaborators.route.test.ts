@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `/api/v1/{agents|agent-groups|documents|knowledge-bases}/{id}/collaborators`
- * over real HTTP: the real collaborator routes behind the same auth +
+ * over real HTTP: every route of `routes/index.ts`, registered the way
+ * `app.ts` does (so the leading `{resourceType}` parameter is proven not to
+ * shadow, or be shadowed by, the other resources), behind the same auth +
  * workspace middlewares `app.ts` mounts, the real scope gates, controller,
  * REST service and the shared `resourcePermission` procedures, on a PGlite
  * database. API keys are real `api_keys` rows; only the database handle is
@@ -27,7 +29,7 @@ const { HTTPException } = await import('hono/http-exception');
 const { errorInitFromException, renderApiError } = await import('../common/errors');
 const { userAuthMiddleware } = await import('../middleware/auth');
 const { workspaceAuthMiddleware } = await import('../middleware/workspace');
-const { collaboratorRouteEntries } = await import('./collaborators.route');
+const routes = (await import('./index')).default;
 
 const serverDB = await getTestDB();
 holder.serverDB = serverDB;
@@ -40,8 +42,7 @@ app.onError((error, c) =>
 );
 app.use('*', userAuthMiddleware);
 app.use('*', workspaceAuthMiddleware);
-for (const [path, routes] of Object.entries(collaboratorRouteEntries))
-  app.route(`/${path}`, routes);
+for (const [key, value] of Object.entries(routes)) app.route(`/${key}`, value);
 
 const OWNER = 'r9-collab-owner';
 const MEMBER = 'r9-collab-member';
@@ -252,6 +253,18 @@ describe('request validation', () => {
 
     expect(res.status).toBe(400);
     expect((await json(res)).code).toBe('validation_error');
+  });
+
+  it.each([
+    ['a type outside the whitelist', `/topics/tpc_x/collaborators`],
+    ['a singular type', `/agent/${AGENT}/collaborators`],
+  ])('rejects %s with 400', async (_label, path) => {
+    const res = await call(path, { key: KEYS.ownerFull, workspaceId: WORKSPACE });
+
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.code).toBe('validation_error');
+    expect(body.details[0].path).toBe('param.resourceType');
   });
 
   it('rejects a level the resource type does not support', async () => {

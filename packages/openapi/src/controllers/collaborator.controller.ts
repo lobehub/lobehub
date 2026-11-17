@@ -1,7 +1,5 @@
 import type { Context } from 'hono';
 
-import type { PermissionResourceType } from '@/database/schemas';
-
 import { BaseController } from '../common/base.controller';
 import { CollaboratorRestService } from '../services/collaborator.service';
 import { pageOf } from '../services/workspace.service';
@@ -12,22 +10,20 @@ import type {
   CollaboratorResourceParam,
   SetGeneralAccessRequest,
 } from '../types/collaborator.type';
+import { COLLABORATOR_RESOURCES } from '../types/collaborator.type';
 
 /**
- * Collaborators controller, bound to one permission resource type.
+ * Collaborators controller.
  * Handles HTTP concerns only — the ACL rules live in `resourcePermission`.
  */
 export class CollaboratorController extends BaseController {
-  constructor(private readonly resourceType: PermissionResourceType) {
-    super();
-  }
-
   private async service(c: Context): Promise<CollaboratorRestService> {
+    const { resourceType } = this.getParams<CollaboratorResourceParam>(c);
     return new CollaboratorRestService(
       await this.getDatabase(),
       this.getUserId(c),
       this.getWorkspaceId(c),
-      this.resourceType,
+      COLLABORATOR_RESOURCES[resourceType],
     );
   }
 
