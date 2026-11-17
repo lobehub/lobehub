@@ -229,6 +229,30 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`us-east-1`
 - 示例：`us-east-1`
 
+## GMI Cloud Speech
+
+仅支持文本转语音。配置步骤见 [在 LobeHub 中使用 GMI Cloud Speech](/zh/docs/usage/providers/gmicloudspeech)。
+
+### `GMICLOUDSPEECH_API_KEY`
+
+- 类型：部署时可选；提供共享服务端 Key 时必填。用户也可以在 GMI Cloud Speech 服务商设置中填写自己的 Key，且优先生效。
+- 说明：在 [GMI Cloud 控制台](https://console.gmicloud.ai) 组织设置中创建的 API Key。设置非空 Key 会自动在服务端配置中启用 GMI Cloud Speech。`ENABLED_GMICLOUDSPEECH` 由该 Key 推导得出，不是独立的环境开关。两处都没有 Key 时，GMI Cloud Speech 的语音请求会以 `InvalidProviderAPIKey` 错误失败。
+- 默认值：未设置；无共享服务端 Key。
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `GMICLOUDSPEECH_PROXY_URL`
+
+- 类型：可选
+- 说明：覆盖 GMI Cloud 控制台 API 的基础地址。仅与服务端 Key 一起使用。
+- 默认值：`https://console.gmicloud.ai`
+- 示例：`https://console.gmicloud.ai`
+
+### `GMICLOUDSPEECH_MODEL_LIST`
+
+- 类型：可选
+- 说明：使用共享的 [模型列表语法][model-list] 自定义 GMI Cloud Speech 模型列表：`+` 添加模型，`-` 隐藏模型，`model_id=display_name` 重命名模型。多个条目用逗号分隔。
+- 默认值：未设置；使用内置模型列表。
+
 ## ComfyUI
 
 ### `ENABLED_COMFYUI`

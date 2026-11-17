@@ -1,0 +1,54 @@
+---
+title: Using GMI Cloud Speech API Key in LobeHub
+description: >-
+  Configure a GMI Cloud API key in LobeHub and generate speech with Inworld Realtime TTS and MiniMax speech synthesis.
+tags:
+  - GMI Cloud
+  - Text to Speech
+  - TTS
+  - API Key
+---
+
+# Using GMI Cloud Speech in LobeHub
+
+[GMI Cloud](https://www.gmicloud.ai) hosts several speech model families behind one multimodal request-queue API, including Inworld Realtime TTS and MiniMax speech synthesis. In LobeHub, GMI Cloud Speech is a text-to-speech provider only: it has no chat models.
+
+<Steps>
+  ### Step 1: Obtain your GMI Cloud API key
+
+  - Sign up or sign in at [GMI Cloud](https://console.gmicloud.ai).
+  - Create an API key in your organization settings.
+  - Copy the key and store it securely.
+
+  ### Step 2: Configure GMI Cloud Speech in LobeHub
+
+  - Open **App Settings → AI Providers** and select **GMI Cloud Speech** (type `GMI` in the provider search box to find it).
+  - Paste your key into **API Key**. Changes are saved automatically, and the key is encrypted with AES-GCM before it is stored.
+  - Turn on the switch next to the provider name.
+  - Optional: enter an API proxy URL in **API Proxy URL**. Leave it empty to use `https://console.gmicloud.ai`.
+
+  ### Step 3: Choose models
+
+  The **Model List** shows the GMI Cloud speech models under the **TTS** tab. Inworld TTS 2 and MiniMax Speech 2.8 Turbo are enabled by default.
+
+  GMI Cloud Speech has no chat model, so the provider page shows no **Check** button. Verify the key by generating speech as described below.
+
+  <Callout type={'info'}>
+    Generations go through GMI Cloud's request queue. Inworld TTS 2 is the low-latency option; MiniMax generations are usually quick, but an occasional request runs long.
+  </Callout>
+</Steps>
+
+## Generate speech
+
+Speech synthesis runs through the LobeHub text-to-speech API, which the LobeHub CLI (`lh`) and the OpenAI-compatible `POST /api/v1/audio/speech` endpoint both use:
+
+```bash
+lh generate tts "Hello from LobeHub" -m gmicloudspeech/inworld-tts-2 -o hello.mp3
+```
+
+- **Voice** — when no voice is given, the family default voice is used (`Dennis` for Inworld, `English_expressive_narrator` for MiniMax). Pass `--voice <voice id>` to use another voice supported by the model family.
+- **Format** — WAV and MP3 output are supported; MP3 is the default.
+
+<Callout type={'warning'}>
+  Only WAV and MP3 output are supported. Chatterbox models on GMI Cloud require a Resemble voice UUID and are not listed in LobeHub.
+</Callout>
