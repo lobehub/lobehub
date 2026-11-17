@@ -115,14 +115,19 @@ vi.mock('@/store/global', () => ({
 }));
 
 interface ServerConfigTestState {
-  featureFlags: { isAgentEditable: boolean };
+  featureFlags: { isAgentEditable: boolean | undefined };
   serverConfigInit: boolean;
 }
+
+const serverConfigMock = vi.hoisted((): ServerConfigTestState => ({
+  featureFlags: { isAgentEditable: true },
+  serverConfigInit: true,
+}));
 
 vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
   useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
-    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
+    selector(serverConfigMock),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -152,6 +157,7 @@ describe('Agent sidebar header nav', () => {
     toggleCommandMenuMock.mockReset();
     useParamsMock.mockReset();
     usePathnameMock.mockReset();
+    serverConfigMock.featureFlags.isAgentEditable = true;
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
@@ -236,6 +242,22 @@ describe('Agent sidebar header nav', () => {
 
     expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
+  });
+
+  it.each([
+    [false, false],
+    [false, undefined],
+    [true, false],
+    [true, undefined],
+  ])('hides profile when mobile=%s and isAgentEditable=%s', (mobile, isAgentEditable) => {
+    vi.stubGlobal('__MOBILE__', mobile);
+    serverConfigMock.featureFlags.isAgentEditable = isAgentEditable;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'title' })).toBeInTheDocument();
   });
 
   it('navigates to the agent goals page', () => {

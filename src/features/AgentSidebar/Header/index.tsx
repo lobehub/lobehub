@@ -31,7 +31,7 @@ const HeaderInfo = (_props: PropsWithChildren) => {
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   // Keep the entry while resource access is loading; only a confirmed denial
   // hides it. The profile page still enforces ResourceConfigAccessGate.
-  const showProfile = !!agentId && isAgentEditable && canEditContent && canEditResource;
+  const showProfile = !!agentId && !!isAgentEditable && canEditContent && canEditResource;
   const openProfile = () => {
     if (!showProfile) return;
     switchTopic(null, { skipRefreshMessage: true });
