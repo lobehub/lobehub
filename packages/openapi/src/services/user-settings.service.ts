@@ -1,10 +1,11 @@
+import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
-import { mergeWith } from 'es-toolkit/compat';
 
 import { UserModel } from '@/database/models/user';
 import { users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { userRouter } from '@/server/routers/lambda/user';
+import { assertCanUpdateWorkspaceSettings } from '@/server/routers/lambda/user/settings';
 
 import { BaseService } from '../common/base.service';
 import {
@@ -16,12 +17,6 @@ import {
   type UserSettingsValue,
 } from '../types/user-settings.type';
 
-/** Objects merge key by key; arrays (and scalars) replace, unlike lodash's index-wise merge. */
-const mergePatch = <T>(stored: T, patch: unknown): T =>
-  mergeWith({}, stored, patch, (_stored: unknown, next: unknown) =>
-    Array.isArray(next) ? next : undefined,
-  ) as T;
-
 const toObject = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -30,11 +25,13 @@ const toObject = (value: unknown): Record<string, unknown> =>
 /**
  * The caller's own settings, preference and profile (`/users/me/*`).
  *
- * Writes go through the same `user` tRPC procedures the web app calls,
- * invoked server-side without API-key scopes (the REST route has already
- * narrowed the key to `user:*`), so the workspace permission gate on
- * owner-level settings, the username uniqueness check and the avatar upload
- * stay one implementation.
+ * Preference and profile writes go through the same `user` tRPC procedures
+ * the web app calls, invoked server-side without API-key scopes (the REST
+ * route has already narrowed the key to `user:*`), so the username uniqueness
+ * check and the avatar upload stay one implementation. Settings patches reuse
+ * the procedure's workspace gate and merge under a row lock
+ * (`UserModel.mergeSettings`), because the procedure itself replaces whole
+ * sections.
  */
 export class UserSettingsRestService extends BaseService {
   private readonly ctx: { userId: string; workspaceId?: string };
@@ -65,14 +62,18 @@ export class UserSettingsRestService extends BaseService {
 
   async updateSettings(input: UpdateUserSettingsRequest): Promise<UserSettingsResult> {
     if (input.settings && Object.keys(input.settings).length > 0) {
-      const { settings: current } = await this.getSettings();
-      const next = Object.fromEntries(
-        Object.entries(input.settings).map(([key, patch]) => [
-          key,
-          mergePatch(current[key as keyof UserSettingsValue], patch),
-        ]),
-      );
-      await this.user.updateSettings(next);
+      try {
+        // The same workspace gate as tRPC `user.updateSettings`; the merge then
+        // runs under a row lock so concurrent patches of one section both land.
+        await assertCanUpdateWorkspaceSettings(
+          { serverDB: this.db, userId: this.userId, workspaceId: this.workspaceId },
+          input.settings,
+        );
+        await new UserModel(this.db, this.userId).mergeSettings(input.settings);
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        this.handleServiceError(error, 'Update settings');
+      }
     }
 
     if (input.preference) await this.user.updatePreference(input.preference);

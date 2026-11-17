@@ -44,7 +44,7 @@ ExportsRoutes.post(
   routeDoc({
     data: ExportSchema,
     description:
-      'Exports your data and stores the file for download. `format: "json"` dumps the whole account — or, with `X-Workspace-Id`, the workspace (owner only) — in the shape `POST /imports` accepts with `source: "export"`; `format: "pdf"` renders the given Markdown. The response carries a signed `downloadUrl`; `GET /exports/{id}` returns a fresh one. Needs a full-access API key because the dump contains stored credentials. 503 when the server has no file storage.',
+      'Exports your data and stores the file for download. `format: "json"` dumps the whole account — or, with `X-Workspace-Id`, the workspace (owner only) — in the shape `POST /imports` accepts with `source: "export"`; `format: "pdf"` renders the given Markdown. The file is stored privately and kept for 24 hours: the response carries a signed `downloadUrl`, `GET /exports/{id}` returns a fresh one until the export expires, then answers 404. Needs a full-access API key because the dump contains stored credentials. 503 when the server has no file storage.',
     errors: [404, 503],
     operationId: 'exports.create',
     requestExample: example(CreateExportRequestSchema, { format: 'json' }),

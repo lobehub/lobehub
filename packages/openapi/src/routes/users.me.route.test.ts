@@ -209,6 +209,17 @@ describe('PATCH /users/me/settings', () => {
     expect(row.market).toEqual({ accessToken: 'market-secret' });
   });
 
+  it('keeps both of two concurrent patches to the same section', async () => {
+    const patch = (general: Record<string, unknown>) =>
+      call('/me/settings', { body: { settings: { general } }, key: KEYS.write, method: 'PATCH' });
+
+    const results = await Promise.all([patch({ fontSize: 18 }), patch({ animationMode: 'none' })]);
+    expect(results.map((res) => res.status)).toEqual([200, 200]);
+
+    const [row] = await serverDB.select().from(userSettings).where(eq(userSettings.id, OWNER));
+    expect(row.general).toEqual({ animationMode: 'none', fontSize: 18, language: 'en-US' });
+  });
+
   it('refuses credential sections, unknown sections and an empty body', async () => {
     for (const body of [
       { settings: { keyVaults: { openai: { apiKey: 'sk-x' } } } },

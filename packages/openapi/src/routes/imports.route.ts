@@ -26,7 +26,7 @@ ImportsRoutes.post(
     data: ImportResultSchema,
     description:
       'Imports data into your account (or, with `X-Workspace-Id`, the workspace — owner only). Send a `json` export inline with `source: "export"` (spread its `data` and `schemaHash`), a legacy LobeChat config with `source: "legacy"`, or point at one of your uploaded files with `source: "file"`. Rows that already exist are skipped and rows that cannot be written are counted under `errors`; when the import cannot run at all the call answers 422 and nothing is written. Needs a full-access API key.',
-    errors: [404, 422],
+    errors: [404, 422, 503],
     operationId: 'imports.create',
     requestExample: example(CreateImportRequestSchema, {
       data: { agents: [{ id: 'agt_6sQwJ3dVbX1m', title: 'Code Reviewer' }] },

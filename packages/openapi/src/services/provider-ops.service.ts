@@ -191,11 +191,3 @@ export class ProviderOpsService extends BaseService {
     }
   }
 }
-
-/** Shared by the model operations: models live under an addressable provider. */
-export const assertProviderKnown = (
-  db: LobeChatDatabase,
-  userId: string | null,
-  workspaceId: string | undefined,
-  providerId: string,
-) => new ProviderOpsService(db, userId, workspaceId).assertProvidersKnown([providerId]);

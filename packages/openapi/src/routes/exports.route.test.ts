@@ -12,7 +12,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const holder = vi.hoisted(() => {
   process.env.S3_BUCKET ??= 'test-bucket';
   process.env.KEY_VAULTS_SECRET ??= Buffer.alloc(32, 7).toString('base64');
-  return { serverDB: undefined as unknown, store: new Map<string, Buffer>() };
+  return {
+    metadataError: undefined as Error | undefined,
+    serverDB: undefined as unknown,
+    store: new Map<string, Buffer>(),
+    uploadOptions: new Map<string, { private?: boolean } | undefined>(),
+  };
 });
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => holder.serverDB }));
@@ -27,14 +32,22 @@ vi.mock('@/server/services/file', async (importOriginal) => ({
       if (!value) throw new Error('NoSuchKey');
       return value.toString('utf8');
     };
+    deleteFiles = async (keys: string[]) => {
+      for (const key of keys) holder.store.delete(key);
+    };
     getFileMetadata = async (key: string) => {
+      if (holder.metadataError) throw holder.metadataError;
       const value = holder.store.get(key);
-      if (!value) throw new Error('NotFound');
+      // The S3 client's HeadObject miss.
+      if (!value) throw Object.assign(new Error('NotFound'), { name: 'NotFound' });
       return { contentLength: value.length };
     };
     getKeyFromFullUrl = async (url: string) => url;
-    uploadBuffer = async (key: string, buffer: Buffer) => {
+    listFileKeys = async (prefix: string) =>
+      [...holder.store.keys()].filter((key) => key.startsWith(prefix));
+    uploadBuffer = async (key: string, buffer: Buffer, _type: string, options?: object) => {
       holder.store.set(key, buffer);
+      holder.uploadOptions.set(key, options);
       return { key };
     };
   },
@@ -95,7 +108,9 @@ const call = (
 const json = async (res: Response) => (await res.json()) as any;
 
 beforeEach(async () => {
+  holder.metadataError = undefined;
   holder.store.clear();
+  holder.uploadOptions.clear();
   await serverDB.delete(files);
   await serverDB.delete(agents);
   await serverDB.delete(apiKeys);
@@ -182,6 +197,30 @@ describe('POST /exports', () => {
     expect(data.size).toBe(holder.store.get(`exports/${OWNER}/personal/${data.id}.json`)!.length);
     expect(stored.data.agents.map((row: { id: string }) => row.id)).toEqual(['agt_r12_owner']);
     expect(typeof stored.schemaHash).toBe('string');
+    // Never public-read, even where S3_SET_ACL grants it to ordinary uploads.
+    expect(holder.uploadOptions.get(`exports/${OWNER}/personal/${data.id}.json`)).toEqual({
+      private: true,
+    });
+  });
+
+  it("deletes the caller's expired exports and leaves fresh ones and other users' alone", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const stale = `exp_${(Date.now() - 2 * day).toString(36)}_aaaaaaaaaaaaaaaa`;
+    const fresh = `exp_${(Date.now() - 60_000).toString(36)}_bbbbbbbbbbbbbbbb`;
+    holder.store.set(`exports/${OWNER}/${WORKSPACE}/${stale}.json`, Buffer.from('{}'));
+    holder.store.set(`exports/${OWNER}/personal/${fresh}.json`, Buffer.from('{}'));
+    holder.store.set(`exports/${STRANGER}/personal/${stale}.json`, Buffer.from('{}'));
+
+    const res = await call('/exports', {
+      body: { format: 'json' },
+      key: KEYS.owner,
+      method: 'POST',
+    });
+    expect(res.status).toBe(202);
+
+    expect(holder.store.has(`exports/${OWNER}/${WORKSPACE}/${stale}.json`)).toBe(false);
+    expect(holder.store.has(`exports/${OWNER}/personal/${fresh}.json`)).toBe(true);
+    expect(holder.store.has(`exports/${STRANGER}/personal/${stale}.json`)).toBe(true);
   });
 
   it('rejects an unknown format and a PDF without content', async () => {
@@ -219,6 +258,23 @@ describe('GET /exports/:id', () => {
     const res = await call(`/exports/${id}`, { key: KEYS.owner });
     expect(res.status).toBe(200);
     expect(ExportSchema.parse((await json(res)).data)).toMatchObject({ format: 'json', id });
+  });
+
+  it('answers 404 for an export past its retention and deletes it', async () => {
+    const stale = `exp_${(Date.now() - 2 * 24 * 60 * 60 * 1000).toString(36)}_cccccccccccccccc`;
+    holder.store.set(`exports/${OWNER}/personal/${stale}.json`, Buffer.from('{}'));
+
+    expect((await call(`/exports/${stale}`, { key: KEYS.owner })).status).toBe(404);
+    expect(holder.store.has(`exports/${OWNER}/personal/${stale}.json`)).toBe(false);
+  });
+
+  it('reports a storage failure as an error, not as a missing export', async () => {
+    const id = await createExport(KEYS.owner);
+    holder.metadataError = new Error('socket hang up');
+
+    const res = await call(`/exports/${id}`, { key: KEYS.owner });
+    expect(res.status).toBe(503);
+    expect((await json(res)).code).toBe('service_unavailable');
   });
 
   it("answers 404 for another user's export and outside the workspace it was made in", async () => {

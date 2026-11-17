@@ -9518,6 +9518,10 @@ export type PostApiV1ImportsErrors = {
      * Internal server error
      */
     500: ApiError;
+    /**
+     * Service unavailable
+     */
+    503: ApiError;
 };
 
 export type PostApiV1ImportsError = PostApiV1ImportsErrors[keyof PostApiV1ImportsErrors];

@@ -39,6 +39,12 @@ import { notTrashed } from '../utils/softDelete';
 import { hasLiveParentTopic } from '../utils/topicVisibility';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
+/** JSON settings columns a partial patch can be merged into. */
+export type UserSettingsMergeableSection = Exclude<
+  keyof UserSettingsItem,
+  'id' | 'keyVaults' | 'createdAt' | 'updatedAt' | 'accessedAt'
+>;
+
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
   userId?: string,
@@ -322,6 +328,35 @@ export class UserModel {
         target: userSettings.id,
       });
   };
+
+  /**
+   * Deep-merge partial settings sections (objects merge key by key, arrays
+   * replace) into the stored ones while the row is locked, so two concurrent
+   * patches of the same section both land instead of the later whole-column
+   * write dropping the earlier change. Credential columns (`keyVaults`) are
+   * not mergeable here; they stay with `updateSetting`.
+   */
+  mergeSettings = async (
+    patch: Partial<Record<UserSettingsMergeableSection, Record<string, unknown>>>,
+  ) =>
+    this.db.transaction(async (trx) => {
+      await trx.insert(userSettings).values({ id: this.userId }).onConflictDoNothing();
+      const [row] = await trx
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.id, this.userId))
+        .for('update');
+
+      const next = Object.fromEntries(
+        Object.entries(patch).map(([key, value]) => [
+          key,
+          merge((row?.[key as UserSettingsMergeableSection] as object | null) ?? {}, value ?? {}),
+        ]),
+      );
+      if (Object.keys(next).length > 0) {
+        await trx.update(userSettings).set(next).where(eq(userSettings.id, this.userId));
+      }
+    });
 
   /**
    * Atomically merge a partial humanIntervention config into the `tool` settings

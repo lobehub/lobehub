@@ -22348,10 +22348,11 @@ paths:
         Exports your data and stores the file for download. `format: "json"`
         dumps the whole account — or, with `X-Workspace-Id`, the workspace
         (owner only) — in the shape `POST /imports` accepts with `source:
-        "export"`; `format: "pdf"` renders the given Markdown. The response
-        carries a signed `downloadUrl`; `GET /exports/{id}` returns a fresh one.
-        Needs a full-access API key because the dump contains stored
-        credentials. 503 when the server has no file storage.
+        "export"`; `format: "pdf"` renders the given Markdown. The file is
+        stored privately and kept for 24 hours: the response carries a signed
+        `downloadUrl`, `GET /exports/{id}` returns a fresh one until the export
+        expires, then answers 404. Needs a full-access API key because the dump
+        contains stored credentials. 503 when the server has no file storage.
 
 
         **API key scopes:** a full-access API key (`*`).
@@ -26967,6 +26968,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
           description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Service unavailable
           headers:
             X-Request-Id:
               $ref: "#/components/headers/RequestId"

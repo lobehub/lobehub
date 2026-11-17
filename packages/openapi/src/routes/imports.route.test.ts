@@ -239,6 +239,26 @@ describe('POST /imports', () => {
     expect(res.status).toBe(400);
   });
 
+  it('reports an unreadable file as a storage error, not as a non-export', async () => {
+    // The row exists but its object is gone from storage.
+    await serverDB.insert(files).values({
+      fileType: 'application/json',
+      id: 'file_r12_gone',
+      name: 'gone.json',
+      size: 1,
+      url: 'files/owner/gone.json',
+      userId: OWNER,
+    });
+
+    const res = await call('/imports', {
+      body: { fileId: 'file_r12_gone', source: 'file' },
+      key: KEYS.owner,
+      method: 'POST',
+    });
+    expect(res.status).toBe(503);
+    expect((await json(res)).code).toBe('service_unavailable');
+  });
+
   it('counts rows that cannot be written as errors and keeps the rest', async () => {
     const res = await call('/imports', {
       body: {

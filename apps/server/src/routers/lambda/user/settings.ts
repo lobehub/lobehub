@@ -11,6 +11,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { RbacModel } from '@/database/models/rbac';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -24,11 +25,40 @@ const WORKSPACE_UPDATE_PERMISSION = 'workspace:update:all';
 
 const WORKSPACE_CONTENT_PERMISSIONS = ['agent:update:all', 'agent:update:owner'] as const;
 
-const hasOwnerSettingChange = (input: Partial<UserSettings>) =>
+/** Only which sections are present matters to the gate, not their shape. */
+type SettingsSections = Partial<Record<keyof UserSettings, unknown>>;
+
+const hasOwnerSettingChange = (input: SettingsSections) =>
   OWNER_SETTING_KEYS.some((key) => input[key] !== undefined);
 
-const hasMemberSettingChange = (input: Partial<UserSettings>) =>
+const hasMemberSettingChange = (input: SettingsSections) =>
   MEMBER_SETTING_KEYS.some((key) => input[key] !== undefined);
+
+/**
+ * Inside a workspace, owner-level settings (default agent, system agent, …)
+ * need `workspace:update` and member-level ones need agent update rights.
+ * Shared by `updateSettings` and the REST `PATCH /users/me/settings`.
+ */
+export const assertCanUpdateWorkspaceSettings = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
+  input: SettingsSections,
+) => {
+  if (!ctx.workspaceId || !(hasOwnerSettingChange(input) || hasMemberSettingChange(input))) return;
+
+  const rbac = new RbacModel(ctx.serverDB, ctx.userId);
+  const allowed = hasOwnerSettingChange(input)
+    ? await rbac.hasPermission(WORKSPACE_UPDATE_PERMISSION, { workspaceId: ctx.workspaceId })
+    : await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
+        workspaceId: ctx.workspaceId,
+      });
+
+  if (!allowed) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to perform this action.',
+    });
+  }
+};
 
 export const settingsRouter = router({
   /**
@@ -117,23 +147,7 @@ export const settingsRouter = router({
       });
     }
 
-    if (ctx.workspaceId && (hasOwnerSettingChange(res) || hasMemberSettingChange(res))) {
-      const rbac = new RbacModel(ctx.serverDB, ctx.userId);
-      const allowed = hasOwnerSettingChange(res)
-        ? await rbac.hasPermission(WORKSPACE_UPDATE_PERMISSION, {
-            workspaceId: ctx.workspaceId,
-          })
-        : await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
-            workspaceId: ctx.workspaceId,
-          });
-
-      if (!allowed) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You do not have permission to perform this action.',
-        });
-      }
-    }
+    await assertCanUpdateWorkspaceSettings(ctx, res);
 
     // Encrypt keyVaults; only touch the column when the caller sent the field,
     // so a settings update without `keyVaults` no longer clears stored creds
