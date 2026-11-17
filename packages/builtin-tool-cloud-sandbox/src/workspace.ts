@@ -377,7 +377,7 @@ export const formatSandboxStoragePromptVariables = ({
       // wrong here: the result is thrown away with the session and the user
       // never sees it when browsing the drive, which reads this directory.
       // Said once, positively, rather than as a list of directories to avoid.
-      '- Every call starts you in that directory, and it is where the work belongs: checkouts, generated files and notes written anywhere else — `/root`, `/tmp`, a scratch directory of your own — are lost with the session and never appear on the user’s drive. Stay where you start; if a step genuinely needs scratch space, say where you put it.',
+      '- Every call starts you in that directory, and it is where the work belongs: results, generated files and notes written anywhere else — `/root`, `/tmp`, a scratch directory of your own — are lost with the session and never appear on the user’s drive. Stay where you start; if a step genuinely needs scratch space, say where you put it.',
       // Deliberately does NOT send installs to `/tmp`. The drive is network
       // storage — an order of magnitude slower for the thousands of small files
       // a package install writes — but the answer is to let them land where the
