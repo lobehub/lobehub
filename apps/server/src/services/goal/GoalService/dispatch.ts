@@ -23,6 +23,7 @@ import { GoalSupervisorService } from '../supervisor';
 import { claimGoalTask } from '../taskClaim';
 import {
   buildLaneInstruction,
+  isClosedSwarmLane,
   isSwarmPromoteNode,
   laneContinuationNote,
   swarmLaneOf,
@@ -238,6 +239,12 @@ export const dispatchWork = async (
       currentGraph.decisions.some((item) => item.status === 'pending')
     )
       return 'stopped' as const;
+    // A lane chosen before the deadline can reach this claim after another
+    // advance wrapped the swarm up: the graph this advance planned from still
+    // shows the lane in the backlog, while the deadline and the lane node are
+    // already gone. Without this fence the budget check below sees no deadline
+    // and starts a paid lane run that the wrap-up will never cancel.
+    if (isClosedSwarmLane(currentGraph, nodeId)) return 'lane-closed' as const;
     const currentBudget = await ctx.inTransaction(tx).evaluateBudget(currentGoal, currentGraph);
     if (
       currentBudget.costLimitReached ||
@@ -260,6 +267,15 @@ export const dispatchWork = async (
     return {
       goalId,
       message: 'Goal is stopped or its execution budget is exhausted',
+      outcome: 'no_progress',
+      taskId: task.id,
+    };
+
+  if (claimed === 'lane-closed')
+    return {
+      goalId,
+      message: `Swarm lane ${nodeId} is closed; not starting ${task.identifier}`,
+      nodeId,
       outcome: 'no_progress',
       taskId: task.id,
     };

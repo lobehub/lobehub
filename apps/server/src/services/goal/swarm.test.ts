@@ -10,6 +10,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskRunnerService } from '../taskRunner';
 import { GoalService } from './GoalService';
+import { isClosedSwarmLane } from './GoalService/swarm';
 import { GoalObjectiveService } from './objective';
 import * as scheduler from './scheduler';
 import { GoalSwarmService, SWARM_LANE_ATTEMPTS } from './swarm';
@@ -253,5 +254,29 @@ describe('a running swarm', () => {
 
     expect((await service.tick(graph.goal.id)).message).toContain('no lane recorded a valid score');
     expect((await service.tick(graph.goal.id)).outcome).toBe('achieved');
+  });
+});
+
+describe('isClosedSwarmLane', () => {
+  it('closes a real swarm lane after a wrap-up is claimed', async () => {
+    vi.spyOn(scheduler, 'scheduleGoalAdvance').mockResolvedValue();
+    const graph = await createSwarm({ lanes: 1 });
+    const laneNodeId = graph.goal.config!.swarm!.lanes[0].taskNodeId;
+    expect(isClosedSwarmLane(graph, laneNodeId)).toBe(false);
+
+    const repository = new GoalRepository(serverDB, userId);
+    await repository.update(graph.goal.id, {
+      config: {
+        ...graph.goal.config,
+        swarm: {
+          ...graph.goal.config!.swarm!,
+          wrapUp: { championLane: 'A', championScore: 12, startedAt: new Date().toISOString() },
+        },
+      },
+    });
+
+    const after = await new GoalService(serverDB, userId).graph(graph.goal.id);
+    expect(isClosedSwarmLane(after, laneNodeId)).toBe(true);
+    vi.restoreAllMocks();
   });
 });

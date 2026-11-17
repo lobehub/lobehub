@@ -16,6 +16,24 @@ export const swarmLaneOf = (graph: Pick<GoalGraphSnapshot, 'goal'>, nodeId: stri
 export const isSwarmPromoteNode = (graph: Pick<GoalGraphSnapshot, 'goal'>, nodeId: string) =>
   graph.goal.config?.swarm?.wrapUp?.promoteNodeId === nodeId;
 
+/**
+ * Whether a dispatch must not start this lane after all. An advance can pick a
+ * backlog lane before the deadline and only reach its claim after another
+ * advance wrapped the swarm up: the deadline is gone, the lane node is
+ * resolved, and the lane's Task is still in the backlog, so the ordinary
+ * dispatch would pay for another lane run that nothing will ever cancel. The
+ * promotion Task is not a lane, so it stays dispatchable.
+ */
+export const isClosedSwarmLane = (
+  graph: Pick<GoalGraphSnapshot, 'goal' | 'nodes'>,
+  nodeId: string,
+) => {
+  const swarm = graph.goal.config?.swarm;
+  if (!swarm || !swarmLaneOf(graph, nodeId)) return false;
+  const node = graph.nodes.find((item) => item.id === nodeId);
+  return Boolean(swarm.wrapUp) || node?.status === 'resolved' || node?.status === 'retired';
+};
+
 const formatDeadline = (deadline?: string | null) =>
   deadline ? new Date(deadline).toISOString().replace('.000Z', 'Z') : 'the deadline';
 
