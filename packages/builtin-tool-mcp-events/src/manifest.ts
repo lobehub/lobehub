@@ -55,6 +55,12 @@ export const McpEventsManifest: BuiltinToolManifest = {
             description:
               'Subscription arguments matching this event type inputSchema from listEventTypes (filters and other event-specific options). Omit when the schema needs no arguments.',
           },
+          deliverTo: {
+            type: 'string',
+            enum: ['thread', 'channel'],
+            description:
+              "Only when this conversation is a Channel Thread: 'thread' (default) posts each event's result to this Thread, 'channel' to the Channel's main timeline. Omit elsewhere.",
+          },
           instructions: {
             type: 'string',
             description:

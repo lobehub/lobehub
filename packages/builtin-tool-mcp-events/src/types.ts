@@ -32,6 +32,11 @@ export interface SubscribeEventArgs {
   arguments?: Record<string, unknown>;
   /** 连接器 identifier */
   connector: string;
+  /**
+   * Subscribing from a Channel Thread: `thread` (default) posts each event's result to that
+   * Thread, `channel` to the Channel's main timeline. Ignored outside a Thread.
+   */
+  deliverTo?: 'channel' | 'thread';
   /** 事件到达时 agent 应该做什么 */
   instructions: string;
   /** 事件类型名 */
@@ -40,6 +45,8 @@ export interface SubscribeEventArgs {
 export interface McpEventSubscriptionSummary {
   arguments: Record<string, unknown>;
   connector: { identifier: string; name: string };
+  /** Where each event's result is posted, for a subscription made in a Channel. */
+  deliversTo?: 'channel' | 'thread';
   eventName: string;
   /** null = 永不过期 */
   expiresAt: string | null;
@@ -76,7 +83,7 @@ export type McpEventsToolErrorCode =
   | 'forbidden' // 无权限或连接器未认证
   | 'invalid_arguments' // 参数不符合 inputSchema
   | 'callback_unreachable' // server 连不上回调地址
-  | 'channel_unsupported' // Channel 里的运行不能订阅：事件会落在 Channel 看不到的话题里
+  | 'channel_unsupported' // Channel 里不是由消息发起的运行不能订阅：不知道结果该发到哪个 Channel / Thread
   | 'limit_reached' // 订阅数达到上限
   | 'not_found' // unsubscribe 的目标不存在或不属于当前 topic
   | 'unknown';

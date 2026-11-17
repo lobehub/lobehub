@@ -57,7 +57,6 @@ import {
   scheduleConnectorRefresh,
 } from './connectors';
 import { resolveDevicePlan } from './devicePlan';
-import { offersMcpEvents } from './eventConnectors';
 import { resolveModelContext, startModelMetadataRead } from './modelFacts';
 import { readCredentialFacts, startToolReads } from './reads';
 import { resolveOperationGroup, resolveTurnScopedPluginIds } from './turnContext';
@@ -118,7 +117,6 @@ export const discoverTools = async (
     loadHistoryMessages,
     localDeviceId,
     requestedDeviceId,
-    requestTrigger,
     selectedToolIds,
     throwIfExecutionAborted,
     topicBoundDeviceId,
@@ -532,7 +530,7 @@ export const discoverTools = async (
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
       hasIdentityAccount,
-      hasEventConnector: offersMcpEvents(hasEventConnector, requestTrigger),
+      hasEventConnector,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,

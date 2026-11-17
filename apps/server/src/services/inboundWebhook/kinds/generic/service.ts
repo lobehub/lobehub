@@ -1,4 +1,8 @@
-import type { GenericWebhookTopicMode, InboundWebhookStatus } from '@lobechat/types';
+import type {
+  GenericWebhookTopicMode,
+  InboundWebhookChannelDelivery,
+  InboundWebhookStatus,
+} from '@lobechat/types';
 import { isInboundWebhookOfKind } from '@lobechat/types';
 
 import type { InboundWebhookView, InboundWebhookViewOf } from '@/database/models/inboundWebhook';
@@ -7,11 +11,14 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
+import { assertChannelDelivery } from '../../channelDelivery';
 import { receiveInboundWebhook } from '../../receiver';
 import { generateWebhookToken } from './token';
 
 export interface GenericWebhookSettings {
   autoApprove?: boolean;
+  /** Post each run's answer to this Channel or Thread; null stops posting. Needs `autoApprove`. */
+  delivery?: InboundWebhookChannelDelivery | null;
   instructions?: string | null;
   name?: string | null;
   /** `reuse` only: an existing Topic of the agent to continue; null clears it. */
@@ -21,7 +28,7 @@ export interface GenericWebhookSettings {
 
 export class GenericWebhookError extends Error {
   constructor(
-    readonly code: 'invalid_topic' | 'not_generic' | 'not_found',
+    readonly code: 'auto_approve_required' | 'invalid_topic' | 'not_generic' | 'not_found',
     message: string,
   ) {
     super(message);
@@ -47,6 +54,27 @@ const pinnedTopic = async (
   if (!topic || topic.agentId !== agentId || topic.userId !== scope.userId)
     throw new GenericWebhookError('invalid_topic', 'Pick one of your own topics of this agent.');
   return topic.id;
+};
+
+/**
+ * A Channel delivery, checked as the creator. Nobody can approve a tool in a Channel delivery's
+ * run, so it never waits for approval; setting one needs the creator to have turned on
+ * auto-approval, so that is never a side effect.
+ */
+const checkedDelivery = async (
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string },
+  agentId: string,
+  delivery: InboundWebhookChannelDelivery | null | undefined,
+  autoApprove: boolean,
+): Promise<InboundWebhookChannelDelivery | undefined> => {
+  if (!delivery) return undefined;
+  if (!autoApprove)
+    throw new GenericWebhookError(
+      'auto_approve_required',
+      'Posting to a Channel needs auto-approval: nobody can approve a tool call there.',
+    );
+  return assertChannelDelivery(db, scope, agentId, delivery);
 };
 
 /** Model scoped to the row's creator, with a gatekeeper: secrets are read and written as theirs. */
@@ -85,9 +113,16 @@ export async function createGenericWebhook(
   const token = generateWebhookToken();
   const topicMode = input.topicMode ?? 'new';
   const topicId = await pinnedTopic(db, scope, input.agentId, topicMode, input.topicId);
+  const autoApprove = input.autoApprove ?? false;
+  const delivery = await checkedDelivery(db, scope, input.agentId, input.delivery, autoApprove);
   const row = await model.createWithLimits({
     agentId: input.agentId,
-    config: { autoApprove: input.autoApprove ?? false, topicMode, ...(topicId && { topicId }) },
+    config: {
+      autoApprove,
+      ...(delivery && { delivery }),
+      topicMode,
+      ...(topicId && { topicId }),
+    },
     instructions: clean(input.instructions),
     kind: 'generic',
     name: clean(input.name),
@@ -112,19 +147,32 @@ export async function updateGenericWebhook(
   let config: typeof row.config | undefined;
   if (
     input.autoApprove !== undefined ||
+    input.delivery !== undefined ||
     input.topicMode !== undefined ||
     input.topicId !== undefined
   ) {
+    const scope = { userId: row.userId, workspaceId: row.workspaceId ?? undefined };
     const topicMode = input.topicMode ?? row.config.topicMode;
     const topicId = await pinnedTopic(
       db,
-      { userId: row.userId, workspaceId: row.workspaceId ?? undefined },
+      scope,
       row.agentId,
       topicMode,
       input.topicId === undefined ? row.config.topicId : input.topicId,
     );
+    const autoApprove = input.autoApprove ?? row.config.autoApprove;
+    // An unchanged delivery is checked again too: turning auto-approval off must not leave a
+    // Channel delivery whose runs would approve tools anyway.
+    const delivery = await checkedDelivery(
+      db,
+      scope,
+      row.agentId,
+      input.delivery === undefined ? row.config.delivery : input.delivery,
+      autoApprove,
+    );
     config = {
-      autoApprove: input.autoApprove ?? row.config.autoApprove,
+      autoApprove,
+      ...(delivery && { delivery }),
       topicMode,
       ...(topicId && { topicId }),
     };

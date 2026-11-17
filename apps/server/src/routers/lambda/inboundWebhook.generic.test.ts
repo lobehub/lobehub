@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
+import { ChannelRepository } from '@/database/repositories/channel';
 import { agents, signals, topics, users, workspaceAuditLogs, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import type * as AppEnvModule from '@/envs/app';
@@ -447,5 +448,74 @@ describe('generic webhook management', () => {
     const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.item.id });
     expect(first.nextCursor?.createdAt).toMatch(/\.\d{6}Z$/);
     expect([...first.items, ...second.items].map((item) => item.preview)).toHaveLength(21);
+  });
+});
+
+describe('Channel delivery (CLI and agent tools; read-only on the Web)', () => {
+  const directChannel = async () => {
+    const { channel } = await new ChannelRepository(db, creator).create({
+      agentConfig: {},
+      agentId,
+      title: 'Nightly',
+    });
+    const root = await new ChannelRepository(db, creator).send(channel.id, {
+      content: 'Build status for the nightly run',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const thread = await new ChannelRepository(db, creator).createThread(channel.id, {
+      rootMessageId: root.id,
+    });
+    return { channelId: channel.id, threadId: thread.id };
+  };
+
+  it('needs auto-approval: nobody can approve a tool call in the Channel', async () => {
+    const { channelId } = await directChannel();
+    await expect(caller().create({ agentId, delivery: { channelId } })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    const { item } = await caller().create({
+      agentId,
+      autoApprove: true,
+      delivery: { channelId },
+    });
+    // Turning auto-approval off while it still posts to the Channel is refused too.
+    await expect(caller().update({ autoApprove: false, id: item.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    const cleared = await caller().update({ autoApprove: false, delivery: null, id: item.id });
+    expect(cleared).toMatchObject({ channel: null, source: { autoApprove: false } });
+    expect(cleared.source).not.toHaveProperty('delivery');
+  });
+
+  it('names the Channel and Thread it posts to for members, and hides them from others', async () => {
+    const { channelId, threadId } = await directChannel();
+    const { item } = await caller().create({
+      agentId,
+      autoApprove: true,
+      delivery: { channelId, threadId },
+    });
+    expect(item.channel).toEqual({
+      id: channelId,
+      projectId: null,
+      threadId,
+      threadTitle: 'Build status for the nightly run',
+      title: 'Nightly',
+    });
+    expect(item.source).toMatchObject({ delivery: { channelId, threadId } });
+  });
+
+  it('refuses a Channel the creator is not in, or a Thread of another Channel', async () => {
+    const { channelId } = await directChannel();
+    await expect(
+      caller(colleague).create({ agentId, autoApprove: true, delivery: { channelId } }),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/BAD_REQUEST|NOT_FOUND|FORBIDDEN/) });
+    await expect(
+      caller().create({
+        agentId,
+        autoApprove: true,
+        delivery: { channelId, threadId: 'cht_elsewhere' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Thread not found in that Channel.' });
   });
 });

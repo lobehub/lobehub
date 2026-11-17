@@ -14,6 +14,8 @@ import type {
 
 export interface McpEventsScope {
   agentId: string;
+  /** The run calling the tool; in a Channel it names the Channel and Thread being answered. */
+  operationId?: string;
   topicId: string;
 }
 
@@ -76,6 +78,7 @@ export class McpEventsExecutionRuntime {
       this.service.subscribeEvent({
         arguments: args.arguments,
         connector: args.connector,
+        ...(args.deliverTo && { deliverTo: args.deliverTo }),
         instructions: args.instructions,
         name: args.name,
         ...this.scope,

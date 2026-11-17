@@ -28,6 +28,7 @@ export const INBOUND_WEBHOOK_ERRORS = [
   'access_revoked', // server 终止订阅：权限被撤销
   'event_unavailable', // server 终止订阅：事件类型被移除或不兼容变更
   'server_unreachable', // 检查 / 续订时连不上 MCP server
+  'channel_unavailable', // 运行结果发不进目标 Channel：Agent 或创建人已不在其中、Agent 被静音、Channel 已归档或删除
   'unknown',
 ] as const;
 export type InboundWebhookError = (typeof INBOUND_WEBHOOK_ERRORS)[number];
@@ -49,8 +50,20 @@ export const INBOUND_WEBHOOK_RUN_ERRORS = [
   'insufficient_budget',
 ] as const satisfies readonly InboundWebhookError[];
 
+/**
+ * A Channel the run's final answer is posted to, as the Agent's message, instead of staying in a
+ * Topic of its own. `threadId` names a Thread of that Channel (`cht_…`); absent, the main timeline.
+ * The run itself still works in a Topic; only its answer reaches the Channel.
+ */
+export interface InboundWebhookChannelDelivery {
+  channelId: string;
+  threadId?: string;
+}
+
 export interface McpEventsWebhookConfig {
   arguments: Record<string, unknown>;
+  /** Set when the subscription was made in a Channel: where each event's result is posted. */
+  delivery?: InboundWebhookChannelDelivery;
   eventName: string;
   /**
    * The connector account (`connector_links.id`) the subscription was made with. The server knows
@@ -86,6 +99,12 @@ export interface GenericWebhookConfig {
   /** Runs this webhook starts approve tools as auto-run; tools marked `always` still wait. */
   autoApprove: boolean;
   /**
+   * Post each run's answer to this Channel or Thread. Nobody can approve a tool there, so such
+   * runs never wait for approval (`headless`), and setting it requires `autoApprove`.
+   * Configured from the CLI and agent tools; the Web shows it read-only.
+   */
+  delivery?: InboundWebhookChannelDelivery;
+  /**
    * `reuse` only: an existing Topic of the agent, picked by the creator, that every call without a
    * thread continues. Absent: a Topic of the webhook's own, made on the first call. Kept in the
    * config, not in `topic_id`, whose cascade would delete the webhook with the Topic.
@@ -104,6 +123,7 @@ export type InboundWebhookVerification = McpEventsWebhookVerification | GenericW
 
 export interface McpEventsWebhookSource {
   arguments: Record<string, unknown>;
+  delivery?: InboundWebhookChannelDelivery;
   eventName: string;
   kind: 'mcp_events';
 }
@@ -138,6 +158,19 @@ export interface InboundWebhookItem {
   canConfigure: boolean;
   /** 当前用户能否删除 / 检查这一行 */
   canManage: boolean;
+  /**
+   * The Channel (and Thread) run results are posted to, for a row with `delivery`. Null when the
+   * row has none, or the caller cannot see that Channel (then only `source.delivery` says one is
+   * set). Such rows are read-only on the Web; the CLI and agent tools change them.
+   */
+  channel: {
+    id: string;
+    /** A project's Channel opens inside its project. */
+    projectId: string | null;
+    threadId: string | null;
+    threadTitle: string | null;
+    title: string | null;
+  } | null;
   connector: {
     /** Set when the connector is owned by an agent rather than the user (`user_connectors.agent_id`). */
     agentId: string | null;
@@ -164,10 +197,18 @@ export interface InboundWebhookItem {
   topic: { id: string; title: string | null } | null;
 }
 
+export const InboundWebhookChannelDeliverySchema = z
+  .object({
+    channelId: z.string().min(1),
+    threadId: z.string().min(1).optional(),
+  })
+  .strict();
+
 /** Validation stays beside domain types so the standalone database layer owns no protocol logic. */
 export const McpEventsWebhookConfigSchema = z
   .object({
     arguments: z.record(z.string(), z.unknown()),
+    delivery: InboundWebhookChannelDeliverySchema.optional(),
     eventName: z.string().min(1),
     linkId: z.string().min(1).optional(),
   })
@@ -201,6 +242,7 @@ export const McpEventsWebhookVerificationSchema = z
 export const GenericWebhookConfigSchema = z
   .object({
     autoApprove: z.boolean(),
+    delivery: InboundWebhookChannelDeliverySchema.optional(),
     topicMode: z.enum(GENERIC_WEBHOOK_TOPIC_MODES),
     topicId: z.string().min(1).optional(),
   })

@@ -13,7 +13,7 @@ export const mcpEventsRuntime: ServerRuntimeRegistration = {
     }
     return new McpEventsExecutionRuntime(
       new McpEventsService(context.serverDB, context.userId, context.workspaceId),
-      { agentId: context.agentId, topicId: context.topicId },
+      { agentId: context.agentId, operationId: context.operationId, topicId: context.topicId },
     );
   },
 };
