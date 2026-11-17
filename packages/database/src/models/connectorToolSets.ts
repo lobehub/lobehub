@@ -1,11 +1,14 @@
 import { connectorToolIdentifier } from '@lobechat/types';
 
-import type { UserConnectorItem } from '../schemas';
-
-type RankedRow = Pick<
-  UserConnectorItem,
-  'agentId' | 'id' | 'identifier' | 'metadata' | 'visibility' | 'workspaceId'
->;
+/** The fields of a connector row a run ranks it by and names its tool set from. */
+interface RankedRow {
+  agentId: string | null;
+  id: string;
+  identifier: string;
+  metadata?: { mountedByAgentId?: unknown } | null;
+  visibility?: string | null;
+  workspaceId: string | null;
+}
 
 /**
  * How a run ranks one connector row against another of its identifier:
