@@ -1064,7 +1064,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     let terminalErrorMessage: string | undefined;
     let terminalErrorData: Record<string, unknown> | undefined;
     try {
-      for await (const event of withHeteroSteer(handle, !!sink && { getTrpcClient, operationId })) {
+      const steerContext = !!sink && {
+        getTrpcClient,
+        isWaitingForUser: () => (askBridge?.pendingCount ?? 0) > 0,
+        operationId,
+      };
+      for await (const event of withHeteroSteer(handle, steerContext)) {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');
@@ -1079,19 +1084,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
             continue;
           }
         }
-        // A terminal `error` event (e.g. an API/rate-limit error relayed by CC)
-        // must mark the run as failed even when the child exits 0 — track it so
-        // the finish result is not derived from the exit code alone. Capture the
-        // message too, so the finish payload can surface it as the task-level
-        // error detail (CC relays these on stdout, not stderr).
+        // A terminal `error` (e.g. a rate limit CC relays on stdout) fails the run even on
+        // exit 0; its message becomes the finish payload's task-level error detail.
         if (event.type === 'error') {
           sawTerminalError = true;
           const data = event.data as Record<string, unknown> | undefined;
           terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
-          // Keep the adapter's already-classified status-guide payload
-          // (overloaded / rate_limit carry `agentType` + `code`) so the finish
-          // leg doesn't flatten it back to a bare string — the process-failure
-          // classifier there only knows cli_not_found / auth_required.
+          // Keep the adapter's classified status-guide payload (overloaded / rate_limit carry
+          // `agentType` + `code`): the finish leg's classifier only knows cli/auth failures.
           terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);

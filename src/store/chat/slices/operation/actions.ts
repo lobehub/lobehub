@@ -1042,6 +1042,7 @@ export class OperationActionsImpl {
       Pick<
         QueuedMessage,
         | 'heldBehindOperationId'
+        | 'localSteer'
         | 'serverDelivering'
         | 'serverDelivery'
         | 'serverRequest'

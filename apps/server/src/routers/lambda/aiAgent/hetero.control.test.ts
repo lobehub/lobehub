@@ -78,6 +78,14 @@ describe('waitHeteroSteer and the Follow-up behavior', () => {
     expect(mocks.takeHeteroSteer).not.toHaveBeenCalled();
   });
 
+  it('hands out no follow-up while the session waits for the user', async () => {
+    mocks.readFollowUpMode.mockResolvedValue('steer');
+
+    await caller.waitHeteroSteer({ blockMs: 1, holdSteer: true, operationId: 'op-1' });
+
+    expect(mocks.takeHeteroSteer).not.toHaveBeenCalled();
+  });
+
   it('asks for a merged steer in Steer mode', async () => {
     mocks.readFollowUpMode.mockResolvedValue('steer');
 

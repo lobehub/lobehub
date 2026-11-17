@@ -157,6 +157,11 @@ const WaitHeteroSteerSchema = z.object({
    */
   acceptsImages: z.boolean().optional(),
   blockMs: z.number().int().positive().max(25_000).default(20_000),
+  /**
+   * The session waits for the user (a question or an approval): hand it no
+   * follow-up now, only control messages. Older producers omit it.
+   */
+  holdSteer: z.boolean().optional(),
   operationId: z.string().min(1),
 });
 
@@ -588,7 +593,7 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
-      const { acceptsControl, acceptsImages, operationId, blockMs } = input;
+      const { acceptsControl, acceptsImages, holdSteer, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -652,7 +657,7 @@ export const heteroRouter = router({
           const control = await takeHeteroControl(operationId);
           if (control) return answer(null, control);
         }
-        if (scope && followUpMode !== 'queue') {
+        if (scope && followUpMode !== 'queue' && !holdSteer) {
           const message = await takeHeteroSteer(storeCtx, {
             acceptsImages,
             agentId: operation.agentId,
