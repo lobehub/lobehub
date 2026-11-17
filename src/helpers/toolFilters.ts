@@ -11,7 +11,7 @@ import {
 import { isDesktop } from '@lobechat/const';
 
 import { getServerConfigStoreState } from '@/store/serverConfig';
-import { getUserStoreState } from '@/store/user';
+import { useUserStore } from '@/store/user';
 
 /**
  * Check if a tool should be enabled based on platform-specific constraints
@@ -22,7 +22,7 @@ export const shouldEnableTool = (toolId: string): boolean => {
   // Feature-flagged tools (e.g. builtin-dashboard) are not listed or offered while off.
   if (!isToolEnabledByFeatureFlags(toolId, getServerConfigStoreState()?.featureFlags)) return false;
   // Lab-gated tools (e.g. lobe-session) are not listed or offered while their Labs switch is off.
-  if (!isToolEnabledByLab(toolId, getUserStoreState().preference?.lab)) return false;
+  if (!isToolEnabledByLab(toolId, useUserStore.getState().preference?.lab)) return false;
 
   // These executors call Electron IPC and cannot run in a plain web client.
   if (toolId === LocalSystemManifest.identifier || toolId === AuvManifest.identifier) {

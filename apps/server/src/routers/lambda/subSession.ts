@@ -10,6 +10,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { startComposerRun } from '@/server/services/aiAgent/composerRun';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
 import { findOwnLiveRuns } from '@/server/services/aiAgent/steerQueue/liveRuns';
 import {
@@ -21,7 +22,6 @@ import {
 import { readSubSessionsEnabled } from '@/server/services/subSession/labGate';
 
 import { agentSteerQueueRouter } from './agentSteerQueue';
-import { aiAgentRouter } from './aiAgent';
 import { deviceRouter } from './device';
 import { topicRouter } from './topic';
 import { readTopicTranscript } from './topic/transcript';
@@ -95,10 +95,19 @@ export const createSubSessionService = (ctx: CallerCtx) => {
       return content ? content.slice(0, 2000) : undefined;
     },
     resolveInterventionConfig: () => resolveForegroundInterventionConfig(db, ctx.userId),
+    // What `aiAgent.execAgent` does for a non-superseding send; the steer-queue
+    // append just before it already authorized this agent and conversation.
     startOnTopic: (params) =>
-      aiAgentRouter
-        .createCaller(callerCtx)
-        .execAgent({ ...(params as any), supersedeLiveRun: false }) as any,
+      startComposerRun(
+        {
+          aiAgentService: new AiAgentService(db, ctx.userId, { workspaceId }),
+          db,
+          supersedeLiveRun: false,
+          userId: ctx.userId,
+          workspaceId,
+        },
+        { ...(params as any), queuedSuccessor: true },
+      ) as any,
     // Same default as the delete confirmation: the topic's uploaded files go with it.
     trashTopic: (topicId) => topicCaller().removeTopic({ id: topicId, removeFiles: true }),
   });

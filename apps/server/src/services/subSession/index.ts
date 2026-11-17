@@ -338,7 +338,10 @@ export class SubSessionService {
         };
       } catch (error) {
         // A turn began after the queue saw the topic idle: queue behind it instead.
-        if ((error as { code?: string })?.code !== 'CONFLICT') throw error;
+        const conflict =
+          (error as { code?: string })?.code === 'CONFLICT' ||
+          (error as Error)?.name === 'TopicStartReservationError';
+        if (!conflict) throw error;
       }
     }
 
