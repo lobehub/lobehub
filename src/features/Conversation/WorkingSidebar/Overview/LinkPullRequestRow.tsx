@@ -11,7 +11,7 @@ interface LinkPullRequestRowProps {
 }
 
 /** Better Coding Experience: the repository card's "Link a pull request" action. */
-const LinkPullRequestRow = memo<LinkPullRequestRowProps>(({ onLink }) => {
+export const LinkPullRequestRow = memo<LinkPullRequestRowProps>(({ onLink }) => {
   const { t } = useTranslation('chat');
 
   return (
@@ -26,5 +26,3 @@ const LinkPullRequestRow = memo<LinkPullRequestRowProps>(({ onLink }) => {
 });
 
 LinkPullRequestRow.displayName = 'OverviewLinkPullRequestRow';
-
-export default LinkPullRequestRow;

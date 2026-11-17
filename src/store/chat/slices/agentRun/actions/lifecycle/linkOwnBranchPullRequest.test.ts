@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { linkOwnBranchPullRequest } from '../linkOwnBranchPullRequest';
+import { linkOwnBranchPullRequest } from './linkOwnBranchPullRequest';
 
 const mocks = vi.hoisted(() => ({
   getLinkedPullRequest: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('@/store/chat/utils/topicWorkingDirGit', () => ({
   canReadTopicGitTransport: () => true,
   resolveTopicGitTransport: () => ({ deviceId: 'dev-1' }),
 }));
-vi.mock('../../../../topic/selectors', () => ({
+vi.mock('../../../topic/selectors', () => ({
   topicSelectors: { getTopicById: () => () => mocks.topic },
 }));
 

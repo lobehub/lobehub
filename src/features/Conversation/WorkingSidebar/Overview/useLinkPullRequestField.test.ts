@@ -4,7 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isPullRequestUrl, useLinkPullRequestField } from '../useLinkPullRequestField';
+import { isPullRequestUrl, useLinkPullRequestField } from './useLinkPullRequestField';
 
 const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 

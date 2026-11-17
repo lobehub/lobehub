@@ -14,6 +14,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
@@ -28,6 +29,14 @@ import {
   resolveShellPullRequestLinking,
   setTopicPullRequestDismissed,
 } from '@/server/services/workRegistration';
+
+import { assertCanUseTopicTargets } from './_helpers/conversationResourceGuard';
+
+const topicGuardCtx = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -365,6 +374,8 @@ export const workRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Same gate as topic.updateTopicMetadata: `use` access to the conversation.
+      await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
       const parsed = parsePullRequestUrl(input.url);
       if (!parsed) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a GitHub pull request URL' });
@@ -395,12 +406,15 @@ export const workRouter = router({
         topicId: z.string().min(1),
       }),
     )
-    .mutation(async ({ ctx, input }) => ({
-      updated: await setTopicPullRequestDismissed(
-        ctx.topicModel,
-        input.topicId,
-        input.identifier,
-        input.dismissed,
-      ),
-    })),
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
+      return {
+        updated: await setTopicPullRequestDismissed(
+          ctx.topicModel,
+          input.topicId,
+          input.identifier,
+          input.dismissed,
+        ),
+      };
+    }),
 });

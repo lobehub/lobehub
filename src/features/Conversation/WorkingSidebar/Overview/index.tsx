@@ -55,7 +55,7 @@ import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
 import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
 import DeviceStatusSection from './DeviceStatusSection';
-import LinkPullRequestRow from './LinkPullRequestRow';
+import { LinkPullRequestRow } from './LinkPullRequestRow';
 import {
   collectChangeStats,
   isLinkedWorktreeCheckout,

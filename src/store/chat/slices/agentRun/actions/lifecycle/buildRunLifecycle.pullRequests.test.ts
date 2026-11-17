@@ -18,10 +18,17 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/linkOwnBranchPullRequest
 vi.mock('@/services/work', () => ({
   workService: { refreshTopicPullRequests: mocks.refreshTopicPullRequests },
 }));
-vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableBetterCodingExperience: () => mocks.betterCoding },
-}));
+// Partial: the queued follow-up path reads other user selectors (follow-up mode).
+vi.mock('@/store/user/selectors', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    labPreferSelectors: {
+      ...actual.labPreferSelectors,
+      enableBetterCodingExperience: () => mocks.betterCoding,
+    },
+  };
+});
 vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));

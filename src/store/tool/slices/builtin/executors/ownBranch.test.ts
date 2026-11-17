@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyOwnBranchToConfig, parseCreatedBranch } from '../ownBranch';
+import { applyOwnBranchToConfig, parseCreatedBranch } from './ownBranch';
 
 describe('parseCreatedBranch', () => {
   it.each([

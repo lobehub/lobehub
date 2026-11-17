@@ -63,11 +63,13 @@ export const useSidebarPullRequests = (params: {
   const dismissPullRequest = useCallback(
     async (view: TopicPullRequestView) => {
       if (!topicId) return;
-      await workService.setTopicPullRequestDismissed({
+      const { updated } = await workService.setTopicPullRequestDismissed({
         dismissed: true,
         identifier: view.identifier,
         topicId,
       });
+      // Not saved (lost write race, topic not reachable): the caller reports it.
+      if (!updated) throw new Error(`Could not remove ${view.identifier}`);
       await refresh();
     },
     [refresh, topicId],
@@ -76,11 +78,13 @@ export const useSidebarPullRequests = (params: {
   const linkPullRequest = useCallback(
     async (url: string) => {
       if (!topicId) return undefined;
-      const { identifier } = await workService.linkTopicPullRequest({
+      const { identifier, linked } = await workService.linkTopicPullRequest({
         source: 'manual',
         topicId,
         url,
       });
+      // Not saved: reject so the dialog stays open with its error.
+      if (!linked) throw new Error(`Could not link ${identifier}`);
       await refresh();
       return identifier;
     },

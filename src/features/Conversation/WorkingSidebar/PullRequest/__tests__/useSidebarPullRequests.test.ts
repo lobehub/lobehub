@@ -153,4 +153,18 @@ describe('useSidebarPullRequests', () => {
     expect(identifier).toBe('a/b#4');
     expect(mocks.refresh).toHaveBeenCalledTimes(2);
   });
+
+  it('rejects a link or removal the server did not save', async () => {
+    const views = [view(3)];
+    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    mocks.link.mockResolvedValueOnce({ identifier: 'a/b#4', linked: false });
+    mocks.dismiss.mockResolvedValueOnce({ updated: false });
+    const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
+
+    await expect(
+      result.current.linkPullRequest?.('https://github.com/a/b/pull/4'),
+    ).rejects.toThrow();
+    await expect(result.current.dismissPullRequest?.(views[0] as any)).rejects.toThrow();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
 });
