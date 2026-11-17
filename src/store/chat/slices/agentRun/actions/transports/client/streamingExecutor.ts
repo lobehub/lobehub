@@ -70,6 +70,7 @@ import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
 import { steerQueuedFollowUps } from './clientSteer';
+import { resolveClientSubAgentTarget } from './clientSubAgentTarget';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -975,11 +976,14 @@ export class StreamingExecutorActionImpl {
     inheritMessages?: boolean;
     instruction: string;
     parentOperationId?: string;
+    /** Another agent to run on its own config instead of a copy of `agentId`. */
+    targetAgentId?: string;
     toolMessageId: string;
     topicId: string;
   }): Promise<RunSubAgentResult> => {
     const {
-      agentId,
+      agentId: parentAgentId,
+      targetAgentId,
       topicId,
       instruction,
       description,
@@ -989,8 +993,15 @@ export class StreamingExecutorActionImpl {
     } = params;
 
     const logId = `runClientSubAgent:${toolMessageId}`;
+    // The child runs as the named target, or as a copy of the parent.
+    const agentId = targetAgentId ?? parentAgentId;
 
     try {
+      const target = targetAgentId ? await resolveClientSubAgentTarget(targetAgentId) : undefined;
+      if (target && 'error' in target) {
+        return { error: target.error, result: target.error, success: false, threadId: '' };
+      }
+
       // 1. Create the isolation Thread (persists thread + initial user message)
       const threadResult = await aiAgentService.createClientTaskThread({
         agentId,
@@ -1046,7 +1057,7 @@ export class StreamingExecutorActionImpl {
       let subMessages = [...threadMessages];
       if (inheritMessages) {
         const parentMessages = (
-          this.#get().dbMessagesMap[messageMapKey({ agentId, topicId })] || []
+          this.#get().dbMessagesMap[messageMapKey({ agentId: parentAgentId, topicId })] || []
         ).filter((m) => m.role !== 'task');
         subMessages = [...parentMessages, ...subMessages];
         this.#get().replaceMessages(subMessages, { context: subContext });
@@ -1058,24 +1069,25 @@ export class StreamingExecutorActionImpl {
       //    wins, otherwise the sub-agent follows the parent's *effective* model
       //    — topic-pinned model over the agent default, the same precedence
       //    internal_createAgentState applies to the parent run itself.
-      const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
+      //    A named target keeps the model configured on it (no override).
+      const parentAgentConfig =
+        agentSelectors.getAgentConfigById(parentAgentId)(getAgentStoreState());
       const parentEffectiveModel =
         topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
-      const subAgentModel = resolveSubAgentModel(
-        parentAgentConfig?.agencyConfig?.subagent,
-        parentEffectiveModel,
-      );
+      const subAgentModel = target
+        ? undefined
+        : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
       // Warm the sub-agent model's user-level reasoning config before the run:
       // the ChatInput loader only fetches the parent's effective model, while
       // resolveModelExtendParams reads this cache synchronously mid-run.
-      await getAiInfraStoreState().ensureModelReasoningConfig(
-        subAgentModel.model,
-        subAgentModel.provider,
-      );
+      const runModel = subAgentModel ?? target?.config;
+      if (runModel?.model && runModel.provider) {
+        await getAiInfraStoreState().ensureModelReasoningConfig(runModel.model, runModel.provider);
+      }
       const runtimeResult = await this.#get().executeClientAgent({
-        chatConfigOverride: getSubAgentChatConfigOverride(
-          parentAgentConfig?.agencyConfig?.subagent,
-        ),
+        chatConfigOverride: target
+          ? undefined
+          : getSubAgentChatConfigOverride(parentAgentConfig?.agencyConfig?.subagent),
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
