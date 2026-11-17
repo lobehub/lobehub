@@ -593,7 +593,9 @@ export const TaskRunStartedSchema = z
     memberOperationId: z.string().optional(),
     message: z.string(),
     messageId: z.string().optional(),
-    operationId: z.string(),
+    operationId: z
+      .string()
+      .meta({ description: 'The started run; follow it with `GET /runs/{id}`.' }),
     status: z.string(),
     success: z.boolean(),
     supervisorOperationId: z.string().optional(),

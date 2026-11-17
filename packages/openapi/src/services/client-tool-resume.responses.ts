@@ -39,7 +39,14 @@ const findCallingAssistantId = (state: AgentState, callId: string): string | und
 interface ResumeParams {
   agentRuntimeService: AgentRuntimeService;
   db: LobeChatDatabase;
+  /** Only resume this run; another run parked on the topic is left alone. */
+  operationId?: string;
   outputs: FunctionCallOutputItem[];
+  /**
+   * Hand the resume to the runtime's queue instead of returning it for the
+   * caller to execute in-request (`POST /runs/{id}/tool-results`).
+   */
+  resumeInBackground?: boolean;
   topicId: string;
   userId: string;
   workspaceId?: string;
@@ -93,7 +100,9 @@ export interface ParkedClientToolsResume {
 export const resumeParkedClientTools = async ({
   agentRuntimeService,
   db,
+  operationId: expectedOperationId,
   outputs,
+  resumeInBackground = false,
   topicId,
   userId,
   workspaceId,
@@ -101,6 +110,7 @@ export const resumeParkedClientTools = async ({
   const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
   const operationId = topic?.metadata?.runningOperation?.operationId;
   if (!operationId) return;
+  if (expectedOperationId && operationId !== expectedOperationId) return;
 
   const operationModel = new AgentOperationModel(db, userId, workspaceId);
   const operation = await operationModel.findById(operationId);
@@ -159,9 +169,9 @@ export const resumeParkedClientTools = async ({
     throw error;
   }
 
-  if (callerCalls.length === pending.length) return { callIds, operationId };
+  if (callerCalls.length === pending.length && !resumeInBackground) return { callIds, operationId };
 
-  // Mixed batch: hand the park back to the runtime's completion barrier, which
+  // Mixed batch (or a background resume): hand the park back to the runtime's completion barrier, which
   // resumes it once every tool of the batch has a result. If the other tools
   // already finished, the barrier passes now and this request runs the resume.
   await releaseClaim(db, userId, operationId);

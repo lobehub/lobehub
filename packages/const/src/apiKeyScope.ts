@@ -56,6 +56,14 @@ export const API_KEY_SCOPES = [
   'workspace:write',
   'user:read',
   'user:write',
+  /**
+   * Agent runs over the public REST API (`/api/v1/runs`): reading a run's
+   * status and event stream, and controlling it (cancel, steer, approve, tool
+   * results). Starting or resuming one also needs `model:invoke`, so a key can
+   * watch and steer runs without being able to spend.
+   */
+  'run:read',
+  'run:write',
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
