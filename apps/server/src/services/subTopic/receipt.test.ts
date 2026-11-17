@@ -135,17 +135,14 @@ describe('deliverSubTopicReceipt', () => {
     expect(queueWakeup).not.toHaveBeenCalled();
   });
 
-  it("keeps a group conversation's identity on the receipt, so its transcript shows it", async () => {
+  it('reports nothing to a group conversation, whose wake would lose its group context', async () => {
     mocks.findTopic.mockImplementation(async (id: string) =>
       id === 'tpc_child' ? child : { ...parent, groupId: 'grp_1' },
     );
 
-    await deliverSubTopicReceipt({ queueWakeup }, params);
-
-    expect(mocks.create.mock.calls[0][0]).toMatchObject({
-      groupId: 'grp_1',
-      topicId: 'tpc_parent',
-    });
+    expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('not_reportable');
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).not.toHaveBeenCalled();
   });
 
   it('counts a turn a person started as hop 1', async () => {

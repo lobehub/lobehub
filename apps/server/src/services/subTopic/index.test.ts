@@ -632,6 +632,23 @@ describe('SubTopicService.retire — runs', () => {
 });
 
 describe('SubTopicService — review fixes', () => {
+  it('refuses a sub-topic of a group conversation, but opens a detached topic from one', async () => {
+    const deps = createDeps();
+    deps.findTopic.mockResolvedValue({ ...opener, groupId: 'grp_1' } as any);
+
+    await expect(
+      new SubTopicService(deps).open({ openerTopicId: 'tpc_parent', prompt: 'x' }),
+    ).rejects.toThrow(/not available in group conversations/);
+    expect(deps.execAgent).not.toHaveBeenCalled();
+
+    await new SubTopicService(deps).open({
+      detach: true,
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+    });
+    expect(deps.execAgent.mock.calls[0][0]).not.toHaveProperty('openedByTopicId');
+  });
+
   it('pins a new worktree sub-topic to the device the worktree was created on', async () => {
     const deps = createDeps();
 

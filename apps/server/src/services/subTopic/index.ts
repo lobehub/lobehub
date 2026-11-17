@@ -79,6 +79,7 @@ export const toSubTopicState = (
 
 interface TopicRow {
   agentId?: null | string;
+  groupId?: null | string;
   id: string;
   metadata?: ChatTopicMetadata | null;
   status?: ChatTopicStatus | null;
@@ -272,6 +273,14 @@ export class SubTopicService {
   /** Open a sub-topic and send its first message; returns as soon as the run is dispatched. */
   async open(input: OpenSubTopicInput) {
     const opener = await this.requireTopic(input.openerTopicId);
+    // Group conversations keep their own collaboration (members, supervisor):
+    // a sub-topic could not report back into one with the group's context.
+    if (opener.groupId && !input.detach) {
+      throw new SubTopicError(
+        'BAD_REQUEST',
+        'Sub-topics are not available in group conversations; open a detached topic instead.',
+      );
+    }
     const agentId = input.agentId || opener.agentId;
     if (!agentId) {
       throw new SubTopicError('BAD_REQUEST', 'Name the agent to open the sub-topic with.');

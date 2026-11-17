@@ -184,6 +184,13 @@ export const deliverSubTopicReceipt = async (
   if (!opener?.agentId || (opener.status && RETIRED_STATUSES.has(opener.status))) {
     return 'opener_gone';
   }
+  // Group conversations keep their own collaboration: a wake through the
+  // shared channel would run without the group's context and supervisor role,
+  // so a group parent is never reported to (and cannot open sub-topics).
+  if (opener.groupId) {
+    log('opener %s is a group conversation; nothing reported', opener.id);
+    return 'not_reportable';
+  }
   // A member may use a shared sub-topic yet only view its opener: their turn
   // must not write into the opener or wake it under their identity.
   const canRunOpener = deps.canRunOpener ?? defaultCanRunOpener({ db, userId, workspaceId });
@@ -252,8 +259,6 @@ export const deliverSubTopicReceipt = async (
         parentId,
         role: 'user',
         topicId: opener.id,
-        // A group conversation's transcript only reads its own messages.
-        ...(opener.groupId && { groupId: opener.groupId }),
       },
       messageId,
     );
