@@ -1,9 +1,9 @@
 import { tabScopeKey } from '@/features/Electron/titlebar/TabBar/scope';
 import { useElectronStore } from '@/store/electron';
 
-import { MAIN_OWNER } from './useLocationOwner';
+import { MAIN_OWNER } from './locationOwner';
 
-export { MAIN_OWNER, type OpenOwners, parseOpenOwners } from './useLocationOwner';
+export { MAIN_OWNER, type OpenOwners, parseOpenOwners } from './locationOwner';
 
 /**
  * Which history a location belongs to: each Electron tab (or split pane) keeps
