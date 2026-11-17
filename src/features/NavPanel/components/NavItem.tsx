@@ -54,7 +54,7 @@ const styles = createStaticStyles(({ css }) => ({
       .${CONTENT_CLASS_NAME} {
         mask-image: linear-gradient(
           to right,
-          #000 calc(100% - var(--nav-item-actions-inset) - 28px),
+          black calc(100% - var(--nav-item-actions-inset) - 28px),
           transparent calc(100% - var(--nav-item-actions-inset))
         );
       }
@@ -93,6 +93,11 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    */
   actions?: LazyActions;
   active?: boolean;
+  /**
+   * Denser single-line row for long lists of shortcuts (e.g. Favorites): 28px
+   * tall with 13px text and a 24px icon column, instead of 36px / 14px / 28px.
+   */
+  compact?: boolean;
   contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
   /**
    * Optional second line rendered under the title (e.g. a topic's project
@@ -125,9 +130,10 @@ const NavItem = memo<NavItemProps>(
     actions,
     contextMenuItems,
     active,
+    compact,
     href,
     icon,
-    iconSize = 18,
+    iconSize = compact ? 16 : 18,
     title,
     titleColor,
     description,
@@ -180,15 +186,18 @@ const NavItem = memo<NavItemProps>(
           }
         : undefined;
 
+    const iconColumnWidth = compact ? 24 : 28;
+    const titleFontSize = compact ? 13 : undefined;
+
     const iconNode = icon && (
       <Center
         flex={'none'}
         // With a description the row is two lines tall; align the leading icon
         // to the title's first line (match its line-height) instead of letting
         // it center across both lines, which drops it into the gap.
-        height={description ? 22 : 28}
+        height={description ? 22 : iconColumnWidth}
         style={description ? { alignSelf: 'flex-start' } : undefined}
-        width={28}
+        width={iconColumnWidth}
       >
         {loading ? (
           <Spin size={iconSize} variant="network" />
@@ -204,8 +213,8 @@ const NavItem = memo<NavItemProps>(
         align={'center'}
         className={cx(styles.container, className)}
         clickable={!disabled}
-        gap={8}
-        height={description ? undefined : 36}
+        gap={compact ? 6 : 8}
+        height={description ? undefined : compact ? 28 : 36}
         paddingBlock={description ? 8 : undefined}
         paddingInline={4}
         style={mergedStyle}
@@ -232,7 +241,7 @@ const NavItem = memo<NavItemProps>(
             style={description ? { alignSelf: 'flex-start' } : undefined}
             // Keep the icon column width so the title does not shift; a wider
             // label overflows evenly into the gaps around it.
-            width={28}
+            width={iconColumnWidth}
           >
             {iconNode}
             {iconBelow}
@@ -253,7 +262,11 @@ const NavItem = memo<NavItemProps>(
           {titlePrefix}
           {description ? (
             <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
-              <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }}>
+              <Text
+                color={textColor}
+                ellipsis={{ tooltipWhenOverflow: true }}
+                fontSize={titleFontSize}
+              >
                 {title}
               </Text>
               {description}
@@ -261,6 +274,7 @@ const NavItem = memo<NavItemProps>(
           ) : (
             <Text
               color={textColor}
+              fontSize={titleFontSize}
               style={{ flex: 1 }}
               ellipsis={{
                 tooltipWhenOverflow: true,
