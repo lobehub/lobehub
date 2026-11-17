@@ -10,7 +10,8 @@ export const ChannelManifest: BuiltinToolManifest = {
   meta: {
     avatar: '#',
     title: 'Channel',
-    description: 'Read the current shared conversation, and message Agents in your other Channels.',
+    description:
+      'Read the current shared conversation, message Agents in your other Channels, and message people for your requester.',
   },
   api: [
     {
@@ -103,6 +104,45 @@ export const ChannelManifest: BuiltinToolManifest = {
             type: 'string',
             description:
               'The message, self-contained: the addressed Agent does not see this conversation.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.listPeople,
+      description:
+        'List the people your requester can message one-on-one (userId, name, username): their contacts, or in a workspace its members and the external contacts paired with them. Use it to find who messagePerson can reach. Filter with query (part of the name or @handle). Default 10, maximum 20.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          query: {
+            type: 'string',
+            description: "Case-insensitive part of the person's name or @handle.",
+          },
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 20,
+            description: 'Number of people; default 10.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.messagePerson,
+      description:
+        "Message one person for your requester, e.g. when asked to let someone know once you are done. It is posted in your requester's one-on-one conversation with that person, as your requester's message marked as sent by you, and the person is notified. No Agent answers there and nothing comes back to you. Get userId from listPeople; if several people match the name, ask your requester instead of guessing. Not for your requester: your final answer reaches them.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['userId', 'content'],
+        properties: {
+          userId: { type: 'string', description: 'The person, from listPeople.' },
+          content: {
+            type: 'string',
+            description:
+              'The message, self-contained and written for that person: they do not see this conversation.',
           },
         },
       },

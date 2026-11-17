@@ -36,7 +36,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import type { DeviceAccessReason } from '../deviceAccessPolicy';
 import { resolveDeviceAccessPolicy } from '../deviceAccessPolicy';
@@ -550,10 +550,14 @@ export const setupTurn = async (
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
   // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
-  // agents are not available for shared visitor runs. Checked here (using the
-  // agent-level config, before any topic-pinned model override) rather than
-  // at the later hetero-detection site (`isHeteroAgent`) so it runs ahead of
-  // ALL row creation, not just the message rows.
+  // agents are not available for shared visitor runs, even when the share
+  // grants device access (`shareGate.canUseDevice`): the hetero dispatch path
+  // signs its gateway token for the run's user (the creator) and registers no
+  // visitor stream owner, so opening it would hand the visitor creator account
+  // access. Checked here (using the agent-level config, before any
+  // topic-pinned model override) rather than at the later hetero-detection
+  // site (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
+  // message rows.
   if (shareGate && (heterogeneousProvider?.type || isHeterogeneousAgentModelId(model))) {
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -638,7 +642,7 @@ export const setupTurn = async (
         taskId: operationTaskId,
       });
 
-      const fallbackTitleSource = markdownToTxt(prompt);
+      const fallbackTitleSource = toTitleText(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
       const metadataWithSnapshot = await withProjectSandbox(deps, {
         agentId: resolvedAgentId,
@@ -818,7 +822,7 @@ export const setupTurn = async (
       }
 
       // Re-assert the share restriction after topic overrides are applied.
-      // Heterogeneous agents are not available for shared visitor runs.
+      // Heterogeneous agents are not available for shared visitor runs (see above).
       if (shareGate && isHeterogeneousAgentModelId(model)) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -874,7 +878,7 @@ export const setupTurn = async (
   // chat) and stops the device list from leaking into the LLM context.
   const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
     botContext,
-    shareVisitor: !!shareGate,
+    shareVisitor: shareGate ? { canUseDevice: shareGate.canUseDevice } : undefined,
   });
   log(
     'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',

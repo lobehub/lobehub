@@ -2,7 +2,7 @@ import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CircleAlertIcon, RotateCwIcon, XIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FileUploadErrorActions } from '@/business/client/features/FileUploadErrorActions';
@@ -14,14 +14,10 @@ import { type UploadFileItem } from '@/types/files/upload';
 import { openFilePreviewModal } from './FilePreviewModal.loader';
 import UploadIndicator from './UploadIndicator';
 import UploadTooltipContent from './UploadTooltipContent';
+import { useRepastePulse } from './useRepastePulse';
 import { getUploadChipState } from './utils';
 
 const IMAGE_CARD_SIZE = 112;
-
-const enter = stylex.keyframes({
-  from: { opacity: 0, transform: 'scale(0.92)' },
-  to: { opacity: 1, transform: 'scale(1)' },
-});
 
 const styles = stylex.create({
   card: {
@@ -35,12 +31,6 @@ const styles = stylex.create({
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,
-    animationName: {
-      'default': enter,
-      '@media (prefers-reduced-motion: reduce)': 'none',
-    },
-    animationDuration: '160ms',
-    animationTimingFunction: 'ease-out',
   },
   cardError: { borderColor: cssVar.colorErrorBorder },
   image: {
@@ -101,6 +91,8 @@ const ImageCard = memo<UploadFileItem>((item) => {
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
   const { busy, canRetry, indicator } = getUploadChipState(item);
   const src = previewUrl || item.fileUrl || item.base64Url;
+  const cardRef = useRef<HTMLDivElement>(null);
+  useRepastePulse(cardRef, item.repastedAt);
 
   const handlePreview = useEventCallback(() => {
     void openFilePreviewModal(item);
@@ -113,7 +105,11 @@ const ImageCard = memo<UploadFileItem>((item) => {
   });
 
   return (
-    <div aria-busy={busy} {...stylex.props(styles.card, canRetry && styles.cardError)}>
+    <div
+      aria-busy={busy}
+      ref={cardRef}
+      {...stylex.props(styles.card, canRetry && styles.cardError)}
+    >
       {src && <img alt={file.name} draggable={false} src={src} {...stylex.props(styles.image)} />}
       <Tooltip title={<UploadTooltipContent {...item} />}>
         <button

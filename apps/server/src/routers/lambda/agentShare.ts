@@ -1,6 +1,7 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
+  AGENT_SHARE_DEVICE_ALLOW_EMAILS_LIMIT,
   AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
 import { assembleSkillPool } from '@lobechat/mecha';
@@ -64,6 +65,16 @@ export const agentShareConfigSchema = z
           .strict(),
       )
       .max(20)
+      .optional(),
+    deviceAccess: z.enum(['none', 'all', 'allowlist']).optional(),
+    /**
+     * Normalized to lower case before the duplicate check, because the
+     * runtime match against the visitor's account email is case-insensitive.
+     */
+    deviceAllowEmails: z
+      .array(z.string().trim().toLowerCase().pipe(z.email()))
+      .max(AGENT_SHARE_DEVICE_ALLOW_EMAILS_LIMIT)
+      .refine((emails) => new Set(emails).size === emails.length, 'Duplicate email')
       .optional(),
     featuredWorkIds: z
       .array(z.string().trim().min(1))

@@ -68,7 +68,8 @@ describe('direct Channel identity', () => {
     await repository.send(channel.id, { ...sendInput, content: 'Second', requestKey: 'second' });
     expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
       lastMessage: { content: 'Second', thread: null },
-      unreadCount: 2,
+      // The caller's own messages are never unread for them.
+      unreadCount: 0,
     });
   });
 

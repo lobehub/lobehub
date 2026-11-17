@@ -101,10 +101,11 @@ describe('open project Channels', () => {
     await teammate.send(channel.id, { content: 'Hi', requestKey: 'hi', routing: 'fallback' });
 
     expect(await membershipOf(channel.id)).toEqual([
-      expect.objectContaining({ lastReadSequence: 1, role: 'member', status: 'active' }),
+      // Sending reads up to the teammate's own message.
+      expect.objectContaining({ lastReadSequence: 2, role: 'member', status: 'active' }),
     ]);
     expect(await teammate.list()).toEqual([
-      expect.objectContaining({ id: channel.id, joined: true, unreadCount: 1 }),
+      expect.objectContaining({ id: channel.id, joined: true, unreadCount: 0 }),
     ]);
     expect((await teammate.detail(channel.id)).joined).toBe(true);
     expect((await owner.detail(channel.id)).messages.map((message) => message.content)).toEqual([

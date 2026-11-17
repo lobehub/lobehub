@@ -9,6 +9,7 @@ const item = (number: number, overrides: Record<string, unknown> = {}) =>
     number,
     repoFullName: 'lobehub/lobehub',
     scm: null,
+    source: 'created',
     status: 'open',
     title: `PR ${number}`,
     url: `https://github.com/lobehub/lobehub/pull/${number}`,
@@ -99,5 +100,25 @@ describe('resolvePullRequestView · localDetail', () => {
       }).localDetail,
     ).toBe(false);
     expect(resolvePullRequestView(item(1, { scm })).localDetail).toBe(false);
+  });
+});
+
+describe('resolvePullRequestView · trust', () => {
+  it('carries how the PR was linked and whether it is vouched', () => {
+    expect(resolvePullRequestView(item(4, { source: 'branch', vouched: false }))).toMatchObject({
+      source: 'branch',
+      vouched: false,
+    });
+    // A list persisted before these fields existed.
+    expect(resolvePullRequestView(item(5, { source: undefined }))).toMatchObject({
+      source: 'created',
+      vouched: true,
+    });
+  });
+});
+
+describe('resolvePullRequestView · untitled', () => {
+  it('names the repository when no title is known yet, not the number again', () => {
+    expect(resolvePullRequestView(item(12, { title: null })).title).toBe('lobehub/lobehub');
   });
 });

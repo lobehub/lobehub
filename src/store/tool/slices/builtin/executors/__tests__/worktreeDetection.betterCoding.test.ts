@@ -139,4 +139,80 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
       expect.objectContaining({ branch: 'feat/x', toolCallId: 'call-push' }),
     );
   });
+
+  it("records a branch the agent created as the topic's own", async () => {
+    await recordGitCommandEffects({
+      command: 'git switch -c feat/new',
+      resultContent: "Switched to a new branch 'feat/new'",
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git).toMatchObject(
+      { branch: 'feat/new', ownBranch: 'feat/new' },
+    );
+  });
+
+  it('does not own a branch it only switched to', async () => {
+    await recordGitCommandEffects({
+      command: 'git switch main',
+      resultContent: "Switched to branch 'main'",
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(
+      chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git,
+    ).not.toHaveProperty('ownBranch');
+  });
+
+  it('owns a branch created by a quiet switch that printed nothing', async () => {
+    await recordGitCommandEffects({
+      command: 'git switch -q -c feat/quiet',
+      resultContent: '',
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git).toMatchObject(
+      { branch: 'feat/quiet', ownBranch: 'feat/quiet' },
+    );
+  });
+
+  it('owns a branch only when the flag guarantees creation, not a create-or-reset', async () => {
+    for (const command of [
+      'git switch -q -C feat/x feat/x',
+      'git checkout -q -B feat/x',
+      'git worktree add -B feat/x /tmp/wt',
+    ]) {
+      chatMocks.updateTopicMetadata.mockClear();
+      chatMocks.topics = { t1: topic() };
+      await recordGitCommandEffects({ command, resultContent: '', toolCallId: 'c', topicId: 't1' });
+      const git = chatMocks.updateTopicMetadata.mock.calls[0]?.[1].workingDirectoryConfig.git;
+      expect(git?.ownBranch).toBeUndefined();
+    }
+
+    chatMocks.updateTopicMetadata.mockClear();
+    await recordGitCommandEffects({
+      command: 'git checkout -q -b feat/new',
+      resultContent: '',
+      toolCallId: 'c',
+      topicId: 't1',
+    });
+    expect(
+      chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git.ownBranch,
+    ).toBe('feat/new');
+  });
+
+  it('does not own a branch whose creation a fallback may have rescued', async () => {
+    await recordGitCommandEffects({
+      command: 'git switch -q -c feat/x || git switch -q feat/x',
+      resultContent: '',
+      toolCallId: 'c',
+      topicId: 't1',
+    });
+
+    const git = chatMocks.updateTopicMetadata.mock.calls[0]?.[1].workingDirectoryConfig.git;
+    expect(git?.ownBranch).toBeUndefined();
+  });
 });

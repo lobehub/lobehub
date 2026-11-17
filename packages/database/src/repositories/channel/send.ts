@@ -1,6 +1,6 @@
 import type { ChannelMessageMetadata, ChannelRoutingMode } from '@lobechat/types';
 import { CHANNEL_LIMITS } from '@lobechat/types';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
 import { agents, channelMembers, channelMessages, channelThreads, files } from '../../schemas';
@@ -309,6 +309,17 @@ export const sendMessage = async (
     threadId,
   });
   await attachFiles(tx, { fileIds, messageId: message.id });
+  // Like any chat app, sending reads the conversation up to the sender's own message, so it
+  // never counts as unread (or notifies) on the sender's other devices. An Agent's request, or a
+  // relay (`via`) posted for the person, is not the person reading: their unseen messages stay
+  // unread.
+  if (!author && !input.metadata?.via)
+    await tx
+      .update(channelMembers)
+      .set({
+        lastReadSequence: sql`greatest(coalesce(${channelMembers.lastReadSequence}, 0), ${message.sequence})`,
+      })
+      .where(eq(channelMembers.id, member.id));
   const delivered = await deliver(tx, message, recipients, member.id);
   if (delivered.length) {
     await tx

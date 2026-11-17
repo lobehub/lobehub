@@ -30,12 +30,20 @@ export type DeviceAccessReason =
    */
   | 'bot-owner-not-configured'
   /**
-   * Shared-agent visitor conversation — DENY device tools. The run executes
-   * under the creator's identity, so device access would hand the visitor the
-   * creator's machines; hetero targets degrade to sandbox, native device tools
-   * to plain chat.
+   * Shared-agent visitor conversation the share does not grant device access
+   * (`shareConfig.deviceAccess`) — DENY device tools. The run executes under
+   * the creator's identity, so device access would hand the visitor the
+   * creator's machines; hetero agents are refused, native device tools
+   * degrade to plain chat.
    */
-  | 'share-visitor';
+  | 'share-visitor'
+  /**
+   * Shared-agent visitor the creator explicitly granted the Agent's execution
+   * environment (`shareConfig.deviceAccess` = `all`, or `allowlist` with the
+   * visitor listed). The device is still the Agent's configured one; the
+   * visitor never picks it.
+   */
+  | 'share-visitor-granted';
 
 /**
  * Bot platforms whose LobeHub integration is **personal-scope-only at the
@@ -62,8 +70,11 @@ const PERSONAL_SCOPE_BOT_PLATFORMS = new Set<string>(['wechat']);
 export interface DeviceAccessPolicyInput {
   /** Undefined when the caller is a first-party UI (web / desktop / mobile). */
   botContext?: ChatTopicBotContext;
-  /** True when the run serves a shared-agent visitor (share gate present). */
-  shareVisitor?: boolean;
+  /**
+   * Present when the run serves a shared-agent visitor (share gate present);
+   * `canUseDevice` is the share's device grant resolved for this visitor.
+   */
+  shareVisitor?: { canUseDevice: boolean };
 }
 
 export interface DeviceAccessPolicyOutput {
@@ -87,10 +98,13 @@ export const resolveDeviceAccessPolicy = (
 ): DeviceAccessPolicyOutput => {
   const { botContext, shareVisitor } = input;
 
-  // Checked before every trust branch: a share visitor is never allowed to
-  // reach the creator's devices, regardless of how the request arrived.
+  // Checked before every trust branch: a share visitor reaches the creator's
+  // devices only through the share's own grant, regardless of how the
+  // request arrived.
   if (shareVisitor) {
-    return { canUseDevice: false, reason: 'share-visitor' };
+    return shareVisitor.canUseDevice
+      ? { canUseDevice: true, reason: 'share-visitor-granted' }
+      : { canUseDevice: false, reason: 'share-visitor' };
   }
 
   if (!botContext) {

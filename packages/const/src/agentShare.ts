@@ -236,3 +236,9 @@ export const isShareToolApiGranted = (
   if (!grant) return false;
   return grant === 'all' || grant.has(apiName);
 };
+
+/**
+ * Upper bound on `AgentShareConfig.deviceAllowEmails`. Device access is meant
+ * for a handful of trusted people; a larger audience should use `all`.
+ */
+export const AGENT_SHARE_DEVICE_ALLOW_EMAILS_LIMIT = 100;

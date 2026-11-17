@@ -19,12 +19,15 @@ vi.mock('@/database/models/scm', () => ({
 }));
 
 const db = {} as any;
+const topicModelWith = (pullRequests?: unknown) =>
+  ({ findById: vi.fn(async () => ({ metadata: pullRequests ? { pullRequests } : {} })) }) as any;
 
 const workItem = (number: number, repoFullName = 'lobehub/lobehub') => ({
   identifier: `${repoFullName}#${number}`,
   linkedAt: new Date('2026-11-17T00:00:00Z'),
   number,
   repoFullName,
+  source: 'created',
   status: 'open',
   title: `PR ${number}`,
   url: `https://github.com/${repoFullName}/pull/${number}`,
@@ -56,6 +59,7 @@ describe('listTopicPullRequestsWithStatus', () => {
     const items = await listTopicPullRequestsWithStatus({
       db,
       topicId: 't1',
+      topicModel: topicModelWith(),
       userId: 'u1',
       workModel,
       workspaceId: 'ws1',
@@ -75,13 +79,62 @@ describe('listTopicPullRequestsWithStatus', () => {
       updatedAt,
     });
     expect(items[1].scm).toBeNull();
+    expect(items.every((item) => item.vouched)).toBe(true);
+  });
+
+  it('adds the topic links, hides removed PRs, and keeps the latest link first', async () => {
+    listByIdentities.mockResolvedValue([]);
+    const workModel = {
+      listTopicPullRequests: vi.fn(async () => [workItem(1), workItem(2)]),
+    } as any;
+    const topicModel = topicModelWith({
+      dismissed: ['LobeHub/lobehub#2'],
+      links: [
+        {
+          headRefName: 'feat/own',
+          identifier: 'lobehub/lobehub#7',
+          linkedAt: '2026-11-18T00:00:00Z',
+          source: 'branch',
+          url: 'https://github.com/lobehub/lobehub/pull/7',
+          vouched: false,
+        },
+        // Already a Work row: the Work wins.
+        {
+          identifier: 'lobehub/lobehub#1',
+          linkedAt: '2026-11-19T00:00:00Z',
+          source: 'manual',
+          url: 'https://github.com/lobehub/lobehub/pull/1',
+          vouched: true,
+        },
+      ],
+    });
+
+    const items = await listTopicPullRequestsWithStatus({
+      db,
+      topicId: 't1',
+      topicModel,
+      userId: 'u1',
+      workModel,
+    });
+
+    expect(items.map((item) => [item.identifier, item.source, item.vouched])).toEqual([
+      ['lobehub/lobehub#7', 'branch', false],
+      ['lobehub/lobehub#1', 'created', true],
+    ]);
+    expect(items[0]).toMatchObject({ headBranch: 'feat/own', workId: null });
   });
 
   it('skips the scm lookup for a topic without pull requests', async () => {
     const workModel = { listTopicPullRequests: vi.fn(async () => []) } as any;
 
     expect(
-      await listTopicPullRequestsWithStatus({ db, topicId: 't1', userId: 'u1', workModel }),
+      await listTopicPullRequestsWithStatus({
+        db,
+        topicId: 't1',
+        topicModel: topicModelWith(),
+        userId: 'u1',
+        workModel,
+      }),
     ).toEqual([]);
     expect(listByIdentities).not.toHaveBeenCalled();
   });
@@ -180,7 +233,7 @@ describe('linkPushedPullRequests', () => {
       expect.objectContaining({
         changeType: 'updated',
         messageId: 'msg-push',
-        metadata: { headBranch: 'feat/x' },
+        metadata: { headBranch: 'feat/x', pullRequestLink: 'push' },
         patchFields: ['identifier', 'url', 'title', 'status'],
         resourceId: 'lobehub/lobehub#12',
         status: 'open',
@@ -190,6 +243,26 @@ describe('linkPushedPullRequests', () => {
         topicId: 't1',
       }),
     );
+  });
+
+  it('accepts a fork PR whose head repository is the push destination', async () => {
+    const models = createModels({
+      ...pushRow,
+      content: 'To github.com:contributor/lobehub.git\n   031bf96..f6b1c2a  local -> feat/x',
+    });
+
+    const result = await link(models, [
+      { ...devicePR, headRepoFullName: 'contributor/lobehub' },
+      // A same-named branch in a stranger's fork was not this push.
+      {
+        ...devicePR,
+        headRepoFullName: 'stranger/lobehub',
+        number: 13,
+        url: 'https://github.com/lobehub/lobehub/pull/13',
+      },
+    ]);
+
+    expect(result).toEqual({ linked: ['lobehub/lobehub#12'], status: 'linked' });
   });
 
   it('asks the client to retry while the push is not persisted yet', async () => {

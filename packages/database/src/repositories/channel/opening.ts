@@ -14,6 +14,8 @@ import type { LobeChatDatabase, Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
+import type { OpeningFacts, OpeningLayout } from './openingLayout';
+import { chooseOpeningLayout } from './openingLayout';
 import { audit, withChannelLock } from './transaction';
 import { createChannelThread } from './view';
 
@@ -148,9 +150,9 @@ export const findOpeningCandidate = async (
 };
 
 /**
- * Applies the opener's decision to a still-queued job, once: posts the acknowledgement as the
- * replying Agent in the request's branch, then opens the Thread under it (under the request when
- * there is none) and moves the job into it. Records the opening even when nothing was posted, so the opener is not asked again.
+ * Applies the opener's decision to a still-queued job, once: picks the layout with
+ * `chooseOpeningLayout`, then opens the Thread and posts the acknowledgement where it says.
+ * Records the opening even when nothing was posted, so the opener is not asked again.
  * Returns false when another worker opened the job first or it already started.
  */
 export const applyOpening = async (
@@ -177,9 +179,16 @@ export const applyOpening = async (
       .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
     if (!member?.agentId) return false;
 
-    // The acknowledgement goes where the person is looking: the request's own branch, answering
-    // the request. A Thread opens under it, so the person sees the reply start and where it went.
     const ack = decision.ack?.trim();
+    const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH) ?? '';
+    const layout = await planOpening(tx, channelId, job, { ack, title });
+
+    let threadId = job.threadId;
+    if (layout === 'underRequest')
+      threadId = await openReplyThread(tx, channelId, job, job.messageId, title);
+
+    // The acknowledgement answers the request where the reply continues: in place, or in the
+    // Thread just opened under the request.
     const posted = ack
       ? await appendMessage(tx, {
           agentId: member.agentId,
@@ -188,63 +197,12 @@ export const applyOpening = async (
           replyToId: job.messageId,
           requestKey: openingRequestKey(job.id),
           routingStatus: 'reply',
-          threadId: job.threadId,
+          threadId,
         })
       : undefined;
 
-    let threadId = job.threadId;
-    const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
-    // Without an acknowledgement the Thread opens under the request itself, unless an archived
-    // one already sits there: it takes no new work, so the reply stays where it was asked.
-    const rootMessageId = posted?.id ?? job.messageId;
-    if (title && !threadId && !(await hasArchivedThread(tx, channelId, rootMessageId))) {
-      // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
-      const deferred = await tx
-        .select({ id: channelJobs.id, memberId: channelJobs.memberId })
-        .from(channelJobs)
-        .where(
-          and(
-            eq(channelJobs.channelId, channelId),
-            eq(channelJobs.messageId, job.messageId),
-            eq(channelJobs.status, 'queued'),
-            isNull(channelJobs.threadId),
-            sql`${channelJobs.wake}->>'afterMemberId' = ${job.memberId}`,
-          ),
-        );
-      const candidates = [
-        ...new Set([
-          job.requesterMemberId,
-          job.memberId,
-          ...deferred.map(({ memberId }) => memberId),
-        ]),
-      ];
-      // A member who has left since the request no longer follows anything.
-      const followers = (
-        await tx
-          .select({ id: channelMembers.id })
-          .from(channelMembers)
-          .where(
-            and(
-              eq(channelMembers.channelId, channelId),
-              eq(channelMembers.status, 'active'),
-              inArray(channelMembers.id, candidates),
-            ),
-          )
-      ).map(({ id }) => id);
-      const thread = await createChannelThread(tx, channelId, {
-        followerMemberIds: followers,
-        rootMessageId,
-      });
-      // A Thread already open under the request (another Agent's answer without an
-      // acknowledgement, or one someone branched) keeps its name, and gains whoever answers in it.
-      await followThread(tx, thread, followers);
-      if (!thread.metadata?.title) await nameThread(tx, thread.id, title);
-      threadId = thread.id;
-      await tx
-        .update(channelJobs)
-        .set({ threadId })
-        .where(inArray(channelJobs.id, [job.id, ...deferred.map(({ id }) => id)]));
-    }
+    if (layout === 'underAck')
+      threadId = await openReplyThread(tx, channelId, job, posted?.id ?? job.messageId, title);
 
     await audit(tx, channelId, REPLY_OPENED_EVENT, job.id, {
       ...(posted && { messageId: posted.id }),
@@ -253,6 +211,97 @@ export const applyOpening = async (
 
     return true;
   });
+
+/** Gathers the facts `chooseOpeningLayout` needs, reading the Channel only when a Thread is wanted. */
+const planOpening = async (
+  tx: Transaction,
+  channelId: string,
+  job: typeof channelJobs.$inferSelect,
+  decision: { ack?: string; title: string },
+): Promise<OpeningLayout> => {
+  const wantsThread = !!decision.title;
+  const inThread = !!job.threadId;
+  const facts: OpeningFacts = {
+    acknowledges: !!decision.ack,
+    inThread,
+    requestHasArchivedThread: false,
+    sharedTimeline: false,
+    wantsThread,
+  };
+  if (wantsThread && !inThread) {
+    facts.sharedTimeline = await hasSeveralPeople(tx, channelId);
+    facts.requestHasArchivedThread = await hasArchivedThread(tx, channelId, job.messageId);
+  }
+  return chooseOpeningLayout(facts);
+};
+
+/** Whether more than one person is in the Channel, so its main timeline is shared. */
+const hasSeveralPeople = async (tx: Transaction, channelId: string) => {
+  const people = await tx
+    .select({ id: channelMembers.id })
+    .from(channelMembers)
+    .where(
+      and(
+        eq(channelMembers.channelId, channelId),
+        eq(channelMembers.actorType, 'user'),
+        eq(channelMembers.status, 'active'),
+      ),
+    )
+    .limit(2);
+  return people.length > 1;
+};
+
+/** Opens (or joins) the Thread under `rootMessageId` and moves the job into it. */
+const openReplyThread = async (
+  tx: Transaction,
+  channelId: string,
+  job: typeof channelJobs.$inferSelect,
+  rootMessageId: string,
+  title: string,
+) => {
+  // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
+  const deferred = await tx
+    .select({ id: channelJobs.id, memberId: channelJobs.memberId })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.messageId, job.messageId),
+        eq(channelJobs.status, 'queued'),
+        isNull(channelJobs.threadId),
+        sql`${channelJobs.wake}->>'afterMemberId' = ${job.memberId}`,
+      ),
+    );
+  const candidates = [
+    ...new Set([job.requesterMemberId, job.memberId, ...deferred.map(({ memberId }) => memberId)]),
+  ];
+  // A member who has left since the request no longer follows anything.
+  const followers = (
+    await tx
+      .select({ id: channelMembers.id })
+      .from(channelMembers)
+      .where(
+        and(
+          eq(channelMembers.channelId, channelId),
+          eq(channelMembers.status, 'active'),
+          inArray(channelMembers.id, candidates),
+        ),
+      )
+  ).map(({ id }) => id);
+  const thread = await createChannelThread(tx, channelId, {
+    followerMemberIds: followers,
+    rootMessageId,
+  });
+  // A Thread already open under the request (another Agent's answer, or one someone branched)
+  // keeps its name, and gains whoever answers in it.
+  await followThread(tx, thread, followers);
+  if (!thread.metadata?.title) await nameThread(tx, thread.id, title);
+  await tx
+    .update(channelJobs)
+    .set({ threadId: thread.id })
+    .where(inArray(channelJobs.id, [job.id, ...deferred.map(({ id }) => id)]));
+  return thread.id;
+};
 
 const hasArchivedThread = async (tx: Transaction, channelId: string, rootMessageId: string) => {
   const [thread] = await tx

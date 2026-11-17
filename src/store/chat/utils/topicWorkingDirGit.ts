@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type {
   ChatTopicMetadata,
   DeviceGitUpstreamRef,
@@ -8,6 +8,7 @@ import type {
 import { dropStaleAutoCreated, getWorkingDirEffectivePath } from '@lobechat/types';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { applyTopicDeviceBinding } from '@/helpers/executionTarget';
 import type { GitLinkedPRSummary } from '@/services/git';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -29,10 +30,31 @@ export interface TopicLinkedPullRequestBase {
 export const canReadTopicGitTransport = (transport: Pick<TopicGitTransport, 'deviceId'>) =>
   !!transport.deviceId || isDesktop;
 
-export const resolveTopicGitTransport = (agentId: string): TopicGitTransport => {
+/**
+ * Where the topic's git reads go: the agent's execution target — or, when the
+ * topic is bound to a device (`topicDeviceId`), that device, by the same rules
+ * the run applies (`applyTopicDeviceBinding`): a run keeps executing on the
+ * topic's device after the agent's default moves elsewhere.
+ */
+export const resolveTopicGitTransport = (
+  agentId: string,
+  topicDeviceId?: string,
+): TopicGitTransport => {
   const agentState = getAgentStoreState();
-  const agencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const agentAgencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(agentState);
+  const agencyConfig = topicDeviceId
+    ? applyTopicDeviceBinding(
+        { agencyConfig: agentAgencyConfig, workspaceScoped: false },
+        topicDeviceId,
+        currentDeviceId,
+        {
+          isHetero: isHeterogeneousAgentModelId(
+            agentByIdSelectors.getAgentModelById(agentId)(agentState),
+          ),
+        },
+      ).agencyConfig
+    : agentAgencyConfig;
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
 

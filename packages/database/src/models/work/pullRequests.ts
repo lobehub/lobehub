@@ -1,4 +1,8 @@
-import type { TopicPullRequestWork, WorkVersionMetadata } from '@lobechat/types';
+import type {
+  TopicPullRequestLinkSource,
+  TopicPullRequestWork,
+  WorkVersionMetadata,
+} from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { works, workVersions } from '../../schemas/work';
@@ -25,10 +29,16 @@ export const listTopicPullRequests = async (
   topicId: string,
 ): Promise<TopicPullRequestWork[]> => {
   const linkedAt = sql<Date>`max(${workVersions.createdAt})`;
+  // How the topic came to it: an open command here (`gh pr create`) beats a
+  // command naming it, which beats only ever having pushed to its branch.
+  const created = sql<boolean>`bool_or(${workVersions.changeType} = 'created')`;
+  const pushOnly = sql<boolean>`bool_and(coalesce(${workVersions.metadata} ->> 'pullRequestLink', '') = 'push')`;
   const rows = await ctx.db
     .select({
+      created,
       currentVersionId: works.currentVersionId,
       linkedAt,
+      pushOnly,
       resourceId: works.resourceId,
       status: works.status,
       title: works.title,
@@ -75,6 +85,11 @@ export const listTopicPullRequests = async (
         linkedAt: new Date(row.linkedAt),
         number: identity.number,
         repoFullName: identity.repoFullName,
+        source: (row.created
+          ? 'created'
+          : row.pushOnly
+            ? 'push'
+            : 'command') satisfies TopicPullRequestLinkSource,
         status: row.status,
         title: row.title,
         url: row.url,

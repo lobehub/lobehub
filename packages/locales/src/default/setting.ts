@@ -1070,6 +1070,8 @@ export default {
     'The hotkey must include at least one modifier key (Ctrl, Alt, Shift) and one regular key',
   'hotkey.record': 'Press a key to record the hotkey',
   'hotkey.reset': 'Reset to default hotkeys',
+  'hotkey.sendMessage.desc': 'The other key combination inserts a line break',
+  'hotkey.sendMessage.title': 'Send Message',
   'hotkey.title': 'Hotkeys',
   'hotkey.updateError': 'Failed to update hotkey: Network or system error',
   'hotkey.updateSuccess': 'Hotkey updated successfully',
@@ -1407,8 +1409,8 @@ export default {
   'settingAgent.environment.title': 'Environment',
   'settingAgent.environment.desc': 'Where it runs, and what it needs there.',
   'settingAgent.instruction.title': 'Instruction',
-  'settingAgent.instruction.desc':
-    'Who it is and how it should behave. It reads this before every reply.',
+  'settingAgent.instruction.description':
+    'Define the agent’s identity, responsibilities, working methods, and response style. These instructions apply in every conversation.',
   'settingAgent.knowledgePage.title': 'Knowledge Base',
   'settingAgent.knowledgePage.desc': 'The libraries and files it can search when it answers.',
   'settingAgent.knowledgePage.libraries.title': 'Libraries',
@@ -5168,7 +5170,11 @@ When I am ___, I need ___
   'subscriptionAccounts.columns.status': 'Status',
   'subscriptionAccounts.empty.desc':
     'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
+  'subscriptionAccounts.empty.privateDesc':
+    'No private accounts here. Accounts you sign in to on your devices start here, visible only to you.',
   'subscriptionAccounts.empty.title': 'No subscription accounts yet',
+  'subscriptionAccounts.empty.workspaceDesc':
+    "No accounts are shared with this workspace yet. Share one from the Private tab so teammates' agents can use it.",
   'subscriptionAccounts.filter.all': 'All',
   'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
   'subscriptionAccounts.meter.session': '5-hour',
@@ -5210,17 +5216,20 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.todayDay': 'Today',
   'subscriptionAccounts.calendar.tomorrow': 'Tomorrow {{time}}',
   'subscriptionAccounts.calendar.tomorrowDay': 'Tomorrow',
+  'subscriptionAccounts.tabs.private': 'Private',
+  'subscriptionAccounts.tabs.workspace': 'Workspace',
   'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
   'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
-  'subscriptionAccounts.visibility.private': 'Private',
   'subscriptionAccounts.visibility.privateAction': 'Make private',
   'subscriptionAccounts.visibility.privateConfirm.desc':
     "Only you will see it. Other members' agents stop drawing on its quota.",
   'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
+  'subscriptionAccounts.visibility.privateDone': 'Made private. It now lists under Private.',
   'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
   'subscriptionAccounts.visibility.publicConfirm.desc':
     'Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.',
   'subscriptionAccounts.visibility.publicConfirm.title': 'Share this account with the workspace?',
+  'subscriptionAccounts.visibility.publicDone': 'Shared. It now lists under Workspace.',
   'tab.subscriptionAccounts': 'Subscription Accounts',
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',
@@ -5253,25 +5262,35 @@ When I am ___, I need ___
   'taskLabels.usage': '{{count}} tasks',
   'taskLabels.actions.more': 'More actions',
   'tab.automations': 'Automations',
-  'settingsSearch.tabKeywords.automations':
-    'automations, events, event subscriptions, triggers, webhooks',
+  'webhooks.empty.desc':
+    'Open an agent and go to Agent Profile → Webhook to create one. Every agent’s webhooks are listed here.',
+  'webhooks.empty.title': 'No webhooks yet',
+  'webhooks.desc':
+    'URLs any outside system can call to run an agent with what it sent. Each call uses credits. To create one, open an agent and go to Agent Profile → Webhook.',
+  'automations.actions.more': 'More actions',
+  'settingsSearch.tabKeywords.webhooks': 'webhooks, webhook url, callback, http trigger',
+  'tab.webhooks': 'Webhooks',
+  'settingsSearch.tabKeywords.automations': 'automations, events, event subscriptions, triggers',
   'automations.desc':
-    'Connector events your agents subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events your agents subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.descWorkspace':
-    'Connector events the agents in this workspace subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
+    'Connector events the agents in this workspace subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
   'automations.descAgent':
-    'Connector events this agent subscribed to, and webhooks that wake it. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events this agent subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.columns.subscription': 'Subscription',
   'automations.columns.status': 'Status',
   'automations.columns.target': 'Agent & topic',
   'automations.columns.topic': 'Topic',
   'automations.columns.lastDelivery': 'Last event',
   'automations.source.moreArgs': '{{text}} +{{count}}',
-  'automations.source.webhook': 'Webhook',
-  'automations.source.topicMode.new': 'New topic per call',
-  'automations.source.topicMode.reuse': 'One shared topic',
   'automations.untitledTopic': 'Untitled topic',
-  'automations.target.webhookCalls': 'Calls and topics',
+  'automations.error.channel_unavailable':
+    "Couldn't post the last result to the Channel: the Agent or its creator is no longer a member, or the Channel was archived.",
+  'automations.target.channel': 'Posts to {{channel}}',
+  'automations.target.channelHidden': "Posts to a Channel you're not in",
+  'automations.target.channelThread': 'Posts to a thread in {{channel}}: {{thread}}',
+  'automations.target.untitledChannel': 'Untitled Channel',
+  'automations.target.untitledThread': 'Untitled thread',
   'automations.lastDelivery.never': 'No events yet',
   'automations.status.active': 'Active',
   'automations.status.reconnect': 'Reconnect needed',
@@ -5306,6 +5325,13 @@ When I am ___, I need ___
   'automations.actions.checkTooltip':
     'Confirm with the connector that events are still delivered; paused delivery resumes',
   'automations.actions.delete': 'Delete',
+  'automations.actions.rename': 'Rename',
+  'automations.rename.done': 'Renamed',
+  'automations.rename.failed': "Couldn't rename it. Try again.",
+  'automations.rename.hint':
+    'Only people see this name; the agent keeps using its identifier. Leave it empty to show "{{fallback}}".',
+  'automations.rename.ok': 'Save',
+  'automations.rename.title': 'Rename automation',
   'automations.actions.noPermission':
     'Only the member who approved it or a workspace admin can do this',
   'automations.check.healthy': 'Subscription is working',
@@ -5317,8 +5343,6 @@ When I am ___, I need ___
   'automations.delete.title': 'Delete this subscription?',
   'automations.delete.content':
     '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
-  'automations.delete.contentWebhook':
-    'The URL of "{{name}}" stops working at once, and calls to it no longer run "{{agent}}". This cannot be undone.',
   'automations.delete.ok': 'Delete',
   'automations.delete.cancel': 'Cancel',
   'automations.delete.failed': "Couldn't delete the subscription. Try again",

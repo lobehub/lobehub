@@ -15,6 +15,7 @@ import {
   SEND_NOW_CANCEL_REASON,
 } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
+import type { UploadFileItem } from '@/types/files/upload';
 import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
 
 type SupportedChatInputRole = Extract<OpenAIChatMessage['role'], 'assistant' | 'tool' | 'user'>;
@@ -179,17 +180,37 @@ export const getContextWindow = (
 export const getConversationSendButtonProps = (
   defaults: SendButtonProps,
   overrides: Partial<SendButtonProps> | undefined,
-  isUploadingFiles: boolean,
 ): SendButtonProps => ({
   ...defaults,
   ...overrides,
-  // Uploads are a hard gate even when a host explicitly enables sending.
-  disabled: isUploadingFiles || (overrides?.disabled ?? defaults.disabled),
+  disabled: overrides?.disabled ?? defaults.disabled,
 });
+
+/**
+ * Split a composer's uploads into those the message can carry and those it cannot.
+ *
+ * Use when:
+ * - Sending from the composer: a failed or cancelled upload has no stored file, so
+ *   it is left out of the message instead of being sent as a dangling id.
+ *
+ * Returns:
+ * - `sendable` in composer order, which is the order image numbers
+ *   (`[Image #N]`) are counted in, and `failed`, which stays in the composer.
+ */
+export const partitionSendableUploads = <T extends Pick<UploadFileItem, 'status'>>(
+  files: T[],
+): { failed: T[]; sendable: T[] } => {
+  const failed: T[] = [];
+  const sendable: T[] = [];
+  for (const file of files) {
+    if (file.status === 'error' || file.status === 'cancelled') failed.push(file);
+    else sendable.push(file);
+  }
+  return { failed, sendable };
+};
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;
-  showSendMenu: boolean;
   /** Show Send beside Stop so a typed follow-up can be queued by click. */
   showSendWhileGenerating: boolean;
   showStopButton: boolean;
@@ -220,7 +241,6 @@ export const getConversationChatInputUiState = ({
   const followUp = !disableFollowUpVariant && isInputLoading && isInputEmpty;
   return {
     placeholderVariant: followUp ? 'followUp' : 'default',
-    showSendMenu: !isInputLoading,
     showSendWhileGenerating: isInputLoading && !isInputEmpty && !disableQueue,
     showStopButton: isInputLoading,
   };

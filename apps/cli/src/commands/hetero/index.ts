@@ -1057,7 +1057,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
-    // Stream events (steering Claude Code, see withHeteroSteer); each is optionally written as JSONL
+    // Stream events (steering Claude Code or native Codex, see withHeteroSteer); each is optionally written as JSONL
     // and pushed into the ingester. A resume `error` is withheld and flags a retry instead.
     let resumeNotFound = false;
     let sawTerminalError = false;

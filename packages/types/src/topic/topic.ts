@@ -12,8 +12,10 @@ import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
+import type { OwnedWorktree } from '../ownedWorktree';
 import type { OnboardingUnderstandingSession } from '../understanding';
 import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
+import type { TopicPullRequestsMeta } from '../work';
 
 export type ShareVisibility = 'private' | 'link';
 export type TimeGroupId =
@@ -153,8 +155,8 @@ export interface ChatTopicMetadata {
     summarizedAt?: string;
     version: number;
   };
-
   bot?: ChatTopicBotContext;
+
   botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -301,8 +303,22 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /**
+   * Worktrees the app created for this topic, and where their automatic
+   * cleanup stands. Server-owned: claimed whenever metadata is written with
+   * `workingDirectoryConfig.git.autoCreated`, and deliberately absent from
+   * the client-writable metadata schema. See `./ownedWorktree`.
+   */
+  ownedWorktrees?: OwnedWorktree[];
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
+  /**
+   * Better Coding Experience: PR links kept on the topic (found on its own
+   * branch, or linked by hand) and the PRs removed from its lists. Server-owned —
+   * written only by the `work.*TopicPullRequest` endpoints, never by a client
+   * metadata patch.
+   */
+  pullRequests?: TopicPullRequestsMeta;
   /**
    * Topic-pinned reasoning effort / mode for the pinned API model
    * (`ChatTopic.model`). Mirrors the model pin: snapshotted from the user's

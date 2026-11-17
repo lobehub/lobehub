@@ -24,9 +24,10 @@ interface SubscriptionSummaryProps {
 }
 
 /**
- * One subscription as the conversation shows it: where events come from, the
- * filter, its state, and how long it lasts. The status reads the same as the
- * settings list because both resolve it through `AutomationStatus`.
+ * One subscription as the conversation shows it: the name people gave it, where
+ * events come from (the fixed event it follows), the filter, its state, how long
+ * it lasts and, when known, the topic its events run in. The status reads the
+ * same as the settings list because both resolve it through `AutomationStatus`.
  */
 const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscription }) => {
   const { t } = useTranslation('plugin');
@@ -50,8 +51,19 @@ const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscrip
       })
     : t('builtins.lobe-mcp-events.render.expiresNever');
 
+  // A name the user gave it; one that only repeats the event adds nothing.
+  const title =
+    subscription.name?.trim() && subscription.name !== subscription.eventName
+      ? subscription.name.trim()
+      : undefined;
+
   return (
     <Flexbox gap={6}>
+      {title && (
+        <Text ellipsis weight={500}>
+          {title}
+        </Text>
+      )}
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
         <ConnectorEventLabel
           event={subscription.eventName}
@@ -61,7 +73,25 @@ const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscrip
         <AutomationStatusTag item={subscription} />
       </Flexbox>
       <Text style={{ fontSize: 12 }} type={'secondary'}>
-        {filter} · {lifetime}
+        {[
+          filter,
+          lifetime,
+          subscription.topic &&
+            t('builtins.lobe-mcp-events.render.inTopic', {
+              topic:
+                subscription.topic.title?.trim() ||
+                t('builtins.lobe-mcp-events.render.untitledTopic'),
+            }),
+          // Made in a Channel: each event's result is posted back there, not left in a topic.
+          subscription.deliversTo &&
+            t(
+              subscription.deliversTo === 'thread'
+                ? 'builtins.lobe-mcp-events.render.deliversToThread'
+                : 'builtins.lobe-mcp-events.render.deliversToChannel',
+            ),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </Text>
       {detailed && (
         <AutomationStatusReason

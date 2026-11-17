@@ -19,6 +19,7 @@ const COMPACT_HEADER_TABS = new Set<string>([
   WorkspaceSettingsTabs.APIKey,
   WorkspaceSettingsTabs.Appearance,
   WorkspaceSettingsTabs.Automations,
+  WorkspaceSettingsTabs.Webhooks,
   WorkspaceSettingsTabs.Billing,
   WorkspaceSettingsTabs.Budget,
   WorkspaceSettingsTabs.ChatPreference,
