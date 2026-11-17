@@ -239,7 +239,8 @@ export class InboundWebhookModel {
       const config = INBOUND_WEBHOOK_KIND_SCHEMAS[input.kind].config.parse(
         await finalizeConfig(tx, payload.config),
       );
-      return this.insert(tx, { ...payload, config });
+      // Parsed with the schema of the payload's own kind, so the pair still matches.
+      return this.insert(tx, { ...payload, config } as typeof payload);
     });
   };
 
