@@ -40,6 +40,7 @@ export * from './file';
 export * from './fileShare';
 export * from './ftsSearchSyncOutbox';
 export * from './generation';
+export * from './generationShare';
 export * from './goal';
 export * from './goalGraph';
 export * from './goalShare';

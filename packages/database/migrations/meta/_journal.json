@@ -1533,6 +1533,13 @@
       "when": 1794852458535,
       "tag": "0218_channel_and_contacts_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 219,
+      "version": "7",
+      "when": 1794888109920,
+      "tag": "0219_generation_shares",
+      "breakpoints": true
     }
   ],
   "version": "6"
