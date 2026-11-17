@@ -435,6 +435,42 @@ export const resolveTopicEnvironment = async ({
 };
 
 /**
+ * The repository configuration a topic's run checks out, read the way the
+ * session resolves it: a topic bound to a persistent instance runs that
+ * instance's snapshot — an instance keeps the specification it was built
+ * from, whatever its environment says since — and any other topic is
+ * initialized from the environment it picked (see
+ * {@link resolveTopicEnvironment}), including one whose instance can no longer
+ * be resolved and falls back to a temporary sandbox.
+ *
+ * Throws on a failed read; callers degrade.
+ */
+export const resolveTopicCheckoutConfiguration = async (
+  input: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
+    Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>,
+): Promise<{ configuration?: EnvironmentConfiguration | null; name: string } | undefined> => {
+  const { serverDB, topicId, userId, workspaceId } = input;
+  const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(topicId);
+  const instanceId = topic?.metadata?.sandboxInstanceId;
+  if (instanceId) {
+    // The same visibility boundary the placement applies to the instance.
+    const callerAgentVisibility =
+      workspaceId && topic.agentId
+        ? await new AgentModel(serverDB, userId, workspaceId).getAgentVisibility(topic.agentId)
+        : null;
+    const instance = await new EnvironmentInstanceModel(
+      serverDB,
+      userId,
+      workspaceId ?? undefined,
+      callerAgentVisibility,
+    ).findById(instanceId);
+    if (instance) return { configuration: instance.configurationSnapshot, name: instance.name };
+  }
+
+  return resolveTopicEnvironment(input);
+};
+
+/**
  * The topic's environment as an initialization, or `undefined` when it picked
  * none, picked one the caller cannot read (see {@link resolveTopicEnvironment}),
  * or one that asks for nothing.

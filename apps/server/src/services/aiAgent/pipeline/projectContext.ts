@@ -4,7 +4,7 @@ import { buildProjectContextPrompt } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { ProjectModel } from '@/database/models/project';
-import { resolveTopicEnvironment } from '@/server/services/sandbox/session';
+import { resolveTopicCheckoutConfiguration } from '@/server/services/sandbox/session';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -21,7 +21,8 @@ export interface ProjectContextDeps {
 
 /**
  * The repository a cloud-sandbox run's working directory is a checkout of: the
- * first git source of the environment the topic picked, read the way the
+ * first git source of what the session checks out — a persistent instance's
+ * snapshot, otherwise the environment the topic picked — read the way the
  * sandbox reads it so the run is never told about a checkout it will not get.
  * A project conversation picks its project's repository when it is created.
  * Never throws.
@@ -31,7 +32,7 @@ export const resolveSandboxRepository = async (
   topicId: string,
 ): Promise<ProjectContextRepository | undefined> => {
   try {
-    const environment = await resolveTopicEnvironment({
+    const environment = await resolveTopicCheckoutConfiguration({
       serverDB: deps.db,
       topicId,
       userId: deps.userId,

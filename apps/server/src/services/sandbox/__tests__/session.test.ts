@@ -50,7 +50,8 @@ vi.mock('../driveFolder', () => ({
   ensureDriveFolder: mocks.ensureDriveFolder,
 }));
 
-const { resolveSandboxSessionConfig } = await import('../session');
+const { resolveSandboxSessionConfig, resolveTopicCheckoutConfiguration } =
+  await import('../session');
 
 const serverDB = {} as LobeChatDatabase;
 const CLAIM = { key: 'ws-user_1', quotaBytes: 2048 };
@@ -738,5 +739,67 @@ describe('resolveSandboxSessionConfig', () => {
       expect(config).not.toHaveProperty('initialization');
       expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('resolveTopicCheckoutConfiguration', () => {
+  const checkout = () =>
+    resolveTopicCheckoutConfiguration({ serverDB, topicId: 'topic-1', userId: 'user_1' });
+
+  beforeEach(() => {
+    findById.mockReset();
+    findInstanceById.mockReset();
+    getAgentVisibility.mockReset();
+    mocks.findEnvironmentById.mockReset().mockResolvedValue({
+      configuration: {
+        sources: [{ kind: 'git', ref: 'next', url: 'https://github.com/a/edited' }],
+      },
+      id: 'env-1',
+      name: 'Edited',
+      visibility: 'private',
+    });
+    mocks.TopicModel.mockReset().mockImplementation(function () {
+      return { findById };
+    });
+    mocks.EnvironmentInstanceModel.mockReset().mockImplementation(function () {
+      return { findById: findInstanceById };
+    });
+  });
+
+  // An instance keeps the specification it was built from: the run works in
+  // that checkout even after its environment was pointed somewhere else.
+  it('reads a persistent instance from its snapshot, not the edited environment', async () => {
+    findById.mockResolvedValue({
+      metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
+    });
+    findInstanceById.mockResolvedValue({
+      configurationSnapshot: {
+        sources: [{ kind: 'git', ref: 'main', url: 'https://github.com/a/built' }],
+      },
+      id: INSTANCE_ID,
+      name: 'Built',
+    });
+
+    await expect(checkout()).resolves.toEqual({
+      configuration: { sources: [{ kind: 'git', ref: 'main', url: 'https://github.com/a/built' }] },
+      name: 'Built',
+    });
+    expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
+  });
+
+  it('reads the environment when the instance no longer resolves, as the fallback run does', async () => {
+    findById.mockResolvedValue({
+      metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
+    });
+    findInstanceById.mockResolvedValue(undefined);
+
+    await expect(checkout()).resolves.toMatchObject({ name: 'Edited' });
+  });
+
+  it('reads the environment of a topic without an instance', async () => {
+    findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });
+
+    await expect(checkout()).resolves.toMatchObject({ name: 'Edited' });
+    expect(findInstanceById).not.toHaveBeenCalled();
   });
 });
