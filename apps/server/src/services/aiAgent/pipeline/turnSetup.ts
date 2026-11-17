@@ -44,7 +44,7 @@ import { ingestAttachment } from '../ingestAttachment';
 import type { AgentShareGate } from '../shareGate';
 import { reserveShareVisitorTopic, reserveShareVisitorTurn } from '../shareVisitorAbuseGuards';
 import type { InternalExecAgentParams } from '../types';
-import { buildNewTopicMetadata } from './newTopicMetadata';
+import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
@@ -357,6 +357,8 @@ export interface TurnSetupInput {
   externalOrigin?: InternalExecAgentParams['externalOrigin'];
   files?: InternalExecAgentParams['files'];
   modelOverride?: string;
+  /** See `ExecAgentParams.openedByTopicId`. */
+  openedByTopicId?: string;
   operationTaskId?: string;
   parentMessageId?: string;
   persistedUserMessageId?: string;
@@ -469,6 +471,7 @@ export const setupTurn = async (
     externalOrigin,
     cronJobId,
     webhookThread,
+    openedByTopicId,
     files,
     modelOverride,
     operationTaskId,
@@ -628,12 +631,14 @@ export const setupTurn = async (
         await routeToProjectDirectory(projectDirectory);
       }
 
+      const openedBy = await resolveTopicOpenedBy(deps.topicModel, openedByTopicId);
       const metadata = buildNewTopicMetadata({
         appContext,
         botContext,
         cronJobId,
         deviceBindingPinned: Boolean(effectiveRequestedDeviceId),
         editingAgentId,
+        openedBy,
         projectDirectory,
         taskId: operationTaskId,
         topicBoundDeviceId,
