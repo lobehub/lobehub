@@ -86,7 +86,7 @@ class HeterogeneousAgentService {
     messageId: string;
     prompt: string;
     sessionId: string;
-  }): Promise<{ status: 'accepted' | 'rejected' | 'unsupported' }> {
+  }): Promise<{ deliveredText?: string; status: 'accepted' | 'rejected' | 'unsupported' }> {
     return this.ipc.heterogeneousAgent.steerSession(params);
   }
 

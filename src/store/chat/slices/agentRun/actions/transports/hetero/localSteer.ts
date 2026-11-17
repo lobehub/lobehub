@@ -41,6 +41,15 @@ export interface LocalSteerOptions {
   /** Whether the run waits for the user (a pending question or approval); nothing is steered then. */
   isWaitingForUser: () => boolean;
   operationId: string;
+  /**
+   * The run's write-behind rows: the steer message's parent can still be only
+   * enqueued, so its write waits for it (`ensureParentPersisted`), and a failed
+   * write is parked for the in-order replay (`add`) like the run's own rows.
+   */
+  rows: {
+    add: (messageId: string, message: any) => void;
+    ensureParentPersisted: (parentId?: string) => Promise<void>;
+  };
   /** The message the next steer user message parents off (the run's spine), and its update. */
   spine: { get: () => string; set: (id: string) => void };
   subscribe: (listener: () => void) => () => void;
@@ -48,6 +57,11 @@ export interface LocalSteerOptions {
 
 interface PendingSteer {
   content: string;
+  /**
+   * The text the agent received (Pi reports a read message by its text, which
+   * the transport can expand with context); `content` when not reported.
+   */
+  deliveredText?: string;
   messageId: string;
   /** `delivering` until the IPC answers; `written` once accepted, until the agent reads it. */
   state: 'delivering' | 'written';
@@ -69,6 +83,7 @@ interface PendingSteer {
 export const createLocalSteer = (options: LocalSteerOptions) => {
   const { context, contextKey, get, ipcSessionId, operationId } = options;
   let pending: PendingSteer | undefined;
+  let pumping = false;
   let stopped = false;
 
   /** Swap the taken messages back in for the merged one, at the head of the queue. */
@@ -83,17 +98,30 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
   };
 
   const pump = async () => {
-    if (stopped || pending || options.isWaitingForUser()) return;
+    if (stopped || pending || pumping || options.isWaitingForUser()) return;
+    // Taking from the queue notifies its subscribers, this pump among them.
+    pumping = true;
+    let again = false;
+    try {
+      again = await pumpOnce();
+    } finally {
+      pumping = false;
+    }
+    // Read before its write was answered: what queued meanwhile can go now.
+    if (again) schedule();
+  };
 
+  /** @returns whether the steer was read before its write was answered, so the pump runs again */
+  const pumpOnce = async (): Promise<boolean> => {
     const queue = get().queuedMessages[contextKey] ?? [];
     const firstHeld = queue.findIndex(
       (message) => !canSteerClientRun(message) || !!message.localSteer,
     );
     const joinable = firstHeld === -1 ? queue.length : firstHeld;
-    if (joinable === 0) return;
+    if (joinable === 0) return false;
 
     const taken = get().drainQueuedMessages(contextKey, { limit: joinable });
-    if (taken.length === 0) return;
+    if (taken.length === 0) return false;
 
     const merged = mergeQueuedMessages(taken);
     const steer: PendingSteer = {
@@ -117,34 +145,37 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
 
     let status: 'accepted' | 'rejected' | 'unsupported';
     try {
-      ({ status } = await heterogeneousAgentService.steerSession({
-        messageId: steer.messageId,
-        prompt: merged.content,
-        sessionId: ipcSessionId,
-      }));
+      ({ deliveredText: steer.deliveredText, status } =
+        await heterogeneousAgentService.steerSession({
+          messageId: steer.messageId,
+          prompt: merged.content,
+          sessionId: ipcSessionId,
+        }));
     } catch (error) {
       // Read already (`confirm` ran first): it landed.
-      if (pending !== steer) return;
+      if (pending !== steer) return true;
       // It may or may not be in the session: never sent again on its own.
       console.error('[localSteer] steering the session failed:', error);
       get().updateQueuedMessage(contextKey, steer.messageId, { localSteer: 'unknown' });
       pending = undefined;
       stopped = true;
-      return;
+      return false;
     }
 
     // The agent can report reading it before the write is answered (Codex).
-    if (pending !== steer) return;
+    if (pending !== steer) return true;
     if (status === 'accepted') {
       steer.state = 'written';
       log('[%s] Steered %d messages as %s', operationId, taken.length, steer.messageId);
-      return;
+      return false;
     }
+    // Refused: the session takes no input now, so it and the rest wait for the
+    // run end. Stop first: restoring the queue notifies this pump again.
     pending = undefined;
-    giveBack(steer);
+    stopped = true;
     if (status === 'unsupported') markUnsupported();
-    // Refused: the session takes no input now, so the rest waits for the run end.
-    else stopped = true;
+    giveBack(steer);
+    return false;
   };
 
   const schedule = () => {
@@ -164,7 +195,8 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
     if (!steer) return false;
     const matches = data.uuid
       ? data.uuid === steer.messageId
-      : data.text !== undefined && data.text.trim() === steer.content.trim();
+      : data.text !== undefined &&
+        data.text.trim() === (steer.deliveredText ?? steer.content).trim();
     if (!matches) return false;
 
     pending = undefined;
@@ -185,14 +217,16 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
       { creationOrigin: 'client' },
     );
     get().removeQueuedMessage(contextKey, steer.messageId);
+    // The agent answers it under this message whatever the write does next.
     options.spine.set(message.id);
     try {
+      await options.rows.ensureParentPersisted(message.parentId);
       await messageService.createMessage(message);
       get().internal_confirmClientMessages([message.id]);
     } catch (error) {
-      // The agent already answers it; keep the row on screen and let the run-end
-      // refresh reconcile it.
+      // Parked for the run's in-order replay: the answer rows behind it wait too.
       console.error('[localSteer] writing the steer message failed:', error);
+      options.rows.add(message.id, message);
     }
     schedule();
     return true;

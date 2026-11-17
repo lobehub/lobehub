@@ -33,7 +33,14 @@ export interface SteerSessionParams {
  *   cannot be steered); nothing was written, so it can run as the next turn.
  * - `unsupported`: this runtime has no way into a running turn.
  */
-export type SteerSessionResult = { status: 'accepted' | 'rejected' | 'unsupported' };
+export type SteerSessionResult = {
+  /**
+   * The text the agent received, when it reports a read message by its text
+   * (Pi): the prompt transport can expand it (referenced-topic guidance).
+   */
+  deliveredText?: string;
+  status: 'accepted' | 'rejected' | 'unsupported';
+};
 
 const accepted: SteerSessionResult = { status: 'accepted' };
 const rejected: SteerSessionResult = { status: 'rejected' };
@@ -89,7 +96,7 @@ export const steerAgentSession = async (
     if (!rpc) return rejected;
     const { images, text } = await toPiRpcPrompt(promptInput, { cacheDir });
     await rpc.steer(text, images);
-    return accepted;
+    return { deliveredText: text, status: 'accepted' };
   }
 
   logger.debug('No native steer for %s; the message waits for the run to end', session.agentType);

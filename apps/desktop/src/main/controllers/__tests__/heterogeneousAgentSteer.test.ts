@@ -79,7 +79,11 @@ describe('steerAgentSession', () => {
     const steer = vi.fn(async () => {});
     const pi = session({ agentType: 'pi', piRpcSession: { steer } as any });
 
-    await expect(steerAgentSession(pi, params, '/tmp')).resolves.toEqual({ status: 'accepted' });
+    // Pi reports a read message by its text: hand back exactly what it received.
+    await expect(steerAgentSession(pi, params, '/tmp')).resolves.toEqual({
+      deliveredText: 'also run the tests',
+      status: 'accepted',
+    });
     expect(steer).toHaveBeenCalledWith('also run the tests', undefined);
   });
 

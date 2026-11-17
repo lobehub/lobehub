@@ -2047,8 +2047,8 @@ export const executeHeterogeneousAgent = async (
       // usage tray derives its total from these per-message usages directly
       // (OpStatusTray → calculateOperationUsageMetrics), so there is no separate
       // accumulation here. Not forwarded (bookkeeping).
-      // A message steered into the run was read: it joins the spine (Follow-up behavior: Steer).
       if (event.type === 'step_complete' && event.data?.phase === 'user_message') {
+        // A steered message was read: it joins the spine (Follow-up behavior: Steer).
         persistQueue = persistQueue.then(async () => void (await localSteer?.confirm(event.data)));
         return;
       }
@@ -2494,6 +2494,7 @@ export const executeHeterogeneousAgent = async (
       isWaitingForUser: () =>
         [...mainState.interventionsByCallId.values()].some((i) => i.transition === 'pending'),
       operationId,
+      rows: pendingCreateLedger,
       spine: {
         get: () => mainState.lastSpineMessageId,
         set: (id) => void (mainState = { ...mainState, lastSpineMessageId: id }),
@@ -2569,7 +2570,7 @@ export const executeHeterogeneousAgent = async (
     localSteer?.settle();
     if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
-      const turn = drainQueuedTurn(get, contextKey);
+      const turn = drainQueuedTurn(get, contextKey); // Queue mode: the head alone
       if (turn.messages.length > 0) {
         // Complete this op + mark unread BEFORE the next sendMessage: its queue check would
         // still see this op as running and re-queue the content into an orphaned operation.
@@ -2583,7 +2584,6 @@ export const executeHeterogeneousAgent = async (
           });
         }
 
-        // Queue mode sends the head alone; the rest waits behind the run it starts.
         setTimeout(() => {
           sendQueuedTurn(useChatStore.getState, { ...context }, turn).catch((e: unknown) => {
             console.error('[heterogeneousAgentExecutor] sendMessage for queued content failed:', e);

@@ -159,6 +159,22 @@ describe('takeHeteroSteer', () => {
       });
     });
 
+    it('rebinds a merged delivery that lapsed back, instead of merging it again with newer ones', async () => {
+      mocks.deliveries.set(
+        'msg_ab',
+        JSON.stringify({ drainId: 'old', entryId: 'a', entryIds: ['a', 'b'], scope }),
+      );
+      mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2), followUp('c', 3)]);
+
+      await expect(steer()).resolves.toBeUndefined();
+
+      // The session already has A+B; only C goes back, for the next join.
+      const [, drainId, returned] = mocks.settle.mock.calls[0];
+      expect(returned).toEqual(['c']);
+      expect(JSON.parse(mocks.deliveries.get('msg_ab')!).drainId).toBe(drainId);
+      expect(mocks.deliveries.size).toBe(1);
+    });
+
     it('returns every merged follow-up when the session refuses the message', async () => {
       mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2)]);
       const message = await steer();

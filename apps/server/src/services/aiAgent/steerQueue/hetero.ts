@@ -126,6 +126,25 @@ export const takeHeteroSteer = async (
 
   const held = await redisService.steerQueue.listHeteroDeliveries<HeteroSteerDelivery>(operationId);
 
+  // A delivery whose lease lapsed while the session still held it came back
+  // into the queue. It is the session's already: rebind it as it was, so a
+  // merge with newer follow-ups (a new message id) never types its entries twice.
+  const heldBy = new Map<string, string>();
+  for (const [messageId, delivery] of Object.entries(held))
+    for (const id of delivery.entryIds ?? [delivery.entryId]) heldBy.set(id, messageId);
+  const lapsedId = drained.entries.map((entry) => heldBy.get(entry.id)).find(Boolean);
+  if (lapsedId) {
+    const delivery = held[lapsedId];
+    const ids = new Set(delivery.entryIds ?? [delivery.entryId]);
+    const others = drained.entries.filter((entry) => !ids.has(entry.id));
+    await returnFollowUps(scope, drained, others, 'behind a delivery the session holds');
+    await redisService.steerQueue.putHeteroDelivery(operationId, lapsedId, {
+      ...delivery,
+      drainId: drained.drainId,
+    } satisfies HeteroSteerDelivery);
+    return;
+  }
+
   // A session that only takes text gets no image follow-up: decided from the
   // markdown alone, since the run asks again on every poll.
   const canGo = (entry: QueuedFollowUp) =>

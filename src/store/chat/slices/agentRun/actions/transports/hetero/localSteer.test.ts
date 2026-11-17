@@ -55,6 +55,7 @@ const createHarness = (messages: QueuedMessage[], waiting = false) => {
     ),
   } as unknown as ChatStore;
   let spine = 'assistant-1';
+  const rows = { add: vi.fn(), ensureParentPersisted: vi.fn(async () => {}) };
   const steer = createLocalSteer({
     context: { agentId: 'agent-1', threadId: null, topicId: 'topic-1' },
     contextKey: 'key',
@@ -62,13 +63,14 @@ const createHarness = (messages: QueuedMessage[], waiting = false) => {
     ipcSessionId: 'ipc-1',
     isWaitingForUser: () => waiting,
     operationId: 'op-1',
+    rows,
     spine: { get: () => spine, set: (id) => (spine = id) },
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
   });
-  return { getQueue: () => queue, getSpine: () => spine, setQueue, steer, store };
+  return { getQueue: () => queue, getSpine: () => spine, rows, setQueue, steer, store };
 };
 
 const steerCall = () => vi.mocked(heterogeneousAgentService.steerSession).mock.calls.at(-1)?.[0];
@@ -142,6 +144,60 @@ describe('createLocalSteer', () => {
     expect(messageService.createMessage).toHaveBeenCalledTimes(1);
     // Read, so nothing goes back for the next turn.
     expect(h.getQueue()).toEqual([]);
+  });
+
+  it('writes the steer message only once its parent row is persisted', async () => {
+    const h = createHarness([queued('q1', 'first')]);
+    await vi.waitFor(() => expect(heterogeneousAgentService.steerSession).toHaveBeenCalled());
+    const order: string[] = [];
+    h.rows.ensureParentPersisted.mockImplementation(async () => void order.push('parent'));
+    vi.mocked(messageService.createMessage).mockImplementation(async () => {
+      order.push('steer');
+      return { id: 'x' } as any;
+    });
+
+    await h.steer.confirm({ uuid: steerCall()!.messageId });
+
+    expect(h.rows.ensureParentPersisted).toHaveBeenCalledWith('assistant-1');
+    expect(order).toEqual(['parent', 'steer']);
+  });
+
+  it('parks a failed steer write for the run’s in-order replay', async () => {
+    vi.mocked(messageService.createMessage).mockRejectedValue(new Error('fk'));
+    const h = createHarness([queued('q1', 'first')]);
+    await vi.waitFor(() => expect(heterogeneousAgentService.steerSession).toHaveBeenCalled());
+    const { messageId } = steerCall()!;
+
+    await h.steer.confirm({ uuid: messageId });
+
+    expect(h.rows.add).toHaveBeenCalledWith(messageId, expect.objectContaining({ id: messageId }));
+    expect(h.getSpine()).toBe(messageId);
+  });
+
+  it('matches Pi’s report against the text it actually received', async () => {
+    vi.mocked(heterogeneousAgentService.steerSession).mockResolvedValue({
+      deliveredText: 'Referenced topic guidance\n\nsee <refer_topic id="t"/>',
+      status: 'accepted',
+    });
+    const h = createHarness([queued('q1', 'see <refer_topic id="t"/>')]);
+    await vi.waitFor(() => expect(h.getQueue()[0]?.localSteer).toBe('delivering'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect(h.steer.confirm({ text: 'see <refer_topic id="t"/>' })).resolves.toBe(false);
+    await expect(
+      h.steer.confirm({ text: 'Referenced topic guidance\n\nsee <refer_topic id="t"/>' }),
+    ).resolves.toBe(true);
+  });
+
+  it('does not retry a refused steer, nor steer later messages ahead of it', async () => {
+    vi.mocked(heterogeneousAgentService.steerSession).mockResolvedValue({ status: 'rejected' });
+    const h = createHarness([queued('q1', 'first')]);
+    await vi.waitFor(() => expect(h.getQueue().map((m) => m.id)).toEqual(['q1']));
+    h.setQueue([...h.getQueue(), queued('q2', 'second')]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(heterogeneousAgentService.steerSession).toHaveBeenCalledTimes(1);
+    expect(h.getQueue().map((m) => m.id)).toEqual(['q1', 'q2']);
   });
 
   it('ignores a replay that is not its steer (the run’s own prompt)', async () => {
