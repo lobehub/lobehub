@@ -705,4 +705,21 @@ describe('GitStatus — Better Coding Experience pull requests', () => {
     expect(screen.getByText('#77')).toBeInTheDocument();
     expect(screen.queryByTestId('topic-pull-request-chip')).toBeNull();
   });
+
+  it('keeps the topic PR chip while the device cannot be read', () => {
+    setLab(true);
+    deviceStoreMock.devices = [{ deviceId: 'device-1', online: false }];
+    gitHookMocks.useFetchGitBranch.mockReturnValue({
+      data: undefined,
+      error: new Error('offline'),
+      isConfirmed: false,
+      mutate: gitHookMocks.mutateBranch,
+    });
+
+    render(
+      <GitStatus isGithub agentId="agent-1" deviceId="device-1" path="/repo" topicId="topic-1" />,
+    );
+
+    expect(screen.getByTestId('topic-pull-request-chip')).toHaveTextContent('topic-1');
+  });
 });

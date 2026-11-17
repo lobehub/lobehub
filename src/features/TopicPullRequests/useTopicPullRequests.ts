@@ -11,6 +11,7 @@ import {
   resolvePullRequestView,
   type TopicPullRequestView,
 } from './pullRequestView';
+import type { TopicPullRequestProbe } from './TopicPullRequestProbes';
 
 export interface UseTopicPullRequestsParams {
   /** Execution device of the working directory; omitted for this machine. */
@@ -29,7 +30,7 @@ export interface TopicPullRequests {
    * all of them, since only the device says which ones live in the working
    * directory's repository — the ones the sidebar PR pane can open.
    */
-  probeNumbers: number[];
+  probes: TopicPullRequestProbe[];
   views: TopicPullRequestView[];
 }
 
@@ -65,7 +66,9 @@ export const useTopicPullRequests = ({
     });
     return {
       enabled: betterCoding,
-      probeNumbers: path ? list.map((item) => item.number) : [],
+      probes: path
+        ? list.map((item) => ({ number: item.number, version: new Date(item.linkedAt).getTime() }))
+        : [],
       primary: pickPrimaryPullRequest(views),
       views,
     };

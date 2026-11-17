@@ -372,19 +372,30 @@ const GitStatus = memo<GitStatusProps>(
       reviewPatches !== undefined ? liveDiffStats : (cachedDiffStats ?? liveDiffStats);
     const hasChanges = diffStats.files > 0;
 
+    // Better Coding Experience: the topic's linked PRs are server records, so
+    // they stay in the bar (with their last known state) even when the working
+    // directory cannot be read — an offline device, a deleted worktree.
+    const topicPullRequestChip =
+      betterCoding && topicId ? (
+        <TopicPullRequestChip deviceId={deviceId} path={path} topicId={topicId} />
+      ) : null;
+
     // Dead directory: the whole live cluster is unreachable, so hand off to the
     // snapshot renderer — it shows what the topic recorded and offers the one
     // action that can still work (drop the worktree override).
     if (isStale) {
       return (
-        <StaleGitSnapshot
-          agentId={agentId}
-          git={betterCoding ? { ...fallbackGit!, github: undefined } : fallbackGit!}
-          isGithub={isGithub}
-          path={path}
-          sourcePath={sourcePath}
-          topicId={topicId}
-        />
+        <>
+          <StaleGitSnapshot
+            agentId={agentId}
+            git={betterCoding ? { ...fallbackGit!, github: undefined } : fallbackGit!}
+            isGithub={isGithub}
+            path={path}
+            sourcePath={sourcePath}
+            topicId={topicId}
+          />
+          {topicPullRequestChip}
+        </>
       );
     }
 
@@ -415,10 +426,11 @@ const GitStatus = memo<GitStatusProps>(
                 </Tooltip>
               </>
             )}
+            {topicPullRequestChip}
           </>
         );
       }
-      return null;
+      return topicPullRequestChip;
     }
 
     const branchTooltip = detached ? t('workingDirectory.detachedHead', { sha: branch }) : branch;
@@ -626,9 +638,7 @@ const GitStatus = memo<GitStatusProps>(
         {outdatedNode}
         {worktreeToggleNode}
         {diffNode}
-        {betterCoding && topicId && (
-          <TopicPullRequestChip deviceId={deviceId} path={path} topicId={topicId} />
-        )}
+        {topicPullRequestChip}
         {pullRequest && (
           <>
             <div {...stylex.props(gitChipStyles.separator)} />

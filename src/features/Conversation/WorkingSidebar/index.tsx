@@ -411,7 +411,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
     pickPullRequest,
-    probeNumbers,
+    probes: pullRequestProbes,
     pullRequest,
     pullRequests,
     refresh: refreshPullRequest,
@@ -938,8 +938,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       {overviewPanel}
       <TopicPullRequestProbes
         deviceId={remoteDeviceId}
-        numbers={probeNumbers}
         path={environmentWorkingDirectory}
+        probes={pullRequestProbes}
       />
       <RightPanel
         collapseThreshold={320}

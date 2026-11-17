@@ -8,15 +8,15 @@ import TopicPullRequestChip from '../TopicPullRequestChip';
 
 const mocks = vi.hoisted(() => ({
   open: vi.fn(),
-  result: { primary: undefined as any, probeNumbers: [] as number[], views: [] as any[] },
+  result: { primary: undefined as any, probes: [] as any[], views: [] as any[] },
 }));
 
 vi.mock('@/features/TopicPullRequests/useTopicPullRequests', () => ({
   useTopicPullRequests: () => mocks.result,
 }));
 vi.mock('@/features/TopicPullRequests/TopicPullRequestProbes', () => ({
-  default: ({ numbers }: { numbers: number[] }) => (
-    <span data-numbers={numbers.join(',')} data-testid="probes" />
+  default: ({ probes }: { probes: { number: number }[] }) => (
+    <span data-numbers={probes.map((p) => p.number).join(',')} data-testid="probes" />
   ),
 }));
 vi.mock('@/utils/openTrustedExternalUrl', () => ({ openTrustedExternalUrl: mocks.open }));
@@ -51,7 +51,7 @@ describe('TopicPullRequestChip', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders only the device probes while no PR is linked', () => {
-    mocks.result = { primary: undefined, probeNumbers: [], views: [] };
+    mocks.result = { primary: undefined, probes: [], views: [] };
     render(<TopicPullRequestChip path="/repo" topicId="t1" />);
 
     expect(screen.queryByTestId('topic-pull-request-chip')).toBeNull();
@@ -59,7 +59,7 @@ describe('TopicPullRequestChip', () => {
   });
 
   it('opens the only linked PR directly', () => {
-    mocks.result = { primary: view(12), probeNumbers: [12], views: [view(12)] };
+    mocks.result = { primary: view(12), probes: [{ number: 12, version: 1 }], views: [view(12)] };
     render(<TopicPullRequestChip path="/repo" topicId="t1" />);
 
     const chip = screen.getByTestId('topic-pull-request-chip');
@@ -71,7 +71,14 @@ describe('TopicPullRequestChip', () => {
 
   it('shows the latest open PR plus the count, and lists them all', () => {
     const views = [view(13, 'merged'), view(12)];
-    mocks.result = { primary: views[1], probeNumbers: [13, 12], views };
+    mocks.result = {
+      primary: views[1],
+      probes: [
+        { number: 13, version: 1 },
+        { number: 12, version: 1 },
+      ],
+      views,
+    };
     render(<TopicPullRequestChip path="/repo" topicId="t1" />);
 
     expect(screen.getByTestId('topic-pull-request-chip')).toHaveTextContent('#12+1');

@@ -280,6 +280,19 @@ const Overview = memo<OverviewProps>(
       />
     );
 
+    // Better Coding Experience PRs are server records: they stay listed with
+    // their last known state even when the working directory cannot be read.
+    const pullRequestRows = pullRequests
+      ? pullRequests.map((view) => (
+          <PullRequestRow
+            key={view.identifier}
+            pullRequest={toLinkedPullRequest(view)}
+            tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
+            onClick={() => onOpenPullRequest?.(view)}
+          />
+        ))
+      : pullRequest && <PullRequestRow pullRequest={pullRequest} onClick={() => onOpenTab('pr')} />;
+
     const gitRows = (
       <>
         {branch &&
@@ -386,18 +399,7 @@ const Overview = memo<OverviewProps>(
           onClick={() => onOpenTab('review')}
         />
 
-        {pullRequests
-          ? pullRequests.map((view) => (
-              <PullRequestRow
-                key={view.identifier}
-                pullRequest={toLinkedPullRequest(view)}
-                tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
-                onClick={() => onOpenPullRequest?.(view)}
-              />
-            ))
-          : pullRequest && (
-              <PullRequestRow pullRequest={pullRequest} onClick={() => onOpenTab('pr')} />
-            )}
+        {pullRequestRows}
       </>
     );
 
@@ -407,21 +409,24 @@ const Overview = memo<OverviewProps>(
           <Skeleton.Text rows={3} />
         </div>
       ) : gitError ? (
-        <OverviewRow
-          danger
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorError}
-          value={t('workingPanel.overview.environmentError')}
-          trailing={
-            <Button
-              icon={<Icon icon={RefreshCwIcon} size={12} />}
-              size={'small'}
-              onClick={() => void refreshGit()}
-            >
-              {tCommon('retry')}
-            </Button>
-          }
-        />
+        <>
+          <OverviewRow
+            danger
+            icon={TriangleAlertIcon}
+            iconColor={cssVar.colorError}
+            value={t('workingPanel.overview.environmentError')}
+            trailing={
+              <Button
+                icon={<Icon icon={RefreshCwIcon} size={12} />}
+                size={'small'}
+                onClick={() => void refreshGit()}
+              >
+                {tCommon('retry')}
+              </Button>
+            }
+          />
+          {pullRequests && pullRequestRows}
+        </>
       ) : (
         gitRows
       )

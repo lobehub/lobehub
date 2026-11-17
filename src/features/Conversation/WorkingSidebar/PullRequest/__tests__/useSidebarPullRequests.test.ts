@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   linked: {
     enabled: true,
     primary: undefined as any,
-    probeNumbers: [] as number[],
+    probes: [] as any[],
     views: [] as any[],
   },
   refresh: vi.fn(),
@@ -60,7 +60,7 @@ describe('useSidebarPullRequests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.betterCoding = true;
-    mocks.linked = { enabled: true, primary: undefined, probeNumbers: [], views: [] };
+    mocks.linked = { enabled: true, primary: undefined, probes: [], views: [] };
   });
 
   it('keeps the branch PR path untouched without the lab', () => {
@@ -83,7 +83,7 @@ describe('useSidebarPullRequests', () => {
 
   it('lists every linked PR and opens the picked one in the tab', () => {
     const views = [view(3), view(2), view(9, { localDetail: false })];
-    mocks.linked = { enabled: true, primary: views[0], probeNumbers: [3, 2, 9], views };
+    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
 
     expect(result.current.pullRequests).toHaveLength(3);
@@ -101,7 +101,7 @@ describe('useSidebarPullRequests', () => {
 
   it('locks mutations until the PR is confirmed', () => {
     const views = [view(3, { confirmed: false })];
-    mocks.linked = { enabled: true, primary: views[0], probeNumbers: [3], views };
+    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
     const { result } = renderHook(() => useSidebarPullRequests(PARAMS));
 
     expect(result.current.confirmed).toBe(false);

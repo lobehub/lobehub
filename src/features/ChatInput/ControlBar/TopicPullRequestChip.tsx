@@ -32,7 +32,7 @@ interface TopicPullRequestChipProps {
  */
 const TopicPullRequestChip = memo<TopicPullRequestChipProps>(({ deviceId, path, topicId }) => {
   const { t } = useTranslation('device');
-  const { primary, probeNumbers, views } = useTopicPullRequests({ deviceId, path, topicId });
+  const { primary, probes, views } = useTopicPullRequests({ deviceId, path, topicId });
   const extra = views.length - 1;
 
   const items = useMemo(
@@ -49,8 +49,8 @@ const TopicPullRequestChip = memo<TopicPullRequestChipProps>(({ deviceId, path, 
     [views],
   );
 
-  const probes = <TopicPullRequestProbes deviceId={deviceId} numbers={probeNumbers} path={path} />;
-  if (!primary) return probes;
+  const probeReads = <TopicPullRequestProbes deviceId={deviceId} path={path} probes={probes} />;
+  if (!primary) return probeReads;
 
   const chip = (
     <div
@@ -67,7 +67,7 @@ const TopicPullRequestChip = memo<TopicPullRequestChipProps>(({ deviceId, path, 
 
   return (
     <>
-      {probes}
+      {probeReads}
       <div {...stylex.props(gitChipStyles.separator)} />
       {extra > 0 ? (
         <DropdownMenu items={items} placement="topLeft">

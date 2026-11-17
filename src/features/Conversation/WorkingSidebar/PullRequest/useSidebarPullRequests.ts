@@ -60,7 +60,7 @@ export const useSidebarPullRequests = (params: {
   );
 
   if (!linked.enabled) {
-    return { ...legacy, pickPullRequest: undefined, probeNumbers: [], pullRequests: undefined };
+    return { ...legacy, pickPullRequest: undefined, probes: [], pullRequests: undefined };
   }
 
   return {
@@ -72,7 +72,7 @@ export const useSidebarPullRequests = (params: {
       setPicked(view.identifier);
       return view.localDetail;
     },
-    probeNumbers: linked.probeNumbers,
+    probes: linked.probes,
     pullRequest: selected ? toLinkedPullRequest(selected) : undefined,
     pullRequests: linked.views,
     refresh,
