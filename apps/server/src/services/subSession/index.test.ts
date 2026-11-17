@@ -232,8 +232,12 @@ describe('SubSessionService.retire', () => {
   it('stops running descendants, then archives each one before the topic itself', async () => {
     const deps = createDeps();
     deps.listDescendants.mockResolvedValue([
-      { id: 'tpc_same', status: 'running' },
-      { id: 'tpc_cross', status: 'active' },
+      { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, status: 'running' },
+      { id: 'tpc_cross', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
+      // A task run belongs to its task: it is neither stopped nor archived,
+      // and neither is what it opened.
+      { id: 'tpc_run', openedBy: { topicId: 'tpc_parent' }, status: 'running', trigger: 'task' },
+      { id: 'tpc_under_run', openedBy: { topicId: 'tpc_run' }, status: 'active' },
     ] as any);
     deps.findLiveRunIds.mockImplementation(async (id: string) =>
       id === 'tpc_same' ? ['op_same'] : [],
@@ -306,6 +310,7 @@ describe('SubSessionService.describe', () => {
       { id: 'a', openedBy: { topicId: 'tpc_parent' }, status: 'running' },
       { id: 'b', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
       { id: 'c', openedBy: { topicId: 'a' }, status: 'waitingForHuman' },
+      { id: 'run', openedBy: { topicId: 'tpc_parent' }, status: 'running', trigger: 'task' },
     ] as any);
 
     expect(await new SubSessionService(deps).describe('tpc_parent')).toEqual({
@@ -314,5 +319,25 @@ describe('SubSessionService.describe', () => {
       running: 2,
       topicId: 'tpc_parent',
     });
+  });
+});
+
+describe('SubSessionService.isOpenedBy', () => {
+  it('accepts a sub-session at any depth and nothing else', async () => {
+    const deps = createDeps();
+    deps.findTopic.mockImplementation(async (id: string) => {
+      const links: Record<string, any> = {
+        tpc_child: { topicId: 'tpc_parent' },
+        tpc_detached: { detachedAt: 'later', topicId: 'tpc_parent' },
+        tpc_grand: { topicId: 'tpc_child' },
+      };
+      return links[id] ? { id, metadata: { openedBy: links[id] } } : { id, metadata: {} };
+    });
+    const service = new SubSessionService(deps);
+
+    expect(await service.isOpenedBy('tpc_child', 'tpc_parent')).toBe(true);
+    expect(await service.isOpenedBy('tpc_grand', 'tpc_parent')).toBe(true);
+    expect(await service.isOpenedBy('tpc_detached', 'tpc_parent')).toBe(false);
+    expect(await service.isOpenedBy('tpc_other', 'tpc_parent')).toBe(false);
   });
 });

@@ -67,14 +67,18 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { readSubSessionsEnabled } from '@/server/services/subSession/labGate';
 import { onSubSessionTurnSettled } from '@/server/services/subSession/settle';
 import { ResultWakeChannel } from '@/server/services/taskResultBridge/wakeChannel';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
+  type BackgroundResultsWake,
   type BackgroundSubAgentResult,
   deliverBackgroundSubAgentResults,
+  wakeForBackgroundResults,
 } from './backgroundSubAgentDelivery';
+import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
@@ -897,10 +901,26 @@ export class AiAgentService {
         agentOperationModel: this.agentOperationModel,
         appendResultMessages: this.appendBackgroundResultMessages,
         messageModel: this.messageModel,
-        queueWakeup: (wake) => this.resultWakeChannel.queueWakeup(wake),
+        queueWakeup: this.wakeForBackgroundResults,
         topicModel: this.topicModel,
       },
       params,
+    );
+
+  /**
+   * Wake a topic for its background sub-agent results. Under Better Coding
+   * Experience they share the channel tasks and sub-sessions use (batched with
+   * them); otherwise the topic is woken directly, exactly as it always was.
+   */
+  private wakeForBackgroundResults = (wake: BackgroundResultsWake): Promise<void> =>
+    wakeForBackgroundResults(
+      {
+        execAgent: (params) => this.execAgent(params),
+        isChannelEnabled: () => readSubSessionsEnabled(this.db, this.userId),
+        queueWakeup: (params) => this.resultWakeChannel.queueWakeup(params),
+        resolveInterventionConfig: () => resolveForegroundInterventionConfig(this.db, this.userId),
+      },
+      wake,
     );
 
   /**

@@ -151,7 +151,7 @@ describe('getSidebarTopicListParams', () => {
     expect(getSidebarTopicListParams({ agentId: 'agent-7' })).toEqual({
       agentId: 'agent-7',
       excludeStatuses: ['completed'],
-      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
       isInbox: false,
       pageSize: 20,
     });
@@ -200,7 +200,7 @@ describe('getSidebarTopicListParams', () => {
     expect(getSidebarTopicListParams({ groupId: 'grp_1' })).toEqual({
       groupId: 'grp_1',
       excludeStatuses: ['completed'],
-      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
       isInbox: false,
       pageSize: 20,
     });
@@ -222,25 +222,28 @@ describe('sub-sessions opened for this agent', () => {
     };
 
     expect(deriveSidebarTopicListQuery(base).excludeTriggers).toContain('sub_session');
-    expect(deriveSidebarTopicListQuery({ ...base, showOpenedForMe: true }).excludeTriggers).toEqual(
+    expect(
+      deriveSidebarTopicListQuery({ ...base, showSubSessionTopics: true }).excludeTriggers,
+    ).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME);
+    expect(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME).not.toContain('sub_session');
+    // A group's list never holds sub-sessions: it keeps the list it always asked for.
+    expect(deriveSidebarTopicListQuery({ ...base, isGroupSession: true }).excludeTriggers).toEqual(
       MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
     );
-    expect(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME).not.toContain('sub_session');
-    // A group's list is not one agent's: the filter does not apply there.
-    expect(
-      deriveSidebarTopicListQuery({ ...base, isGroupSession: true, showOpenedForMe: true })
-        .excludeTriggers,
-    ).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS);
   });
 
-  it('asks the route loader for the same rows, and only under the lab', () => {
-    globalStateMock.topicShowOpenedForMeByAgent = { 'agent-1': true };
-
-    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).toContain(
+  it('asks the route loader for the same rows: hidden only under the lab with the filter off', () => {
+    // Lab off: no hierarchy to show them under their opener, so they are plain rows.
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
       'sub_session',
     );
 
     userStateMock.betterCoding = true;
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).toContain(
+      'sub_session',
+    );
+
+    globalStateMock.topicShowOpenedForMeByAgent = { 'agent-1': true };
     expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
       'sub_session',
     );

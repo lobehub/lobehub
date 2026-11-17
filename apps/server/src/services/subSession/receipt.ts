@@ -50,6 +50,8 @@ export const renderSubSessionReceipt = (params: {
 export interface SubSessionReceiptParams {
   db: LobeChatDatabase;
   errorMessage?: string;
+  /** The user's Better Coding Experience switch, when the caller already read it. */
+  labEnabled?: boolean;
   lastAssistantContent?: string;
   /** The sub-session turn that just settled. */
   operationId: string;
@@ -71,7 +73,7 @@ export interface SubSessionReceiptDeps {
 }
 
 export type SubSessionReceiptOutcome =
-  'delivered' | 'hop_limit' | 'lab_off' | 'not_reportable' | 'opener_gone';
+  'delivered' | 'duplicate' | 'hop_limit' | 'lab_off' | 'not_reportable' | 'opener_gone';
 
 /**
  * Report a finished sub-session turn to the conversation that opened it: a
@@ -100,7 +102,7 @@ export const deliverSubSessionReceipt = async (
   const openedBy = liveOpenedBy(topic?.metadata);
   // A task run reports through its task (`TaskResultBridgeService.deliver`).
   if (!topic?.agentId || !openedBy || topic.trigger === 'task') return 'not_reportable';
-  if (!(await readSubSessionsEnabled(db, userId))) return 'lab_off';
+  if (!(params.labEnabled ?? (await readSubSessionsEnabled(db, userId)))) return 'lab_off';
 
   const opener = await topicModel.findById(openedBy.topicId);
   if (!opener?.agentId || (opener.status && RETIRED_STATUSES.has(opener.status))) {
@@ -135,10 +137,10 @@ export const deliverSubSessionReceipt = async (
   // Serialized per opener topic with every other result delivery, so two
   // receipts cannot anchor on the same leaf and fork its main line.
   const messageId = `subsession-cb-${operationId}`;
-  await db.transaction(async (tx) => {
+  const written = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${opener.id}))`);
     const txMessages = new MessageModel(tx, userId, workspaceId);
-    if (await txMessages.findById(messageId)) return;
+    if (await txMessages.findById(messageId)) return false;
     const parentId = await txMessages.getLastMainThreadSpineMessageId(opener.id);
     await txMessages.create(
       {
@@ -160,7 +162,10 @@ export const deliverSubSessionReceipt = async (
       },
       messageId,
     );
+    return true;
   });
+  // A redelivered completion: the first delivery already queued (or ran) the wake.
+  if (!written) return 'duplicate';
 
   if (hop > MAX_AGENT_RELAY_HOPS) {
     log(

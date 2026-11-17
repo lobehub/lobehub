@@ -99,7 +99,8 @@ export const createSubSessionService = (ctx: CallerCtx) => {
       aiAgentRouter
         .createCaller(callerCtx)
         .execAgent({ ...(params as any), supersedeLiveRun: false }) as any,
-    trashTopic: (topicId) => topicCaller().removeTopic({ id: topicId }),
+    // Same default as the delete confirmation: the topic's uploaded files go with it.
+    trashTopic: (topicId) => topicCaller().removeTopic({ id: topicId, removeFiles: true }),
   });
 };
 

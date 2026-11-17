@@ -40,16 +40,21 @@ export const onSubSessionTurnSettled = async (
   deps: { execAgent: WakeChannelExecAgent },
 ) => {
   const { db, topicId, userId, workspaceId } = params;
+  // Everything here is Better Coding Experience: with it off, a settle costs one preference read.
+  if (!(await readSubSessionsEnabled(db, userId).catch(() => false))) return;
   const bridge = new ResultWakeChannel(db, userId, workspaceId, deps.execAgent);
 
   try {
-    await deliverSubSessionReceipt({ queueWakeup: (wake) => bridge.queueWakeup(wake) }, params);
+    await deliverSubSessionReceipt(
+      { queueWakeup: (wake) => bridge.queueWakeup(wake) },
+      { ...params, labEnabled: true },
+    );
   } catch (error) {
     log('reporting sub-session %s failed: %O', topicId, error);
   }
 
   try {
-    if (!ResultWakeChannel.canQueue() || !(await readSubSessionsEnabled(db, userId))) return;
+    if (!ResultWakeChannel.canQueue()) return;
     const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
     if (topic?.agentId) await bridge.drain(topic.agentId, topicId);
   } catch (error) {

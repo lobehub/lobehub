@@ -153,4 +153,14 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
       'detached',
     ]);
   });
+
+  it('treats an archived opener as gone, so its sub-session does not disappear', async () => {
+    await serverDB.update(topics).set({ status: 'completed' }).where(eq(topics.id, 'parent'));
+
+    const result = await topicModel.query({
+      agentId: 'agent-b',
+      excludeTriggers: ['task', 'sub_session'],
+    });
+    expect(result.items.map((row: any) => row.id)).toEqual(['child-cross']);
+  });
 });

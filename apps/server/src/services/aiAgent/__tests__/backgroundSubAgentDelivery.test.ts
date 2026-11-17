@@ -1,8 +1,10 @@
+import { RequestTrigger } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type BackgroundSubAgentDeliveryDeps,
   deliverBackgroundSubAgentResults,
+  wakeForBackgroundResults,
 } from '../backgroundSubAgentDelivery';
 
 const finished = (
@@ -95,6 +97,7 @@ describe('deliverBackgroundSubAgentResults', () => {
       callbackMessageId: 'leaf-msg',
       originTopicId: 'topic-1',
       receiptId: 'subagent-cb-a',
+      resultCount: 2,
     });
   });
 
@@ -198,5 +201,60 @@ describe('deliverBackgroundSubAgentResults', () => {
     await expect(
       deliverBackgroundSubAgentResults(deps, { topicId: 'topic-1' }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('wakeForBackgroundResults', () => {
+  const wake = {
+    agentId: 'agent-1',
+    callbackMessageId: 'leaf-msg',
+    originTopicId: 'topic-1',
+    receiptId: 'subagent-cb-a',
+    resultCount: 2,
+  };
+  const createWakeDeps = (channel: boolean) => ({
+    execAgent: vi.fn().mockResolvedValue({ operationId: 'wake-op', success: true }),
+    isChannelEnabled: vi.fn().mockResolvedValue(channel),
+    queueWakeup: vi.fn().mockResolvedValue(undefined),
+    resolveInterventionConfig: vi.fn().mockResolvedValue({ allowList: [], approvalMode: 'manual' }),
+  });
+
+  it('wakes the parent directly, as before, while Better Coding Experience is off', async () => {
+    const deps = createWakeDeps(false);
+
+    await wakeForBackgroundResults(deps, wake);
+
+    expect(deps.queueWakeup).not.toHaveBeenCalled();
+    expect(deps.execAgent).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      autoStart: true,
+      parentMessageId: 'leaf-msg',
+      prompt: 'Process 2 finished background results',
+      suppressUserMessage: true,
+      trigger: RequestTrigger.Chat,
+      userInterventionConfig: { allowList: [], approvalMode: 'manual' },
+    });
+  });
+
+  it('uses the shared wake-up channel under the lab', async () => {
+    const deps = createWakeDeps(true);
+
+    await wakeForBackgroundResults(deps, wake);
+
+    expect(deps.execAgent).not.toHaveBeenCalled();
+    expect(deps.queueWakeup).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      callbackMessageId: 'leaf-msg',
+      originTopicId: 'topic-1',
+      receiptId: 'subagent-cb-a',
+    });
+  });
+
+  it('throws when the direct wake does not start, so claims are handed back', async () => {
+    const deps = createWakeDeps(false);
+    deps.execAgent.mockResolvedValue({ error: 'no model', success: false });
+
+    await expect(wakeForBackgroundResults(deps, wake)).rejects.toThrow('no model');
   });
 });

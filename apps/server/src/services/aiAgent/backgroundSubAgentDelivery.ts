@@ -1,9 +1,12 @@
-import { isAgentOperationInFlight } from '@lobechat/types';
+import type { ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
+import { isAgentOperationInFlight, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
+
+import type { InternalExecAgentParams } from './types';
 
 const log = debug('lobe-server:ai-agent:background-sub-agent');
 
@@ -63,6 +66,8 @@ export interface BackgroundSubAgentDeliveryDeps {
     callbackMessageId: string;
     originTopicId: string;
     receiptId: string;
+    /** How many results this wake carries. */
+    resultCount: number;
   }) => Promise<void>;
   topicModel: Pick<TopicModel, 'findById'>;
 }
@@ -147,6 +152,7 @@ export const deliverBackgroundSubAgentResults = async (
         callbackMessageId: lastMessageId ?? `subagent-cb-${results.at(-1)!.callId}`,
         originTopicId: topicId,
         receiptId: `subagent-cb-${results[0].callId}`,
+        resultCount: results.length,
       });
 
       log('woke agent %s in topic %s with %d result(s)', agentId, topicId, results.length);
@@ -157,4 +163,48 @@ export const deliverBackgroundSubAgentResults = async (
   } catch (error) {
     log('delivering background results for topic %s failed: %O', topicId, error);
   }
+};
+
+/** One wake for a topic's background results; see {@link wakeForBackgroundResults}. */
+export interface BackgroundResultsWake {
+  agentId: string;
+  callbackMessageId: string;
+  originTopicId: string;
+  receiptId: string;
+  resultCount: number;
+}
+
+export interface BackgroundResultsWakeDeps {
+  execAgent: (params: InternalExecAgentParams) => Promise<ExecAgentResult>;
+  /** Better Coding Experience: results share the wake-up channel of tasks and sub-sessions. */
+  isChannelEnabled: () => Promise<boolean>;
+  queueWakeup: (params: Omit<BackgroundResultsWake, 'resultCount'>) => Promise<void>;
+  resolveInterventionConfig: () => Promise<UserInterventionConfig>;
+}
+
+/**
+ * Wake the parent for its background results. Under Better Coding Experience
+ * they go through the wake-up channel finished tasks and sub-sessions share, so
+ * results that land together wake it once; otherwise the parent is woken
+ * directly, exactly as background results always were. Throws when the wake
+ * cannot start, so the caller hands its claims back.
+ */
+export const wakeForBackgroundResults = async (
+  deps: BackgroundResultsWakeDeps,
+  wake: BackgroundResultsWake,
+): Promise<void> => {
+  const { resultCount, ...channelWake } = wake;
+  if (await deps.isChannelEnabled()) return deps.queueWakeup(channelWake);
+
+  const started = await deps.execAgent({
+    agentId: wake.agentId,
+    appContext: { topicId: wake.originTopicId },
+    autoStart: true,
+    parentMessageId: wake.callbackMessageId,
+    prompt: `Process ${resultCount} finished background result${resultCount === 1 ? '' : 's'}`,
+    suppressUserMessage: true,
+    trigger: RequestTrigger.Chat,
+    userInterventionConfig: await deps.resolveInterventionConfig(),
+  });
+  if (!started.success) throw new Error(started.error ?? 'the turn did not start');
 };

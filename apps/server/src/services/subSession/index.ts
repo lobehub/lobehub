@@ -135,6 +135,35 @@ const inheritWorkingDirectory = (metadata: ChatTopicMetadata | null | undefined)
   };
 };
 
+/**
+ * The descendants an "archive / delete all" takes along: everything except
+ * task runs and whatever they opened. A task run belongs to its task, which
+ * keeps running it and reads its topic; retiring a conversation must not stop
+ * or remove it.
+ */
+export const retirableDescendants = (rootId: string, descendants: OpenedTopicItem[]) => {
+  const kept = new Set<string>([rootId]);
+  const result: OpenedTopicItem[] = [];
+  let pending = descendants;
+  // Parents usually arrive before children (breadth-first walk); repeat until nothing moves.
+  while (pending.length > 0) {
+    const next: OpenedTopicItem[] = [];
+    for (const item of pending) {
+      const parent = item.openedBy?.topicId;
+      if (!parent || !kept.has(parent)) {
+        next.push(item);
+        continue;
+      }
+      if (item.trigger === 'task') continue;
+      kept.add(item.id);
+      result.push(item);
+    }
+    if (next.length === pending.length) break;
+    pending = next;
+  }
+  return result;
+};
+
 export class SubSessionService {
   constructor(private readonly deps: SubSessionDeps) {}
 
@@ -320,7 +349,7 @@ export class SubSessionService {
    */
   async describe(topicId: string) {
     await this.requireTopic(topicId);
-    const descendants = await this.deps.listDescendants(topicId);
+    const descendants = retirableDescendants(topicId, await this.deps.listDescendants(topicId));
     return {
       descendants: descendants.length,
       direct: descendants.filter((item) => item.openedBy?.topicId === topicId).length,
@@ -352,7 +381,7 @@ export class SubSessionService {
     const retireOne = params.action === 'archive' ? this.deps.archiveTopic : this.deps.trashTopic;
 
     if (params.mode === 'all') {
-      const descendants = await this.deps.listDescendants(root.id);
+      const descendants = retirableDescendants(root.id, await this.deps.listDescendants(root.id));
       for (const item of descendants) {
         if (item.status === 'running' || item.status === 'waitingForHuman') {
           for (const operationId of await this.deps.findLiveRunIds(item.id)) {
@@ -370,6 +399,24 @@ export class SubSessionService {
     const detached = await this.deps.detachTopics(children.map((child) => child.id));
     await retireOne(root.id);
     return { detached: this.describeMoves(root, detached), retired: [root.id] };
+  }
+
+  /**
+   * Whether `topicId` is a sub-session (at any depth) of `openerTopicId` — the
+   * only topics the `lobe-session` tool of that conversation may act on.
+   */
+  async isOpenedBy(topicId: string, openerTopicId: string): Promise<boolean> {
+    const seen = new Set<string>();
+    let cursor: string | undefined = topicId;
+    for (let depth = 0; cursor && depth < 8 && !seen.has(cursor); depth += 1) {
+      seen.add(cursor);
+      const topic = await this.deps.findTopic(cursor);
+      const openedBy = topic?.metadata?.openedBy;
+      if (!openedBy?.topicId || openedBy.detachedAt) return false;
+      if (openedBy.topicId === openerTopicId) return true;
+      cursor = openedBy.topicId;
+    }
+    return false;
   }
 
   /** Move sub-sessions to the top level. */

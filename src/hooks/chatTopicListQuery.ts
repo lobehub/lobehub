@@ -46,24 +46,35 @@ export const deriveSidebarTopicListQuery = ({
   includeCompleted,
   isGroupSession,
   onlyMine,
-  showOpenedForMe,
+  showSubSessionTopics,
   topicGroupMode,
 }: {
   includeCompleted: boolean;
   isGroupSession: boolean;
   onlyMine: boolean;
-  /** Also list the sub-sessions other conversations opened for this agent. */
-  showOpenedForMe?: boolean;
+  /**
+   * List the agent's sub-sessions (`sub_session`) as its own rows: when it asks
+   * to show the ones others opened for it, and whenever Better Coding
+   * Experience is off — there is no hierarchy then to show them under their
+   * opener. See {@link resolveShowSubSessionTopics}.
+   */
+  showSubSessionTopics?: boolean;
   topicGroupMode: TopicGroupMode;
 }): SidebarTopicListQuery => ({
   excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
+  // A group's list never holds sub-sessions (they belong to agents), so it keeps
+  // the list it always asked for.
   excludeTriggers:
-    showOpenedForMe && !isGroupSession
+    showSubSessionTopics || isGroupSession
       ? MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME
       : MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
   onlyMine: onlyMine || undefined,
   sortBy: !isGroupSession && topicGroupMode === 'byStatus' ? 'status' : undefined,
 });
+
+/** Whether an agent's list shows its sub-sessions as its own rows; see `showSubSessionTopics`. */
+export const resolveShowSubSessionTopics = (labEnabled: boolean, showOpenedForMe: boolean) =>
+  !labEnabled || showOpenedForMe;
 
 /**
  * Topic-group mode of one agent, resolved the same way the sidebar resolves it
@@ -108,9 +119,10 @@ export const getSidebarTopicListParams = (session: {
       onlyMine:
         !!getActiveWorkspaceId() &&
         systemStatusSelectors.topicOnlyMine(groupId ?? agentId)(globalState),
-      showOpenedForMe:
-        labPreferSelectors.enableBetterCodingExperience(userState) &&
+      showSubSessionTopics: resolveShowSubSessionTopics(
+        labPreferSelectors.enableBetterCodingExperience(userState),
         systemStatusSelectors.topicShowOpenedForMe(agentId)(globalState),
+      ),
       topicGroupMode: getTopicGroupModeForAgent(agentId),
     }),
     agentId,

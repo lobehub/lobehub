@@ -50,16 +50,18 @@ describe('onSubSessionTurnSettled', () => {
 
     expect(mocks.deliver).toHaveBeenCalledWith(
       { queueWakeup: expect.any(Function) },
-      expect.objectContaining({ operationId: 'op_1', topicId: 'tpc_a' }),
+      expect.objectContaining({ labEnabled: true, operationId: 'op_1', topicId: 'tpc_a' }),
     );
     expect(mocks.drain).toHaveBeenCalledWith('agt_a', 'tpc_a');
   });
 
-  it('leaves the queue alone with the lab off', async () => {
+  it('does nothing but read the lab switch while it is off', async () => {
     mocks.labEnabled.mockResolvedValue(false);
 
     await onSubSessionTurnSettled(params, { execAgent: vi.fn() });
 
+    expect(mocks.deliver).not.toHaveBeenCalled();
+    expect(mocks.findTopic).not.toHaveBeenCalled();
     expect(mocks.drain).not.toHaveBeenCalled();
   });
 

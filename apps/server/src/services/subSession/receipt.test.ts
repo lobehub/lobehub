@@ -163,12 +163,13 @@ describe('deliverSubSessionReceipt', () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it('skips a receipt that was already written (redelivered completion)', async () => {
+  it('skips a receipt that was already written (redelivered completion), and its wake', async () => {
     mocks.findMessage.mockResolvedValue({ id: 'subsession-cb-op_child' });
 
-    await deliverSubSessionReceipt({ queueWakeup }, params);
+    expect(await deliverSubSessionReceipt({ queueWakeup }, params)).toBe('duplicate');
 
     expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).not.toHaveBeenCalled();
   });
 });
 

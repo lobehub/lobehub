@@ -161,9 +161,10 @@ export const detachOpenedTopics = async (
 };
 
 /**
- * A `sub_session` row whose opener no longer exists (or sits in the recycle
- * bin): nothing would ever list it under that opener, so the target agent's own
- * list shows it at the top level instead of hiding it forever.
+ * A `sub_session` row whose opener is gone — deleted, in the recycle bin, or
+ * archived (by a path that did not ask what to do with its sub-sessions):
+ * nothing lists it under that opener any more, so the target agent's own list
+ * shows it at the top level instead of hiding it.
  *
  * The opener's columns go through `sql.identifier`: inside a correlated
  * subquery a bare `${topics.metadata}` renders unqualified and would resolve
@@ -175,7 +176,13 @@ export const orphanSubSessionCondition = (ctx: TopicModelContext) => {
   const liveOpener = ctx.db
     .select({ one: sql`1` })
     .from(opener)
-    .where(and(eq(opener.id, outerOpenedBy), notTrashed(opener.isDeleted)));
+    .where(
+      and(
+        eq(opener.id, outerOpenedBy),
+        notTrashed(opener.isDeleted),
+        or(isNull(opener.status), not(inArray(opener.status, ['completed', 'archived']))),
+      ),
+    );
 
   return and(eq(topics.trigger, 'sub_session'), notExists(liveOpener));
 };
