@@ -93,32 +93,64 @@ const setSwarm = async (
     });
   });
 
+/** Stops the runs a lane Task has on record, reporting what it found and what refused. */
+const stopRecordedRuns = async (
+  ctx: GoalServiceContext,
+  taskId: string,
+): Promise<{ live: number; stuck: string[] }> => {
+  const stuck: string[] = [];
+  let live = 0;
+  const runs = await ctx.taskTopicModel.findByTaskId(taskId).catch(() => []);
+  for (const run of runs) {
+    if (run.status !== 'running' || !run.topicId) continue;
+    live += 1;
+    const stopped = await ctx.taskService.cancelTopic(run.topicId).then(
+      () => true,
+      (error) => {
+        console.error('[GoalService.swarm] failed to stop a lane run:', error);
+        return false;
+      },
+    );
+    if (!stopped) stuck.push(run.topicId);
+  }
+  return { live, stuck };
+};
+
 /**
  * Lane runs that are still going at the deadline are stopped; their work stays
  * on disk. Returns the runs that refused to stop: `cancelTopic` rejects on
  * purpose when the owning device does not confirm the interruption, and
  * committing the wrap-up anyway would resolve the lanes, so nothing would ever
  * retry them and they would keep running past the deadline.
+ *
+ * A dispatch can claim its Task just before the deadline and record the run only
+ * after `runTask` has already handed it to a device, so at the deadline there is
+ * no topic to cancel yet. That start is withdrawn instead: `runTask` re-reads the
+ * Task under its row lock before recording anything and interrupts whatever it
+ * started once the claim is gone, so the lane cannot execute after the wrap-up
+ * resolved its node. Leaving the claim behind would also hold the slot a
+ * single-lane swarm's promotion needs to start.
  */
-const stopLaneRuns = async (
+export const stopLaneRuns = async (
   ctx: GoalServiceContext,
   laneNodes: GoalGraphNode[],
 ): Promise<string[]> => {
   const stuck: string[] = [];
   for (const node of laneNodes) {
     if (!node.taskId) continue;
-    const runs = await ctx.taskTopicModel.findByTaskId(node.taskId).catch(() => []);
-    for (const run of runs) {
-      if (run.status !== 'running' || !run.topicId) continue;
-      const stopped = await ctx.taskService.cancelTopic(run.topicId).then(
-        () => true,
-        (error) => {
-          console.error('[GoalService.swarm] failed to stop a lane run:', error);
-          return false;
-        },
-      );
-      if (!stopped) stuck.push(run.topicId);
-    }
+    const recorded = await stopRecordedRuns(ctx, node.taskId);
+    stuck.push(...recorded.stuck);
+    if (recorded.live) continue;
+    const withdrawn = await ctx.taskModel
+      .updateStatusIfCurrent(node.taskId, 'running', 'backlog', { error: null })
+      .catch((error) => {
+        console.error('[GoalService.swarm] failed to withdraw a pending lane start:', error);
+        return null;
+      });
+    if (!withdrawn) continue;
+    // The start may have recorded its run between that read and the withdrawal:
+    // stop it too, since the Task is no longer running to do it for us.
+    stuck.push(...(await stopRecordedRuns(ctx, node.taskId)).stuck);
   }
   return stuck;
 };
