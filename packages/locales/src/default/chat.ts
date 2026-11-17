@@ -975,6 +975,11 @@ export default {
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
+  'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
+  'heteroAgent.executionTarget.persistentSandboxDesc':
+    'Keeps results and work on your drive, for everyday tasks',
+  'heteroAgent.executionTarget.temporarySandboxDesc':
+    'Discarded after use, for coding and one-off data processing',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
@@ -4445,6 +4450,7 @@ export default {
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',
+  'sandboxEnvironment.none': 'No repository',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
   'sandboxDrive.pickerTitle': 'Work location',

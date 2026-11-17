@@ -272,9 +272,11 @@ export const isSafeSandboxEnvironmentId = (value: string): boolean =>
  * - `sandbox_workspace` fills the `<sandbox_environment>` file-system bullets
  * - `sandbox_session_files` fills the `<session_behavior>` persistence bullet
  *
- * An ephemeral run renders the ORIGINAL wording, byte for byte, so a deployment
- * where persistence is not enabled keeps the exact prompt it had before and
- * never leaks a raw placeholder.
+ * An ephemeral run is told the sandbox is discarded after use, and what that
+ * makes it for: coding on a repository and one-off data processing, with
+ * anything worth keeping exported before the session ends. Nothing in it
+ * mentions a drive, so a deployment where persistence is not enabled is not
+ * pointed at one it does not have.
  *
  * The persistent wording carries no absolute path on purpose. The mount root is
  * the execution plane's to choose, the runtime already starts every call inside
@@ -318,6 +320,9 @@ export const formatSandboxStoragePromptVariables = ({
         '- Each conversation topic has its own isolated session',
         '- Sessions may expire after inactivity; files will be recreated if needed',
         '- The sandbox has its own isolated file system starting at the root directory',
+        // What the disposable sandbox is FOR, so the model neither treats it as
+        // somewhere to keep things nor apologizes for it on a coding task.
+        '- This is a temporary sandbox, discarded after use: results and intermediate files are not kept once it is gone. It suits coding on a repository and one-off data processing, where nothing along the way needs keeping. Anything the user wants to keep has to leave the sandbox — export finished files with `exportFile`.',
       ].join('\n'),
     };
   }
@@ -345,6 +350,11 @@ export const formatSandboxStoragePromptVariables = ({
             ? '- Other conversations may use other folders on the same drive at the same time. Keep to this folder unless the user asks otherwise.'
             : '- Other conversations may use the same drive at the same time. Keep task-specific work in its own subfolder so unrelated tasks do not overwrite each other, and reuse what is already there when the user refers to earlier work.',
           '- Only files on the drive persist. The machine itself starts fresh every session: packages you install and anything outside the drive are gone next time, so reinstall what a task needs rather than assuming it is still there.',
+          // The persistent sandbox is for everyday work whose results should
+          // stay; coding is what the temporary one is for. A repository's
+          // dependencies and build output on the drive cost the user quota
+          // and nothing else.
+          "- This is the persistent sandbox, meant for everyday tasks: the results you produce and the work behind them stay on the drive for the user. It is not meant for coding — a repository's dependencies, virtual environments, caches and build output would take up a lot of the user's drive space. Keep those off the drive (outside the working directory) when a task needs them, and when the task is mainly programming on a codebase, suggest the user switch this conversation to the Cloud Sandbox, which is discarded after use.",
         ]
       : workingDir
         ? [
@@ -367,13 +377,13 @@ export const formatSandboxStoragePromptVariables = ({
       // wrong here: the result is thrown away with the session and the user
       // never sees it when browsing the drive, which reads this directory.
       // Said once, positively, rather than as a list of directories to avoid.
-      '- Every call starts you in that directory, and it is where the work belongs: checkouts, generated files and notes written anywhere else — `/root`, `/tmp`, a scratch directory of your own — are lost with the session and never appear on the user’s drive. Stay where you start; if a step genuinely needs scratch space, say where you put it.',
+      '- Every call starts you in that directory, and it is where the work belongs: results, generated files and notes written anywhere else — `/root`, `/tmp`, a scratch directory of your own — are lost with the session and never appear on the user’s drive. Stay where you start; if a step genuinely needs scratch space, say where you put it.',
       // Deliberately does NOT send installs to `/tmp`. The drive is network
       // storage — an order of magnitude slower for the thousands of small files
       // a package install writes — but the answer is to let them land where the
       // toolchain normally puts them, not to relocate them somewhere the
       // platform treats as scratch.
-      '- The drive is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Install packages and build where the toolchain puts things by default, and keep the drive for what is worth keeping.',
+      '- The drive is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Keep the drive for what is worth keeping.',
       '- It has a storage quota, which covers what you leave on the drive.',
     ].join('\n'),
   };
