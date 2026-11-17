@@ -441,7 +441,7 @@ export const execAgentTurn = async (
         botContext,
         botSender,
         clientIds,
-        continuationAssistantId,
+        continuationAssistantId: continuationAssistantId ?? params.reservedAssistantMessageId,
         conversationAgentId,
         createdThreadId,
         externalOrigin,
@@ -451,10 +451,17 @@ export const execAgentTurn = async (
         modelOverride,
         operationTaskId,
         parentMessageId,
+        persistedUserMessageId:
+          suppressUserMessage &&
+          !effectiveResume &&
+          params.persistedUserMessageId === parentMessageId
+            ? params.persistedUserMessageId
+            : undefined,
         prompt,
         providerOverride,
         requestedDeviceId,
         requireDevice,
+        reservedOperationId: params.reservedOperationId,
         resolvedAgentId,
         resume,
         runFromHistory,
@@ -528,7 +535,10 @@ export const execAgentTurn = async (
     userMessageId: turn.userMessageId,
     // Exactly what the user row was persisted with, so every stage reads the
     // message the way a later turn reads it back from history.
-    userMessageMetadata: turn.userMessageId ? turn.requestTriggerMetadata : undefined,
+    userMessageMetadata:
+      turn.userMessageId || params.reservedAssistantMessageId
+        ? turn.requestTriggerMetadata
+        : undefined,
   };
 
   // Every caller that is not the plain composer (bots, group members,
@@ -593,7 +603,10 @@ export const execAgentTurn = async (
           requestTrigger: requestTriggerMetadata.trigger,
           requestedDeviceId: turn.requestedDeviceId,
           runAttachments,
-          selfMessageIds,
+          selfMessageIds:
+            params.reservedAssistantMessageId && parentMessageId
+              ? new Set([...selfMessageIds, parentMessageId])
+              : selfMessageIds,
           topicStartOwnerOperationId: params.topicStartOwnerOperationId,
         },
       ),
