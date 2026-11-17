@@ -26,11 +26,9 @@ vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableBetterCodingExperience: () => mocks.labOn },
 }));
 
-const run = async (proceed = vi.fn()) => {
+const run = async (action: 'archive' | 'trash' = 'archive', proceed = vi.fn()) => {
   const { result } = renderHook(() => useRetireTopicWithSubTopics());
-  await act(() =>
-    result.current({ action: 'archive', proceed, title: 'Release', topicId: 'tpc_a' }),
-  );
+  await act(() => result.current({ action, proceed, title: 'Release', topicId: 'tpc_a' }));
   return proceed;
 };
 
@@ -60,7 +58,7 @@ describe('useRetireTopicWithSubTopics', () => {
   });
 
   it('asks, then archives only this one and reports the moved sub-topics', async () => {
-    mocks.ask.mockResolvedValue('self');
+    mocks.ask.mockResolvedValue({ mode: 'self', removeFiles: true });
 
     const proceed = await run();
 
@@ -71,16 +69,30 @@ describe('useRetireTopicWithSubTopics', () => {
       title: 'Release',
     });
     expect(proceed).not.toHaveBeenCalled();
-    expect(mocks.retireTopicTree).toHaveBeenCalledWith('tpc_a', 'archive', 'self');
+    expect(mocks.retireTopicTree).toHaveBeenCalledWith('tpc_a', 'archive', 'self', {
+      removeFiles: true,
+    });
     expect(mocks.notify).toHaveBeenCalledWith([{ agentId: 'agt_x' }], expect.any(Function));
   });
 
   it('archives everything when asked to', async () => {
-    mocks.ask.mockResolvedValue('all');
+    mocks.ask.mockResolvedValue({ mode: 'all', removeFiles: true });
 
     await run();
 
-    expect(mocks.retireTopicTree).toHaveBeenCalledWith('tpc_a', 'archive', 'all');
+    expect(mocks.retireTopicTree).toHaveBeenCalledWith('tpc_a', 'archive', 'all', {
+      removeFiles: true,
+    });
+  });
+
+  it("carries the delete confirm's attachment opt-out into the tree deletion", async () => {
+    mocks.ask.mockResolvedValue({ mode: 'self', removeFiles: false });
+
+    await run('trash');
+
+    expect(mocks.retireTopicTree).toHaveBeenCalledWith('tpc_a', 'trash', 'self', {
+      removeFiles: false,
+    });
   });
 
   it('does nothing when the dialog is dismissed', async () => {

@@ -79,12 +79,16 @@ export class ChatSubTopicActionImpl {
     topicId: string,
     action: 'archive' | 'trash',
     mode: 'all' | 'self',
+    options: { removeFiles?: boolean } = {},
   ): Promise<SubTopicRetireResult> => {
     const result =
       action === 'archive'
         ? await subTopicService.archive(topicId, mode)
-        : await subTopicService.trash(topicId, mode);
-    if (this.#get().activeTopicId === topicId) this.#get().switchTopic(null);
+        : await subTopicService.trash(topicId, mode, options.removeFiles);
+    // Whatever was retired — the topic or, with "all", one of its sub-topics —
+    // must not stay the open conversation.
+    const activeTopicId = this.#get().activeTopicId;
+    if (activeTopicId && result.retired.includes(activeTopicId)) this.#get().switchTopic(null);
     await Promise.all([this.#get().refreshTopic(), this.refreshSubTopics()]);
     return result;
   };

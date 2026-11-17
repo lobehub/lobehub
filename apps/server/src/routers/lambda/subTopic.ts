@@ -147,7 +147,8 @@ export const createSubTopicService = (ctx: CallerCtx) => {
         { ...(params as any), queuedSuccessor: true },
       ) as any,
     // Same default as the delete confirmation: the topic's uploaded files go with it.
-    trashTopic: (topicId) => topicCaller().removeTopic({ id: topicId, removeFiles: true }),
+    trashTopic: (topicId, { removeFiles }) =>
+      topicCaller().removeTopic({ id: topicId, removeFiles }),
   });
 };
 
@@ -351,12 +352,20 @@ export const subTopicRouter = router({
 
   trash: subTopicProcedure
     .use(withScopedPermission('topic:delete'))
-    .input(z.object({ mode: z.enum(['all', 'self']), topicId: z.string() }))
+    .input(
+      z.object({
+        mode: z.enum(['all', 'self']),
+        /** Also delete uploads only these topics reference; the delete confirm's default is yes. */
+        removeFiles: z.boolean().optional(),
+        topicId: z.string(),
+      }),
+    )
     .mutation(({ ctx, input }) =>
       run(async (): Promise<SubTopicRetireResult> => {
         const result = await createSubTopicService(ctx).retire({
           action: 'trash',
           mode: input.mode,
+          removeFiles: input.removeFiles,
           topicId: input.topicId,
         });
         return { ...result, detached: await withAgentTitles(ctx, result.detached) };

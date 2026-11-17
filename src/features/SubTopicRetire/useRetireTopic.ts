@@ -37,16 +37,18 @@ export const useRetireTopicWithSubTopics = () => {
       const summary = await subTopicService.describe(params.topicId).catch(() => undefined);
       if (!summary || summary.descendants === 0) return params.proceed();
 
-      const choice = await askRetireSubTopics({
+      const decision = await askRetireSubTopics({
         action: params.action,
         descendants: summary.descendants,
         running: summary.running,
         title: params.title,
       });
-      if (!choice) return;
+      if (!decision) return;
 
       try {
-        const result = await retireTopicTree(params.topicId, params.action, choice);
+        const result = await retireTopicTree(params.topicId, params.action, decision.mode, {
+          removeFiles: decision.removeFiles,
+        });
         notifyMovedSubTopics(result.detached, (agentId) => navigate(`/agent/${agentId}`));
       } catch {
         toast.error(t('operationFailed'));

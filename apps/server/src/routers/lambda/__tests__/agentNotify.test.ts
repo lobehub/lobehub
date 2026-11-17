@@ -69,9 +69,10 @@ vi.mock('@/database/models/message', () => ({
     };
   }),
 }));
+const mockOnSubTopicTurnSettled = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn(function () {
-    return { execAgent: mockExecAgent };
+    return { execAgent: mockExecAgent, onSubTopicTurnSettled: mockOnSubTopicTurnSettled };
   }),
 }));
 
@@ -243,6 +244,25 @@ describe('agentNotifyRouter.notify — remote hetero terminal signal', () => {
     );
     // The lifecycle must not issue a second topic lookup for its hooks.
     expect(mockTopicFindById).toHaveBeenCalledTimes(1);
+    completeOperationSpy.mockRestore();
+  });
+
+  it("reports a remote agent's finished turn to the topic that opened it (sub-topic receipt)", async () => {
+    const completeOperationSpy = vi
+      .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+      .mockResolvedValue(undefined);
+
+    await createCaller().notify({ content: '', done: true, role: 'assistant', topicId: TOPIC });
+
+    await vi.waitFor(() => expect(completeOperationSpy).toHaveBeenCalledTimes(1));
+    // The terminal lifecycle carries the same settle handler `heteroFinish` wires.
+    const lifecycle = completeOperationSpy.mock.instances[0] as unknown as {
+      onTopicRunSettled?: (settled: unknown) => unknown;
+    };
+    expect(lifecycle.onTopicRunSettled).toEqual(expect.any(Function));
+    const settled = { operationId: OP, reason: 'done', topicId: TOPIC };
+    await lifecycle.onTopicRunSettled!(settled);
+    expect(mockOnSubTopicTurnSettled).toHaveBeenCalledWith(settled);
     completeOperationSpy.mockRestore();
   });
 

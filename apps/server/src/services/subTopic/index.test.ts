@@ -455,7 +455,8 @@ describe('SubTopicService.retire', () => {
     });
 
     expect(deps.detachTopics).toHaveBeenCalledWith(['tpc_same', 'tpc_cross']);
-    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent');
+    // Without a choice, uploads go with the topic — the delete confirm's default.
+    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent', { removeFiles: true });
     expect(deps.trashTopic).toHaveBeenCalledTimes(1);
     expect(result.detached).toEqual([
       { agentId: 'agt_lobe', id: 'tpc_same', movedToOwnAgent: false, trigger: null },
@@ -510,7 +511,48 @@ describe('SubTopicService.describe', () => {
   });
 });
 
+describe('SubTopicService.retire — attachments', () => {
+  it("keeps every topic's uploads when the user unchecked the attachment option", async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue([
+      { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, trigger: 'sub_topic' },
+    ] as any);
+
+    await new SubTopicService(deps).retire({
+      action: 'trash',
+      mode: 'all',
+      removeFiles: false,
+      topicId: 'tpc_parent',
+    });
+
+    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_same', { removeFiles: false });
+    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent', { removeFiles: false });
+  });
+});
+
 describe('SubTopicService.isOpenedBy', () => {
+  it('walks a chain of any length up to its opener', async () => {
+    const deps = createDeps();
+    // tpc_d12 → tpc_d11 → … → tpc_d1 → tpc_parent: twelve generations.
+    deps.findTopic.mockImplementation(async (id: string) => {
+      const depth = Number(id.replace('tpc_d', ''));
+      const opener = depth === 1 ? 'tpc_parent' : `tpc_d${depth - 1}`;
+      return { id, metadata: { openedBy: { topicId: opener } } };
+    });
+
+    expect(await new SubTopicService(deps).isOpenedBy('tpc_d12', 'tpc_parent')).toBe(true);
+  });
+
+  it('stops on a cycle', async () => {
+    const deps = createDeps();
+    deps.findTopic.mockImplementation(async (id: string) => ({
+      id,
+      metadata: { openedBy: { topicId: id === 'tpc_a' ? 'tpc_b' : 'tpc_a' } },
+    }));
+
+    expect(await new SubTopicService(deps).isOpenedBy('tpc_a', 'tpc_parent')).toBe(false);
+  });
+
   it('accepts a sub-topic at any depth and nothing else', async () => {
     const deps = createDeps();
     deps.findTopic.mockImplementation(async (id: string) => {

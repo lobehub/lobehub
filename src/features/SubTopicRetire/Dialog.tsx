@@ -1,17 +1,23 @@
 'use client';
 
-import { Button, createModal, Flexbox, Text, useModalContext } from '@lobehub/ui';
+import { Button, Checkbox, createModal, Flexbox, Text, useModalContext } from '@lobehub/ui';
 import { t } from 'i18next';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export type RetireAction = 'archive' | 'trash';
 export type RetireChoice = 'all' | 'self';
 
+/** What the user picked; `removeFiles` is the delete confirm's attachment choice (trash only). */
+export interface RetireDecision {
+  mode: RetireChoice;
+  removeFiles: boolean;
+}
+
 interface DialogProps {
   action: RetireAction;
   descendants: number;
-  onChoose: (choice: RetireChoice | null) => void;
+  onChoose: (decision: RetireDecision | null) => void;
   running: number;
   title: string;
 }
@@ -20,8 +26,11 @@ const RetireSubTopicsContent = memo<DialogProps>(
   ({ action, descendants, onChoose, running, title }) => {
     const { t } = useTranslation('topic');
     const { close } = useModalContext();
-    const choose = (choice: RetireChoice | null) => {
-      onChoose(choice);
+    // Same default as the ordinary delete confirm: uploads go with the topics
+    // unless the user unchecks it.
+    const [removeFiles, setRemoveFiles] = useState(true);
+    const choose = (mode: RetireChoice | null) => {
+      onChoose(mode ? { mode, removeFiles } : null);
       close();
     };
 
@@ -31,6 +40,11 @@ const RetireSubTopicsContent = memo<DialogProps>(
           {t(`subTopic.retire.${action}.description`, { count: descendants, title })}
           {running > 0 && ` ${t(`subTopic.retire.${action}.running`, { count: running })}`}
         </Text>
+        {action === 'trash' && (
+          <Checkbox checked={removeFiles} onChange={setRemoveFiles}>
+            {t('actions.confirmRemoveTopicFiles')}
+          </Checkbox>
+        )}
         <Flexbox horizontal gap={8} justify={'flex-end'} wrap={'wrap'}>
           <Button onClick={() => choose(null)}>{t('cancel', { ns: 'common' })}</Button>
           <Button danger={action === 'trash'} onClick={() => choose('all')}>
@@ -54,13 +68,13 @@ RetireSubTopicsContent.displayName = 'RetireSubTopicsContent';
  */
 export const askRetireSubTopics = (
   params: Omit<DialogProps, 'onChoose'>,
-): Promise<RetireChoice | null> =>
+): Promise<RetireDecision | null> =>
   new Promise((resolve) => {
     let settled = false;
-    const settle = (choice: RetireChoice | null) => {
+    const settle = (decision: RetireDecision | null) => {
       if (settled) return;
       settled = true;
-      resolve(choice);
+      resolve(decision);
     };
     createModal({
       content: <RetireSubTopicsContent {...params} onChoose={settle} />,

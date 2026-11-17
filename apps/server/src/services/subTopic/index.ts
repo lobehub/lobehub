@@ -140,7 +140,8 @@ export interface SubTopicDeps {
   }) => Promise<void>;
   /** Start a turn on an existing topic without taking it over from a live run. */
   startOnTopic: (params: Record<string, unknown>) => Promise<ExecAgentResult>;
-  trashTopic: (topicId: string) => Promise<unknown>;
+  /** `removeFiles`: also delete uploads only this topic references (the delete confirm's checkbox). */
+  trashTopic: (topicId: string, options: { removeFiles: boolean }) => Promise<unknown>;
 }
 
 export class SubTopicError extends Error {
@@ -496,9 +497,19 @@ export class SubTopicService {
    * - `self`: archive the topic only; its direct sub-topics move to the top
    *   level (`openedBy.detachedAt`), cross-agent ones back to their own agent.
    */
-  async retire(params: { action: 'archive' | 'trash'; mode: 'all' | 'self'; topicId: string }) {
+  async retire(params: {
+    action: 'archive' | 'trash';
+    mode: 'all' | 'self';
+    /** Trash only: also delete the topics' uploads, as the delete confirm offers. Defaults to yes. */
+    removeFiles?: boolean;
+    topicId: string;
+  }) {
     const root = await this.requireTopic(params.topicId);
-    const retireOne = params.action === 'archive' ? this.deps.archiveTopic : this.deps.trashTopic;
+    const removeFiles = params.removeFiles ?? true;
+    const retireOne =
+      params.action === 'archive'
+        ? (topicId: string) => this.deps.archiveTopic(topicId)
+        : (topicId: string) => this.deps.trashTopic(topicId, { removeFiles });
 
     if (params.mode === 'all') {
       const descendants = retirableDescendants(root.id, await this.deps.listDescendants(root.id));
@@ -528,7 +539,8 @@ export class SubTopicService {
   async isOpenedBy(topicId: string, openerTopicId: string): Promise<boolean> {
     const seen = new Set<string>();
     let cursor: string | undefined = topicId;
-    for (let depth = 0; cursor && depth < 8 && !seen.has(cursor); depth += 1) {
+    // Walk up to the root, however deep: the `seen` set stops a cycle.
+    while (cursor && !seen.has(cursor)) {
       seen.add(cursor);
       const topic = await this.deps.findTopic(cursor);
       const openedBy = topic?.metadata?.openedBy;

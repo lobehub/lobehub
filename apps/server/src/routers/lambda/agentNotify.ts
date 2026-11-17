@@ -298,6 +298,14 @@ export const createAgentNotifyRouter = (
                 ctx.serverDB,
                 ctx.userId,
                 ctx.workspaceId ?? undefined,
+                {
+                  // A sub-topic's finished turn reports to the topic that opened
+                  // it — the same contract `heteroFinish` wires for CLI agents.
+                  onTopicRunSettled: (settled) =>
+                    new AiAgentService(ctx.serverDB, ctx.userId, {
+                      workspaceId: ctx.workspaceId ?? undefined,
+                    }).onSubTopicTurnSettled(settled),
+                },
               ).completeOperation(
                 {
                   agentId,

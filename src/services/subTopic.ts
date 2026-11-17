@@ -17,8 +17,12 @@ class SubTopicService {
   archive = (topicId: string, mode: 'all' | 'self'): Promise<SubTopicRetireResult> =>
     lambdaClient.subTopic.archive.mutate({ mode, topicId });
 
-  trash = (topicId: string, mode: 'all' | 'self'): Promise<SubTopicRetireResult> =>
-    lambdaClient.subTopic.trash.mutate({ mode, topicId });
+  trash = (
+    topicId: string,
+    mode: 'all' | 'self',
+    removeFiles?: boolean,
+  ): Promise<SubTopicRetireResult> =>
+    lambdaClient.subTopic.trash.mutate({ mode, removeFiles, topicId });
 
   detach = (topicIds: string[]): Promise<SubTopicDetachResult> =>
     lambdaClient.subTopic.detach.mutate({ topicIds });
