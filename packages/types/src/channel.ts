@@ -248,6 +248,14 @@ export const channelMessageReceipt = (
     : undefined;
 };
 
+/** When the message was deleted (`metadata.deletedAt`); null while it stands. */
+export const channelMessageDeletedAt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): Date | null => {
+  const deletedAt = metadata?.deletedAt;
+  return typeof deletedAt === 'string' ? new Date(deletedAt) : null;
+};
+
 /** When a person last edited their message (`metadata.editedAt`); null if never. */
 export const channelMessageEditedAt = (
   metadata: ChannelMessageMetadata | null | undefined,
@@ -655,6 +663,11 @@ export interface ChannelPublicMessage {
   };
   content: string;
   createdAt: Date;
+  /**
+   * Set once the message was deleted. Its row stays as a tombstone, without text, mentions or
+   * attachments, so Threads, replies and jobs that point at it still resolve.
+   */
+  deletedAt?: Date | null;
   /** Set once the author has edited the text; shown as "(edited)". */
   editedAt?: Date | null;
   fileIds: string[];
@@ -666,7 +679,7 @@ export interface ChannelPublicMessage {
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
     ChannelPublicMessage,
-    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+    'id' | 'author' | 'content' | 'deletedAt' | 'sequence' | 'threadId'
   > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;

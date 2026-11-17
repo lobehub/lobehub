@@ -389,6 +389,13 @@ export class ChannelService {
     return message;
   };
 
+  /** Replies the message asked for stop with it; the coordinator stops those still writing. */
+  deleteMessage = async (channelId: string, messageId: string) => {
+    const writers = await this.repository.deleteMessage(channelId, messageId);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
   addUser = async (channelId: string, userId: string) => {
     const member = await this.repository.addUser(channelId, userId);
     await this.changed(channelId);
