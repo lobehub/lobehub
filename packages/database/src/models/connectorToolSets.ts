@@ -16,7 +16,7 @@ type RankedRow = Pick<
  */
 const connectorRunRank = (
   row: RankedRow,
-  { agentId, workspaceId }: { agentId?: string; workspaceId?: string },
+  { agentId, workspaceId }: { agentId?: string; workspaceId?: string | null },
 ) => {
   const binding =
     agentId && row.agentId === agentId
@@ -40,7 +40,7 @@ const connectorRunRank = (
  */
 export const pickConnectorByPriority = <T extends RankedRow>(
   rows: T[],
-  context: { agentId?: string; workspaceId?: string },
+  context: { agentId?: string; workspaceId?: string | null },
 ): T[] => {
   const byIdentifier = new Map<string, T>();
   for (const row of rows) {
@@ -63,7 +63,7 @@ export const pickConnectorByPriority = <T extends RankedRow>(
  */
 export const pickConnectorToolSets = <T extends RankedRow>(
   rows: T[],
-  context: { agentId?: string; workspaceId?: string },
+  context: { agentId?: string; workspaceId?: string | null },
 ): (T & { toolIdentifier: string })[] => {
   const groups = new Map<string, T[]>();
   for (const row of rows) groups.set(row.identifier, [...(groups.get(row.identifier) ?? []), row]);
