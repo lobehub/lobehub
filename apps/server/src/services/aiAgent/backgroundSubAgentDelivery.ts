@@ -1,12 +1,9 @@
-import type { ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
-import { isAgentOperationInFlight, RequestTrigger } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
-
-import type { InternalExecAgentParams } from './types';
 
 const log = debug('lobe-server:ai-agent:background-sub-agent');
 
@@ -19,7 +16,10 @@ const log = debug('lobe-server:ai-agent:background-sub-agent');
  * Each answer lands on the conversation's main line as a user message whose
  * sender is the sub-agent (`metadata.subAgentCallback`) — the chat shows the
  * sub-agent speaking, the model reads it wrapped as `<sub_agent_result>` — and
- * the parent agent then runs off that history.
+ * the parent agent then runs off that history, woken through the wake-up
+ * channel finished tasks and sub-sessions share
+ * (`TaskResultBridgeService.queueWakeup`), so results that land together wake
+ * it once.
  *
  * It runs when a background sub-agent finishes and whenever a run of the topic
  * settles, so an answer that arrives mid-turn is delivered once that turn ends
@@ -51,15 +51,19 @@ export interface BackgroundSubAgentDeliveryDeps {
     results: BackgroundSubAgentResult[];
     topicId: string;
   }) => Promise<string | undefined>;
-  execAgent: (params: InternalExecAgentParams) => Promise<ExecAgentResult>;
   messageModel: Pick<
     MessageModel,
     | 'claimBackgroundSubAgentDelivery'
     | 'listBackgroundSubAgentCalls'
     | 'releaseBackgroundSubAgentDelivery'
   >;
-  /** Approval policy for the wake-up run — the user's foreground preferences. */
-  resolveInterventionConfig: () => Promise<UserInterventionConfig>;
+  /** Queue the results on the shared wake-up channel; it starts one run for everything pending. */
+  queueWakeup: (params: {
+    agentId: string;
+    callbackMessageId: string;
+    originTopicId: string;
+    receiptId: string;
+  }) => Promise<void>;
   topicModel: Pick<TopicModel, 'findById'>;
 }
 
@@ -135,18 +139,15 @@ export const deliverBackgroundSubAgentResults = async (
 
     const agentId = topic.agentId;
     try {
-      const parentMessageId = await deps.appendResultMessages({ agentId, results, topicId });
-      const started = await deps.execAgent({
+      const lastMessageId = await deps.appendResultMessages({ agentId, results, topicId });
+      // Claims are exclusive, so the first claimed call names this batch
+      // uniquely — and a retry after a failed wake reuses the same receipt.
+      await deps.queueWakeup({
         agentId,
-        appContext: { topicId },
-        autoStart: true,
-        parentMessageId,
-        prompt: `Process ${results.length} finished background result${results.length === 1 ? '' : 's'}`,
-        suppressUserMessage: true,
-        trigger: RequestTrigger.Chat,
-        userInterventionConfig: await deps.resolveInterventionConfig(),
+        callbackMessageId: lastMessageId ?? `subagent-cb-${results.at(-1)!.callId}`,
+        originTopicId: topicId,
+        receiptId: `subagent-cb-${results[0].callId}`,
       });
-      if (!started.success) throw new Error(started.error ?? 'the turn did not start');
 
       log('woke agent %s in topic %s with %d result(s)', agentId, topicId, results.length);
     } catch (error) {

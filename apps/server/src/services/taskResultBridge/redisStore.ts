@@ -23,7 +23,7 @@ export interface TaskResultCallbackReceipt {
   operationId: string;
   originTopicId: string;
   status: 'pending' | 'processing';
-  taskId: string;
+  taskId?: string;
   taskTopicId?: string;
   updatedAt: number;
   userId: string;
@@ -41,8 +41,10 @@ export interface TaskResultCallbackScope {
 interface CreatePendingParams {
   agentId: string;
   callbackMessageId: string;
+  /** The receipt's id: the finished run's operation, or another id unique per result. */
   operationId: string;
-  taskId: string;
+  /** Absent for results that are not tasks (sub-sessions, background sub-agents). */
+  taskId?: string;
   taskTopicId?: string;
 }
 
@@ -119,7 +121,7 @@ const parseReceipt = (payload: Record<string, string>): TaskResultCallbackReceip
     operationId: payload.operationId,
     originTopicId: payload.originTopicId,
     status: payload.status,
-    taskId: payload.taskId,
+    taskId: payload.taskId || undefined,
     taskTopicId: payload.taskTopicId || undefined,
     updatedAt: Number(payload.updatedAt),
     userId: payload.userId,
@@ -140,6 +142,11 @@ export class TaskResultCallbackRedisStore {
     if (!redis) throw new Error('Redis is required for task result callbacks');
     this.redis = redis;
     this.scopeKey = `${userId}:${workspaceId || 'personal'}:${originTopicId}`;
+  }
+
+  /** Whether a Redis is configured to queue receipts on; without one, results wake their conversation directly. */
+  static isAvailable(redis = getAgentRuntimeRedisClient()): boolean {
+    return !!redis;
   }
 
   static async findRecoverableScopes(
@@ -197,7 +204,7 @@ export class TaskResultCallbackRedisStore {
       'status',
       'pending',
       'taskId',
-      params.taskId,
+      params.taskId || '',
       'taskTopicId',
       params.taskTopicId || '',
       'updatedAt',

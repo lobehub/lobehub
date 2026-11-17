@@ -1,4 +1,4 @@
-import type { AgentSenderMetadata } from '@lobechat/types';
+import type { AgentSenderMetadata, MessageSubSessionCallback } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -66,6 +66,25 @@ export const formatAgentSenderHeader = (
 };
 
 /**
+ * The header of a sub-session's report: the conversation this one opened
+ * finished a turn. The model continues it by sending to the sub-session, not
+ * by replying to a message.
+ */
+export const formatSubSessionResultHeader = (callback: MessageSubSessionCallback) => {
+  const attributes = [
+    ['topic_id', callback.topicId],
+    ['agent_id', callback.agentId],
+    ['title', callback.title],
+    ['status', callback.reason],
+  ]
+    .filter((entry): entry is [string, string] => !!entry[1])
+    .map(([key, value]) => `${key}="${escapeAttribute(value)}"`)
+    .join(' ');
+
+  return `<sub_session_result ${attributes}>A sub-session you opened finished a turn; its reply follows. To continue it, send to that sub-session (lobe-session sendToSession, or \`lh session send ${callback.topicId}\`); your response here is not delivered to it.</sub_session_result>`;
+};
+
+/**
  * Agent Sender Message Processor
  *
  * A user message another agent sent (`lh topic send`, `lh message reply`,
@@ -96,10 +115,12 @@ export class AgentSenderMessageProcessor extends BaseProcessor {
         continue;
       }
 
-      clonedContext.messages[i] = {
-        ...message,
-        content: `${formatAgentSenderHeader(message.id, sender, this.config)}\n\n${message.content}`,
-      };
+      const subSession = message.metadata?.subSessionCallback as
+        MessageSubSessionCallback | undefined;
+      const header = subSession?.topicId
+        ? formatSubSessionResultHeader(subSession)
+        : formatAgentSenderHeader(message.id, sender, this.config);
+      clonedContext.messages[i] = { ...message, content: `${header}\n\n${message.content}` };
       processedCount++;
     }
 

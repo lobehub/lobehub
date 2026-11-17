@@ -52,16 +52,21 @@ vi.mock('@/database/models/message', () => ({
   }),
 }));
 
+const { redisClient } = vi.hoisted(() => ({ redisClient: vi.fn(() => ({}) as unknown) }));
+
 vi.mock('./redisStore', () => ({
-  TaskResultCallbackRedisStore: vi.fn(function () {
-    return {
-      attachCreatorOperation,
-      claimPending,
-      createPending,
-      release,
-      settle,
-    };
-  }),
+  TaskResultCallbackRedisStore: Object.assign(
+    vi.fn(function () {
+      return {
+        attachCreatorOperation,
+        claimPending,
+        createPending,
+        release,
+        settle,
+      };
+    }),
+    { isAvailable: () => !!redisClient() },
+  ),
 }));
 
 vi.mock('@/database/models/topic', () => ({
@@ -378,8 +383,8 @@ describe('TaskResultBridgeService.deliver', () => {
 
   it('aggregates all pending callbacks into one creator wakeup', async () => {
     claimPending.mockResolvedValue([
-      { callbackMessageId: 'callback-1', id: 'receipt-1' },
-      { callbackMessageId: 'callback-2', id: 'receipt-2' },
+      { callbackMessageId: 'callback-1', id: 'receipt-1', taskId: 'task-1' },
+      { callbackMessageId: 'callback-2', id: 'receipt-2', taskId: 'task-2' },
     ]);
     getLastLeaf
       .mockReset()
@@ -449,5 +454,64 @@ describe('TaskResultBridgeService.deliver', () => {
 
     const [params] = createMsg.mock.calls[0] as [any, string];
     expect(params.content).toContain('Raw final output from the run');
+  });
+});
+
+describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    redisClient.mockReturnValue({});
+    createPending.mockResolvedValue(undefined);
+    tryReserve.mockResolvedValue(true);
+    getLastLeaf.mockResolvedValue('result-msg');
+    topicFindById.mockResolvedValue({ agentId: 'agent-parent', metadata: {} });
+    getUserSettings.mockResolvedValue(undefined);
+    execAgent.mockResolvedValue({ operationId: 'op-wake', success: true });
+  });
+
+  it('queues a non-task result and wakes the conversation once for everything pending', async () => {
+    claimPending.mockResolvedValue([
+      { callbackMessageId: 'sub-1', id: 'sub-session-a' },
+      { callbackMessageId: 'task-cb', id: 'op-task', taskId: 'task-1' },
+    ]);
+
+    await new TaskResultBridgeService(db, TEST_USER).queueWakeup({
+      agentId: 'agent-parent',
+      callbackMessageId: 'sub-1',
+      originTopicId: 'topic-parent',
+      receiptId: 'sub-session-a',
+    });
+
+    expect(createPending).toHaveBeenCalledWith({
+      agentId: 'agent-parent',
+      callbackMessageId: 'sub-1',
+      operationId: 'sub-session-a',
+    });
+    expect(execAgent).toHaveBeenCalledTimes(1);
+    expect(execAgent.mock.calls[0][0]).toMatchObject({
+      agentId: 'agent-parent',
+      appContext: { topicId: 'topic-parent' },
+      parentMessageId: 'result-msg',
+      prompt: 'Process 2 completed results',
+      suppressUserMessage: true,
+      trigger: RequestTrigger.TaskCallback,
+    });
+    expect(attachCreatorOperation).toHaveBeenCalledWith(['sub-session-a', 'op-task'], 'op-wake');
+  });
+
+  it('wakes the conversation directly when no Redis is configured', async () => {
+    redisClient.mockReturnValue(undefined);
+
+    await new TaskResultBridgeService(db, TEST_USER).queueWakeup({
+      agentId: 'agent-parent',
+      callbackMessageId: 'sub-1',
+      originTopicId: 'topic-parent',
+      receiptId: 'sub-session-a',
+    });
+
+    expect(createPending).not.toHaveBeenCalled();
+    expect(execAgent).toHaveBeenCalledTimes(1);
+    // No queue to settle, so no completion hook re-drains it.
+    expect(execAgent.mock.calls[0][0].hooks).toEqual([]);
   });
 });

@@ -202,6 +202,43 @@ export class TaskResultBridgeService {
     log('queued task %s result for creator topic %s (%s)', taskIdentifier, originTopicId, reason);
   }
 
+  /**
+   * The one wake-up channel every "a result arrived for this conversation"
+   * path shares — finished tasks, sub-session turns and background
+   * sub-agents. The caller has already written its result onto the
+   * conversation's main line (`callbackMessageId`); this queues a receipt and
+   * starts a single run that reads every result that landed, so results that
+   * arrive together wake the agent once.
+   *
+   * Without Redis there is no queue to batch on: the conversation is woken
+   * directly, the way background sub-agents always were.
+   */
+  async queueWakeup(params: {
+    agentId: string;
+    callbackMessageId: string;
+    originTopicId: string;
+    /** Unique per result; a repeated id is ignored, so retries are safe. */
+    receiptId: string;
+  }): Promise<void> {
+    const { agentId, callbackMessageId, originTopicId, receiptId } = params;
+    if (!TaskResultCallbackRedisStore.isAvailable()) {
+      await this.startCreatorRun({ agentId, originTopicId, receiptIds: [receiptId] });
+      return;
+    }
+
+    await new TaskResultCallbackRedisStore(
+      this.userId,
+      originTopicId,
+      this.workspaceId,
+    ).createPending({ agentId, callbackMessageId, operationId: receiptId });
+    await this.drain(agentId, originTopicId);
+  }
+
+  /** Whether receipts are queued (and batched); see {@link queueWakeup}. */
+  static canQueue(): boolean {
+    return TaskResultCallbackRedisStore.isAvailable();
+  }
+
   /** Claim and start one aggregated creator wakeup for the topic. */
   async drain(agentId: string, originTopicId: string): Promise<void> {
     const callbackStore = new TaskResultCallbackRedisStore(
@@ -213,12 +250,45 @@ export class TaskResultBridgeService {
     if (receipts.length === 0) return;
 
     const receiptIds = receipts.map((item) => item.id);
+    try {
+      const creatorOperationId = await this.startCreatorRun({
+        agentId,
+        callbackStore,
+        allTasks: receipts.every((item) => !!item.taskId),
+        originTopicId,
+        receiptIds,
+      });
+      if (creatorOperationId) {
+        await callbackStore.attachCreatorOperation(receiptIds, creatorOperationId);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start creator agent';
+      await callbackStore.release(receiptIds, errorMessage);
+      throw error;
+    }
+  }
+
+  /**
+   * Start the run that processes `receiptIds` on the creator conversation.
+   * Returns its operation id, or undefined when the topic could not be
+   * reserved (the results stay on the main line for the next turn).
+   */
+  private async startCreatorRun(params: {
+    agentId: string;
+    /** Only task receipts: keeps the long-standing task wording of the run prompt. */
+    allTasks?: boolean;
+    /** Set when the receipts came from the queue; its completion re-drains it. */
+    callbackStore?: TaskResultCallbackRedisStore;
+    originTopicId: string;
+    receiptIds: string[];
+  }): Promise<string | undefined> {
+    const { agentId, allTasks, callbackStore, originTopicId, receiptIds } = params;
     const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
     const topic = await topicModel.findById(originTopicId);
     const botContext = topic?.metadata?.bot as ChatTopicBotContext | undefined;
-    const hooks: AgentHook[] = [
-      this.createCreatorCompletionHook(receiptIds, agentId, originTopicId, botContext),
-    ];
+    const hooks: AgentHook[] = callbackStore
+      ? [this.createCreatorCompletionHook(receiptIds, agentId, originTopicId, botContext)]
+      : [];
     const reservationId = `task-result-wakeup-${receiptIds[0]}`;
 
     try {
@@ -228,7 +298,7 @@ export class TaskResultBridgeService {
         topicModel,
       });
       if (!reserved) {
-        await callbackStore.settle(receiptIds);
+        await callbackStore?.settle(receiptIds);
         return;
       }
 
@@ -257,17 +327,13 @@ export class TaskResultBridgeService {
         botContext,
         hooks,
         parentMessageId,
-        prompt: `Process ${receipts.length} completed task result${receipts.length === 1 ? '' : 's'}`,
+        prompt: `Process ${receiptIds.length} completed ${allTasks ? 'task ' : ''}result${receiptIds.length === 1 ? '' : 's'}`,
         suppressUserMessage: true,
         topicStartReservationId: reservationId,
         trigger: RequestTrigger.TaskCallback,
         userInterventionConfig,
       });
-      await callbackStore.attachCreatorOperation(receiptIds, result.operationId);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to start creator agent';
-      await callbackStore.release(receiptIds, errorMessage);
-      throw error;
+      return result.operationId;
     } finally {
       await topicModel.releaseTaskCallbackReservation(originTopicId, reservationId);
     }

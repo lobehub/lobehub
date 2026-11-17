@@ -503,6 +503,41 @@ export class CompletionLifecycle {
         after(() => onTopicRunSettled({ operationId, topicId: settledTopicId }));
       }
 
+      // Sub-sessions: report this turn to the topic that opened it, and wake
+      // this topic for results that arrived while it ran. Unlike the handler
+      // above it does not depend on who built this lifecycle, so heterogeneous
+      // turns (`completeOperation`) report too. A stopped turn never reports.
+      if (
+        settledTopicId &&
+        isTopicRunSettledReason(reason) &&
+        !runOrigin.lineage?.parentOperationId &&
+        runOrigin.lineage?.isSubAgent !== true &&
+        runOrigin.lineage?.orchestrationRole !== 'member' &&
+        !runOrigin.signal &&
+        !isAgentShareRun(state)
+      ) {
+        const db = this.serverDB;
+        const userId = runOrigin.userId || this.userId;
+        const workspaceId = this.workspaceId;
+        const lastAssistantContent = event.lastAssistantContent;
+        const errorMessage =
+          typeof event.errorMessage === 'string' ? event.errorMessage : undefined;
+        after(async () => {
+          // Lazy: the sub-session service reaches the agent service, which builds this lifecycle.
+          const { onSubSessionTurnSettled } = await import('@/server/services/subSession/settle');
+          await onSubSessionTurnSettled({
+            db,
+            errorMessage,
+            lastAssistantContent,
+            operationId,
+            reason,
+            topicId: settledTopicId,
+            userId,
+            workspaceId,
+          });
+        });
+      }
+
       // Delivery checker: on a successful completion, run the confirmed verify
       // plan against the deliverable. Fire-and-forget and self-guarded — a run
       // without an opted-in plan is a no-op, and failures never affect the run.

@@ -72,7 +72,6 @@ import {
   type BackgroundSubAgentResult,
   deliverBackgroundSubAgentResults,
 } from './backgroundSubAgentDelivery';
-import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
@@ -893,9 +892,14 @@ export class AiAgentService {
       {
         agentOperationModel: this.agentOperationModel,
         appendResultMessages: this.appendBackgroundResultMessages,
-        execAgent: (execParams) => this.execAgent(execParams),
         messageModel: this.messageModel,
-        resolveInterventionConfig: () => resolveForegroundInterventionConfig(this.db, this.userId),
+        queueWakeup: async (wake) => {
+          // Lazy: the bridge imports this service, so a static import would cycle.
+          const { TaskResultBridgeService } = await import('@/server/services/taskResultBridge');
+          await new TaskResultBridgeService(this.db, this.userId, this.workspaceId).queueWakeup(
+            wake,
+          );
+        },
         topicModel: this.topicModel,
       },
       params,
