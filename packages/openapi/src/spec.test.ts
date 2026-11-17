@@ -88,6 +88,10 @@ const successResponses = (spec: Spec) =>
         Object.entries(op.responses ?? {})
           .filter(([status]) => status.startsWith('2'))
           .map(([status, response]) => ({
+            binary: Object.entries(response.content ?? {}).some(
+              ([media, body]: [string, any]) =>
+                media !== 'application/json' && body?.schema?.format === 'binary',
+            ),
             key: `${method.toUpperCase()} ${path}`,
             schema: response.content?.['application/json']?.schema as Schema | undefined,
             status,
@@ -102,9 +106,10 @@ describe('generated OpenAPI document', () => {
     spec = await loadAppSpec();
   }, 60_000);
 
-  it('gives every operation a JSON success response', () => {
+  // Binary bodies (synthesized audio) are the one non-JSON success shape.
+  it('gives every operation a JSON or binary success response', () => {
     const missing = successResponses(spec)
-      .filter(({ schema }) => !schema)
+      .filter(({ binary, schema }) => !schema && !binary)
       .map(({ key }) => key);
     expect(missing).toEqual([]);
   });
@@ -131,6 +136,12 @@ describe('generated OpenAPI document', () => {
   it('keeps the allowlist free of stale entries', () => {
     const operations = new Set(successResponses(spec).map(({ key }) => key));
     expect(Object.keys(OPEN_RESPONSE_ALLOWLIST).filter((key) => !operations.has(key))).toEqual([]);
+  });
+
+  // A `$defs` ref (what `z.toJSONSchema` emits for a schema carrying a meta id)
+  // is unresolvable for the SDK generator, which crashes on it.
+  it('references components only, never local $defs', () => {
+    expect(JSON.stringify(spec)).not.toContain('#/$defs/');
   });
 
   it('declares no 409 on the health check', () => {

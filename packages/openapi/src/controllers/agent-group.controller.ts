@@ -7,6 +7,7 @@ import type {
   DeleteAgentGroupRequest,
   UpdateAgentGroupRequest,
 } from '../types/agent-group.type';
+import type { DeletedResource } from '../types/common.type';
 
 /**
  * AgentGroup controller class
@@ -118,8 +119,9 @@ export class AgentGroupController extends BaseController {
         this.getWorkspaceId(c),
       );
       await agentGroupService.updateAgentGroup(request);
+      const updated = await agentGroupService.getAgentGroupById(groupId);
 
-      return this.success(c, null, 'Agent category updated successfully');
+      return this.success(c, updated, 'Agent category updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -151,7 +153,11 @@ export class AgentGroupController extends BaseController {
       );
       await agentGroupService.deleteAgentGroup(request);
 
-      return this.success(c, null, 'Agent category deleted successfully');
+      return this.success(
+        c,
+        { deleted: true, id: groupId } satisfies DeletedResource,
+        'Agent category deleted successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

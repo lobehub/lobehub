@@ -12,6 +12,7 @@ vi.mock('../services', () => ({
 }));
 
 const { UserController } = await import('./user.controller');
+const { CurrentUserSchema, UserIdentitySchema } = await import('../types/user.type');
 
 /**
  * `/me` is open to any authenticated caller so a key can resolve its own
@@ -56,7 +57,11 @@ describe('UserController.getCurrentUser', () => {
         contextFor({ authType: 'apikey', scopes: ['model:invoke'] }),
       );
 
-      await expect(bodyOf(res)).resolves.toEqual({ id: 'user-1' });
+      const body = await bodyOf(res);
+      expect(body).toEqual({ id: 'user-1' });
+      // The narrowed body is the documented `UserIdentity` branch of `/me`.
+      expect(() => UserIdentitySchema.parse(body)).not.toThrow();
+      expect(() => CurrentUserSchema.parse(body)).not.toThrow();
     });
 
     it('returns the full profile to a key holding user:read', async () => {

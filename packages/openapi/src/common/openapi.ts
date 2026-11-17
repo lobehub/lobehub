@@ -14,9 +14,9 @@ export const ApiErrorSchema = z
     success: z.literal(false),
     timestamp: dateTimeSchema,
   })
-  .strict()
-  .meta({ id: 'ApiError' });
+  .strict();
 
+/** Registered as `components/schemas/ApiError` by `buildSpecDocument`. */
 export const API_ERROR_REF = '#/components/schemas/ApiError';
 
 export type SuccessStatus = 200 | 201 | 202;
