@@ -73,7 +73,9 @@ export class TopicToolExecutionRuntime {
           ? ` in ${started.workingDirectory}`
           : '';
       return {
-        content: `Started sub-topic ${started.topicId}${where}. It runs on its own; its reply will be reported back here when its turn ends — do not poll it.`,
+        content: params.detach
+          ? `Opened topic ${started.topicId}${where}, detached: it is not linked to this conversation and will not report back.`
+          : `Started sub-topic ${started.topicId}${where}. It runs on its own; its reply will be reported back here when its turn ends — do not poll it.`,
         state: started satisfies OpenTopicState,
         success: true,
       };

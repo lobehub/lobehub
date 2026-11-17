@@ -133,6 +133,20 @@ describe('SubTopicService.open', () => {
     });
   });
 
+  it('opens a plain, unlinked topic when asked to detach', async () => {
+    await new SubTopicService(deps).open({
+      agentId: 'agt_codex',
+      detach: true,
+      openerTopicId: 'tpc_parent',
+      prompt: 'Stand-alone work',
+    });
+
+    const params = deps.execAgent.mock.calls[0][0] as any;
+    expect(params.openedByTopicId).toBeUndefined();
+    expect(params.trigger).toBeUndefined();
+    expect(params.agentId).toBe('agt_codex');
+  });
+
   it('refuses a new worktree without a repository on a device', async () => {
     deps.findTopic.mockResolvedValueOnce({ agentId: 'agt_lobe', id: 'tpc_parent', metadata: {} });
 

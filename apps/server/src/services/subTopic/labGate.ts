@@ -6,11 +6,10 @@ import type { LobeChatDatabase } from '@/database/type';
 const log = debug('lobe-server:sub-topic:lab');
 
 /**
- * Whether the user turned on Labs → Better Coding Experience, which owns
- * everything sub-topics add on top of the `metadata.openedBy` link: the
- * `lobe-topic` tool, completion receipts and the sidebar hierarchy. The link
- * itself is always written. A failed read counts as off, so nothing new
- * happens for a user whose preference cannot be read.
+ * Whether the user turned on Labs → Better Coding Experience, which gates the
+ * `lobe-topic` tool (and, on the client, the sub-topic UI). Opening a sub-topic
+ * from the CLI and its completion receipts do not depend on it. A failed read
+ * counts as off.
  */
 export const readSubTopicsEnabled = async (
   db: LobeChatDatabase,

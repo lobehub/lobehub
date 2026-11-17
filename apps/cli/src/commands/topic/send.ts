@@ -169,7 +169,9 @@ export const sendToNewConversation = async (
     baseBranch?: string;
     content: string;
     device?: string;
-    /** The parent topic; defaults to `LOBEHUB_TOPIC_ID`. */
+    /** Open a plain, unlinked topic even from inside a conversation. */
+    detach?: boolean;
+    /** The parent topic; overrides `LOBEHUB_TOPIC_ID`. */
     openedByTopicId?: string;
     title?: string;
     /** The sub-topic's working directory: inherit (default), new-worktree, none. */
@@ -178,45 +180,42 @@ export const sendToNewConversation = async (
 ): Promise<ConversationSendResult> => {
   const agentId = params.agentId ?? process.env.LOBEHUB_AGENT_ID;
   const sourceOperationId = process.env.LOBEHUB_OPERATION_ID;
-  const parentTopicId = params.openedByTopicId ?? process.env.LOBEHUB_TOPIC_ID;
+  // The parent: an explicit --parent-topic-id, else the conversation running
+  // this command, else none. --detach opens a plain topic either way.
+  const parentTopicId = params.detach
+    ? undefined
+    : params.openedByTopicId || process.env.LOBEHUB_TOPIC_ID || undefined;
   const deviceId = params.device ? await resolveTargetDevice(client, params.device) : undefined;
 
   if (params.where && !SUB_TOPIC_WHERE.includes(params.where as any)) {
     throw new Error(`--where must be one of: ${SUB_TOPIC_WHERE.join(', ')}.`);
   }
+  if (!parentTopicId && (params.where || params.baseBranch)) {
+    throw new Error(
+      '--where and --base-branch apply to a sub-topic: run from inside a conversation or pass --parent-topic-id, without --detach.',
+    );
+  }
 
-  // Run from inside a conversation: the new one is its sub-topic — listed
-  // under it, reporting back to it, working where `--where` says.
+  // A sub-topic of the parent: listed under it, reporting back to it, working
+  // where `--where` says.
   if (parentTopicId) {
-    try {
-      const opened = await client.subTopic.open.mutate({
-        ...(agentId && { agentId }),
-        ...(params.baseBranch && { baseBranch: params.baseBranch }),
-        ...(deviceId && { deviceId }),
-        openerTopicId: parentTopicId,
-        prompt: params.content,
-        ...(sourceOperationId && { sourceOperationId }),
-        ...(params.title && { title: params.title }),
-        ...(params.where && { workspace: params.where as (typeof SUB_TOPIC_WHERE)[number] }),
-      });
-      return {
-        agentId: opened.agentId,
-        branch: opened.branch,
-        delivery: 'created',
-        operationId: opened.operationId,
-        topicId: opened.topicId,
-      };
-    } catch (error) {
-      // Sub-topics need Better Coding Experience; without it the new
-      // conversation is opened as before (still linked to this one).
-      if (!isSubTopicsOff(error)) throw error;
-      if (params.where || params.baseBranch) {
-        throw new Error(
-          '--where and --base-branch open a sub-topic, which needs Labs → Better Coding Experience; it is off for this account.',
-          { cause: error },
-        );
-      }
-    }
+    const opened = await client.subTopic.open.mutate({
+      ...(agentId && { agentId }),
+      ...(params.baseBranch && { baseBranch: params.baseBranch }),
+      ...(deviceId && { deviceId }),
+      openerTopicId: parentTopicId,
+      prompt: params.content,
+      ...(sourceOperationId && { sourceOperationId }),
+      ...(params.title && { title: params.title }),
+      ...(params.where && { workspace: params.where as (typeof SUB_TOPIC_WHERE)[number] }),
+    });
+    return {
+      agentId: opened.agentId,
+      branch: opened.branch,
+      delivery: 'created',
+      operationId: opened.operationId,
+      topicId: opened.topicId,
+    };
   }
 
   if (!agentId) {
@@ -240,7 +239,6 @@ export const sendToNewConversation = async (
   }
   if (params.title) request.title = params.title;
   if (sourceOperationId) request.sourceOperationId = sourceOperationId;
-  if (parentTopicId) request.openedByTopicId = parentTopicId;
 
   const started = (await client.aiAgent.execAgent.mutate(request as any)) as {
     error?: string;
@@ -265,16 +263,13 @@ export const sendToNewConversation = async (
 /** Working directories of a sub-topic (`--where`). */
 export const SUB_TOPIC_WHERE = ['inherit', 'new-worktree', 'none'] as const;
 
-/** The server refuses sub-topics while the account's Better Coding Experience lab is off. */
-const isSubTopicsOff = (error: unknown) =>
-  (error as { data?: { code?: string } })?.data?.code === 'FORBIDDEN' &&
-  /Better Coding Experience/.test((error as Error)?.message ?? '');
-
 /** Options shared by the commands that send into a new conversation. */
 export interface NewConversationOptions {
   agentId?: string;
   baseBranch?: string;
+  detach?: boolean;
   device?: string;
+  parentTopicId?: string;
   title?: string;
   where?: string;
 }
@@ -336,6 +331,14 @@ export function registerTopicSendCommand(topic: Command) {
     .option('--where <mode>', `With --new: ${NEW_CONVERSATION_OPTIONS_HELP.where}`)
     .option('--base-branch <branch>', 'With --new --where new-worktree: the branch to fork from')
     .option(
+      '--parent-topic-id <tpc_id>',
+      'With --new: open a sub-topic of this topic (default: the conversation running this command, LOBEHUB_TOPIC_ID)',
+    )
+    .option(
+      '--detach',
+      'With --new: open a plain topic that is not linked to any parent and never reports back, even from inside a conversation',
+    )
+    .option(
       '--workspace <id|slug>',
       "The workspace the topic lives in (overrides LOBEHUB_WORKSPACE_ID and 'workspace use')",
     )
@@ -348,10 +351,11 @@ Examples:
   lh topic send --new -c "Draft the release notes" --device local --title "Release notes"
   lh topic send --new -c "Fix the flaky upload test; done when CI is green" --where new-worktree
 
-Run from inside a conversation, --new opens a sub-topic of it (Labs → Better
-Coding Experience): listed under it in LobeHub, and each finished turn reports
+Run from inside a conversation (or with --parent-topic-id), --new opens a
+sub-topic of it: listed under it in LobeHub, and each finished turn reports
 back to it as a <sub_topic_result> message, so do not poll it. Continue it with
 'lh topic send <topicId>'; see the ones you opened with 'lh topic list --opened-by-me'.
+--detach opens a plain topic that stands on its own instead.
 
 Run by an agent, the message is shown as written by that agent, and the
 receiving agent can answer it with 'lh message reply <messageId>', which wakes
@@ -372,7 +376,13 @@ after a few rounds, so a person can step in.`,
         await reportConversationSend(() => {
           if (options.new) {
             if (topicId) throw new Error('Pass either <topicId> or --new, not both.');
-            return sendToNewConversation(client, { ...options });
+            if (options.detach && options.parentTopicId) {
+              throw new Error('Pass either --parent-topic-id or --detach, not both.');
+            }
+            return sendToNewConversation(client, {
+              ...options,
+              openedByTopicId: options.parentTopicId,
+            });
           }
           if (!topicId) {
             throw new Error('Pass the <topicId> to send to, or --new to open a new conversation.');
@@ -382,10 +392,12 @@ after a few rounds, so a person can step in.`,
             options.device ||
             options.title ||
             options.where ||
-            options.baseBranch
+            options.baseBranch ||
+            options.parentTopicId ||
+            options.detach
           ) {
             throw new Error(
-              '--agent-id, --device, --title, --where and --base-branch only apply with --new; an existing conversation keeps its own.',
+              '--agent-id, --device, --title, --where, --base-branch, --parent-topic-id and --detach only apply with --new; an existing conversation keeps its own.',
             );
           }
           return sendToConversation(client, { content: options.content, topicId });

@@ -19,10 +19,7 @@ const log = debug('lobe-server:ai-agent:background-sub-agent');
  * Each answer lands on the conversation's main line as a user message whose
  * sender is the sub-agent (`metadata.subAgentCallback`) — the chat shows the
  * sub-agent speaking, the model reads it wrapped as `<sub_agent_result>` — and
- * the parent agent then runs off that history, woken through the wake-up
- * channel finished tasks and sub-topics share
- * (`TaskResultBridgeService.queueWakeup`), so results that land together wake
- * it once.
+ * the parent agent then runs off that history.
  *
  * It runs when a background sub-agent finishes and whenever a run of the topic
  * settles, so an answer that arrives mid-turn is delivered once that turn ends
@@ -54,21 +51,15 @@ export interface BackgroundSubAgentDeliveryDeps {
     results: BackgroundSubAgentResult[];
     topicId: string;
   }) => Promise<string | undefined>;
+  execAgent: (params: InternalExecAgentParams) => Promise<ExecAgentResult>;
   messageModel: Pick<
     MessageModel,
     | 'claimBackgroundSubAgentDelivery'
     | 'listBackgroundSubAgentCalls'
     | 'releaseBackgroundSubAgentDelivery'
   >;
-  /** Queue the results on the shared wake-up channel; it starts one run for everything pending. */
-  queueWakeup: (params: {
-    agentId: string;
-    callbackMessageId: string;
-    originTopicId: string;
-    receiptId: string;
-    /** How many results this wake carries. */
-    resultCount: number;
-  }) => Promise<void>;
+  /** Approval policy for the wake-up run — the user's foreground preferences. */
+  resolveInterventionConfig: () => Promise<UserInterventionConfig>;
   topicModel: Pick<TopicModel, 'findById'>;
 }
 
@@ -144,16 +135,18 @@ export const deliverBackgroundSubAgentResults = async (
 
     const agentId = topic.agentId;
     try {
-      const lastMessageId = await deps.appendResultMessages({ agentId, results, topicId });
-      // Claims are exclusive, so the first claimed call names this batch
-      // uniquely — and a retry after a failed wake reuses the same receipt.
-      await deps.queueWakeup({
+      const parentMessageId = await deps.appendResultMessages({ agentId, results, topicId });
+      const started = await deps.execAgent({
         agentId,
-        callbackMessageId: lastMessageId ?? `subagent-cb-${results.at(-1)!.callId}`,
-        originTopicId: topicId,
-        receiptId: `subagent-cb-${results[0].callId}`,
-        resultCount: results.length,
+        appContext: { topicId },
+        autoStart: true,
+        parentMessageId,
+        prompt: `Process ${results.length} finished background result${results.length === 1 ? '' : 's'}`,
+        suppressUserMessage: true,
+        trigger: RequestTrigger.Chat,
+        userInterventionConfig: await deps.resolveInterventionConfig(),
       });
+      if (!started.success) throw new Error(started.error ?? 'the turn did not start');
 
       log('woke agent %s in topic %s with %d result(s)', agentId, topicId, results.length);
     } catch (error) {
@@ -163,48 +156,4 @@ export const deliverBackgroundSubAgentResults = async (
   } catch (error) {
     log('delivering background results for topic %s failed: %O', topicId, error);
   }
-};
-
-/** One wake for a topic's background results; see {@link wakeForBackgroundResults}. */
-export interface BackgroundResultsWake {
-  agentId: string;
-  callbackMessageId: string;
-  originTopicId: string;
-  receiptId: string;
-  resultCount: number;
-}
-
-export interface BackgroundResultsWakeDeps {
-  execAgent: (params: InternalExecAgentParams) => Promise<ExecAgentResult>;
-  /** Better Coding Experience: results share the wake-up channel of tasks and sub-topics. */
-  isChannelEnabled: () => Promise<boolean>;
-  queueWakeup: (params: Omit<BackgroundResultsWake, 'resultCount'>) => Promise<void>;
-  resolveInterventionConfig: () => Promise<UserInterventionConfig>;
-}
-
-/**
- * Wake the parent for its background results. Under Better Coding Experience
- * they go through the wake-up channel finished tasks and sub-topics share, so
- * results that land together wake it once; otherwise the parent is woken
- * directly, exactly as background results always were. Throws when the wake
- * cannot start, so the caller hands its claims back.
- */
-export const wakeForBackgroundResults = async (
-  deps: BackgroundResultsWakeDeps,
-  wake: BackgroundResultsWake,
-): Promise<void> => {
-  const { resultCount, ...channelWake } = wake;
-  if (await deps.isChannelEnabled()) return deps.queueWakeup(channelWake);
-
-  const started = await deps.execAgent({
-    agentId: wake.agentId,
-    appContext: { topicId: wake.originTopicId },
-    autoStart: true,
-    parentMessageId: wake.callbackMessageId,
-    prompt: `Process ${resultCount} finished background result${resultCount === 1 ? '' : 's'}`,
-    suppressUserMessage: true,
-    trigger: RequestTrigger.Chat,
-    userInterventionConfig: await deps.resolveInterventionConfig(),
-  });
-  if (!started.success) throw new Error(started.error ?? 'the turn did not start');
 };

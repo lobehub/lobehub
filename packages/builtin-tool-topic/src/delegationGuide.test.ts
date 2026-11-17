@@ -14,6 +14,7 @@ describe('delegationGuide', () => {
     expect(delegationGuide).toMatch(/device and working directory/);
     expect(delegationGuide).toMatch(/`new-worktree` \(a fresh branch and worktree/);
     expect(delegationGuide).toContain('Group conversations and Channels');
+    expect(delegationGuide).toContain('`detach: true`');
   });
 
   it('is part of the lobe-topic system role', () => {

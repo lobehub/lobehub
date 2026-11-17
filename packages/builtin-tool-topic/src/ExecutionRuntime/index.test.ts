@@ -93,4 +93,12 @@ describe('TopicToolExecutionRuntime', () => {
     );
     expect((await runtime.getTopic({ topicId: 'tpc_child' })).content).toContain('Merged.');
   });
+
+  it('says a detached topic will not report back', async () => {
+    const runtime = new TopicToolExecutionRuntime(createService(), { topicId: 'tpc_parent' });
+
+    const result = await runtime.openTopic({ detach: true, prompt: 'x' });
+
+    expect(result.content).toMatch(/detached: it is not linked/);
+  });
 });

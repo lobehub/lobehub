@@ -7,7 +7,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 
-import { TaskResultBridgeService } from './index';
+import { ResultWakeChannel, TaskResultBridgeService } from './index';
 
 // `MessageModel.create` is a class-field arrow (instance prop, not on the
 // prototype) and `AiAgentService`'s constructor builds many sub-services — mock
@@ -52,7 +52,10 @@ vi.mock('@/database/models/message', () => ({
   }),
 }));
 
-const { redisClient } = vi.hoisted(() => ({ redisClient: vi.fn(() => ({}) as unknown) }));
+const { listPendingIds, redisClient } = vi.hoisted(() => ({
+  listPendingIds: vi.fn(),
+  redisClient: vi.fn(() => ({}) as unknown),
+}));
 
 vi.mock('./redisStore', () => ({
   TaskResultCallbackRedisStore: Object.assign(
@@ -61,6 +64,7 @@ vi.mock('./redisStore', () => ({
         attachCreatorOperation,
         claimPending,
         createPending,
+        listPendingIds,
         release,
         settle,
       };
@@ -513,5 +517,42 @@ describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
     expect(execAgent).toHaveBeenCalledTimes(1);
     // No queue to settle, so no completion hook re-drains it.
     expect(execAgent.mock.calls[0][0].hooks).toEqual([]);
+  });
+});
+
+describe('ResultWakeChannel.drainIfPending', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    redisClient.mockReturnValue({});
+    claimPending.mockResolvedValue([{ callbackMessageId: 'sub-1', id: 'subtopic-cb-op1' }]);
+    tryReserve.mockResolvedValue(true);
+    getLastLeaf.mockResolvedValue('leaf');
+    topicFindById.mockResolvedValue({ agentId: 'agent-parent', metadata: {} });
+    execAgent.mockResolvedValue({ operationId: 'op-wake', success: true });
+  });
+
+  it('wakes the topic when a sub-topic receipt is pending', async () => {
+    listPendingIds.mockResolvedValue(['task-receipt', 'subtopic-cb-op1']);
+
+    await new ResultWakeChannel(db, TEST_USER, undefined, execAgent).drainIfPending(
+      'agent-parent',
+      'topic-parent',
+      'subtopic-cb-',
+    );
+
+    expect(execAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves task callbacks alone: no wake when only they are pending', async () => {
+    listPendingIds.mockResolvedValue(['op-task']);
+
+    await new ResultWakeChannel(db, TEST_USER, undefined, execAgent).drainIfPending(
+      'agent-parent',
+      'topic-parent',
+      'subtopic-cb-',
+    );
+
+    expect(claimPending).not.toHaveBeenCalled();
+    expect(execAgent).not.toHaveBeenCalled();
   });
 });

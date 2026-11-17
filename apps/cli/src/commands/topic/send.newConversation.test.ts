@@ -29,14 +29,6 @@ const run = async (...args: string[]) => {
   await program.parseAsync(['node', 'lh', ...args]);
 };
 
-const labOff = () =>
-  Object.assign(
-    new Error(
-      'Sub-topics are part of Labs → Better Coding Experience, which is off for this account.',
-    ),
-    { data: { code: 'FORBIDDEN' } },
-  );
-
 const errorLogged = () =>
   vi
     .mocked(log.error)
@@ -50,10 +42,10 @@ describe('sending into a new conversation', () => {
   beforeEach(() => {
     vi.stubEnv('LOBEHUB_AGENT_ID', 'agt-self');
     vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-sender');
-    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-here');
+    // Not run from inside a conversation: --new opens a plain topic (the
+    // sub-topic cases below set a parent).
+    vi.stubEnv('LOBEHUB_TOPIC_ID', '');
     mockGetTrpcClient.mockResolvedValue(client);
-    // Better Coding Experience off by default: no sub-topics, the plain new conversation.
-    client.subTopic.open.mutate.mockRejectedValue(labOff());
     client.aiAgent.execAgent.mutate.mockResolvedValue({
       operationId: 'op-new',
       success: true,
@@ -87,8 +79,6 @@ describe('sending into a new conversation', () => {
 
     expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith({
       agentId: 'agt-self',
-      // Run from inside a conversation: the new one is its sub-topic.
-      openedByTopicId: 'tpc-here',
       prompt: 'Draft the release notes',
       sourceOperationId: 'op-sender',
       trigger: 'cli',
@@ -223,8 +213,9 @@ describe('sending into a new conversation', () => {
     });
   });
 
-  describe('as a sub-topic (Better Coding Experience)', () => {
+  describe('as a sub-topic', () => {
     beforeEach(() => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-here');
       client.subTopic.open.mutate.mockResolvedValue({
         agentId: 'agt-codex',
         branch: 'lobehub/202611181200-brave-river',
@@ -265,14 +256,42 @@ describe('sending into a new conversation', () => {
       });
     });
 
-    it('refuses --where while the lab is off instead of dropping it', async () => {
-      client.subTopic.open.mutate.mockRejectedValue(labOff());
+    it('takes the parent from --parent-topic-id over LOBEHUB_TOPIC_ID', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
 
-      await run('topic', 'send', '--new', '-c', 'x', '--where', 'new-worktree');
+      expect(client.subTopic.open.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ openerTopicId: 'tpc-other' }),
+      );
+    });
 
-      expect(errorLogged()).toMatch(/Better Coding Experience/);
+    it('opens a parent-less topic with --parent-topic-id even outside a conversation', async () => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+
+      await run('topic', 'send', '--new', '-c', 'x', '--parent-topic-id', 'tpc-other');
+
+      expect(client.subTopic.open.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ openerTopicId: 'tpc-other' }),
+      );
+    });
+
+    it('opens a plain, unlinked topic with --detach, even from inside a conversation', async () => {
+      await run('topic', 'send', '--new', '-c', 'Stand-alone work', '--detach');
+
+      expect(client.subTopic.open.mutate).not.toHaveBeenCalled();
+      const request = client.aiAgent.execAgent.mutate.mock.calls[0][0];
+      expect(request.openedByTopicId).toBeUndefined();
+      expect(request.trigger).toBe('cli');
+    });
+
+    it('refuses --detach with --parent-topic-id, and --where without a parent', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--detach', '--parent-topic-id', 'tpc-other');
+      expect(errorLogged()).toMatch(/either --parent-topic-id or --detach/);
+
+      vi.mocked(log.error).mockClear();
+      await run('topic', 'send', '--new', '-c', 'x', '--detach', '--where', 'new-worktree');
+      expect(errorLogged()).toMatch(/--where and --base-branch apply to a sub-topic/);
+      expect(client.subTopic.open.mutate).not.toHaveBeenCalled();
       expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
-      expect(exit).toHaveBeenCalledWith(1);
     });
 
     it('rejects an unknown --where', async () => {

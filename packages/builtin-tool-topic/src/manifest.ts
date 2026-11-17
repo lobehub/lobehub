@@ -29,6 +29,11 @@ export const TopicToolManifest: BuiltinToolManifest = {
             description: 'With workspace "new-worktree": the branch to fork from. Omit for HEAD.',
             type: 'string',
           },
+          detach: {
+            description:
+              'Open a plain, unlinked topic instead of a sub-topic: it is not listed under this conversation and never reports back. Use only when the user wants the new conversation to stand on its own.',
+            type: 'boolean',
+          },
           deviceId: {
             description: "Device to run on. Omit to use this conversation's device.",
             type: 'string',

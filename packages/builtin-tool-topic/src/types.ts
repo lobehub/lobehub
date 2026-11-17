@@ -20,6 +20,8 @@ export interface OpenTopicParams {
   agentId?: string;
   /** Branch a new worktree forks from (`workspace: 'new-worktree'`). */
   baseBranch?: string;
+  /** Open a plain topic: not linked to this one, not listed under it, never reports back. */
+  detach?: boolean;
   /** Device to run on; defaults to this conversation's device. */
   deviceId?: string;
   prompt: string;

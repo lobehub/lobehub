@@ -71,6 +71,23 @@ export class ResultWakeChannel {
     return TaskResultCallbackRedisStore.isAvailable();
   }
 
+  /**
+   * Wake the topic when one of its pending receipts carries `receiptIdPrefix`
+   * (a sub-topic's receipt that arrived while the topic was busy). Receipts of
+   * other kinds keep the timing they always had — the sweep or their own
+   * completion — unless they happen to be pending alongside.
+   */
+  async drainIfPending(agentId: string, originTopicId: string, receiptIdPrefix: string) {
+    if (!TaskResultCallbackRedisStore.isAvailable()) return;
+    const pending = await new TaskResultCallbackRedisStore(
+      this.userId,
+      originTopicId,
+      this.workspaceId,
+    ).listPendingIds();
+    if (!pending.some((id) => id.startsWith(receiptIdPrefix))) return;
+    await this.drain(agentId, originTopicId);
+  }
+
   /** Claim and start one aggregated creator wakeup for the topic. */
   async drain(agentId: string, originTopicId: string): Promise<void> {
     const callbackStore = new TaskResultCallbackRedisStore(

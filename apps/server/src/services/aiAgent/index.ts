@@ -67,16 +67,12 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
-import { readSubTopicsEnabled } from '@/server/services/subTopic/labGate';
 import { onSubTopicTurnSettled } from '@/server/services/subTopic/settle';
-import { ResultWakeChannel } from '@/server/services/taskResultBridge/wakeChannel';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
-  type BackgroundResultsWake,
   type BackgroundSubAgentResult,
   deliverBackgroundSubAgentResults,
-  wakeForBackgroundResults,
 } from './backgroundSubAgentDelivery';
 import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
@@ -900,38 +896,13 @@ export class AiAgentService {
       {
         agentOperationModel: this.agentOperationModel,
         appendResultMessages: this.appendBackgroundResultMessages,
+        execAgent: (execParams) => this.execAgent(execParams),
         messageModel: this.messageModel,
-        queueWakeup: this.wakeForBackgroundResults,
+        resolveInterventionConfig: () => resolveForegroundInterventionConfig(this.db, this.userId),
         topicModel: this.topicModel,
       },
       params,
     );
-
-  /**
-   * Wake a topic for its background sub-agent results. Under Better Coding
-   * Experience they share the channel tasks and sub-topics use (batched with
-   * them); otherwise the topic is woken directly, exactly as it always was.
-   */
-  private wakeForBackgroundResults = (wake: BackgroundResultsWake): Promise<void> =>
-    wakeForBackgroundResults(
-      {
-        execAgent: (params) => this.execAgent(params),
-        isChannelEnabled: () => readSubTopicsEnabled(this.db, this.userId),
-        queueWakeup: (params) => this.resultWakeChannel.queueWakeup(params),
-        resolveInterventionConfig: () => resolveForegroundInterventionConfig(this.db, this.userId),
-      },
-      wake,
-    );
-
-  /**
-   * The wake-up channel finished tasks, sub-topic receipts and background
-   * sub-agent results share; this service starts the run it asks for.
-   */
-  private get resultWakeChannel() {
-    return new ResultWakeChannel(this.db, this.userId, this.workspaceId, (params) =>
-      this.execAgent(params),
-    );
-  }
 
   /**
    * `AgentRuntimeDelegate.onSubTopicTurnSettled`: a topic's own turn settled.

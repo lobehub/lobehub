@@ -125,6 +125,11 @@ export interface OpenSubTopicInput {
   agentId?: string;
   /** Branch the new worktree forks from (`workspace: 'new-worktree'`); HEAD otherwise. */
   baseBranch?: string;
+  /**
+   * Open a plain topic instead: no `openedBy` link, no `sub_topic` trigger, no
+   * receipts — it is not listed under the parent and never reports back.
+   */
+  detach?: boolean;
   deviceId?: string;
   openerTopicId: string;
   prompt: string;
@@ -259,11 +264,11 @@ export class SubTopicService {
       // device (or the one asked for) either way — a device-bound agent such as
       // Claude Code has nowhere else to run.
       ...(deviceId && { deviceId }),
-      openedByTopicId: opener.id,
+      ...(!input.detach && { openedByTopicId: opener.id }),
       prompt: input.prompt,
       ...(input.sourceOperationId && { sourceOperationId: input.sourceOperationId }),
       ...(input.title && { title: input.title }),
-      trigger: SUB_TOPIC_TRIGGER,
+      ...(!input.detach && { trigger: SUB_TOPIC_TRIGGER }),
       userInterventionConfig: await this.deps.resolveInterventionConfig(),
     });
     if (!result.success || !result.topicId) {

@@ -6,14 +6,15 @@ import { onSubTopicTurnSettled } from './settle';
 const mocks = vi.hoisted(() => ({
   canQueue: vi.fn(() => true),
   deliver: vi.fn(),
-  drain: vi.fn(),
+  drainIfPending: vi.fn(),
   findTopic: vi.fn(),
-  labEnabled: vi.fn(),
   queueWakeup: vi.fn(),
 }));
 
-vi.mock('./receipt', () => ({ deliverSubTopicReceipt: mocks.deliver }));
-vi.mock('./labGate', () => ({ readSubTopicsEnabled: mocks.labEnabled }));
+vi.mock('./receipt', () => ({
+  SUB_TOPIC_RECEIPT_PREFIX: 'subtopic-cb-',
+  deliverSubTopicReceipt: mocks.deliver,
+}));
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(function () {
     return { findById: mocks.findTopic };
@@ -22,7 +23,7 @@ vi.mock('@/database/models/topic', () => ({
 vi.mock('@/server/services/taskResultBridge/wakeChannel', () => ({
   ResultWakeChannel: Object.assign(
     vi.fn(function () {
-      return { drain: mocks.drain, queueWakeup: mocks.queueWakeup };
+      return { drainIfPending: mocks.drainIfPending, queueWakeup: mocks.queueWakeup };
     }),
     { canQueue: mocks.canQueue },
   ),
@@ -40,7 +41,6 @@ describe('onSubTopicTurnSettled', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.canQueue.mockReturnValue(true);
-    mocks.labEnabled.mockResolvedValue(true);
     mocks.findTopic.mockResolvedValue({ agentId: 'agt_a', id: 'tpc_a' });
     mocks.deliver.mockResolvedValue('delivered');
   });
@@ -50,25 +50,16 @@ describe('onSubTopicTurnSettled', () => {
 
     expect(mocks.deliver).toHaveBeenCalledWith(
       { queueWakeup: expect.any(Function) },
-      expect.objectContaining({ labEnabled: true, operationId: 'op_1', topicId: 'tpc_a' }),
+      expect.objectContaining({ operationId: 'op_1', topicId: 'tpc_a' }),
     );
-    expect(mocks.drain).toHaveBeenCalledWith('agt_a', 'tpc_a');
-  });
-
-  it('does nothing but read the lab switch while it is off', async () => {
-    mocks.labEnabled.mockResolvedValue(false);
-
-    await onSubTopicTurnSettled(params, { execAgent: vi.fn() });
-
-    expect(mocks.deliver).not.toHaveBeenCalled();
-    expect(mocks.findTopic).not.toHaveBeenCalled();
-    expect(mocks.drain).not.toHaveBeenCalled();
+    // Only sub-topic receipts pull the wake forward; task callbacks keep their timing.
+    expect(mocks.drainIfPending).toHaveBeenCalledWith('agt_a', 'tpc_a', 'subtopic-cb-');
   });
 
   it('never throws, even when the receipt fails', async () => {
     mocks.deliver.mockRejectedValue(new Error('db down'));
 
     await expect(onSubTopicTurnSettled(params, { execAgent: vi.fn() })).resolves.toBeUndefined();
-    expect(mocks.drain).toHaveBeenCalled();
+    expect(mocks.drainIfPending).toHaveBeenCalled();
   });
 });

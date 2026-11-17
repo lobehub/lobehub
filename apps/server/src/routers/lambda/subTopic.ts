@@ -19,7 +19,6 @@ import {
   SubTopicService,
   toSubTopicState,
 } from '@/server/services/subTopic';
-import { readSubTopicsEnabled } from '@/server/services/subTopic/labGate';
 
 import { agentSteerQueueRouter } from './agentSteerQueue';
 import { deviceRouter } from './device';
@@ -285,6 +284,7 @@ export const subTopicRouter = router({
         agentId: z.string().optional(),
         baseBranch: z.string().optional(),
         deviceId: z.string().optional(),
+        detach: z.boolean().optional(),
         openerTopicId: z.string(),
         prompt: z.string().min(1),
         sourceOperationId: z.string().optional(),
@@ -292,16 +292,9 @@ export const subTopicRouter = router({
         workspace: workspaceSchema.optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      if (!(await readSubTopicsEnabled(ctx.serverDB, ctx.userId))) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message:
-            'Sub-topics are part of Labs → Better Coding Experience, which is off for this account.',
-        });
-      }
-      return run(() => createSubTopicService(ctx).open(input));
-    }),
+    // Not lab-gated: `lh topic send --new` opens sub-topics with the lab off too;
+    // only the lobe-topic tool and the UI are.
+    .mutation(({ ctx, input }) => run(() => createSubTopicService(ctx).open(input))),
 
   stop: subTopicProcedure
     .input(z.object({ topicId: z.string() }))

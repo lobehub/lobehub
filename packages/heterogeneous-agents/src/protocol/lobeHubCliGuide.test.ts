@@ -25,6 +25,8 @@ describe('lobeHubCliGuide', () => {
     expect(lobeHubCliGuide).toContain('<sub_topic_result>');
     expect(lobeHubCliGuide).toContain('lh topic send <tpc_id>');
     expect(lobeHubCliGuide).toContain('lh topic list --opened-by-me');
+    expect(lobeHubCliGuide).toContain('--parent-topic-id <tpc_id>');
+    expect(lobeHubCliGuide).toContain('`--detach`');
     expect(lobeHubCliGuide).toContain('`lh task`');
     expect(lobeHubCliGuide).not.toContain('lh session');
   });

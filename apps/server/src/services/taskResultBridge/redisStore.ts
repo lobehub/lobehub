@@ -229,6 +229,11 @@ export class TaskResultCallbackRedisStore {
     );
   }
 
+  /** Ids of the receipts waiting for a wake-up, oldest first. Read-only. */
+  async listPendingIds(): Promise<string[]> {
+    return this.redis.zrange(this.pendingKey, 0, -1);
+  }
+
   async getDeliveredChunkCount(operationId: string): Promise<number> {
     return Number((await this.redis.get(this.deliveryKey(operationId))) || 0);
   }

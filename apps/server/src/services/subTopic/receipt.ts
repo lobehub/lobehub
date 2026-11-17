@@ -8,11 +8,12 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { MAX_AGENT_RELAY_HOPS } from '@/server/services/aiAgent/sourceAttribution';
 
-import { readSubTopicsEnabled } from './labGate';
-
 const log = debug('lobe-server:sub-topic:receipt');
 
 const SUMMARY_MAX_LENGTH = 2000;
+
+/** Prefix of a sub-topic receipt's id (its message id and its wake-up receipt). */
+export const SUB_TOPIC_RECEIPT_PREFIX = 'subtopic-cb-';
 const RETIRED_STATUSES = new Set(['archived', 'completed']);
 
 /** A sub-topic's link to its opener, while it still reports to it. */
@@ -50,8 +51,6 @@ export const renderSubTopicReceipt = (params: {
 export interface SubTopicReceiptParams {
   db: LobeChatDatabase;
   errorMessage?: string;
-  /** The user's Better Coding Experience switch, when the caller already read it. */
-  labEnabled?: boolean;
   lastAssistantContent?: string;
   /** The sub-topic turn that just settled. */
   operationId: string;
@@ -73,7 +72,7 @@ export interface SubTopicReceiptDeps {
 }
 
 export type SubTopicReceiptOutcome =
-  'delivered' | 'duplicate' | 'hop_limit' | 'lab_off' | 'not_reportable' | 'opener_gone';
+  'delivered' | 'duplicate' | 'hop_limit' | 'not_reportable' | 'opener_gone';
 
 /**
  * Report a finished sub-topic turn to the conversation that opened it: a
@@ -81,7 +80,8 @@ export type SubTopicReceiptOutcome =
  * the opener is woken through the shared channel (batched with whatever else
  * arrived). Nothing is sent for a stopped turn (the caller only reports
  * settled ones), a detached sub-topic, a task run (its task reports for it)
- * or while Better Coding Experience is off.
+ * It does not depend on the Better Coding Experience lab: a
+ * sub-topic opened by `lh topic send --new` reports back either way.
  *
  * The receipt carries the relay hop — one more than the hop that started the
  * sub-topic's turn — so "opener sends → sub-topic reports → opener sends
@@ -102,7 +102,6 @@ export const deliverSubTopicReceipt = async (
   const openedBy = liveOpenedBy(topic?.metadata);
   // A task run reports through its task (`TaskResultBridgeService.deliver`).
   if (!topic?.agentId || !openedBy || topic.trigger === 'task') return 'not_reportable';
-  if (!(params.labEnabled ?? (await readSubTopicsEnabled(db, userId)))) return 'lab_off';
 
   const opener = await topicModel.findById(openedBy.topicId);
   if (!opener?.agentId || (opener.status && RETIRED_STATUSES.has(opener.status))) {
@@ -136,7 +135,7 @@ export const deliverSubTopicReceipt = async (
   // Deterministic id: a redelivered completion finds the row and skips it.
   // Serialized per opener topic with every other result delivery, so two
   // receipts cannot anchor on the same leaf and fork its main line.
-  const messageId = `subtopic-cb-${operationId}`;
+  const messageId = `${SUB_TOPIC_RECEIPT_PREFIX}${operationId}`;
   const written = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${opener.id}))`);
     const txMessages = new MessageModel(tx, userId, workspaceId);

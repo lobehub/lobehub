@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   findTopic: vi.fn(),
   getDisplay: vi.fn(),
   getLeaf: vi.fn(),
-  labEnabled: vi.fn(),
 }));
 
 vi.mock('@/database/models/topic', () => ({
@@ -33,7 +32,6 @@ vi.mock('@/database/models/agent', () => ({
     return { getAgentDisplayFields: mocks.getDisplay };
   }),
 }));
-vi.mock('./labGate', () => ({ readSubTopicsEnabled: mocks.labEnabled }));
 
 const db = { transaction: vi.fn(async (fn: any) => fn({ execute: vi.fn() })) } as any;
 
@@ -63,7 +61,6 @@ describe('deliverSubTopicReceipt', () => {
     mocks.findTopic.mockImplementation(async (id: string) =>
       id === 'tpc_child' ? child : id === 'tpc_parent' ? parent : undefined,
     );
-    mocks.labEnabled.mockResolvedValue(true);
     mocks.findLatestUserTurnHop.mockResolvedValue(1);
     mocks.findMessage.mockResolvedValue(undefined);
     mocks.getLeaf.mockResolvedValue('leaf');
@@ -136,11 +133,35 @@ describe('deliverSubTopicReceipt', () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it('sends nothing while the lab is off', async () => {
-    mocks.labEnabled.mockResolvedValue(false);
+  it('reports regardless of the Better Coding Experience lab', async () => {
+    // No lab read at all: a sub-topic opened by `lh topic send --new` reports either way.
+    expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('delivered');
+  });
 
-    expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('lab_off');
+  it('sends nothing for a topic opened detached (no link)', async () => {
+    mocks.findTopic.mockImplementation(async (id: string) =>
+      id === 'tpc_child' ? { ...child, metadata: {}, trigger: 'cli' } : parent,
+    );
+
+    expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('not_reportable');
     expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing when the sub-topic was moved to the top level before its turn ended', async () => {
+    // The link is read when the turn settles, so a detach mid-run already counts.
+    mocks.findTopic.mockImplementation(async (id: string) =>
+      id === 'tpc_child'
+        ? {
+            ...child,
+            metadata: { openedBy: { ...child.metadata.openedBy, detachedAt: 'mid-run' } },
+          }
+        : parent,
+    );
+
+    expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('not_reportable');
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).not.toHaveBeenCalled();
   });
 
   it('leaves task runs and detached sub-topics alone', async () => {
