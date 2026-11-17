@@ -55,7 +55,9 @@ export const assertPrivateConnectorTarget = async (
  *   owner's reconnect): making it private would keep that account to the
  *   creator and take it from its own linker and the rest of the workspace.
  * - Sharing it follows the member policy for shared connectors.
- * - Agent-scoped rows follow their agent and are not switched here.
+ * - Agent-scoped rows follow their agent and are not switched here; a base row
+ *   mounted on an agent goes private only while that agent is the caller's
+ *   own private agent.
  * - At most one shared row and one private row per member per identifier.
  */
 export const resolveVisibilityChange = async (
@@ -65,7 +67,10 @@ export const resolveVisibilityChange = async (
     agentId: string | null;
     id: string;
     identifier: string;
-    metadata?: { composio?: { connectedAccountId?: string; linkedByUserId?: string } } | null;
+    metadata?: {
+      composio?: { connectedAccountId?: string; linkedByUserId?: string };
+      mountedByAgentId?: string;
+    } | null;
     userId: string;
     visibility: ConnectorVisibility;
   },
@@ -94,6 +99,22 @@ export const resolveVisibilityChange = async (
       code: 'FORBIDDEN',
       message:
         'This connection was authorized by another member. Reconnect it with your own account to make it private',
+    });
+  }
+  // A mounted row serves its agent: made private, a shared agent's runs (or a
+  // teammate's private agent's) leave it out, and the tool configured on that
+  // agent quietly disappears or falls to a same-identifier shared connector.
+  const mountedBy = target.metadata?.mountedByAgentId;
+  if (
+    requested === 'private' &&
+    mountedBy &&
+    (!(await ctx.agentModel.existsOwnedById(mountedBy)) ||
+      (await ctx.agentModel.getAgentVisibility(mountedBy)) !== 'private')
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'This connector is mounted on an agent other members use. Unmount it from that agent before making it private',
     });
   }
   if (requested === 'public' && !(await canManageWorkspaceConnectors(ctx))) {

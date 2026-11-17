@@ -331,6 +331,40 @@ describe('connectorRouter visibility', () => {
       );
     });
 
+    it.each([
+      ['a workspace agent', 'public', true],
+      ["a teammate's private agent", 'private', false],
+    ] as const)(
+      'refuses to make private a connector mounted on %s',
+      async (_label, agentVisibility, owned) => {
+        // Regression: the switch succeeded, run scoping then dropped the row
+        // from the agent it is mounted on, and its configured tool vanished.
+        connectorModelMock.findById.mockResolvedValue(
+          row({ metadata: { mountedByAgentId: 'agt-mounted' } }),
+        );
+        agentModelMock.getAgentVisibility.mockResolvedValue(agentVisibility);
+        agentModelMock.existsOwnedById.mockResolvedValue(owned);
+
+        await expect(
+          member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        expect(connectorModelMock.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('makes private a connector mounted on its creator’s own private agent', async () => {
+      connectorModelMock.findById.mockResolvedValue(
+        row({ metadata: { mountedByAgentId: 'agt-mine' } }),
+      );
+
+      await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
+
+      expect(connectorModelMock.update).toHaveBeenCalledWith(
+        CONNECTOR_ID,
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
     it('refuses to make private a Composio account someone else linked', async () => {
       // The creator opened a teammate's legacy connection first, so the row is
       // theirs, but the account runs as the teammate. Making it private would
