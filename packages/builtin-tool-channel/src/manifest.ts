@@ -92,8 +92,7 @@ export const ChannelManifest: BuiltinToolManifest = {
             items: { type: 'string' },
             minItems: 1,
             maxItems: 5,
-            description:
-              'Agents to address. One Agent is asked directly; several need channelId.',
+            description: 'Agents to address. One Agent is asked directly; several need channelId.',
           },
           channelId: {
             type: 'string',

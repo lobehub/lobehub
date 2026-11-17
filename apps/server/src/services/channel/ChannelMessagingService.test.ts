@@ -62,7 +62,9 @@ const lobehub = {
   channel: { agentId: null, id: 'channel-lobehub', projectId: 'project-lobehub', title: 'General' },
 };
 const otherDirect = {
-  agents: [{ agentId: 'agent-lobehub', description: '', memberId: 'member-direct', name: 'LobeHub' }],
+  agents: [
+    { agentId: 'agent-lobehub', description: '', memberId: 'member-direct', name: 'LobeHub' },
+  ],
   channel: { agentId: 'agent-lobehub', id: 'channel-direct', projectId: null, title: 'LobeHub' },
 };
 /** Answers the member environment lookup in `askAgent`. */

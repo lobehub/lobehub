@@ -806,7 +806,6 @@ export class ChannelRepository {
       openAgentPair(tx, { userId: this.userId, workspaceId: this.workspaceId }, params),
     );
 
-
   /**
    * The caller's active Channels with their active Agent members, newest first: where the caller
    * can address another Agent. Archived and trashed Channels are left out, since nothing posted

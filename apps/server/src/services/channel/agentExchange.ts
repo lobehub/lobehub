@@ -61,6 +61,19 @@ export const reportAgentExchange = async (
     .where(eq(channelMessages.id, params.replyMessageId))
     .limit(1);
   if (!origin || !reply?.content.trim()) return;
+  // The Agent that answered, shown with the report ("Messages from <Agent>").
+  const [answering] = row.request.agentId
+    ? await db
+        .select({ name: channelMembers.name })
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, params.channelId),
+            eq(channelMembers.agentId, row.request.agentId),
+          ),
+        )
+        .limit(1)
+    : [];
 
   await new ChannelRepository(db, row.requesterUserId, row.workspaceId).postAgentMessage(
     origin.channelId,
@@ -69,6 +82,8 @@ export const reportAgentExchange = async (
       content: reply.content.slice(0, CHANNEL_LIMITS.contentLength),
       metadata: {
         receipt: {
+          ...(row.request.agentId &&
+            answering?.name && { agent: { agentId: row.request.agentId, name: answering.name } }),
           channelId: params.channelId,
           channelTitle: row.channelTitle,
           messageId: params.replyMessageId,

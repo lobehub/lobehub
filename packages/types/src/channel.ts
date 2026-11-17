@@ -185,6 +185,11 @@ export interface ChannelRelayOrigin {
  * relayed the original message. Its `via` names the Agent that answered.
  */
 export interface ChannelMessageReceipt {
+  /**
+   * The Agent whose answer the message reports, on an Agent's report from a conversation between
+   * Agents. Absent on a relay receipt, which names that Agent in `via`.
+   */
+  agent?: { agentId: string; name: string };
   channelId: string;
   channelTitle: string;
   /** The published reply in that Channel. */
@@ -231,6 +236,10 @@ export const channelMessageReceipt = (
     typeof receipt.channelTitle === 'string' &&
     typeof receipt.messageId === 'string'
     ? {
+        ...(typeof receipt.agent?.agentId === 'string' &&
+          typeof receipt.agent.name === 'string' && {
+            agent: { agentId: receipt.agent.agentId, name: receipt.agent.name },
+          }),
         channelId: receipt.channelId,
         channelTitle: receipt.channelTitle,
         messageId: receipt.messageId,

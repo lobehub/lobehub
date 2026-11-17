@@ -96,6 +96,27 @@ const setup = async () => {
 };
 
 describe('An Agent asking an Agent in its own conversation', () => {
+  it('asks one Agent between the two Agents even when it was named in a group', async () => {
+    const { answerer, asker, messaging } = await setup();
+    const [home] = await db
+      .select({ channelId: channelMembers.channelId })
+      .from(channelMembers)
+      .where(eq(channelMembers.id, answerer.id));
+
+    const sent = await messaging.sendMessage(
+      { agentIds: [answerer.agentId!], channelId: home.channelId, content: 'Is T-1 fixed?' },
+      'call-group',
+    );
+
+    // The group carries nothing; the question is the Asker's own, between the two Agents.
+    expect(await messagesIn(home.channelId)).toEqual([]);
+    const [pair] = await db.select().from(channels).where(eq(channels.id, sent.channelId));
+    expect(pair.agentPairKey).toBe([asker.agentId, answerer.agentId].sort().join(':'));
+    expect(await messagesIn(pair.id)).toEqual([
+      expect.objectContaining({ agentId: asker.agentId, userId: null }),
+    ]);
+  });
+
   it("asks between the two Agents and posts the Agent's conclusion back where it asked", async () => {
     const { answerer, asker, askerRun, direct, messaging, origin } = await setup();
 
@@ -147,7 +168,12 @@ describe('An Agent asking an Agent in its own conversation', () => {
         agentId: asker.agentId,
         content: 'T-1 is not fixed yet.',
         metadata: {
-          receipt: { channelId: pair.id, channelTitle: pair.title, messageId: conclusionId },
+          receipt: {
+            agent: { agentId: answerer.agentId, name: expect.any(String) },
+            channelId: pair.id,
+            channelTitle: pair.title,
+            messageId: conclusionId,
+          },
         },
         routingStatus: 'reply',
         userId: null,
