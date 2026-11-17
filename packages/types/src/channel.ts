@@ -626,6 +626,8 @@ export interface ChannelPublicMessage {
   receipt?:
     | (Omit<ChannelMessageReceipt, 'agent'> & {
         agent?: (NonNullable<ChannelMessageReceipt['agent']> & { avatar: string | null }) | null;
+        /** Whether the viewer is a member of that Channel and can open it. */
+        canOpen?: boolean;
       })
     | null;
   recipientMemberIds: string[];

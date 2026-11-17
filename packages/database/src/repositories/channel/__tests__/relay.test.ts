@@ -118,7 +118,8 @@ describe('Relaying a request into another Channel', () => {
     const message = (await team.asOwner.detail(team.channel.id)).messages.find(
       (entry) => entry.id === request.id,
     );
-    expect(message?.receipt).toEqual(receipt);
+    // The viewer is not a member of the answering Channel, so it is named but not openable.
+    expect(message?.receipt).toEqual({ ...receipt, canOpen: false });
     expect(message?.via).toEqual({ agentId: answerer.agentId, avatar: '🦊', name: 'Answerer' });
 
     const [job] = await jobsOf(db, request.id);

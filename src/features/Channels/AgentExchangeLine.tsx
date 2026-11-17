@@ -51,14 +51,17 @@ export function AgentExchangeLine({ message }: { message: ChannelPublicMessage }
           ),
         }}
       />
-      <button
-        type="button"
-        {...stylex.props(styles.eventAction)}
-        onClick={() => navigate(CHANNEL_URL(channelId, null, null))}
-      >
-        {t('events.agentExchangeOpen')}
-        <ChevronRight size={12} />
-      </button>
+      {/* Only the person who asked is in the conversation between the Agents. */}
+      {message.receipt.canOpen && (
+        <button
+          type="button"
+          {...stylex.props(styles.eventAction)}
+          onClick={() => navigate(CHANNEL_URL(channelId, null, null))}
+        >
+          {t('events.agentExchangeOpen')}
+          <ChevronRight size={12} />
+        </button>
+      )}
     </div>
   );
 }

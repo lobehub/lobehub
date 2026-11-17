@@ -30,6 +30,7 @@ const report = (patch: Partial<ChannelPublicMessage> = {}) =>
     author: { avatar: null, id: 'agt_asker', name: 'Sanjo', type: 'agent' },
     receipt: {
       agent: { agentId: 'agt_answerer', avatar: null, name: 'Xiao C' },
+      canOpen: true,
       channelId: 'chn_pair',
       channelTitle: 'Sanjo · Xiao C',
       messageId: 'msg_2',
@@ -46,6 +47,14 @@ describe('AgentExchangeLine', () => {
     expect(screen.getByTestId('agent-avatar').dataset.agentId).toBe('agt_answerer');
     fireEvent.click(screen.getByText('events.agentExchangeOpen'));
     expect(navigate).toHaveBeenCalledWith('/channels/chn_pair');
+  });
+
+  it('names the Agent without a link for someone who cannot open the conversation', () => {
+    const { receipt } = report();
+    render(<AgentExchangeLine message={report({ receipt: { ...receipt!, canOpen: false } })} />);
+
+    expect(screen.getByText('Xiao C')).toBeTruthy();
+    expect(screen.queryByText('events.agentExchangeOpen')).toBeNull();
   });
 
   it('applies only to an Agent report that is not a relay receipt', () => {
