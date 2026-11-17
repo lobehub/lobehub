@@ -1,0 +1,49 @@
+import type { ChatTopicStatus, TopicOpenedBy } from './topic';
+
+/** What a sub-topic is doing, read from its latest run and its own status. */
+export type SubTopicState = 'archived' | 'failed' | 'idle' | 'running' | 'waiting_for_user';
+
+/** The agent a sub-topic runs, for the cross-agent avatar in the sidebar. */
+export interface SubTopicAgentDisplay {
+  avatar: null | string;
+  backgroundColor: null | string;
+  title: null | string;
+}
+
+/** One live sub-topic row of the sidebar hierarchy (`subTopic.listOpened`). */
+export interface OpenedSubTopic {
+  agent?: SubTopicAgentDisplay;
+  agentId: null | string;
+  id: string;
+  openedBy: TopicOpenedBy;
+  runStartedAt: Date | null;
+  state: SubTopicState;
+  status: ChatTopicStatus | null;
+  /** The task a task-run sub-topic belongs to. */
+  taskId: null | string;
+  title: null | string;
+  trigger: null | string;
+  updatedAt: Date;
+}
+
+/** A sub-topic moved to the top level, and whose list received it. */
+export interface SubTopicMove {
+  agentId: null | string;
+  /** The receiving agent's title, for the "moved to …" notice. */
+  agentTitle: null | string;
+  id: string;
+  /** It went back to its own agent's list rather than staying in the parent's agent. */
+  movedToOwnAgent: boolean;
+  trigger: null | string;
+}
+
+/** `subTopic.detach`: the sub-topics moved to the top level. */
+export interface SubTopicDetachResult {
+  detached: SubTopicMove[];
+}
+
+/** `subTopic.archive` / `subTopic.trash`: what was retired and what moved up. */
+export interface SubTopicRetireResult extends SubTopicDetachResult {
+  /** Retired topic ids, deepest first, the topic itself last. */
+  retired: string[];
+}

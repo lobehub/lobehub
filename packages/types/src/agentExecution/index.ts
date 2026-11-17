@@ -372,6 +372,13 @@ export interface ExecAgentParams {
   /** Override the agent's default model */
   model?: string;
   /**
+   * The conversation this NEW topic is opened from — it becomes a sub-topic
+   * (`metadata.openedBy`). Resolved through the caller's own topic scope: an
+   * unknown or foreign topic records no link. Ignored when the run continues
+   * an existing topic.
+   */
+  openedByTopicId?: string;
+  /**
    * Parent operation ID when this run is a sub-agent invocation. Forwarded
    * to `agent_operations.parent_operation_id` so analytics can join the
    * sub-tree back to its root.

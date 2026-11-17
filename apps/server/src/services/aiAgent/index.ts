@@ -57,6 +57,7 @@ import {
   type CompleteDeferredShellOutcome,
   type CompleteDeferredShellParams,
 } from '@/server/services/agentRuntime/AgentRuntimeService/asyncShellResult';
+import type { TopicRunSettledHandler } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -66,6 +67,7 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { onSubTopicTurnSettled } from '@/server/services/subTopic/settle';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
@@ -201,6 +203,7 @@ export class AiAgentService {
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
         injectQueuedFollowUp: this.injectQueuedFollowUp,
+        onSubTopicTurnSettled: this.onSubTopicTurnSettled,
         runDeferredInit: this.runDeferredInit,
         startQueuedFollowUp: this.startQueuedFollowUp,
         verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
@@ -899,6 +902,17 @@ export class AiAgentService {
         topicModel: this.topicModel,
       },
       params,
+    );
+
+  /**
+   * `AgentRuntimeDelegate.onSubTopicTurnSettled`: a topic's own turn settled.
+   * Also handed to heterogeneous completions (`heteroFinish`), whose lifecycle
+   * is not built by the runtime.
+   */
+  onSubTopicTurnSettled: TopicRunSettledHandler = (settled) =>
+    onSubTopicTurnSettled(
+      { ...settled, db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      { execAgent: (params) => this.execAgent(params) },
     );
 
   /**

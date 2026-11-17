@@ -333,6 +333,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   shareChat: 'blocked',
   spend: 'blocked',
   storageOverage: 'blocked',
+  // Sub-topics start and steer agent runs, like `aiAgent`.
+  subTopic: rw('agent:read', 'agent:write'),
   subscription: 'blocked',
   task: rw('agent:read', 'agent:write'),
   taskLabel: rw('agent:read', 'agent:write'),
@@ -407,6 +409,18 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'agentSteerQueue.remove': ['chat:write'],
   // returns the queued prompts and attachments, i.e. conversation content
   'agentSteerQueue.list': ['chat:read'],
+  // opening a sub-topic or sending to one starts a model turn and writes the
+  // user message, like `aiAgent.execAgent` / `agentSteerQueue.append`
+  'subTopic.open': AGENT_RUN_SCOPES,
+  'subTopic.send': AGENT_RUN_SCOPES,
+  // stop / archive / trash / move to top level change conversation state without a run
+  'subTopic.archive': ['chat:write'],
+  'subTopic.detach': ['chat:write'],
+  'subTopic.stop': ['chat:write'],
+  'subTopic.trash': ['chat:write'],
+  // return conversation content (the last reply, a transcript page)
+  'subTopic.get': ['chat:read'],
+  'subTopic.read': ['chat:read'],
   // thread/message state writes without starting a run
   'aiAgent.createClientGroupAgentTaskThread': ['chat:write'],
   'aiAgent.createClientTaskThread': ['chat:write'],

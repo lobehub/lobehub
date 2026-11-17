@@ -56,7 +56,9 @@ describe('CompletionLifecycle — topic run settled', () => {
 
       expect(onTopicRunSettled).not.toHaveBeenCalled();
       await flushAfter();
-      expect(onTopicRunSettled).toHaveBeenCalledWith({ operationId: 'op-1', topicId: 'topic-1' });
+      expect(onTopicRunSettled).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-1', reason, topicId: 'topic-1' }),
+      );
     },
   );
 
@@ -87,5 +89,31 @@ describe('CompletionLifecycle — topic run settled', () => {
     await flushAfter();
 
     expect(onTopicRunSettled).not.toHaveBeenCalled();
+  });
+
+  it('hands the handler what a sub-topic receipt needs', async () => {
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1', undefined, {
+      onTopicRunSettled,
+    });
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'notifyPendingAgentIntervention').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'registerFileWorks').mockResolvedValue(undefined);
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        host: { hooks: [] },
+        messages: [{ content: 'All green.', role: 'assistant' }],
+        origin: { agentId: 'a', topicId: 'topic-1' },
+        status: 'done',
+      },
+      'done',
+    );
+    await flushAfter();
+
+    expect(onTopicRunSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ lastAssistantContent: 'All green.', reason: 'done' }),
+    );
   });
 });

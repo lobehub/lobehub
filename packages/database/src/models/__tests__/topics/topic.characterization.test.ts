@@ -60,6 +60,7 @@ const PUBLIC_METHODS = [
   'create',
   'delete',
   'deleteAll',
+  'detachOpenedTopics',
   'findByAgentAndDocumentTrigger',
   'findById',
   'findByIds',
@@ -76,7 +77,10 @@ const PUBLIC_METHODS = [
   'findTrashedByIds',
   'findWaitingCleanupTopicsUnder',
   'getCronTopicsGroupedByCronJob',
+  'getLatestRunStatus',
   'isRunningOperationAlive',
+  'listOpenedDescendants',
+  'listOpenedTopics',
   'listTopicsForMemoryExtractor',
   'markRead',
   'patchRunningOperation',
@@ -133,6 +137,7 @@ describe('TopicModel - public surface', () => {
 
   it('keeps the runtime exports of the module', () => {
     expect(Object.keys(topicModule).sort()).toEqual([
+      'OPENED_BY_TRIGGERS',
       'TopicModel',
       'getTopicDeviceId',
       'hasLiveTaskCallbackReservation',

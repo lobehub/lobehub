@@ -2,7 +2,13 @@ import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills'
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type { ChatTopicMetadata, ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  ExecAgentResult,
+  TaskContext,
+  TaskItem,
+  TaskRunTrigger,
+} from '@lobechat/types';
 import {
   getHeterogeneousTaskModelProvider,
   readTaskExecutionConfig,
@@ -435,6 +441,13 @@ export class TaskRunnerService {
         }),
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
         ...(maxSteps ? { maxSteps } : {}),
+        // A run started from a conversation (`runTask` in a chat) is a
+        // sub-topic of it: the new topic records the creator topic as its
+        // opener, so the creator's sidebar lists it underneath.
+        ...(!continueTopicId &&
+          (task.context as TaskContext | undefined)?.origin?.topicId && {
+            openedByTopicId: (task.context as TaskContext).origin!.topicId,
+          }),
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,

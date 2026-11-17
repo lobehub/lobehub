@@ -255,7 +255,12 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
-    expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
+    // The agent's own disabled plugin, beside the builtins a Labs switch keeps
+    // out of the pool (e.g. `lobe-topic` while Better Coding Experience is off).
+    const disabled = disabledPluginIdsArg();
+    expect(disabled).toContain('plugin-b');
+    expect(disabled).not.toContain('plugin-a');
+    expect(disabled.filter((id: string) => id.startsWith('plugin-'))).toEqual(['plugin-b']);
   });
 
   it('behaves identically to a pure string array when no entry is disabled', async () => {

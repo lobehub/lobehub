@@ -93,3 +93,39 @@ describe('AgentSenderMessageProcessor', () => {
     expect(result.metadata.agentSenderMessagesProcessed).toBe(0);
   });
 });
+
+describe('AgentSenderMessageProcessor — sub-topic reports', () => {
+  it('marks a sub-topic report and points at sending to the sub-topic', async () => {
+    const processor = new AgentSenderMessageProcessor({ canRunLhCommand: true });
+    const result = await processor.process({
+      initialState: { messages: [] },
+      isAborted: false,
+      messages: [
+        {
+          content: 'Fixed in commit abc.',
+          id: 'subtopic-cb-op1',
+          metadata: {
+            agentSender: { agentId: 'agt_codex', hop: 2, topicId: 'tpc_child' },
+            subTopicCallback: {
+              agentId: 'agt_codex',
+              operationId: 'op1',
+              reason: 'done',
+              title: 'Fix "flaky" test',
+              topicId: 'tpc_child',
+            },
+          },
+          role: 'user',
+        },
+      ],
+      metadata: {},
+    } as any);
+
+    const content = result.messages[0].content as string;
+    expect(content).toContain(
+      '<sub_topic_result topic_id="tpc_child" agent_id="agt_codex" title="Fix &quot;flaky&quot; test" status="done">',
+    );
+    expect(content).toContain('`lh topic send tpc_child`');
+    expect(content).not.toContain('lh message reply');
+    expect(content.endsWith('Fixed in commit abc.')).toBe(true);
+  });
+});

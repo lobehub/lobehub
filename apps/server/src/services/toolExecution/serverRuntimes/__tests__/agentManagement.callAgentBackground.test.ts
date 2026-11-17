@@ -63,6 +63,8 @@ describe('agentManagementRuntime callAgent', () => {
       expect(result.content).toContain('Started in the background');
       // A callAgent target cannot be continued with subAgentId, so no handle.
       expect(result.content).not.toContain('<sub_agent');
+      // Still supported, but independent work belongs in a sub-topic.
+      expect(result.content).toContain('lobe-topic openTopic');
     });
 
     it('refuses in a group conversation without starting anything', async () => {
@@ -78,6 +80,8 @@ describe('agentManagementRuntime callAgent', () => {
         error: { code: 'BACKGROUND_SUB_AGENT_UNSUPPORTED' },
         success: false,
       });
+      // The refusal names the path that does work here.
+      expect(result.content).toContain('open a sub-topic with lobe-topic openTopic');
       expect(run).not.toHaveBeenCalled();
     });
   });

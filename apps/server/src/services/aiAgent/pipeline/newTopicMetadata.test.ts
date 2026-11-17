@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildNewTopicMetadata } from './newTopicMetadata';
+import { buildNewTopicMetadata, resolveTopicOpenedBy } from './newTopicMetadata';
 
 const worktree = '/Users/me/.lobehub/worktrees/lobehub-0000beef/quiet-hill';
 const prepared = {
@@ -72,5 +72,34 @@ describe('buildNewTopicMetadata — project directory', () => {
     });
 
     expect(metadata?.workingDirectoryConfig).toEqual({ path: '/code/lobehub' });
+  });
+});
+
+describe('sub-topic link (metadata.openedBy)', () => {
+  it('records the opener read through the caller scope', async () => {
+    const findById = vi.fn().mockResolvedValue({ agentId: 'agt_parent', id: 'tpc_parent' });
+
+    const openedBy = await resolveTopicOpenedBy({ findById } as any, 'tpc_parent');
+
+    expect(findById).toHaveBeenCalledWith('tpc_parent');
+    expect(openedBy).toEqual({
+      agentId: 'agt_parent',
+      at: expect.any(String),
+      topicId: 'tpc_parent',
+    });
+    expect(buildNewTopicMetadata({ openedBy })).toEqual(expect.objectContaining({ openedBy }));
+  });
+
+  it('records nothing for an unknown or unreadable opener', async () => {
+    expect(
+      await resolveTopicOpenedBy({ findById: vi.fn().mockResolvedValue(undefined) } as any, 'x'),
+    ).toBeUndefined();
+    expect(
+      await resolveTopicOpenedBy(
+        { findById: vi.fn().mockRejectedValue(new Error('no')) } as any,
+        'x',
+      ),
+    ).toBeUndefined();
+    expect(await resolveTopicOpenedBy({ findById: vi.fn() } as any, undefined)).toBeUndefined();
   });
 });

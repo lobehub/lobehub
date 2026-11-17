@@ -40,10 +40,20 @@ const { checkClaims, enabled, gateKeeper, maintain, teardown } = vi.hoisted(() =
 vi.mock('@/server/services/inboundWebhook/featureGate', () => ({ isWebhookEnabled: enabled }));
 
 // Exercise the real router and DB while replacing platform authentication with a bounded test context.
-vi.mock('@/libs/trpc/lambda', async () => {
+// Every procedure kind is the bare test procedure: the router's import graph
+// (through the agent service and its tool runtimes) builds other routers too.
+vi.mock('@/libs/trpc/lambda', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const { initTRPC } = await import('@trpc/server');
   const trpc = initTRPC.context<RouterTestContext>().create();
+  const procedures = Object.fromEntries(
+    Object.keys(actual)
+      .filter((key) => key.endsWith('Procedure'))
+      .map((key) => [key, trpc.procedure]),
+  );
   return {
+    ...actual,
+    ...procedures,
     authedProcedure: trpc.procedure,
     mergeRouters: trpc.mergeRouters,
     router: trpc.router,
@@ -52,11 +62,14 @@ vi.mock('@/libs/trpc/lambda', async () => {
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async ({ next }: { next: () => Promise<unknown> }) => next(),
 }));
-vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const { authedProcedure } = await import('@/libs/trpc/lambda');
   const { TRPCError } = await import('@trpc/server');
   return {
+    ...actual,
     wsCompatProcedure: authedProcedure,
+    wsProcedure: authedProcedure,
     requireWorkspaceRoleWhenScoped:
       () =>
       async ({ ctx, next }: { ctx: RouterTestContext; next: () => Promise<unknown> }) => {

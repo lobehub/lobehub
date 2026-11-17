@@ -248,6 +248,8 @@ export const execRouter = router({
           ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
           resumeToolResult?.parentMessageId,
         ],
+        // The topic this one is opened from receives its reports: authorize it too.
+        openedByTopicId: input.openedByTopicId,
         topicId: appContext?.topicId,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,

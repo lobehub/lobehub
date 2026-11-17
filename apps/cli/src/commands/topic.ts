@@ -9,6 +9,7 @@ import { log } from '../utils/logger';
 import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 import { registerTopicExportCommand } from './topic/export';
 import { registerTopicSendCommand } from './topic/send';
+import { listSubTopics, registerTopicSubTopicCommands } from './topic/subTopic';
 import { registerTopicViewCommand } from './topic/view';
 
 export function registerTopicCommand(program: Command) {
@@ -20,6 +21,11 @@ export function registerTopicCommand(program: Command) {
     .command('list')
     .description('List topics')
     .option('--agent-id <id>', 'Filter by agent ID')
+    .option(
+      '--opened-by-me',
+      'Only the sub-topics this conversation opened (LOBEHUB_TOPIC_ID, or --parent-topic-id), with their state',
+    )
+    .option('--parent-topic-id <tpc_id>', 'With --opened-by-me: the parent topic')
     .option('-L, --limit <n>', 'Page size', '30')
     .option('-P, --page <n>', 'Page number', '1')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -28,9 +34,15 @@ export function registerTopicCommand(program: Command) {
         agentId?: string;
         json?: string | boolean;
         limit?: string;
+        openedByMe?: boolean;
         page?: string;
+        parentTopicId?: string;
       }) => {
         const client = await getTrpcClient();
+        if (options.openedByMe) {
+          await listSubTopics(client, options);
+          return;
+        }
 
         const input: Record<string, any> = {};
         if (options.agentId) input.agentId = options.agentId;
@@ -355,4 +367,5 @@ export function registerTopicCommand(program: Command) {
   registerTopicExportCommand(topic);
   registerTopicViewCommand(topic);
   registerTopicSendCommand(topic);
+  registerTopicSubTopicCommands(topic);
 }

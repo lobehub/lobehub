@@ -1,0 +1,709 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type SubTopicDeps, SubTopicError, SubTopicService } from './index';
+
+const opener = {
+  agentId: 'agt_lobe',
+  id: 'tpc_parent',
+  metadata: {
+    boundDeviceId: 'dev_mac',
+    workingDirectory: '/Users/me/.lobehub/worktrees/repo/quiet-hill',
+    workingDirectoryConfig: {
+      git: {
+        activeWorktree: '/Users/me/.lobehub/worktrees/repo/quiet-hill',
+        autoCreated: true,
+        autoCreatedAt: '2026-11-17T00:00:00.000Z',
+        branch: 'lobehub/quiet-hill',
+        isWorktree: true,
+        ownBranch: 'lobehub/quiet-hill',
+        ownerNonce: 'nonce-parent',
+        ownerToken: 'token-parent',
+      },
+      path: '/Users/me/repo',
+      repoType: 'github',
+    },
+  },
+  status: 'active',
+};
+
+const createDeps = () =>
+  ({
+    addGitWorktree: vi.fn(async (params: { ownerToken?: string }) => ({
+      // The device echoes the receipt it recorded.
+      ownerToken: params.ownerToken,
+      success: true,
+      worktreePath: '/Users/me/.lobehub/worktrees/repo/brave-river',
+    })),
+    appendFollowUp: vi.fn().mockResolvedValue({ queued: false, reason: 'idle' }),
+    archiveTopic: vi.fn().mockResolvedValue(undefined),
+    assertCanEditTopics: vi.fn().mockResolvedValue(undefined),
+    assertCanOpen: vi.fn().mockResolvedValue(undefined),
+    assertCanViewTopics: vi.fn().mockResolvedValue(undefined),
+    detachTopics: vi.fn(async (ids: string[]) =>
+      ids.map((id) => ({
+        agentId: id === 'tpc_cross' ? 'agt_codex' : 'agt_lobe',
+        id,
+        trigger: null,
+      })),
+    ),
+    execAgent: vi
+      .fn()
+      .mockResolvedValue({ operationId: 'op_child', success: true, topicId: 'tpc_new' }),
+    filterViewableAgents: vi.fn(async (ids: string[]) => new Set(ids)),
+    findLatestRunStatus: vi.fn().mockResolvedValue(null),
+    findLiveRunIds: vi.fn().mockResolvedValue([]),
+    findTopic: vi.fn(async (id: string) => {
+      if (id === 'tpc_parent') return opener;
+      if (id === 'tpc_run') return { agentId: 'agt_lobe', id, trigger: 'task' };
+      if (id === 'tpc_cross')
+        return { agentId: 'agt_codex', id, metadata: { openedBy: { topicId: 'tpc_parent' } } };
+      if (id === 'tpc_same')
+        return { agentId: 'agt_lobe', id, metadata: { openedBy: { topicId: 'tpc_parent' } } };
+      return undefined;
+    }),
+    interrupt: vi.fn().mockResolvedValue({ success: true }),
+    issueWorktreeReceipt: vi.fn(() => ({ nonce: 'nonce-child', token: 'token-child' })),
+    listDescendants: vi.fn().mockResolvedValue([]),
+    listOpened: vi.fn().mockResolvedValue([]),
+    listOpenedTree: vi.fn().mockResolvedValue([]),
+    readLastReply: vi.fn().mockResolvedValue('Done.'),
+    readTranscript: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    resolveInterventionConfig: vi.fn().mockResolvedValue({ approvalMode: 'auto-run' }),
+    rollbackWorktree: vi.fn().mockResolvedValue(undefined),
+    startOnTopic: vi.fn().mockResolvedValue({ operationId: 'op_turn', success: true }),
+    trashTopic: vi.fn().mockResolvedValue(undefined),
+  }) satisfies SubTopicDeps;
+
+describe('SubTopicService.open', () => {
+  let deps: ReturnType<typeof createDeps>;
+  beforeEach(() => {
+    deps = createDeps();
+  });
+
+  it('opens a sub_topic topic linked to the opener, sharing its directory without owning it', async () => {
+    const result = await new SubTopicService(deps).open({
+      openerTopicId: 'tpc_parent',
+      prompt: 'Fix the flaky test',
+      sourceOperationId: 'op_parent',
+      title: 'Flaky test',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({ agentId: 'agt_lobe', operationId: 'op_child', topicId: 'tpc_new' }),
+    );
+    const params = deps.execAgent.mock.calls[0][0] as any;
+    expect(params).toMatchObject({
+      agentId: 'agt_lobe',
+      deviceId: 'dev_mac',
+      openedByTopicId: 'tpc_parent',
+      prompt: 'Fix the flaky test',
+      sourceOperationId: 'op_parent',
+      title: 'Flaky test',
+      trigger: 'sub_topic',
+      userInterventionConfig: { approvalMode: 'auto-run' },
+    });
+    const config = params.appContext.initialTopicMetadata.workingDirectoryConfig;
+    expect(params.appContext.initialTopicMetadata.workingDirectory).toBe(
+      '/Users/me/.lobehub/worktrees/repo/quiet-hill',
+    );
+    // The opener owns that worktree and its branch; the child must never clean
+    // it up, force-delete it with the opener's receipt, or claim its PR.
+    expect(config.git.autoCreated).toBeUndefined();
+    expect(config.git.ownerToken).toBeUndefined();
+    expect(config.git.ownerNonce).toBeUndefined();
+    expect(config.git.ownBranch).toBeUndefined();
+    expect(config.git.branch).toBe('lobehub/quiet-hill');
+    expect(config.git.activeWorktree).toBe('/Users/me/.lobehub/worktrees/repo/quiet-hill');
+  });
+
+  it('creates and claims a new worktree from the opener repository', async () => {
+    const result = await new SubTopicService(deps).open({
+      agentId: 'agt_codex',
+      baseBranch: 'canary',
+      openerTopicId: 'tpc_parent',
+      prompt: 'Try the other approach',
+      workspace: 'new-worktree',
+    });
+
+    expect(deps.addGitWorktree).toHaveBeenCalledWith({
+      branch: expect.stringMatching(/^lobehub\//),
+      deviceId: 'dev_mac',
+      ownerToken: 'token-child',
+      path: '/Users/me/.lobehub/worktrees/repo/quiet-hill',
+      sourcePath: '/Users/me/repo',
+      startPoint: 'canary',
+    });
+    const params = deps.execAgent.mock.calls[0][0] as any;
+    expect(params.agentId).toBe('agt_codex');
+    expect(params.appContext.initialTopicMetadata).toEqual({
+      workingDirectory: '/Users/me/.lobehub/worktrees/repo/brave-river',
+      workingDirectoryConfig: {
+        git: {
+          activeWorktree: '/Users/me/.lobehub/worktrees/repo/brave-river',
+          autoCreated: true,
+          autoCreatedAt: expect.any(String),
+          branch: result.branch,
+          isWorktree: true,
+          ownBranch: result.branch,
+          // The receipt the device confirmed, so the normal discard flow can remove it.
+          ownerNonce: 'nonce-child',
+          ownerToken: 'token-child',
+        },
+        path: '/Users/me/repo',
+        repoType: 'github',
+        sessionPath: '/Users/me/.lobehub/worktrees/repo/brave-river',
+      },
+    });
+  });
+
+  it('takes the new worktree back when the run is refused before a topic exists', async () => {
+    deps.execAgent.mockRejectedValueOnce(new Error('Requested device ignored'));
+
+    await expect(
+      new SubTopicService(deps).open({
+        deviceId: 'dev_mac',
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toThrow('Requested device ignored');
+
+    expect(deps.rollbackWorktree).toHaveBeenCalledWith({
+      branch: expect.stringMatching(/^lobehub\//),
+      deviceId: 'dev_mac',
+      repoPath: '/Users/me/.lobehub/worktrees/repo/quiet-hill',
+      worktreePath: '/Users/me/.lobehub/worktrees/repo/brave-river',
+    });
+  });
+
+  it('also takes it back on a refusal that created no topic, but not once a topic owns it', async () => {
+    deps.execAgent.mockResolvedValueOnce({ error: 'quota', success: false });
+    await expect(
+      new SubTopicService(deps).open({
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toThrow('quota');
+    expect(deps.rollbackWorktree).toHaveBeenCalledTimes(1);
+
+    deps.execAgent.mockResolvedValueOnce({ error: 'boom', success: false, topicId: 'tpc_new' });
+    await expect(
+      new SubTopicService(deps).open({
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toThrow('boom');
+    // The topic records the worktree; its archive / trash cleanup takes it.
+    expect(deps.rollbackWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  it('never touches a directory it did not create', async () => {
+    deps.execAgent.mockRejectedValueOnce(new Error('nope'));
+
+    await expect(
+      new SubTopicService(deps).open({ openerTopicId: 'tpc_parent', prompt: 'x' }),
+    ).rejects.toThrow('nope');
+
+    expect(deps.rollbackWorktree).not.toHaveBeenCalled();
+  });
+
+  it('records no receipt the device did not confirm', async () => {
+    deps.addGitWorktree.mockResolvedValueOnce({
+      ownerToken: undefined,
+      success: true,
+      worktreePath: '/Users/me/.lobehub/worktrees/repo/brave-river',
+    });
+
+    await new SubTopicService(deps).open({
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+      workspace: 'new-worktree',
+    });
+
+    const git = (deps.execAgent.mock.calls[0][0] as any).appContext.initialTopicMetadata
+      .workingDirectoryConfig.git;
+    expect(git.autoCreated).toBe(true);
+    expect(git.ownerToken).toBeUndefined();
+    expect(git.ownerNonce).toBeUndefined();
+  });
+
+  it("inherits a cloud-sandbox parent's placement, so the child shares its files", async () => {
+    deps.findTopic.mockResolvedValueOnce({
+      agentId: 'agt_lobe',
+      id: 'tpc_parent',
+      metadata: {
+        sandboxDrive: 'personal',
+        sandboxEnvironmentId: 'env_web',
+        sandboxInstanceId: 'inst_web',
+      },
+    });
+
+    await new SubTopicService(deps).open({ openerTopicId: 'tpc_parent', prompt: 'x' });
+
+    expect((deps.execAgent.mock.calls[0][0] as any).appContext.initialTopicMetadata).toEqual({
+      sandboxDrive: 'personal',
+      sandboxEnvironmentId: 'env_web',
+      sandboxInstanceId: 'inst_web',
+    });
+  });
+
+  it('opens a plain, unlinked topic when asked to detach', async () => {
+    await new SubTopicService(deps).open({
+      agentId: 'agt_codex',
+      detach: true,
+      openerTopicId: 'tpc_parent',
+      prompt: 'Stand-alone work',
+    });
+
+    const params = deps.execAgent.mock.calls[0][0] as any;
+    expect(params.openedByTopicId).toBeUndefined();
+    expect(params.trigger).toBeUndefined();
+    expect(params.agentId).toBe('agt_codex');
+  });
+
+  it('refuses a new worktree without a repository on a device', async () => {
+    deps.findTopic.mockResolvedValueOnce({ agentId: 'agt_lobe', id: 'tpc_parent', metadata: {} });
+
+    await expect(
+      new SubTopicService(deps).open({
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toBeInstanceOf(SubTopicError);
+    expect(deps.execAgent).not.toHaveBeenCalled();
+  });
+
+  it('sets no directory when asked for no workspace, but stays on the opener device', async () => {
+    await new SubTopicService(deps).open({
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+      workspace: 'none',
+    });
+
+    const params = deps.execAgent.mock.calls[0][0] as any;
+    expect(params.appContext).toBeUndefined();
+    // A device-bound agent (Claude Code) has nowhere else to run.
+    expect(params.deviceId).toBe('dev_mac');
+    // The opener's device is a default, not a demand.
+    expect(params.requireDevice).toBeUndefined();
+  });
+
+  it('requires the device it was explicitly asked to run on', async () => {
+    await new SubTopicService(deps).open({
+      deviceId: 'dev_linux',
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+    });
+
+    expect(deps.execAgent.mock.calls[0][0]).toMatchObject({
+      deviceId: 'dev_linux',
+      requireDevice: true,
+    });
+  });
+
+  it('checks the caller may use the target agent from this conversation before starting it', async () => {
+    deps.assertCanOpen.mockRejectedValueOnce(new Error('FORBIDDEN'));
+
+    await expect(
+      new SubTopicService(deps).open({
+        agentId: 'agt_locked',
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+      }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanOpen).toHaveBeenCalledWith({
+      agentId: 'agt_locked',
+      openerTopicId: 'tpc_parent',
+    });
+    expect(deps.execAgent).not.toHaveBeenCalled();
+    expect(deps.addGitWorktree).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubTopicService.send', () => {
+  it('starts a turn when the sub-topic is idle', async () => {
+    const deps = createDeps();
+    const result = await new SubTopicService(deps).send({
+      message: 'Also update the docs',
+      sourceOperationId: 'op_parent',
+      topicId: 'tpc_cross',
+    });
+
+    expect(result).toEqual({ delivery: 'started', operationId: 'op_turn', topicId: 'tpc_cross' });
+    expect(deps.startOnTopic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agt_codex',
+        appContext: { topicId: 'tpc_cross' },
+        prompt: 'Also update the docs',
+        sourceOperationId: 'op_parent',
+      }),
+    );
+  });
+
+  it("queues behind a running turn, where the user's Follow-up behavior applies", async () => {
+    const deps = createDeps();
+    deps.appendFollowUp.mockResolvedValue({ queued: true });
+
+    const result = await new SubTopicService(deps).send({ message: 'x', topicId: 'tpc_cross' });
+
+    expect(result.delivery).toBe('queued');
+    expect(deps.startOnTopic).not.toHaveBeenCalled();
+  });
+
+  it('goes back to the queue when a turn started in between', async () => {
+    const deps = createDeps();
+    deps.startOnTopic.mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'CONFLICT' }));
+    deps.appendFollowUp
+      .mockResolvedValueOnce({ queued: false, reason: 'idle' })
+      .mockResolvedValueOnce({ queued: true });
+
+    const result = await new SubTopicService(deps).send({ message: 'x', topicId: 'tpc_cross' });
+
+    expect(result.delivery).toBe('queued');
+    // One entry id across attempts, so a retried append is stored once.
+    expect(deps.appendFollowUp.mock.calls[0][0].id).toBe(deps.appendFollowUp.mock.calls[1][0].id);
+  });
+});
+
+describe('SubTopicService.stop / get', () => {
+  it('interrupts every live run of the sub-topic', async () => {
+    const deps = createDeps();
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+
+    expect(await new SubTopicService(deps).stop('tpc_cross')).toEqual({
+      stopped: 1,
+      topicId: 'tpc_cross',
+    });
+    expect(deps.interrupt).toHaveBeenCalledWith('op_a');
+  });
+
+  it('reports a live run as running with the last reply', async () => {
+    const deps = createDeps();
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+
+    expect(await new SubTopicService(deps).get('tpc_cross')).toMatchObject({
+      lastReply: 'Done.',
+      state: 'running',
+      topicId: 'tpc_cross',
+    });
+  });
+
+  it('reads the latest run like the lists do: a run waiting for a person needs the user', async () => {
+    const deps = createDeps();
+    // The paused run still counts as live, but it is waiting, not running.
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+    deps.findLatestRunStatus.mockResolvedValue('waiting_for_human');
+
+    expect((await new SubTopicService(deps).get('tpc_cross')).state).toBe('waiting_for_user');
+    expect(deps.findLatestRunStatus).toHaveBeenCalledWith('tpc_cross');
+  });
+
+  it('reports a failed latest run as failed', async () => {
+    const deps = createDeps();
+    deps.findLatestRunStatus.mockResolvedValue('error');
+
+    expect((await new SubTopicService(deps).get('tpc_cross')).state).toBe('failed');
+  });
+});
+
+describe('SubTopicService.retire', () => {
+  it('stops running descendants, then archives each one before the topic itself', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue([
+      // A server run leaves topics.status alone: only its operation says it is running.
+      {
+        id: 'tpc_same',
+        latestRunStatus: 'running',
+        openedBy: { topicId: 'tpc_parent' },
+        status: 'active',
+      },
+      { id: 'tpc_cross', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
+      // A task run belongs to its task: it is neither stopped nor archived,
+      // and neither is what it opened.
+      { id: 'tpc_run', openedBy: { topicId: 'tpc_parent' }, status: 'running', trigger: 'task' },
+      { id: 'tpc_under_run', openedBy: { topicId: 'tpc_run' }, status: 'active' },
+    ] as any);
+    deps.findLiveRunIds.mockImplementation(async (id: string) =>
+      id === 'tpc_same' ? ['op_same'] : [],
+    );
+
+    const result = await new SubTopicService(deps).retire({
+      action: 'archive',
+      mode: 'all',
+      topicId: 'tpc_parent',
+    });
+
+    expect(deps.interrupt).toHaveBeenCalledWith('op_same');
+    expect(deps.archiveTopic.mock.calls.map(([id]) => id)).toEqual([
+      'tpc_cross',
+      'tpc_same',
+      'tpc_parent',
+    ]);
+    expect(deps.interrupt.mock.invocationCallOrder[0]).toBeLessThan(
+      deps.archiveTopic.mock.invocationCallOrder[0],
+    );
+    expect(result.retired).toEqual(['tpc_same', 'tpc_cross', 'tpc_parent']);
+  });
+
+  it('archives only the topic and moves its sub-topics to the top level', async () => {
+    const deps = createDeps();
+    deps.listOpened.mockResolvedValue([{ id: 'tpc_same' }, { id: 'tpc_cross' }] as any);
+
+    const result = await new SubTopicService(deps).retire({
+      action: 'trash',
+      mode: 'self',
+      topicId: 'tpc_parent',
+    });
+
+    expect(deps.detachTopics).toHaveBeenCalledWith(['tpc_same', 'tpc_cross']);
+    // Without a choice, uploads go with the topic — the delete confirm's default.
+    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent', { removeFiles: true });
+    expect(deps.trashTopic).toHaveBeenCalledTimes(1);
+    expect(result.detached).toEqual([
+      { agentId: 'agt_lobe', id: 'tpc_same', movedToOwnAgent: false, trigger: null },
+      { agentId: 'agt_codex', id: 'tpc_cross', movedToOwnAgent: true, trigger: null },
+    ]);
+  });
+});
+
+describe('SubTopicService.detach', () => {
+  it('says which sub-topics moved to their own agent list', async () => {
+    const deps = createDeps();
+
+    const result = await new SubTopicService(deps).detach(['tpc_cross', 'tpc_same']);
+
+    expect(result.detached).toEqual([
+      { agentId: 'agt_codex', id: 'tpc_cross', movedToOwnAgent: true, trigger: null },
+      { agentId: 'agt_lobe', id: 'tpc_same', movedToOwnAgent: false, trigger: null },
+    ]);
+  });
+
+  it('keeps task runs with their task', async () => {
+    const deps = createDeps();
+
+    await expect(new SubTopicService(deps).detach(['tpc_run'])).rejects.toBeInstanceOf(
+      SubTopicError,
+    );
+    expect(deps.detachTopics).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubTopicService.describe', () => {
+  it('counts what retiring the topic would touch', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue([
+      {
+        id: 'a',
+        latestRunStatus: 'running',
+        openedBy: { topicId: 'tpc_parent' },
+        status: 'active',
+      },
+      { id: 'b', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
+      { id: 'c', openedBy: { topicId: 'a' }, status: 'waitingForHuman' },
+      { id: 'run', openedBy: { topicId: 'tpc_parent' }, status: 'running', trigger: 'task' },
+    ] as any);
+
+    expect(await new SubTopicService(deps).describe('tpc_parent')).toEqual({
+      descendants: 3,
+      direct: 2,
+      running: 2,
+      topicId: 'tpc_parent',
+    });
+  });
+});
+
+describe('SubTopicService.retire — attachments', () => {
+  it("keeps every topic's uploads when the user unchecked the attachment option", async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue([
+      { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, trigger: 'sub_topic' },
+    ] as any);
+
+    await new SubTopicService(deps).retire({
+      action: 'trash',
+      mode: 'all',
+      removeFiles: false,
+      topicId: 'tpc_parent',
+    });
+
+    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_same', { removeFiles: false });
+    expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent', { removeFiles: false });
+  });
+});
+
+describe('SubTopicService — view access', () => {
+  const row = (id: string, agentId: string, opener: string) =>
+    ({ agentId, id, openedBy: { topicId: opener }, status: null, trigger: 'sub_topic' }) as any;
+
+  it('hides a sub-topic whose agent the caller may not view, and everything below it', async () => {
+    const deps = createDeps();
+    deps.listOpenedTree.mockResolvedValue([
+      // Not in tree order: the grandchild comes first.
+      row('tpc_grand', 'agt_lobe', 'tpc_private'),
+      row('tpc_private', 'agt_private', 'tpc_parent'),
+      row('tpc_same', 'agt_lobe', 'tpc_parent'),
+    ]);
+    deps.filterViewableAgents.mockResolvedValue(new Set(['agt_lobe']));
+
+    const rows = await new SubTopicService(deps).listTree(['tpc_parent']);
+
+    expect(rows.map((item) => item.id)).toEqual(['tpc_same']);
+  });
+
+  it('refuses to read, get or describe a topic the caller may not view', async () => {
+    const deps = createDeps();
+    deps.assertCanViewTopics.mockRejectedValue(new Error('FORBIDDEN'));
+    const service = new SubTopicService(deps);
+
+    await expect(service.read('tpc_cross', { limit: 30 })).rejects.toThrow('FORBIDDEN');
+    await expect(service.get('tpc_cross')).rejects.toThrow('FORBIDDEN');
+    await expect(service.describe('tpc_parent')).rejects.toThrow('FORBIDDEN');
+    await expect(service.list('tpc_parent')).rejects.toThrow('FORBIDDEN');
+    expect(deps.readTranscript).not.toHaveBeenCalled();
+    expect(deps.readLastReply).not.toHaveBeenCalled();
+  });
+
+  it('reads the transcript once allowed', async () => {
+    const deps = createDeps();
+
+    await new SubTopicService(deps).read('tpc_cross', { limit: 30 });
+
+    expect(deps.assertCanViewTopics).toHaveBeenCalledWith(['tpc_cross']);
+    expect(deps.readTranscript).toHaveBeenCalledWith({ limit: 30, topicId: 'tpc_cross' });
+  });
+
+  it('needs edit access to stop a run', async () => {
+    const deps = createDeps();
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(new SubTopicService(deps).stop('tpc_cross')).rejects.toThrow('FORBIDDEN');
+    expect(deps.interrupt).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubTopicService.retire — runs', () => {
+  const descendants = [
+    { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, trigger: 'sub_topic' },
+  ] as any;
+
+  it('checks edit access on every topic before cancelling any run', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue(descendants);
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'archive', mode: 'all', topicId: 'tpc_parent' }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanEditTopics).toHaveBeenCalledWith(['tpc_parent', 'tpc_same']);
+    expect(deps.interrupt).not.toHaveBeenCalled();
+    expect(deps.archiveTopic).not.toHaveBeenCalled();
+  });
+
+  it('retires nothing when a run could not be confirmed stopped', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue(descendants);
+    deps.findLiveRunIds.mockImplementation(async (id: string) =>
+      id === 'tpc_same' ? ['op_device'] : [],
+    );
+    deps.interrupt.mockResolvedValue({ success: false });
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'trash', mode: 'all', topicId: 'tpc_parent' }),
+    ).rejects.toThrow(/could not be confirmed stopped/);
+    expect(deps.trashTopic).not.toHaveBeenCalled();
+  });
+
+  it('says so when stop could not confirm the cancellation', async () => {
+    const deps = createDeps();
+    deps.findLiveRunIds.mockResolvedValue(['op_device']);
+    deps.interrupt.mockResolvedValue({ success: false });
+
+    await expect(new SubTopicService(deps).stop('tpc_cross')).rejects.toThrow(
+      /could not be confirmed stopped/,
+    );
+  });
+});
+
+describe('SubTopicService — edit access', () => {
+  it('refuses to move sub-topics the caller may only view', async () => {
+    const deps = createDeps();
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(new SubTopicService(deps).detach(['tpc_cross'])).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanEditTopics).toHaveBeenCalledWith(['tpc_cross']);
+    expect(deps.detachTopics).not.toHaveBeenCalled();
+  });
+
+  it('checks the direct sub-topics before "only this one" moves them up, and retires nothing on refusal', async () => {
+    const deps = createDeps();
+    deps.listOpened.mockResolvedValue([{ id: 'tpc_same' }] as any);
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'archive', mode: 'self', topicId: 'tpc_parent' }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.detachTopics).not.toHaveBeenCalled();
+    expect(deps.archiveTopic).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubTopicService.isOpenedBy', () => {
+  it('walks a chain of any length up to its opener', async () => {
+    const deps = createDeps();
+    // tpc_d12 → tpc_d11 → … → tpc_d1 → tpc_parent: twelve generations.
+    deps.findTopic.mockImplementation(async (id: string) => {
+      const depth = Number(id.replace('tpc_d', ''));
+      const opener = depth === 1 ? 'tpc_parent' : `tpc_d${depth - 1}`;
+      return { id, metadata: { openedBy: { topicId: opener } } };
+    });
+
+    expect(await new SubTopicService(deps).isOpenedBy('tpc_d12', 'tpc_parent')).toBe(true);
+  });
+
+  it('stops on a cycle', async () => {
+    const deps = createDeps();
+    deps.findTopic.mockImplementation(async (id: string) => ({
+      id,
+      metadata: { openedBy: { topicId: id === 'tpc_a' ? 'tpc_b' : 'tpc_a' } },
+    }));
+
+    expect(await new SubTopicService(deps).isOpenedBy('tpc_a', 'tpc_parent')).toBe(false);
+  });
+
+  it('accepts a sub-topic at any depth and nothing else', async () => {
+    const deps = createDeps();
+    deps.findTopic.mockImplementation(async (id: string) => {
+      const links: Record<string, any> = {
+        tpc_child: { topicId: 'tpc_parent' },
+        tpc_detached: { detachedAt: 'later', topicId: 'tpc_parent' },
+        tpc_grand: { topicId: 'tpc_child' },
+      };
+      return links[id] ? { id, metadata: { openedBy: links[id] } } : { id, metadata: {} };
+    });
+    const service = new SubTopicService(deps);
+
+    expect(await service.isOpenedBy('tpc_child', 'tpc_parent')).toBe(true);
+    expect(await service.isOpenedBy('tpc_grand', 'tpc_parent')).toBe(true);
+    expect(await service.isOpenedBy('tpc_detached', 'tpc_parent')).toBe(false);
+    expect(await service.isOpenedBy('tpc_other', 'tpc_parent')).toBe(false);
+  });
+});
+
+describe('toSubTopicState', () => {
+  it("takes the latest run's state, since server runs leave topics.status alone", async () => {
+    const { toSubTopicState } = await import('./index');
+
+    expect(toSubTopicState('active', 'running')).toBe('running');
+    expect(toSubTopicState(null, 'waiting_for_human')).toBe('waiting_for_user');
+    expect(toSubTopicState('active', 'error')).toBe('failed');
+    expect(toSubTopicState('active', 'done')).toBe('idle');
+    expect(toSubTopicState('completed', 'running')).toBe('archived');
+    expect(toSubTopicState('failed', null)).toBe('failed');
+  });
+});
