@@ -20,6 +20,8 @@ interface ReconcileRuntimeEndParams {
   isSuperseded: boolean;
   /** Revision of the last `message_patch` this run applied. */
   lastMessagePatchRevision: number;
+  /** Revision the last `step_start` announced, kept even when its read failed. */
+  lastStepStartRevision: number;
   /** Reads the conversation into the store; `undefined` when a newer snapshot won. */
   refresh: () => Promise<UIChatMessage[] | undefined>;
 }
@@ -46,6 +48,7 @@ export const reconcileRuntimeEndMessages = async ({
   hasStreamedContent,
   isSuperseded,
   lastMessagePatchRevision,
+  lastStepStartRevision,
   refresh,
 }: ReconcileRuntimeEndParams): Promise<ReconcileRuntimeEndResult> => {
   if (Array.isArray(data?.uiMessages)) {
@@ -67,8 +70,10 @@ export const reconcileRuntimeEndMessages = async ({
     // persists the same. Without streamed content, the optimistic `tmp_*`
     // rows are all we have and still need the refetch below.
     //
-    // In patch mode a Stop mid-step ends one revision past the last patch.
-    // Two or more past means a step that already finished is missing: a step
+    // In patch mode a Stop mid-step ends one revision past the step it
+    // landed in: the later of the last applied patch and the last
+    // `step_start`, which still names that step when its read failed. Two or
+    // more past means a step that already finished is missing: a step
     // that continues inline publishes its patch only from the next step's
     // entry read, so a Stop between the two steps overtakes it, and this
     // frame is the last one the client gets. That step is persisted and the
@@ -78,7 +83,7 @@ export const reconcileRuntimeEndMessages = async ({
     if (
       data.messagePatchMode &&
       typeof data.messageRevision === 'number' &&
-      data.messageRevision - lastMessagePatchRevision >= 2
+      data.messageRevision - Math.max(lastMessagePatchRevision, lastStepStartRevision) >= 2
     ) {
       const messages = await refresh().catch((error) => {
         console.error(error);

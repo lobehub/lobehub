@@ -361,6 +361,8 @@ export const createGatewayEventHandler = (
   let lastTextSnapshotSeq = 0;
   let lastReasoningSnapshotSeq = 0;
   let lastMessagePatchRevision = 0;
+  // Set even when the step_start read fails, so Stop can tell which step it landed in.
+  let lastStepStartRevision = 0;
   const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
@@ -1025,6 +1027,7 @@ export const createGatewayEventHandler = (
           uiMessages?: UIChatMessage[];
         };
 
+        if (typeof data?.messageRevision === 'number') lastStepStartRevision = data.messageRevision;
         if (
           typeof data?.messageRevision === 'number' &&
           data.messageRevision !== lastMessagePatchRevision
@@ -1239,6 +1242,7 @@ export const createGatewayEventHandler = (
               context,
             )(get()),
             lastMessagePatchRevision,
+            lastStepStartRevision,
             refresh: () => refreshMessagesFromDb(),
           });
           lastMessagePatchRevision = settled.lastMessagePatchRevision;

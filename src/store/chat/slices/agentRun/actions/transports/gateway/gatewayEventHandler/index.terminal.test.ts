@@ -227,6 +227,26 @@ describe('createGatewayEventHandler — terminal and error events', () => {
         expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       });
 
+      it('keeps the streamed text when a Stop mid-step follows a failed step_start read', async () => {
+        const { handler, store } = await startStreamedRun();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // Revision 2's patch never arrived and the step_start read fails, so
+        // the last applied patch stays at 1 while step 2 streams.
+        vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('offline'));
+        handler(makeEvent('step_start', { messageRevision: 2 }));
+        handler(makeEvent('stream_chunk', { chunkType: 'text', content: ' more' }));
+        await flush();
+        vi.mocked(messageService.getMessages).mockClear();
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+        consoleError.mockRestore();
+      });
+
       it('keeps the messages it has and still settles when that read fails', async () => {
         const { handler, store } = await startStreamedRun();
         const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
