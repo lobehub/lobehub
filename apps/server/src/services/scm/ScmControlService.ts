@@ -516,8 +516,14 @@ export class ScmControlService {
     // snapshot, and on a Redis-less deployment there is no debounce to stop
     // two deliveries from passing it together. Handed back below if the run
     // never starts.
+    // The reservation also re-reads Auto-fix: it may have been turned off
+    // while the prompt was being built from job logs or review feedback.
     const count = await ScmChangeRequestModel.reserveWake(this.db, row.id, SCM_MAX_WAKES, reason);
     if (count === null) {
+      const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
+      if (fresh?.metadata?.autoFix === false) {
+        return { detail: 'auto-fix off', outcome: 'skipped' };
+      }
       return { detail: `wake cap (${SCM_MAX_WAKES}) reached`, outcome: 'skipped' };
     }
 

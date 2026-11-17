@@ -947,8 +947,10 @@ export class ScmChangeRequestModel {
    * Redis there is no debounce, so two webhooks landing together both read
    * the same `wakeCount` and a read-modify-write would lose one increment.
    * A conditional `UPDATE … WHERE wake_count < max` lets exactly one of them
-   * through per remaining slot. Returns the new count, or `null` when the
-   * cap is already spent.
+   * through per remaining slot. The same condition holds the pull request's
+   * Auto-fix switch: a wake that read the row before the person turned it
+   * off, and was still building its prompt, is refused here. Returns the
+   * new count, or `null` when the cap is spent or Auto-fix is off.
    */
   static reserveWake = async (
     db: LobeChatDatabase,
@@ -973,7 +975,13 @@ export class ScmChangeRequestModel {
         updatedAt: now,
         wakeCount: sql`${scmChangeRequests.wakeCount} + 1`,
       })
-      .where(and(eq(scmChangeRequests.id, id), lt(scmChangeRequests.wakeCount, max)))
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          lt(scmChangeRequests.wakeCount, max),
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') <> 'false'`,
+        ),
+      )
       .returning({ wakeCount: scmChangeRequests.wakeCount });
 
     return reserved?.wakeCount ?? null;

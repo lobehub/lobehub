@@ -823,6 +823,33 @@ describe('ScmControlService — per pull request Auto-fix', () => {
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(1);
   });
 
+  it('refuses the wake when Auto-fix is turned off while the prompt is being built', async () => {
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
+    const topic = await createTopic();
+    const row = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { installationId: installation.id, topicId: topic.id },
+    });
+    const withChecks = await ScmChangeRequestModel.applyChecks(serverDB, row.id, {
+      checks: [
+        { conclusion: 'failure', externalId: 'check_run:9', name: 'Test', status: 'completed' },
+      ],
+      headSha: baseRow.headSha,
+    });
+    // The person switches it off while the job log is still being fetched.
+    mocks.jobLog.mockImplementationOnce(async () => {
+      await ScmChangeRequestModel.setAutoFix(serverDB, { userId }, row.id, false);
+      return 'log';
+    });
+
+    expect(
+      await control().handle({ event: checksEvent, kind: 'ci_failed', row: withChecks!.row }),
+    ).toEqual({ detail: 'auto-fix off', outcome: 'skipped' });
+    expect(mocks.jobLog).toHaveBeenCalledTimes(1);
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
+  });
+
   it('drops a held wake instead of delivering it after Auto-fix went off', async () => {
     const row = await linked();
     await ScmChangeRequestModel.markPendingWake(serverDB, row.id, 'ci_failed');

@@ -123,6 +123,17 @@ describe('ScmChangeRequestModel.setAutoFix', () => {
     ).toEqual({ autoFix: false, wakeCount: 0 });
   });
 
+  it('refuses to reserve a wake while Auto-fix is off', async () => {
+    const row = await linkedRow();
+    await ScmChangeRequestModel.setAutoFix(serverDB, personal, row.id, false);
+
+    expect(await ScmChangeRequestModel.reserveWake(serverDB, row.id, 3, 'ci_failed')).toBeNull();
+    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
+
+    await ScmChangeRequestModel.setAutoFix(serverDB, personal, row.id, true);
+    expect(await ScmChangeRequestModel.reserveWake(serverDB, row.id, 3, 'ci_failed')).toBe(1);
+  });
+
   it('stops reporting a wake target while Auto-fix is off', async () => {
     const row = await linkedRow();
     const has = () => ScmChangeRequestModel.hasWakeTarget(serverDB, personal, topicId, 3);
