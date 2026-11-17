@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
@@ -642,6 +643,22 @@ describe('checkpoint, review and verify configuration', () => {
       TaskReviewConfigSchema.nullable(),
     );
     expect(after?.rubrics[0]).toMatchObject({ id: 'r1', weight: 1 });
+  });
+
+  it('reads a review stored in an older shape', async () => {
+    const task = await createTask({ instruction: 'legacy review' });
+    // Before the verify split, `config.review` could hold a partial, verify-like object.
+    await serverDB
+      .update(tasks)
+      .set({ config: { review: { enabled: true, requirement: 'Old rubric-less review' } } })
+      .where(eq(tasks.id, task.id));
+
+    const review = await expectData(
+      await call(`/tasks/${task.id}/review`, { key: KEYS.ownerRead }),
+      200,
+      TaskReviewConfigSchema.nullable(),
+    );
+    expect(review).toMatchObject({ enabled: true });
   });
 
   it('rejects a review with too many iterations', async () => {

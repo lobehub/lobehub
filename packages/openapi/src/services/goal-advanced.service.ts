@@ -1,6 +1,5 @@
 import type { LobeChatDatabase } from '@/database/type';
 import { goalRouter } from '@/server/routers/lambda/goal';
-import { GoalService } from '@/server/services/goal';
 import { graphForClient } from '@/server/services/goal/graphCompat';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
@@ -41,7 +40,7 @@ export class GoalAdvancedRestService extends GoalRestService {
     return goalRouter.createCaller({ userId: this.userId, workspaceId: this.workspaceId });
   }
 
-  private scheduleAdvance(goalId: string, trigger: 'budget' | 'observe') {
+  private scheduleAdvance(goalId: string, trigger: 'observe') {
     return scheduleGoalAdvance({
       goalId,
       trigger,
@@ -52,53 +51,10 @@ export class GoalAdvancedRestService extends GoalRestService {
 
   // ==================== Configuration ====================
 
-  /**
-   * Apply a configuration patch in one transaction, so a part the goal refuses
-   * (an exploration budget on a plain goal, an agent the caller cannot use)
-   * leaves every other part unapplied too. Handing the goal or its Tasks to
-   * another agent and switching models cancel nothing, but they change whose
-   * work the goal is — so, like the tRPC procedures, they are limited to the
-   * goal's creator or a workspace owner.
-   */
+  /** Patch the requirement, budget, agents and models together; see `applyConfig`. */
   async updateConfig(id: string, input: UpdateGoalConfigRequest) {
-    const goal = await this.requireGoal(id);
-    if (
-      input.agent ||
-      input.taskAgent ||
-      input.model !== undefined ||
-      input.taskModel !== undefined
-    ) {
-      await this.assertRowManageable(goal.userId, 'AGENT_UPDATE', 'goal');
-    }
-
-    const reassignedTaskIds = new Set<string>();
-    await this.db.transaction(async (tx) => {
-      const service = new GoalService(tx, this.userId, this.workspaceId);
-      if (input.requirement) await service.updateRequirement(id, input.requirement);
-      if (input.budget) await service.setBudget(id, input.budget);
-      if (input.agent) {
-        const { reassignedTaskIds: moved } = await service.setAgent(id, input.agent.agentId, {
-          goalOnly: input.agent.goalOnly,
-        });
-        for (const taskId of moved) reassignedTaskIds.add(taskId);
-      }
-      if (input.taskAgent) {
-        const { reassignedTaskIds: moved } = await service.setTaskAgent(
-          id,
-          input.taskAgent.agentId,
-          { goalOnly: input.taskAgent.goalOnly },
-        );
-        for (const taskId of moved) reassignedTaskIds.add(taskId);
-      }
-      if (input.model !== undefined) await service.setModel(id, input.model);
-      if (input.taskModel !== undefined) await service.setTaskModel(id, input.taskModel);
-    });
-
-    // Raising a budget is how a goal stopped on one starts moving again; only
-    // after the commit, so an advance never outlives a rolled-back patch.
-    if (input.budget) await this.scheduleAdvance(id, 'budget');
-
-    return { graph: await this.goalService.graph(id), reassignedTaskIds: [...reassignedTaskIds] };
+    const reassignedTaskIds = await this.applyConfig(id, input);
+    return { graph: await this.goalService.graph(id), reassignedTaskIds };
   }
 
   // ==================== Graph ====================

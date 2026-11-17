@@ -275,6 +275,8 @@ const coordinatorStateSchema = (description: string) => jsonObjectSchema.describ
  * the pockets the coordinator writes for itself (manager turn, rollout,
  * report receipts, decomposition notes) are documented as JSON because their
  * shape moves with the coordinator and they are not configuration.
+ * `goals.config` is JSON written by several releases, so older rows may carry
+ * keys beyond these (`maxRounds`, `maxTotalCost` before they became columns).
  */
 export const GoalConfigSchema = z
   .object({
@@ -292,11 +294,11 @@ export const GoalConfigSchema = z
                 target: z.number(),
                 title: z.string().optional(),
               })
-              .strict(),
+              .catchall(z.unknown()),
           )
           .optional(),
       } satisfies Record<keyof GoalAcceptancePolicy, z.ZodType>)
-      .strict()
+      .catchall(z.unknown())
       .optional(),
     changeRequest: z
       .object({
@@ -304,7 +306,7 @@ export const GoalConfigSchema = z
         requestedAt: dateTimeSchema,
         taskId: z.string(),
       })
-      .strict()
+      .catchall(z.unknown())
       .optional()
       .describe("The owner's latest request for changes."),
     exploration: z
@@ -313,7 +315,7 @@ export const GoalConfigSchema = z
         instruction: z.string(),
         maxExperiments: z.number().int(),
       })
-      .strict()
+      .catchall(z.unknown())
       .optional(),
     manager: z
       .object({
@@ -322,7 +324,7 @@ export const GoalConfigSchema = z
         maxTurns: z.number().int().optional(),
         openedForHandoff: z.string().optional(),
       })
-      .strict()
+      .catchall(z.unknown())
       .optional(),
     managerState: coordinatorStateSchema('Coordinator-owned main Agent turn state.').optional(),
     /** How many of the goal's Tasks may run at once; null uses the default. */
@@ -348,15 +350,18 @@ export const GoalConfigSchema = z
         maxStepsPerRun: z.number().int().nullable().optional(),
         operationLeaseTimeoutMs: z.number().int().optional(),
       } satisfies Record<keyof GoalRecoveryPolicy, z.ZodType>)
-      .strict()
+      .catchall(z.unknown())
       .optional(),
     report: coordinatorStateSchema('Coordinator-owned wrap-up report receipt.').optional(),
     rollout: coordinatorStateSchema('Batch rollout policy of a repeated-mould goal.').optional(),
     rolloutState: coordinatorStateSchema('Coordinator-owned batch progress.').optional(),
-    schedule: z.object({ deadline: dateTimeSchema.nullable().optional() }).strict().optional(),
+    schedule: z
+      .object({ deadline: dateTimeSchema.nullable().optional() })
+      .catchall(z.unknown())
+      .optional(),
     supervision: z
       .object({ enabled: z.boolean(), maxIncidents: z.number().int().optional() })
-      .strict()
+      .catchall(z.unknown())
       .optional(),
     supervisorState: coordinatorStateSchema(
       'Supervisor topic and incident ledger; read it typed from `GET /goals/{id}/supervision`.',
@@ -368,7 +373,7 @@ export const GoalConfigSchema = z
     taskProvider: z.string().optional(),
     understanding: coordinatorStateSchema('Coordinator-owned decomposition notes.').optional(),
   } satisfies Record<keyof GoalConfig, z.ZodType>)
-  .strict()
+  .catchall(z.unknown())
   .meta({ id: 'GoalConfig' });
 
 /** A `goals` row exactly as `select()` reads it (soft-delete columns included). */

@@ -175,28 +175,37 @@ export const TaskVerifyConfigSchema = z
   } satisfies Record<keyof TaskVerifyConfig, z.ZodType>)
   .strict();
 
-/** The judge that scores each run of the task. */
+/**
+ * The judge that scores each run of the task. Rows written before the verify
+ * config split may hold a legacy shape under `review`, so every field is
+ * optional and unknown keys pass through.
+ */
 export const TaskReviewConfigSchema = z
   .object({
-    autoRetry: z.boolean(),
-    enabled: z.boolean(),
-    judge: z.object({ model: z.string().optional(), provider: z.string().optional() }).strict(),
-    maxIterations: z.number().int(),
-    rubrics: z.array(
-      z
-        .object({
-          config: jsonObjectSchema,
-          extractor: jsonObjectSchema.optional(),
-          id: z.string(),
-          name: z.string(),
-          threshold: z.number().optional(),
-          type: z.string(),
-          weight: z.number(),
-        })
-        .strict(),
-    ),
+    autoRetry: z.boolean().optional(),
+    enabled: z.boolean().optional(),
+    judge: z
+      .object({ model: z.string().optional(), provider: z.string().optional() })
+      .catchall(z.unknown())
+      .optional(),
+    maxIterations: z.number().int().optional(),
+    rubrics: z
+      .array(
+        z
+          .object({
+            config: jsonObjectSchema,
+            extractor: jsonObjectSchema.optional(),
+            id: z.string(),
+            name: z.string(),
+            threshold: z.number().optional(),
+            type: z.string(),
+            weight: z.number().optional(),
+          })
+          .catchall(z.unknown()),
+      )
+      .optional(),
   })
-  .strict()
+  .catchall(z.unknown())
   .meta({ id: 'TaskReviewConfig' });
 
 /** The execution pins every run of the task starts with. */

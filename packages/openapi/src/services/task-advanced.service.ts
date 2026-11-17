@@ -16,7 +16,6 @@ import type {
   SubtaskOrder,
   TaskCheckpoint,
   TaskCheckpointConfig,
-  TaskReviewConfig,
   TaskVerify,
   UpdateTaskCheckpointRequest,
   UpdateTaskCommentRequest,
@@ -211,14 +210,14 @@ export class TaskAdvancedRestService extends BaseService {
     return data;
   }
 
-  async getReview(id: string): ServiceResult<TaskReviewConfig | null> {
+  async getReview(id: string) {
     const { data } = await this.tasks.getReview({ id });
-    return (data as TaskReviewConfig | null) ?? null;
+    return data ?? null;
   }
 
-  async updateReview(id: string, review: UpdateTaskReviewRequest): ServiceResult<TaskReviewConfig> {
+  async updateReview(id: string, review: UpdateTaskReviewRequest) {
     const { data } = await this.tasks.updateReview({ id, review });
-    return data as TaskReviewConfig;
+    return data;
   }
 
   async getVerify(id: string): ServiceResult<TaskVerify | null> {

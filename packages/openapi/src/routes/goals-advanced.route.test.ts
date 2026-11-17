@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
@@ -341,6 +342,45 @@ describe('PATCH /goals/:id/config', () => {
     );
     // A personal key does not reach into the workspace at all.
     await expectError(await call(`/goals/${goal.id}/graph`, { key: KEYS.ownerRead }), 404);
+  });
+});
+
+describe('stored configuration from older releases', () => {
+  it('documents a goal whose config still carries retired keys', async () => {
+    const { goal } = await createGoal();
+    // Rows written before `maxRounds` / `maxTotalCost` became columns keep them in config.
+    await serverDB
+      .update(goals)
+      .set({
+        config: { ...goal.config, maxRounds: 3, schedule: { deadline: null, legacy: 1 } } as any,
+      })
+      .where(eq(goals.id, goal.id));
+
+    const graph = await expectData(
+      await call(`/goals/${goal.id}/graph`, { key: KEYS.ownerRead }),
+      200,
+      GoalGraphSchema,
+    );
+    expect(graph.goal.config).toMatchObject({ maxRounds: 3 });
+  });
+
+  it('keeps PATCH /goals/:id atomic through the shared config path', async () => {
+    const { goal } = await createGoal();
+
+    await expectError(
+      await call(`/goals/${goal.id}`, {
+        body: { budget: { maxManagerTurns: 5 }, requirement: 'Should not stick' },
+        key: KEYS.ownerWrite,
+        method: 'PATCH',
+      }),
+      400,
+    );
+    const graph = await expectData(
+      await call(`/goals/${goal.id}`, { key: KEYS.ownerRead }),
+      200,
+      GoalGraphSchema,
+    );
+    expect(graph.goal.requirement).toBe('Ship it');
   });
 });
 

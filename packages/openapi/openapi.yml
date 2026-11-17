@@ -3042,8 +3042,8 @@ components:
                 required:
                   - key
                   - target
-                additionalProperties: false
-          additionalProperties: false
+                additionalProperties: {}
+          additionalProperties: {}
         changeRequest:
           description: The owner's latest request for changes.
           type: object
@@ -3058,7 +3058,7 @@ components:
           required:
             - requestedAt
             - taskId
-          additionalProperties: false
+          additionalProperties: {}
         exploration:
           type: object
           properties:
@@ -3077,7 +3077,7 @@ components:
           required:
             - instruction
             - maxExperiments
-          additionalProperties: false
+          additionalProperties: {}
         manager:
           type: object
           properties:
@@ -3089,7 +3089,7 @@ components:
               maximum: 9007199254740991
             openedForHandoff:
               type: string
-          additionalProperties: false
+          additionalProperties: {}
         managerState:
           type: object
           propertyNames:
@@ -3150,7 +3150,7 @@ components:
               type: integer
               minimum: -9007199254740991
               maximum: 9007199254740991
-          additionalProperties: false
+          additionalProperties: {}
         report:
           type: object
           propertyNames:
@@ -3177,7 +3177,7 @@ components:
                 - type: string
                   format: date-time
                 - type: "null"
-          additionalProperties: false
+          additionalProperties: {}
         supervision:
           type: object
           properties:
@@ -3189,7 +3189,7 @@ components:
               maximum: 9007199254740991
           required:
             - enabled
-          additionalProperties: false
+          additionalProperties: {}
         supervisorState:
           type: object
           propertyNames:
@@ -3209,7 +3209,7 @@ components:
             type: string
           additionalProperties: {}
           description: Coordinator-owned decomposition notes.
-      additionalProperties: false
+      additionalProperties: {}
     GoalGraphSnapshot:
       type: object
       properties:
@@ -8184,7 +8184,7 @@ components:
               type: string
             provider:
               type: string
-          additionalProperties: false
+          additionalProperties: {}
         maxIterations:
           type: integer
           minimum: -9007199254740991
@@ -8219,15 +8219,8 @@ components:
               - id
               - name
               - type
-              - weight
-            additionalProperties: false
-      required:
-        - autoRetry
-        - enabled
-        - judge
-        - maxIterations
-        - rubrics
-      additionalProperties: false
+            additionalProperties: {}
+      additionalProperties: {}
     TaskContext:
       type: object
       properties:

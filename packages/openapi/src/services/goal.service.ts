@@ -15,6 +15,7 @@ import type {
   RestartGoalRequest,
   UpdateGoalRequest,
 } from '../types/goal.type';
+import type { UpdateGoalConfigRequest } from '../types/goal-advanced.type';
 
 /** The model's own default page size, kept so omitting `limit` still returns 50 rows. */
 export const GOAL_LIST_DEFAULT_LIMIT = 50;
@@ -149,24 +150,47 @@ export class GoalRestService extends BaseService {
     return data;
   }
 
-  /** Update the acceptance requirement and/or the budget in one call. */
-  async updateGoal(id: string, input: UpdateGoalRequest) {
-    await this.requireGoal(id);
+  /**
+   * Apply a configuration patch in one transaction, so a part the goal refuses
+   * (a turn budget on a goal with no main Agent, a model its owner cannot run)
+   * leaves every other part unapplied too — the caller never sees a 400 while
+   * half the patch already landed. Handing the goal or its Tasks to another
+   * agent and switching models change whose work the goal is, so, like the
+   * tRPC procedures, they are limited to the goal's creator or a workspace
+   * owner. Returns the Tasks that moved to a new agent.
+   */
+  protected async applyConfig(id: string, input: UpdateGoalConfigRequest): Promise<string[]> {
+    const goal = await this.requireGoal(id);
+    if (
+      input.agent ||
+      input.taskAgent ||
+      input.model !== undefined ||
+      input.taskModel !== undefined
+    ) {
+      await this.assertRowManageable(goal.userId, 'AGENT_UPDATE', 'goal');
+    }
 
-    // Both writes land in one transaction. A budget the goal cannot take (e.g.
-    // `maxManagerTurns` on a goal with no main Agent) must not leave the new
-    // requirement persisted behind a failed response — the caller would see a
-    // 400 while half the patch had already been applied.
+    const reassignedTaskIds = new Set<string>();
     await this.db.transaction(async (tx) => {
       const service = new GoalService(tx, this.userId, this.workspaceId);
-
-      if (input.requirement) {
-        await service.updateRequirement(id, input.requirement);
+      if (input.requirement) await service.updateRequirement(id, input.requirement);
+      if (input.budget) await service.setBudget(id, input.budget);
+      if (input.agent) {
+        const { reassignedTaskIds: moved } = await service.setAgent(id, input.agent.agentId, {
+          goalOnly: input.agent.goalOnly,
+        });
+        for (const taskId of moved) reassignedTaskIds.add(taskId);
       }
-
-      if (input.budget) {
-        await service.setBudget(id, input.budget);
+      if (input.taskAgent) {
+        const { reassignedTaskIds: moved } = await service.setTaskAgent(
+          id,
+          input.taskAgent.agentId,
+          { goalOnly: input.taskAgent.goalOnly },
+        );
+        for (const taskId of moved) reassignedTaskIds.add(taskId);
       }
+      if (input.model !== undefined) await service.setModel(id, input.model);
+      if (input.taskModel !== undefined) await service.setTaskModel(id, input.taskModel);
     });
 
     if (input.budget) {
@@ -181,6 +205,12 @@ export class GoalRestService extends BaseService {
       });
     }
 
+    return [...reassignedTaskIds];
+  }
+
+  /** Update the acceptance requirement and/or the budget; the subset `PATCH /goals/{id}/config` extends. */
+  async updateGoal(id: string, input: UpdateGoalRequest) {
+    await this.applyConfig(id, { budget: input.budget, requirement: input.requirement });
     return this.goalService.graph(id);
   }
 

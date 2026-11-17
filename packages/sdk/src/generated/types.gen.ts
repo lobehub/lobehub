@@ -941,7 +941,9 @@ export type GoalConfig = {
             op?: 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
             target: number;
             title?: string;
+            [key: string]: unknown;
         }>;
+        [key: string]: unknown;
     };
     /**
      * The owner's latest request for changes.
@@ -950,6 +952,7 @@ export type GoalConfig = {
         comment?: string;
         requestedAt: string;
         taskId: string;
+        [key: string]: unknown;
     };
     exploration?: {
         /**
@@ -960,11 +963,13 @@ export type GoalConfig = {
         };
         instruction: string;
         maxExperiments: number;
+        [key: string]: unknown;
     };
     manager?: {
         instruction?: string;
         maxTurns?: number;
         openedForHandoff?: string;
+        [key: string]: unknown;
     };
     /**
      * Coordinator-owned main Agent turn state.
@@ -994,6 +999,7 @@ export type GoalConfig = {
         maxAttemptsPerTask?: number;
         maxStepsPerRun?: number | null;
         operationLeaseTimeoutMs?: number;
+        [key: string]: unknown;
     };
     /**
      * Coordinator-owned wrap-up report receipt.
@@ -1015,10 +1021,12 @@ export type GoalConfig = {
     };
     schedule?: {
         deadline?: string | null;
+        [key: string]: unknown;
     };
     supervision?: {
         enabled: boolean;
         maxIncidents?: number;
+        [key: string]: unknown;
     };
     /**
      * Supervisor topic and incident ledger; read it typed from `GET /goals/{id}/supervision`.
@@ -1035,6 +1043,7 @@ export type GoalConfig = {
     understanding?: {
         [key: string]: unknown;
     };
+    [key: string]: unknown;
 };
 
 export type GoalGraphSnapshot = {
@@ -2457,14 +2466,15 @@ export type TaskConfig = {
 };
 
 export type TaskReviewConfig = {
-    autoRetry: boolean;
-    enabled: boolean;
-    judge: {
+    autoRetry?: boolean;
+    enabled?: boolean;
+    judge?: {
         model?: string;
         provider?: string;
+        [key: string]: unknown;
     };
-    maxIterations: number;
-    rubrics: Array<{
+    maxIterations?: number;
+    rubrics?: Array<{
         config: {
             [key: string]: unknown;
         };
@@ -2475,8 +2485,10 @@ export type TaskReviewConfig = {
         name: string;
         threshold?: number;
         type: string;
-        weight: number;
+        weight?: number;
+        [key: string]: unknown;
     }>;
+    [key: string]: unknown;
 };
 
 export type TaskContext = {
