@@ -81,6 +81,7 @@ export const query = async (
     isInbox,
     legacySessionId,
     onlyMine,
+    openedByTopicId,
     sortBy,
     timing,
     triggers,
@@ -180,6 +181,74 @@ export const query = async (
     editingAgentId ? sql`${topics.metadata}->>'editingAgentId' = ${editingAgentId}` : undefined,
     editingGroupId ? sql`${topics.metadata}->>'editingGroupId' = ${editingGroupId}` : undefined,
   );
+
+  // Child topics of one topic, across agents. `ownership()` (the user /
+  // workspace index) narrows the rows before the unindexed jsonb comparison.
+  // Never a jsonb null test in a qual — see the note on `TopicModel`.
+  if (openedByTopicId) {
+    const childWhere = and(
+      ctx.ownership(),
+      ctx.notShareVisitor(),
+      notChannelTopic(),
+      sql`${topics.metadata} -> 'openedBy' ->> 'topicId' = ${openedByTopicId}`,
+      sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
+      agentId ? eq(topics.agentId, agentId) : undefined,
+      includeTriggerCondition,
+      excludeTriggerCondition,
+      triggerCondition,
+      excludeStatusCondition,
+      onlyMineCondition,
+    );
+
+    const [items, totalResult] = await Promise.all([
+      runTimedStage(
+        timing,
+        'db.topic.query.children.items.select',
+        () =>
+          ctx.db
+            // See note on the group-branch select above re: `as any` cast.
+            .select({
+              // A child may run another agent: callers need to know which.
+              agentId: topics.agentId,
+              completedAt: topics.completedAt,
+              createdAt: topics.createdAt,
+              favorite: topics.favorite,
+              historySummary: topics.historySummary,
+              id: topics.id,
+              metadata: topicMetadataWithCreator(ctx.db, ctx.messageOwnership()),
+              model: topics.model,
+              provider: topics.provider,
+              runStartedAt: runStartedAtColumn,
+              sortUpdatedAt: topicActivityAt,
+              status: topics.status,
+              title: topics.title,
+              trigger: topics.trigger,
+              updatedAt: topics.updatedAt,
+              userId: topics.userId,
+              ...detailColumns,
+            } as any)
+            .from(topics)
+            .where(childWhere)
+            .orderBy(...orderBy)
+            .limit(pageSize)
+            .offset(offset),
+        { current, pageSize },
+      ),
+      runTimedStage(timing, 'db.topic.query.children.count.select', () =>
+        ctx.db
+          .select({ count: count(topics.id) })
+          .from(topics)
+          .where(childWhere),
+      ),
+    ]);
+
+    logTiming(timing, 'db.topic.query:done', {
+      itemCount: items.length,
+      stageMs: getDurationMs(queryStartedAt),
+      total: totalResult[0].count,
+    });
+    return { items, total: totalResult[0].count };
+  }
 
   if (groupId) {
     const whereCondition = and(

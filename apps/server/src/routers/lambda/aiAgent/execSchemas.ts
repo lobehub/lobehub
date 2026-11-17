@@ -341,9 +341,10 @@ export const ExecAgentFieldsSchema = z.object({
    */
   sourceOperationId: z.string().optional(),
   /**
-   * The conversation this new topic is opened from (`lh topic send --new`
-   * passes its own `LOBEHUB_TOPIC_ID`): the topic records it as
-   * `metadata.openedBy` and lists under it as a sub-topic.
+   * The conversation this new topic is opened from (its parent topic;
+   * `lh topic send --new` passes `--parent-topic-id` or its own
+   * `LOBEHUB_TOPIC_ID`): the topic records it as `metadata.openedBy` and lists
+   * under it. Needs `use` on that topic.
    */
   openedByTopicId: z.string().optional(),
   /**

@@ -140,19 +140,20 @@ export interface OnboardingSessionSnapshot {
 }
 
 /**
- * Provenance of a sub-topic: the topic (and its agent) that opened it.
+ * Provenance of a topic opened from another one (its parent topic): the topic
+ * and agent it was opened from.
  *
- * Presentation and receipts only — the sub-topic keeps its own agent, working
- * directory and lifecycle. The sidebar nests a topic under its opener while
- * `detachedAt` is unset and the opener is visible; a detached one stays a
- * top-level row but keeps the link as its origin.
+ * A link only — the topic keeps its own agent, working directory and
+ * lifecycle. While `detachedAt` is unset it lists under its parent
+ * (`topic.getTopics({ openedByTopicId })`, `lh topic list --parent-topic-id`);
+ * a detached one keeps the link as its origin.
  */
 export interface TopicOpenedBy {
   /** The opener topic's agent, so a reader never has to load the opener. */
   agentId?: string;
   /** ISO time the link was written. */
   at: string;
-  /** ISO time the sub-topic was moved to the top level; no longer nested or reported back. */
+  /** ISO time the topic was unlinked from its parent; it no longer lists under it. */
   detachedAt?: string;
   topicId: string;
 }
@@ -322,10 +323,10 @@ export interface ChatTopicMetadata {
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
   /**
-   * The topic that opened this one — a sub-topic. Server-owned (absent from
-   * the client-writable metadata schema), written once when the topic is
-   * created by `runTask`, `lh topic send --new` or `lobe-topic.openTopic`.
-   * See {@link TopicOpenedBy}.
+   * The topic this one was opened from (its parent topic). Server-owned
+   * (absent from the client-writable metadata schema), written once when the
+   * topic is created with `execAgent({ openedByTopicId })` — e.g.
+   * `lh topic send --new` run inside a conversation. See {@link TopicOpenedBy}.
    */
   openedBy?: TopicOpenedBy;
   /**
