@@ -338,6 +338,88 @@ export class AgentAccountBindingModel {
 
   remove = async (id: string) =>
     this.db.delete(agentAccountBindings).where(and(eq(agentAccountBindings.id, id), this.mine()));
+
+  /**
+   * Replace the set of accounts an agent is authorized to schedule, within
+   * `scopeAccountIds` (the accounts this write speaks for, e.g. one provider's
+   * visible accounts; bindings outside it are left alone).
+   *
+   * - an account in `accountIds` ends up authorized: a missing binding is
+   *   created in the pool, a `disabled` / switched-off one returns to the pool,
+   *   and an existing `pool` or `pinned` binding keeps its role, priority,
+   *   weight and rotation stamp;
+   * - an account in scope but not in `accountIds` loses its binding (which also
+   *   drops a pin on it, returning the agent to Auto).
+   *
+   * Authorization is per agent: other agents' bindings to the same accounts
+   * are never touched. Run inside a transaction so the set changes at once.
+   */
+  setAuthorizedAccounts = async (
+    agentId: string,
+    accountIds: string[],
+    scopeAccountIds: string[],
+  ) => {
+    const wanted = [...new Set(accountIds)];
+    const wantedSet = new Set(wanted);
+    const dropped = scopeAccountIds.filter((id) => !wantedSet.has(id));
+
+    if (dropped.length > 0)
+      await this.db
+        .delete(agentAccountBindings)
+        .where(
+          and(
+            this.mine(),
+            eq(agentAccountBindings.agentId, agentId),
+            inArray(agentAccountBindings.accountId, dropped),
+          ),
+        );
+
+    if (wanted.length > 0)
+      await this.db
+        .insert(agentAccountBindings)
+        .values(
+          wanted.map((accountId) =>
+            buildWorkspacePayload(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              { accountId, agentId, role: QuotaBindingRole.pool },
+            ),
+          ),
+        )
+        .onConflictDoUpdate({
+          set: {
+            enabled: true,
+            role: sql`case when ${agentAccountBindings.role} = ${QuotaBindingRole.pinned} then ${QuotaBindingRole.pinned} else ${QuotaBindingRole.pool} end`,
+            updatedAt: new Date(),
+          },
+          target: [agentAccountBindings.agentId, agentAccountBindings.accountId],
+        });
+
+    return this.listByAgent(agentId);
+  };
+
+  /**
+   * Serialize this agent's account selections until the surrounding
+   * transaction ends, so concurrent runs rank one after another and each sees
+   * the previous pick's `lastSelectedAt`. A no-op outside a transaction.
+   */
+  lockSelection = async (agentId: string) => {
+    await this.db.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`agent-account-selection:${agentId}`}))`,
+    );
+  };
+
+  /** Stamp the account the load balancer just picked for this agent (rotation state). */
+  markSelected = async (agentId: string, accountId: string, at: Date = new Date()) =>
+    this.db
+      .update(agentAccountBindings)
+      .set({ lastSelectedAt: at })
+      .where(
+        and(
+          this.mine(),
+          eq(agentAccountBindings.agentId, agentId),
+          eq(agentAccountBindings.accountId, accountId),
+        ),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -494,6 +576,20 @@ export class AgentDeviceAccountBindingModel {
           eq(agentDeviceAccountBindings.deviceId, deviceId),
         ),
       );
+
+  /** Drop the agent's per-device choices of these accounts (they are no longer authorized). */
+  clearAccounts = async (agentId: string, accountIds: string[]) => {
+    if (accountIds.length === 0) return;
+    await this.db
+      .delete(agentDeviceAccountBindings)
+      .where(
+        and(
+          this.mine(),
+          eq(agentDeviceAccountBindings.agentId, agentId),
+          inArray(agentDeviceAccountBindings.accountId, accountIds),
+        ),
+      );
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

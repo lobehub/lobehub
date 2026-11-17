@@ -31,6 +31,7 @@ export default {
   'navigation.lobehub': 'LobeHub',
   'navigation.engine': 'Agent Engine',
   'navigation.environment': 'Agent Environment',
+  'navigation.accounts': 'Agent Subscription Accounts',
   'navigation.instruction': 'Agent Instruction',
   'navigation.knowledge': 'Agent Knowledge Base',
   'navigation.tools': 'Agent Tools',

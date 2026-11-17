@@ -16,10 +16,10 @@ import {
   type QuotaLimitReading,
   type QuotaTokenUsage,
   rankAccounts,
-  selectAccount,
   windowSecondsForKind,
   windowsToCalibrationIntervals,
 } from '@lobechat/heterogeneous-agents/quota';
+import { isAuthorizedQuotaBinding, type QuotaLoadBalanceConfig } from '@lobechat/types';
 import pMap from 'p-map';
 
 import type { AccountIdentityInput, SafeAccount } from '@/database/models/agentQuota';
@@ -37,6 +37,7 @@ import { DeviceModel } from '@/database/models/device';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   type QuotaAccountCredentialRef,
+  QuotaAccountStatus,
   QuotaBindingRole,
   QuotaCostSource,
   QuotaCredentialMode,
@@ -108,6 +109,27 @@ export class AccountNotSignedInOnDeviceError extends Error {
     this.name = 'AccountNotSignedInOnDeviceError';
   }
 }
+
+/** An authorization write named accounts the caller cannot see (or of another provider). */
+export class QuotaAccountNotFoundError extends Error {
+  readonly accountIds: string[];
+  constructor(accountIds: string[]) {
+    super(`Account not found: ${accountIds.join(', ')}`);
+    this.name = 'QuotaAccountNotFoundError';
+    this.accountIds = accountIds;
+  }
+}
+
+/** One global-pool account with whether the agent is authorized to schedule it. */
+export type AgentAuthorizedAccount = SafeAccount & {
+  authorized: boolean;
+  bindingId: string | null;
+  role: string | null;
+};
+
+/** An account that can run at all: switched on and not disabled. */
+const isUsableAccount = (account: SafeAccount | undefined): account is SafeAccount =>
+  !!account && account.enabled && account.status !== QuotaAccountStatus.disabled;
 
 const isForeignKeyViolation = (error: unknown): boolean => {
   for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
@@ -484,7 +506,7 @@ export class AgentQuotaService {
           return {
             accountId,
             capacityUsd: calibration ? Number(calibration.capacityUsd) : undefined,
-            enabled: account?.enabled ?? true,
+            enabled: isUsableAccount(account),
             label: account?.label ?? null,
             priority: 0,
             rateLimitedUntil,
@@ -537,6 +559,101 @@ export class AgentQuotaService {
       externalAccountId: account.externalAccountId ?? null,
       ...(chosen.pinScope && { pinScope: chosen.pinScope }),
       reason: chosen.reason,
+    };
+  };
+
+  // ── authorized accounts (which accounts an agent may schedule) ──────────
+
+  /**
+   * The global account pool the caller can see (optionally one provider's),
+   * each marked with whether this agent is authorized to schedule it.
+   */
+  listAgentAccounts = async (
+    agentId: string,
+    provider?: string,
+  ): Promise<AgentAuthorizedAccount[]> => {
+    const [accounts, bindings] = await Promise.all([
+      this.accounts.list(),
+      this.bindings.listByAgent(agentId),
+    ]);
+    const bindingByAccount = new Map(bindings.map((b) => [b.accountId, b]));
+
+    return accounts
+      .filter((account) => !provider || account.provider === provider)
+      .map((account) => {
+        const binding = bindingByAccount.get(account.id);
+        return {
+          ...account,
+          authorized: isAuthorizedQuotaBinding(binding),
+          bindingId: binding?.id ?? null,
+          role: binding?.role ?? null,
+        };
+      });
+  };
+
+  /**
+   * Replace the set of accounts an agent may schedule. With `provider`, only
+   * that provider's accounts are rewritten; without it, every visible account.
+   * Accounts dropped from the set lose their binding (and a pin on them, so the
+   * agent returns to Auto) and the agent's per-device choices of them.
+   *
+   * Throws `QuotaAccountNotFoundError` for an id the caller cannot see or of
+   * another provider; nothing is written then.
+   */
+  setAgentAccounts = async (
+    agentId: string,
+    accountIds: string[],
+    provider?: string,
+  ): Promise<QuotaLoadBalanceConfig> => {
+    const scope = (await this.accounts.list()).filter(
+      (account) => !provider || account.provider === provider,
+    );
+    const scopeIds = new Set(scope.map((account) => account.id));
+    const unknown = accountIds.filter((id) => !scopeIds.has(id));
+    if (unknown.length > 0) throw new QuotaAccountNotFoundError(unknown);
+
+    const wanted = new Set(accountIds);
+    const dropped = [...scopeIds].filter((id) => !wanted.has(id));
+    await this.db.transaction(async (tx) => {
+      const scoped = new AgentQuotaService(tx as LobeChatDatabase, this.userId, this.workspaceId);
+      await scoped.bindings.setAuthorizedAccounts(agentId, [...wanted], [...scopeIds]);
+      await scoped.deviceBindings.clearAccounts(agentId, dropped);
+    });
+
+    return this.getLoadBalanceConfig(agentId, { provider });
+  };
+
+  /**
+   * The agent's load-balancing configuration: Manual when its choice on
+   * `deviceId` or the agent-wide pin names an account, Auto otherwise. The
+   * candidates are always the authorized, usable accounts — never the global
+   * pool.
+   */
+  getLoadBalanceConfig = async (
+    agentId: string,
+    options: Pick<SelectAccountOptions, 'deviceId' | 'provider'> = {},
+  ): Promise<QuotaLoadBalanceConfig> => {
+    const [bindings, accounts] = await Promise.all([
+      this.enabledBindings(agentId, options.provider),
+      this.accounts.list(),
+    ]);
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
+    const authorized = bindings.filter(
+      (b) => isAuthorizedQuotaBinding(b) && accountById.has(b.accountId),
+    );
+
+    const deviceChoice = await this.deviceChoiceOf(agentId, bindings, options.deviceId);
+    const agentPin = authorized.find((b) => b.role === QuotaBindingRole.pinned)?.accountId;
+    const pinnedAccountId = deviceChoice ?? agentPin ?? null;
+
+    return {
+      authorizedAccountIds: authorized.map((b) => b.accountId),
+      candidateAccountIds: authorized
+        .filter((b) => isUsableAccount(accountById.get(b.accountId)))
+        .map((b) => b.accountId),
+      mode: pinnedAccountId ? 'manual' : 'auto',
+      pinScope: deviceChoice ? 'device' : agentPin ? 'agent' : null,
+      pinnedAccountId,
     };
   };
 
@@ -625,6 +742,12 @@ export class AgentQuotaService {
   planDeviceRouting = async (
     agentId: string,
     options: Pick<SelectAccountOptions, 'deviceId' | 'modelScope' | 'now' | 'provider'> = {},
+  ): Promise<ClaudeCodeAccountRouting | null> =>
+    this.withSelectionLock(agentId, (scoped) => scoped.planDeviceRoutingLocked(agentId, options));
+
+  private planDeviceRoutingLocked = async (
+    agentId: string,
+    options: Pick<SelectAccountOptions, 'deviceId' | 'modelScope' | 'now' | 'provider'>,
   ): Promise<ClaudeCodeAccountRouting | null> => {
     const bindings = await this.enabledBindings(agentId, options.provider);
     const accounts = new Map((await this.accounts.list()).map((a) => [a.id, a]));
@@ -661,15 +784,16 @@ export class AgentQuotaService {
       return pinnedElsewhere ? { candidates: [pinnedElsewhere], mode: 'balanced' } : null;
 
     const now = options.now ?? Date.now();
-    const priorityById = new Map(pool.map((b) => [b.accountId, b.priority]));
-    const loads = await this.resolveAccountLoads(
-      pool.map((b) => b.accountId),
+    const ranked = rankAccounts(await this.poolLoads(pool, now), {
+      authorizedAccountIds: pool.map((b) => b.accountId),
+      modelScope: options.modelScope,
       now,
-    );
-    const candidates = rankAccounts(
-      loads.map((l) => ({ ...l, priority: priorityById.get(l.accountId) ?? 0 })),
-      { modelScope: options.modelScope, now },
-    ).flatMap((load) => routed(load.accountId) ?? []);
+    }).filter((load) => routed(load.accountId));
+    // The device runs the first candidate it holds a login for: stamp that one
+    // so the agent's next run rotates on.
+    const runs = await this.firstSignedInOn(ranked, options.deviceId);
+    if (runs) await this.bindings.markSelected(agentId, runs.accountId, new Date(now));
+    const candidates = ranked.flatMap((load) => routed(load.accountId) ?? []);
     if (pinnedElsewhere)
       candidates.splice(
         0,
@@ -741,7 +865,69 @@ export class AgentQuotaService {
     return bindings.filter((binding) => providerById.get(binding.accountId) === provider);
   };
 
+  /**
+   * Run `fn` with this agent's selections serialized (transaction-scoped
+   * advisory lock): concurrent runs of one agent rank one after another, each
+   * seeing the previous pick's rotation stamp, so they spread instead of all
+   * landing on the same account. Other agents are not blocked.
+   */
+  private withSelectionLock = <T>(
+    agentId: string,
+    fn: (scoped: AgentQuotaService) => Promise<T>,
+  ): Promise<T> =>
+    this.db.transaction(async (tx) => {
+      const scoped = new AgentQuotaService(tx as LobeChatDatabase, this.userId, this.workspaceId);
+      await scoped.bindings.lockSelection(agentId);
+      return fn(scoped);
+    });
+
+  /**
+   * The first of `ranked` that `deviceId` holds a recorded login for; the top
+   * pick when there is no device or it has recorded none of them (a desktop
+   * that never reported its logins).
+   */
+  private firstSignedInOn = async <T extends { accountId: string }>(
+    ranked: T[],
+    deviceId?: string,
+  ): Promise<T | undefined> => {
+    if (!deviceId || ranked.length <= 1) return ranked[0];
+    const signedIn = new Set(
+      (await this.logins.listByDevice(deviceId)).map((login) => login.accountId),
+    );
+    return ranked.find((load) => signedIn.has(load.accountId)) ?? ranked[0];
+  };
+
+  /** Load views of the agent's pool bindings, carrying each binding's priority and rotation stamp. */
+  private poolLoads = async (
+    pool: { accountId: string; lastSelectedAt: Date | null; priority: number }[],
+    now: number,
+  ): Promise<AccountLoad[]> => {
+    const bindingById = new Map(pool.map((b) => [b.accountId, b]));
+    const loads = await this.resolveAccountLoads(
+      pool.map((b) => b.accountId),
+      now,
+    );
+    return loads.map((load) => {
+      const binding = bindingById.get(load.accountId);
+      return {
+        ...load,
+        lastSelectedAt: binding?.lastSelectedAt?.getTime() ?? null,
+        priority: binding?.priority ?? 0,
+      };
+    });
+  };
+
   private selectAccountId = async (
+    agentId: string,
+    options: SelectAccountOptions,
+  ): Promise<{
+    accountId: string;
+    pinScope?: AccountPinScope;
+    reason: 'pinned' | 'balanced';
+  } | null> =>
+    this.withSelectionLock(agentId, (scoped) => scoped.selectAccountIdLocked(agentId, options));
+
+  private selectAccountIdLocked = async (
     agentId: string,
     options: SelectAccountOptions,
   ): Promise<{
@@ -780,14 +966,20 @@ export class AgentQuotaService {
     if (pool.length === 0) return null;
 
     const now = options.now ?? Date.now();
-    const loads = await this.resolveAccountLoads(
-      pool.map((b) => b.accountId),
+    const ranked = rankAccounts(await this.poolLoads(pool, now), {
+      authorizedAccountIds: pool.map((b) => b.accountId),
+      modelScope: options.modelScope,
       now,
+    });
+    // Without an explicit runnable list, prefer what the run's device is
+    // signed in to, so the stamp lands on the account that will really run.
+    const chosen = await this.firstSignedInOn(
+      ranked,
+      options.runnableExternalAccountIds ? undefined : options.deviceId,
     );
-    const priorityById = new Map(pool.map((b) => [b.accountId, b.priority]));
-    const withPriority = loads.map((l) => ({ ...l, priority: priorityById.get(l.accountId) ?? 0 }));
+    if (!chosen) return null;
 
-    const chosen = selectAccount(withPriority, { modelScope: options.modelScope, now });
-    return chosen ? { accountId: chosen.accountId, reason: 'balanced' } : null;
+    await this.bindings.markSelected(agentId, chosen.accountId, new Date(now));
+    return { accountId: chosen.accountId, reason: 'balanced' };
   };
 }

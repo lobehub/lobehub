@@ -12,6 +12,7 @@ import {
   type ClaudeCodeLoginSpawnParams,
   resolveDefaultClaudeConfigDir,
   RETIRED_PROFILE_GRACE_MS,
+  UNSHARED_PROJECTS_DIR,
 } from './claudeCodeAccounts';
 
 const fakeFs = vi.hoisted(() => ({
@@ -24,7 +25,7 @@ const fakeFs = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>();
-  return { ...actual, symlink: vi.fn(actual.symlink) };
+  return { ...actual, rename: vi.fn(actual.rename), symlink: vi.fn(actual.symlink) };
 });
 
 vi.mock('node:child_process', () => ({
@@ -170,6 +171,145 @@ describe('ClaudeCodeAccountProfiles', () => {
     const link = path.join(root, 'p1', 'projects');
     expect((await lstat(link)).isSymbolicLink()).toBe(true);
     expect(await readlink(link)).toBe(path.join(fakeFs.home, '.claude', 'projects'));
+  });
+
+  /**
+   * The kept-aside copy of a profile's transcripts. It must live outside the
+   * profile, which is retired and removed when its account signs in again.
+   */
+  const keptAside = async (profile: string) => {
+    const { readdir } = await vi.importActual<typeof FsPromises>('node:fs/promises');
+    expect((await readdir(path.join(root, profile))).some((n) => n.includes('unshared'))).toBe(
+      false,
+    );
+    const keptDir = path.join(fakeFs.home, '.claude', UNSHARED_PROJECTS_DIR);
+    const name = (await readdir(keptDir)).find((n) => n.startsWith(`${profile}-`));
+    expect(name).toBeDefined();
+    return path.join(keptDir, name!);
+  };
+
+  // Regression: a profile signed in before transcripts were shared kept its own
+  // `projects/`, the link was skipped, and a run switched onto that account
+  // could not --resume a conversation started on another one (or vice versa).
+  it('folds a profile’s own transcripts into the shared tree and links it', async () => {
+    await writeLogin(path.join(root, 'p1'), 'acc-p1');
+    const shared = path.join(fakeFs.home, '.claude', 'projects', '-repo');
+    const own = path.join(root, 'p1', 'projects', '-repo');
+    await mkdir(shared, { recursive: true });
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(shared, 'started-on-default.jsonl'), 'default');
+    await writeFile(path.join(own, 'started-on-p1.jsonl'), 'p1');
+
+    await profiles.resolve('acc-p1');
+
+    const link = path.join(root, 'p1', 'projects');
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    // Each side now sees both conversations, so either account can resume either.
+    expect(readFileSync(path.join(link, '-repo', 'started-on-default.jsonl'), 'utf8')).toBe(
+      'default',
+    );
+    expect(readFileSync(path.join(shared, 'started-on-p1.jsonl'), 'utf8')).toBe('p1');
+  });
+
+  it('keeps a profile transcript aside instead of deleting it when the shared tree has the same name', async () => {
+    await writeLogin(path.join(root, 'p1'), 'acc-p1');
+    const shared = path.join(fakeFs.home, '.claude', 'projects', '-repo');
+    const own = path.join(root, 'p1', 'projects', '-repo');
+    await mkdir(shared, { recursive: true });
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(shared, 'same.jsonl'), 'shared');
+    await writeFile(path.join(own, 'same.jsonl'), 'profile');
+
+    await profiles.resolve('acc-p1');
+
+    expect((await lstat(path.join(root, 'p1', 'projects'))).isSymbolicLink()).toBe(true);
+    expect(readFileSync(path.join(shared, 'same.jsonl'), 'utf8')).toBe('shared');
+    const aside = await keptAside('p1');
+    expect(readFileSync(path.join(aside, '-repo', 'same.jsonl'), 'utf8')).toBe('profile');
+  });
+
+  it('never deletes a transcript written into the profile while it is being folded in', async () => {
+    await writeLogin(path.join(root, 'p1'), 'acc-p1');
+    const own = path.join(root, 'p1', 'projects', '-repo');
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(own, 'old.jsonl'), 'old');
+    // A run on this account writes a new session file right after the listing.
+    const fsp = await vi.importActual<typeof FsPromises>('node:fs/promises');
+    const rename = vi.spyOn(await import('node:fs/promises'), 'rename');
+    rename.mockImplementationOnce(async (from, to) => {
+      await fsp.rename(from, to);
+      await fsp.writeFile(path.join(root, 'p1', 'projects', 'late.jsonl'), 'late');
+    });
+
+    await profiles.resolve('acc-p1');
+
+    const shared = path.join(fakeFs.home, '.claude', 'projects');
+    // What was listed moved; the late file stays in the profile, which keeps its
+    // own `projects` for now instead of losing it to the link.
+    expect(readFileSync(path.join(shared, '-repo', 'old.jsonl'), 'utf8')).toBe('old');
+    expect((await lstat(path.join(root, 'p1', 'projects'))).isSymbolicLink()).toBe(false);
+    expect(readFileSync(path.join(root, 'p1', 'projects', 'late.jsonl'), 'utf8')).toBe('late');
+
+    // The next resolve finishes the job.
+    await profiles.resolve('acc-p1');
+
+    expect((await lstat(path.join(root, 'p1', 'projects'))).isSymbolicLink()).toBe(true);
+    expect(readFileSync(path.join(shared, 'late.jsonl'), 'utf8')).toBe('late');
+  });
+
+  // Regression: with the default config dir on another volume every rename
+  // failed with EXDEV, the profile kept its own `projects`, and resume across
+  // accounts stayed broken.
+  it('folds transcripts in across filesystems, where rename fails with EXDEV', async () => {
+    await writeLogin(path.join(root, 'p1'), 'acc-p1');
+    const own = path.join(root, 'p1', 'projects', '-repo');
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(own, 'started-on-p1.jsonl'), 'p1');
+    const fsp = await vi.importActual<typeof FsPromises>('node:fs/promises');
+    const sharedRoot = path.join(fakeFs.home, '.claude');
+    // Renames into the default config dir cross a volume; within the profile they do not.
+    vi.spyOn(await import('node:fs/promises'), 'rename').mockImplementation(async (from, to) => {
+      if (String(to).startsWith(sharedRoot))
+        throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+      await fsp.rename(from, to);
+    });
+
+    await profiles.resolve('acc-p1');
+
+    const link = path.join(root, 'p1', 'projects');
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect(
+      readFileSync(
+        path.join(fakeFs.home, '.claude', 'projects', '-repo', 'started-on-p1.jsonl'),
+        'utf8',
+      ),
+    ).toBe('p1');
+  });
+
+  // Regression: across volumes the original was unlinked after a metadata
+  // check, so an append landing after the check went to a deleted file.
+  it('never unlinks a cross-volume transcript under its live name', async () => {
+    await writeLogin(path.join(root, 'p1'), 'acc-p1');
+    const own = path.join(root, 'p1', 'projects', '-repo');
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(own, 'live.jsonl'), 'first');
+    const fsp = await vi.importActual<typeof FsPromises>('node:fs/promises');
+    const shared = path.join(fakeFs.home, '.claude', 'projects');
+    // Only moves into the shared tree cross a volume; staging stays on the profile's.
+    vi.spyOn(await import('node:fs/promises'), 'rename').mockImplementation(async (from, to) => {
+      if (String(to).startsWith(shared))
+        throw Object.assign(new Error('cross-device'), { code: 'EXDEV' });
+      await fsp.rename(from, to);
+      // The running session appends by path right after it was staged.
+      if (String(from).endsWith('live.jsonl')) await fsp.writeFile(String(from), 'second');
+    });
+
+    await profiles.resolve('acc-p1');
+
+    expect(readFileSync(path.join(shared, '-repo', 'live.jsonl'), 'utf8')).toBe('first');
+    // The append survives under the live name; the profile keeps its projects.
+    expect(readFileSync(path.join(own, 'live.jsonl'), 'utf8')).toBe('second');
+    expect((await lstat(path.join(root, 'p1', 'projects'))).isSymbolicLink()).toBe(false);
   });
 
   it('shares with an inherited CLAUDE_CONFIG_DIR, the dir the default login runs on', async () => {

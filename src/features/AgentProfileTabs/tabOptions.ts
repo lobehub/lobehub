@@ -1,6 +1,7 @@
 import urlJoin from 'url-join';
 
 export type AgentProfileTab =
+  | 'accounts'
   | 'automations'
   | 'channel'
   | 'engine'
@@ -32,7 +33,7 @@ export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) 
   urlJoin('/agent', agentId, tab);
 
 const AGENT_PROFILE_ROUTE =
-  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|accounts|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
 
 /**
  * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
@@ -60,6 +61,7 @@ export const getAgentProfileTab = (pathname: string): AgentProfileTab | undefine
  * render with nothing selected on the very page that owns it.
  */
 export const buildAgentProfileTabOptions = ({
+  accountsSupported = false,
   active,
   automationsSupported = false,
   canConfigure,
@@ -70,6 +72,11 @@ export const buildAgentProfileTabOptions = ({
   heterogeneous,
   webhookSupported = false,
 }: {
+  /**
+   * The agent runs Claude Code on subscription logins, so it has accounts to pick
+   * and balance across (`accounts`).
+   */
+  accountsSupported?: boolean;
   active: AgentProfileTab;
   /** Inbound webhooks are switched on for this member (`webhook`). */
   automationsSupported?: boolean;
@@ -94,6 +101,8 @@ export const buildAgentProfileTabOptions = ({
   const showInstruction = (canConfigure && !heterogeneous) || active === 'instruction';
   // Where a heterogeneous agent runs and what it needs there; a harness agent has no such page.
   const showEnvironment = (canConfigure && heterogeneous) || active === 'environment';
+  // Which subscription accounts this agent may run on edits the agent too, so it follows the same gate.
+  const showAccounts = (canConfigure && accountsSupported) || active === 'accounts';
   const showTools = (canConfigure && !heterogeneous) || active === 'tools';
   const showSkills = (canConfigure && !heterogeneous) || active === 'skills';
   const showMail = (canConfigure && mailSupported) || active === 'mail';
@@ -116,6 +125,7 @@ export const buildAgentProfileTabOptions = ({
     showKnowledge ? { label: labels.knowledge, value: 'knowledge' as const } : null,
     showEngine ? { label: labels.engine, value: 'engine' as const } : null,
     showEnvironment ? { label: labels.environment, value: 'environment' as const } : null,
+    showAccounts ? { label: labels.accounts, value: 'accounts' as const } : null,
     showTools ? { label: labels.tools, value: 'tools' as const } : null,
     showSkills ? { label: labels.skills, value: 'skills' as const } : null,
     showMail ? { label: labels.mail, value: 'mail' as const } : null,
@@ -131,7 +141,7 @@ export const buildAgentProfileTabOptions = ({
 const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfileTab[] }[] = [
   { key: 'profile', tabs: ['profile'] },
   { key: 'shape', tabs: ['instruction', 'knowledge'] },
-  { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
+  { key: 'setup', tabs: ['engine', 'environment', 'accounts', 'tools', 'skills'] },
   { key: 'identity', tabs: ['mail', 'channel', 'automations', 'webhook'] },
   { key: 'general', tabs: ['self-evolving', 'statistics', 'share'] },
 ];

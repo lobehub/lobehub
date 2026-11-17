@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { useShowAgentIdentity } from '@/features/AgentMail/useShowAgentIdentity';
+import { usesAgentQuotaAccounts } from '@/features/AgentQuotaAccounts/supported';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import {
   featureFlagsSelectors,
   serverConfigSelectors,
@@ -36,6 +37,11 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
   // One flag switches on everything that wakes an agent from outside: its list and its webhooks.
   const webhookSupported = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
+  const accountsSupported = useAgentStore((s) =>
+    usesAgentQuotaAccounts(
+      agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig?.heterogeneousProvider,
+    ),
+  );
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // The mobile Segmented has no room for another segment, so mobile keeps the
   // drawer entry in `AgentSidebar/Header/Nav`.
@@ -44,10 +50,12 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
   return useMemo(
     () =>
       buildAgentProfileTabOptions({
+        accountsSupported,
         active,
         automationsSupported: webhookSupported,
         canConfigure,
         labels: {
+          'accounts': t('tab.accounts'),
           'automations': t('tab.automations'),
           'channel': t('tab.integration'),
           'engine': t('tab.engine'),
@@ -73,6 +81,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
         webhookSupported,
       }),
     [
+      accountsSupported,
       active,
       canConfigure,
       canManageShare,

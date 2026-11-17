@@ -13,6 +13,7 @@ import {
   Share2Icon,
   SparklesIcon,
   UsersIcon,
+  UsersRoundIcon,
   WebhookIcon,
   WrenchIcon,
   ZapIcon,
@@ -61,6 +62,11 @@ const SkillsDynamicMeta = lazy(() =>
 const EnvironmentDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.EnvironmentDynamicMeta,
+  })),
+);
+const AccountsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.AccountsDynamicMeta,
   })),
 );
 const ToolsDynamicMeta = lazy(() =>
@@ -159,6 +165,13 @@ export const agentEnvironmentRouteMeta = routeMeta({
   icon: MonitorSmartphoneIcon,
   Skeleton: ProfileSkeleton,
   titleKey: 'navigation.environment',
+});
+
+export const agentAccountsRouteMeta = routeMeta({
+  DynamicMeta: AccountsDynamicMeta,
+  icon: UsersRoundIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.accounts',
 });
 
 export const agentToolsRouteMeta = routeMeta({
