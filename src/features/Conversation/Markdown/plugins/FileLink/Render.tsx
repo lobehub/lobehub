@@ -2,7 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { A, copyToClipboard, createStaticStyles, Icon, toast } from '@lobehub/ui';
+import { A, copyToClipboard, Icon, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CopyIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -17,6 +19,7 @@ import { useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
 import type { MarkdownElementProps } from '../type';
+import { fileLinkMarker } from './markers.stylex';
 import {
   getFileLinkCopyHref,
   getFileLinkOpenAction,
@@ -24,6 +27,55 @@ import {
   isShareVisitorContext,
   resolveAppOrigin,
 } from './parse';
+
+const stylesAtomic = stylex.create({
+  icon: { display: 'inline-flex', flexShrink: 0, alignItems: 'center' },
+  label: {
+    textDecorationColor: {
+      default: cssVar.colorTextTertiary,
+      [stylex.when.ancestor(':hover', fileLinkMarker)]: cssVar.colorTextSecondary,
+    },
+    textDecorationLine: 'underline',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '3px',
+    transition: 'text-decoration-color 0.15s',
+  },
+  link: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    color: cssVar.colorText,
+    textDecoration: 'none',
+    verticalAlign: '-0.16em',
+    borderRadius: { 'default': null, ':focus-visible': '2px' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  copy: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    marginInlineStart: '2px',
+    padding: '0',
+    borderStyle: 'none',
+    borderRadius: 'var(--lobe-border-radius-sm)',
+    color: { 'default': 'var(--lobe-color-text-quaternary)', ':hover': 'var(--lobe-color-text)' },
+    verticalAlign: '-0.2em',
+    backgroundColor: { 'default': 'transparent', ':hover': 'var(--lobe-color-fill-secondary)' },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'color 0.15s, background 0.15s',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': 'var(--lobe-color-primary-border)' },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+});
 
 interface FileLinkProperties {
   fileId?: string;
@@ -46,88 +98,12 @@ const getAppOrigin = () =>
     windowOrigin: () => window.location.origin,
   });
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  copy: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    margin-inline-start: 2px;
-    padding: 0;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextQuaternary};
-    vertical-align: -0.2em;
-
-    background: transparent;
-
-    transition:
-      color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  icon: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-  `,
-  label: css`
-    /* The same treatment as an internal entity link: body text with an
-       underline, not link blue — the file icon already says what it is. */
-    text-decoration-color: ${cssVar.colorTextTertiary};
-    text-decoration-line: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-
-    transition: text-decoration-color 0.15s;
-  `,
-  link: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    color: ${cssVar.colorText} !important;
-    text-decoration: none;
-    vertical-align: -0.16em;
-
-    &:hover {
-      color: ${cssVar.colorText} !important;
-    }
-
-    &:hover > span:last-child {
-      text-decoration-color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus-visible {
-      border-radius: 2px;
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
-}));
-
 const FileLabel = ({ label }: { label: string }) => (
   <>
-    <span aria-hidden className={styles.icon}>
+    <span aria-hidden {...stylex.props(stylesAtomic['icon'])}>
       <FileIcon fileName={label} size={16} variant={'raw'} />
     </span>
-    <span className={styles.label}>{label}</span>
+    <span {...stylex.props(stylesAtomic['label'])}>{label}</span>
   </>
 );
 
@@ -207,7 +183,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
     <>
       <A
         {...(fileId ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
-        className={styles.link}
+        {...stylex.props(stylesAtomic['link'], fileLinkMarker)}
         href={targetHref}
         rel="noopener noreferrer"
         onClick={handleClick}
@@ -221,7 +197,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
       {targetHref && (
         <button
           aria-label={t('copy')}
-          className={styles.copy}
+          {...stylex.props(stylesAtomic['copy'])}
           title={t('copy')}
           type={'button'}
           onClick={handleCopy}
