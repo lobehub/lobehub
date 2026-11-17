@@ -8,6 +8,8 @@ import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewar
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { WorktreeCleanupService } from '@/server/services/worktreeCleanup';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
 import { deviceProcedure } from './procedures';
@@ -30,6 +32,24 @@ const requireDeviceAnswer = <T>(result: T | undefined, what: string): T => {
 };
 
 export const gitRouter = router({
+  /**
+   * A device just connected to the gateway (desktop main process, `lh
+   * connect`): run the worktree cleanups that waited for it while it was
+   * offline. They run over the gateway after the response, so the device can
+   * call this from its `connected` handler and move on.
+   */
+  drainWorktreeCleanups: deviceProcedure
+    .input(z.object({ deviceId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const service = new WorktreeCleanupService(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      afterUnscoped(async () => {
+        const summary = await service.runPendingForDevice(input.deviceId);
+        if (Object.keys(summary.results).length > 0)
+          log('drained worktree cleanups for %s: %o', input.deviceId, summary.results);
+      });
+      return { scheduled: true };
+    }),
+
   /**
    * Granular git reads for a directory on a remote device, each via its own
    * device RPC so the web/remote git status bar mirrors the local desktop's

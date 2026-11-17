@@ -27,6 +27,10 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TrashService } from '../index';
 
+// Trashing a topic starts the cleanup of the worktree the app created for it.
+const scheduleWorktreeCleanup = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/worktreeCleanup', () => ({ scheduleWorktreeCleanup }));
+
 // Lets a test land a concurrent purge between a restore handler's reads and its
 // write: the handlers check the owning agent right before restoring, inside the
 // restore transaction (the hook receives that transaction).
@@ -163,6 +167,12 @@ describe('TrashService', () => {
       await topicModel.create({ agentId: agent.id, title: 'b' });
       const roots = await service.trashTopicsByAgent(agent.id);
       expect(roots).toHaveLength(2);
+      expect(scheduleWorktreeCleanup).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          topicIds: expect.arrayContaining(roots.map((root) => root.resourceId)),
+          trigger: 'trashed',
+        }),
+      );
       expect((await topicModel.query({ agentId: agent.id })).items).toHaveLength(0);
       expect((await service.list()).items).toHaveLength(2);
     });

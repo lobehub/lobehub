@@ -94,15 +94,32 @@ export const findPendingOwnedWorktreeTopics = async (
   );
 };
 
-/** Retired or trashed topics that own the worktree at `path`. */
+/**
+ * Topics that own the worktree at `path` — by their record, or (for topics
+ * that predate it) by the markers `resolveOwnedWorktrees` backfills from.
+ * Trashed ones included; the caller filters for retired topics.
+ */
 export const findOwnersOfWorktree = async (
   ctx: TopicModelContext,
   path: string,
-): Promise<OwnedWorktreeTopicRow[]> =>
-  ctx.db
+): Promise<OwnedWorktreeTopicRow[]> => {
+  const rows = await ctx.db
     .select(rowColumns)
     .from(topics)
-    .where(and(ctx.trashScope(), containsEntry({ path })));
+    .where(
+      and(
+        ctx.trashScope(),
+        or(
+          containsEntry({ path }),
+          eq(sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'sessionPath'`, path),
+          sql`COALESCE(${topics.metadata} -> 'workingDirectoryConfig' -> 'git' @> ${JSON.stringify({ activeWorktree: path, autoCreated: true })}::jsonb, false)`,
+        ),
+      ),
+    );
+  return rows.filter((row) =>
+    resolveOwnedWorktrees(row.metadata).some((entry) => entry.path === path),
+  );
+};
 
 /**
  * How many other topics still use `path` as their working directory or CLI
