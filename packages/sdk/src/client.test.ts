@@ -98,6 +98,53 @@ describe('idempotencyKey', () => {
     expect(await requests[1].json()).toEqual({ title: 't' });
   });
 
+  it('waits out a 409 idempotency_conflict while the first attempt is still running', async () => {
+    let calls = 0;
+    const { fetch, requests } = mockFetch(() =>
+      ++calls === 1
+        ? apiError(409, 'idempotency_conflict', {}, { 'Retry-After': '0' })
+        : json(envelope({ id: 'agt_1' }), { headers: { 'Idempotent-Replayed': 'true' } }),
+    );
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    const { data, error } = await lobehub.agents.create({
+      body: { title: 't' },
+      idempotencyKey: 'k1',
+    });
+
+    expect(error).toBeUndefined();
+    expect(data?.data.id).toBe('agt_1');
+    expect(requests).toHaveLength(2);
+  });
+
+  it('does not retry other 409s or a key reused for a different request (422)', async () => {
+    for (const [status, code] of [
+      [409, 'conflict'],
+      [422, 'idempotency_conflict'],
+    ] as const) {
+      const { fetch, requests } = mockFetch(() => apiError(status, code));
+      const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+      const { error } = await lobehub.agents.create({ body: { title: 't' }, idempotencyKey: 'k' });
+
+      expect(error).toMatchObject({ code, status });
+      expect(requests).toHaveLength(1);
+    }
+  });
+
+  it('does not make a keyed PATCH retryable: the server only deduplicates POST', async () => {
+    const { fetch, requests } = mockFetch(() => apiError(503, 'service_unavailable'));
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    await lobehub.agents.update({
+      body: { title: 't' },
+      idempotencyKey: 'k',
+      path: { id: 'agt_1' },
+    });
+
+    expect(requests).toHaveLength(1);
+  });
+
   it('never retries a POST without one', async () => {
     const { fetch, requests } = mockFetch(() => apiError(503, 'service_unavailable'));
     const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });

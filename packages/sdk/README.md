@@ -117,7 +117,7 @@ try {
 
 ## Retries and timeouts
 
-Requests that are safe to resend are retried up to `maxRetries` times (default 2) on 408, 429, 5xx and network errors, with exponential backoff (\~0.5s, 1s, 2s … up to 8s, with jitter) or exactly the server's `Retry-After`. Safe means an idempotent method (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) or a request with an idempotency key — a plain `POST` is never resent.
+Requests that are safe to resend are retried up to `maxRetries` times (default 2) on 408, 429, 5xx and network errors, with exponential backoff (\~0.5s, 1s, 2s … up to 8s, with jitter) or exactly the server's `Retry-After`. Safe means an idempotent method (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) or a `POST` with an idempotency key — a plain `POST` is never resent, and the server only deduplicates keyed `POST`s, so a key on `PATCH` does not make it retryable. A keyed `POST` resent while the first attempt is still running gets 409 `idempotency_conflict`; the SDK waits and retries it, until the stored answer comes back or the retries run out.
 
 `timeout` (default 10 minutes, `0` disables) bounds the wait for the response headers of each attempt. Both work on the client and per call:
 

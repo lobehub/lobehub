@@ -95,8 +95,8 @@ const rewriteHeaderSpreads = (dir: string) => {
 
 const CONFIG_ANCHOR = "  extends Omit<RequestInit, 'body' | 'headers' | 'method'>, CoreConfig {\n";
 const CONFIG_FIELDS = `  /**
-   * Retries on 408/429/5xx and network errors, for idempotent methods or
-   * requests with an \`idempotencyKey\` only. Applied by \`createLobeHub\`; default 2.
+   * Retries on 408/429/5xx and network errors, for idempotent methods or a
+   * POST with an \`idempotencyKey\` only. Applied by \`createLobeHub\`; default 2.
    */
   maxRetries?: number;
   /**

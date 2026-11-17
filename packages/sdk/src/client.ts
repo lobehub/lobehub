@@ -133,14 +133,23 @@ export class FilesResource extends Files {
   }
 }
 
+/**
+ * Abort when any of `signals` does. `AbortSignal.any` keeps no strong
+ * reference to the inputs, so a long-lived caller signal reused across many
+ * streams does not accumulate listeners; the fallback is for hosts without it.
+ */
 const anySignal = (signals: AbortSignal[]) => {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
   const controller = new AbortController();
   for (const signal of signals) {
     if (signal.aborted) {
       controller.abort(signal.reason);
       break;
     }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    signal.addEventListener('abort', () => controller.abort(signal.reason), {
+      once: true,
+      signal: controller.signal,
+    });
   }
   return controller.signal;
 };

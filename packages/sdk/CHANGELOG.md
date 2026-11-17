@@ -11,7 +11,7 @@ First semver release. Versions before it were published as `1.0.<UTC timestamp>`
 ### Added
 
 - `createLobeHub({ workspaceId })` sends `X-Workspace-Id` on every request; a per-call header still overrides it.
-- `timeout` (default 10 minutes, until the response headers) and `maxRetries` (default 2) on the client and on every call. Retries back off exponentially on 408, 429, 5xx and network errors, honor `Retry-After`, and only resend idempotent methods (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) or requests that carry an `Idempotency-Key`.
+- `timeout` (default 10 minutes, until the response headers) and `maxRetries` (default 2) on the client and on every call. Retries back off exponentially on 408, 429, 5xx and network errors, honor `Retry-After`, and only resend idempotent methods (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`) or a `POST` that carries an `Idempotency-Key` (whose in-flight 409 `idempotency_conflict` is waited out too).
 - `idempotencyKey` call option, sent as the `Idempotency-Key` header.
 - Typed errors: `LobeHubAPIError` (`status`, `code`, `requestId`, `details`, `headers`, `body`), `LobeHubConnectionError` and `LobeHubTimeoutError`.
 - `createLobeHub({ throwOnError: true })` makes every method reject with `LobeHubAPIError` and types `data` as always present.

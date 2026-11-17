@@ -19,6 +19,20 @@ export type SuccessStatus = 200 | 201 | 202;
 export const REQUEST_EXAMPLE_EXTENSION = 'x-request-example';
 
 /**
+ * Documentation mistakes found while routes are declared (an example that does
+ * not match its schema, an undocumentable scope gate). Recorded here instead of
+ * thrown, so a doc slip can never stop the API server from booting;
+ * `buildSpecDocument` fails on them, which CI runs on every PR.
+ */
+export const SPEC_ERROR_EXTENSION = 'x-spec-error';
+
+/** A request body example plus, when it does not match its schema, why. */
+export interface RequestExample {
+  error?: string;
+  value: unknown;
+}
+
+/**
  * Error statuses a route may declare on top of the ones every authenticated
  * route shares. `400` is also derived automatically for any route with a
  * request validator, so declare it only when the handler itself rejects input.
@@ -91,8 +105,8 @@ export interface RouteDocOptions extends Omit<DescribeRouteOptions, 'responses'>
   operationId?: `${string}.${string}`;
   /** Public routes skip the shared authenticated errors (401/403/500). */
   public?: boolean;
-  /** Example JSON request body. */
-  requestExample?: unknown;
+  /** Example JSON request body, built with `example(schema, value)` from `common/examples.ts`. */
+  requestExample?: RequestExample;
   /** Example success payload (`data`); wrapped in the success envelope like the schema. */
   responseExample?: unknown;
   /** The success status the handler answers with. Defaults to 200. */
@@ -121,13 +135,12 @@ export const routeDoc = ({
   ...rest
 }: RouteDocOptions) => {
   const errorStatuses = new Set<number>([...(isPublic ? [] : AUTHENTICATED_ERRORS), ...errors]);
+  const specErrors: string[] = [];
+  if (requestExample?.error) specErrors.push(requestExample.error);
   if (responseExample !== undefined) {
     const parsed = data.safeParse(responseExample);
-    if (!parsed.success) {
-      throw new Error(
-        `routeDoc(${rest.summary}): responseExample does not match data: ${parsed.error.message}`,
-      );
-    }
+    if (!parsed.success)
+      specErrors.push(`responseExample does not match data: ${parsed.error.message}`);
   }
   const example =
     responseExample === undefined
@@ -145,7 +158,8 @@ export const routeDoc = ({
     // limit and Idempotency-Key the spec builder adds to authenticated ones.
     ...(isPublic ? { security: [] } : {}),
     ...rest,
-    ...(requestExample === undefined ? {} : { [REQUEST_EXAMPLE_EXTENSION]: requestExample }),
+    ...(requestExample === undefined ? {} : { [REQUEST_EXAMPLE_EXTENSION]: requestExample.value }),
+    ...(specErrors.length > 0 ? { [SPEC_ERROR_EXTENSION]: specErrors } : {}),
     responses: {
       [status]: {
         content: {

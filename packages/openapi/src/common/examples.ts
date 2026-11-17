@@ -2,19 +2,20 @@
  * Request / response examples for the core resources' operations, published
  * in the spec through `routeDoc({ requestExample, responseExample })`.
  *
- * Every example is checked against its schema when the routes load (requests
- * here through `example()`, responses inside `routeDoc`), so the documentation
- * cannot drift from the payload it describes.
+ * Every example is checked against its schema (requests here through
+ * `example()`, responses inside `routeDoc`), and the spec build fails on a
+ * mismatch, so the documentation cannot drift from the payload it describes.
  */
 import type { z } from 'zod';
 
-/** Return `value` unchanged after checking it satisfies `schema`. */
-export const example = <T extends z.ZodType>(schema: T, value: z.input<T>): z.input<T> => {
+import type { RequestExample } from './openapi';
+
+/** Pair `value` with its schema check for `routeDoc({ requestExample })`. */
+export const example = <T extends z.ZodType>(schema: T, value: z.input<T>): RequestExample => {
   const result = schema.safeParse(value);
-  if (!result.success) {
-    throw new Error(`OpenAPI example does not match its schema: ${result.error.message}`);
-  }
-  return value;
+  return result.success
+    ? { value }
+    : { error: `requestExample does not match its schema: ${result.error.message}`, value };
 };
 
 const createdAt = '2026-01-15T08:30:00.000Z';

@@ -55,17 +55,39 @@ const sleep = (ms: number, signal: AbortSignal | null) =>
   });
 
 /**
- * Only resend what cannot double-apply: idempotent methods, or a request the
- * server deduplicates through its `Idempotency-Key`.
+ * Only resend what cannot double-apply: idempotent methods, or a POST the
+ * server deduplicates through its `Idempotency-Key` (the server honors the key
+ * on POST only, so a keyed PATCH is still not safe to resend).
  */
-export const isRetryable = (request: Request) =>
-  IDEMPOTENT_METHODS.has(request.method.toUpperCase()) ||
-  request.headers.has(IDEMPOTENCY_KEY_HEADER);
+export const isRetryable = (request: Request) => {
+  const method = request.method.toUpperCase();
+  return (
+    IDEMPOTENT_METHODS.has(method) ||
+    (method === 'POST' && request.headers.has(IDEMPOTENCY_KEY_HEADER))
+  );
+};
+
+/**
+ * Whether an answer is worth another attempt. A keyed POST resent while the
+ * first attempt is still running on the server (typical after a timeout or a
+ * dropped connection) gets 409 `idempotency_conflict`; waiting and retrying
+ * then yields the stored answer. A 422 with that code means a different
+ * request reused the key, which a retry cannot fix.
+ */
+const shouldRetryStatus = async (request: Request, response: Response) => {
+  if (RETRYABLE_STATUSES.has(response.status)) return true;
+  if (response.status !== 409 || !request.headers.has(IDEMPOTENCY_KEY_HEADER)) return false;
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => undefined)) as { code?: unknown } | undefined;
+  return body?.code === 'idempotency_conflict';
+};
 
 /**
  * Wrap `fetch` with a per-attempt timeout (until the response headers arrive)
- * and retries with exponential backoff on 408/429/5xx and network failures,
- * honoring `Retry-After`. Network failures surface as `LobeHubConnectionError`
+ * and retries with exponential backoff on 408/429/5xx, network failures and a
+ * keyed POST's in-flight 409, honoring `Retry-After`. Network failures surface as `LobeHubConnectionError`
  * and timeouts as `LobeHubTimeoutError`; a caller abort stays an `AbortError`.
  */
 export const createTransport = (
@@ -88,6 +110,9 @@ export const createTransport = (
       // by another sends a clone.
       const current = canRetry ? request.clone() : request;
       const controller = new AbortController();
+      // Forwarded for the life of the response, not just until its headers:
+      // aborting must also stop a body that is still streaming. The listener
+      // lives on this request's own signal, so it is collected with it.
       const forwardAbort = () => controller.abort(callerSignal.reason);
       callerSignal.addEventListener('abort', forwardAbort, { once: true });
       let timedOut = false;
@@ -111,11 +136,11 @@ export const createTransport = (
               cause: error,
             });
       } finally {
+        // The timeout only bounds the wait for the headers.
         clearTimeout(timer);
-        callerSignal.removeEventListener('abort', forwardAbort);
       }
 
-      if (response && !(canRetry && RETRYABLE_STATUSES.has(response.status))) return response;
+      if (response && !(canRetry && (await shouldRetryStatus(current, response)))) return response;
       if (!canRetry) throw failure;
 
       let delay = backoffDelay(attempt, options.random);
@@ -127,6 +152,8 @@ export const createTransport = (
         }
         await response.body?.cancel().catch(() => {});
       }
+      // This attempt is discarded: stop forwarding aborts to it.
+      callerSignal.removeEventListener('abort', forwardAbort);
       await sleep(delay, callerSignal);
     }
   };

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { isValidApiKeyScope } from '@/const/apiKeyScope';
 
+import { example } from './common/examples';
 import { routeDoc } from './common/openapi';
 import { OPERATION_ID_PATTERN, operationResource } from './common/operation-id';
 import { zValidator } from './common/validator';
@@ -436,7 +437,7 @@ describe('route-declared responses', () => {
       routeDoc({
         data: z.object({ id: z.string() }),
         operationId: 'things.archive',
-        requestExample: { reason: 'done' },
+        requestExample: example(z.object({ reason: z.string() }), { reason: 'done' }),
         summary: 'Archive a thing',
       }),
       zValidator('json', z.object({ reason: z.string() })),
@@ -463,14 +464,29 @@ describe('route-declared responses', () => {
     await expect(buildSpecDocument(app)).rejects.toThrow('already used');
   });
 
-  it('rejects a response example that does not match the payload schema', () => {
-    expect(() =>
-      routeDoc({
-        data: z.object({ id: z.string() }),
-        responseExample: { id: 1 },
-        summary: 'Bad example',
-      }),
-    ).toThrow('responseExample does not match');
+  it('fails the spec build, not the route declaration, on an example that does not match', async () => {
+    const app = buildApp();
+    // Declaring the route must not throw: a doc slip cannot stop the server from booting.
+    const declare = () =>
+      app.post(
+        '/api/v1/things/:id/bad',
+        routeDoc({
+          data: z.object({ id: z.string() }),
+          requestExample: example(z.object({ reason: z.string() }), { reason: 1 } as never),
+          responseExample: { id: 1 },
+          summary: 'Bad examples',
+        }),
+        zValidator('json', z.object({ reason: z.string() })),
+        (c) => c.json({}),
+      );
+    expect(declare).not.toThrow();
+
+    const { invalid } = await collectSpecDocument(app);
+    expect(invalid).toEqual([
+      expect.stringContaining('POST /api/v1/things/{id}/bad: requestExample does not match'),
+      expect.stringContaining('POST /api/v1/things/{id}/bad: responseExample does not match'),
+    ]);
+    await expect(buildSpecDocument(app)).rejects.toThrow('Invalid route documentation');
   });
 
   it('refuses to emit a route without a declared success response', async () => {

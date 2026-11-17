@@ -20,6 +20,7 @@ interface Seen {
 
 const seen: Seen[] = [];
 let attempts = 0;
+let endlessClosed = false;
 
 const send = (res: ServerResponse, status: number, body: unknown, headers = {}) => {
   res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
@@ -63,6 +64,21 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname === '/api/v1/topics') {
     // Never answers: lets the client-side timeout fire.
+    return;
+  }
+  if (url.pathname === '/api/v1/responses' && JSON.parse(record.body).input === 'endless') {
+    // An endless stream: only the client closing the connection ends it.
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    let index = 0;
+    const tick = setInterval(() => {
+      res.write(
+        `data: ${JSON.stringify({ delta: '.', sequence_number: index++, type: 'response.output_text.delta' })}\n\n`,
+      );
+    }, 10);
+    res.on('close', () => {
+      clearInterval(tick);
+      endlessClosed = true;
+    });
     return;
   }
   if (url.pathname === '/api/v1/responses') {
@@ -139,6 +155,30 @@ describe('over real HTTP', () => {
       if (event.type === 'response.output_text.delta') text += event.delta;
     }
     expect(text).toBe('Hi there');
+  });
+
+  it('closes a stream mid-body on abort() and on the caller signal', async () => {
+    const lobehub = createLobeHub({ apiKey: 'k', baseURL });
+
+    for (const cancel of ['abort', 'signal'] as const) {
+      endlessClosed = false;
+      const caller = new AbortController();
+      const stream = lobehub.responses.stream(
+        { input: 'endless', model: 'agt_1' },
+        { signal: caller.signal },
+      );
+      let received = 0;
+      const consume = (async () => {
+        for await (const _ of stream) {
+          if (++received === 3) cancel === 'abort' ? stream.abort() : caller.abort();
+        }
+      })();
+
+      // Aborting ends the loop with an AbortError instead of more events.
+      await expect(consume).rejects.toMatchObject({ name: 'AbortError' });
+      expect(received).toBeLessThan(10);
+      await expect.poll(() => endlessClosed, { timeout: 2000 }).toBe(true);
+    }
   });
 
   it('uploads multipart form data', async () => {

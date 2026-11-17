@@ -3,7 +3,12 @@ import { generateSpecs } from 'hono-openapi';
 import { z } from 'zod';
 
 import { API_ERROR_CODES, ApiErrorCodeSchema } from './common/errors';
-import { ApiErrorSchema, errorResponse, REQUEST_EXAMPLE_EXTENSION } from './common/openapi';
+import {
+  ApiErrorSchema,
+  errorResponse,
+  REQUEST_EXAMPLE_EXTENSION,
+  SPEC_ERROR_EXTENSION,
+} from './common/openapi';
 import { OPERATION_ID_PATTERN, resolveOperationId } from './common/operation-id';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './helpers/pagination';
 import { IDEMPOTENCY_KEY_HEADER, IDEMPOTENT_REPLAYED_HEADER } from './middleware/idempotency';
@@ -39,6 +44,7 @@ interface OperationObject {
   [REQUIRED_SCOPES_EXTENSION]?: string[];
   responses?: Record<string, ResponseObject>;
   security?: unknown[];
+  [SPEC_ERROR_EXTENSION]?: string[];
   summary?: string;
   tags?: string[];
 }
@@ -166,21 +172,24 @@ Send \`${OPENAPI_WORKSPACE_HEADER}\` to act inside a workspace; see the paramete
  * instead of being documented with a guessed or open-ended shape.
  */
 export const buildSpecDocument = async (app: GenerateSpecsApp) => {
-  const { spec, undocumented } = await collectSpecDocument(app);
+  const { invalid, spec, undocumented } = await collectSpecDocument(app);
 
   if (undocumented.length > 0) {
     throw new Error(
       `Routes without a declared success response (attach routeDoc() from src/common/openapi.ts):\n${undocumented.map((op) => `  - ${op}`).join('\n')}`,
     );
   }
+  if (invalid.length > 0) {
+    throw new Error(`Invalid route documentation:\n${invalid.map((op) => `  - ${op}`).join('\n')}`);
+  }
 
   return spec;
 };
 
 /**
- * The document plus every operation that lacks a typed success response.
- * `buildSpecDocument` refuses to emit a document with any; tests and tooling
- * use this to report them.
+ * The document plus every operation that lacks a typed success response or
+ * carries invalid documentation (`x-spec-error`). `buildSpecDocument` refuses
+ * to emit a document with either; tests and tooling use this to report them.
  */
 export const collectSpecDocument = async (app: GenerateSpecsApp) => {
   const spec = await generateSpecs(app, {
@@ -215,6 +224,7 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
 
   const paths = (spec.paths ?? {}) as Record<string, Record<string, OperationObject>>;
   const undocumented: string[] = [];
+  const invalid: string[] = [];
   const operationIds = new Map<string, string>();
 
   for (const [path, item] of Object.entries(paths)) {
@@ -237,6 +247,9 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
         throw new Error(`${endpoint}: operationId "${op.operationId}" is already used by ${clash}`);
       }
       operationIds.set(op.operationId, endpoint);
+
+      for (const error of op[SPEC_ERROR_EXTENSION] ?? []) invalid.push(`${endpoint}: ${error}`);
+      delete op[SPEC_ERROR_EXTENSION];
 
       const requestExample = op[REQUEST_EXAMPLE_EXTENSION];
       delete op[REQUEST_EXAMPLE_EXTENSION];
@@ -302,5 +315,5 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
     }
   }
 
-  return { spec, undocumented };
+  return { invalid, spec, undocumented };
 };

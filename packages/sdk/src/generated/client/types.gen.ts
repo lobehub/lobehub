@@ -13,8 +13,8 @@ export type ResponseStyle = 'data' | 'fields';
 export interface Config<T extends ClientOptions = ClientOptions>
   extends Omit<RequestInit, 'body' | 'headers' | 'method'>, CoreConfig {
   /**
-   * Retries on 408/429/5xx and network errors, for idempotent methods or
-   * requests with an `idempotencyKey` only. Applied by `createLobeHub`; default 2.
+   * Retries on 408/429/5xx and network errors, for idempotent methods or a
+   * POST with an `idempotencyKey` only. Applied by `createLobeHub`; default 2.
    */
   maxRetries?: number;
   /**
