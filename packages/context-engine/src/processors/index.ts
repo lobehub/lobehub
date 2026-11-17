@@ -36,6 +36,7 @@ export {
   collectDocumentReads,
   type DocumentRead,
   formatRevokedDocumentResult,
+  formatUnverifiedDocumentResult,
   type RevokedDocumentReads,
   RevokedDocumentResultFilter,
   type RevokedDocumentResultFilterConfig,

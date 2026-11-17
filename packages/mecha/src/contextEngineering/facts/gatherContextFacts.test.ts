@@ -637,7 +637,7 @@ describe('gatherContextFacts — revoked document reads', () => {
     expect(findRevokedDocumentReads).toHaveBeenCalledWith('agt_edit', ['docs_a']);
   });
 
-  it('leaves the fact out when nothing is revoked or the lookup fails', async () => {
+  it('leaves the fact out when nothing is revoked, and fails closed when the lookup fails', async () => {
     const none = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
       findRevokedDocumentReads: async () => ({ agentDocumentReadIds: [], documentIds: [] }),
     });
@@ -648,7 +648,8 @@ describe('gatherContextFacts — revoked document reads', () => {
     });
 
     expect(none.revokedDocumentReads).toBeUndefined();
-    expect(failed.revokedDocumentReads).toBeUndefined();
+    // An unknown binding state must not let a deleted body back in.
+    expect(failed.revokedDocumentReads).toEqual([{ documentIds: [], unverifiedIds: ['docs_a'] }]);
   });
 
   it("checks another group member's reads against that member's bindings", async () => {

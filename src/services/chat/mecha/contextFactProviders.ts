@@ -80,6 +80,9 @@ const toIsoString = (value: Date | string | null | undefined): string =>
  * stores do not hold; which facts a turn needs is decided by
  * `gatherContextFacts` in `@lobechat/mecha`, the same way as on the server.
  */
+/** Matches the `.max()` of `agentDocument.listRevokedDocumentReads`. */
+const REVOKED_READS_BATCH = 500;
+
 export const createBrowserContextFactProviders = ({
   agentId,
   groupId,
@@ -90,8 +93,25 @@ export const createBrowserContextFactProviders = ({
     return doc ? { content: doc.content, title: doc.title } : null;
   },
 
-  findRevokedDocumentReads: (targetAgentId, documentIds) =>
-    agentDocumentService.listRevokedDocumentReads({ agentId: targetAgentId, documentIds }),
+  findRevokedDocumentReads: async (targetAgentId, documentIds) => {
+    // The endpoint takes at most REVOKED_READS_BATCH ids per call.
+    const batches: string[][] = [];
+    for (let i = 0; i < documentIds.length; i += REVOKED_READS_BATCH) {
+      batches.push(documentIds.slice(i, i + REVOKED_READS_BATCH));
+    }
+    const results = await Promise.all(
+      batches.map((batch) =>
+        agentDocumentService.listRevokedDocumentReads({
+          agentId: targetAgentId,
+          documentIds: batch,
+        }),
+      ),
+    );
+    return {
+      agentDocumentReadIds: results.flatMap((result) => result.agentDocumentReadIds),
+      documentIds: results.flatMap((result) => result.documentIds),
+    };
+  },
 
   findTopic: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());

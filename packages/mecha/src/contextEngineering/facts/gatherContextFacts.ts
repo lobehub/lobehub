@@ -182,20 +182,32 @@ const gatherRevokedDocumentReads = async (
 
   const sets = await Promise.all(
     [...idsByMember].map(async ([member, ids]): Promise<RevokedDocumentReads> => {
-      const found = await attempt('revokedDocumentReads', () =>
-        findRevokedDocumentReads(member ?? agentId, [...ids].sort()),
-      );
+      const sortedIds = [...ids].sort();
+      let found: Awaited<ReturnType<typeof findRevokedDocumentReads>>;
+      try {
+        found = await findRevokedDocumentReads(member ?? agentId, sortedIds);
+      } catch (error) {
+        log('revokedDocumentReads failed, withholding unverified reads: %O', error);
+      }
+      // Fail closed: without an answer, a deleted document's old body must not
+      // slip through, so every read is withheld until the model reads it again.
+      if (!found) {
+        return { ...(member && { agentId: member }), documentIds: [], unverifiedIds: sortedIds };
+      }
       // Sorted so the filtered prefix stays stable whatever order the host returns.
       return {
         ...(member && { agentId: member }),
-        agentDocumentReadIds: [...(found?.agentDocumentReadIds ?? [])].sort(),
-        documentIds: [...(found?.documentIds ?? [])].sort(),
+        agentDocumentReadIds: [...(found.agentDocumentReadIds ?? [])].sort(),
+        documentIds: [...(found.documentIds ?? [])].sort(),
       };
     }),
   );
 
   const hasRevocations = sets.some(
-    (set) => set.documentIds.length > 0 || (set.agentDocumentReadIds?.length ?? 0) > 0,
+    (set) =>
+      set.documentIds.length > 0 ||
+      (set.agentDocumentReadIds?.length ?? 0) > 0 ||
+      (set.unverifiedIds?.length ?? 0) > 0,
   );
   return hasRevocations ? sets : undefined;
 };

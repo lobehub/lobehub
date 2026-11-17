@@ -4,6 +4,7 @@ import type { PipelineContext } from '../../types';
 import {
   collectDocumentReads,
   formatRevokedDocumentResult,
+  formatUnverifiedDocumentResult,
   RevokedDocumentResultFilter,
 } from '../RevokedDocumentResultFilter';
 
@@ -125,6 +126,17 @@ describe('RevokedDocumentResultFilter', () => {
       ['docs_deleted'],
     );
 
+    expect(result.messages[0].content).not.toContain(RULE);
+  });
+});
+
+describe('RevokedDocumentResultFilter — unverified reads', () => {
+  it('withholds reads whose binding state could not be checked', async () => {
+    const result = await new RevokedDocumentResultFilter({
+      revokedDocumentReads: [{ documentIds: [], unverifiedIds: ['docs_rule'] }],
+    }).process(createContext([readKnowledgeMessage(['docs_rule'])]));
+
+    expect(result.messages[0].content).toBe(formatUnverifiedDocumentResult(['docs_rule']));
     expect(result.messages[0].content).not.toContain(RULE);
   });
 });

@@ -8,6 +8,7 @@ import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 
 import { contextEngineering } from './contextEngineering';
+import { createBrowserContextFactProviders } from './contextFactProviders';
 
 vi.hoisted(() => {
   const storage = new Map<string, string>();
@@ -144,5 +145,26 @@ describe('contextEngineering — revoked document reads', () => {
     const serialized = JSON.stringify(output);
     expect(serialized).not.toContain('RULE-ACTIVE');
     expect(serialized).toContain('revoked_document_content');
+  });
+});
+
+describe('createBrowserContextFactProviders — findRevokedDocumentReads', () => {
+  it('splits a large lookup into endpoint-sized batches and merges the answers', async () => {
+    const ids = Array.from({ length: 1201 }, (_, i) => `docs_${String(i).padStart(4, '0')}`);
+    vi.mocked(agentDocumentService.listRevokedDocumentReads).mockImplementation(
+      async ({ documentIds }) => ({
+        agentDocumentReadIds: [],
+        documentIds: documentIds.filter((id) => id.endsWith('0')),
+      }),
+    );
+
+    const found = await createBrowserContextFactProviders().findRevokedDocumentReads!(
+      'agent-1',
+      ids,
+    );
+
+    const calls = vi.mocked(agentDocumentService.listRevokedDocumentReads).mock.calls;
+    expect(calls.map(([params]) => params.documentIds.length)).toEqual([500, 500, 201]);
+    expect(found?.documentIds).toHaveLength(121);
   });
 });
