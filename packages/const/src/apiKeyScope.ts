@@ -58,7 +58,36 @@ export const API_KEY_SCOPES = [
   'user:write',
 ] as const;
 
-export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+/**
+ * Scopes the server grants on its own and an API key can never be issued with:
+ * `isValidApiKeyScope` rejects them, so a restricted key still cannot reach
+ * the namespaces they gate.
+ *
+ * - `acceptance:*` — the acceptance and verify surfaces, for a device run's
+ *   caller token (`HETERO_CALLER_SCOPES`)
+ */
+export const INTERNAL_API_KEY_SCOPES = ['acceptance:read', 'acceptance:write'] as const;
+
+export type ApiKeyScope =
+  (typeof API_KEY_SCOPES)[number] | (typeof INTERNAL_API_KEY_SCOPES)[number];
+
+/**
+ * The scopes of a device run's `caller:act` token, which acts as the user who
+ * started the run (`oidcAuth`). Limited to the work an agent does through `lh`
+ * — tasks, documents, acceptance — so the run cannot reach the account's
+ * high-risk surfaces: workspace ownership and lifecycle, billing, member and
+ * role management, API keys, OAuth apps and account deletion all stay closed,
+ * as for any restricted key. Widen it per namespace when an agent needs more.
+ */
+export const HETERO_CALLER_SCOPES: readonly ApiKeyScope[] = [
+  'acceptance:write',
+  'agent:write',
+  'chat:write',
+  'knowledge:write',
+  'model:invoke',
+  'user:read',
+  'workspace:read',
+];
 
 const API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
 
@@ -179,9 +208,11 @@ const rw = (read: ApiKeyScope | null, write: ApiKeyScope | null): TrpcNamespaceS
  */
 export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule> = {
   accountDeletion: 'blocked',
-  acceptance: 'blocked',
+  // `acceptance:*` is internal (`INTERNAL_API_KEY_SCOPES`), so restricted keys
+  // stay out; a device run's caller token holds it
+  acceptance: rw('acceptance:read', 'acceptance:write'),
   // the discussion on an acceptance follows the acceptance itself
-  acceptanceComment: 'blocked',
+  acceptanceComment: rw('acceptance:read', 'acceptance:write'),
   agent: rw('agent:read', 'agent:write'),
   // an agent's identity assets (mail / wallet / service). Reading and
   // managing accounts is ordinary agent read/write; installing a *credential*
@@ -353,7 +384,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   userMemory: rw('user:read', 'user:write'),
   // the user's own skill library — same scope as the agent skills it sits beside
   userSkill: rw('agent:read', 'agent:write'),
-  verify: 'blocked',
+  // an acceptance's verification runs and evidence
+  verify: rw('acceptance:read', 'acceptance:write'),
   video: { any: 'model:invoke' },
   waitlist: 'blocked',
   webBrowsing: { any: 'model:invoke' },

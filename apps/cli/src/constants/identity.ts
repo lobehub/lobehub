@@ -82,8 +82,24 @@ const firstEnvEntry = (names: readonly string[]): { name: string; value: string 
 
 const firstEnvValue = (names: readonly string[]): string | undefined => firstEnvEntry(names)?.value;
 
-/** API key from the environment, honouring every accepted variable name. */
-export const readCliApiKeyEnv = (): string | undefined => firstEnvValue(CLI_API_KEY_ENV_NAMES);
+/**
+ * Whether this process runs inside a LobeHub agent run: the app stamps the run's ids into the
+ * environment of every agent it launches, and every shell that agent opens inherits them (Codex
+ * included, through `shell_environment_policy.set`).
+ */
+export const isInsideAgentRun = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  !!(env.LOBEHUB_TOPIC_ID || env.LOBEHUB_OPERATION_ID);
+
+/**
+ * API key from the environment, honouring every accepted variable name.
+ *
+ * Inside an agent run there is none: the run authenticates with its own sign-in
+ * (`LOBEHUB_JWT`), and a key the user exported in their shell belongs to this
+ * machine, not to the run — the same reason the stored login is not read there
+ * (`getValidToken`).
+ */
+export const readCliApiKeyEnv = (): string | undefined =>
+  isInsideAgentRun() ? undefined : firstEnvValue(CLI_API_KEY_ENV_NAMES);
 
 /**
  * Same lookup as {@link readCliApiKeyEnv}, but keeps the variable name that
@@ -91,7 +107,7 @@ export const readCliApiKeyEnv = (): string | undefined => firstEnvValue(CLI_API_
  * and "LOBEHUB_CLI_API_KEY" is the wrong answer when an older alias won.
  */
 export const readCliApiKeyEnvSource = (): { name: string; value: string } | undefined =>
-  firstEnvEntry(CLI_API_KEY_ENV_NAMES);
+  isInsideAgentRun() ? undefined : firstEnvEntry(CLI_API_KEY_ENV_NAMES);
 
 /** Config directory name, overridable per-install by the home env var. */
 export const resolveCliDirName = (): string =>
