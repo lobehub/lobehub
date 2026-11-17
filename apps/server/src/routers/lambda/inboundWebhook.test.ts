@@ -399,6 +399,30 @@ describe('inboundWebhook tRPC resource contract', () => {
     expect(checkClaims.size).toBe(0);
   });
 
+  it('renames a subscription for its creator, back to the event name when cleared', async () => {
+    const row = await seed();
+    const renamed = await caller().update({ id: row.id, name: 'Web bugs' });
+    expect(renamed).toMatchObject({ name: 'Web bugs', source: { kind: 'mcp_events' } });
+    expect((await caller().list())[0].name).toBe('Web bugs');
+    expect(await caller().update({ id: row.id, name: null })).toMatchObject({
+      name: row.config.eventName,
+    });
+    // What it follows is set up in its conversation, not here.
+    await expect(caller().update({ id: row.id, instructions: 'x' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    await expect(caller().update({ id: row.id, paused: true })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it("does not let an admin rename a colleague's subscription", async () => {
+    const row = await seed({ workspaceId });
+    await expect(
+      scoped('admin', colleague).update({ id: row.id, name: 'Mine now' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('rejects viewers at the write-role boundary', async () => {
     const row = await seed({ workspaceId });
     await expect(scoped('viewer').check({ id: row.id })).rejects.toMatchObject({

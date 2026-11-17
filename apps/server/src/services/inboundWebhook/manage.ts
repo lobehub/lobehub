@@ -221,7 +221,12 @@ export class InboundWebhookManager {
     input: GenericWebhookChanges & { paused?: boolean },
   ): Promise<InboundWebhookItem> {
     return guard(async () => {
-      const row = await this.manageableGeneric(id);
+      await this.assertEnabled();
+      const found = await this.manageable(id);
+      // An MCP Events subscription is set up in its conversation; only its name, which is how
+      // lists show it, changes here.
+      if (found.kind === 'mcp_events') return this.renameSubscription(found, input);
+      const row = await guard(async () => asGeneric(found));
       const { paused, ...settings } = input;
       // Pausing or resuming alone stays an administrative action.
       if (Object.values(settings).some((value) => value !== undefined)) {
@@ -236,6 +241,28 @@ export class InboundWebhookManager {
       });
       return this.item(updated);
     });
+  }
+
+  private async renameSubscription(
+    row: InboundWebhookView,
+    input: GenericWebhookChanges & { paused?: boolean },
+  ) {
+    const { name, ...rest } = input;
+    if (Object.values(rest).some((value) => value !== undefined))
+      throw new InboundWebhookManageError(
+        'bad_request',
+        'Only the name of an MCP Events subscription can be changed; ask the agent to subscribe again to change the rest.',
+      );
+    if (name === undefined) return this.item(row);
+    await this.assertAgentAccess(row.agentId, 'use');
+    this.assertConfigures(row);
+    // Unnamed, a subscription is shown by its event, as when it was made.
+    const updated = await this.model.update(row.id, {
+      name: name?.trim() || (row.kind === 'mcp_events' ? row.config.eventName : null),
+    });
+    if (!updated) throw notFound();
+    await this.audit('webhook.updated', updated, { renamed: true });
+    return this.item(updated);
   }
 
   /** Remove a webhook of any kind; an MCP Events subscription is also ended on its server. */

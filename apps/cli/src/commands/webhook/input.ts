@@ -101,7 +101,17 @@ export function buildUpdateInput(
   item: InboundWebhookItem,
   options: WebhookSettingsOptions,
 ): WebhookSettingsInput {
-  if (item.source.kind !== 'generic') throw new Error('Only custom webhooks can be edited.');
+  if (item.source.kind !== 'generic') {
+    // An MCP Events subscription is set up in its conversation; only its name changes here.
+    const { autoApprove, channel, instructions, name, thread, topic, topicMode } = options;
+    if ([autoApprove, channel, instructions, thread, topic, topicMode].some((v) => v !== undefined))
+      throw new Error(
+        `${item.id} is an MCP Events subscription: only its name can be changed here (--name, or --no-name to show its event). To change what it follows, ask its agent to subscribe again.`,
+      );
+    if (name === undefined)
+      throw new Error('Nothing to change. Pass --name <name>; see: lh webhook edit --help');
+    return { name: name || null };
+  }
   const current = item.source;
 
   let delivery: InboundWebhookChannelDelivery | null | undefined;

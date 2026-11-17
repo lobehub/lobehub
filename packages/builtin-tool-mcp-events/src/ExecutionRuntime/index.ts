@@ -81,6 +81,7 @@ export class McpEventsExecutionRuntime {
         ...(args.deliverTo && { deliverTo: args.deliverTo }),
         instructions: args.instructions,
         name: args.name,
+        ...(args.title && { title: args.title }),
         ...this.scope,
       }),
     );

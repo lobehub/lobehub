@@ -282,6 +282,18 @@ describe('MCP event subscription service scope', () => {
     },
   );
 
+  it('names the subscription as the user asked, or after its event', async () => {
+    const titled = await service().subscribeEvent({ ...args, title: '  Web bugs  ' });
+    expect(mocks.create).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Web bugs' }));
+    expect(titled.subscription.name).toBe('Web bugs');
+
+    mocks.rows.clear();
+    await service().subscribeEvent(args);
+    expect(mocks.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ name: 'issue.created' }),
+    );
+  });
+
   it('keeps a Thread subscription and a main-timeline one of the same event apart', async () => {
     mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
     mocks.channelOrigin.mockResolvedValue({ channelId: 'chn_1', threadId: 'cht_1' });

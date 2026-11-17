@@ -41,6 +41,8 @@ export interface SubscribeEventArgs {
   instructions: string;
   /** 事件类型名 */
   name: string;
+  /** How lists show this subscription; defaults to the event type name. */
+  title?: string;
 }
 export interface McpEventSubscriptionSummary {
   arguments: Record<string, unknown>;
@@ -53,6 +55,8 @@ export interface McpEventSubscriptionSummary {
   id: string;
   instructions: string | null;
   lastError: InboundWebhookError | null;
+  /** How lists show it: the title given when subscribing, or the event name. */
+  name: string | null;
   status: 'active' | 'error' | 'terminated';
 }
 export interface SubscribeEventState {

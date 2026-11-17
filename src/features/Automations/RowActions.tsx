@@ -2,7 +2,7 @@
 
 import type { InboundWebhookItem } from '@lobechat/types';
 import { ActionIcon, Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { RefreshCwIcon, Trash2Icon } from 'lucide-react';
+import { PencilIcon, RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,13 +13,13 @@ interface RowActionsProps extends AutomationRowCallbacks {
 }
 
 /**
- * Check and delete. Both act with the connector's credentials or on someone's
+ * Check, rename (the creator's) and delete. Both act with the connector's credentials or on someone's
  * automation, so both follow `canManage`; a row the viewer cannot manage keeps
  * the buttons, disabled, with the reason on hover.
  */
 const RowActions = memo<RowActionsProps>(({ item, onChecked, onRemoved }) => {
   const { t } = useTranslation('setting');
-  const { check, checking, confirmDelete } = useAutomationRowActions(item, {
+  const { canRename, check, checking, confirmDelete, rename } = useAutomationRowActions(item, {
     onChecked,
     onRemoved,
   });
@@ -41,6 +41,15 @@ const RowActions = memo<RowActionsProps>(({ item, onChecked, onRemoved }) => {
             {t('automations.actions.check')}
           </Button>
         </Tooltip>
+      )}
+      {canRename && (
+        <ActionIcon
+          aria-label={t('automations.actions.rename')}
+          icon={PencilIcon}
+          size={'small'}
+          title={t('automations.actions.rename')}
+          onClick={rename}
+        />
       )}
       <ActionIcon
         // The tooltip is not an accessible name; screen readers need one.

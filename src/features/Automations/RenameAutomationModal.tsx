@@ -1,0 +1,100 @@
+'use client';
+
+import {
+  Button,
+  createModal,
+  cssVar,
+  Flexbox,
+  Input,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
+import { t } from 'i18next';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+/** Longest name the server accepts. */
+const NAME_MAX = 100;
+
+interface RenameContentProps {
+  currentName: string;
+  /** What an empty name falls back to (the event, or "Webhook"); shown as the placeholder. */
+  fallback: string;
+  /** Save the name (null clears it). Return an error to show inline and keep the dialog open. */
+  onSubmit: (name: string | null) => Promise<string | undefined>;
+}
+
+const RenameContent = memo<RenameContentProps>(({ currentName, fallback, onSubmit }) => {
+  const { t } = useTranslation(['setting', 'common']);
+  const { close } = useModalContext();
+  const [value, setValue] = useState(currentName);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    queueMicrotask(() => inputRef.current?.select());
+  }, []);
+
+  const trimmed = value.trim();
+  const unchanged = trimmed === currentName.trim();
+
+  const submit = useCallback(async () => {
+    if (loading || unchanged) return;
+    setLoading(true);
+    try {
+      const message = await onSubmit(trimmed || null);
+      if (message) {
+        setError(message);
+        return;
+      }
+      close();
+    } finally {
+      setLoading(false);
+    }
+  }, [close, loading, onSubmit, trimmed, unchanged]);
+
+  return (
+    <Flexbox gap={16}>
+      <Flexbox gap={6}>
+        <Input
+          maxLength={NAME_MAX}
+          placeholder={fallback}
+          ref={inputRef}
+          value={value}
+          onPressEnter={submit}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setError(undefined);
+          }}
+        />
+        <Text style={{ fontSize: 12 }} type={'secondary'}>
+          {t('automations.rename.hint', { fallback })}
+        </Text>
+        {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
+      </Flexbox>
+      <Flexbox horizontal gap={8} justify={'flex-end'}>
+        <Button disabled={loading} onClick={close}>
+          {t('cancel', { ns: 'common' })}
+        </Button>
+        <Button disabled={unchanged} loading={loading} type={'primary'} onClick={submit}>
+          {t('automations.rename.ok')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+RenameContent.displayName = 'AutomationRenameContent';
+
+/** The name lists show for an automation; clearing it shows the event (or "Webhook") again. */
+export const openRenameAutomationModal = (options: RenameContentProps): ModalInstance =>
+  createModal({
+    content: <RenameContent {...options} />,
+    footer: null,
+    maskClosable: true,
+    styles: { header: { borderBottom: 'none' } },
+    title: t('automations.rename.title', { ns: 'setting' }),
+    width: 'min(90vw, 480px)',
+  });

@@ -17,6 +17,7 @@ import { LastDeliveryCell, SubscriptionCell, TargetCell, TopicCell } from './cel
 import { COLUMN_WIDTH } from './columnWidth';
 import RowActions from './RowActions';
 import { useAutomationList } from './useAutomationList';
+import { visibleAutomations } from './visibleRows';
 
 const styles = stylex.create({
   // Same surface as the API key list: one frame, the table flush inside it.
@@ -90,7 +91,7 @@ const AutomationList = memo<{ agentId?: string }>(({ agentId }) => {
     },
   ];
 
-  const rows = data ?? [];
+  const rows = visibleAutomations(data, agentId);
 
   return (
     <div {...stylex.props(styles.container)}>

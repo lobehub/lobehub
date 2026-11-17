@@ -5216,7 +5216,7 @@ When I am ___, I need ___
   'automations.descWorkspace':
     'Connector events the agents in this workspace subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
   'automations.descAgent':
-    'Connector events this agent subscribed to, and webhooks that wake it. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events this agent subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Custom webhooks are on the Webhook tab.',
   'automations.columns.subscription': 'Subscription',
   'automations.columns.status': 'Status',
   'automations.columns.target': 'Agent & topic',
@@ -5269,6 +5269,12 @@ When I am ___, I need ___
   'automations.actions.checkTooltip':
     'Confirm with the connector that events are still delivered; paused delivery resumes',
   'automations.actions.delete': 'Delete',
+  'automations.actions.rename': 'Rename',
+  'automations.rename.done': 'Renamed',
+  'automations.rename.failed': "Couldn't rename it. Try again.",
+  'automations.rename.hint': 'Shown in automation lists. Leave it empty to show "{{fallback}}".',
+  'automations.rename.ok': 'Save',
+  'automations.rename.title': 'Rename automation',
   'automations.actions.noPermission':
     'Only the member who approved it or a workspace admin can do this',
   'automations.check.healthy': 'Subscription is working',

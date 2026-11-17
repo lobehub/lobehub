@@ -80,7 +80,7 @@ export const WebhookManifest: BuiltinToolManifest = {
       name: WebhookApiName.updateWebhook,
       humanIntervention: 'required',
       description:
-        'Change a custom webhook of this agent: name, instructions, topic mode, auto-approve, pause or resume, or where its answers are posted. Only the fields given change.',
+        'Change a custom webhook of this agent: name, instructions, topic mode, auto-approve, pause or resume, or where its answers are posted. Only the fields given change. For an MCP Events subscription only `name` (how lists show it) can change.',
       parameters: {
         type: 'object',
         required: ['webhookId'],

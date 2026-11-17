@@ -9,7 +9,7 @@ Manage inbound webhooks: the rows of the `inbound_webhooks` table the Web shows 
 Two kinds share one table:
 
 - `generic`: a custom webhook URL called with `Authorization: Bearer <key>`. Full management here.
-- `mcp_events`: an MCP Events subscription an agent made in a conversation. View, `check` and `delete` only; creating one stays a conversation action.
+- `mcp_events`: an MCP Events subscription an agent made in a conversation. View, rename (`edit --name`), `check` and `delete`; creating one stays a conversation action.
 
 ## Commands
 
@@ -34,4 +34,4 @@ Settings flags (`create` and `edit`): `--name`, `--instructions`, `--topic-mode 
 - `--channel` needs auto-approval: on `create` the `--auto-approve` flag, on `edit` the flag or the row's current value. Turning auto-approval off while the row still posts to a Channel needs `--no-channel`.
 - `--thread` needs a Channel: on `create` `--channel`; on `edit` the flag or the row's current delivery. A `cht_` id passed as `--channel` is rejected with a hint.
 - `--topic` with `--topic-mode new` is rejected (the server would silently drop the topic).
-- `edit`, `pause`, `resume`, `rotate-key` and `test` on an `mcp_events` row, and `check` on a `generic` row, fail with a message naming what works instead.
+- `pause`, `resume`, `rotate-key` and `test` on an `mcp_events` row, `edit` with anything but `--name`/`--no-name` on one, and `check` on a `generic` row, fail with a message naming what works instead.

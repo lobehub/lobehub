@@ -114,6 +114,7 @@ export class McpEventsService {
       id: row.id,
       instructions: row.instructions,
       lastError: row.lastError,
+      name: row.name,
       status:
         row.status === 'pending' || row.status === 'deleting' || row.status === 'paused'
           ? 'error'
@@ -265,7 +266,8 @@ export class McpEventsService {
         dedupeKey,
         instructions: input.instructions,
         kind: 'mcp_events',
-        name: input.name,
+        // How lists show it: the user's name for it, else the event it follows.
+        name: input.title?.trim().slice(0, 100) || input.name,
         secret,
         status: 'pending',
         topicId: input.topicId,

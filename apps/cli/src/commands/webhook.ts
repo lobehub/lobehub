@@ -59,7 +59,7 @@ async function getWebhook(client: TrpcClient, id: string): Promise<InboundWebhoo
 function requireGeneric(item: InboundWebhookItem, command: string) {
   if (item.kind === 'generic') return;
   throw new Error(
-    `"lh webhook ${command}" works on custom webhooks only. ${item.id} is an MCP Events subscription, made by its agent in a conversation: view it, check it (lh webhook check ${item.id}), or delete it to stop it (lh webhook delete ${item.id}).`,
+    `"lh webhook ${command}" works on custom webhooks only. ${item.id} is an MCP Events subscription, made by its agent in a conversation: view it, rename it (lh webhook edit ${item.id} --name <name>), check it (lh webhook check ${item.id}), or delete it to stop it (lh webhook delete ${item.id}).`,
   );
 }
 
@@ -175,7 +175,11 @@ export function registerWebhookCommand(program: Command) {
   // ── edit ──────────────────────────────────────────────
 
   addSettingsOptions(
-    webhook.command('edit <id>').description('Change what a custom webhook runs and where'),
+    webhook
+      .command('edit <id>')
+      .description(
+        'Change what a custom webhook runs and where, or rename an MCP Events subscription',
+      ),
   )
     .option('--no-name', 'Clear the name')
     .option('--no-instructions', 'Clear the instructions')
@@ -187,7 +191,6 @@ export function registerWebhookCommand(program: Command) {
       guarded(async (id: string, options: WebhookSettingsOptions & JsonOption) => {
         const client = await getTrpcClient();
         const current = await getWebhook(client, id);
-        requireGeneric(current, 'edit');
         const changes = buildUpdateInput(current, options);
         const item: InboundWebhookItem = await client.inboundWebhook.update.mutate({
           id,

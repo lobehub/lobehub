@@ -3,14 +3,14 @@ const content = `# lh webhook (alias: lh webhooks) - Inbound Webhooks
 Inbound webhooks wake an agent from outside a conversation. One list holds two kinds:
 
 - \`generic\` - a custom webhook: a URL any system calls with \`Authorization: Bearer <key>\`. Each call runs the agent with what was sent. Created, changed, tested and deleted here.
-- \`mcp_events\` - an MCP Events subscription an agent made in a conversation. Here it can only be viewed, checked and deleted; creating one stays a conversation action (ask the agent to subscribe).
+- \`mcp_events\` - an MCP Events subscription an agent made in a conversation. Here it can be viewed, renamed (\`edit <id> --name\`), checked and deleted; creating one stays a conversation action (ask the agent to subscribe).
 
 ## Subcommands
 
 - \`lh webhook list [--agent <agentId>] [--kind generic|mcp_events] [--json [fields]]\` - All webhooks and subscriptions you can see: id, kind, name or event, agent, status, target, last call
 - \`lh webhook view <id> [--json [fields]]\` - Settings, the call URL, a curl example and the last error
 - \`lh webhook create --agent <agentId> [options]\` - Create a custom webhook; prints its URL and key
-- \`lh webhook edit <id> [options]\` - Change a custom webhook; only the flags given change
+- \`lh webhook edit <id> [options]\` - Change a custom webhook (only the flags given change), or rename an MCP Events subscription with \`--name\` / \`--no-name\`
 - \`lh webhook pause <id>\` / \`lh webhook resume <id>\` - Refuse calls (HTTP 409) until resumed
 - \`lh webhook rotate-key <id> [--yes]\` - Issue a new key; the old key stops working at once, the URL stays
 - \`lh webhook test <id>\` - Send a sample call; the agent runs as it would for a real caller
@@ -18,7 +18,7 @@ Inbound webhooks wake an agent from outside a conversation. One list holds two k
 - \`lh webhook check <id>\` - Check an MCP Events subscription with its server now (renews or recovers it; once per 30 seconds)
 - \`lh webhook delete <id> [--yes]\` - Delete; for an MCP Events subscription this also ends it on the MCP server
 
-\`<id>\` is the webhook's uuid from \`lh webhook list\`. \`edit\`, \`pause\`, \`resume\`, \`rotate-key\` and \`test\` work on custom webhooks only; \`check\` on MCP Events subscriptions only.
+\`<id>\` is the webhook's uuid from \`lh webhook list\`. \`pause\`, \`resume\`, \`rotate-key\` and \`test\` work on custom webhooks only, and \`edit\` on an MCP Events subscription takes \`--name\` only; \`check\` on MCP Events subscriptions only.
 
 ## create / edit options
 

@@ -274,6 +274,17 @@ export class WebhookExecutionRuntime {
 
   updateWebhook = (args: UpdateWebhookArgs) =>
     this.result(async (): Promise<WebhookState> => {
+      const target = await this.own(args.webhookId);
+      // An MCP Events subscription is set up in its conversation; only its name changes here.
+      if (target.kind === 'mcp_events') {
+        const { name, webhookId: _id, ...rest } = args;
+        if (Object.values(rest).some((value) => value !== undefined) || name === undefined)
+          throw new WebhookToolError(
+            'unsupported_kind',
+            'Only the name of an MCP Events subscription can be changed. To change what it follows, subscribe again with the MCP Events tool and delete this one.',
+          );
+        return { webhook: toWebhookSummary(await this.service.update(target.id, { name })) };
+      }
       const current = await this.ownOfKind(args.webhookId, 'generic');
       const delivery = await this.resolveDelivery(args.deliverTo, 'update');
       const autoApprove = this.resolveAutoApprove(args.autoApprove, delivery);

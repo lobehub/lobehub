@@ -441,12 +441,21 @@ describe('webhook command', () => {
       expect(errors()).toContain('Nothing to change');
     });
 
-    it('refuses an MCP Events subscription', async () => {
+    it('renames an MCP Events subscription, and nothing else about it', async () => {
       mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
+      mockTrpcClient.inboundWebhook.update.mutate.mockResolvedValue(mcpEvents());
 
-      await expect(run('edit', MCP_ID, '--name', 'x')).rejects.toThrow('exit:1');
+      await run('edit', MCP_ID, '--name', 'Web bugs');
+      expect(mockTrpcClient.inboundWebhook.update.mutate).toHaveBeenCalledWith({
+        id: MCP_ID,
+        name: 'Web bugs',
+      });
 
-      expect(errors()).toContain('MCP Events subscription');
+      mockTrpcClient.inboundWebhook.update.mutate.mockClear();
+      await expect(run('edit', MCP_ID, '--name', 'x', '--instructions', 'y')).rejects.toThrow(
+        'exit:1',
+      );
+      expect(errors()).toContain('only its name can be changed');
       expect(mockTrpcClient.inboundWebhook.update.mutate).not.toHaveBeenCalled();
     });
   });

@@ -55,6 +55,11 @@ export const McpEventsManifest: BuiltinToolManifest = {
             description:
               'Subscription arguments matching this event type inputSchema from listEventTypes (filters and other event-specific options). Omit when the schema needs no arguments.',
           },
+          title: {
+            type: 'string',
+            description:
+              'Optional short name for this subscription, shown in the automation lists (e.g. "New bugs in Web team"). Use the name the user gave; omit to show the event name.',
+          },
           deliverTo: {
             type: 'string',
             enum: ['thread', 'channel'],

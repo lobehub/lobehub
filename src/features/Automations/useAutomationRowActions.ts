@@ -11,9 +11,10 @@ import {
   feedbackForCheckError,
   feedbackForDeleteError,
 } from './checkFeedback';
+import { openRenameAutomationModal } from './RenameAutomationModal';
 
 export interface AutomationRowCallbacks {
-  /** The server answered a check with this row; put it in place. */
+  /** The server answered a check or a rename with this row; put it in place. */
   onChecked: (item: InboundWebhookItem) => void;
   /** The row no longer exists on the server; drop it. */
   onRemoved: (id: string) => void;
@@ -90,5 +91,27 @@ export const useAutomationRowActions = (
       title: t('automations.delete.title'),
     });
 
-  return { check, checking, confirmDelete };
+  /**
+   * The name lists show. Only its creator renames it, as only they change what it runs; a
+   * webhook that posts to a Channel is changed from the CLI or in chat, not here.
+   */
+  const canRename = item.canConfigure && !(item.source.kind === 'generic' && item.source.delivery);
+
+  const rename = () =>
+    openRenameAutomationModal({
+      currentName: item.name ?? '',
+      fallback:
+        item.source.kind === 'generic' ? t('automations.source.webhook') : item.source.eventName,
+      onSubmit: async (name) => {
+        try {
+          onChecked(await inboundWebhookService.update(item.id, { name }));
+          toast.success(t('automations.rename.done'));
+          return undefined;
+        } catch {
+          return t('automations.rename.failed');
+        }
+      },
+    });
+
+  return { canRename, check, checking, confirmDelete, rename };
 };

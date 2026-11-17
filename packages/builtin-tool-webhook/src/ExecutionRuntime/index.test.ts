@@ -138,9 +138,13 @@ describe('webhook tool: agent scope', () => {
   it('keeps each action to the kinds it applies to', async () => {
     const { runtime, service } = setup();
     service.get.mockResolvedValue(subscription);
-    expect((await runtime.updateWebhook({ name: 'x', webhookId: ID })).state.error.code).toBe(
-      'unsupported_kind',
-    );
+    // A subscription can be renamed, and nothing else about it changes here.
+    service.update.mockResolvedValue(subscription);
+    expect((await runtime.updateWebhook({ name: 'Web bugs', webhookId: ID })).success).toBe(true);
+    expect(service.update).toHaveBeenCalledWith(ID, { name: 'Web bugs' });
+    expect(
+      (await runtime.updateWebhook({ name: 'x', paused: true, webhookId: ID })).state.error.code,
+    ).toBe('unsupported_kind');
     expect((await runtime.sendTestWebhook({ webhookId: ID })).state.error.code).toBe(
       'unsupported_kind',
     );

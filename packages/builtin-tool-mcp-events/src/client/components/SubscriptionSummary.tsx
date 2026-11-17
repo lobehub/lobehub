@@ -50,8 +50,19 @@ const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscrip
       })
     : t('builtins.lobe-mcp-events.render.expiresNever');
 
+  // A name the user gave it; one that only repeats the event adds nothing.
+  const title =
+    subscription.name?.trim() && subscription.name !== subscription.eventName
+      ? subscription.name.trim()
+      : undefined;
+
   return (
     <Flexbox gap={6}>
+      {title && (
+        <Text ellipsis weight={500}>
+          {title}
+        </Text>
+      )}
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
         <ConnectorEventLabel
           event={subscription.eventName}
