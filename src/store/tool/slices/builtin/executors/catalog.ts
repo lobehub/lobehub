@@ -17,6 +17,7 @@ import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
 import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
+import { withDesktopIpcGuard } from './desktopIpcGuard';
 import {
   ampExecutor,
   antigravityExecutor,
@@ -70,7 +71,7 @@ export const builtinToolExecutors = [
   agentDocumentsExecutor,
   agentManagementExecutor,
   attachmentsExecutor,
-  auvExecutor,
+  withDesktopIpcGuard(auvExecutor, 'Computer Use'),
   calculatorExecutor,
   canvasExecutor,
   withPageEditHooks(cloudSandboxExecutor),
@@ -81,7 +82,7 @@ export const builtinToolExecutors = [
   imageGenerationExecutor,
   knowledgeBaseExecutor,
   browserExecutor,
-  localSystemExecutorWithGitEffects,
+  withDesktopIpcGuard(localSystemExecutorWithGitEffects, 'Local System'),
   memoryExecutor,
   messageExecutor,
   notebookExecutor,

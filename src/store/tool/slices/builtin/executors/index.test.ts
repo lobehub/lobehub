@@ -4,6 +4,7 @@ import {
   LegacyDashboardIdentifier,
 } from '@lobechat/builtin-tool-dashboard';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
@@ -91,6 +92,26 @@ describe('builtin executor registry', () => {
     },
     30_000,
   );
+
+  // A web client can be handed a Local System call (a paused desktop call approved in the
+  // browser, or a model repeating a call from the topic history). It used to fail with the
+  // developer-facing "Ensure the preload exposes invoke" error, which models read as a broken
+  // desktop install and retried.
+  it('answers a Local System call without the desktop bridge with where it can run', async () => {
+    const result = await invokeExecutor(
+      LocalSystemIdentifier,
+      LocalSystemApiName.readFile,
+      { path: '/tmp/notes.md' },
+      { messageId: 'tool-message-id' },
+    );
+
+    expect(result).toMatchObject({
+      error: { type: 'DesktopRuntimeUnavailable' },
+      success: false,
+    });
+    expect(result.content).toMatch(/web browser.*Do not retry.*LobeHub desktop app/);
+    expect(result.content).not.toMatch(/Ensure the preload/);
+  }, 30_000);
 
   it('rejects nested sub-agent execution', async () => {
     const subAgentRun = vi.fn();

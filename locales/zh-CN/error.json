@@ -9,6 +9,8 @@
   "chatRequestBlocked.title": "请求已被拦截",
   "error.backHome": "返回首页",
   "error.desc": "页面暂时不可用。你可以返回首页，或稍后重试（你的设置不会因此丢失）",
+  "error.desktopIpc.notDesktop": "此页面需要在 LobeHub 桌面端中使用，请在桌面端中打开后继续。",
+  "error.desktopIpc.preloadMissing": "LobeHub 桌面端在此窗口与本地系统的连接已断开。请重新加载窗口（Cmd/Ctrl+R）以重新连接；如仍无效，请退出并重启 LobeHub 桌面端。",
   "error.retry": "重新加载",
   "error.stack": "错误堆栈",
   "error.title": "页面暂时不可用",

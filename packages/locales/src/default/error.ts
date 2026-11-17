@@ -16,6 +16,10 @@ export default {
   'saveState.saveFailed': 'Failed to save your changes. Please try again.',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
+  'error.desktopIpc.notDesktop':
+    'This page needs the LobeHub desktop app. Open it in LobeHub Desktop to continue.',
+  'error.desktopIpc.preloadMissing':
+    'LobeHub Desktop lost its connection to the local system in this window. Reload the window (Cmd/Ctrl+R) to reconnect it. If that does not help, quit and restart LobeHub Desktop.',
   'error.stack': 'Error Stack',
   'error.retry': 'Reload',
   'error.title': 'Oops, something went wrong..',
