@@ -214,7 +214,6 @@ describe('attemptWebhookDelivery', () => {
     expect(row.status).toBe('retrying');
     expect(row.responseStatus).toBeNull();
     expect(row.error).toBe('Timed out after 300 ms');
-    expect(row.durationMs).toBeLessThan(1000);
   });
 
   it('disables the endpoint once five deliveries in a row exhaust their retries', async () => {

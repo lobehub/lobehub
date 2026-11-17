@@ -70,8 +70,9 @@ export const EndpointCell = ({ endpoint }: { endpoint: WebhookEndpointItem }) =>
 );
 
 /** A count tag; hovering lists every subscribed event by name. */
-export const EventsCell = ({ events }: { events: WebhookEndpointItem['events'] }) => {
+export const EventsCell = ({ events: rawEvents }: { events: WebhookEndpointItem['events'] }) => {
   const { t } = useTranslation('setting');
+  const events = rawEvents ?? [];
   const label = useEventLabel();
 
   return (
