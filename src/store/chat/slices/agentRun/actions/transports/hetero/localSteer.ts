@@ -123,6 +123,8 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
         sessionId: ipcSessionId,
       }));
     } catch (error) {
+      // Read already (`confirm` ran first): it landed.
+      if (pending !== steer) return;
       // It may or may not be in the session: never sent again on its own.
       console.error('[localSteer] steering the session failed:', error);
       get().updateQueuedMessage(contextKey, steer.messageId, { localSteer: 'unknown' });
@@ -131,6 +133,8 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
       return;
     }
 
+    // The agent can report reading it before the write is answered (Codex).
+    if (pending !== steer) return;
     if (status === 'accepted') {
       steer.state = 'written';
       log('[%s] Steered %d messages as %s', operationId, taken.length, steer.messageId);
@@ -157,7 +161,7 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
    */
   const confirm = async (data: SteerConfirmation): Promise<boolean> => {
     const steer = pending;
-    if (!steer || steer.state !== 'written') return false;
+    if (!steer) return false;
     const matches = data.uuid
       ? data.uuid === steer.messageId
       : data.text !== undefined && data.text.trim() === steer.content.trim();

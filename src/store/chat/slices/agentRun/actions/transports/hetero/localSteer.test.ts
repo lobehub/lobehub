@@ -124,6 +124,26 @@ describe('createLocalSteer', () => {
     expect(h.getQueue().map((m) => m.id)).toEqual(['q3']);
   });
 
+  it('takes a confirmation that arrives before the write is answered', async () => {
+    let answer!: (value: { status: 'accepted' }) => void;
+    vi.mocked(heterogeneousAgentService.steerSession).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const h = createHarness([queued('q1', 'first')]);
+    await vi.waitFor(() => expect(heterogeneousAgentService.steerSession).toHaveBeenCalled());
+
+    await expect(h.steer.confirm({ uuid: steerCall()!.messageId })).resolves.toBe(true);
+    answer({ status: 'accepted' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    h.steer.settle();
+
+    expect(messageService.createMessage).toHaveBeenCalledTimes(1);
+    // Read, so nothing goes back for the next turn.
+    expect(h.getQueue()).toEqual([]);
+  });
+
   it('ignores a replay that is not its steer (the run’s own prompt)', async () => {
     const h = createHarness([queued('q1', 'first')]);
     await vi.waitFor(() => expect(heterogeneousAgentService.steerSession).toHaveBeenCalled());
