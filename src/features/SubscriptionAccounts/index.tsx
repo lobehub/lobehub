@@ -177,31 +177,33 @@ const SubscriptionAccounts = () => {
 
   return (
     <Flexbox gap={16} width={'100%'}>
-      {/* The tabs (or, without them, the summary) and the toolbar share one row,
-          as on the Devices page; with tabs, the summary drops to its own line. */}
+      {/* Tabs, the summary beside them, and the toolbar share one row, as on the
+          Devices page. The tabs sit in a plain block (as there): a flex wrapper
+          stretches their full-width root and throws the row out of line. */}
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'} wrap={'wrap'}>
-        {split ? (
-          <Flexbox flex={'none'}>
-            <Tabs
-              activeKey={tab}
-              items={[
-                {
-                  icon: <Icon icon={UsersIcon} />,
-                  key: 'public',
-                  label: t('subscriptionAccounts.tabs.workspace'),
-                },
-                {
-                  icon: <Icon icon={LockIcon} />,
-                  key: 'private',
-                  label: t('subscriptionAccounts.tabs.private'),
-                },
-              ]}
-              onChange={(key) => setTab(key as AccountVisibilityTab)}
-            />
-          </Flexbox>
-        ) : (
-          summary
-        )}
+        <Flexbox horizontal align={'center'} gap={16} style={{ minWidth: 0 }}>
+          {split && (
+            <div style={{ flex: 'none' }}>
+              <Tabs
+                activeKey={tab}
+                items={[
+                  {
+                    icon: <Icon icon={UsersIcon} />,
+                    key: 'public',
+                    label: t('subscriptionAccounts.tabs.workspace'),
+                  },
+                  {
+                    icon: <Icon icon={LockIcon} />,
+                    key: 'private',
+                    label: t('subscriptionAccounts.tabs.private'),
+                  },
+                ]}
+                onChange={(key) => setTab(key as AccountVisibilityTab)}
+              />
+            </div>
+          )}
+          {summary}
+        </Flexbox>
         <Flexbox horizontal align={'center'} gap={8}>
           {/* Nothing to search or filter in an empty tab. Filters sit on the right
               as a dropdown: the provider list grows with every coding plan we
@@ -242,7 +244,6 @@ const SubscriptionAccounts = () => {
           />
         </Flexbox>
       </Flexbox>
-      {split && accounts.length > 0 && summary}
       <Flexbox horizontal gap={20} style={{ minWidth: 0 }}>
         <Flexbox flex={1} style={{ minWidth: 0 }}>
           {body}
