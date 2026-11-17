@@ -2,6 +2,7 @@ import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
@@ -13,7 +14,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
-import type { ChannelClaim } from '@/database/repositories/channel';
+import type { ChannelClaim, ChannelCoAddressedAgent } from '@/database/repositories/channel';
 import { ChannelExecutionRepository } from '@/database/repositories/channel';
 import { agentOperations, channelJobs, channelMembers, channels } from '@/database/schemas';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
@@ -21,6 +22,7 @@ import { extractTextFromMessage } from '@/server/services/agentRuntime/Completio
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
+import { resolveShareVisitorDeviceAccess } from '@/server/services/aiAgent/shareGate/deviceAccess';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
@@ -38,6 +40,12 @@ import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routed
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
+
+/** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
+const describePeer = (agent: ChannelCoAddressedAgent) => {
+  const name = agentDisplayName(agent);
+  return name && agent.title && agent.title !== name ? `${name} (${agent.title})` : name;
+};
 // Limit startup IO, not the number of Agents that may execute concurrently.
 const STARTUP_CONCURRENCY = 5;
 
@@ -85,6 +93,7 @@ export class ChannelCoordinator {
     if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
     return {
       agentId,
+      canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share.shareConfig, requesterId),
       shareConfig: share.shareConfig,
       shareId: share.shareId,
       visitorUserId: requesterId,
@@ -292,11 +301,12 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context, primaryReply, opening] = await Promise.all([
+      const [input, context, primaryReply, opening, coAddressed] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
         this.executions.primaryReply(job.channelId, job.id),
         this.executions.openingReply(job.channelId, job.id),
+        this.executions.coAddressed(job.channelId, job.id),
       ]);
       const shareGate =
         share && topic.senderId
@@ -327,6 +337,7 @@ export class ChannelCoordinator {
           context: context.messages,
           omitted: context.omitted,
           opening,
+          peers: coAddressed.map(describePeer).filter((peer): peer is string => !!peer),
           primaryReply,
           wake: job.wake,
         }),

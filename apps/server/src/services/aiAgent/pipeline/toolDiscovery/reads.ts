@@ -16,7 +16,6 @@ import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
   connectorLinksContextForRow,
-  getConnectorLinkModel,
   loadConnectorLinksMap,
   pickPrimaryLink,
   withLinkCredentials,
@@ -148,7 +147,6 @@ const refreshConnectorTokens = async (
         const [fresh] = await refreshExpiredLinkTokens(
           connector,
           [primary],
-          getConnectorLinkModel(rowContext),
           rowContext.connectorModel,
           { onTimeout },
         );

@@ -112,4 +112,52 @@ describe('WorkModel.listTopicPullRequests', () => {
       'lobehub/lobehub#7',
     ]);
   });
+
+  it('reports how the topic linked each PR', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerExternal(pr('lobehub/lobehub#10', 'call-create'));
+    await model.registerExternal(
+      pr('lobehub/lobehub#11', 'call-merge', {
+        changeType: 'updated',
+        patchFields: ['identifier'],
+      }),
+    );
+    await model.registerExternal(
+      pr('lobehub/lobehub#12', 'call-push', {
+        changeType: 'updated',
+        metadata: { headBranch: 'feat/p', pullRequestLink: 'push' },
+        patchFields: ['identifier'],
+      }),
+    );
+
+    const sources = Object.fromEntries(
+      (await model.listTopicPullRequests(topicId)).map((i) => [i.number, i.source]),
+    );
+    expect(sources).toEqual({ 10: 'created', 11: 'command', 12: 'push' });
+  });
+
+  it('reports a PR first linked by a push as command once a command names it', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerExternal(
+      pr('lobehub/lobehub#20', 'call-push', {
+        changeType: 'updated',
+        metadata: { headBranch: 'feat/p', pullRequestLink: 'push' },
+        patchFields: ['identifier'],
+      }),
+    );
+    // gh pr edit 20: the normalizer stamps its own marker over the merged metadata.
+    await model.registerExternal(
+      pr('lobehub/lobehub#20', 'call-edit', {
+        changeType: 'updated',
+        metadata: { pullRequestLink: 'command' },
+        patchFields: ['identifier', 'title'],
+      }),
+    );
+
+    expect((await model.listTopicPullRequests(topicId))[0]).toMatchObject({
+      headBranch: 'feat/p',
+      number: 20,
+      source: 'command',
+    });
+  });
 });

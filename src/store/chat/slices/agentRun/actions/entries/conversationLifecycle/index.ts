@@ -5,10 +5,7 @@ import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { collectHeteroAttachedFiles } from '@lobechat/heterogeneous-agents';
 import type {
-  ChatAudioItem,
-  ChatImageItem,
   ChatTopicMetadata,
-  ChatVideoItem,
   ConversationContext,
   MessageMetadata,
   SendMessageParams,
@@ -109,7 +106,7 @@ import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
 import { materializeLocalSystemToolSnapshots } from '../../transports/client/localSystemToolSnapshots';
@@ -129,6 +126,7 @@ import { pageConversationNeedsGateway, preparePageConversation } from '../pageCo
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { getOptimisticMessageMedia } from './optimisticMessageMedia';
 import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
@@ -621,7 +619,7 @@ export class ConversationLifecycleActionImpl {
       return;
     }
 
-    const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
+    const newTopicTitle = toTitleText(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
     // ━━━ Message Queue: enqueue if this context is already busy ━━━
     // Include the initial `sendMessage` persist/create-topic phase: while a first
@@ -923,34 +921,6 @@ export class ConversationLifecycleActionImpl {
       runtimeType,
     });
 
-    // Construct local media preview for server-mode temporary messages (S3 URL takes priority).
-    // Use the captured `files` param (not the global file store) so the optimistic preview
-    // also works on the queue-drain path, where chatUploadFileList has already been cleared.
-    const filesForPreview = files ?? [];
-    const tempImages: ChatImageItem[] = filesForPreview
-      .filter((f) => f.file?.type?.startsWith('image'))
-      .map((f) => ({
-        ...f.dimensions,
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
-    const tempVideos: ChatVideoItem[] = filesForPreview
-      .filter((f) => f.file?.type?.startsWith('video'))
-      .map((f) => ({
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
-    const tempAudios: ChatAudioItem[] = filesForPreview
-      .filter((f) => f.audioMetadata || f.file?.type?.startsWith('audio'))
-      .map((f) => ({
-        ...f.audioMetadata,
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
-
     const optimisticUserMessage = {
       content: message,
       editorData: editorData ?? undefined,
@@ -961,9 +931,7 @@ export class ConversationLifecycleActionImpl {
       // if there is topicId, then add topicId to message
       topicId: operationContext.topicId ?? undefined,
       threadId: operationContext.threadId ?? undefined,
-      audioList: tempAudios.length > 0 ? tempAudios : undefined,
-      imageList: tempImages.length > 0 ? tempImages : undefined,
-      videoList: tempVideos.length > 0 ? tempVideos : undefined,
+      ...getOptimisticMessageMedia(files),
       // Pass metadata for immediate display
       metadata: userMessageMetadata,
     };
@@ -974,8 +942,8 @@ export class ConversationLifecycleActionImpl {
       (item) => item.id === tempId && item.role === 'user',
     );
 
-    // A voice message can render a local-only row before its binary upload finishes. Adopt that
-    // row in place so the formal send lifecycle keeps its stable position and never duplicates it.
+    // Voice uploads and forced steers can render a local-only row before sending. Adopt
+    // that row in place so the formal send keeps its position and never duplicates it.
     if (existingOptimisticUserMessage) {
       this.#get().internal_dispatchMessage(
         {

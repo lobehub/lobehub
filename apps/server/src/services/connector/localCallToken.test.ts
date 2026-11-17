@@ -151,12 +151,7 @@ describe('getResolvedConnectorLocalCallToken', () => {
     expect(connectorModel.findById).not.toHaveBeenCalled();
     expect(connectorModel.forRow).toHaveBeenCalledWith(personal);
     expect(workspaceLinkModel.listByConnectorIds).not.toHaveBeenCalled();
-    expect(ensureFreshLinkToken).toHaveBeenCalledWith(
-      personal,
-      link,
-      personalLinkModel,
-      personalModel,
-    );
+    expect(ensureFreshLinkToken).toHaveBeenCalledWith(personal, link, personalModel);
   });
 
   it('refuses a resolved row someone else connected', async () => {

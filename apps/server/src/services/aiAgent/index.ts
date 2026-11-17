@@ -48,6 +48,7 @@ import type {
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
   AgentStepContinuation,
+  DeferredMessagePatch,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -387,9 +388,15 @@ export class AiAgentService {
     return this.agentRuntimeService.createOperationLockOwner(operationId);
   }
 
-  /** Publish a step that an inline loop deferred instead of running. */
-  scheduleContinuation(continuation: AgentStepContinuation): Promise<void> {
-    return this.agentRuntimeService.scheduleContinuation(continuation);
+  /**
+   * Publish a step that an inline loop deferred instead of running, after the
+   * message patch its previous step left unpublished.
+   */
+  scheduleContinuation(
+    continuation: AgentStepContinuation,
+    deferredMessagePatch?: DeferredMessagePatch,
+  ): Promise<void> {
+    return this.agentRuntimeService.scheduleContinuation(continuation, deferredMessagePatch);
   }
 
   /** Release a lock retained across an inline step loop. */

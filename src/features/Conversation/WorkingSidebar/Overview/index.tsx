@@ -1,18 +1,10 @@
 'use client';
 
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-  Icon,
-  Skeleton,
-  toast,
-} from '@lobehub/ui';
+import { Button, Empty, Flexbox, Icon, Skeleton, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -41,7 +33,7 @@ import { gitService } from '@/services/git';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors } from '@/store/chat/selectors';
+import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
@@ -56,6 +48,8 @@ import ProgressSection from '../ProgressSection';
 import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
 import { BackgroundTasksSection } from './BackgroundTasks';
 import DeviceStatusSection from './DeviceStatusSection';
+import KeptWorktreeRows, { RemovedWorktreeRow, useTopicWorktrees } from './KeptWorktreeRows';
+import { LinkPullRequestRow } from './LinkPullRequestRow';
 import {
   collectChangeStats,
   isLinkedWorktreeCheckout,
@@ -65,18 +59,18 @@ import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
 import PullRequestRow from './PullRequestRow';
-import { sectionStyles } from './sectionStyles';
+import { sectionProps, sectionStyles } from './sectionStyles';
 import { TerminalRow } from './TerminalRow';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-  `,
-  emptyWorkspace: css`
-    padding-block: 28px 30px;
-    padding-inline: 20px;
-  `,
-}));
+const styles = stylex.create({
+  body: { overflowY: 'auto' },
+  emptyWorkspace: {
+    flexShrink: 0,
+    paddingBlockStart: '28px',
+    paddingBlockEnd: '30px',
+    paddingInline: '20px',
+  },
+});
 
 interface OverviewProps {
   active: boolean;
@@ -84,6 +78,10 @@ interface OverviewProps {
   /** Routes file / git RPCs; empty for "This device", which reads over IPC. */
   deviceId?: string;
   environmentAvailable: boolean;
+  /** Better Coding Experience: remove one of {@link pullRequests} from the topic. */
+  onDismissPullRequest?: (pullRequest: TopicPullRequestView) => Promise<void>;
+  /** Better Coding Experience: link a PR by URL; resolves to its `owner/repo#n`. */
+  onLinkPullRequest?: (url: string) => Promise<string | undefined>;
   /** Better Coding Experience: open one of {@link pullRequests}. */
   onOpenPullRequest?: (pullRequest: TopicPullRequestView) => void;
   onOpenTab: (tab: string) => void;
@@ -110,6 +108,8 @@ const Overview = memo<OverviewProps>(
     agentId,
     deviceId,
     environmentAvailable,
+    onDismissPullRequest,
+    onLinkPullRequest,
     onOpenPullRequest,
     onOpenTab,
     onRefreshPullRequest,
@@ -126,12 +126,22 @@ const Overview = memo<OverviewProps>(
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
     const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
+    const topicStatus = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.status);
+    const topicMetadata = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.metadata);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
       getAllWorkSummaries(dbMessageSelectors.activeDbMessages(s), threadId),
     );
 
-    const gitPath = active && repoType ? workingDirectory : undefined;
+    const topicWorktrees = useTopicWorktrees({
+      metadata: topicMetadata,
+      status: topicStatus,
+      topicId: topicId ?? undefined,
+      workingDirectory,
+    });
+    // A worktree the cleanup removed has no folder left to read git from.
+    const worktreeRemoved = !!topicWorktrees.removed;
+    const gitPath = active && repoType && !worktreeRemoved ? workingDirectory : undefined;
     const isGithub = repoType === 'github';
     const {
       data: branchData,
@@ -185,6 +195,7 @@ const Overview = memo<OverviewProps>(
     const visibleWorks = works.slice(0, 3);
     const directoryName = workingDirectory ? pathBasename(workingDirectory) : undefined;
     const hasWorkspace = environmentAvailable && !!workingDirectory;
+    const showEmptyWorkspace = environmentAvailable && !workingDirectory;
 
     const isLinkedWorktree = isLinkedWorktreeCheckout(workingDirectory, worktrees);
 
@@ -271,7 +282,7 @@ const Overview = memo<OverviewProps>(
         value={
           detached ? (
             <>
-              <span className={rowStyles.num}>{branch}</span>
+              <span {...stylex.props(rowStyles.num)}>{branch}</span>
               {t('workingPanel.overview.branch.detached')}
             </>
           ) : (
@@ -283,16 +294,36 @@ const Overview = memo<OverviewProps>(
 
     // Better Coding Experience PRs are server records: they stay listed with
     // their last known state even when the working directory cannot be read.
-    const pullRequestRows = pullRequests
-      ? pullRequests.map((view) => (
+    const pullRequestRows = pullRequests ? (
+      <>
+        {pullRequests.map((view) => (
           <PullRequestRow
             key={view.identifier}
             pullRequest={toLinkedPullRequest(view)}
             tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
+            unvouched={!view.vouched}
             onClick={() => onOpenPullRequest?.(view)}
+            onDismiss={
+              onDismissPullRequest &&
+              (() =>
+                void onDismissPullRequest(view).then(
+                  () =>
+                    toast.info(
+                      t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
+                    ),
+                  () =>
+                    toast.error(
+                      t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
+                    ),
+                ))
+            }
           />
-        ))
-      : pullRequest && <PullRequestRow pullRequest={pullRequest} onClick={() => onOpenTab('pr')} />;
+        ))}
+        {onLinkPullRequest && <LinkPullRequestRow onLink={onLinkPullRequest} />}
+      </>
+    ) : (
+      pullRequest && <PullRequestRow pullRequest={pullRequest} onClick={() => onOpenTab('pr')} />
+    );
 
     const gitRows = (
       <>
@@ -329,7 +360,9 @@ const Overview = memo<OverviewProps>(
               pulling ? (
                 <RingLoadingIcon size={12} />
               ) : (
-                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.pull')}</span>
+                <span {...stylex.props(rowStyles.rowAction)}>
+                  {t('workingPanel.overview.sync.pull')}
+                </span>
               )
             }
             onClick={actionsBlocked ? undefined : handlePull}
@@ -345,7 +378,9 @@ const Overview = memo<OverviewProps>(
               pushing ? (
                 <RingLoadingIcon size={12} />
               ) : (
-                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.push')}</span>
+                <span {...stylex.props(rowStyles.rowAction)}>
+                  {t('workingPanel.overview.sync.push')}
+                </span>
               )
             }
             onClick={actionsBlocked ? undefined : handlePush}
@@ -385,8 +420,8 @@ const Overview = memo<OverviewProps>(
               <RingLoadingIcon size={12} />
             ) : changeStats.files > 0 ? (
               <>
-                <span className={rowStyles.changeAdditions}>+{changeStats.additions}</span>
-                <span className={rowStyles.changeDeletions}>−{changeStats.deletions}</span>
+                <span {...stylex.props(rowStyles.changeAdditions)}>+{changeStats.additions}</span>
+                <span {...stylex.props(rowStyles.changeDeletions)}>−{changeStats.deletions}</span>
               </>
             ) : (
               t('workingPanel.overview.changes.none')
@@ -406,7 +441,7 @@ const Overview = memo<OverviewProps>(
 
     const workspaceSection = repoType ? (
       isGitLoading ? (
-        <div className={sectionStyles.skeleton}>
+        <div {...stylex.props(sectionStyles.skeleton)}>
           <Skeleton.Text rows={3} />
         </div>
       ) : gitError ? (
@@ -434,7 +469,7 @@ const Overview = memo<OverviewProps>(
     ) : null;
 
     return (
-      <Flexbox className={styles.body}>
+      <Flexbox className={stylex.props(styles.body).className}>
         {hasWorkspace && (
           <>
             <OverviewHeader
@@ -445,8 +480,18 @@ const Overview = memo<OverviewProps>(
               repoType={repoType}
               onClick={() => onOpenTab('files')}
             />
-            <Flexbox className={sectionStyles.section}>
-              {workspaceSection}
+            <Flexbox {...sectionProps()}>
+              {/* A worktree the archive cleanup kept for its uncommitted work. */}
+              <KeptWorktreeRows
+                entries={topicWorktrees.entries}
+                topicId={topicId ?? undefined}
+                onChange={topicWorktrees.mutate}
+              />
+              {topicWorktrees.removed ? (
+                <RemovedWorktreeRow entry={topicWorktrees.removed} />
+              ) : (
+                workspaceSection
+              )}
               {/* Outside the git rows: a dev server runs in plain folders too. */}
               {tunnelsEnabled && deviceId && (
                 <PortSwitcher
@@ -463,27 +508,27 @@ const Overview = memo<OverviewProps>(
         {statusDeviceId && <DeviceStatusSection active={active} deviceId={statusDeviceId} />}
 
         <TopicBackgroundActivity topicId={topicId} />
-        {environmentAvailable && !workingDirectory && (
+        {showEmptyWorkspace && (
           <Empty
-            className={cx(sectionStyles.section, styles.emptyWorkspace)}
+            className={stylex.props(styles.emptyWorkspace).className}
             description={t('workingPanel.overview.workspace.emptyDesc')}
             icon={LaptopIcon}
             title={t('workingPanel.overview.workspace.empty')}
           />
         )}
 
-        <GoalSection className={sectionStyles.section} />
-        <ProgressSection className={sectionStyles.section} />
+        <GoalSection className={sectionProps(showEmptyWorkspace).className} />
+        <ProgressSection className={sectionProps(showEmptyWorkspace).className} />
 
         {visibleWorks.length > 0 && (
-          <Flexbox className={sectionStyles.section}>
+          <Flexbox {...sectionProps(showEmptyWorkspace)}>
             <Flexbox
               horizontal
               align={'center'}
-              className={sectionStyles.sectionHeader}
+              {...stylex.props(sectionStyles.sectionHeader)}
               justify={'space-between'}
             >
-              <span className={sectionStyles.sectionTitle}>
+              <span {...stylex.props(sectionStyles.sectionTitle)}>
                 {t('workingPanel.overview.outputs')}
               </span>
               <Button
@@ -503,7 +548,7 @@ const Overview = memo<OverviewProps>(
 
         {!environmentAvailable && !topicId && visibleWorks.length === 0 && (
           <Empty
-            className={sectionStyles.section}
+            className={sectionProps().className}
             description={t('workingPanel.overview.empty')}
             icon={BoxesIcon}
             title={t('workingPanel.overview.emptyTitle')}
@@ -511,13 +556,17 @@ const Overview = memo<OverviewProps>(
         )}
 
         {/* Claude Code background tasks; async subagents stay in the thread list below. */}
-        <BackgroundTasksSection deviceId={deviceId} outputReadable={environmentAvailable} />
+        <BackgroundTasksSection
+          afterBreak={showEmptyWorkspace}
+          deviceId={deviceId}
+          outputReadable={environmentAvailable}
+        />
 
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
-        {topicId && <ThreadListSection topicId={topicId} />}
+        {topicId && <ThreadListSection afterBreak={showEmptyWorkspace} topicId={topicId} />}
 
-        <Flexbox className={sectionStyles.section}>
+        <Flexbox {...sectionProps(showEmptyWorkspace)}>
           {hasWorkspace && (
             <OverviewRow
               weak

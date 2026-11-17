@@ -3,7 +3,7 @@ import { PassThrough } from 'node:stream';
 import { ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it, vi } from 'vitest';
 
-import { completeLiveCliRuntime, writeCliPrompt } from '../heterogeneousAgentLiveInput';
+import { endLiveCliRun, writeCliPrompt } from '../heterogeneousAgentLiveInput';
 import type { AgentSession } from '../heterogeneousAgentSession';
 import { steerAgentSession } from '../heterogeneousAgentSteer';
 
@@ -110,26 +110,20 @@ describe('live Claude Code CLI input', () => {
     expect(ended).toHaveBeenCalled();
   });
 
-  it('reports the runtime end once, at a clean exit after a finished turn', () => {
+  it('ends the run once, at a clean exit after a finished turn, like `lh hetero exec`', () => {
     const stdin = new PassThrough();
     stdin.resume();
     const input = writeCliPrompt(stdin, '{"type":"user","message":{}}\n', true)!;
     input.observe('{"type":"result","is_error":false,"terminal_reason":"completed"}\n');
     const completeRuntime = vi.fn(() => []);
+    const exit = { code: 0, sawError: false, signal: null };
 
-    completeLiveCliRuntime({ completeRuntime }, input, {
-      cancelledByUs: false,
-      code: 0,
-      signal: null,
-    });
+    endLiveCliRun({ completeRuntime }, input, exit);
     expect(completeRuntime).toHaveBeenCalledWith({ reason: 'complete', transport: 'cli-live' });
 
     completeRuntime.mockClear();
-    completeLiveCliRuntime({ completeRuntime }, input, {
-      cancelledByUs: false,
-      code: 2,
-      signal: null,
-    });
+    endLiveCliRun({ completeRuntime }, input, { ...exit, code: 2 });
+    endLiveCliRun({ completeRuntime }, input, { ...exit, sawError: true });
     expect(completeRuntime).not.toHaveBeenCalled();
   });
 });

@@ -1,14 +1,9 @@
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import {
-  ActionIcon,
-  createStaticStyles,
-  cssVar,
-  DropdownMenu,
-  Flexbox,
-  Skeleton,
-} from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Skeleton } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BoxesIcon,
   ClipboardListIcon,
@@ -106,89 +101,53 @@ import WorksSection from './WorksSection';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  close: css`
-    flex-shrink: 0;
-  `,
-  header: css`
-    flex-shrink: 0;
-    min-width: 0;
-  `,
-  pane: css`
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  paneHidden: css`
-    display: none;
-  `,
-  paramsLoading: css`
-    width: 100%;
-    padding: 16px;
-  `,
-  add: css`
-    flex-shrink: 0;
-  `,
-  overviewBody: css`
-    overflow-y: auto;
-    min-height: 0;
-  `,
-  overviewPanel: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    max-height: calc(100% - 32px);
-    margin: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  overviewSlot: css`
-    overflow: hidden;
-    display: flex;
-    flex-shrink: 0;
-    align-items: flex-start;
-
-    height: 100%;
-
-    @container agent-chat-layout (min-width: 1200px) {
-      padding-block-start: 44px;
-    }
-  `,
-  tabs: css`
-    overflow-anchor: none;
-    scrollbar-width: none;
-
-    overflow-x: auto;
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-  /* keeps the add button glued to the last tab while the strip itself scrolls */
-  tabsArea: css`
-    display: flex;
-    flex: 1;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  body: { overflowY: 'auto', flex: '1', minHeight: '0' },
+  close: { flexShrink: 0 },
+  header: { flexShrink: 0, minWidth: '0' },
+  pane: { overflowY: 'auto', flex: '1', minHeight: '0' },
+  paneHidden: { display: 'none' },
+  paramsLoading: { width: '100%', padding: '16px' },
+  add: { flexShrink: 0 },
+  overviewBody: { overflowY: 'auto', minHeight: '0' },
+  overviewPanel: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    maxHeight: 'calc(100% - 32px)',
+    margin: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  overviewSlot: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'flex-start',
+    height: '100%',
+    paddingBlockStart: {
+      'default': null,
+      '@container agent-chat-layout (min-width: 1200px)': '44px',
+    },
+  },
+  tabs: {
+    'overflowAnchor': 'none',
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'display': 'flex',
+    'gap': '4px',
+    'alignItems': 'center',
+    'minWidth': '0',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
+  tabsArea: { display: 'flex', flex: '1', gap: '4px', alignItems: 'center', minWidth: '0' },
+});
 
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const OPEN_TABS_STORAGE_KEY = 'lobechat-working-sidebar-open-tabs-v1';
@@ -410,6 +369,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
+    dismissPullRequest,
+    linkPullRequest,
     pickPullRequest,
     probes: pullRequestProbes,
     pullRequest,
@@ -423,7 +384,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     isGithub,
     snapshot: snapshotConfig?.git,
     topicId,
-    workingDirectory,
+    workingDirectory: sourceWorkingDirectory ?? workingDirectory,
   });
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
@@ -892,21 +853,21 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         {showWorkingOverview && overviewFits && (
           <m.div
             animate={{ width: overviewWidth + overviewGutter }}
-            className={styles.overviewSlot}
+            {...stylex.props(styles.overviewSlot)}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
             transition={OVERVIEW_TRANSITION}
           >
             <m.div
               animate={{ opacity: 1, x: 0 }}
-              className={styles.overviewPanel}
+              className={stylex.props(styles.overviewPanel).className}
               exit={{ opacity: 0, transition: overviewExitTransition, x: 12 }}
               initial={{ opacity: 0, x: 12 }}
               role={'complementary'}
               style={{ width: overviewWidth }}
               transition={OVERVIEW_TRANSITION}
             >
-              <Flexbox className={styles.overviewBody}>
+              <Flexbox className={stylex.props(styles.overviewBody).className}>
                 <Overview
                   active
                   agentId={activeAgentId}
@@ -918,6 +879,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   sourcePath={sourceWorkingDirectory}
                   statusDeviceId={getStatusDeviceId(effectiveTarget, agencyConfig?.boundDeviceId)}
                   workingDirectory={environmentWorkingDirectory}
+                  onDismissPullRequest={dismissPullRequest}
+                  onLinkPullRequest={linkPullRequest}
                   onOpenTab={openTab}
                   onRefreshPullRequest={refreshPullRequest}
                   onOpenPullRequest={
@@ -939,7 +902,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       {overviewPanel}
       <TopicPullRequestProbes
         deviceId={remoteDeviceId}
-        path={environmentWorkingDirectory}
+        path={sourceWorkingDirectory ?? environmentWorkingDirectory}
         probes={pullRequestProbes}
       />
       <RightPanel
@@ -962,14 +925,14 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.header}
+            className={stylex.props(styles.header).className}
             gap={4}
             height={44}
             justify={'space-between'}
             paddingInline={4}
           >
-            <div className={styles.tabsArea}>
-              <div className={styles.tabs} ref={tabsRef}>
+            <div {...stylex.props(styles.tabsArea)}>
+              <div {...stylex.props(styles.tabs)} ref={tabsRef}>
                 {displayedTabs.map((tab, index) => (
                   <WorkspaceTab
                     active={activeTab === tab.key}
@@ -997,7 +960,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 }}
               >
                 <ActionIcon
-                  className={styles.add}
+                  className={stylex.props(styles.add).className}
                   icon={PlusIcon}
                   size={DESKTOP_HEADER_ICON_SMALL_SIZE}
                   title={t('workingPanel.openMenu.title')}
@@ -1005,20 +968,20 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
               </DropdownMenu>
             </div>
             <ActionIcon
-              className={styles.close}
+              className={stylex.props(styles.close).className}
               icon={PanelRightCloseIcon}
               size={DESKTOP_HEADER_ICON_SMALL_SIZE}
               onClick={() => toggleRightPanel(false)}
             />
           </Flexbox>
-          <Flexbox className={styles.body} width={'100%'}>
+          <Flexbox className={stylex.props(styles.body).className} width={'100%'}>
             {!contentReady && storedTab !== 'files' && activeTab !== 'files' && (
               <DeferredSkeleton />
             )}
             <FilesPane
               active={!!showRightPanel && activeTab === 'files'}
               available={filesAvailable}
-              className={styles.pane}
+              className={stylex.props(styles.pane).className}
               contentReady={contentReady || (activeTab === 'files' && filesAvailable)}
               deviceId={filesDeviceId}
               directory={filesDirectory}
@@ -1030,15 +993,21 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
               <>
                 {commentsAvailable && (
                   <Flexbox
-                    className={activeTab === 'comments' ? styles.pane : styles.paneHidden}
                     style={{ overflow: 'hidden' }}
+                    className={
+                      stylex.props(activeTab === 'comments' ? styles.pane : styles.paneHidden)
+                        .className
+                    }
                   >
                     <TopicCommentsSidebar />
                   </Flexbox>
                 )}
                 {!!topicId && (
                   <Activity mode={showRightPanel && activeTab === 'search' ? 'visible' : 'hidden'}>
-                    <Flexbox className={styles.pane} style={{ overflow: 'hidden' }}>
+                    <Flexbox
+                      className={stylex.props(styles.pane).className}
+                      style={{ overflow: 'hidden' }}
+                    >
                       <TopicSearchPane
                         active={!!showRightPanel && activeTab === 'search'}
                         key={topicId}
@@ -1048,9 +1017,14 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   </Activity>
                 )}
                 {paramsAvailable && activeTab === 'params' && (
-                  <Flexbox className={styles.pane}>
+                  <Flexbox className={stylex.props(styles.pane).className}>
                     <Suspense
-                      fallback={<Skeleton.Text className={styles.paramsLoading} rows={6} />}
+                      fallback={
+                        <Skeleton.Text
+                          className={stylex.props(styles.paramsLoading).className}
+                          rows={6}
+                        />
+                      }
                     >
                       <ParamsSection />
                     </Suspense>
@@ -1062,7 +1036,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     for ~200ms. */}
                 {reviewAvailable && activeTab === 'review' && retainReview && (
                   <Activity mode={panelVisible ? 'visible' : 'hidden'}>
-                    <Flexbox className={styles.pane}>
+                    <Flexbox className={stylex.props(styles.pane).className}>
                       <Review
                         active={panelVisible}
                         composerTarget={composerTarget}
@@ -1080,9 +1054,10 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     {...pullRequestLink}
                     active={!!showRightPanel && activeTab === 'pr'}
                     canShow={overviewFits}
-                    className={styles.pane}
+                    className={stylex.props(styles.pane).className}
                     deviceId={remoteDeviceId}
                     pullRequest={pullRequest}
+                    repositoryPath={sourceWorkingDirectory}
                     workingDirectory={workingDirectory}
                     onOpenTab={openTab}
                   />
@@ -1110,8 +1085,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 />
                 {extraTabs.map((tab) => (
                   <Flexbox
-                    className={activeTab === tab.key ? styles.pane : styles.paneHidden}
                     key={tab.key}
+                    className={
+                      stylex.props(activeTab === tab.key ? styles.pane : styles.paneHidden)
+                        .className
+                    }
                   >
                     {tab.pane}
                   </Flexbox>
@@ -1125,7 +1103,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     key={resourceTab}
                     mode={showRightPanel && activeTab === resourceTab ? 'visible' : 'hidden'}
                   >
-                    <Flexbox className={styles.pane} width={'100%'}>
+                    <Flexbox className={stylex.props(styles.pane).className} width={'100%'}>
                       <ResourcesSection
                         deviceId={remoteDeviceId}
                         enabled={showRightPanel && activeTab === resourceTab}
@@ -1135,7 +1113,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   </Activity>
                 ))}
                 <Activity mode={showRightPanel && activeTab === 'works' ? 'visible' : 'hidden'}>
-                  <Flexbox className={styles.pane}>
+                  <Flexbox className={stylex.props(styles.pane).className}>
                     <WorksSection active={showRightPanel && activeTab === 'works'} />
                   </Flexbox>
                 </Activity>

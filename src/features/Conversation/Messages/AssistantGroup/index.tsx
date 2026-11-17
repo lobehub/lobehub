@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { selectionStyles } from '@/features/Conversation/MessageForward/selectionStyles';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
@@ -22,6 +23,7 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
@@ -59,7 +61,7 @@ const EditState = dynamic(() => import('./components/EditState'), {
 const actionBarHolder = (
   <div
     {...{ [MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES.assistantGroup]: '' }}
-    style={{ height: '28px' }}
+    {...sx(selectionStyles.hidden, { height: '28px' })}
   />
 );
 

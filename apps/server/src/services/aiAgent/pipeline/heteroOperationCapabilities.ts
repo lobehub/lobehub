@@ -18,8 +18,9 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * a user-sent run creates binds to that user's topic, where its tray shows it.
  *
  * `channel:read` and `channel:message` let a Channel dispatch read its own conversation
- * (`lh channel history|message`) and message Agents in the requester's other Channels
- * (`lh channel list|send`), as the requester, never as the device owner. A bot run whose
+ * (`lh channel history|message`), message Agents in the requester's other Channels
+ * (`lh channel list|send`) and people the requester can talk to one-on-one
+ * (`lh channel people|dm`), as the requester, never as the device owner. A bot run whose
  * sender is the bot's owner (`botContext.isOwner`, e.g. the owner messaging their Agent on
  * Telegram) gets `channel:message` alone: it may list the owner's Channels and post a request
  * there as the owner. It has no Channel conversation to read, and a bot message from anyone

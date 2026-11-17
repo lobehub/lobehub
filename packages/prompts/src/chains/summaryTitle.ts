@@ -1,3 +1,4 @@
+import { stripImageRefs } from '@lobechat/const/imageRef';
 import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 export const TOPIC_TITLE_PROMPT_VERSION = 'v1';
@@ -20,7 +21,10 @@ export const chainSummaryTitle = (
   locale: string,
 ): { messages: Array<{ content: string; role: 'system' | 'user' }> } => {
   const conversationText = messages
-    .map((message) => `<${message.role}>\n${String(message.content ?? '')}\n</${message.role}>`)
+    .map(
+      (message) =>
+        `<${message.role}>\n${stripImageRefs(String(message.content ?? ''))}\n</${message.role}>`,
+    )
     .join('\n');
 
   return {

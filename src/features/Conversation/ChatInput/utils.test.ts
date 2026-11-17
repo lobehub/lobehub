@@ -1,6 +1,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import {
@@ -9,6 +10,7 @@ import {
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   getQueuedHintKey,
+  partitionSendableUploads,
   putQueuedMessageInEditor,
   sendQueuedMessageNow,
   toChatInputMessages,
@@ -254,43 +256,38 @@ describe('getContextWindow', () => {
 });
 
 describe('getConversationSendButtonProps', () => {
-  it.each([false, true])(
-    'keeps uploads disabled with generating=%s despite a host override',
-    (generating) => {
-      const defaults = {
-        disabled: true,
-        generating,
-        onStop: vi.fn(),
-        showSendWhileGenerating: generating,
-      };
-      const overrides = { disabled: false, shape: 'round' as const };
-
-      expect(getConversationSendButtonProps(defaults, overrides, true)).toEqual({
-        ...defaults,
-        disabled: true,
-        shape: 'round',
-      });
-      expect(getConversationSendButtonProps(defaults, overrides, false).disabled).toBe(false);
-    },
-  );
-
   it.each([
     { customDisabled: undefined, disabled: true, expected: true },
     { customDisabled: undefined, disabled: false, expected: false },
     { customDisabled: true, disabled: false, expected: true },
     { customDisabled: false, disabled: true, expected: false },
   ])(
-    'preserves non-upload disabled overrides: $customDisabled / $disabled',
+    'lets a host override disabled: $customDisabled / $disabled',
     ({ customDisabled, disabled, expected }) => {
       expect(
         getConversationSendButtonProps(
           { disabled, generating: false, onStop: vi.fn() },
           customDisabled === undefined ? undefined : { disabled: customDisabled },
-          false,
         ).disabled,
       ).toBe(expected);
     },
   );
+});
+
+describe('partitionSendableUploads', () => {
+  it('leaves failed and cancelled uploads out, keeping the rest in composer order', () => {
+    const files = [
+      { id: 'a', status: 'success' as const },
+      { id: 'b', status: 'error' as const },
+      { id: 'c', status: 'success' as const },
+      { id: 'd', status: 'cancelled' as const },
+    ];
+
+    expect(partitionSendableUploads(files)).toEqual({
+      failed: [files[1], files[3]],
+      sendable: [files[0], files[2]],
+    });
+  });
 });
 
 describe('getConversationChatInputUiState', () => {
@@ -302,7 +299,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'followUp',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });
@@ -320,7 +316,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: false,
       showSendWhileGenerating: true,
       showStopButton: true,
     });
@@ -347,7 +342,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: true,
       showSendWhileGenerating: false,
       showStopButton: false,
     });
@@ -362,7 +356,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });
@@ -406,6 +399,7 @@ describe('toDisplayableSendErrorMessage', () => {
 
 describe('sendQueuedMessageNow', () => {
   const context = { agentId: 'agt-1', topicId: 'tpc-1' };
+  const contextKey = messageMapKey(context);
   const msg = {
     content: 'now',
     createdAt: 1,
@@ -415,6 +409,7 @@ describe('sendQueuedMessageNow', () => {
   };
   const chatWith = (cancelled: boolean | Error) => {
     const order: string[] = [];
+    const dbMessagesMap: Record<string, UIChatMessage[]> = { [contextKey]: [] };
     const chat = {
       cancelOperation: vi.fn(async () => {
         order.push('cancel');
@@ -422,6 +417,17 @@ describe('sendQueuedMessageNow', () => {
         return cancelled;
       }),
       restoreQueuedMessage: vi.fn(),
+      dbMessagesMap,
+      internal_createClientMessage: vi.fn(
+        (id: string, value: Pick<UIChatMessage, 'content' | 'metadata' | 'role'>) => {
+          dbMessagesMap[contextKey].push({ ...value, createdAt: 1, id, updatedAt: 1 });
+        },
+      ),
+      internal_dispatchMessage: vi.fn(({ id }: { id: string }) => {
+        dbMessagesMap[contextKey] = dbMessagesMap[contextKey].filter(
+          (message) => message.id !== id,
+        );
+      }),
       operations: {
         'op-1': {
           context,
@@ -439,12 +445,50 @@ describe('sendQueuedMessageNow', () => {
           { content: 'after', createdAt: 2, id: 'q2', interruptMode: 'soft' },
         ],
       },
-      sendMessage: vi.fn(async () => {
+      sendMessage: vi.fn(async ({ onMessageAccepted, optimisticUserMessageId }) => {
         order.push('send');
+        const row = dbMessagesMap[contextKey].find(({ id }) => id === optimisticUserMessageId);
+        if (row) row.metadata = { steer: true };
+        onMessageAccepted();
       }),
     } as any;
     return { chat, order };
   };
+
+  it('shows a user bubble with the final message ID while the device is still stopping', async () => {
+    const { chat } = chatWith(true);
+    const cancellation = Promise.withResolvers<boolean>();
+    chat.cancelOperation.mockReturnValueOnce(cancellation.promise);
+
+    const sending = sendQueuedMessageNow({
+      context,
+      contextKey,
+      getChat: () => chat,
+      msg,
+      withdraw: async () => true,
+    });
+
+    await vi.waitFor(() => expect(chat.cancelOperation).toHaveBeenCalledOnce());
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([
+      expect.objectContaining({
+        content: 'now',
+        metadata: { scope: LOCAL_MESSAGE_SCOPE, steer: true },
+        role: 'user',
+      }),
+    ]);
+    const [{ id }] = chat.dbMessagesMap[contextKey];
+
+    cancellation.resolve(true);
+    await expect(sending).resolves.toBe('sent');
+    expect(chat.sendMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ optimisticUserMessageId: id }),
+    );
+    expect(chat.dbMessagesMap[contextKey]).toEqual([
+      expect.objectContaining({ id, metadata: { steer: true } }),
+    ]);
+    expect(chat.restoreQueuedMessage).not.toHaveBeenCalled();
+  });
 
   // ROOT CAUSE:
   //
@@ -462,10 +506,9 @@ describe('sendQueuedMessageNow', () => {
     });
 
     await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
-      isQueued: () => true,
       msg,
       withdraw,
     });
@@ -482,10 +525,9 @@ describe('sendQueuedMessageNow', () => {
     const { chat } = chatWith(true);
 
     await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
-      isQueued: () => true,
       msg: { ...msg, forceRuntime: 'gateway' },
       withdraw: async () => true,
     });
@@ -497,12 +539,12 @@ describe('sendQueuedMessageNow', () => {
 
   it('stops nothing and sends nothing when the run already wrote it', async () => {
     const { chat } = chatWith(true);
+    chat.queuedMessages[messageMapKey(context)] = [];
 
     const outcome = await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
-      isQueued: () => false,
       msg,
       withdraw: async () => false,
     });
@@ -536,10 +578,9 @@ describe('sendQueuedMessageNow', () => {
     });
 
     const outcome = await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
-      isQueued: () => true,
       msg,
       withdraw,
     });
@@ -552,10 +593,9 @@ describe('sendQueuedMessageNow', () => {
     const { chat } = chatWith(true);
 
     const outcome = await sendQueuedMessageNow({
-      chat,
+      getChat: () => chat,
       context,
       contextKey: messageMapKey(context),
-      isQueued: () => true,
       msg,
       withdraw: async () => false,
     });
@@ -563,6 +603,7 @@ describe('sendQueuedMessageNow', () => {
     expect(outcome).toBe('delivered');
     expect(chat.cancelOperation).toHaveBeenCalled();
     expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([]);
   });
 
   it('keeps an item the run holds in the tray when the interrupt fails', async () => {
@@ -570,10 +611,9 @@ describe('sendQueuedMessageNow', () => {
 
     await expect(
       sendQueuedMessageNow({
-        chat,
+        getChat: () => chat,
         context,
         contextKey: messageMapKey(context),
-        isQueued: () => true,
         msg,
         withdraw: async () => false,
       }),
@@ -581,6 +621,52 @@ describe('sendQueuedMessageNow', () => {
 
     expect(chat.restoreQueuedMessage).not.toHaveBeenCalled();
     expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([]);
+  });
+
+  it('restores the queue if the replacement send returns without accepting the message', async () => {
+    const { chat } = chatWith(true);
+    chat.sendMessage.mockResolvedValueOnce(undefined);
+
+    await expect(
+      sendQueuedMessageNow({
+        context,
+        contextKey,
+        getChat: () => chat,
+        msg,
+        withdraw: async () => true,
+      }),
+    ).rejects.toThrow('The queued message was not accepted');
+
+    expect(chat.restoreQueuedMessage).toHaveBeenCalledOnce();
+    expect(chat.dbMessagesMap[contextKey]).toEqual([]);
+  });
+
+  it('keeps the bubble when persistence is acknowledged ahead of the transcript', async () => {
+    const { chat } = chatWith(true);
+    chat.sendMessage.mockImplementationOnce(
+      async ({
+        onMessageAccepted,
+        onMessagePersisted,
+      }: {
+        onMessageAccepted: () => void;
+        onMessagePersisted: () => void;
+      }) => {
+        onMessageAccepted();
+        onMessagePersisted();
+      },
+    );
+
+    await expect(
+      sendQueuedMessageNow({
+        context,
+        contextKey,
+        getChat: () => chat,
+        msg,
+        withdraw: async () => true,
+      }),
+    ).resolves.toBe('sent');
+    expect(chat.dbMessagesMap[contextKey]).toEqual([expect.objectContaining({ content: 'now' })]);
   });
 
   it.each([
@@ -591,10 +677,9 @@ describe('sendQueuedMessageNow', () => {
 
     await expect(
       sendQueuedMessageNow({
-        chat,
+        getChat: () => chat,
         context,
         contextKey: messageMapKey(context),
-        isQueued: () => true,
         msg,
         withdraw: async () => true,
       }),
@@ -603,7 +688,12 @@ describe('sendQueuedMessageNow', () => {
     // Back at its own place (index 1), not at the tail, so the order holds.
     expect(chat.restoreQueuedMessage).toHaveBeenCalledWith(
       messageMapKey(context),
-      { ...msg, serverDelivery: undefined, serverUnconfirmed: undefined },
+      {
+        ...msg,
+        serverDelivering: undefined,
+        serverDelivery: undefined,
+        serverUnconfirmed: undefined,
+      },
       1,
     );
     expect(chat.sendMessage).not.toHaveBeenCalled();

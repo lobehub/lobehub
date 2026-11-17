@@ -3,12 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelMessagingService } from './ChannelMessagingService';
 
-const { directory, openAgentPair, relaySource, send } = vi.hoisted(() => ({
-  directory: vi.fn(),
-  openAgentPair: vi.fn(),
-  relaySource: vi.fn(),
-  send: vi.fn(),
-}));
+const { directory, findUser, listPeople, openAgentPair, openPeer, relaySource, send } = vi.hoisted(
+  () => ({
+    directory: vi.fn(),
+    findUser: vi.fn(),
+    listPeople: vi.fn(),
+    openAgentPair: vi.fn(),
+    openPeer: vi.fn(),
+    relaySource: vi.fn(),
+    send: vi.fn(),
+  }),
+);
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelHistoryRepository: class {
@@ -17,6 +22,12 @@ vi.mock('@/database/repositories/channel', async (original) => ({
   ChannelRepository: class {
     directory = directory;
     openAgentPair = openAgentPair;
+  },
+}));
+vi.mock('@/database/models/contact', () => ({
+  ContactModel: class {
+    findUser = findUser;
+    listPeople = listPeople;
   },
 }));
 vi.mock('@/database/models/workspace', () => ({
@@ -28,6 +39,7 @@ vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com/' } }
 vi.mock('./featureGate', () => ({ assertChannelEnabled: vi.fn() }));
 vi.mock('./ChannelService', () => ({
   ChannelService: class {
+    openPeer = openPeer;
     send = send;
   },
 }));
@@ -275,5 +287,88 @@ describe('ChannelMessagingService', () => {
       ),
     ).rejects.toThrow(/asked 3 times/);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  describe('people', () => {
+    const alice = { avatar: null, fullName: 'Alice', id: 'user-alice', username: 'alice' };
+    beforeEach(() => {
+      openPeer.mockResolvedValue({
+        channel: { id: 'channel-peer', isDeleted: false, projectId: null },
+      });
+      findUser.mockResolvedValue(alice);
+    });
+
+    it('lists who the requester can message, named for the model', async () => {
+      listPeople.mockResolvedValue({
+        hasMore: true,
+        people: [
+          alice,
+          { avatar: null, fullName: ' ', id: 'user-bob', username: 'bob' },
+          { avatar: null, fullName: null, id: 'user-anon', username: null },
+        ],
+      });
+      expect(await service().listPeople({ limit: 3, query: 'a' })).toEqual({
+        hasMore: true,
+        people: [
+          { name: 'Alice', userId: 'user-alice', username: 'alice' },
+          { name: 'bob', userId: 'user-bob', username: 'bob' },
+          { name: 'Unnamed', userId: 'user-anon', username: null },
+        ],
+      });
+      expect(listPeople).toHaveBeenCalledWith({ limit: 3, query: 'a' });
+      await expect(service().listPeople({ limit: 21 })).rejects.toThrow('limit');
+    });
+
+    it("posts in the requester's conversation with the person, marked as sent by the Agent", async () => {
+      expect(
+        await service().messagePerson({ content: ' T-1 is done ', userId: 'user-alice' }, 'call-1'),
+      ).toEqual({
+        channelId: 'channel-peer',
+        messageId: 'message-sent',
+        person: { name: 'Alice', userId: 'user-alice', username: 'alice' },
+        url: 'https://app.example.com/lobehub/channels/channel-peer',
+      });
+      expect(openPeer).toHaveBeenCalledWith('user-alice');
+      // No origin: nobody answers there, so no receipt comes back.
+      expect(send).toHaveBeenCalledWith('channel-peer', {
+        content: 'T-1 is done',
+        metadata: {
+          via: { agentId: 'agent-self', name: 'Project Agent', operationId: 'op-current' },
+        },
+        requestKey: 'agent-dm:op-current:call-1',
+      });
+    });
+
+    it('works from an owner bot run, which has no Channel of its own', async () => {
+      relaySource.mockResolvedValue(botRun);
+      await service().messagePerson({ content: 'Done', userId: 'user-alice' }, 'call-1');
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses the requester, empty content, people they cannot reach and a trashed conversation', async () => {
+      await expect(
+        service().messagePerson({ content: 'Hi', userId: 'user-1' }, 'call-1'),
+      ).rejects.toThrow('your final answer already reaches them');
+      await expect(
+        service().messagePerson({ content: '  ', userId: 'user-alice' }, 'call-1'),
+      ).rejects.toThrow('bounded content');
+
+      const { ChannelError } = await import('@/database/repositories/channel');
+      openPeer.mockRejectedValueOnce(new ChannelError('FORBIDDEN', 'You are not contacts'));
+      await expect(
+        service().messagePerson({ content: 'Hi', userId: 'user-stranger' }, 'call-1'),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('You are not contacts: your requester cannot message'),
+      });
+
+      openPeer.mockResolvedValueOnce({
+        channel: { id: 'channel-peer', isDeleted: true, projectId: null },
+      });
+      await expect(
+        service().messagePerson({ content: 'Hi', userId: 'user-alice' }, 'call-1'),
+      ).rejects.toThrow('in the trash');
+      expect(send).not.toHaveBeenCalled();
+    });
   });
 });

@@ -355,6 +355,7 @@ export class ConnectorLinkModel {
     connectorId: string,
     linkId: string,
     credentials: OAuthCredentials,
+    status: ConnectorLinkStatus = 'connected',
   ): Promise<void> => {
     await this.mutate(connectorId, (records) => ({
       records: records.some((r) => r.id === linkId)
@@ -363,7 +364,7 @@ export class ConnectorLinkModel {
               ? {
                   ...r,
                   credentials: toStoredCredentials(credentials),
-                  status: 'connected' as const,
+                  status,
                 }
               : r,
           )

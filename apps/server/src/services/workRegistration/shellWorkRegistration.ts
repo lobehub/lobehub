@@ -20,7 +20,7 @@ const log = debug('lobe-server:shell-work-registration');
  * shell `apiName`:
  *
  * - codex `command_execution` — stdout in `state.stdout` / `state.output`,
- *   `state.exitCode` on completion (`adapters/codex.ts`).
+ *   `state.exitCode` on completion (`adapters/codex/`).
  * - claude-code `Bash` — stdout is the tool MESSAGE CONTENT (the adapter
  *   persists the tool_result text as content, no structured state); failures
  *   surface via the plugin `error` column (is_error), never an exit code.

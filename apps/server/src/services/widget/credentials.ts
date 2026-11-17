@@ -1,4 +1,4 @@
-import type { WidgetEnvRequirement } from '@lobechat/types';
+import { needsConnectorReauthorization, type WidgetEnvRequirement } from '@lobechat/types';
 
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import type { DecryptedConnectorLink } from '@/database/models/connectorLink';
@@ -6,8 +6,6 @@ import type { ConnectorCredentials } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
-  connectorLinksContextForRow,
-  getConnectorLinkModel,
   loadConnectorLinksMap,
   pickPrimaryLink,
   withLinkCredentials,
@@ -332,23 +330,16 @@ export const resolveWidgetEnv = async (
     let connector = byIdentifier.get(requirement.connector);
     if (connector) {
       const link = accountOf.get(connector.id);
-      if (link) {
-        // An account is refreshed in its connector row's own scope
-        const rowContext = connectorLinksContextForRow({ connectorModel: model }, connector);
-        connector = withLinkCredentials(
-          connector,
-          await ensureFreshLinkToken(
-            connector,
-            link,
-            getConnectorLinkModel(rowContext),
-            rowContext.connectorModel,
-          ),
-        );
-      } else {
-        connector = await ensureFreshConnectorToken(connector, model);
-      }
+      // The refresh writes through the row's own scope (`tokens.refreshSlot`)
+      connector = link
+        ? withLinkCredentials(connector, await ensureFreshLinkToken(connector, link, model))
+        : await ensureFreshConnectorToken(connector, model);
     }
-    const selection = selectConnectorSecret(connector?.credentials ?? null, requirement.field);
+    const credentials = connector?.credentials ?? null;
+    const selection = selectConnectorSecret(
+      needsConnectorReauthorization(credentials) ? null : credentials,
+      requirement.field,
+    );
     if ('error' in selection) {
       // A manifest that does not pick one header is wrong whether or not the
       // variable is optional: report it rather than silently dropping it.

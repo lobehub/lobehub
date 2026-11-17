@@ -18,8 +18,8 @@ const localStoppers = new Map<string, LocalBackgroundTaskStopper>();
 
 /**
  * Register how to stop the background tasks of a local run, for as long as
- * its session lives. Only runtimes that can stop a single task register (the
- * Claude Code SDK session); a plain CLI spawn has closed its stdin.
+ * its session lives. Only runtimes that can stop a single task register:
+ * Claude Code, whose input (SDK stream or CLI stdin) stays open for the run.
  *
  * @returns Unregister; a no-op once a newer registration took the operation.
  */

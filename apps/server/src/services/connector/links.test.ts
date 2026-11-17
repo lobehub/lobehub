@@ -55,12 +55,7 @@ describe('resolveLinkedCall', () => {
       linkId: 'lnk_b',
       connector: { credentials: { accessToken: 'bob-token' } },
     });
-    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(
-      connector,
-      links[1],
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(connector, links[1], expect.anything());
   });
   it('requires a selector by total count, lists current choices and hides names for visitors', async () => {
     await expect(resolveLinkedCall({ connector }, context())).rejects.toThrow(
@@ -196,33 +191,23 @@ describe("a personal connector's accounts in a workspace run", () => {
   });
 
   it("resolves a personal row's primary account through the personal scope", async () => {
-    const { ctx, personalLinks, personalModel, workspaceLinks } = setup();
+    const { ctx, personalModel, workspaceLinks } = setup();
 
     const result = await resolveConnectorAccount(personal, ctx);
 
     expect(result).toMatchObject({ accountCount: 1, linkId: 'lnk_a' });
     expect(workspaceLinks.listByConnectorIds).not.toHaveBeenCalled();
-    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(
-      personal,
-      links[0],
-      personalLinks,
-      personalModel,
-    );
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(personal, links[0], personalModel);
   });
 
   it('calls as, and refreshes through, the personal scope', async () => {
-    const { ctx, personalLinks, personalModel, workspaceLinks } = setup();
+    const { ctx, personalModel, workspaceLinks } = setup();
 
     const result = await resolveLinkedCall({ connector: personal }, ctx);
 
     expect(result).toMatchObject({ linkId: 'lnk_a' });
     expect(workspaceLinks.listByConnectorIds).not.toHaveBeenCalled();
-    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(
-      personal,
-      links[0],
-      personalLinks,
-      personalModel,
-    );
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(personal, links[0], personalModel);
   });
 });
 

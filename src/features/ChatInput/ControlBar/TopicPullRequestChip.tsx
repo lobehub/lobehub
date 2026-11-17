@@ -1,6 +1,7 @@
 import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { GitPullRequest } from 'lucide-react';
+import { GitPullRequest, TriangleAlertIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,6 +33,7 @@ interface TopicPullRequestChipProps {
  */
 const TopicPullRequestChip = memo<TopicPullRequestChipProps>(({ deviceId, path, topicId }) => {
   const { t } = useTranslation('device');
+  const { t: tChat } = useTranslation('chat');
   const { primary, probes, views } = useTopicPullRequests({ deviceId, path, topicId });
   const extra = views.length - 1;
 
@@ -40,13 +42,23 @@ const TopicPullRequestChip = memo<TopicPullRequestChipProps>(({ deviceId, path, 
       views.map((view) => {
         const visual = PR_STATE_VISUAL[getPullRequestState(view)];
         return {
+          // How the PR was linked is kept, not shown; only a PR the app cannot
+          // vouch for is flagged, since its merge / close stay locked.
+          extra: view.vouched ? undefined : (
+            <Icon
+              aria-label={tChat('workingPanel.overview.pr.unvouched')}
+              color={cssVar.colorWarning}
+              icon={TriangleAlertIcon}
+              size={12}
+            />
+          ),
           icon: <Icon color={visual.color} icon={visual.icon} size={14} />,
           key: view.identifier,
           label: `#${view.number} ${view.title}`,
           onClick: () => openTrustedExternalUrl(view.url),
         };
       }),
-    [views],
+    [tChat, views],
   );
 
   const probeReads = <TopicPullRequestProbes deviceId={deviceId} path={path} probes={probes} />;

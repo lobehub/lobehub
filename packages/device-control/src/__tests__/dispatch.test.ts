@@ -700,6 +700,31 @@ describe('executeDeviceRpc', () => {
     expect(result.success).toBe(false);
   });
 
+  it('publishes the owned-worktree RPCs on the device surface', () => {
+    expect(DEVICE_RPC_METHODS).toEqual(
+      expect.arrayContaining(['cleanupOwnedWorktree', 'restoreOwnedWorktree']),
+    );
+  });
+
+  it('never lets a request widen the owned-worktree guard root', async () => {
+    // `rootDir` is a test-only knob of the shell function; arriving over RPC it
+    // is dropped, so a folder outside `~/.lobehub/worktrees` stays refused.
+    const target = path.join(root, 'wt');
+    const cleanup = (await executeDeviceRpc(
+      'cleanupOwnedWorktree',
+      { discard: true, rootDir: root, sourcePath: root, worktreePath: target },
+      makeDeps(),
+    )) as { outcome: string };
+    expect(cleanup.outcome).toBe('refused');
+
+    const restore = (await executeDeviceRpc(
+      'restoreOwnedWorktree',
+      { branch: 'lobehub/x', rootDir: root, sourcePath: root, worktreePath: target },
+      makeDeps(),
+    )) as { outcome: string };
+    expect(restore.outcome).toBe('refused');
+  });
+
   describe('interactive terminal', () => {
     /** The PTY handlers a host opts into; absent they all refuse. */
     const terminalDeps = () => ({

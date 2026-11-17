@@ -21,6 +21,7 @@ import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
@@ -37,6 +38,7 @@ import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -147,6 +149,13 @@ export const createServerContextFactProviders = ({
       ).getDocumentById(documentId, agentId);
       return doc ? { content: doc.content, title: doc.title } : null;
     },
+
+    findRevokedDocumentReads: async (agentId, documentIds) =>
+      findRevokedDocumentReads(
+        new AgentDocumentModel(db, userId, workspaceId, documentAccessScope),
+        agentId,
+        documentIds,
+      ),
 
     findTopic: async (topicId) => {
       const topic = await new TopicModel(db, userId, ctx.workspaceId).findById(topicId);

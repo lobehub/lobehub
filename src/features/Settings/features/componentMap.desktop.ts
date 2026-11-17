@@ -30,9 +30,11 @@ import ServiceModel from '../service-model';
 import Skill from '../skill';
 import Stats from '../stats';
 import Storage from '../storage';
+import SubscriptionAccounts from '../subscription-accounts';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
 import Trash from '../trash';
+import Webhooks from '../webhooks';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
@@ -52,6 +54,7 @@ export const componentMap = {
   [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
   [SettingsTabs.Environments]: Environments,
+  [SettingsTabs.SubscriptionAccounts]: SubscriptionAccounts,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,
@@ -64,6 +67,7 @@ export const componentMap = {
   [SettingsTabs.Skill]: Skill,
   [SettingsTabs.Connector]: Connector,
   [SettingsTabs.Automations]: Automations,
+  [SettingsTabs.Webhooks]: Webhooks,
   [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,

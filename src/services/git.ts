@@ -83,6 +83,8 @@ export interface GitLinkedPRSummary {
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  /** `owner/repo` of the GitHub remote the branch publishes to. */
+  remoteRepoFullName?: string;
   upstream?: DeviceGitUpstreamRef;
 }
 
@@ -191,6 +193,7 @@ class GitService {
   async addGitWorktree({
     branch,
     deviceId,
+    ownerToken,
     path,
     sourcePath,
     startPoint,
@@ -199,6 +202,8 @@ class GitService {
   }: {
     branch: string;
     deviceId?: string;
+    /** Creation receipt for a worktree the app makes for a conversation; echoed when recorded. */
+    ownerToken?: string;
     path: string;
     /** The repo's main checkout; the server keys the target folder on it. */
     sourcePath?: string;
@@ -211,7 +216,10 @@ class GitService {
     stripBranchPrefix?: boolean;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
-    const start = startPoint ? { startPoint } : {};
+    const start = {
+      ...(startPoint ? { startPoint } : {}),
+      ...(ownerToken ? { ownerToken } : {}),
+    };
     const result = deviceId
       ? await lambdaClient.device.addGitWorktree.mutate({
           branch,
@@ -296,11 +304,14 @@ class GitService {
     deviceId,
     path,
     pullRequestNumber,
+    state,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
     pullRequestNumber?: number;
+    /** `open`: discovery of a branch's open PR; default lists every state. */
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
       ? await lambdaClient.device.gitLinkedPullRequest.query({
@@ -308,14 +319,21 @@ class GitService {
           deviceId,
           path,
           pullRequestNumber,
+          ...(state ? { state } : {}),
         })
-      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
+      : await electronGitService.getLinkedPullRequest({
+          branch,
+          path,
+          pullRequestNumber,
+          ...(state ? { state } : {}),
+        });
     if (!pr) return undefined;
     return {
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
       pullRequestStatus: pr.status,
+      remoteRepoFullName: pr.remoteRepoFullName,
       upstream: pr.upstream,
     };
   }
@@ -383,15 +401,31 @@ class GitService {
     deviceId,
     number,
     path,
+    repository,
   }: {
     action: DeviceGitPullRequestAction;
     deviceId?: string;
     number: number;
     path: string;
+    repository?: { path: string; url: string };
   }): Promise<DeviceGitPullRequestActionResult> {
-    return deviceId
-      ? lambdaClient.device.runGitPullRequestAction.mutate({ action, deviceId, number, path })
-      : electronGitService.runPullRequestAction({ action, number, path });
+    if (deviceId) {
+      return lambdaClient.device.runGitPullRequestAction.mutate({
+        action,
+        deviceId,
+        number,
+        path,
+        repository,
+      });
+    }
+
+    const target = action.type === 'merge' && action.deleteBranch ? undefined : repository;
+    return electronGitService.runPullRequestAction({
+      action,
+      number,
+      path: target?.path ?? path,
+      url: target?.url,
+    });
   }
 
   /** Working-tree dirty-file counts for a working directory. */

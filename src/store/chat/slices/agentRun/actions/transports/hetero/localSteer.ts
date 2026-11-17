@@ -316,10 +316,11 @@ export const startLocalSteer = (
     get().updateOperationMetadata(operationId, { steerUnsupported: true });
     return;
   }
-  // Claude Code takes messages mid-run only when spawned for it (input kept
-  // open, each read replayed), so a run started in Queue mode stays queued.
-  // Codex app-server and Pi can take one at any point: their pump checks the
-  // mode before each delivery, so switching to Steer mid-run applies.
+  // Claude Code keeps its input open in every mode, but a run takes messages
+  // mid-run only when started in Steer (the SDK session replays what it reads
+  // only then, which is how a steer is confirmed), so a run started in Queue
+  // mode stays queued. Codex app-server and Pi can take one at any point: their
+  // pump checks the mode before each delivery, so switching to Steer applies.
   if (options.agentType === 'claude-code' && mode !== 'steer') return;
 
   get().updateOperationMetadata(operationId, { liveSteer: true });

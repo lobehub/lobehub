@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +12,7 @@ import { getLocalBackgroundTaskStopper } from '@/store/chat/slices/agentRun/acti
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import { sectionStyles } from '../sectionStyles';
+import { sectionProps, sectionStyles } from '../sectionStyles';
 import {
   type BackgroundTaskItem,
   groupBackgroundTasks,
@@ -23,6 +24,7 @@ import { BackgroundTaskRow } from './BackgroundTaskRow';
 import { useBackgroundTasks } from './useBackgroundTasks';
 
 interface BackgroundTasksSectionProps {
+  afterBreak?: boolean;
   /** Routes the output read to a connected device; empty for this device. */
   deviceId?: string;
   /** Whether this client can read the run's files (this device or a connected one). */
@@ -45,7 +47,11 @@ const locate = ({ toolCallId }: BackgroundTaskItem) => {
  * Monitor), Better Coding Experience only. Running ones all show; finished ones
  * fold to the most recent few.
  */
-const BackgroundTasksBody = ({ deviceId, outputReadable }: BackgroundTasksSectionProps) => {
+const BackgroundTasksBody = ({
+  afterBreak,
+  deviceId,
+  outputReadable,
+}: BackgroundTasksSectionProps) => {
   const { t } = useTranslation('chat');
   const { items, liveOperations } = useBackgroundTasks();
   const [showAllFinished, setShowAllFinished] = useState(false);
@@ -81,12 +87,12 @@ const BackgroundTasksBody = ({ deviceId, outputReadable }: BackgroundTasksSectio
   );
 
   return (
-    <Flexbox className={sectionStyles.section}>
-      <Flexbox horizontal align={'center'} className={sectionStyles.sectionHeader} gap={6}>
-        <span className={sectionStyles.sectionTitle}>
+    <Flexbox {...sectionProps(afterBreak)}>
+      <Flexbox horizontal align={'center'} {...stylex.props(sectionStyles.sectionHeader)} gap={6}>
+        <span {...stylex.props(sectionStyles.sectionTitle)}>
           {t('workingPanel.overview.backgroundTasks.title')}
         </span>
-        {running.length > 0 && <span className={sectionStyles.count}>{running.length}</span>}
+        {running.length > 0 && <span {...stylex.props(sectionStyles.count)}>{running.length}</span>}
       </Flexbox>
       {running.map(renderRow)}
       {finished.map(renderRow)}

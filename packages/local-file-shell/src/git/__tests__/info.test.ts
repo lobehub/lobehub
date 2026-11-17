@@ -39,6 +39,7 @@ const PULL_REQUEST = {
 
 const NORMALIZED_PULL_REQUEST = {
   ciStatus: 'success',
+  headRefName: 'feat/hetero-session-import-ui',
   isDraft: false,
   mergeStateStatus: 'CLEAN',
   mergeable: 'MERGEABLE',
@@ -57,6 +58,8 @@ interface ShellFixture {
   commitOnDefault?: boolean;
   /** `gh api repos/{owner}/{repo}/commits/<sha>/pulls`. */
   commitPulls?: unknown[];
+  /** `git config --get <key>`. */
+  config?: Record<string, string>;
   defaultBranch?: Record<string, string>;
   /** `gh pr list --head`. */
   prList?: unknown[];
@@ -66,6 +69,10 @@ interface ShellFixture {
   pushedRefs?: string[];
   refsAt?: string[];
   remotes?: string[];
+  /** `git remote get-url --push <remote>`. */
+  remoteUrl?: string;
+  /** Per-remote push URLs, overriding {@link remoteUrl}. */
+  remoteUrls?: Record<string, string>;
   /** Remote refs a local branch tracks (`for-each-ref --format=%(upstream)`). */
   trackedRefs?: string[];
 }
@@ -92,11 +99,21 @@ const mockShell = ({
   pushedRefs = [],
   refsAt = [],
   remotes = ['origin'],
+  config = {},
+  remoteUrl = '',
+  remoteUrls = {},
   trackedRefs = [],
 }: ShellFixture) => {
   childProcessMocks.execFileAsync.mockImplementation(async (cmd: string, args: string[]) => {
     if (cmd === 'git') {
       const [subcommand] = args;
+      if (subcommand === 'remote' && args[1] === 'get-url')
+        return ok(remoteUrls[args.at(-1)!] ?? remoteUrl);
+      if (subcommand === 'config') {
+        const value = config[args.at(-1)!];
+        if (value === undefined) throw Object.assign(new Error('unset'), { code: 1 });
+        return ok(value);
+      }
       if (subcommand === 'remote') return ok(remotes.join('\n'));
       if (subcommand === 'merge-base') {
         // `--is-ancestor` reports through the exit status: 0 = contained, 1 = not.
@@ -172,7 +189,7 @@ describe('getLinkedPullRequest', () => {
     );
     expect(result).toEqual({
       extraCount: 0,
-      pullRequest: NORMALIZED_PULL_REQUEST,
+      pullRequest: { ...NORMALIZED_PULL_REQUEST, headRefName: 'fix/topic-running' },
       status: 'ok',
       upstream: { branch: 'fix/topic-running', remote: 'origin' },
     });
@@ -180,6 +197,84 @@ describe('getLinkedPullRequest', () => {
 
   // The reported bug. The local branch name never existed on the remote, so asking
   // `gh` about it returned an empty list forever and the PR silently never linked.
+  it("reports the PR's head repository and the repository the checkout publishes to", async () => {
+    mockShell({
+      branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',
+      prList: [
+        {
+          ...PULL_REQUEST,
+          headRefName: 'feat/x',
+          headRepository: { name: 'lobehub' },
+          headRepositoryOwner: { login: 'contributor' },
+        },
+      ],
+      remoteUrl: 'git@github.com:contributor/lobehub.git\n',
+    });
+
+    const result = await getLinkedPullRequest({ branch: 'feat/x', path: '/repo' });
+
+    expect(result.remoteRepoFullName).toBe('contributor/lobehub');
+    expect(result.pullRequest).toMatchObject({
+      headRefName: 'feat/x',
+      headRepoFullName: 'contributor/lobehub',
+    });
+    expect(childProcessMocks.execFileAsync).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining([expect.stringContaining('headRepositoryOwner')]),
+      expect.anything(),
+    );
+  });
+
+  it('names the push remote of a triangular workflow, not the upstream it pulls from', async () => {
+    mockShell({
+      branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',
+      config: { 'branch.feat/x.pushRemote': 'fork' },
+      prList: [],
+      remoteUrls: {
+        fork: 'git@github.com:alice/widgets.git\n',
+        origin: 'git@github.com:acme/widgets.git\n',
+      },
+    });
+
+    expect(
+      (await getLinkedPullRequest({ branch: 'feat/x', path: '/repo' })).remoteRepoFullName,
+    ).toBe('alice/widgets');
+
+    mockShell({
+      branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',
+      config: { 'remote.pushDefault': 'fork' },
+      prList: [],
+      remoteUrls: { fork: 'https://github.com/alice/widgets.git\n' },
+    });
+    expect(
+      (await getLinkedPullRequest({ branch: 'feat/x', path: '/repo' })).remoteRepoFullName,
+    ).toBe('alice/widgets');
+  });
+
+  it('lists only open PRs when asked, so a newer closed PR cannot hide the open one', async () => {
+    mockShell({ branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x', prList: [] });
+
+    await getLinkedPullRequest({ branch: 'feat/x', path: '/repo', state: 'open' });
+
+    expect(childProcessMocks.execFileAsync).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining(['--head', 'feat/x', '--state', 'open']),
+      expect.anything(),
+    );
+  });
+
+  it('names no remote repository for a non-GitHub remote', async () => {
+    mockShell({
+      branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',
+      prList: [],
+      remoteUrl: 'https://gitlab.com/a/b.git\n',
+    });
+
+    expect(
+      (await getLinkedPullRequest({ branch: 'feat/x', path: '/repo' })).remoteRepoFullName,
+    ).toBeUndefined();
+  });
+
   it('queries the head branch that exists on the REMOTE, not the local branch name', async () => {
     mockShell({
       ...publishedAs('refs/remotes/origin/feat/hetero-session-import-ui'),

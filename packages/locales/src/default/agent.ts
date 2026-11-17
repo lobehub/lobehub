@@ -958,6 +958,16 @@ export default {
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
+  'share.settings.permissions.deviceAccess': 'Execution environment',
+  'share.settings.permissions.deviceAccessHint':
+    'Lets visitors use this Agent’s execution environment to run commands and read or write files there.',
+  'share.settings.permissions.deviceAccessOption.all': 'All visitors',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific visitors',
+  'share.settings.permissions.deviceAccessOption.none': 'No visitors',
+  'share.settings.permissions.deviceAllowEmailsHint':
+    'Matches the visitor’s verified account email. No one can use it until you add one.',
+  'share.settings.permissions.deviceAllowEmailsPlaceholder':
+    'Enter the visitors’ account emails, then press Enter',
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and what the visitor gets to see back.',
   'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
@@ -1277,6 +1287,13 @@ export default {
   'webhook.actions.test': 'Send test',
   'webhook.actions.usage': 'How to call',
   'webhook.autoApproveTag': 'Auto-approve',
+  'webhook.untitledAgent': 'Untitled agent',
+  'webhook.wakes': 'Wakes {{agent}}',
+  'webhook.identifier': 'Identifier {{identifier}}',
+  'webhook.renamed': 'Renamed',
+  'webhook.actions.rename': 'Rename',
+  'webhook.channel.readOnly':
+    'Results are posted to this Channel. What it runs is changed with the lh CLI or by asking the Agent; here you can rename or delete it.',
   'webhook.cancel': 'Cancel',
   'webhook.create': 'Create webhook',
   'webhook.created.done': 'Done',

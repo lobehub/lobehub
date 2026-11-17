@@ -1,5 +1,7 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Empty, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
+import { Button, Empty, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { GlobeIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +15,7 @@ import {
 } from '@/store/device';
 
 import { OverviewRow } from '../Overview/OverviewRow';
-import { sectionStyles } from '../Overview/sectionStyles';
+import { sectionProps } from '../Overview/sectionStyles';
 import { resolvePullRequestActionLock } from './actionLock';
 import Header from './Header';
 import MergeDock from './MergeDock';
@@ -22,23 +24,12 @@ import Sections from './Sections';
 import PullRequestSkeleton from './Skeleton';
 import { usePullRequestActions } from './usePullRequestActions';
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    flex: 1;
-    min-height: 0;
-  `,
-  scroll: css`
-    overflow: hidden;
-    flex: 1;
-    min-height: 0;
-  `,
-  scrollContent: css`
-    padding-block: 0 10px;
-  `,
-  viewport: css`
-    overflow-x: hidden;
-  `,
-}));
+const styles = stylex.create({
+  root: { flex: '1', minHeight: '0' },
+  scroll: { overflow: 'hidden', flex: '1', minHeight: '0' },
+  scrollContent: { paddingBlockStart: '0', paddingBlockEnd: '10px' },
+  viewport: { overflowX: 'hidden' },
+});
 
 interface PullRequestProps {
   active: boolean;
@@ -54,6 +45,7 @@ interface PullRequestProps {
   onOpenTab: (tab: string) => void;
   /** Re-run the branch / linked-PR reads that confirm `number`. */
   onRetryConfirm?: () => void;
+  repositoryPath?: string;
   summary?: DeviceGitLinkedPullRequest;
   url?: string;
   workingDirectory: string;
@@ -68,31 +60,37 @@ const PullRequest = memo<PullRequestProps>(
     number,
     onOpenTab,
     onRetryConfirm,
+    repositoryPath,
     summary,
     url,
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
+    const readPath = repositoryPath ?? workingDirectory;
     const {
       data,
       error: fetchError,
       isConfirmed: detailConfirmed,
       isLoading,
       mutate,
-    } = useFetchGitPullRequestDetail(deviceId, workingDirectory, number, { active });
+    } = useFetchGitPullRequestDetail(deviceId, readPath, number, { active });
+    // A number is only unique within a repository. Do not act on another
+    // repository's PR if the source checkout resolves a different remote.
+    const matches = !url || data?.detail?.url.toLowerCase() === url.toLowerCase();
+    const coreDetail = matches ? data?.detail : undefined;
     const activity = useFetchGitPullRequestActivity(
       deviceId,
-      workingDirectory,
-      data?.detail?.number,
-      active && data?.detail?.state === 'open',
+      readPath,
+      coreDetail?.number,
+      active && coreDetail?.state === 'open',
     );
     const {
       data: cachedContext,
       error: contextError,
       isConfirmed: contextConfirmed,
       mutate: mutateContext,
-    } = useFetchGitPullRequestMergeContext(deviceId, workingDirectory, data?.detail ?? undefined);
+    } = useFetchGitPullRequestMergeContext(deviceId, readPath, coreDetail ?? undefined);
     const { data: aheadBehind } = useFetchGitAheadBehind(deviceId, workingDirectory);
     // Stale content stays paintable; actions wait for the live reads.
     const {
@@ -107,7 +105,7 @@ const PullRequest = memo<PullRequestProps>(
       context: cachedContext,
       contextConfirmed,
       contextError,
-      detailConfirmed,
+      detailConfirmed: detailConfirmed && matches,
       detailError: fetchError,
     });
     const actions = usePullRequestActions({
@@ -116,11 +114,13 @@ const PullRequest = memo<PullRequestProps>(
       policyLocked,
       mutateDetail: mutate,
       number,
+      repositoryPath: readPath,
+      url: coreDetail?.url,
       workingDirectory,
     });
 
     const detail = useMemo(() => {
-      const core = data?.detail ? { ...data.detail, ...activity.data } : undefined;
+      const core = coreDetail ? { ...coreDetail, ...activity.data } : undefined;
       if (!core || !context) return core ?? undefined;
       const required = new Set(context.requiredChecks);
       return {
@@ -130,10 +130,10 @@ const PullRequest = memo<PullRequestProps>(
         viewerCanBypass: context.viewerCanBypass,
         viewerCanWrite: context.viewerCanWrite,
       };
-    }, [data?.detail, context, activity.data]);
+    }, [coreDetail, context, activity.data]);
     const externalUrl = detail?.url ?? url;
     const loadError = (error: unknown, onRetry: () => void) => (
-      <Flexbox className={sectionStyles.section}>
+      <Flexbox {...sectionProps()}>
         <OverviewRow
           danger
           icon={TriangleAlertIcon}
@@ -188,13 +188,16 @@ const PullRequest = memo<PullRequestProps>(
         : undefined;
 
     return (
-      <Flexbox className={styles.root}>
+      <Flexbox className={stylex.props(styles.root).className}>
         <ScrollArea
           disableContentFit
           scrollFade
-          className={styles.scroll}
-          contentProps={{ className: styles.scrollContent }}
-          viewportProps={{ className: styles.viewport, style: { overflowX: 'hidden' } }}
+          className={stylex.props(styles.scroll).className}
+          contentProps={{ className: stylex.props(styles.scrollContent).className }}
+          viewportProps={{
+            className: stylex.props(styles.viewport).className,
+            style: { overflowX: 'hidden' },
+          }}
         >
           {/* The persisted PR still paints, but stays locked until a live read lands. */}
           {refreshFailed &&
