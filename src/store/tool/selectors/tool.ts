@@ -4,7 +4,11 @@ import {
   getLobehubSkillProviderById,
   isDesktop,
 } from '@lobechat/const';
-import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
+import {
+  manifestBaseIdentifier,
+  type RenderDisplayControl,
+  type ToolManifest,
+} from '@lobechat/types';
 
 import {
   isInstalledPluginAvailableInCurrentEnv,
@@ -238,17 +242,19 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
   // 5. MCP connectors no plugin row serves (every MCP install now), as the
   //    tools engine offers them. Stdio servers run only on a desktop.
   const listed = new Set([...builtinItems, ...pluginItems].map((item) => item.identifier));
+  //    Each row is its own tool set (a private or personal row under its own
+  //    prefix), so a manifest is runnable by the row it was built from, and
+  //    deduplicated against the other sources by the connector it serves.
   const runnableHere = new Set(
-    connectorSelectors
-      .executableMcpConnectors(s)
+    [...connectorSelectors.executableMcpConnectors(s), ...getAllRunConnectors()]
       .filter((connector) => isDesktop || connector.mcpConnectionType !== 'stdio')
-      .map((connector) => connector.identifier),
+      .map((connector) => connector.id),
   );
   const connectorItems = executableConnectorManifests(s)
-    .filter((manifest) => runnableHere.has(manifest.identifier))
-    .filter((manifest) => !listed.has(manifest.identifier))
-    .filter((manifest) => !composioIds.has(manifest.identifier))
-    .filter((manifest) => !lobehubSkillIds.has(manifest.identifier))
+    .filter((manifest) => !!manifest.connector && runnableHere.has(manifest.connector.id))
+    .filter((manifest) => !listed.has(manifestBaseIdentifier(manifest)))
+    .filter((manifest) => !composioIds.has(manifestBaseIdentifier(manifest)))
+    .filter((manifest) => !lobehubSkillIds.has(manifestBaseIdentifier(manifest)))
     .map((manifest) => ({
       description: manifest.meta?.description || '',
       identifier: manifest.identifier,

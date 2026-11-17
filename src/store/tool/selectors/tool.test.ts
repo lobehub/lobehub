@@ -270,6 +270,25 @@ describe('MCP connectors in tool discovery', () => {
     expect(ids.filter((id) => id === 'plugin-1')).toHaveLength(1);
   });
 
+  it('lists a private row beside the shared one of its connector, each under its prefix', () => {
+    // Regression: discovery matched manifests against base identifiers, so a
+    // private row's `identifier-<suffix>` tool set never matched and could not
+    // be discovered or activated.
+    const s = state([
+      marketplace('notes-mcp', { id: 'c-shared', metadata: {}, sourceType: 'custom' }),
+      marketplace('notes-mcp', {
+        id: '3f9a1c2e-mine',
+        metadata: {},
+        sourceType: 'custom',
+        visibility: 'private',
+      }),
+    ]);
+
+    expect(toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier)).toEqual(
+      expect.arrayContaining(['notes-mcp', 'notes-mcp-3f9a1c2e']),
+    );
+  });
+
   it("reads a connector-only identifier's manifest from its connector", () => {
     const s = state([marketplace('notes-mcp'), marketplace('plugin-1')]);
 
