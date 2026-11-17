@@ -708,7 +708,10 @@ export interface ChannelPublicJob {
   errorType?: string | null;
   id: string;
   memberId: string;
-  /** A `merged` job's request is answered by this job of the same member and branch. */
+  /**
+   * A `merged` job's request is answered by this job of the same member and branch. Derived from
+   * that job's `manifest.requestMessageIds`; null for any other status.
+   */
   mergedIntoJobId: string | null;
   messageId: string;
   publicationRevoked: boolean;

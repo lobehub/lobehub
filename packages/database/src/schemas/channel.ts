@@ -473,11 +473,6 @@ export const channelJobs = pgTable(
     /** A revoked job never publishes. Set by stops, failures and isolation. */
     publicationRevoked: boolean('publication_revoked').notNull().default(false),
     publishedMessageId: uuid('published_message_id'),
-    /**
-     * Set with status `merged`: the job of the same member and branch that took this request in
-     * and answers it. Not a foreign key, like `messageId`: both rows live and die with the channel.
-     */
-    mergedIntoJobId: uuid('merged_into_job_id'),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),

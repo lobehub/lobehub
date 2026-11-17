@@ -184,7 +184,6 @@ export const mergeQueuedRequests = async (
     .set({
       blockedCode: null,
       blockedReason: null,
-      mergedIntoJobId: target.id,
       status: 'merged',
     })
     .where(and(inArray(channelJobs.id, ids), eq(channelJobs.status, 'queued')));
@@ -211,18 +210,23 @@ const plainTextRequests = async (tx: Transaction, messageIds: string[]) => {
  * claim takes them up again, so a failure never swallows a request it was only carrying. A
  * stopped run keeps them: stopping a reply stops what it answers.
  */
-export const requeueMerged = async (tx: Transaction, channelId: string, targetJobId: string) => {
+export const requeueMerged = async (tx: Transaction, target: ChannelJobItem) => {
+  const merged = target.manifest
+    ? manifestRequestIds(target.manifest).filter((id) => id !== target.messageId)
+    : [];
+  if (!merged.length) return;
   const requeued = await tx
     .update(channelJobs)
-    .set({ mergedIntoJobId: null, status: 'queued' })
+    .set({ status: 'queued' })
     .where(
       and(
-        eq(channelJobs.channelId, channelId),
-        eq(channelJobs.mergedIntoJobId, targetJobId),
+        eq(channelJobs.channelId, target.channelId),
+        eq(channelJobs.memberId, target.memberId),
         eq(channelJobs.status, 'merged'),
+        inArray(channelJobs.messageId, merged),
       ),
     )
     .returning({ id: channelJobs.id });
   for (const { id } of requeued)
-    await audit(tx, channelId, 'job_requeued', id, { from: targetJobId });
+    await audit(tx, target.channelId, 'job_requeued', id, { from: target.id });
 };

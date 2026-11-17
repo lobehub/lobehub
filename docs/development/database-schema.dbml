@@ -1594,7 +1594,6 @@ table channel_jobs {
   draft text
   publication_revoked boolean [not null, default: false]
   published_message_id uuid
-  merged_into_job_id uuid
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 

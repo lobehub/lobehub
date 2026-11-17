@@ -77,7 +77,6 @@ describe('asynchronous Channel routing', () => {
     const first = await execution.claim(channel.id, firstJob.id, lease);
     expect(first?.job.manifest?.requestMessageIds).toEqual([root.id, next.id]);
     expect(await jobById(db, nextJob.id)).toMatchObject({
-      mergedIntoJobId: firstJob.id,
       status: 'merged',
     });
   });

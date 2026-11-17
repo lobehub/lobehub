@@ -189,7 +189,7 @@ export class ChannelExecutionRepository {
           writerHeld: false,
         })
         .where(eq(channelJobs.id, job.id));
-      if (!job.publicationRevoked) await requeueMerged(tx, channelId, job.id);
+      if (!job.publicationRevoked) await requeueMerged(tx, job);
       await audit(tx, channelId, 'reservation_retired', job.id, { status });
       return true;
     });
@@ -711,7 +711,7 @@ export class ChannelExecutionRepository {
         stopping ? 'interrupted' : 'error',
         stopping ? undefined : failure.message,
       );
-      if (!stopping && isOpenJob(job)) await requeueMerged(tx, channelId, job.id);
+      if (!stopping && isOpenJob(job)) await requeueMerged(tx, job);
       await audit(tx, channelId, 'execution_failed', job.id, {
         message: failure.message,
       });
@@ -736,7 +736,7 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await advanceOperation(tx, job, 'abandoned', message);
-      if (isOpenJob(job)) await requeueMerged(tx, channelId, job.id);
+      if (isOpenJob(job)) await requeueMerged(tx, job);
       await audit(tx, channelId, 'execution_unknown', job.id, { message });
     });
 

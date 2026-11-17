@@ -223,8 +223,10 @@ only the leading run of the queue:
   message in the same lock, so a failed write leaves them queued. External CLI runs are never
   steered; their queue joins the next claim.
 
-A taken-in job settles as `merged` with `mergedIntoJobId`; it never runs or publishes, and the
-job it points to carries the outcome. A request from an Agent, relayed from another Channel or
+A taken-in job settles as `merged`; it never runs or publishes, and the job that took it in
+carries the outcome. No column records the link: that job's `manifest.requestMessageIds` lists the
+request, and the member has one job per message, so the public view derives `mergedIntoJobId`
+from it. A request from an Agent, relayed from another Channel or
 carrying a receipt never merges, nor does a job deferred behind another member's answer
 (`awaiting_primary`), nor one behind an earlier undecided routing decision: they stop the run of
 the queue that is taken in. People other than the head's requester are read as input under the

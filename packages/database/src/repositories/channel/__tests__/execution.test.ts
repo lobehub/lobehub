@@ -233,7 +233,6 @@ describe('ChannelExecutionRepository', () => {
     });
     expect(await jobById(nextJob.id)).toMatchObject({
       blockedCode: null,
-      mergedIntoJobId: job.id,
       status: 'merged',
     });
     expect((await execution.input(channel.id, job.id)).map(({ id }) => id)).toEqual([
@@ -255,12 +254,12 @@ describe('ChannelExecutionRepository', () => {
     // A run that never started gives back what it took in; the queue resumes in order.
     expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
     expect(await jobById(job.id)).toMatchObject({ status: 'failed', writerHeld: false });
-    expect(await jobById(nextJob.id)).toMatchObject({ mergedIntoJobId: null, status: 'queued' });
+    expect(await jobById(nextJob.id)).toMatchObject({ status: 'queued' });
     expect(await execution.claim(channel.id, thirdJob.id, lease)).toBeNull();
     const retaken = await execution.claim(channel.id, nextJob.id, lease);
     expect(retaken?.job.manifest?.requestMessageIds).toEqual([next.id, third.id]);
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: null });
-    expect(await jobById(thirdJob.id)).toMatchObject({ mergedIntoJobId: nextJob.id });
+    expect(await jobById(thirdJob.id)).toMatchObject({ status: 'merged' });
   });
 
   /** A team channel with one Agent and a Thread per root title, each under a person's message. */
@@ -307,7 +306,7 @@ describe('ChannelExecutionRepository', () => {
 
     // Each branch's head takes its own branch's queue in, never another branch's.
     expect(await execution.claim(channel.id, a1.id, lease)).not.toBeNull();
-    expect(await jobById(a2.id)).toMatchObject({ mergedIntoJobId: a1.id, status: 'merged' });
+    expect(await jobById(a2.id)).toMatchObject({ status: 'merged' });
     expect(await execution.claim(channel.id, b1.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, main.id, lease)).not.toBeNull();
     expect(await jobById(b1.id)).toMatchObject({ status: 'running' });

@@ -219,7 +219,16 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
 const publicJobColumns = {
   id: channelJobs.id,
   memberId: channelJobs.memberId,
-  mergedIntoJobId: channelJobs.mergedIntoJobId,
+  // A merged job's request is listed in the manifest of the job that took it in: the latest one,
+  // should a failed run have handed it back to the queue before.
+  mergedIntoJobId: sql<string | null>`CASE WHEN ${channelJobs.status} = 'merged' THEN (
+      SELECT merge_target.id FROM channel_jobs AS merge_target
+      WHERE merge_target.member_id = ${channelJobs.memberId}
+        AND merge_target.id <> ${channelJobs.id}
+        AND merge_target.manifest->'requestMessageIds' @> jsonb_build_array(${channelJobs.messageId}::text)
+      ORDER BY merge_target.claimed_at DESC NULLS LAST
+      LIMIT 1
+    ) END`,
   messageId: channelJobs.messageId,
   requesterMemberId: channelJobs.requesterMemberId,
   threadId: channelJobs.threadId,

@@ -75,7 +75,6 @@ describe('merging queued requests into one reply', () => {
       requesterMemberId: member.id,
     });
     expect(await jobById(db, second.job.id)).toMatchObject({
-      mergedIntoJobId: first.job.id,
       status: 'merged',
     });
     expect(await jobById(db, third.job.id)).toMatchObject({ status: 'queued' });
@@ -93,6 +92,24 @@ describe('merging queued requests into one reply', () => {
 
     await execution.claim(channel.id, first.job.id, lease);
     expect(await jobById(db, relayed.job.id)).toMatchObject({ status: 'queued' });
+  });
+
+  it('shows each merged job with the job that answers it, read from that job’s manifest', async () => {
+    const { ask, asMember, channel } = await setup();
+    const first = await ask('First');
+    const second = await ask('Second');
+    await execution.claim(channel.id, first.job.id, lease);
+    const mergedInto = async () =>
+      Object.fromEntries(
+        (await asMember.detail(channel.id)).jobs.map((job) => [job.id, job.mergedIntoJobId]),
+      );
+
+    expect(await mergedInto()).toEqual({ [first.job.id]: null, [second.job.id]: first.job.id });
+
+    // Handed back by a failed run, it no longer points at that run.
+    await execution.accepted(channel.id, first.job.id);
+    await execution.fail(channel.id, first.job.id, { message: 'boom' });
+    expect((await mergedInto())[second.job.id]).toBeNull();
   });
 
   it('makes the reply owed when an owed request joins a wake that may stay silent', async () => {
@@ -117,7 +134,6 @@ describe('merging queued requests into one reply', () => {
 
     await execution.fail(channel.id, first.job.id, { message: 'boom' });
     expect(await jobById(db, second.job.id)).toMatchObject({
-      mergedIntoJobId: null,
       status: 'queued',
     });
   });
@@ -144,7 +160,6 @@ describe('steering queued requests into a running Native run', () => {
       requestMessageIds: [first.message.id, second.message.id],
     });
     expect(await jobById(db, second.job.id)).toMatchObject({
-      mergedIntoJobId: first.job.id,
       status: 'merged',
     });
     // Nothing is left to join, and the run's input now covers both requests.
