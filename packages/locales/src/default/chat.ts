@@ -3899,6 +3899,7 @@ export default {
   'workingPanel.overview.changes.none': 'No changes',
   'workingPanel.overview.ci.failure': 'Failed',
   'workingPanel.overview.pr.dismiss': 'Remove from this topic',
+  'workingPanel.overview.pr.dismissFailed': "Couldn't remove {{name}} from this topic",
   'workingPanel.overview.pr.dismissed': 'Removed {{name}} from this topic',
   'workingPanel.overview.pr.link': 'Link a pull request',
   'workingPanel.overview.pr.linkAction': 'Link',

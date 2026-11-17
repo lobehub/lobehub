@@ -17,6 +17,7 @@ import type {
 } from './types';
 import {
   getDefaultRemote,
+  getPushRemote,
   getRemoteGithubRepo,
   isCommitSafeForPullRequestLookup,
   resolveUpstream,
@@ -256,7 +257,10 @@ export const getLinkedPullRequest = async (payload: {
       : { sha: undefined, upstream: undefined };
     // The repository this checkout publishes to: a found PR whose head lives
     // here was pushed from here, not a same-named branch in another fork.
-    const remote = localUpstream?.remote ?? (await getDefaultRemote(dirPath));
+    const remote =
+      (await getPushRemote(dirPath, branch || undefined)) ??
+      localUpstream?.remote ??
+      (await getDefaultRemote(dirPath));
     const remoteRepoFullName = remote ? await getRemoteGithubRepo(dirPath, remote) : undefined;
     const answer = (result: GitLinkedPullRequestResult): GitLinkedPullRequestResult =>
       remoteRepoFullName ? { ...result, remoteRepoFullName } : result;

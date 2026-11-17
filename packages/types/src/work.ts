@@ -146,10 +146,11 @@ export interface WorkVersionMetadata {
   /** `file` Work — MIME type of the edited file. */
   mimeType?: string;
   /**
-   * `external` GitHub PR Work — how this version linked the PR when no command
-   * named it: `push` for a `git push` to a branch that already had the PR.
+   * `external` GitHub PR Work — how this version linked the PR: `command` when
+   * a command named it, `push` for a `git push` to a branch that already had
+   * it. Set on every version, since metadata merges over the previous one.
    */
-  pullRequestLink?: 'push';
+  pullRequestLink?: 'command' | 'push';
 }
 
 export interface WorkVersionCumulativeUsage {

@@ -311,18 +311,6 @@ export const buildRunLifecycle = (
       if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
       if (adapter.runScope === 'sub_agent') return;
 
-      // The run's gh / push commands are linked by the completion Work scan,
-      // which finishes before the run reports its end. Only a mounted list
-      // (Better Coding Experience PR chip / sidebar) refetches.
-      void workService.refreshTopicPullRequests(topicId).catch(() => {});
-      // Better Coding Experience: a PR someone opened on the topic's own branch.
-      if (
-        topicId &&
-        agentId &&
-        labPreferSelectors.enableBetterCodingExperience(getUserStoreState())
-      )
-        void linkOwnBranchPullRequest(get, { agentId, topicId });
-
       const serverOperationId = get().operations[event.operationId]?.metadata.serverOperationId;
       const disposition = resolveTerminalDisposition(event);
       if (disposition === 'failed' && event.notification) {
@@ -412,6 +400,23 @@ export const buildRunLifecycle = (
       // side effect. Run it before the queued-message early return so a follow-up
       // cannot strand an audio-first topic without a title.
       if (disposition === 'success') summarizeVoiceTopicTitleAfterCompletion();
+
+      // Same for the topic's linked PRs: a queued follow-up skips the
+      // completion notification, not these. The run's gh / push commands were
+      // linked by the completion Work scan before the run reported its end; only
+      // a mounted list (Better Coding Experience PR chip / sidebar) refetches.
+      if (adapter.runScope !== 'sub_agent') {
+        void workService.refreshTopicPullRequests(topicId).catch(() => {});
+        // A PR someone opened on the topic's own branch — looked up before a
+        // queued turn can move the topic off that branch.
+        if (
+          disposition === 'success' &&
+          topicId &&
+          agentId &&
+          labPreferSelectors.enableBetterCodingExperience(getUserStoreState())
+        )
+          void linkOwnBranchPullRequest(get, { agentId, topicId });
+      }
 
       const completeSuccess = () => {
         get().completeOperation(operationId);

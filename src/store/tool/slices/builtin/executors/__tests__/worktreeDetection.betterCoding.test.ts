@@ -165,4 +165,17 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
       chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git,
     ).not.toHaveProperty('ownBranch');
   });
+
+  it('owns a branch created by a quiet switch that printed nothing', async () => {
+    await recordGitCommandEffects({
+      command: 'git switch -q -c feat/quiet',
+      resultContent: '',
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git).toMatchObject(
+      { branch: 'feat/quiet', ownBranch: 'feat/quiet' },
+    );
+  });
 });

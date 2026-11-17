@@ -58,6 +58,8 @@ interface ShellFixture {
   commitOnDefault?: boolean;
   /** `gh api repos/{owner}/{repo}/commits/<sha>/pulls`. */
   commitPulls?: unknown[];
+  /** `git config --get <key>`. */
+  config?: Record<string, string>;
   defaultBranch?: Record<string, string>;
   /** `gh pr list --head`. */
   prList?: unknown[];
@@ -69,6 +71,8 @@ interface ShellFixture {
   remotes?: string[];
   /** `git remote get-url --push <remote>`. */
   remoteUrl?: string;
+  /** Per-remote push URLs, overriding {@link remoteUrl}. */
+  remoteUrls?: Record<string, string>;
   /** Remote refs a local branch tracks (`for-each-ref --format=%(upstream)`). */
   trackedRefs?: string[];
 }
@@ -95,13 +99,21 @@ const mockShell = ({
   pushedRefs = [],
   refsAt = [],
   remotes = ['origin'],
+  config = {},
   remoteUrl = '',
+  remoteUrls = {},
   trackedRefs = [],
 }: ShellFixture) => {
   childProcessMocks.execFileAsync.mockImplementation(async (cmd: string, args: string[]) => {
     if (cmd === 'git') {
       const [subcommand] = args;
-      if (subcommand === 'remote' && args[1] === 'get-url') return ok(remoteUrl);
+      if (subcommand === 'remote' && args[1] === 'get-url')
+        return ok(remoteUrls[args.at(-1)!] ?? remoteUrl);
+      if (subcommand === 'config') {
+        const value = config[args.at(-1)!];
+        if (value === undefined) throw Object.assign(new Error('unset'), { code: 1 });
+        return ok(value);
+      }
       if (subcommand === 'remote') return ok(remotes.join('\n'));
       if (subcommand === 'merge-base') {
         // `--is-ancestor` reports through the exit status: 0 = contained, 1 = not.
@@ -211,6 +223,32 @@ describe('getLinkedPullRequest', () => {
       expect.arrayContaining([expect.stringContaining('headRepositoryOwner')]),
       expect.anything(),
     );
+  });
+
+  it('names the push remote of a triangular workflow, not the upstream it pulls from', async () => {
+    mockShell({
+      branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',
+      config: { 'branch.feat/x.pushRemote': 'fork' },
+      prList: [],
+      remoteUrls: {
+        fork: 'git@github.com:alice/widgets.git\n',
+        origin: 'git@github.com:acme/widgets.git\n',
+      },
+    });
+
+    expect(
+      (await getLinkedPullRequest({ branch: 'feat/x', path: '/repo' })).remoteRepoFullName,
+    ).toBe('alice/widgets');
+
+    mockShell({
+      branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',
+      config: { 'remote.pushDefault': 'fork' },
+      prList: [],
+      remoteUrls: { fork: 'https://github.com/alice/widgets.git\n' },
+    });
+    expect(
+      (await getLinkedPullRequest({ branch: 'feat/x', path: '/repo' })).remoteRepoFullName,
+    ).toBe('alice/widgets');
   });
 
   it('names no remote repository for a non-GitHub remote', async () => {

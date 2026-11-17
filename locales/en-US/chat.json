@@ -3713,6 +3713,7 @@
   "workingPanel.overview.ports.title": "Ports",
   "workingPanel.overview.ports.unavailable": "Can't read this device's ports right now",
   "workingPanel.overview.pr.dismiss": "Remove from this topic",
+  "workingPanel.overview.pr.dismissFailed": "Couldn't remove {{name}} from this topic",
   "workingPanel.overview.pr.dismissed": "Removed {{name}} from this topic",
   "workingPanel.overview.pr.link": "Link a pull request",
   "workingPanel.overview.pr.linkAction": "Link",

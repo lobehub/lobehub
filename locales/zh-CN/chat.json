@@ -3713,6 +3713,7 @@
   "workingPanel.overview.ports.title": "端口",
   "workingPanel.overview.ports.unavailable": "暂时无法读取这台设备的端口",
   "workingPanel.overview.pr.dismiss": "从话题中移除",
+  "workingPanel.overview.pr.dismissFailed": "未能将 {{name}} 从话题中移除",
   "workingPanel.overview.pr.dismissed": "已将 {{name}} 从话题中移除",
   "workingPanel.overview.pr.link": "关联 PR",
   "workingPanel.overview.pr.linkAction": "关联",

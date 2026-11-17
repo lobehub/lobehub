@@ -112,7 +112,8 @@ interface WorktreeAddParseResult {
   ref?: string;
 }
 
-type BranchSwitchInfo = { branch: string } | { detached: true };
+/** `created`: a creation flag named the branch (`-c` / `-b` / `--orphan` …). */
+type BranchSwitchInfo = { branch: string; created?: true } | { detached: true };
 
 const stripQuotes = (token: string): string => {
   if (token.length >= 2) {
@@ -299,6 +300,7 @@ const parseGitBranchSwitchTokens = (
   if (!git || !GIT_BRANCH_SWITCH_SUBCOMMANDS.has(git.subcommand)) return undefined;
 
   let branch: string | undefined;
+  let created = false;
   for (let i = 0; i < git.args.length; i += 1) {
     const token = git.args[i];
     if (DETACH_FLAGS.has(stripQuotes(token))) return { detached: true };
@@ -306,6 +308,7 @@ const parseGitBranchSwitchTokens = (
     const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS], env);
     if (branchFlag.value) {
       branch = normalizeBranch(branchFlag.value);
+      created = true;
       break;
     }
     if (branchFlag.skipNext) {
@@ -327,7 +330,7 @@ const parseGitBranchSwitchTokens = (
     break;
   }
 
-  return branch ? { branch } : undefined;
+  return branch ? { branch, ...(created ? { created: true as const } : {}) } : undefined;
 };
 
 const isGitBranchSwitchCommand = (tokens: string[]): boolean | undefined => {
@@ -979,8 +982,15 @@ export const recordGitCommandEffects = async (params: {
   }
 
   // A branch the agent created is the conversation's own: its PR may be looked up.
-  if (betterCoding)
-    nextConfig = applyOwnBranchToConfig(nextConfig, parseCreatedBranch(resultContent));
+  // The creation shows in git's output, or — with `-q`, which prints nothing —
+  // in the creation flag that named it.
+  if (betterCoding) {
+    const created =
+      parseCreatedBranch(resultContent) ??
+      (branchSwitch && 'created' in branchSwitch ? branchSwitch.branch : undefined) ??
+      parseWorktreeAddInfo(command, source)?.branch;
+    nextConfig = applyOwnBranchToConfig(nextConfig, created);
+  }
 
   const prCreate = betterCoding ? undefined : parseGhPrCreate(command, resultContent);
   if (prCreate) {

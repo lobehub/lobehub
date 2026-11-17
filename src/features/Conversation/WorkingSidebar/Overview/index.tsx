@@ -311,8 +311,15 @@ const Overview = memo<OverviewProps>(
             onDismiss={
               onDismissPullRequest &&
               (() =>
-                void onDismissPullRequest(view).then(() =>
-                  toast.info(t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` })),
+                void onDismissPullRequest(view).then(
+                  () =>
+                    toast.info(
+                      t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
+                    ),
+                  () =>
+                    toast.error(
+                      t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
+                    ),
                 ))
             }
           />
