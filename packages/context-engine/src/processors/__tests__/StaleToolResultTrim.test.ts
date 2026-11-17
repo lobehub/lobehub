@@ -951,24 +951,34 @@ describe('StaleToolResultTrimProcessor', () => {
     });
 
     it("sets the window from the model's cache TTL for any provider", () => {
-      // 5m on Anthropic is its default: unchanged economics.
-      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '5m' })).toEqual(
-        cacheEconomicsForProvider('anthropic'),
-      );
+      // 5m on Anthropic is its default: 5-minute window, 0.1× reads, 1.25× writes.
+      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '5m' })).toEqual({
+        readPrice: 0.1,
+        ttlMs: 5 * 60_000,
+        writePrice: 1.25,
+      });
+      // Only Anthropic bills the 1h tier at 2× writes.
+      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '1h' })).toEqual({
+        readPrice: 0.1,
+        ttlMs: HOUR,
+        writePrice: 2,
+      });
       // A DeepSeek model the user set to 24h keeps DeepSeek's prices with a 24h window.
       expect(cacheEconomicsForProvider('deepseek', { cacheTTL: '24h' })).toEqual({
-        ...cacheEconomicsForProvider('deepseek'),
+        readPrice: 0.033,
         ttlMs: 24 * HOUR,
+        writePrice: 1,
       });
       expect(cacheEconomicsForProvider('openai', { cacheTTL: '24h' })).toEqual({
-        ...cacheEconomicsForProvider('openai'),
+        readPrice: 0.5,
         ttlMs: 24 * HOUR,
+        writePrice: 1,
       });
-      // Only Anthropic bills the 1h tier at 2× writes; elsewhere 1h only moves the window.
-      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '1h' }).writePrice).toBe(2);
+      // Elsewhere 1h only moves the window: Bedrock keeps the 1.25× write price.
       expect(cacheEconomicsForProvider('bedrock', { cacheTTL: '1h' })).toEqual({
-        ...cacheEconomicsForProvider('bedrock'),
+        readPrice: 0.1,
         ttlMs: HOUR,
+        writePrice: 1.25,
       });
     });
 
