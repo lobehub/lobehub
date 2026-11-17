@@ -58,6 +58,11 @@ export const contactRouter = router({
 
   // ── People ────────────────────────────────────────────────────────────
 
+  /** The workspaces I am an external contact of, whatever the active scope. */
+  listExternalWorkspaces: externalContactProcedure.query(async ({ ctx }) =>
+    ctx.contactModel.listExternalWorkspaces(),
+  ),
+
   listRequests: externalContactProcedure.query(async ({ ctx }) => ctx.contactModel.listRequests()),
 
   // In a workspace this invites someone outside it to be an external contact: a member's act.
