@@ -534,9 +534,19 @@ export interface GithubShellNormalizeOptions {
   topicPullRequests?: string[];
 }
 
+/**
+ * gh's confirmation that the merge itself happened (`✓ Merged pull request …`,
+ * `Squashed and merged`, `Rebased and merged`, `… was already merged`). A
+ * repository with a merge queue only queues the PR, and gh prints nothing at
+ * all to a non-terminal — neither is proof it merged.
+ */
+const MERGE_CONFIRMED_RE = /\b(?:merged pull request|was already merged)\b/i;
+
 /** What a lifecycle command leaves the pull request in; null when it does not say. */
-const lifecycleStatus = (parsed: ParsedGhCommand): string | null => {
-  if (parsed.action === 'merge') return parsed.autoMerge ? null : 'merged';
+const lifecycleStatus = (parsed: ParsedGhCommand, output: string | null): string | null => {
+  if (parsed.action === 'merge') {
+    return !parsed.autoMerge && output && MERGE_CONFIRMED_RE.test(output) ? 'merged' : null;
+  }
   if (parsed.action === 'ready') return parsed.undo ? 'draft' : 'open';
   return null;
 };
@@ -604,7 +614,7 @@ const normalizeGithubCliResult = (
   if (!ref) return null;
 
   const status = isLifecycle
-    ? lifecycleStatus(parsed)
+    ? lifecycleStatus(parsed, output)
     : parsed.action === 'create'
       ? parsed.draft
         ? 'draft'

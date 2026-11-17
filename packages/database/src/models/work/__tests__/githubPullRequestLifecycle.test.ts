@@ -23,8 +23,11 @@ describe('normalizeGithubShellToolResult (pull request lifecycle)', () => {
     expect(shell('gh pr ready 12 -R lobehub/lobehub', '', {})).toBeNull();
   });
 
-  it('marks a merged pull request named by number and --repo', () => {
-    const operation = shell('gh pr merge 12 -R lobehub/lobehub --squash --delete-branch');
+  it('marks a merged pull request named by number and --repo once gh confirms the merge', () => {
+    const operation = shell(
+      'gh pr merge 12 -R lobehub/lobehub --squash --delete-branch',
+      '✓ Squashed and merged pull request lobehub/lobehub#12 (Fix tray)',
+    );
 
     expect(operation?.params).toMatchObject({
       changeType: 'updated',
@@ -40,7 +43,7 @@ describe('normalizeGithubShellToolResult (pull request lifecycle)', () => {
       `gh pr merge 12 --repo lobehub/lobehub -s -t 'squash subject' -b 'squash body'`,
     );
 
-    expect(operation?.params).toMatchObject({ identifier: 'lobehub/lobehub#12', status: 'merged' });
+    expect(operation?.params).toMatchObject({ identifier: 'lobehub/lobehub#12' });
     expect(operation?.params.title).toBeUndefined();
     expect(operation?.params.content).toBeUndefined();
   });
@@ -148,5 +151,16 @@ describe('normalizeGithubShellToolResult (pull request lifecycle)', () => {
         toolName: 'runCommand',
       }),
     ).toBeNull();
+  });
+
+  it('links but does not claim merged when gh only queued the merge or printed nothing', () => {
+    for (const output of [
+      '',
+      '✓ Pull request lobehub/lobehub#12 will be added to the merge queue for main when ready',
+    ]) {
+      const operation = shell('gh pr merge 12 -R lobehub/lobehub --squash', output);
+      expect(operation?.params.identifier).toBe('lobehub/lobehub#12');
+      expect(operation?.params.status).toBeUndefined();
+    }
   });
 });

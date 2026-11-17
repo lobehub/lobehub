@@ -60,7 +60,6 @@ export const createShellPullRequestLinking = (params: {
   workspaceId?: string | null;
 }): ShellPullRequestLinking => {
   const scope = { userId: params.userId, workspaceId: params.workspaceId ?? null };
-  let topicPullRequests: Promise<string[]> | undefined;
 
   return {
     findOpenPullRequestsByHead: async (repoFullName, branches) => {
@@ -78,12 +77,10 @@ export const createShellPullRequestLinking = (params: {
         url: row.url,
       }));
     },
-    listTopicPullRequestIds: () => {
-      topicPullRequests ??= params.workModel
-        .listTopicPullRequests(params.topicId)
-        .then((items) => items.map((item) => item.identifier));
-      return topicPullRequests;
-    },
+    // Read per command, never cached for the scan: an earlier record of the same
+    // run may just have linked the PR a later bare `gh pr merge <n>` names.
+    listTopicPullRequestIds: async () =>
+      (await params.workModel.listTopicPullRequests(params.topicId)).map((item) => item.identifier),
   };
 };
 
