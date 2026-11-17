@@ -98,4 +98,18 @@ describe('WorkModel.listTopicPullRequests', () => {
 
     expect((await model.listTopicPullRequests(topicId)).map((i) => i.number)).toEqual([6]);
   });
+
+  it('skips a pull request Work whose identity is not owner/repo#number', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerExternal(pr('lobehub/lobehub#7', 'call-ok'));
+    await model.registerExternal({
+      ...pr('lobehub/lobehub#7', 'call-bad'),
+      identifier: 'not-a-pr',
+      resourceId: 'not-a-pr',
+    });
+
+    expect((await model.listTopicPullRequests(topicId)).map((i) => i.identifier)).toEqual([
+      'lobehub/lobehub#7',
+    ]);
+  });
 });

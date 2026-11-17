@@ -96,4 +96,23 @@ describe('parseGitPushResult', () => {
       }),
     ).toBeNull();
   });
+
+  it('ignores git commands that carry only options, and tag refs pushed by SHA range', () => {
+    expect(
+      parseGitPushResult({
+        command: 'git --version',
+        output: 'To github.com:a/b.git\n * [new branch]      feat -> feat',
+      }),
+    ).toBeNull();
+    expect(
+      parseGitPushResult({
+        command: 'git -c push.default=current push --follow-tags',
+        output: [
+          'To github.com:a/b.git',
+          '   1234abc..5678def  refs/tags/v1 -> refs/tags/v1',
+          '   1234abc..5678def  feat -> feat',
+        ].join('\n'),
+      }),
+    ).toEqual({ branches: ['feat'], repoFullName: 'a/b' });
+  });
 });
