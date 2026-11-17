@@ -370,6 +370,51 @@ describe('connector visibility — priority within one identifier', () => {
   });
 });
 
+describe('connector visibility — tool sets of one identifier', () => {
+  const suffix = (id: string) => id.replaceAll('-', '').slice(0, 8);
+  const toolSets = async (target: { agentId?: string; topicId?: string }) =>
+    (await new ConnectorModel(serverDB, owner, workspaceId).resolveToolSets(target, ['gmail'])).map(
+      (row) => [row.toolIdentifier, row.id],
+    );
+
+  it('keeps the shared, private and personal rows each as its own tool set', async () => {
+    const shared = await insertConnector({ identifier: 'gmail', userId: mate });
+    const personal = await insertConnector({ identifier: 'gmail', workspaceId: null });
+    const mine = await insertConnector({ identifier: 'gmail', visibility: 'private' });
+
+    expect(await toolSets({ agentId: privateAgent, topicId: privateTopic })).toEqual([
+      [`gmail-${suffix(mine.id)}`, mine.id],
+      [`gmail-${suffix(personal.id)}`, personal.id],
+      ['gmail', shared.id],
+    ]);
+    // Any run but the private agent's own topic resolves the shared row alone
+    expect(await toolSets({ agentId: workspaceAgent, topicId: workspaceAgentTopic })).toEqual([
+      ['gmail', shared.id],
+    ]);
+  });
+
+  it('lets a row bound to the agent stand alone for its identifier', async () => {
+    await insertConnector({ identifier: 'gmail', userId: mate });
+    await insertConnector({ identifier: 'gmail', visibility: 'private' });
+    const agentOwned = await insertConnector({ agentId: privateAgent, identifier: 'gmail' });
+
+    expect(await toolSets({ agentId: privateAgent, topicId: privateTopic })).toEqual([
+      ['gmail', agentOwned.id],
+    ]);
+  });
+
+  it('keeps one tool set for duplicate shared rows, the lowest id', async () => {
+    const [first] = [
+      await insertConnector({ identifier: 'gmail', userId: mate }),
+      await insertConnector({ identifier: 'gmail', userId: owner }),
+    ].sort((a, b) => a.id.localeCompare(b.id));
+
+    expect(await toolSets({ agentId: privateAgent, topicId: privateTopic })).toEqual([
+      ['gmail', first.id],
+    ]);
+  });
+});
+
 describe('connector visibility — write paths', () => {
   it('looks up the idempotency row within one visibility', async () => {
     const shared = await insertConnector({ identifier: 'notion', userId: mate });

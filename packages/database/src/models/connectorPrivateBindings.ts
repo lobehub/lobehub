@@ -13,9 +13,11 @@ import type { LobeChatDatabase } from '../type';
  */
 export const countPrivateConnectorBindings = async (
   db: LobeChatDatabase,
-  workspaceId: string,
+  workspaceId: string | undefined,
   agentId: string,
 ): Promise<number> => {
+  // A personal scope has no private connectors
+  if (!workspaceId) return 0;
   const [row] = await db
     .select({ value: count() })
     .from(userConnectors)
