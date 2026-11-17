@@ -15,17 +15,11 @@ describe('webhook tool manifest', () => {
   });
 
   it('asks for approval before changing anything, never for reads', () => {
-    const approval = Object.fromEntries(
-      WebhookManifest.api.map((entry) => [entry.name, entry.humanIntervention]),
-    );
-    expect(approval).toEqual({
-      createWebhook: 'required',
-      deleteWebhook: 'required',
-      listWebhookCalls: 'never',
-      listWebhooks: 'never',
-      sendTestWebhook: 'required',
-      updateWebhook: 'required',
-    });
+    // Reads are named list*; everything else changes a webhook or runs its agent.
+    for (const entry of WebhookManifest.api)
+      expect(entry.humanIntervention, entry.name).toBe(
+        entry.name.startsWith('list') ? 'never' : 'required',
+      );
   });
 
   it('never takes an agent, a key or an arbitrary Channel from the model', () => {

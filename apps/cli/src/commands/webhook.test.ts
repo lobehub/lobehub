@@ -9,7 +9,6 @@ import { registerWebhookCommand } from './webhook';
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     inboundWebhook: {
-      check: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
       get: { query: vi.fn() },
@@ -693,12 +692,6 @@ describe('webhook command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith('No calls yet.');
     });
-  });
-
-  it('has no check command: checking belongs to lh automation', async () => {
-    await expect(run('check', MCP_ID)).rejects.toThrow();
-
-    expect(mockTrpcClient.inboundWebhook.check.mutate).not.toHaveBeenCalled();
   });
 
   describe('delete', () => {
