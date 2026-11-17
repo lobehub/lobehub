@@ -5,7 +5,7 @@ import { messageService } from '@/services/message';
 import type { QueuedMessage } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
-import { createLocalSteer, supportsLocalSteer } from './localSteer';
+import { createLocalSteer, startLocalSteer, supportsLocalSteer } from './localSteer';
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: { steerSession: vi.fn() },
@@ -331,5 +331,48 @@ describe('createLocalSteer', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(heterogeneousAgentService.steerSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('startLocalSteer', () => {
+  const start = (agentType: string) =>
+    startLocalSteer({
+      agentType,
+      codexAppServer: true,
+      context: { agentId: 'agent-1', threadId: null, topicId: 'topic-1' },
+      contextKey: 'key',
+      get: () => ({ queuedMessages: {}, updateOperationMetadata: vi.fn() }) as unknown as ChatStore,
+      ipcSessionId: 'ipc-1',
+      isReady: () => true,
+      isWaitingForUser: () => false,
+      operationId: 'op-1',
+      rows: { add: vi.fn(), ensureParentPersisted: vi.fn(async () => {}) },
+      spine: { get: () => 'a', set: vi.fn() },
+    });
+
+  it('sets up steering for Codex app-server and Pi in Queue mode, so a switch to Steer applies mid-run', () => {
+    mode.value = 'queue';
+    const codex = start('codex');
+    const pi = start('pi');
+
+    expect(codex).toBeDefined();
+    expect(pi).toBeDefined();
+    codex?.settle();
+    pi?.settle();
+  });
+
+  it('leaves a Claude Code run started in Queue mode queued: it was not spawned to take messages', () => {
+    mode.value = 'queue';
+    expect(start('claude-code')).toBeUndefined();
+
+    mode.value = 'steer';
+    const cc = start('claude-code');
+    expect(cc).toBeDefined();
+    cc?.settle();
+  });
+
+  it('does nothing with the lab off', () => {
+    mode.value = 'legacy';
+    expect(start('codex')).toBeUndefined();
   });
 });
