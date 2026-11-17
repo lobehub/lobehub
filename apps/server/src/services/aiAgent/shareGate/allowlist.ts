@@ -26,8 +26,9 @@ export const isGovernedByBuiltinAllowlist = isBuiltinToolIdentifier;
  * The Channel history reads a shared Agent may make when a Channel runs it for a visitor: the
  * public timeline of that visitor's own conversation, which they already see. Every read
  * re-authorizes against the run's reserved Channel operation (`ChannelHistoryRepository`), so a
- * share-page run, which has none, reads nothing. `listChannels` and `sendMessage` stay blocked:
- * the run executes as the owner, and they would list or post into the owner's own Channels.
+ * share-page run, which has none, reads nothing. The messaging APIs (`listChannels`,
+ * `sendMessage`, `listPeople`, `messagePerson`) stay blocked: the run executes as the owner, and
+ * they would list or post into the owner's own Channels and conversations.
  * Exempt from the owner's `toolGrants`, which picks the Agent's tools, not the Channel's.
  */
 const SHARE_VISITOR_CHANNEL_READ_APIS = new Set<string>([
