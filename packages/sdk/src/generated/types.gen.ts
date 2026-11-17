@@ -2848,13 +2848,10 @@ export type Connector = {
      */
     serverUrl: string | null;
     /**
-     * How the connector was added, e.g. `custom`, `marketplace`.
+     * `custom` for an MCP server you added, `marketplace` for an installed integration, `builtin` for a LobeHub tool.
      */
-    sourceType: string;
-    /**
-     * `connected`, `disconnected` or `error`.
-     */
-    status: string;
+    sourceType: 'builtin' | 'custom' | 'marketplace';
+    status: 'connected' | 'disconnected' | 'error';
     tools: Array<ConnectorTool>;
     updatedAt: string;
 };
@@ -2882,7 +2879,7 @@ export type ConnectorTool = {
 /**
  * `auto` runs without confirmation, `needs_approval` asks a human before every call (and is refused by `POST /tools/call`), `disabled` never runs.
  */
-export type ConnectorToolPermission = 'auto' | 'needs_approval' | 'disabled';
+export type ConnectorToolPermission = 'auto' | 'disabled' | 'needs_approval';
 
 export type ConnectorAuthorization = {
     /**

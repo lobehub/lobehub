@@ -4,6 +4,7 @@ import { connectorRouter } from '@/server/routers/lambda/connector';
 import { BaseService } from '../common/base.service';
 import { ApiException } from '../common/errors';
 import type { ToolCallRequest, ToolCallResult } from '../types/tool-call.type';
+import { toMcpUpstreamError } from './mcp-server.service';
 
 interface ToolCallOutcome {
   content?: unknown;
@@ -52,8 +53,13 @@ export class ToolCallRestService extends BaseService {
       if (cause?.reason === 'approval_required') {
         throw new ApiException(403, 'approval_required', (error as Error).message);
       }
-      if ((error as { code?: string }).code === 'INTERNAL_SERVER_ERROR') {
-        throw new ApiException(502, 'upstream_error', (error as Error).message);
+      const { code } = error as { code?: string };
+      if (code === 'SERVICE_UNAVAILABLE' || code === 'TIMEOUT') throw toMcpUpstreamError(error);
+      if (code === 'INTERNAL_SERVER_ERROR') {
+        // The procedure wraps every unexpected failure — ours included — with
+        // its message; keep that in the log, not in the client's body.
+        console.error('[tools.call] tool call failed:', error);
+        throw new ApiException(502, 'upstream_error', 'The tool call failed');
       }
       throw error;
     }

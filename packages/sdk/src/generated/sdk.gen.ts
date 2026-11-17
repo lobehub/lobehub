@@ -2707,7 +2707,7 @@ export class Connectors extends HeyApiClient {
      *
      * Disconnects the service and removes the connector with its tools and stored credentials. An agent that had it pinned stops using it.
      *
-     * **API key scopes:** `mcp:write`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ConnectorsByIdData, ThrowOnError>): RequestResult<DeleteApiV1ConnectorsByIdResponses, DeleteApiV1ConnectorsByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1ConnectorsByIdResponses, DeleteApiV1ConnectorsByIdErrors, ThrowOnError>({
@@ -2735,7 +2735,7 @@ export class Connectors extends HeyApiClient {
      *
      * Starts an OAuth connection for an HTTP connector: discovers the server's authorization server, registers a client when needed and returns the URL the user opens to grant access. The connector becomes `connected` once the user completes the flow; poll `GET /connectors/{id}`.
      *
-     * **API key scopes:** `mcp:write`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public authorize<ThrowOnError extends boolean = false>(options: Options<PostApiV1ConnectorsByIdAuthorizeData, ThrowOnError>): RequestResult<PostApiV1ConnectorsByIdAuthorizeResponses, PostApiV1ConnectorsByIdAuthorizeErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ConnectorsByIdAuthorizeResponses, PostApiV1ConnectorsByIdAuthorizeErrors, ThrowOnError>({
@@ -2751,7 +2751,7 @@ export class Connectors extends HeyApiClient {
      *
      * Fetches the tool list from the service and updates the synced tools. Tool permissions you set are kept.
      *
-     * **API key scopes:** `mcp:write`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public sync<ThrowOnError extends boolean = false>(options: Options<PostApiV1ConnectorsByIdSyncData, ThrowOnError>): RequestResult<PostApiV1ConnectorsByIdSyncResponses, PostApiV1ConnectorsByIdSyncErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PostApiV1ConnectorsByIdSyncResponses, PostApiV1ConnectorsByIdSyncErrors, ThrowOnError>({
@@ -2766,7 +2766,7 @@ export class Connectors extends HeyApiClient {
      *
      * Returns a bound connector to the workspace / personal scope, or releases a mount. A connector attached to no agent is returned unchanged.
      *
-     * **API key scopes:** `mcp:write`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public detachAgent<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1ConnectorsByIdAgentData, ThrowOnError>): RequestResult<DeleteApiV1ConnectorsByIdAgentResponses, DeleteApiV1ConnectorsByIdAgentErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteApiV1ConnectorsByIdAgentResponses, DeleteApiV1ConnectorsByIdAgentErrors, ThrowOnError>({
@@ -2781,7 +2781,7 @@ export class Connectors extends HeyApiClient {
      *
      * Attaches the connector to an agent the caller can edit, by binding (moving it into the agent) or mounting (reserving a shared connector for the agent).
      *
-     * **API key scopes:** `mcp:write`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public attachAgent<ThrowOnError extends boolean = false>(options: Options<PutApiV1ConnectorsByIdAgentData, ThrowOnError>): RequestResult<PutApiV1ConnectorsByIdAgentResponses, PutApiV1ConnectorsByIdAgentErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutApiV1ConnectorsByIdAgentResponses, PutApiV1ConnectorsByIdAgentErrors, ThrowOnError>({
@@ -2812,7 +2812,7 @@ export class Connectors extends HeyApiClient {
      *
      * Sets whether the tool runs automatically, needs human approval for every call, or is disabled. Applies to conversations and `POST /tools/call` alike.
      *
-     * **API key scopes:** `mcp:write`.
+     * **API key scopes:** a full-access API key (`*`).
      */
     public updateTool<ThrowOnError extends boolean = false>(options: Options<PatchApiV1ConnectorsByIdToolsByToolIdData, ThrowOnError>): RequestResult<PatchApiV1ConnectorsByIdToolsByToolIdResponses, PatchApiV1ConnectorsByIdToolsByToolIdErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchApiV1ConnectorsByIdToolsByToolIdResponses, PatchApiV1ConnectorsByIdToolsByToolIdErrors, ThrowOnError>({
@@ -2949,7 +2949,7 @@ export class Tools extends HeyApiClient {
      *
      * The same rules as in a conversation apply: the connector must be enabled and the tool synced and not `disabled`.
      *
-     * A tool that needs human approval (`requiresApproval` on the connector tool) is refused with `403 approval_required`: an API call cannot be approved. Set its permission to `auto` to allow unattended calls.
+     * A tool that needs human approval (`requiresApproval` on the connector tool) is refused with `403 approval_required`: an API call cannot be approved. Only the user (in the app, or with a full-access key) can change a tool permission.
      *
      * A tool that ran but reported a failure answers 200 with `success: false`.
      *

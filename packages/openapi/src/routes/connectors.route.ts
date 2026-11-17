@@ -6,7 +6,10 @@ import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ConnectorController } from '../controllers/connector.controller';
 import { requireAuth } from '../middleware/auth';
-import { requireAnyPermissionWithApiKeyScope } from '../middleware/permission-check';
+import {
+  requireAnyPermissionWithApiKeyScope,
+  requireFullAccessApiKey,
+} from '../middleware/permission-check';
 import { DeletedResourceSchema } from '../types/common.type';
 import {
   AttachConnectorAgentRequestSchema,
@@ -23,16 +26,19 @@ import {
   UpdateConnectorToolRequestSchema,
 } from '../types/connector.type';
 
-// Same gates as `/mcp-servers`: connectors are agent capabilities (RBAC
-// `agent:*`), exposed to API keys under the `mcp:*` scopes.
+// Connectors are agent capabilities (RBAC `agent:*`). Reading the inventory
+// (never credentials) is open to `mcp:read`, like `/mcp-servers`. Every write
+// re-routes or replaces third-party credentials, or changes which tool calls
+// need a human (tool permissions), so — as the tRPC `connector` namespace,
+// which is `blocked` for restricted keys — it needs a full-access key.
 const requireRead = requireAnyPermissionWithApiKeyScope(
   getAllScopePermissions('AGENT_READ'),
   'mcp:read',
 );
-const requireWrite = requireAnyPermissionWithApiKeyScope(
-  getAllScopePermissions('AGENT_UPDATE'),
-  'mcp:write',
-);
+const requireWrite = [
+  requireAnyPermissionWithApiKeyScope(getAllScopePermissions('AGENT_UPDATE'), 'mcp:write'),
+  requireFullAccessApiKey(),
+] as const;
 
 const app = new Hono();
 
@@ -77,7 +83,7 @@ app.delete(
     tags: ['connectors'],
   }),
   requireAuth,
-  requireWrite,
+  ...requireWrite,
   zValidator('param', ConnectorIdParamSchema),
   async (c) => new ConnectorController().deleteConnector(c),
 );
@@ -94,7 +100,7 @@ app.post(
     tags: ['connectors'],
   }),
   requireAuth,
-  requireWrite,
+  ...requireWrite,
   zValidator('param', ConnectorIdParamSchema),
   zValidator('json', AuthorizeConnectorRequestSchema),
   async (c) => new ConnectorController().authorize(c),
@@ -112,7 +118,7 @@ app.post(
     tags: ['connectors'],
   }),
   requireAuth,
-  requireWrite,
+  ...requireWrite,
   zValidator('param', ConnectorIdParamSchema),
   async (c) => new ConnectorController().syncTools(c),
 );
@@ -129,7 +135,7 @@ app.put(
     tags: ['connectors'],
   }),
   requireAuth,
-  requireWrite,
+  ...requireWrite,
   zValidator('param', ConnectorIdParamSchema),
   zValidator('json', AttachConnectorAgentRequestSchema),
   async (c) => new ConnectorController().attachAgent(c),
@@ -147,7 +153,7 @@ app.delete(
     tags: ['connectors'],
   }),
   requireAuth,
-  requireWrite,
+  ...requireWrite,
   zValidator('param', ConnectorIdParamSchema),
   async (c) => new ConnectorController().detachAgent(c),
 );
@@ -180,7 +186,7 @@ app.patch(
     tags: ['connectors'],
   }),
   requireAuth,
-  requireWrite,
+  ...requireWrite,
   zValidator('param', ConnectorToolParamSchema),
   zValidator('json', UpdateConnectorToolRequestSchema),
   async (c) => new ConnectorController().updateTool(c),

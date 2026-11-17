@@ -88,10 +88,10 @@ export interface McpServerResponse {
 const uuidSchema = z.string().meta({ format: 'uuid' });
 
 /** Values of `ConnectorToolPermission`, the only ones the column ever stores. */
-const MCP_TOOL_PERMISSIONS = ['auto', 'disabled', 'needs_approval'] as const;
+export const MCP_TOOL_PERMISSIONS = ['auto', 'disabled', 'needs_approval'] as const;
 
 /** Values of `ConnectorStatus`, the only ones the connector column ever stores. */
-const MCP_SERVER_STATUSES = ['connected', 'disconnected', 'error'] as const;
+export const MCP_SERVER_STATUSES = ['connected', 'disconnected', 'error'] as const;
 
 export const McpServerToolSchema = z
   .object({

@@ -34,6 +34,20 @@ const isPublicMcpServer = (value: PublicConnectorRecord) =>
   value.mcpConnectionType === ConnectorMcpConnectionType.http &&
   !!value.mcpServerUrl;
 
+/**
+ * A failed request to an MCP server, as the REST error catalogue reads it. The
+ * server's own message is kept: it describes the remote failure, not ours.
+ */
+export const toMcpUpstreamError = (error: unknown) => {
+  const { code, message } = error as { code?: string; message?: string };
+  const reason = message || 'unknown error';
+  if (code === 'SERVICE_UNAVAILABLE' || code === 'TIMEOUT') {
+    return new ApiException(503, 'service_unavailable', `MCP server unavailable: ${reason}`);
+  }
+  if ((error as Error)?.name === 'TRPCError' && code !== 'INTERNAL_SERVER_ERROR') return error;
+  return new ApiException(502, 'upstream_error', `MCP server request failed: ${reason}`);
+};
+
 export class McpServerService extends BaseService {
   private connectorModel: ConnectorModel;
   private connectorToolModel: ConnectorToolModel;
@@ -178,26 +192,25 @@ export class McpServerService extends BaseService {
   }
 
   /**
-   * Ask the server itself, with the connector's (refreshed) credentials. A
-   * server that cannot be reached or refuses keeps its structured status
-   * (403 for upstream auth, 503 unreachable); anything else is a 502.
+   * Ask the server itself, with the connector's (refreshed) credentials.
+   * `mcpService` reports failures as tRPC errors: an unreachable server is
+   * `SERVICE_UNAVAILABLE`/`TIMEOUT` (503), refused upstream auth `FORBIDDEN`
+   * (kept), anything the server got wrong `INTERNAL_SERVER_ERROR` (502).
    */
-  private async withLiveServer<T>(id: string, run: (params: any) => Promise<T>): Promise<T> {
+  private async withLiveServer<T>(
+    id: string,
+    run: (params: ReturnType<typeof buildConnectorMcpParams>) => Promise<T>,
+  ): Promise<T> {
     await this.requireServer(id);
     const model = await this.getCredentialConnectorModel();
     const connector = await model.findById(id);
     if (!connector) throw this.createNotFoundError('MCP server not found');
+    const fresh = await ensureFreshConnectorToken(connector, model);
 
     try {
-      const fresh = await ensureFreshConnectorToken(connector, model);
       return await run(buildConnectorMcpParams(fresh));
     } catch (error) {
-      if ((error as Error)?.name === 'TRPCError') throw error;
-      throw new ApiException(
-        502,
-        'upstream_error',
-        `MCP server request failed: ${(error as Error)?.message ?? 'unknown error'}`,
-      );
+      throw toMcpUpstreamError(error);
     }
   }
 

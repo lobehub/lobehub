@@ -310,6 +310,27 @@ export const requireAnyPermissionWithApiKeyScope = (
 };
 
 /**
+ * Only a full-access API key (`*` or a legacy unscoped key) passes; session and
+ * OIDC auth pass through. For operations the tRPC scope policy keeps away from
+ * restricted keys entirely (`TRPC_NAMESPACE_API_KEY_RULES` → `'blocked'`), so
+ * the REST surface does not hand a narrow key what tRPC refuses it.
+ */
+export const requireFullAccessApiKey = () =>
+  documentScopes(
+    async (c: Context, next: Next) => {
+      if (c.get('authType') !== 'apikey') return next();
+      if (!isFullAccessApiKey(c.get('apiKeyScopes') as string[] | null | undefined)) {
+        throw new HTTPException(403, {
+          cause: { missingScopes: [API_KEY_FULL_ACCESS_SCOPE] },
+          message: 'insufficient_scope: this operation requires a full-access API key',
+        });
+      }
+      return next();
+    },
+    { scopes: [API_KEY_FULL_ACCESS_SCOPE] },
+  );
+
+/**
  * Standalone API key scope gate for routes that declare no RBAC permissions
  * (e.g. `POST /responses`). No-op for session/OIDC auth and full-access keys;
  * restricted keys must hold the given scope.

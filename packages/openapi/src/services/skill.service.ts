@@ -116,7 +116,9 @@ export class SkillRestService extends BaseService {
   }
 
   async createSkill(request: CreateSkillRequest): Promise<SkillResponse> {
-    return toSkill((await this.skills.create(request))!);
+    const created = await this.skills.create(request);
+    if (!created) throw this.createCommonError('Skill creation returned no skill');
+    return toSkill(created);
   }
 
   async updateSkill(id: string, request: UpdateSkillRequest): Promise<SkillResponse> {

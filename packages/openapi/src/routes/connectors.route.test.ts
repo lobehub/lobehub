@@ -76,6 +76,7 @@ const STRANGER_AGENT = 'agt_r7_conn_stranger';
 
 const KEYS = {
   agentOnly: 'sk-lh-r7connagentonly1',
+  mcpWrite: 'sk-lh-r7connmcpwrite01',
   ownerRead: 'sk-lh-r7connownerread1',
   ownerWrite: 'sk-lh-r7connownerwrit1',
   stranger: 'sk-lh-r7connstranger01',
@@ -168,15 +169,15 @@ beforeEach(async () => {
     userId,
     workspaceId: workspaceId ?? null,
   });
-  await serverDB
-    .insert(apiKeys)
-    .values([
-      key(KEYS.ownerWrite, OWNER, ['mcp:write']),
-      key(KEYS.ownerRead, OWNER, ['mcp:read']),
-      key(KEYS.agentOnly, OWNER, ['agent:write']),
-      key(KEYS.stranger, STRANGER, ['mcp:write']),
-      key(KEYS.workspace, OWNER, ['mcp:write'], WORKSPACE),
-    ]);
+  await serverDB.insert(apiKeys).values([
+    // Connector writes need a full-access key; `mcpWrite` proves a narrow one is refused
+    key(KEYS.ownerWrite, OWNER, ['*']),
+    key(KEYS.mcpWrite, OWNER, ['mcp:write']),
+    key(KEYS.ownerRead, OWNER, ['mcp:read']),
+    key(KEYS.agentOnly, OWNER, ['agent:write']),
+    key(KEYS.stranger, STRANGER, ['*']),
+    key(KEYS.workspace, OWNER, ['*'], WORKSPACE),
+  ]);
 });
 
 describe('authentication and API-key scopes', () => {
@@ -211,6 +212,33 @@ describe('authentication and API-key scopes', () => {
       const res = await call(path, { key: KEYS.ownerRead, method });
       expect(res.status).toBe(403);
     }
+  });
+});
+
+describe('connector writes need a full-access key', () => {
+  it('refuses every write to an mcp:write key, as the tRPC connector namespace does', async () => {
+    const connector = await seedConnector({ identifier: 'linear' });
+    const tool = await seedTool(connector, 'create_issue', 'needs_approval');
+
+    for (const [path, method, body] of [
+      [`/connectors/${connector.id}`, 'DELETE', undefined],
+      [`/connectors/${connector.id}/sync`, 'POST', undefined],
+      [`/connectors/${connector.id}/authorize`, 'POST', {}],
+      [`/connectors/${connector.id}/agent`, 'PUT', { agentId: AGENT }],
+      [`/connectors/${connector.id}/agent`, 'DELETE', undefined],
+      // turning `needs_approval` into `auto` would lift the tool-call approval gate
+      [`/connectors/${connector.id}/tools/${tool.id}`, 'PATCH', { permission: 'auto' }],
+    ] as const) {
+      const res = await call(path, { body, key: KEYS.mcpWrite, method });
+      expect(res.status).toBe(403);
+      expect((await json(res)).code).toBe('insufficient_scope');
+    }
+    const [row] = await serverDB.select().from(userConnectorTools);
+    expect(row.permission).toBe('needs_approval');
+    expect(await serverDB.select().from(userConnectors)).toHaveLength(1);
+
+    // reads stay open to the narrow key
+    expect((await call(`/connectors/${connector.id}`, { key: KEYS.mcpWrite })).status).toBe(200);
   });
 });
 

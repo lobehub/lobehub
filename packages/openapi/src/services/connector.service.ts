@@ -86,8 +86,8 @@ export class ConnectorRestService extends BaseService {
       mountedByAgentId: record.mountedByAgentId,
       name: record.name,
       serverUrl: record.mcpServerUrl,
-      sourceType: record.sourceType,
-      status: record.status,
+      sourceType: record.sourceType as ConnectorResponse['sourceType'],
+      status: record.status as ConnectorResponse['status'],
       tools: tools.map(toConnectorTool),
       updatedAt: new Date(record.updatedAt).toISOString(),
     };

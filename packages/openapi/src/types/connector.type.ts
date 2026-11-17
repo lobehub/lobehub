@@ -2,11 +2,12 @@ import { z } from 'zod';
 
 import { CursorPaginationQuerySchema, paginatedListSchema } from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
+import { MCP_SERVER_STATUSES, MCP_TOOL_PERMISSIONS } from './mcp-server.type';
 
 // ==================== Shared ====================
 
 export const ConnectorToolPermissionSchema = z
-  .enum(['auto', 'needs_approval', 'disabled'])
+  .enum(MCP_TOOL_PERMISSIONS)
   .describe(
     '`auto` runs without confirmation, `needs_approval` asks a human before every call (and is refused by `POST /tools/call`), `disabled` never runs.',
   )
@@ -50,8 +51,12 @@ export const ConnectorSchema = z
       .describe('The agent this workspace / personal connector is mounted on, if any.'),
     name: z.string(),
     serverUrl: z.string().nullable().describe('Remote MCP endpoint, for HTTP connectors.'),
-    sourceType: z.string().describe('How the connector was added, e.g. `custom`, `marketplace`.'),
-    status: z.string().describe('`connected`, `disconnected` or `error`.'),
+    sourceType: z
+      .enum(['builtin', 'custom', 'marketplace'])
+      .describe(
+        '`custom` for an MCP server you added, `marketplace` for an installed integration, `builtin` for a LobeHub tool.',
+      ),
+    status: z.enum(MCP_SERVER_STATUSES),
     tools: z.array(ConnectorToolSchema),
     updatedAt: dateTimeSchema,
   })

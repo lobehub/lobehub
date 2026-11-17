@@ -9811,10 +9811,18 @@ components:
             - "null"
         sourceType:
           type: string
-          description: How the connector was added, e.g. `custom`, `marketplace`.
+          enum:
+            - builtin
+            - custom
+            - marketplace
+          description: "`custom` for an MCP server you added, `marketplace` for an
+            installed integration, `builtin` for a LobeHub tool."
         status:
           type: string
-          description: "`connected`, `disconnected` or `error`."
+          enum:
+            - connected
+            - disconnected
+            - error
         tools:
           type: array
           items:
@@ -9879,8 +9887,8 @@ components:
       type: string
       enum:
         - auto
-        - needs_approval
         - disabled
+        - needs_approval
       description: "`auto` runs without confirmation, `needs_approval` asks a human
         before every call (and is refused by `POST /tools/call`), `disabled`
         never runs."
@@ -42500,7 +42508,7 @@ paths:
         stored credentials. An agent that had it pinned stops using it.
 
 
-        **API key scopes:** `mcp:write`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Disconnect and remove a connector
       tags:
         - connectors
@@ -42629,7 +42637,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - mcp:write
+        - "*"
       parameters:
         - in: path
           name: id
@@ -42649,7 +42657,7 @@ paths:
         the user completes the flow; poll `GET /connectors/{id}`.
 
 
-        **API key scopes:** `mcp:write`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Start an OAuth connection
       tags:
         - connectors
@@ -42780,7 +42788,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - mcp:write
+        - "*"
       parameters:
         - in: path
           name: id
@@ -42811,7 +42819,7 @@ paths:
         Tool permissions you set are kept.
 
 
-        **API key scopes:** `mcp:write`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Sync connector tools
       tags:
         - connectors
@@ -42957,7 +42965,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - mcp:write
+        - "*"
       parameters:
         - in: path
           name: id
@@ -42977,7 +42985,7 @@ paths:
         the agent).
 
 
-        **API key scopes:** `mcp:write`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Attach a connector to an agent
       tags:
         - connectors
@@ -43121,7 +43129,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - mcp:write
+        - "*"
       parameters:
         - in: path
           name: id
@@ -43159,7 +43167,7 @@ paths:
         a mount. A connector attached to no agent is returned unchanged.
 
 
-        **API key scopes:** `mcp:write`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Detach a connector from its agent
       tags:
         - connectors
@@ -43303,7 +43311,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - mcp:write
+        - "*"
       parameters:
         - in: path
           name: id
@@ -43477,7 +43485,7 @@ paths:
         alike.
 
 
-        **API key scopes:** `mcp:write`.
+        **API key scopes:** a full-access API key (`*`).
       summary: Set a connector tool permission
       tags:
         - connectors
@@ -43606,7 +43614,7 @@ paths:
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
       x-required-scopes:
-        - mcp:write
+        - "*"
       parameters:
         - in: path
           name: id
@@ -44941,7 +44949,8 @@ paths:
 
         A tool that needs human approval (`requiresApproval` on the connector
         tool) is refused with `403 approval_required`: an API call cannot be
-        approved. Set its permission to `auto` to allow unattended calls.
+        approved. Only the user (in the app, or with a full-access key) can
+        change a tool permission.
 
 
         A tool that ran but reported a failure answers 200 with `success:

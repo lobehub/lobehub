@@ -264,6 +264,34 @@ describe('POST /tools/call — the conversation permission model', () => {
     expect(mcp.callTool).not.toHaveBeenCalled();
   });
 
+  it('answers 503 when the server is unreachable and a bare 502 on any other failure', async () => {
+    const connector = await seedConnector({ identifier: 'linear' });
+    await seedTool(connector, 'search');
+
+    // What `mcpService` throws for a refused connection: a TRPCError whose cause
+    // carries the MCP connection error type, which the connector procedure rethrows.
+    const { TRPCError } = await import('@trpc/server');
+    mcp.callTool.mockRejectedValueOnce(
+      new TRPCError({
+        cause: Object.assign(new Error('connect ECONNREFUSED'), {
+          data: { type: 'CONNECTION_FAILED' },
+        }),
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'connect ECONNREFUSED',
+      }),
+    );
+    const unreachable = await toolCall({ identifier: 'linear', toolName: 'search' });
+    expect(unreachable.status).toBe(503);
+    expect((await json(unreachable)).code).toBe('service_unavailable');
+
+    mcp.callTool.mockRejectedValueOnce(new Error('relation "secret_table" does not exist'));
+    const failed = await toolCall({ identifier: 'linear', toolName: 'search' });
+    expect(failed.status).toBe(502);
+    const body = await json(failed);
+    expect(body.code).toBe('upstream_error');
+    expect(body.message).not.toContain('secret_table');
+  });
+
   it('reports a tool that ran and failed as success: false', async () => {
     const connector = await seedConnector({ identifier: 'linear' });
     await seedTool(connector, 'search');
@@ -386,6 +414,22 @@ describe('GET /mcp-servers/{id}/tools | resources | prompts', () => {
         name: 'summarize',
       },
     ]);
+  });
+
+  it('maps the tRPC errors mcpService raises: unreachable → 503, failed → 502', async () => {
+    const server = await seedConnector({ identifier: 'docs' });
+    const trpcError = (code: string, message: string) =>
+      Object.assign(new Error(message), { code, name: 'TRPCError' });
+
+    mcp.listPrompts.mockRejectedValue(trpcError('SERVICE_UNAVAILABLE', 'connect ECONNREFUSED'));
+    const unreachable = await call(`/mcp-servers/${server.id}/prompts`, { key: KEYS.mcpRead });
+    expect(unreachable.status).toBe(503);
+    expect((await json(unreachable)).code).toBe('service_unavailable');
+
+    mcp.listRawTools.mockRejectedValue(trpcError('INTERNAL_SERVER_ERROR', 'Error listing tools'));
+    const failed = await call(`/mcp-servers/${server.id}/tools`, { key: KEYS.mcpRead });
+    expect(failed.status).toBe(502);
+    expect((await json(failed)).code).toBe('upstream_error');
   });
 
   it('answers 502 upstream_error when the server fails', async () => {
