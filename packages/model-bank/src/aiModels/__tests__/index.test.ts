@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(8);
+    expect(models).toHaveLength(9);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -407,6 +407,7 @@ describe('subscription model catalogs', () => {
   it.each([
     ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6.1-sol', 'gpt6ReasoningEffort'],
+    ['chatgpt', 'gpt-6.1-terra', 'gpt5_6ReasoningEffort'],
     ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
   ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(

@@ -23,8 +23,8 @@ import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
 import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
-import { notChannelTopic } from '../utils/topicVisibility';
 import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
+import { notChannelTopic } from '../utils/topicVisibility';
 import {
   buildWorkspacePayload,
   buildWorkspaceWhere,
@@ -1087,6 +1087,25 @@ export class ProjectModel {
         addedByUserId: this.userId,
       })
       .onConflictDoNothing();
+    return { projectId, environmentId };
+  }
+
+  /**
+   * Unlink an environment from a project. The environment itself stays — it is
+   * shared by every project that lists it — and so do the project's folders
+   * and conversations made from it; unlinking twice is a no-op.
+   */
+  async detachEnvironment(projectId: string, environmentId: string) {
+    if (!(await this.findManageableById(projectId)))
+      throw new Error('Project not found or access denied');
+    await this.db
+      .delete(projectEnvironments)
+      .where(
+        and(
+          eq(projectEnvironments.projectId, projectId),
+          eq(projectEnvironments.environmentId, environmentId),
+        ),
+      );
     return { projectId, environmentId };
   }
 

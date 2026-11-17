@@ -9,7 +9,11 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileS3 } from '@/server/modules/S3';
 import { FileUploadService } from '@/server/services/fileUpload';
-import { reserveUpload, uploadConflict } from '@/server/services/fileUploadReservation';
+import {
+  isMissingObject,
+  reserveUpload,
+  uploadConflict,
+} from '@/server/services/fileUploadReservation';
 
 const MAX_MULTIPART_PARTS = 10_000;
 const MULTIPART_PART_SIZE = 32 * 1024 * 1024;
@@ -163,8 +167,13 @@ export const uploadRouter = router({
       } catch (error) {
         if (!isMissingMultipartUpload(error)) throw error;
 
-        const { contentLength } = await s3.getFileMetadata(upload.pathname);
-        if (contentLength !== upload.size) throw error;
+        const metadata = await s3.getFileMetadata(upload.pathname).catch((headError) => {
+          if (isMissingObject(headError)) {
+            throw uploadConflict('Multipart upload no longer exists in storage');
+          }
+          throw headError;
+        });
+        if (metadata.contentLength !== upload.size) throw error;
       }
 
       await ctx.fileUploadService.model.markCompleted(upload.id);

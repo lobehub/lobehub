@@ -5,6 +5,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
+  agentAutomationsRouteMeta,
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
   agentEngineRouteMeta,
@@ -19,6 +20,7 @@ import {
   agentSkillsRouteMeta,
   agentStatisticsRouteMeta,
   agentToolsRouteMeta,
+  agentWebhookRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
 import { agentDocumentListLoader } from '@/spa/router/agentDocumentListLoader';
@@ -157,6 +159,22 @@ export const agentPageChildren: RouteObject[] = [
     handle: { meta: agentChannelDetailRouteMeta },
     loader: channelDataLoader,
     path: 'channel/:platform',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/automations'),
+      'Desktop > Chat > Automations',
+    ),
+    handle: { meta: agentAutomationsRouteMeta },
+    path: 'automations',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/webhook'),
+      'Desktop > Chat > Webhook',
+    ),
+    handle: { meta: agentWebhookRouteMeta },
+    path: 'webhook',
   },
   {
     element: dynamicElement(

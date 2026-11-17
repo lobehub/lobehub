@@ -1,4 +1,4 @@
-import { buildConnectorManifest } from '@lobechat/mecha';
+import { buildConnectorManifest, resolveConnectorLinkParam } from '@lobechat/mecha';
 import type { ToolManifest } from '@lobechat/types';
 import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 
@@ -38,6 +38,7 @@ export function buildConnectorManifests(
         identifier: connector.identifier,
         isEnabled: connector.isEnabled,
         name: connector.name,
+        links: connector.links,
         tools: toolsByConnector.get(connector.id) ?? [],
       },
       mcpApps,
@@ -47,7 +48,19 @@ export function buildConnectorManifests(
     manifests.push({
       ...(manifest as ToolManifest),
       // @ts-ignore — mcpParams is a runtime-only field not in the public type
-      mcpParams: buildMcpParams(connector),
+      mcpParams: buildMcpParams(
+        (connector.links?.length ?? 0) > 1 ? { ...connector, credentials: null } : connector,
+      ),
+      ...((connector.links?.length ?? 0) > 1
+        ? {
+            connectorLinks: {
+              connectorId: connector.id,
+              param: resolveConnectorLinkParam(
+                (toolsByConnector.get(connector.id) ?? []).map((tool) => tool.inputSchema),
+              ),
+            },
+          }
+        : {}),
     });
   }
 

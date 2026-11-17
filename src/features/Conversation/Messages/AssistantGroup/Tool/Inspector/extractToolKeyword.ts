@@ -1,4 +1,6 @@
-import { readableShellCommand } from './readableShellCommand';
+import { describeShellCommandTitle } from './shellCommand/describeShellCommandTitle';
+import { readableShellCommand } from './shellCommand/readableShellCommand';
+import type { ShellCommandTitle } from './shellCommand/types';
 
 // Arg keys checked in priority order. NAME_KEYS (model-written description /
 // title) lead because they state what the step does; then query/pattern
@@ -65,4 +67,19 @@ export const extractToolKeyword = (args?: Record<string, unknown>): string | und
   if (url) return extractUrlKeyword(url);
 
   return undefined;
+};
+
+/**
+ * What an undescribed shell command does ("读取 app.ts", "运行测试 a.test.ts"),
+ * to replace the generic "执行命令 <command line>" title. `undefined` when the
+ * call has a model-written description (which already says what it does) or
+ * when no action describes the command.
+ */
+export const getShellCommandTitle = (
+  args?: Record<string, unknown>,
+): ShellCommandTitle | undefined => {
+  if (!args || pickString(args, NAME_KEYS)) return undefined;
+  // `script` is left out: it can hold source code for a non-shell runtime.
+  const command = pickString(args, ['command', 'cmd']);
+  return command ? describeShellCommandTitle(command) : undefined;
 };

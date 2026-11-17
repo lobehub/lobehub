@@ -1,10 +1,13 @@
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import type { SendMessageParams } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import type { AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
 import type { TFunction } from 'i18next';
 
 import { mcpService } from '@/services/mcp';
 import { getToolStoreState } from '@/store/tool';
+import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
@@ -35,6 +38,8 @@ export interface AppViewContext {
   identifier: string;
   isDark: boolean;
   lifecycle?: McpAppBridgeHost['lifecycle'];
+  /** The account the view acts as, when its arguments cannot name one (an entrypoint's `{}`). */
+  linkId?: string;
   /** This desktop's own MCP process produced the result; the view's calls run there. */
   onThisDevice: boolean;
   /** Tool call result envelope (`{ content, state, success }`). */
@@ -151,7 +156,16 @@ export const connectAppView = ({
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
-      const { agentId, identifier, onThisDevice, server, t } = getContext();
+      const {
+        agentId,
+        identifier,
+        onThisDevice,
+        server,
+        t,
+        args: initiatingArgs,
+        linkId: viewLinkId,
+      } = getContext();
+      const linkId = viewLinkId ?? getMcpAppLinkId(identifier, agentId, initiatingArgs);
       const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {
@@ -200,7 +214,7 @@ export const connectAppView = ({
               type: 'mcp',
             },
             // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal },
+            { agentId, fromMcpApp: true, onThisDevice, server, signal, linkId },
           ),
         );
       } finally {
@@ -313,4 +327,19 @@ export const getAppViewPhase = ({
   if (isLoading) return 'loading';
   if (!srcDoc || navigated) return 'fallback';
   return 'view';
+};
+
+/** Bind a view to the account of the tool call that created it. */
+export const getMcpAppLinkId = (
+  identifier: string,
+  agentId?: string,
+  args?: string,
+): string | undefined => {
+  const connector = connectorSelectors.connectorByIdentifierForAgent(
+    identifier,
+    agentId,
+  )(getToolStoreState());
+  const param = resolveConnectorLinkParam(connector?.tools.map((tool) => tool.inputSchema) ?? []);
+  const input: unknown = safeParseJSON(args ?? '{}');
+  return isRecord(input) && typeof input[param] === 'string' ? (input[param] as string) : undefined;
 };

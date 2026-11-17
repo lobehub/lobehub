@@ -243,6 +243,16 @@ export const channelRouter = router({
       const access = await ctx.channelService.openPeer(input.userId);
       return { data: access.channel.id, success: true };
     }),
+  /** Public Channels in the active workspace the caller can join. */
+  listJoinable: channelProcedure
+    .input(z.object({ search: z.string().max(100).optional() }).optional())
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.listJoinable(input?.search),
+    })),
+  join: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
+    const { channel } = await ctx.channelService.join(input.channelId);
+    return { data: channel, success: true };
+  }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,
@@ -257,16 +267,46 @@ export const channelRouter = router({
     await ctx.channelService.remove(input.channelId);
     return { success: true };
   }),
+  setMemberMuted: channelProcedure
+    .input(z.object({ channelId, memberId: z.uuid(), muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.setMemberMuted(input.channelId, input.memberId, input.muted);
+      return { success: true };
+    }),
+  editMessage: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        content: z.string().max(CHANNEL_LIMITS.contentLength),
+        messageId: z.uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
+      success: true,
+    })),
   rename: channelProcedure
     .input(z.object({ channelId, title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength) }))
     .mutation(async ({ ctx, input }) => ({
       data: await ctx.channelService.rename(input.channelId, input.title),
       success: true,
     })),
+  updateVisibility: channelProcedure
+    .input(z.object({ channelId, visibility: z.enum(['private', 'public']) }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.updateVisibility(input.channelId, input.visibility),
+      success: true,
+    })),
   removeThread: channelProcedure
     .input(z.object({ channelId, threadId }))
     .mutation(async ({ ctx, input }) => {
       await ctx.channelService.removeThread(input.channelId, input.threadId);
+      return { success: true };
+    }),
+  retryJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.retryJob(input.channelId, input.jobId);
       return { success: true };
     }),
   retryRouting: channelProcedure

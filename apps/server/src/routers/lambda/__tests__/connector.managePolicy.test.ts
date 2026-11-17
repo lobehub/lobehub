@@ -68,6 +68,7 @@ describe('connectorRouter manage policy', () => {
     mocks.getConnectorMemberManage.mockResolvedValue('all_members');
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'created' }),
+      createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'created' } }),
       findById: vi.fn(),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       update: vi.fn(),

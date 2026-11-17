@@ -49,6 +49,7 @@ const channel: ChannelListItem = {
   sequence: 0,
   status: 'active',
   title: 'Team',
+  visibility: 'private',
   workspaceId: 'ws_1',
 };
 

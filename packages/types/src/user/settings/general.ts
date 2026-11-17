@@ -46,6 +46,13 @@ export interface UserGeneralConfig {
   neutralColor?: NeutralColors;
   primaryColor?: LobePrimaryColor;
   responseLanguage?: string;
+  /**
+   * Whether a tool call that only reads an image (e.g. Claude Code `Read` of a
+   * PNG) gets its own row with the image expanded. Off folds it into the
+   * "N calls" collapse like any other call, collapsed until clicked.
+   * @default true
+   */
+  showImageReadPreview?: boolean;
   telemetry: boolean;
   timezone?: string;
   transitionMode?: ResponseAnimationStyle;

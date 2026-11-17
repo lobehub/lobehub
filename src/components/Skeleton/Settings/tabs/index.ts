@@ -4,6 +4,7 @@ import AboutSkeleton from './About';
 import AdvancedSkeleton from './Advanced';
 import APIKeySkeleton from './APIKey';
 import AppearanceSkeleton from './Appearance';
+import AutomationsSkeleton from './Automations';
 import BillingSkeleton from './Billing';
 import ConnectorSkeleton from './Connector';
 import CreditsSkeleton from './Credits';
@@ -41,6 +42,7 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.Advanced]: AdvancedSkeleton,
   [SettingsTabs.APIKey]: APIKeySkeleton,
   [SettingsTabs.Appearance]: AppearanceSkeleton,
+  [SettingsTabs.Automations]: AutomationsSkeleton,
   [SettingsTabs.Billing]: BillingSkeleton,
   [SettingsTabs.Connector]: ConnectorSkeleton,
   [SettingsTabs.Credits]: CreditsSkeleton,

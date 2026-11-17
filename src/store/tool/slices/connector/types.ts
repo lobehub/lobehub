@@ -1,3 +1,5 @@
+import type { ConnectorAuthKind, ConnectorLinkProfile, ConnectorLinkStatus } from '@lobechat/types';
+
 import type { ConnectorToolPermission } from '@/database/schemas';
 
 export interface ConnectorTool {
@@ -16,6 +18,7 @@ export interface ConnectorTool {
 export interface ConnectorWithTools {
   /** Set when this connector is fully owned by an agent (Copy / Connect-new). */
   agentId?: string | null;
+  authKind?: ConnectorAuthKind;
   /**
    * Attribution — avatar of the member who authorized this connector (the
    * Composio account linker when present, else the row creator). Server-resolved
@@ -28,6 +31,7 @@ export interface ConnectorWithTools {
   id: string;
   identifier: string;
   isEnabled: boolean;
+  links?: ConnectorLinkSummary[];
   mcpConnectionType: string | null;
   mcpServerUrl: string | null;
   metadata: Record<string, unknown> | null;
@@ -38,6 +42,40 @@ export interface ConnectorWithTools {
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;
 }
+
+export interface ConnectorLinkSummary {
+  authorizedByAvatar: string | null;
+  authorizedByName: string | null;
+  createdAt: string;
+  id: string;
+  name: string;
+  profile: ConnectorLinkProfile | null;
+  status: ConnectorLinkStatus;
+}
+
+export interface ConnectorAccountFlowOptions {
+  popup?: Window | null;
+  signal?: AbortSignal;
+}
+export interface ConnectorAccountFlowResult {
+  linkId?: string;
+  outcome: 'created' | 'reauthorized' | 'matchedExisting';
+}
+
+export const supportsMultipleConnectorAccounts = (
+  connector: Pick<ConnectorWithTools, 'authKind' | 'mcpConnectionType' | 'sourceType'>,
+): boolean =>
+  connector.authKind === 'oauth2' &&
+  connector.sourceType === 'custom' &&
+  connector.mcpConnectionType === 'http';
+
+export const isConnectorLinkNameConflict = (error: unknown): boolean => {
+  const candidate = error as {
+    data?: { code?: string };
+    shape?: { data?: { code?: string } };
+  } | null;
+  return candidate?.data?.code === 'CONFLICT' || candidate?.shape?.data?.code === 'CONFLICT';
+};
 
 /**
  * An agent-owned connector as returned by `connector.listAgentBound`, enriched

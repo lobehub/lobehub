@@ -1,4 +1,11 @@
 import {
+  hasMandatoryApproval,
+  MANDATORY_APPROVAL_KEY,
+  marketplaceToolIntervention,
+  marketplaceToolPoliciesOf,
+  withMandatoryApprovalMark,
+} from '@lobechat/const';
+import {
   buildMcpToolMetadata,
   getMcpAppEntrypoints,
   resolveMcpUiToolMeta,
@@ -12,7 +19,8 @@ import {
 } from '@lobechat/utils/mcpEndpoint';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
-import type { ConnectorToolModel } from '@/database/models/connectorTool';
+import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
+import type { ConnectorToolModel, SyncToolInput } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
@@ -21,14 +29,17 @@ import {
 } from '@/database/schemas';
 import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
+import { resolveConnectorToolPermission } from '@/server/routers/lambda/_helpers/connectorToolPermission';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import { ensureFreshConnectorToken } from './tokens';
+import { getConnectorLinkModel, resolveConnectorAccount } from './links';
 
 export interface ConnectorToolSyncContext {
+  connectorLinkModel?: ConnectorLinkModel;
   connectorModel: ConnectorModel;
   connectorToolModel: ConnectorToolModel;
 }
@@ -136,6 +147,36 @@ export const pruneMissingAutoConnectorTools = async (
   await connectorToolModel.deleteToolsNotIn(connectorId, [...listedToolNames, ...tombstones]);
 };
 
+type ConnectorToolWriteContext = {
+  connectorModel: Pick<ConnectorModel, 'updateStatus'>;
+  connectorToolModel: Pick<
+    ConnectorToolModel,
+    'deleteToolsNotIn' | 'queryByConnector' | 'upsertMany'
+  >;
+};
+
+/**
+ * Store the connector's tool sync inputs and mark it `connected`. A tool
+ * synced before keeps the permission it has.
+ */
+export const writeConnectorToolSyncInputs = async (
+  connectorId: string,
+  syncInputs: SyncToolInput[],
+  ctx: ConnectorToolWriteContext,
+  options: ConnectorToolSyncOptions = {},
+): Promise<{ toolCount: number }> => {
+  await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+  if (options.pruneMissingAutoTools) {
+    await pruneMissingAutoConnectorTools(
+      ctx.connectorToolModel,
+      connectorId,
+      syncInputs.map((tool) => tool.toolName),
+    );
+  }
+  await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
+  return { toolCount: syncInputs.length };
+};
+
 /**
  * A connector this server must not connect to itself (stdio, local network, or
  * set to connect through the device) is listed on a device through the device
@@ -177,28 +218,72 @@ const listOnDevice = async (
   });
 };
 
+export interface ConnectorToolListOptions {
+  /**
+   * By tool name, the `humanIntervention` a marketplace manifest gives a tool
+   * the server lists, which an MCP listing cannot carry (an HTTP marketplace
+   * install). It applies as a client-listed tool's does in
+   * `toClientToolSyncInputs`. Without it (a refresh), a synced tool keeps the
+   * mandatory approval it has. Either way, market policies the connector
+   * stores (`marketplaceToolPoliciesOf`) take precedence over it.
+   */
+  humanInterventions?: ReadonlyMap<string, unknown>;
+  /** List with this account's credentials instead of the connector's primary one. */
+  linkId?: string;
+}
+
+/** The OAuth account a listing ran as, which a sync marks with the outcome. */
+export interface ConnectorToolListingAccount {
+  /** The account listed as; none for a connector without accounts. */
+  link?: DecryptedConnectorLink;
+  /** The connector's accounts: with two or more, one account's failure leaves the connector's status as it is. */
+  linkCount: number;
+}
+
+export interface ConnectorToolListing extends ConnectorToolListingAccount {
+  /**
+   * Whether the server offers MCP Events webhooks, when asked (the `webhook` flag is on). A
+   * connector listed through a device never offers them: webhooks need a server the cloud reaches.
+   */
+  events?: { supported: boolean };
+  syncInputs: SyncToolInput[];
+}
+
+/** The connector's metadata with the events capability a listing found, for the caller to store. */
+export const withEventsCapability = <T extends Record<string, any> | null | undefined>(
+  metadata: T,
+  events: ConnectorToolListing['events'],
+) =>
+  events
+    ? {
+        ...metadata,
+        capabilities: { ...metadata?.capabilities, events: { supported: events.supported } },
+      }
+    : metadata;
+
 /**
- * Connect to a connector's MCP server, fetch its tool list, and sync it into
- * `user_connector_tools`. Refreshes the OAuth token first when needed, and
- * updates the connector status (`connected` on success, `error` on failure).
- *
- * Shared by the `syncTools` tRPC mutation and the OAuth callback so a connector
- * has its tools immediately after authorization — no client round-trip needed.
+ * Connect to a connector's MCP server and build the sync inputs of the tools
+ * it lists, refreshing the OAuth token first when needed. Writes no tool and
+ * no status: {@link syncConnectorToolsById} does, as does a caller that must
+ * write them only while the row is still its own (a marketplace install).
  */
-export const syncConnectorToolsById = async (
+export const listConnectorToolSyncInputs = async (
   connectorId: string,
   /**
    * `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed
    * too. `serverDB` finds the user's device for a connector the server can't
    * reach itself (`shouldConnectViaDevice`). Required, so each caller decides:
-   * `undefined` fails such a sync instead of tunneling it to a device.
+   * `undefined` fails such a listing instead of tunneling it to a device.
    */
   ctx: ConnectorToolSyncContext & {
     serverDB: LobeChatDatabase | undefined;
     userId?: string | null;
   },
-  options: ConnectorToolSyncOptions = {},
-): Promise<{ toolCount: number }> => {
+  options: ConnectorToolListOptions & {
+    /** Called when the server cannot be reached or refuses the listing, before it rethrows. */
+    onListError?: (account: ConnectorToolListingAccount) => Promise<void>;
+  } = {},
+): Promise<ConnectorToolListing> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
 
@@ -207,53 +292,123 @@ export const syncConnectorToolsById = async (
   }
 
   // Refresh the OAuth access token if it has expired before connecting.
-  connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const account = await resolveConnectorAccount(connector, ctx, options.linkId);
+  const { link } = account;
+  connector = account.connector;
 
   const mcpParams = buildConnectorMcpParams(connector);
 
   const mcpApps = await isMcpAppsEnabled(ctx.userId);
+  const mcpEvents = await isWebhookEnabled(ctx.userId);
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
+  let events: ConnectorToolListing['events'];
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
-    rawTools =
-      (await listOnDevice(connector, mcpParams, ctx, mcpApps)) ??
-      (await mcpService.listRawTools(mcpParams, {
-        mcpApps,
-      }));
+    const deviceTools = await listOnDevice(connector, mcpParams, ctx, mcpApps);
+    rawTools = deviceTools ?? (await mcpService.listRawTools(mcpParams, { mcpApps, mcpEvents }));
+    if (mcpEvents)
+      // Event webhooks need a server the cloud reaches directly; a connector that runs
+      // through a device never offers them, so it is not even asked.
+      events = deviceTools
+        ? { supported: false }
+        : await mcpService.getEventsCapability(mcpParams, { mcpApps, mcpEvents });
   } catch (err) {
-    await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
+    await options.onListError?.({ link, linkCount: account.accountCount });
     throw err;
   }
 
-  const syncInputs = rawTools.map((t) => ({
-    crudType: inferCrudType(t.name),
-    description: t.description,
-    inputSchema: t.inputSchema as Record<string, unknown>,
+  // Only an install holds the marketplace's policy. Any other sync (the
+  // background refresh, a manual one, the OAuth callback) has the listing
+  // alone, which cannot tell whether a manifest's `always` still holds: the
+  // tools it marked mandatory stay so, or auto-run would skip their approval.
+  const keptMandatory = options.humanInterventions
+    ? new Set<string>()
+    : new Set(
+        (await ctx.connectorToolModel.queryByConnector(connectorId))
+          .filter((tool) => hasMandatoryApproval(tool.metadata))
+          .map((tool) => tool.toolName),
+      );
+
+  // The market's per-tool policies, stored at the install, decide every sync:
+  // a declared tool the server only lists later keeps its policy, and one the
+  // market never declared (added since, or renamed) gets no auto-run
+  const marketPolicies = marketplaceToolPoliciesOf(connector.metadata);
+
+  const syncInputs = rawTools.map((t) => {
+    const humanIntervention = marketplaceToolIntervention(
+      marketPolicies,
+      t.name,
+      options.humanInterventions?.get(t.name),
+    );
     // Kept even for view-only tools: a view's call must find the tool synced,
     // while the manifest build leaves it out of the model's tool list.
-    metadata: buildMcpToolMetadata(
-      resolveMcpUiToolMeta(t._meta, false).visibility,
-      mcpApps
-        ? {
-            ...resolveMcpUiToolMeta(t._meta),
-            entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
-            threadEntry: getMcpAppEntrypoints([t], true)[0],
-          }
-        : undefined,
-    ),
-    toolName: t.name,
-  }));
-
-  await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
-  if (options.pruneMissingAutoTools) {
-    await pruneMissingAutoConnectorTools(
-      ctx.connectorToolModel,
-      connectorId,
-      syncInputs.map((tool) => tool.toolName),
+    const metadata = withMandatoryApprovalMark(
+      buildMcpToolMetadata(
+        resolveMcpUiToolMeta(t._meta, false).visibility,
+        mcpApps
+          ? {
+              ...resolveMcpUiToolMeta(t._meta),
+              entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
+              threadEntry: getMcpAppEntrypoints([t], true)[0],
+            }
+          : undefined,
+      ),
+      humanIntervention,
     );
-  }
-  await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
+    return {
+      crudType: inferCrudType(t.name),
+      defaultPermission: resolveConnectorToolPermission(humanIntervention),
+      description: t.description,
+      inputSchema: t.inputSchema as Record<string, unknown>,
+      metadata: keptMandatory.has(t.name)
+        ? { ...metadata, [MANDATORY_APPROVAL_KEY]: true }
+        : metadata,
+      toolName: t.name,
+    };
+  });
 
-  return { toolCount: syncInputs.length };
+  return { events, link, linkCount: account.accountCount, syncInputs };
+};
+
+/**
+ * Connect to a connector's MCP server, fetch its tool list, and sync it into
+ * `user_connector_tools`. Refreshes the OAuth token first when needed, and
+ * updates the connector status (`connected` on success, `error` on failure),
+ * and that of the account it listed as.
+ *
+ * Shared by the `syncTools` tRPC mutation and the OAuth callback so a connector
+ * has its tools immediately after authorization — no client round-trip needed.
+ */
+export const syncConnectorToolsById = async (
+  connectorId: string,
+  /** As {@link listConnectorToolSyncInputs} takes it. */
+  ctx: ConnectorToolSyncContext & {
+    serverDB: LobeChatDatabase | undefined;
+    userId?: string | null;
+  },
+  options: ConnectorToolSyncOptions & ConnectorToolListOptions = {},
+): Promise<{ toolCount: number }> => {
+  const { pruneMissingAutoTools, ...listOptions } = options;
+  const { events, link, syncInputs } = await listConnectorToolSyncInputs(connectorId, ctx, {
+    ...listOptions,
+    onListError: async (account) => {
+      if (account.link)
+        await getConnectorLinkModel(ctx).updateStatus(connectorId, account.link.id, 'error');
+      if (account.linkCount < 2)
+        await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
+    },
+  });
+  if (events) {
+    const current = await ctx.connectorModel.findById(connectorId);
+    if (current)
+      await ctx.connectorModel.update(connectorId, {
+        metadata: withEventsCapability(current.metadata, events),
+      });
+  }
+  const result = await writeConnectorToolSyncInputs(connectorId, syncInputs, ctx, {
+    pruneMissingAutoTools,
+  });
+  if (link) await getConnectorLinkModel(ctx).updateStatus(connectorId, link.id, 'connected');
+  return result;
 };

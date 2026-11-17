@@ -6,6 +6,7 @@ import {
   channelJobTone,
   directAvatarState,
   hasReplyActivity,
+  mainTimelineFailures,
   memberCurrentJob,
   memberJobStatus,
   replyActivityJobs,
@@ -159,6 +160,19 @@ describe('Channel task tone', () => {
       job({ id: 'c-stopped', memberId: 'c', status: 'cancelled', publicationRevoked: true }),
     ];
     expect(unresolvedFailures(jobs).map((entry) => entry.id)).toEqual(['b-failed']);
+  });
+});
+
+describe('mainTimelineFailures', () => {
+  const job = (patch: Partial<ChannelPublicJob>) =>
+    ({ memberId: 'a', publicationRevoked: false, threadId: null, ...patch }) as ChannelPublicJob;
+
+  it('keeps a main failure while the same Agent works in a thread', () => {
+    const jobs = [
+      job({ id: 'thread-running', status: 'running', threadId: 'thr_1' }),
+      job({ id: 'main-failed', status: 'failed' }),
+    ];
+    expect(mainTimelineFailures(jobs).map((entry) => entry.id)).toEqual(['main-failed']);
   });
 });
 

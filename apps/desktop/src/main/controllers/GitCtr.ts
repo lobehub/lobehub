@@ -155,9 +155,13 @@ export default class GitController extends ControllerModule {
   }
 
   @IpcMethod()
-  async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
+  async getGitAheadBehind(
+    payload: string | { branch?: string; path: string },
+  ): Promise<GitAheadBehind> {
     const { getGitAheadBehind: computeGitAheadBehind } = await loadGit();
-    return computeGitAheadBehind(dirPath);
+    // Older renderers send the bare path; newer ones may name a branch.
+    if (typeof payload === 'string') return computeGitAheadBehind(payload);
+    return computeGitAheadBehind(payload.path, { branch: payload.branch });
   }
 
   @IpcMethod()
@@ -165,6 +169,7 @@ export default class GitController extends ControllerModule {
     branch: string;
     create?: boolean;
     path: string;
+    startPoint?: string;
   }): Promise<GitCheckoutResult> {
     const { checkoutGitBranch: runCheckoutGitBranch } = await loadGit();
     return runCheckoutGitBranch(payload);
@@ -199,6 +204,7 @@ export default class GitController extends ControllerModule {
   async addGitWorktree(payload: {
     branch: string;
     path: string;
+    startPoint?: string;
     worktreePath: string;
   }): Promise<GitAddWorktreeResult> {
     const { addGitWorktree: runAddGitWorktree } = await loadGit();
@@ -206,13 +212,13 @@ export default class GitController extends ControllerModule {
   }
 
   @IpcMethod()
-  async pullGitBranch(payload: { path: string }): Promise<GitPullResult> {
+  async pullGitBranch(payload: { branch?: string; path: string }): Promise<GitPullResult> {
     const { pullGitBranch: runPullGitBranch } = await loadGit();
     return runPullGitBranch(payload);
   }
 
   @IpcMethod()
-  async pushGitBranch(payload: { path: string }): Promise<GitPushResult> {
+  async pushGitBranch(payload: { branch?: string; path: string }): Promise<GitPushResult> {
     const { pushGitBranch: runPushGitBranch } = await loadGit();
     return runPushGitBranch(payload);
   }

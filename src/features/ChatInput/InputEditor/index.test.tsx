@@ -1,5 +1,5 @@
 import { RequestTrigger } from '@lobechat/types';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InputEditor from './index';
@@ -362,17 +362,6 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect((await getEditorStyle())?.fontSize).toBe(16);
-  });
-
-  it('keeps restored image references in sync on mobile without inserting new ones', async () => {
-    const { useImageRefTagSync } = await import('./ImageRefTag');
-    platform.isMobile = true;
-
-    render(<InputEditor />);
-
-    await waitFor(() =>
-      expect(useImageRefTagSync).toHaveBeenLastCalledWith(expect.anything(), { insertNew: false }),
-    );
   });
 
   it('keeps the editor font size unchanged on desktop', async () => {

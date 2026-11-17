@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { TaskModel } from '@/database/models/task';
 import { router } from '@/libs/trpc/lambda';
+import { AgentDocumentEditRejectedError } from '@/server/services/agentDocuments/editRejectedError';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { resolveTaskOrThrow } from '@/server/services/task/utils';
@@ -360,13 +361,18 @@ export const toolDocumentsRouter = router({
         .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
-      const doc = await ctx.agentDocumentService.modifyDocumentNodesById(
-        input.id,
-        input.operations,
-        input.agentId,
-      );
-
-      return doc;
+      try {
+        return await ctx.agentDocumentService.modifyDocumentNodesById(
+          input.id,
+          input.operations,
+          input.agentId,
+        );
+      } catch (error) {
+        if (error instanceof AgentDocumentEditRejectedError) {
+          throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+        }
+        throw error;
+      }
     }),
   /**
    * Tool-oriented: replace document content by id

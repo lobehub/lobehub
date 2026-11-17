@@ -1,11 +1,47 @@
+import type { ConnectorVisibility } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
+import type { SQL } from 'drizzle-orm';
 import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
 import { agentEvalDatasets, ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
-import type { LobeChatDatabase } from '../type';
-import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import type { LobeChatDatabase, Transaction } from '../type';
+import {
+  buildWorkspacePayload,
+  buildWorkspaceWhere,
+  normalizeWorkspaceId,
+} from '../utils/workspace';
 import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
-import { connectorAccessScope } from './connectorScope';
+import {
+  type BaseIdentifierScope,
+  claimBaseIdentifier,
+  ConnectorIdentifierHeldError,
+  moveToBaseUnlessIdentifierHeld,
+  queryBaseHolders,
+  sameBaseVisibility,
+} from './connectorIdentifierClaim';
+import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
+import { deleteIfMetadataContains, updateMetadataIfContains } from './connectorMetadataGuard';
+import {
+  connectorAccessScope,
+  connectorAgentConfigScope,
+  connectorRunScope,
+  type ConnectorRunTarget,
+} from './connectorScope';
+
+export { ConnectorIdentifierHeldError } from './connectorIdentifierClaim';
+export type { ConnectorRunTarget } from './connectorScope';
+
+/**
+ * What a runtime resolution runs as: a {@link ConnectorRunTarget}, or an agent
+ * id alone — that agent's run without a topic, which resolves the workspace's
+ * shared rows only (see {@link connectorRunScope}).
+ */
+export type ConnectorRunTargetInput = ConnectorRunTarget | string;
+
+const toRunTarget = (target: ConnectorRunTargetInput = {}): ConnectorRunTarget =>
+  typeof target === 'string' ? { agentId: target } : target;
 
 interface GateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
@@ -14,6 +50,7 @@ interface GateKeeper {
 
 export interface DecryptedConnector extends Omit<UserConnectorItem, 'credentials'> {
   credentials: ConnectorCredentials | null;
+  links?: { id: string; name: string; userId?: string }[];
 }
 
 export interface ConnectorReference {
@@ -52,6 +89,21 @@ export interface ComposioConnectorReference extends ConnectorReference {
   };
 }
 
+/**
+ * A Composio account held by the legacy plugin projection
+ * (`user_installed_plugins.customParams.composio`).
+ */
+export interface ComposioPluginMirror {
+  connectedAccountId: string;
+  identifier: string;
+  /**
+   * The Composio user entity the projection runs the account as
+   * (`linkedByUserId`, else the projection row's user), the same owner the
+   * runtime passes to Composio.
+   */
+  ownerUserId: string;
+}
+
 type CreateConnectorParams = Omit<NewUserConnector, 'userId' | 'id' | 'createdAt' | 'updatedAt'>;
 
 type UpdateConnectorParams = Partial<
@@ -86,6 +138,9 @@ export class ConnectorModel {
     this.gateKeeper = gateKeeper;
   }
 
+  getLinkModel = () =>
+    new ConnectorLinkModel(this.db, this.userId, this.workspaceId, this.gateKeeper);
+
   private ownership = () =>
     connectorAccessScope(
       this.db,
@@ -102,6 +157,21 @@ export class ConnectorModel {
    * and collide on identifier.
    */
   private baseScope = () => and(this.ownership(), isNull(userConnectors.agentId));
+
+  /**
+   * Base rows an agentless runtime lookup may use. In a workspace that is the
+   * shared rows only: a member's private connector serves their private agents
+   * and nothing else (not a client-side call without an agent, not a dashboard
+   * read another member can see). The management view ({@link baseScope}) also
+   * lists the caller's own private rows.
+   */
+  private sharedBaseScope = () =>
+    and(
+      this.evaluationDatasetId
+        ? this.ownership()
+        : connectorRunScope(this.db, { userId: this.userId, workspaceId: this.workspaceId }, {}),
+      isNull(userConnectors.agentId),
+    );
 
   /**
    * Deterministic connector order for runtime resolution: by identifier, then id
@@ -131,8 +201,10 @@ export class ConnectorModel {
   };
 
   /**
-   * Candidate rows for agent-aware resolution within the current scope. For an
-   * agent this is:
+   * Candidate rows for agent-aware resolution. The base rows come from
+   * {@link connectorRunScope}: a workspace run sees the shared rows, and a
+   * private agent's run in its own topic also sees its owner's private and
+   * personal rows. On top of that, for an agent:
    * - agent-OWNED rows (`agent_id = agentId`) — the Copy / Connect-new flows;
    * - base rows (`agent_id IS NULL`) that are either MOUNTED by this agent
    *   (`metadata.mountedByAgentId = agentId`, the Linked flow) or free (not
@@ -140,8 +212,23 @@ export class ConnectorModel {
    * A base row mounted (locked) by *another* agent is excluded, so a mounted
    * connector can serve only its one agent. Without an agent, only free base
    * rows are candidates.
+   *
+   * An evaluation model keeps its own Dataset scope ({@link ownership}).
    */
-  private scopePredicate = (agentId?: string) => {
+  private scopePredicate = (target: ConnectorRunTarget) =>
+    this.agentNarrowing(
+      this.evaluationDatasetId
+        ? this.ownership()
+        : connectorRunScope(
+            this.db,
+            { userId: this.userId, workspaceId: this.workspaceId },
+            target,
+          ),
+      target.agentId,
+    );
+
+  /** The agent-owned / mounted / free narrowing of {@link scopePredicate} over `base`. */
+  private agentNarrowing = (base: SQL | undefined, agentId?: string) => {
     // COALESCE'd to a sentinel rather than null-tested: `->> … IS NULL` in a
     // WHERE clause is one bm25 index on `user_connectors` away from taking every
     // caller down at plan time. See the note on `TopicModel`. `''` is a safe
@@ -150,10 +237,10 @@ export class ConnectorModel {
     // Private Dataset imports are usable only through an exact evaluation binding.
     // Exclude them before priority selection and credential decryption in ordinary chat.
     if (!agentId) {
-      return and(this.ownership(), isNull(userConnectors.agentId), sql`${mountedBy} = ''`);
+      return and(base, isNull(userConnectors.agentId), sql`${mountedBy} = ''`);
     }
     return and(
-      this.ownership(),
+      base,
       or(
         eq(userConnectors.agentId, agentId),
         and(
@@ -165,17 +252,38 @@ export class ConnectorModel {
   };
 
   /**
-   * Reduce candidate rows to at most one per identifier by priority within the
-   * current scope: agent-OWNED (2) > MOUNTED by this agent (1) > free base (0).
-   * Resolution never crosses the base scope: a workspace run resolves within the
-   * workspace, a personal run within personal — no cross-scope personal fallback.
+   * Reduce candidate rows to at most one per identifier. Rows are ranked by
+   * binding first, then by whose connection it is:
+   *
+   * 1. binding — agent-OWNED by this agent > MOUNTED by this agent > free base;
+   * 2. within a binding — the owner's private row in this workspace > the
+   *    owner's personal row > the workspace's shared row. A private agent's
+   *    owner chose their own connection for their own agent, so it shadows
+   *    the shared one; a row made inside this workspace beats one carried
+   *    over from personal space.
+   *
+   * Equal ranks keep the first row in {@link resolutionOrder} (identifier,
+   * then id), so the pick never follows the physical row order. The result
+   * drives the order of the model's tool schema array.
+   *
+   * Only a private agent's run in its own topic can see private or personal
+   * rows at all (see {@link connectorRunScope}); every other run only ranks
+   * shared rows here.
    */
   private pickByPriority = (rows: UserConnectorItem[], agentId?: string): UserConnectorItem[] => {
-    const rank = (row: UserConnectorItem): number => {
+    const workspaceId = normalizeWorkspaceId(this.workspaceId);
+    const bindingRank = (row: UserConnectorItem): number => {
       if (agentId && row.agentId === agentId) return 2;
       if (agentId && row.metadata?.mountedByAgentId === agentId) return 1;
       return 0;
     };
+    const ownershipRank = (row: UserConnectorItem): number => {
+      if (!workspaceId) return 0;
+      if (row.workspaceId === workspaceId && row.visibility === 'private') return 2;
+      if (row.workspaceId === null) return 1;
+      return 0;
+    };
+    const rank = (row: UserConnectorItem) => bindingRank(row) * 3 + ownershipRank(row);
     const byIdentifier = new Map<string, UserConnectorItem>();
     for (const row of rows) {
       const current = byIdentifier.get(row.identifier);
@@ -184,65 +292,148 @@ export class ConnectorModel {
     return [...byIdentifier.values()];
   };
 
+  /**
+   * The model for a resolved row's own scope. A private agent's workspace run
+   * can resolve its owner's personal rows (`workspace_id IS NULL`), which this
+   * workspace-scoped model cannot write; follow-up writes on such a row (a
+   * rotated OAuth token, a status change) go through the personal scope.
+   * Every other row is already in this model's scope.
+   */
+  forRow = (
+    row: Pick<UserConnectorItem, 'userId' | 'workspaceId'>,
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
+  ): ConnectorModel => {
+    if (
+      !this.evaluationDatasetId &&
+      normalizeWorkspaceId(this.workspaceId) &&
+      row.workspaceId === null &&
+      row.userId === this.userId
+    ) {
+      return new ConnectorModel(this.db, this.userId, undefined, gateKeeper);
+    }
+    return this;
+  };
+
+  /**
+   * Create a connector. An agent's own row is inserted as is. A base row
+   * (`agent_id IS NULL`) is claimed like {@link createUnlessIdentifierHeld}, under
+   * the identifier lock, and throws {@link ConnectorIdentifierHeldError} when a
+   * base row of the scope already holds the identifier: no caller can add a
+   * second base row for an identifier between another writer's lookup and insert.
+   */
   create = async (
     params: CreateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<UserConnectorItem> => {
-    return this.db.transaction(async (tx) => {
-      if (!this.evaluationDatasetId && params.metadata?.agentEval) {
-        throw new EvalConnectorUpdateError(
-          'Use the Dataset connection API for evaluation connections',
-        );
-      }
-      if (this.evaluationDatasetId) {
-        const [dataset] = await tx
-          .select({ id: agentEvalDatasets.id })
-          .from(agentEvalDatasets)
-          .where(
-            and(
-              eq(agentEvalDatasets.id, this.evaluationDatasetId),
-              buildWorkspaceWhere(
-                { userId: this.userId, workspaceId: this.workspaceId },
-                agentEvalDatasets,
-              ),
-            ),
-          )
-          .for('share');
-        if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
-        if (params.credentials && !gateKeeper)
-          throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
-        if (params.agentId || params.metadata?.mountedByAgentId)
-          throw new EvalConnectorUpdateError(
-            'Evaluation connections cannot be assigned to a normal Agent',
-          );
-        const marker = params.metadata?.agentEval;
-        params = {
-          ...params,
-          metadata: {
-            ...params.metadata,
-            agentEval: {
-              ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
-              datasetId: this.evaluationDatasetId,
-            },
-          },
-        };
-      }
-      const credentials = params.credentials
-        ? await encryptCredentials(params.credentials, gateKeeper)
-        : null;
+    if (params.agentId)
+      return this.db.transaction((tx) => this.insertInTransaction(tx, params, gateKeeper));
 
-      const [result] = await tx
-        .insert(userConnectors)
-        .values(
-          buildWorkspacePayload(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { ...params, credentials },
+    const claim = await this.createUnlessIdentifierHeld(params, { gateKeeper });
+    if ('holder' in claim) throw new ConnectorIdentifierHeldError(params.identifier);
+    return claim.created;
+  };
+
+  /**
+   * Create a base connector (`agent_id IS NULL`) unless a row in this scope
+   * already holds its identifier in its visibility. The lookup and the insert
+   * are one step, serialized on the identifier lock every base-row writer takes
+   * ({@link claimBaseIdentifier}). `canReplace` may let the holding rows go:
+   * they are deleted, with their tools, in that step; one that may not go
+   * keeps the identifier and is returned.
+   */
+  createUnlessIdentifierHeld = async (
+    params: Omit<CreateConnectorParams, 'agentId'>,
+    options: {
+      canReplace?: (holder: UserConnectorItem) => boolean;
+      gateKeeper?: GateKeeper;
+    } = {},
+  ): Promise<{ created: UserConnectorItem } | { holder: UserConnectorItem }> => {
+    const { canReplace, gateKeeper = this.gateKeeper } = options;
+
+    return this.db.transaction(async (tx) => {
+      const holder = await claimBaseIdentifier(tx, this.baseIdentifierScope(), params, canReplace);
+      if (holder) return { holder };
+      return {
+        created: await this.insertInTransaction(tx, { ...params, agentId: null }, gateKeeper),
+      };
+    });
+  };
+
+  /** See {@link moveToBaseUnlessIdentifierHeld}. */
+  moveToBaseUnlessIdentifierHeld = async (id: string, identifier: string) =>
+    moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
+
+  /** See {@link queryBaseHolders}. */
+  queryBaseHolders = async (
+    identifier: string,
+    visibility?: ConnectorVisibility,
+  ): Promise<UserConnectorItem[]> =>
+    queryBaseHolders(this.db, this.baseIdentifierScope(), identifier, visibility);
+
+  private baseIdentifierScope = (): BaseIdentifierScope => ({
+    ownership: this.ownership,
+    userId: this.userId,
+    workspaceId: this.workspaceId,
+  });
+
+  private insertInTransaction = async (
+    tx: Transaction,
+    params: CreateConnectorParams,
+    gateKeeper: GateKeeper | undefined,
+  ): Promise<UserConnectorItem> => {
+    if (!this.evaluationDatasetId && params.metadata?.agentEval) {
+      throw new EvalConnectorUpdateError(
+        'Use the Dataset connection API for evaluation connections',
+      );
+    }
+    if (this.evaluationDatasetId) {
+      const [dataset] = await tx
+        .select({ id: agentEvalDatasets.id })
+        .from(agentEvalDatasets)
+        .where(
+          and(
+            eq(agentEvalDatasets.id, this.evaluationDatasetId),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              agentEvalDatasets,
+            ),
           ),
         )
-        .returning();
+        .for('share');
+      if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
+      if (params.credentials && !gateKeeper)
+        throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
+      if (params.agentId || params.metadata?.mountedByAgentId)
+        throw new EvalConnectorUpdateError(
+          'Evaluation connections cannot be assigned to a normal Agent',
+        );
+      const marker = params.metadata?.agentEval;
+      params = {
+        ...params,
+        metadata: {
+          ...params.metadata,
+          agentEval: {
+            ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
+            datasetId: this.evaluationDatasetId,
+          },
+        },
+      };
+    }
+    const credentials = params.credentials
+      ? await encryptCredentials(params.credentials, gateKeeper)
+      : null;
 
-      return result;
-    });
+    const [result] = await tx
+      .insert(userConnectors)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...params, credentials },
+        ),
+      )
+      .returning();
+
+    return result;
   };
 
   /**
@@ -296,6 +487,17 @@ export class ConnectorModel {
   delete = async (id: string): Promise<void> => {
     await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
   };
+
+  /** See {@link deleteIfMetadataContains}. */
+  deleteIfMetadataContains = async (id: string, match: Record<string, unknown>) =>
+    deleteIfMetadataContains(this.db, this.ownership, id, match);
+
+  /** See {@link updateMetadataIfContains}. */
+  updateMetadataIfContains = async (
+    id: string,
+    match: Record<string, unknown>,
+    metadata: NonNullable<DecryptedConnector['metadata']>,
+  ) => updateMetadataIfContains(this.db, this.ownership, id, match, metadata);
 
   query = async (
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
@@ -366,8 +568,9 @@ export class ConnectorModel {
   };
 
   /**
-   * Base (non-agent) rows for the given identifiers. Excludes agent-scoped rows;
-   * use {@link resolveByIdentifiers} for agent-aware runtime resolution.
+   * Base (non-agent) shared rows for the given identifiers (see
+   * {@link sharedBaseScope}). Excludes agent-scoped rows; use
+   * {@link resolveByIdentifiers} for agent-aware runtime resolution.
    */
   queryByIdentifiers = async (
     identifiers: string[],
@@ -378,7 +581,7 @@ export class ConnectorModel {
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)))
+      .where(and(this.sharedBaseScope(), inArray(userConnectors.identifier, identifiers)))
       .orderBy(...this.resolutionOrder());
 
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
@@ -386,9 +589,14 @@ export class ConnectorModel {
 
   /**
    * Agent-aware runtime resolution. For each identifier returns at most one
-   * connector, preferring the agent-owned row (`agent_id = agentId`) over the
-   * base row (Agent > Workspace/Personal). When `agentId` is omitted this is
-   * equivalent to {@link queryByIdentifiers} (base rows only).
+   * connector, ranked by {@link pickByPriority} (agent-owned > mounted > free
+   * base, then the owner's private > personal > shared). Without an `agentId`
+   * this resolves the free base rows only.
+   *
+   * `runTarget` decides the base rows (see {@link connectorRunScope}): pass
+   * the run's `topicId` so a private agent can load its owner's private
+   * connectors; any other caller, an agent id alone included, resolves the
+   * workspace's shared ones.
    *
    * This is the single entry point runtime paths (aiAgent manifest build,
    * connector exec, MCP call gate, Composio account resolution) must use in
@@ -397,37 +605,75 @@ export class ConnectorModel {
    */
   resolveByIdentifiers = async (
     identifiers: string[],
-    agentId?: string,
+    runTarget: ConnectorRunTargetInput = {},
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<DecryptedConnector[]> => {
     if (identifiers.length === 0) return [];
 
+    const target = toRunTarget(runTarget);
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(and(this.scopePredicate(agentId), inArray(userConnectors.identifier, identifiers)))
+      .where(and(this.scopePredicate(target), inArray(userConnectors.identifier, identifiers)))
       .orderBy(...this.resolutionOrder());
 
-    return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
+    return pMap(this.pickByPriority(rows, target.agentId), (r) => decryptRow(r, gateKeeper), {
+      concurrency: 5,
+    });
   };
 
   /**
-   * Agent-aware variant of {@link query}: every resolvable connector in the
-   * current scope, deduped by identifier with the agent-owned row winning. Used
-   * to enumerate connectors for a run (e.g. Composio manifest building) where
-   * the agent's own connector should shadow the base one.
+   * Agent-aware variant of {@link query}: every connector the run may resolve,
+   * deduped by identifier with {@link pickByPriority}. Used to enumerate
+   * connectors for a run (e.g. Composio manifest building) where the agent's
+   * own connector should shadow the base one.
    */
   resolveAll = async (
-    agentId?: string,
+    runTarget: ConnectorRunTargetInput = {},
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<DecryptedConnector[]> => {
+    const target = toRunTarget(runTarget);
     const rows = await this.db
       .select()
       .from(userConnectors)
-      .where(this.scopePredicate(agentId))
+      .where(this.scopePredicate(target))
       .orderBy(...this.resolutionOrder());
 
-    return Promise.all(this.pickByPriority(rows, agentId).map((r) => decryptRow(r, gateKeeper)));
+    return pMap(this.pickByPriority(rows, target.agentId), (r) => decryptRow(r, gateKeeper), {
+      concurrency: 5,
+    });
+  };
+
+  /**
+   * The connectors an agent's configuration may name, one per identifier,
+   * ranked as {@link resolveAll} ranks them in the agent's own conversation —
+   * without credentials. It needs no topic (see {@link connectorAgentConfigScope}):
+   * pinning a plugin id on an agent checks what the agent can load, so an owner
+   * can enable their private connector on their private agent. Use it to
+   * validate a configuration, never to run a tool.
+   */
+  queryAvailableForAgent = async (
+    agentId?: string,
+  ): Promise<Pick<UserConnectorItem, 'id' | 'identifier' | 'isEnabled' | 'status'>[]> => {
+    const base = this.evaluationDatasetId
+      ? this.ownership()
+      : connectorAgentConfigScope(
+          this.db,
+          { userId: this.userId, workspaceId: this.workspaceId },
+          agentId,
+        );
+    const rows = await this.db
+      .select()
+      .from(userConnectors)
+      .where(this.agentNarrowing(base, agentId))
+      .orderBy(...this.resolutionOrder());
+
+    return this.pickByPriority(rows, agentId).map(({ id, identifier, isEnabled, status }) => ({
+      id,
+      identifier,
+      isEnabled,
+      status,
+    }));
   };
 
   /**
@@ -437,11 +683,16 @@ export class ConnectorModel {
    * {@link resolveByIdentifiers} it does NOT fall back across scopes, so
    * creating an agent connector never updates the personal/workspace row and
    * vice versa.
+   *
+   * In a workspace a base row is looked up within one visibility: the shared
+   * row (default), or the caller's own private row. Adding a private
+   * connector therefore never rewrites the shared one of the same identifier.
    */
   findScopedByIdentifier = async (
     identifier: string,
     agentId?: string,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
+    visibility: ConnectorVisibility = 'public',
   ): Promise<DecryptedConnector | null> => {
     const [row] = await this.db
       .select()
@@ -451,12 +702,213 @@ export class ConnectorModel {
           this.ownership(),
           eq(userConnectors.identifier, identifier),
           agentId ? eq(userConnectors.agentId, agentId) : isNull(userConnectors.agentId),
+          agentId ? undefined : sameBaseVisibility(this.baseIdentifierScope(), visibility),
         ),
       )
       .limit(1);
 
     if (!row) return null;
     return decryptRow(row, gateKeeper);
+  };
+
+  /**
+   * The row a connector write should update for this identifier: the caller's
+   * binding in ANY visibility. {@link findScopedByIdentifier} pins the lookup to
+   * one visibility so a create never rewrites the sibling row; a refresh already
+   * owns a row and must find it either way, otherwise switching a connector to
+   * private makes the next refresh miss it and create a second, public row for
+   * the same account — republishing it to the workspace.
+   *
+   * A write for a known Composio account (a refresh, a removal) targets the
+   * row holding that account: the caller may keep a private row and see a
+   * shared one of the same identifier, and the account names which of the two
+   * the write is about. An account no row holds is a legacy connection, which
+   * lives in the workspace-wide plugin projection: it belongs to the shared
+   * scope, so the write targets the shared row (or creates one) under the
+   * shared connector policy, and never adopts the account into the caller's
+   * private row, where it would vanish from every other member. A new
+   * connection (no account yet) prefers the caller's own private row over the
+   * shared one, matching {@link pickByPriority}.
+   */
+  findManageableByIdentifier = async (
+    identifier: string,
+    agentId?: string,
+    composioAccountId?: string,
+  ): Promise<{
+    agentId: string | null;
+    id: string;
+    metadata: UserConnectorItem['metadata'];
+    userId: string;
+    visibility: ConnectorVisibility;
+  } | null> => {
+    const rows = await this.db
+      .select({
+        agentId: userConnectors.agentId,
+        id: userConnectors.id,
+        metadata: userConnectors.metadata,
+        userId: userConnectors.userId,
+        visibility: userConnectors.visibility,
+      })
+      .from(userConnectors)
+      .where(
+        and(
+          this.ownership(),
+          eq(userConnectors.identifier, identifier),
+          agentId ? eq(userConnectors.agentId, agentId) : isNull(userConnectors.agentId),
+        ),
+      )
+      .orderBy(asc(userConnectors.id));
+
+    if (rows.length === 0) return null;
+    if (composioAccountId) {
+      const holdsAccount = rows.find(
+        (row) => row.metadata?.composio?.connectedAccountId === composioAccountId,
+      );
+      return holdsAccount ?? rows.find((row) => row.visibility !== 'private') ?? null;
+    }
+    return rows.find((row) => row.visibility === 'private') ?? rows[0];
+  };
+
+  /**
+   * Every Composio connector row in scope that names this account: in a
+   * workspace any member's row, in any visibility and under any identifier,
+   * bound to an agent or not; outside a workspace the caller's personal rows.
+   *
+   * A write naming an account is judged on these rows, never on the identifier
+   * it also names. Every member reads the account ids of the workspace-wide
+   * plugin projection, so the identifier is theirs to choose, and a lookup
+   * keyed by it misses the row that actually runs the account. An account id
+   * in a row is no proof of ownership either: a connector's metadata is
+   * client-written, so a member can name a teammate's account in a row of
+   * their own.
+   */
+  queryComposioAccountHolders = async (
+    composioAccountId: string,
+  ): Promise<
+    {
+      agentId: string | null;
+      id: string;
+      identifier: string;
+      userId: string;
+      visibility: ConnectorVisibility;
+    }[]
+  > => {
+    const workspaceId = normalizeWorkspaceId(this.workspaceId);
+
+    return this.db
+      .select({
+        agentId: userConnectors.agentId,
+        id: userConnectors.id,
+        identifier: userConnectors.identifier,
+        userId: userConnectors.userId,
+        visibility: userConnectors.visibility,
+      })
+      .from(userConnectors)
+      .where(
+        and(
+          workspaceId
+            ? eq(userConnectors.workspaceId, workspaceId)
+            : and(eq(userConnectors.userId, this.userId), isNull(userConnectors.workspaceId)),
+          sql`${userConnectors.metadata} -> 'composio' ->> 'connectedAccountId' = ${composioAccountId}`,
+        ),
+      )
+      .orderBy(asc(userConnectors.id));
+  };
+
+  /**
+   * Whether a teammate's private connector in this workspace holds this
+   * Composio account, under any identifier (see
+   * {@link queryComposioAccountHolders}). The legacy plugin projection is
+   * workspace-wide, so every member can still read a privatized connection's
+   * account id from it; a write naming that account must not reach the
+   * account through a row the caller can see instead (deleting the remote
+   * account, or copying it onto a shared row). Always false outside a
+   * workspace, where nothing is private.
+   */
+  isComposioAccountPrivateToTeammate = async (composioAccountId: string): Promise<boolean> => {
+    if (!normalizeWorkspaceId(this.workspaceId)) return false;
+
+    const holders = await this.queryComposioAccountHolders(composioAccountId);
+    return holders.some((row) => row.visibility === 'private' && row.userId !== this.userId);
+  };
+
+  /**
+   * The plugin-projection accounts that are still legacy connections: no
+   * Composio connector row anywhere in this workspace (or, outside a
+   * workspace, in the caller's personal scope) is the connector they mirror.
+   *
+   * Runtime resolution deliberately narrows to what the run may see, so a
+   * connection can resolve to nothing while its connector row still exists —
+   * a private connector read by someone else, another agent's row. The
+   * projection is a mirror of that row, and serving it would resurrect the
+   * very connection the run is not allowed to use. A mirror belongs to a
+   * Composio row, in any visibility, that:
+   *
+   * - runs the same account as the same Composio entity
+   *   (`linkedByUserId`, else the row creator — what the runtime passes to
+   *   Composio), under any identifier and whatever agent it is bound to; or
+   * - is a base row of the mirror's identifier created or linked by the
+   *   mirror's entity: that user connected this app again, so the account
+   *   still in the projection is the connection's past (a reconnect not
+   *   finished yet), not a legacy connection to hand to the workspace.
+   *
+   * Both tests rest on server-owned attribution. The identifier, and an
+   * account id alone, prove nothing: any member can add a private connector
+   * of a supported identifier without passing the shared connector policy,
+   * and write any account id into its metadata (every member reads the
+   * projection's account ids), and that row must not take a teammate's
+   * legacy connection away from the rest of the workspace. Nor can the
+   * projection's own identifier be trusted: a member can file a projection
+   * row under any app, copying a teammate's account and entity, and the
+   * runtime hands Composio only those two — so the account test spans every
+   * identifier, or a privatized connection filed under another app would
+   * pass as legacy.
+   */
+  pickLegacyComposioMirrors = async <T extends ComposioPluginMirror>(
+    mirrors: T[],
+  ): Promise<T[]> => {
+    if (mirrors.length === 0) return [];
+
+    const workspaceId = normalizeWorkspaceId(this.workspaceId);
+    // In a workspace the whole workspace counts, including rows other members
+    // keep private: the projection is workspace-wide.
+    const scope = workspaceId
+      ? eq(userConnectors.workspaceId, workspaceId)
+      : and(eq(userConnectors.userId, this.userId), isNull(userConnectors.workspaceId));
+
+    const accountId = sql<
+      string | null
+    >`${userConnectors.metadata} -> 'composio' ->> 'connectedAccountId'`;
+    const rows = await this.db
+      .select({
+        agentId: userConnectors.agentId,
+        connectedAccountId: accountId,
+        identifier: userConnectors.identifier,
+        linkedByUserId: sql<
+          string | null
+        >`${userConnectors.metadata} -> 'composio' ->> 'linkedByUserId'`,
+        userId: userConnectors.userId,
+      })
+      .from(userConnectors)
+      .where(
+        and(
+          scope,
+          or(
+            inArray(userConnectors.identifier, [...new Set(mirrors.map((m) => m.identifier))]),
+            inArray(accountId, [...new Set(mirrors.map((m) => m.connectedAccountId))]),
+          ),
+          sql`COALESCE(${accountId}, '') <> ''`,
+        ),
+      );
+
+    const isMirrorOf = (mirror: ComposioPluginMirror, row: (typeof rows)[number]) =>
+      (row.connectedAccountId === mirror.connectedAccountId &&
+        (row.linkedByUserId ?? row.userId) === mirror.ownerUserId) ||
+      (row.identifier === mirror.identifier &&
+        !row.agentId &&
+        (row.userId === mirror.ownerUserId || row.linkedByUserId === mirror.ownerUserId));
+
+    return mirrors.filter((mirror) => !rows.some((row) => isMirrorOf(mirror, row)));
   };
 
   queryReferencesByIdentifiers = async (identifiers: string[]): Promise<ConnectorReference[]> => {
@@ -469,7 +921,7 @@ export class ConnectorModel {
         status: userConnectors.status,
       })
       .from(userConnectors)
-      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.sharedBaseScope(), inArray(userConnectors.identifier, identifiers)));
   };
 
   queryComposioReferencesByIdentifiers = async (
@@ -486,7 +938,7 @@ export class ConnectorModel {
         userId: userConnectors.userId,
       })
       .from(userConnectors)
-      .where(and(this.baseScope(), inArray(userConnectors.identifier, identifiers)));
+      .where(and(this.sharedBaseScope(), inArray(userConnectors.identifier, identifiers)));
 
     return rows.map(toComposioConnectorReference);
   };
@@ -518,24 +970,38 @@ export class ConnectorModel {
     return row ?? null;
   };
 
+  /**
+   * Returns whether the row was there to update: one deleted after the caller
+   * read it (a claim that replaced it, see {@link createUnlessIdentifierHeld})
+   * is not, and its writer must look again for what holds it now.
+   */
   update = async (
     id: string,
     patch: UpdateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
-  ): Promise<void> => {
-    await this.db.transaction(async (tx) => {
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
       const [current] = await tx
         .select()
         .from(userConnectors)
         .where(and(eq(userConnectors.id, id), this.ownership()))
         .limit(1)
         .for('update');
-      if (!current) return;
+      if (!current) return false;
       const normalized = await normalizeEvalConnectorPatch(
         current,
         patch,
         gateKeeper?.decrypt.bind(gateKeeper),
       );
+      if (
+        normalized.credentials !== undefined &&
+        normalized.oidcConfig === undefined &&
+        safeParseJSON<ConnectorCredentials>(normalized.credentials ?? undefined)?.type !== 'oauth2'
+      ) {
+        // Explicit static/no-auth credentials replace OAuth. Do not leave a
+        // stale client configuration presenting this as an OAuth connector.
+        normalized.oidcConfig = null;
+      }
       if (current.metadata?.agentEval && normalized.credentials && !gateKeeper) {
         throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
       }
@@ -549,6 +1015,20 @@ export class ConnectorModel {
           throw error;
         }
       }
+      if (
+        !('credentials' in normalized) &&
+        current.credentials &&
+        ((normalized.mcpServerUrl !== undefined &&
+          normalized.mcpServerUrl !== current.mcpServerUrl) ||
+          (normalized.oidcConfig !== undefined &&
+            normalized.oidcConfig?.clientId !== current.oidcConfig?.clientId)) &&
+        (await isStoredOAuth(current.credentials, gateKeeper))
+      ) {
+        // OAuth tokens belong to the server and client that issued them: a new
+        // one ends every account. Static credentials stay with the connector.
+        normalized.credentials = null;
+        normalized.tokenExpiresAt = null;
+      }
       await tx
         .update(userConnectors)
         .set({
@@ -557,8 +1037,8 @@ export class ConnectorModel {
           updatedAt: new Date(),
         })
         .where(and(eq(userConnectors.id, id), this.ownership()));
+      return true;
     });
-  };
 
   updateStatus = async (id: string, status: ConnectorStatus): Promise<void> => {
     await this.db
@@ -649,6 +1129,11 @@ async function encryptCredentials(credentials: string, gateKeeper?: GateKeeper):
   return gateKeeper.encrypt(credentials);
 }
 
+/**
+ * Decrypt a connector row. OAuth accounts never leave as `credentials`: they
+ * are read through `ConnectorLinkModel`, so no caller of this model can hand a
+ * whole connector's tokens on by accident.
+ */
 async function decryptRow(
   row: UserConnectorItem,
   gateKeeper?: GateKeeper,
@@ -659,8 +1144,21 @@ async function decryptRow(
     const plain = gateKeeper
       ? (await gateKeeper.decrypt(row.credentials)).plaintext
       : row.credentials;
-    return { ...row, credentials: JSON.parse(plain) as ConnectorCredentials };
+    const credentials: unknown = JSON.parse(plain);
+    if (isConnectorOAuthAccounts(credentials)) return { ...row, credentials: null };
+    return { ...row, credentials: credentials as ConnectorCredentials };
   } catch {
     return { ...row, credentials: null };
+  }
+}
+
+/** Whether stored credentials are OAuth: one legacy token or accounts. */
+async function isStoredOAuth(ciphertext: string, gateKeeper?: GateKeeper): Promise<boolean> {
+  try {
+    const plain = gateKeeper ? (await gateKeeper.decrypt(ciphertext)).plaintext : ciphertext;
+    return safeParseJSON<{ type?: string }>(plain)?.type === 'oauth2';
+  } catch {
+    // Unreadable: treat it as OAuth, since the new server cannot use it anyway.
+    return true;
   }
 }

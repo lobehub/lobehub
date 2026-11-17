@@ -562,14 +562,28 @@ export class FileService {
     return { fileId: createdId, key, url };
   }
 
+  /**
+   * Downloads a stored file to a temp path. `maxBytes` (optional) refuses a file larger than the
+   * limit before any bytes are read, by the stored size, and again by the bytes actually received.
+   * Callers that do not pass it (skill ZIP import) keep their own limits.
+   */
   async downloadFileToLocal(
     fileId: string,
     accessScope: FileAccessScope = ordinaryFileAccessScope,
-  ): Promise<{ cleanup: () => void; file: FileItem; filePath: string }> {
+    options: { maxBytes?: number } = {},
+  ): Promise<{ cleanup: () => Promise<void>; file: FileItem; filePath: string }> {
     const file = await this.fileModel.findById(fileId, { accessScope });
     if (!file) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
     }
+
+    const { maxBytes } = options;
+    const tooLarge = () =>
+      new TRPCError({
+        code: 'PAYLOAD_TOO_LARGE',
+        message: `Files larger than ${maxBytes} bytes cannot be parsed in memory`,
+      });
+    if (maxBytes !== undefined && file.size > maxBytes) throw tooLarge();
 
     let content: Uint8Array | undefined;
     try {
@@ -587,6 +601,7 @@ export class FileService {
     }
 
     if (!content) throw new TRPCError({ code: 'BAD_REQUEST', message: 'File content is empty' });
+    if (maxBytes !== undefined && content.byteLength > maxBytes) throw tooLarge();
 
     const dir = nanoid();
     const tempManager = new TempFileManager(dir);

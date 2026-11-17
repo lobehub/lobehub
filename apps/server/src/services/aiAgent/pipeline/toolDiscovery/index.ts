@@ -57,6 +57,7 @@ import {
   scheduleConnectorRefresh,
 } from './connectors';
 import { resolveDevicePlan } from './devicePlan';
+import { offersMcpEvents } from './eventConnectors';
 import { resolveModelContext, startModelMetadataRead } from './modelFacts';
 import { readCredentialFacts, startToolReads } from './reads';
 import { resolveOperationGroup, resolveTurnScopedPluginIds } from './turnContext';
@@ -117,6 +118,7 @@ export const discoverTools = async (
     loadHistoryMessages,
     localDeviceId,
     requestedDeviceId,
+    requestTrigger,
     selectedToolIds,
     throwIfExecutionAborted,
     topicBoundDeviceId,
@@ -288,6 +290,7 @@ export const discoverTools = async (
       connectors,
       connectorsMcp,
       connectorTools,
+      hasEventConnector,
       discoverableConnectorManifests,
       discoverableConnectorsMcp,
       discoverableConnectorTools,
@@ -295,7 +298,11 @@ export const discoverTools = async (
 
     // 5a-1b. Model awareness: tell the model whose connected account each
     // borrowed tool runs on (see `buildOwnershipNote`).
-    connectorOwnershipNote = await buildOwnershipNote(deps, connectors);
+    connectorOwnershipNote = await buildOwnershipNote(
+      deps,
+      connectors.map((c) => connectorsMcp.find((mcp) => mcp.id === c.id) ?? c),
+      !!shareGate,
+    );
 
     connectorManifests = [
       ...buildConnectorManifests(
@@ -525,6 +532,7 @@ export const discoverTools = async (
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
       hasIdentityAccount,
+      hasEventConnector: offersMcpEvents(hasEventConnector, requestTrigger),
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,

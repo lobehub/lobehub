@@ -14,6 +14,13 @@ interface CustomNextConfig {
   turbopack?: NextConfig['turbopack'];
 }
 
+/**
+ * The file-parse worker is started by absolute path at runtime, which no tracer can follow, so the
+ * built artifact (`bun run build:file-parse-worker`) is listed explicitly. Standalone and Vercel
+ * output must both carry it; a deployment without it fails closed instead of parsing in-process.
+ */
+const FILE_PARSE_WORKER_TRACE = 'dist/file-parse-worker/**/*';
+
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
@@ -32,6 +39,7 @@ export function defineConfig(config: CustomNextConfig) {
       '*': [
         'public/**/*',
         '.next/static/**/*',
+        FILE_PARSE_WORKER_TRACE,
 
         // Only needed for Docker standalone builds.
         // On Vercel (serverless), including native bindings can easily exceed function size limits.
@@ -55,7 +63,9 @@ export function defineConfig(config: CustomNextConfig) {
   );
 
   const nextConfig: NextConfig = {
-    ...(isStandaloneMode ? standaloneConfig : {}),
+    ...(isStandaloneMode
+      ? standaloneConfig
+      : { outputFileTracingIncludes: { '*': [FILE_PARSE_WORKER_TRACE] } }),
     // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
     agentRules: false,
     assetPrefix,
@@ -261,6 +271,10 @@ export function defineConfig(config: CustomNextConfig) {
             },
           ],
           source: '/.well-known/assetlinks.json',
+        },
+        {
+          source: '/.well-known/mcp-webhook-receiver.json',
+          headers: [{ key: 'Content-Type', value: 'application/json' }],
         },
         ...(config.headers ?? []),
       ];

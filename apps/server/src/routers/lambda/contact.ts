@@ -6,6 +6,7 @@ import { ContactModel } from '@/database/models/contact';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
+import { notifyContactRequestAfterResponse } from '@/server/services/contact/notify';
 
 /**
  * The address book belongs to the Channel experience: contacts are who you can message there.
@@ -43,11 +44,30 @@ export const contactRouter = router({
         userId,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.contactModel.sendRequest(input.userId, input.message)),
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.contactModel.sendRequest(input.userId, input.message);
+      // Sending while their request is pending accepts theirs, so they hear it was accepted.
+      notifyContactRequestAfterResponse({
+        actorUserId: ctx.userId,
+        kind: result.status === 'accepted' ? 'accepted' : 'received',
+        recipientUserId: input.userId,
+        requestId: result.requestId,
+      });
+      return result;
+    }),
 
   acceptRequest: contactProcedure
     .input(z.object({ requestId }))
-    .mutation(async ({ ctx, input }) => ctx.contactModel.acceptRequest(input.requestId)),
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.contactModel.acceptRequest(input.requestId);
+      notifyContactRequestAfterResponse({
+        actorUserId: ctx.userId,
+        kind: 'accepted',
+        recipientUserId: result.contactUserId,
+        requestId: input.requestId,
+      });
+      return result;
+    }),
 
   declineRequest: contactProcedure
     .input(z.object({ requestId }))

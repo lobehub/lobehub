@@ -4,6 +4,7 @@ import type {
   AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
+  ChatTopicWebhookContext,
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
@@ -223,6 +224,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * relays on (`channelOperationId`), which a client never can.
    */
   llmExecutor?: AgentRunLlmExecutor;
+  /**
+   * Explicit server-only opt-in for an unattended topic run to surface in Inbox.
+   * Set running atomically with its operation marker before dispatch; existing
+   * terminal settlement then projects done to unread and errors to active.
+   * Never inferred from trigger or accepted from client/API parameters.
+   */
+  markTopicRunning?: boolean;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**
@@ -385,6 +393,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Server-only: the generic webhook thread a run starts for. Written to a
+   * Topic the run creates as `metadata.webhook`, which is how later deliveries
+   * of the same thread find that Topic. Ignored when the run continues one.
+   */
+  webhookThread?: ChatTopicWebhookContext;
 }
 
 /**

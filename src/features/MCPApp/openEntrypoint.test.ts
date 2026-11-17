@@ -60,6 +60,18 @@ describe('openMcpAppEntrypoint', () => {
     expect(entry()).toMatchObject({ result: { content: 'first' }, status: 'ready' });
   });
 
+  it('opens as the account its entry names on a connector holding several', async () => {
+    mocks.invoke.mockResolvedValue(viewResult('bob'));
+
+    await openMcpAppEntrypoint({ ...call, linkId: 'lnk_bob' });
+
+    expect(mocks.invoke).toHaveBeenCalledWith(expect.objectContaining({ arguments: '{}' }), {
+      agentId: 'agent',
+      fromEntrypoint: true,
+      linkId: 'lnk_bob',
+    });
+  });
+
   it('shows the tab as opening until the call answers', async () => {
     let answer!: (value: unknown) => void;
     mocks.invoke.mockReturnValue(new Promise((resolve) => (answer = resolve)));

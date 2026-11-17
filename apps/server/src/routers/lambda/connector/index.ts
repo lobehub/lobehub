@@ -17,7 +17,6 @@ import {
 } from '@/database/models/connectorEval';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -34,22 +33,16 @@ import {
   readConnectorUiResourceById,
 } from '@/server/services/connector/exec';
 import { getConnectorLocalCallToken } from '@/server/services/connector/localCallToken';
+import { getConnectorRedirectUri } from '@/server/services/connector/oauth';
+import { loadConnectorPresentation } from '@/server/services/connector/presentation';
 import {
-  buildAuthorizationUrl,
-  discoverConnectorOAuth,
-  getConnectorRedirectUri,
-  resolveConnectorClient,
-  resolveConnectorOAuthScopes,
-  toClientInformation,
-} from '@/server/services/connector/oauth';
-import {
-  generateConnectorOAuthState,
-  saveConnectorOAuthState,
-} from '@/server/services/connector/stateStore';
-import {
-  pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
+  writeConnectorToolSyncInputs,
 } from '@/server/services/connector/sync';
+import {
+  removeByConnector,
+  scheduleRefreshByConnector,
+} from '@/server/services/inboundWebhook/lifecycle';
 import {
   DeviceMcpManifestInputSchema,
   getDeviceMcpManifest,
@@ -80,6 +73,7 @@ import {
 } from '../_helpers/connectorManagePolicy';
 import { resolveDefaultPermission } from '../_helpers/connectorToolPermission';
 import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
+import { connectorAccountProcedures } from './accounts';
 import { connectorAgentScopeRouter } from './agentScope';
 import { connectorProcedure, connectorWriteProcedure } from './procedures';
 
@@ -147,10 +141,12 @@ const createConnectorSchema = z.object({
 });
 
 const connectorCoreRouter = router({
+  ...connectorAccountProcedures,
   // ── Queries ──────────────────────────────────────────────────────────────
 
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
+    const presentation = await loadConnectorPresentation(connectors, ctx);
 
     // Attribution — resolve the member who authorized each connector (workspace
     // dimension), so the profile can tag "authorized by X". The ids come from
@@ -170,6 +166,7 @@ const connectorCoreRouter = router({
         const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
         return {
           ...rest,
+          ...presentation.get(c.id),
           authorizedByAvatar: author?.avatar ?? null,
           authorizedByName: author?.name ?? null,
           oidcConfig: safeOidcConfig,
@@ -191,6 +188,7 @@ const connectorCoreRouter = router({
     .input(z.object({ agentId: z.string() }))
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
+      const presentation = await loadConnectorPresentation(connectors, ctx);
 
       // Attribution — the member who authorized each agent-scoped connector, so
       // a teammate viewing the agent sees "authorized by X" on each chip.
@@ -210,6 +208,7 @@ const connectorCoreRouter = router({
           const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
           return {
             ...rest,
+            ...presentation.get(c.id),
             authorizedByAvatar: author?.avatar ?? null,
             authorizedByName: author?.name ?? null,
             oidcConfig: safeOidcConfig,
@@ -247,9 +246,11 @@ const connectorCoreRouter = router({
     // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
+    const visibleConnectors = connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId));
+    const presentation = await loadConnectorPresentation(visibleConnectors, ctx);
 
     return pMap(
-      connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId)),
+      visibleConnectors,
       async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -257,6 +258,7 @@ const connectorCoreRouter = router({
         const meta = agentMetaById.get(c.agentId!);
         return {
           ...rest,
+          ...presentation.get(c.id),
           agentAvatar: meta?.avatar ?? null,
           agentName: meta?.name ?? null,
           agentTitle: meta?.title ?? null,
@@ -303,8 +305,8 @@ const connectorCoreRouter = router({
 
   /** The OAuth access token a device-routed connector's local desktop call sends. */
   getLocalCallToken: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(({ ctx, input }) => getConnectorLocalCallToken(ctx, input.id)),
+    .input(z.object({ id: z.string().uuid(), linkId: z.string().optional() }))
+    .mutation(({ ctx, input }) => getConnectorLocalCallToken(ctx, input.id, input.linkId)),
 
   /**
    * Test an MCP server that runs on the user's device (an HTTP server set to
@@ -433,136 +435,76 @@ const connectorCoreRouter = router({
     // enforcing "one connector per identifier per agent" at the app layer (the
     // DB indexes are non-unique so multiple same-identifier rows can coexist
     // across scopes).
-    const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
+    const row = {
+      ...fields,
+      isEnabled: input.isEnabled ?? true,
+      sourceType: input.sourceType,
+      status: ConnectorStatus.disconnected,
+    };
     // Adding a workspace connector follows the member policy. Re-adding over
     // someone else's row rewrites its server/command while the row stays theirs
     // (their runs would execute it, and they could read the new credentials), so
     // that keeps the creator-or-owner rule.
-    if (existing && existing.userId !== ctx.userId)
-      await assertConnectorCredentialsManageable(ctx, existing);
-    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
-    await assertConnectorDeviceBindingAllowed(ctx, input.metadata, existing?.metadata);
-    if (existing) {
-      await ctx.connectorModel.update(existing.id, {
-        ...fields,
-        isEnabled: input.isEnabled ?? true,
-        sourceType: input.sourceType,
-        status: ConnectorStatus.disconnected,
-      });
-      // `isNew` lets clients tell a fresh row from an updated pre-existing one —
-      // client-side caches can't answer this reliably (the connector list may
-      // not be fetched yet), and rollback-on-sync-failure must never delete a
-      // connector the user already had.
-      return { id: existing.id, isNew: false };
-    }
+    const assertWritable = async (existing?: {
+      agentId: string | null;
+      metadata?: Record<string, unknown> | null;
+      userId: string;
+    }) => {
+      if (existing && existing.userId !== ctx.userId)
+        await assertConnectorCredentialsManageable(ctx, existing);
+      else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
+      await assertConnectorDeviceBindingAllowed(ctx, input.metadata, existing?.metadata);
+    };
+    // `isNew` lets clients tell a fresh row from an updated pre-existing one —
+    // client-side caches can't answer this reliably (the connector list may
+    // not be fetched yet), and rollback-on-sync-failure must never delete a
+    // connector the user already had.
+    // Nothing when the row is gone by its update (see the retry below).
+    const reAdd = async (existing: {
+      agentId: string | null;
+      id: string;
+      metadata?: Record<string, unknown> | null;
+      userId: string;
+    }) => {
+      await assertWritable(existing);
+      const updated = await ctx.connectorModel.update(existing.id, row);
+      return updated ? { id: existing.id, isNew: false } : undefined;
+    };
 
-    const created = await ctx.connectorModel.create({
-      ...fields,
-      agentId: agentId ?? null,
-      identifier: input.identifier,
-      isEnabled: input.isEnabled ?? true,
-      sourceType: input.sourceType,
-      status: ConnectorStatus.disconnected,
-    });
-    return { id: created.id, isNew: true };
+    const add = async () => {
+      const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
+      if (existing) return reAdd(existing);
+      await assertWritable();
+
+      if (agentId) {
+        const created = await ctx.connectorModel.create({
+          ...row,
+          agentId,
+          identifier: input.identifier,
+        });
+        return { id: created.id, isNew: true };
+      }
+      // A base row is claimed under the identifier lock every base-row writer
+      // takes (an Agent Builder install among them), so concurrent adds create it once.
+      const claim = await ctx.connectorModel.createUnlessIdentifierHeld({
+        ...row,
+        identifier: input.identifier,
+      });
+      if ('holder' in claim) return reAdd(claim.holder);
+      return { id: claim.created.id, isNew: true };
+    };
+
+    const added = await add();
+    if (added) return added;
+    // The row the re-add read was deleted before its update (an Agent Builder
+    // install replaces a stale unfinished one under the identifier lock): start
+    // over once, against the fresh replacement no install takes over in turn.
+    const retried = await add();
+    if (retried) return retried;
+    throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
   }),
 
-  /**
-   * Begin the OAuth authorization-code flow for a custom MCP connector.
-   *
-   * Discovers the authorization server (RFC 9728 → RFC 8414), resolves the
-   * client (pre-registration when a client_id was provided, otherwise a Client
-   * ID Metadata Document or RFC 7591 dynamic registration), persists the
-   * resolved OIDC config, and returns the authorize URL for the client to open. The PKCE verifier is stashed in Redis
-   * keyed by `state`; the callback route completes the exchange.
-   */
-  startOAuth: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid(), returnTo: z.string().optional() }))
-    .mutation(async ({ input, ctx }) => {
-      const connector = await ctx.connectorModel.findById(input.id);
-      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Re-authorizing replaces the stored OAuth credentials with the caller's.
-      await assertConnectorMaintainable(ctx, connector);
-      if (!connector.mcpServerUrl) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
-      }
-
-      const existing: OIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
-      const redirectUri = getConnectorRedirectUri();
-
-      // 1. Discover the authorization server backing the MCP resource.
-      // Discovery and registration failures below are server-compatibility
-      // problems the user must fix in their OAuth setup, not internal errors —
-      // surface them as BAD_REQUEST with the reason so the form can show it.
-      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
-        (error: unknown) => {
-          throw new TRPCError({
-            cause: error,
-            code: 'BAD_REQUEST',
-            message: (error as Error)?.message ?? String(error),
-          });
-        },
-      );
-
-      const { authorizationServerUrl, metadata } = discovery;
-      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
-
-      // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
-      const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
-        await resolveConnectorClient({
-          authorizationServerUrl,
-          existing,
-          metadata,
-          redirectUri,
-          scopes,
-        }).catch((error: unknown) => {
-          throw new TRPCError({
-            cause: error,
-            code: 'BAD_REQUEST',
-            message: (error as Error)?.message ?? String(error),
-          });
-        });
-
-      // 3. Persist the resolved config so the callback + refresh can reuse it.
-      const resolvedOidc: OIDCConfig = {
-        ...existing,
-        authorizationEndpoint: metadata.authorization_endpoint,
-        clientId,
-        clientSecret,
-        issuer: authorizationServerUrl,
-        redirectUri,
-        registrationEndpoint: metadata.registration_endpoint,
-        scheme,
-        scopes,
-        tokenEndpoint: metadata.token_endpoint,
-        tokenEndpointAuthMethod,
-      };
-      await ctx.connectorModel.update(input.id, { oidcConfig: resolvedOidc });
-
-      // 4. Build the authorize URL (with PKCE) and stash the verifier under `state`.
-      const state = generateConnectorOAuthState();
-      const { authorizationUrl, codeVerifier } = await buildAuthorizationUrl({
-        authorizationServerUrl,
-        clientInformation: toClientInformation(resolvedOidc),
-        metadata,
-        redirectUri,
-        resource: connector.mcpServerUrl,
-        scopes,
-        state,
-      });
-
-      await saveConnectorOAuthState(state, {
-        authorizationServerUrl,
-        codeVerifier,
-        connectorId: input.id,
-        lobeUserId: ctx.userId,
-        returnTo: input.returnTo,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-
-      return { authorizationUrl };
-    }),
-
+  /** Update connector configuration while preserving server-resolved OAuth state. */
   update: connectorWriteProcedure
     .input(
       z.object({
@@ -601,6 +543,39 @@ const connectorCoreRouter = router({
       await assertConnectorDeviceBindingAllowed(ctx, input.patch.metadata, target.metadata);
 
       const { credentials, ...patch } = input.patch;
+      const changesUrl =
+        patch.mcpServerUrl !== undefined && patch.mcpServerUrl !== target.mcpServerUrl;
+      if (
+        changesUrl &&
+        target.oidcConfig &&
+        target.oidcConfig.scheme !== 'pre_registration' &&
+        !patch.oidcConfig?.clientId
+      ) {
+        // An automatic client is registered with the old authorization server.
+        // A new endpoint must resolve its own client and initial scopes.
+        patch.oidcConfig = { scheme: 'dcr' };
+      } else if (
+        patch.oidcConfig &&
+        !patch.oidcConfig.clientId &&
+        target.oidcConfig &&
+        target.oidcConfig.scheme !== 'pre_registration' &&
+        patch.oidcConfig.scheme === target.oidcConfig.scheme
+      )
+        // The edit form resends the automatic client it shows without the
+        // fields the server resolved: keep the stored client and its accounts.
+        // A connector switching to OAuth, or to another scheme, stores the new
+        // one and waits for its authorization.
+        delete patch.oidcConfig;
+      if (patch.oidcConfig?.clientId && patch.oidcConfig.clientId === target.oidcConfig?.clientId) {
+        // A form/CLI may resend the client without its resolved server fields.
+        // Undefined fields mean omitted, including an unfilled client secret.
+        patch.oidcConfig = {
+          ...target.oidcConfig,
+          ...Object.fromEntries(
+            Object.entries(patch.oidcConfig).filter(([, value]) => value !== undefined),
+          ),
+        };
+      }
       // Preserve the server-owned `composio.linkedByUserId` from the stored row
       // and ignore whatever the client sent, so an edit can never spoof (or
       // silently clear) the connector's authorizer. Untouched when the patch
@@ -624,6 +599,17 @@ const connectorCoreRouter = router({
                 ...(credentials === null ? { tokenExpiresAt: null } : {}),
               }),
         } as any);
+        const headersChanged =
+          patch.metadata !== undefined &&
+          JSON.stringify(metadata?.customHeaders) !==
+            JSON.stringify(target.metadata?.customHeaders);
+        if (credentials !== undefined || headersChanged) {
+          scheduleRefreshByConnector(
+            ctx.serverDB,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            input.id,
+          );
+        }
       } catch (error) {
         if (error instanceof EvalConnectorUpdateError)
           throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
@@ -656,6 +642,11 @@ const connectorCoreRouter = router({
         if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
       }
 
+      await removeByConnector(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        input.id,
+      );
       await ctx.connectorModel.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's
@@ -735,6 +726,8 @@ const connectorCoreRouter = router({
         fromApp: z.boolean().optional(),
         fromEntrypoint: z.boolean().optional(),
         identifier: z.string().min(1),
+        /** The account to call as, for a connector holding several. */
+        linkId: z.string().optional(),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
         toolName: z.string().min(1),
@@ -769,6 +762,8 @@ const connectorCoreRouter = router({
         /** The server the result came from (`getMcpServerFingerprint`). */
         server: z.string().min(1),
         uri: z.string().startsWith('ui://'),
+        /** The account the tool ran as, for a connector holding several. */
+        linkId: z.string().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
@@ -913,18 +908,12 @@ const connectorCoreRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
-      const syncInputs = await toClientToolSyncInputs(input.tools, ctx.userId);
-
-      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
-      if (input.pruneMissingAutoTools) {
-        await pruneMissingAutoConnectorTools(
-          ctx.connectorToolModel,
-          input.id,
-          syncInputs.map((tool) => tool.toolName),
-        );
-      }
-      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
-      return { toolCount: syncInputs.length };
+      return writeConnectorToolSyncInputs(
+        input.id,
+        await toClientToolSyncInputs(input.tools, ctx.userId, target.metadata),
+        ctx,
+        { pruneMissingAutoTools: input.pruneMissingAutoTools },
+      );
     }),
 
   /**

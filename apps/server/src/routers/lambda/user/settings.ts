@@ -62,6 +62,14 @@ export const settingsRouter = router({
     return ctx.userModel.updatePreference(input);
   }),
   /**
+   * Personal-mode "New worktree" switch for one directory. Its own mutation:
+   * `updatePreference` deep-merges arrays by index, and the list's cap must be
+   * applied against the stored copy, not a client's.
+   */
+  setWorktreeModeDir: userProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) => ctx.userModel.setWorktreeModeDir(input.key, input.enabled)),
+  /**
    * Personal chat-assist preferences (follow-up chips, input completion). They
    * act on the caller's own chat surface, so — unlike the rest of
    * `systemAgent` — no workspace permission gates them, and they patch only

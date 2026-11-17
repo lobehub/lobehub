@@ -1,11 +1,21 @@
 import { $dfs } from '@lexical/utils';
 import type { IEditor } from '@lobehub/editor';
 import { CommonPlugin, Kernel, MarkdownPlugin, moment } from '@lobehub/editor';
-import { $createParagraphNode, $createTextNode, $getRoot, HISTORIC_TAG } from 'lexical';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  type ElementNode,
+  HISTORIC_TAG,
+} from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ImageUploadRef } from '../../utils/imageUploads';
-import { $isImageRefTagNode, type ImageRefTagNode } from './ImageRefTagNode';
+import {
+  $createImageRefTagNode,
+  $isImageRefTagNode,
+  type ImageRefTagNode,
+} from './ImageRefTagNode';
 import {
   ImageRefTagPlugin,
   PRUNE_UNATTACHED_IMAGE_REFS_COMMAND,
@@ -26,10 +36,24 @@ const refsOf = (...srcs: string[]) =>
 const sync = async (
   editor: IEditor,
   refs: Map<string, ImageUploadRef>,
-  { insert, removed }: { insert?: string[]; removed?: string[] } = {},
+  { removed }: { removed?: string[] } = {},
 ) => {
-  editor.dispatchCommand(SYNC_IMAGE_REF_TAGS_COMMAND, { insert, refs, removed });
+  editor.dispatchCommand(SYNC_IMAGE_REF_TAGS_COMMAND, { refs, removed });
   await moment();
+};
+
+/**
+ * Adds references at the end of the text, as editor data saved before references stopped
+ * being inserted brings them back, then syncs them with the attachment list.
+ */
+const addReferences = async (editor: IEditor, refs: Map<string, ImageUploadRef>) => {
+  editor.getLexicalEditor()!.update(() => {
+    const paragraph = $getRoot().getLastChild() as ElementNode;
+    for (const ref of refs.values()) {
+      paragraph.append($createImageRefTagNode(ref.src, ref.number), $createTextNode(' '));
+    }
+  });
+  await sync(editor, refs);
 };
 
 // The exported markdown escapes `[`, which still reads as the literal text `[Image #N]`.
@@ -71,7 +95,7 @@ describe('ImageRefTagPlugin', () => {
     const decorator = vi.fn((node: ImageRefTagNode) => `chip ${node.number}`);
     const editor = createEditor(decorator);
     await setText(editor, '');
-    await sync(editor, refsOf('blob:a'), { insert: ['blob:a'] });
+    await addReferences(editor, refsOf('blob:a'));
 
     const lexical = editor.getLexicalEditor()!;
     const rendered = lexical.getEditorState().read(() =>
@@ -84,19 +108,28 @@ describe('ImageRefTagPlugin', () => {
     expect(rendered).toEqual(['chip 1']);
   });
 
-  it('references newly attached images at the caret as [Image #N]', async () => {
+  it('writes references as [Image #N]', async () => {
     const editor = createEditor();
-    await setText(editor, 'compare');
+    await setText(editor, 'compare ');
 
-    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
 
-    expect(markdown(editor)).toBe('compare[Image #1] [Image #2]');
+    expect(markdown(editor)).toBe('compare [Image #1] [Image #2]');
+  });
+
+  it('adds no reference when an image is attached', async () => {
+    const editor = createEditor();
+    await setText(editor, 'hi');
+
+    await sync(editor, refsOf('blob:a'));
+
+    expect(referencesOf(editor)).toEqual([]);
   });
 
   it('renumbers references when an earlier image is removed', async () => {
     const editor = createEditor();
     await setText(editor, 'see ');
-    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
 
     await sync(editor, refsOf('blob:b'), { removed: ['blob:a'] });
 
@@ -106,7 +139,7 @@ describe('ImageRefTagPlugin', () => {
   it('removes references to images that are no longer attached', async () => {
     const editor = createEditor();
     await setText(editor, 'look ');
-    await sync(editor, refsOf('blob:a'), { insert: ['blob:a'] });
+    await addReferences(editor, refsOf('blob:a'));
 
     await sync(editor, refsOf(), { removed: ['blob:a'] });
 
@@ -116,7 +149,7 @@ describe('ImageRefTagPlugin', () => {
   it('leaves references to unlisted images out of the text, even after undo', async () => {
     const editor = createEditor();
     await setText(editor, 'a ');
-    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
     const beforeRemoval = editor.getDocument('json');
 
     // Removing image #1 and then undoing brings its reference and the old numbers back.
@@ -131,7 +164,7 @@ describe('ImageRefTagPlugin', () => {
   it('stores the current numbers in the editor data after undo brings old ones back', async () => {
     const editor = createEditor();
     await setText(editor, 'a ');
-    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
     const beforeRemoval = editor.getDocument('json');
 
     await sync(editor, refsOf('blob:b'), { removed: ['blob:a'] });
@@ -144,7 +177,7 @@ describe('ImageRefTagPlugin', () => {
   it('binds a reference restored from a sent message to its image by file id', async () => {
     const editor = createEditor();
     await setText(editor, 'what is ');
-    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
     // Both uploads finish, so the references record the uploaded files' ids.
     await sync(
       editor,
@@ -177,7 +210,7 @@ describe('ImageRefTagPlugin', () => {
   it('keeps a restored reference whose image is not listed yet', async () => {
     const editor = createEditor();
     await setText(editor, 'old ');
-    await sync(editor, refsOf('blob:a'), { insert: ['blob:a'] });
+    await addReferences(editor, refsOf('blob:a'));
     const restored = editor.getDocument('json');
 
     // Another conversation's list, then the draft comes back before its uploads.
@@ -193,7 +226,7 @@ describe('ImageRefTagPlugin', () => {
   it('drops references to unattached images before sending', async () => {
     const editor = createEditor();
     await setText(editor, 'see ');
-    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
     const restored = editor.getDocument('json');
 
     // After a reload only image b came back; the draft still references both.

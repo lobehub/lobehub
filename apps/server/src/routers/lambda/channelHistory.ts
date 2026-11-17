@@ -39,7 +39,9 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       const result = await next({
         ctx: {
           channelHistory: new ChannelHistoryService(...args),
-          channelMessaging: new ChannelMessagingService(...args),
+          // The token was checked for this capability above; an owner's bot run carries
+          // `channel:message` without a Channel of its own.
+          channelMessaging: new ChannelMessagingService(...args, { allowBotRun: true }),
         },
       });
       if (!result.ok && result.error.cause instanceof ChannelError)

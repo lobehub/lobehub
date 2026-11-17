@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -53,6 +53,10 @@ groups merge field by field), parsed by the shared bot-wake schema.
   in the main channel (it still follows up there, and is chosen normally in a Thread it follows):
   the decision model never chooses the member either. An unnamed member's generic `Agent` label
   is not a name the text can call.
+- **Muted** (`channel_members.config.muted`, `channel.setMemberMuted`, admins only): the member is
+  not a candidate at all. Only an @mention reaches it: not routing, the paired-Agent shortcut, the
+  all-candidate fallback or a reply to its message; it cannot post on its own either. Muting stops
+  its open jobs. The Agent of a direct conversation cannot be muted.
 - **Quiet**: the member stayed silent `maxSilentWakes` times since it last answered; routing may still
   choose it, but not wake it on a hunch.
 
@@ -138,6 +142,8 @@ select that member. Explicit mentions cannot overtake those decisions; unrelated
 and other Channels remain independent. A failed, skipped or stopped decision releases the wait.
 `channel.retryRouting({ channelId, messageId })` lets the author/admin retry an unassigned message;
 sending a new message with an explicit mention remains available.
+`channel.retryJob({ channelId, jobId })` lets the requester/admin re-queue a reply that failed
+because its device could not be reached; it waits for the device like any queued reply.
 
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
 token count, latency, and each member's own rule verdicts (`wakeRules`). No raw provider errors are stored. Runtime hooks still receive

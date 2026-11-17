@@ -49,6 +49,8 @@ bun run dev
 pnpm --filter @lobechat/server dev
 ```
 
+The file-parse worker is a prebuilt file the server starts by absolute path. `bun run dev`, `dev:next` and `dev:bun` build it before starting (`bun run build:file-parse-worker`). The standalone Hono `pnpm --filter @lobechat/server dev` does not build it and runs with `apps/server` as the working directory, so build it from the repo root first and point `FILE_PARSE_WORKER_PATH` at the absolute path of `<repo root>/dist/file-parse-worker/fileParseWorker.mjs` (for example `FILE_PARSE_WORKER_PATH="$(git rev-parse --show-toplevel)/dist/file-parse-worker/fileParseWorker.mjs"`). Known baseline limitation: that Hono `dev` script calls `vite-node`, which is not declared as a dependency, and it was not verified against a real server.
+
 After `dev:spa` starts, the terminal prints a **Debug Proxy** URL:
 
 ```plaintext

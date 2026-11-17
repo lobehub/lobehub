@@ -39,7 +39,7 @@ const Header = memo(() => {
       */}
       <Flexbox horizontal align={'center'} gap={4} paddingBlock={'0 8px'} paddingInline={8}>
         <LibrarySearchBar />
-        <SortDropdown iconOnly />
+        <SortDropdown />
         <AddButton iconOnly rootLevel />
       </Flexbox>
     </>

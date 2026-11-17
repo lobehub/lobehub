@@ -28,7 +28,7 @@ import { useTopicsViewStore } from './store';
 import type { GroupBy, TriggerFilter } from './types';
 import { getProjectGroupTitle, getProjectLabel, getTimeGroupTitle } from './utils';
 
-const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
+const KNOWN_TRIGGERS: readonly TriggerFilter[] = ['chat', 'bot', 'webhook', 'api', 'task', 'eval'];
 
 const styles = createStaticStyles(({ css }) => ({
   cell: css`

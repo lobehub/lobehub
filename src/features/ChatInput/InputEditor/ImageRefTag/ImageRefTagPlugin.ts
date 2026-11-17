@@ -1,32 +1,18 @@
 import { $dfs } from '@lexical/utils';
 import { type getKernelFromEditor, IMarkdownShortCutService } from '@lobehub/editor';
 import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-  $getSelection,
-  $isElementNode,
-  $isRangeSelection,
   $isTextNode,
   COMMAND_PRIORITY_HIGH,
   createCommand,
   HISTORIC_TAG,
   HISTORY_MERGE_TAG,
   type LexicalEditor,
-  type LexicalNode,
 } from 'lexical';
 
 import type { ImageUploadRef } from '../../utils/imageUploads';
-import {
-  $createImageRefTagNode,
-  $isImageRefTagNode,
-  formatImageRef,
-  ImageRefTagNode,
-} from './ImageRefTagNode';
+import { $isImageRefTagNode, formatImageRef, ImageRefTagNode } from './ImageRefTagNode';
 
 export interface SyncImageRefTagsPayload {
-  /** Preview URLs of newly attached images to reference at the caret, in attachment order. */
-  insert?: string[];
   /** The draft's current image uploads, keyed by preview URL. */
   refs: Map<string, ImageUploadRef>;
   /** Preview URLs of images the user just removed from the attachment list. */
@@ -35,8 +21,10 @@ export interface SyncImageRefTagsPayload {
 
 /**
  * Brings the inline references in line with the attachment list: references to `removed`
- * images are deleted, references to attached images take the image's current number, and
- * `insert` adds references for newly attached images at the caret.
+ * images are deleted, and references to attached images take the image's current number.
+ *
+ * New references are no longer created; these come from editor data saved before that
+ * (drafts and sent messages), so they stay readable and numbered like their images.
  *
  * A reference to an image that is neither attached nor removed — a draft restored before
  * its uploads, or after a reload — is left in place, since its image may still be listed
@@ -63,7 +51,7 @@ export interface ImageRefTagPluginOptions {
   theme?: { imageRefTag?: string };
 }
 
-/** Removes a reference together with the space inserted after it. */
+/** Removes a reference together with the space that followed it. */
 const $removeImageRefTag = (node: ImageRefTagNode) => {
   const next = node.getNextSibling();
   if ($isTextNode(next) && next.getTextContent().startsWith(' ')) {
@@ -124,27 +112,6 @@ const $syncImageRefTags = (refs: Map<string, ImageUploadRef>, removed: RemovedSr
 /** Marks the follow-up update that re-syncs references, so it does not trigger itself. */
 const IMAGE_REF_RESYNC_TAG = 'image-ref-resync';
 
-const $insertImageRefTags = (refs: ImageUploadRef[]) => {
-  const nodes: LexicalNode[] = refs.flatMap((ref) => [
-    $createImageRefTagNode(ref.src, ref.number),
-    // Trailing space so the user can keep typing without adding one manually.
-    $createTextNode(' '),
-  ]);
-
-  const selection = $getSelection();
-  if ($isRangeSelection(selection)) {
-    selection.insertNodes(nodes);
-    return;
-  }
-
-  const root = $getRoot();
-  const last = root.getLastChild();
-  const paragraph = $isElementNode(last) && last.canBeEmpty() ? last : $createParagraphNode();
-  if (paragraph !== last) root.append(paragraph);
-  paragraph.append(...nodes);
-  nodes.at(-1)?.selectEnd();
-};
-
 /**
  * Owns the `image-ref-tag` node: its decorator, its `[Image #N]` markdown writer, and
  * keeping references in sync with the draft's image uploads.
@@ -197,20 +164,13 @@ export class ImageRefTagPlugin {
   private registerSync(editor: LexicalEditor): void {
     editor.registerCommand(
       SYNC_IMAGE_REF_TAGS_COMMAND,
-      ({ insert, refs, removed }) => {
+      ({ refs, removed }) => {
         this.refs = refs;
         for (const src of refs.keys()) this.removed.delete(src);
         for (const src of removed ?? []) this.removed.add(src);
-        const inserted = (insert ?? []).flatMap((src) => refs.get(src) ?? []);
 
-        editor.update(
-          () => {
-            $syncImageRefTags(refs, this.removed);
-            if (inserted.length > 0) $insertImageRefTags(inserted);
-          },
-          // Renumbering after a removal belongs to that removal, not to its own undo step.
-          inserted.length > 0 ? undefined : { tag: HISTORY_MERGE_TAG },
-        );
+        // Renumbering after a removal belongs to that removal, not to its own undo step.
+        editor.update(() => $syncImageRefTags(refs, this.removed), { tag: HISTORY_MERGE_TAG });
         return true;
       },
       COMMAND_PRIORITY_HIGH,

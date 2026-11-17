@@ -129,7 +129,7 @@ vi.mock('@/server/services/gateway/MessageGatewayClient', () => {
 
 const { decodeWeComThreadId, WECOM_DISPLACED_MESSAGE, WeComClientFactory, wecomExtractFiles } =
   await import('./client');
-const { resetWeComGatewayConnectionIds } = await import('./outbound');
+const { createGatewayWeComOutbound, resetWeComGatewayConnectionIds } = await import('./outbound');
 const { MessageGatewaySendError } = await import('@/server/services/gateway/MessageGatewayClient');
 
 const flush = async () => {
@@ -414,6 +414,120 @@ describe('WeComClient on the Node message gateway', () => {
       ['prov-1', 'second'],
       ['prov-2', 'second'],
     ]);
+  });
+
+  describe('while the gateway does not hold the connection (restart / reconnect)', () => {
+    const thread = { id: 'u1', type: 'single' as const };
+    const delays = [1, 2, 3];
+
+    it('waits for the connection to come back instead of losing the reply', async () => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText
+        .mockRejectedValueOnce(new MessageGatewaySendError(404, 'Connection not found'))
+        .mockRejectedValueOnce(
+          new MessageGatewaySendError(500, '{"error":"wecom: connection prov-1 is not connected"}'),
+        )
+        .mockResolvedValueOnce({ messageId: 'push-1' });
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).resolves.toEqual({ id: 'push-1' });
+      expect(gw.sendText).toHaveBeenCalledTimes(3);
+      expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([1, 2]);
+    });
+
+    it('retries when the gateway cannot be reached at all', async () => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText
+        .mockRejectedValueOnce(new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } }))
+        .mockResolvedValueOnce({ messageId: 'push-1' });
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).resolves.toEqual({ id: 'push-1' });
+      expect(sleep).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives up after the last retry and surfaces the error', async () => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText.mockRejectedValue(new MessageGatewaySendError(404, 'Connection not found'));
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).rejects.toThrow('Connection not found');
+      expect(gw.sendText).toHaveBeenCalledTimes(delays.length + 1);
+      expect(sleep).toHaveBeenCalledTimes(delays.length);
+    });
+
+    it.each([
+      [
+        'a receipt lost when the socket dropped',
+        new MessageGatewaySendError(500, '{"error":"WeCom bot bot-1 connection closed"}'),
+      ],
+      [
+        'a gateway connection reset mid-request',
+        new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } }),
+      ],
+      ['a fetch failure without a known cause', new TypeError('fetch failed')],
+    ])('does not resend %s: it may already have reached WeCom', async (_label, failure) => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText.mockRejectedValue(failure);
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).rejects.toBe(failure);
+      expect(gw.sendText).toHaveBeenCalledTimes(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
+    it("still tries a recreated bot's new connection id after the last backoff", async () => {
+      const sleep = vi.fn(async () => {});
+      const notFound = new MessageGatewaySendError(404, 'Connection not found');
+      gw.sendText.mockImplementation(async (id: string) => {
+        if (id === 'prov-2') return { messageId: 'push-1' };
+        throw notFound;
+      });
+      // The row is recreated during the last backoff window: only the final lookup sees it.
+      let lookups = 0;
+      gw.findByPlatformAndAppId.mockImplementation(async () => {
+        lookups++;
+        return { id: lookups > delays.length + 1 ? 'prov-2' : 'prov-1' };
+      });
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).resolves.toEqual({ id: 'push-1' });
+      expect(sleep).toHaveBeenCalledTimes(delays.length);
+      expect(gw.sendText.mock.calls.at(-1)?.[0]).toBe('prov-2');
+    });
+
+    it('stops after one extra try even when the connection id keeps changing', async () => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText.mockRejectedValue(new MessageGatewaySendError(404, 'Connection not found'));
+      let lookups = 0;
+      gw.findByPlatformAndAppId.mockImplementation(async () => ({ id: `prov-${++lookups}` }));
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).rejects.toThrow('Connection not found');
+      expect(gw.sendText).toHaveBeenCalledTimes(delays.length + 2);
+    });
+
+    it('does not resend what WeCom itself refused', async () => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText.mockRejectedValue(
+        new MessageGatewaySendError(
+          500,
+          '{"error":"WeCom rejected aibot_send_msg (errcode 40008)"}',
+        ),
+      );
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).rejects.toThrow(/40008/);
+      expect(gw.sendText).toHaveBeenCalledTimes(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
   });
 
   it('accepts a bot the gateway holds with the same Secret, without a probe', async () => {

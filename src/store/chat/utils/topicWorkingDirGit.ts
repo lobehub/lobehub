@@ -5,7 +5,7 @@ import type {
   WorkingDirConfig,
   WorkingDirGithubState,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { dropStaleAutoCreated, getWorkingDirEffectivePath } from '@lobechat/types';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import type { GitLinkedPRSummary } from '@/services/git';
@@ -107,6 +107,7 @@ export const mergeWorkingDirGithubState = ({
   delete git.detached;
   if (isWorktree) git.activeWorktree = path;
   else delete git.activeWorktree;
+  dropStaleAutoCreated(git, currentConfig?.git?.activeWorktree);
 
   // A probe that resolved no remote ref means the branch is unpushed or its trace is
   // gone — not that a previously recorded ref is wrong. Keep the old one rather than

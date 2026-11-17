@@ -54,6 +54,16 @@ export interface TopicUserMemoryExtractRunState {
   traceId?: string;
 }
 
+/**
+ * The generic webhook thread a Topic was started for. Deliveries of the same
+ * webhook and thread key continue this Topic; `threadKey` is empty for a
+ * webhook that puts every call in one Topic.
+ */
+export interface ChatTopicWebhookContext {
+  threadKey: string;
+  webhookId: string;
+}
+
 export interface ChatTopicBotContext {
   applicationId: string;
   /**
@@ -130,9 +140,17 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
+    /**
+     * Set when the summary model rejected the request for a reason only the user
+     * can fix (invalid key, no balance, missing model). The watermark still moves,
+     * so the topic is retried only after a new message.
+     */
+    failedAt?: string;
+    failureReason?: string;
     lastMessageId: string;
     lastMessageUpdatedAt: string;
-    summarizedAt: string;
+    /** Absent until a summary has been written for this topic. */
+    summarizedAt?: string;
     version: number;
   };
 
@@ -462,6 +480,8 @@ export interface ChatTopicMetadata {
   } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
+  /** The generic webhook thread this Topic was started for (see `ChatTopicWebhookContext`). */
+  webhook?: ChatTopicWebhookContext;
   /**
    * Topic-level working directory.
    * On desktop: local filesystem path for the CC session cwd.

@@ -119,6 +119,8 @@ export const sendMessage = async (
       : [];
   if (replyTo && !humanQuote && !replyAgent)
     throw new ChannelError('BAD_REQUEST', 'The replying Agent is no longer available');
+  // Replying to a muted Agent still opens its Thread, but only an @mention makes it answer.
+  const replyTarget = replyAgent?.config?.muted ? undefined : replyAgent;
   // A click is local. Create the Agent's thread atomically with the first sent reply.
   const thread = assertThreadOpen(
     replyAgent && !sourceThread
@@ -231,7 +233,9 @@ export const sendMessage = async (
   const routed = quoteOnly
     ? ({ reason: 'Quoted human message', source: 'explicit', status: 'skipped' } as const)
     : replyAgent
-      ? ({ reason: 'Reply to Agent', source: 'explicit', status: 'directed' } as const)
+      ? replyTarget || mentions.length
+        ? ({ reason: 'Reply to Agent', source: 'explicit', status: 'directed' } as const)
+        : ({ reason: 'The Agent is muted', source: 'explicit', status: 'skipped' } as const)
       : paired
         ? ({ reason: 'Only Agent in the Channel', source: 'explicit', status: 'directed' } as const)
         : mentions.length
@@ -260,7 +264,14 @@ export const sendMessage = async (
   const recipients = quoteOnly
     ? []
     : replyAgent
-      ? [...new Map([replyAgent, ...mentionedAgents].map((agent) => [agent.id, agent])).values()]
+      ? [
+          ...new Map(
+            [...(replyTarget ? [replyTarget] : []), ...mentionedAgents].map((agent) => [
+              agent.id,
+              agent,
+            ]),
+          ).values(),
+        ]
       : paired
         ? [paired]
         : mentions.length

@@ -492,7 +492,12 @@ describe('GitStatus', () => {
         undefined,
         false,
       );
-      expect(gitHookMocks.useFetchGitAheadBehind).toHaveBeenCalledWith(undefined, undefined);
+      // No branch either: the counts describe HEAD, as without the lab.
+      expect(gitHookMocks.useFetchGitAheadBehind).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+      );
       expect(gitHookMocks.useFetchGitWorktrees).toHaveBeenCalledWith(undefined, undefined);
     });
 

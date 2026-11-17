@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { UploadFileItem } from '@/types/files/upload';
 
+import { getImageUploadRefs } from '../../utils/imageUploads';
 import { planImageRefSync } from './useImageRefTagSync';
 
 vi.mock('@/features/ChatInput/hooks/useChatInputUpload', () => ({
@@ -24,43 +25,18 @@ describe('planImageRefSync', () => {
   it('adopts the images already attached when the composer mounts', () => {
     const { payload } = planImageRefSync([upload('blob:a', 'pending')], 'topic-a', null);
 
-    expect(payload.insert).toBeUndefined();
     expect(payload.removed).toBeUndefined();
   });
 
-  it('inserts references for images that just started uploading, in attachment order', () => {
+  it('adds no reference for an image that just started uploading', () => {
+    // Pasting an image used to insert an inline [Image #N] reference at the caret.
     const { state } = planImageRefSync([], 'topic-a', null);
     const files = [upload('blob:a', 'pending'), upload('blob:b', 'uploading')];
 
-    expect(planImageRefSync(files, 'topic-a', state).payload.insert).toEqual(['blob:a', 'blob:b']);
-  });
-
-  it('still removes and renumbers references when new ones are not inserted (mobile)', () => {
-    const mobile = { insertNew: false };
-    const { state } = planImageRefSync(
-      [upload('blob:a', 'success'), upload('blob:b', 'success')],
-      'topic-a',
-      null,
-      mobile,
-    );
-    const files = [upload('blob:b', 'success'), upload('blob:new', 'pending')];
-
-    const { payload } = planImageRefSync(files, 'topic-a', state, mobile);
-
-    expect(payload.insert).toEqual([]);
-    expect(payload.removed).toEqual(['blob:a']);
-    expect(payload.refs.get('blob:b')?.number).toBe(1);
-  });
-
-  it('does not reference attachments restored from a message or seen before', () => {
-    const { state } = planImageRefSync([upload('blob:seen', 'pending')], 'topic-a', null);
-    const files = [
-      upload('blob:seen', 'success'),
-      upload('blob:restored', 'success'),
-      upload('blob:new', 'pending'),
-    ];
-
-    expect(planImageRefSync(files, 'topic-a', state).payload.insert).toEqual(['blob:new']);
+    expect(planImageRefSync(files, 'topic-a', state).payload).toEqual({
+      refs: getImageUploadRefs(files),
+      removed: [],
+    });
   });
 
   it('removes references only for images removed from the same list', () => {

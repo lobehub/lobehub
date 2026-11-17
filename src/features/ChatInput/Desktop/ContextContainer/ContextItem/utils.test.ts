@@ -7,24 +7,21 @@ import { getUploadChipSize, getUploadChipState } from './utils';
 const uploadState = (progress: number) => ({ progress, restTime: 0, speed: 0 });
 
 describe('getUploadChipState', () => {
-  it.each(['pending', 'processing'] as const)(
-    'shows an indeterminate indicator for %s',
-    (status) => {
-      expect(getUploadChipState({ status, uploadState: uploadState(100) })).toMatchObject({
-        busy: true,
-        canPreview: false,
-        canRetry: false,
-        indicator: 'loading',
-      });
-    },
-  );
+  it.each(['pending', 'processing'] as const)('shows the busy indicator for %s', (status) => {
+    expect(getUploadChipState({ status, uploadState: uploadState(100) })).toMatchObject({
+      busy: true,
+      canPreview: false,
+      canRetry: false,
+      indicator: 'busy',
+    });
+  });
 
-  it('shows upload progress, then marks the upload complete', () => {
+  it('tracks upload progress, then marks the upload complete', () => {
     expect(getUploadChipState({ status: 'uploading', uploadState: uploadState(42) })).toMatchObject(
       {
         busy: true,
         canPreview: false,
-        indicator: 'progress',
+        indicator: 'busy',
         progress: 42,
       },
     );
@@ -49,16 +46,27 @@ describe('getUploadChipState', () => {
   );
 
   it.each([undefined, Number.NaN, Number.POSITIVE_INFINITY])(
-    'uses indeterminate feedback when progress is unavailable (%s)',
+    'drops unmeasurable progress (%s)',
     (progress) => {
       expect(
         getUploadChipState({
           status: 'uploading',
           uploadState: progress === undefined ? undefined : uploadState(progress),
-        }).indicator,
-      ).toBe('loading');
+        }),
+      ).toMatchObject({ indicator: 'busy', progress: undefined });
     },
   );
+
+  it('keeps one busy indicator from pending through processing', () => {
+    // A separate spinner for pending/processing made the indicator shrink and change shape mid-upload.
+    const steps = [
+      getUploadChipState({ status: 'pending', uploadState: uploadState(0) }),
+      getUploadChipState({ status: 'uploading', uploadState: uploadState(42) }),
+      getUploadChipState({ status: 'processing', uploadState: uploadState(100) }),
+    ];
+
+    expect(steps.map((step) => step.indicator)).toEqual(['busy', 'busy', 'busy']);
+  });
 
   it.each([
     [-10, 0],

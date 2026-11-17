@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelListItem } from '@lobechat/types';
+import type { ChannelDetail, ChannelJoinableItem, ChannelListItem } from '@lobechat/types';
 
 import {
   arrayEntity,
@@ -14,6 +14,7 @@ import { settleOutbox } from './outbox';
 import {
   channelDetailEntity,
   channelDetailResource,
+  channelJoinableResource,
   channelListResource,
   channelThreadEntityId,
 } from './projection';
@@ -38,6 +39,7 @@ export class ChannelPrivateAction {
   };
   readonly detail;
   readonly entity;
+  readonly joinable;
   readonly list;
   constructor(set: StoreSetter<ChannelState>, get: () => ChannelState) {
     this.list = createReplicaSlice(channelListResource, {
@@ -47,6 +49,13 @@ export class ChannelPrivateAction {
       set,
       stateKey: 'listReplica',
       view: recordLens<ChannelState, ChannelListItem[]>('listMap'),
+    });
+    this.joinable = createReplicaSlice(channelJoinableResource, {
+      actionPrefix: 'channel/joinable',
+      get,
+      set,
+      stateKey: 'joinableReplica',
+      view: recordLens<ChannelState, ChannelJoinableItem[]>('joinableMap'),
     });
     this.detail = createReplicaSlice(channelDetailResource, {
       actionPrefix: 'channel/detail',

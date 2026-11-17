@@ -170,7 +170,7 @@ export class SkillImporter {
       log('importFromZip: created skill id=%s', skill.id);
       return { skill, status: 'created' };
     } finally {
-      cleanup();
+      await cleanup();
       log('importFromZip: cleaned up temp file');
     }
   }

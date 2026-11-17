@@ -11,6 +11,7 @@ import type {
   DeviceSystemInfo,
   GatewayDevice,
   GatewayMcpParams,
+  GatewayToolCallCompletion,
   GatewayToolCallType,
   GatewayTunnelRegistration,
 } from './types';
@@ -151,6 +152,12 @@ export class GatewayHttpClient {
        * knows; otherwise `resolveClientKinds` decides from the tool identifier.
        */
       clientKinds?: DeviceClient[];
+      /**
+       * Lets the device deliver this call's final result later. The gateway
+       * keeps `callbackUrl` for `ttlMs` and posts the device's
+       * `tool_call_completion` there; the device only learns `toolCallId`.
+       */
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -193,6 +200,7 @@ export class GatewayHttpClient {
   private async postToolCall(
     params: {
       clientKinds?: DeviceClient[];
+      completion?: GatewayToolCallCompletion;
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -223,6 +231,7 @@ export class GatewayHttpClient {
                 kind: 'tool',
                 type: toolCall.type ?? 'tool',
               }),
+          completion: params.completion,
           deviceId: params.deviceId,
           operationId: params.operationId,
           timeout: params.timeout,

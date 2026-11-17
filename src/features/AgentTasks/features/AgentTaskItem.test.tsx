@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TaskListOriginContext } from '../shared/taskListOrigin';
 import AgentTaskItem from './AgentTaskItem';
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   taskDetailMap: {} as Record<string, unknown>,
 }));
 
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US' },
@@ -25,6 +28,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('react-router', () => ({
+  useLocation: () => ({ state: locationMock.state }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -165,6 +169,7 @@ const createTask = (assigneeAgentId?: string | null) =>
 
 describe('AgentTaskItem', () => {
   beforeEach(() => {
+    locationMock.state = undefined;
     mocks.activeWorkspaceId = 'workspace-1';
     mocks.memberDirectory = [];
     mocks.fetchTaskDetail.mockReset();
@@ -183,7 +188,9 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update', {
+      state: undefined,
+    });
   });
 
   it('opens an assigned task on the global detail route in global scope', () => {
@@ -191,7 +198,9 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update', {
+      state: undefined,
+    });
   });
 
   it('falls back to the global task detail route when the task has no assignee', () => {
@@ -199,7 +208,9 @@ describe('AgentTaskItem', () => {
 
     fireEvent.click(screen.getByText('Hourly trend update'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update', {
+      state: undefined,
+    });
   });
 
   describe('project badge', () => {
@@ -372,5 +383,31 @@ describe('AgentTaskItem', () => {
     fireEvent.click(screen.getByTestId('subtask-progress'));
 
     await waitFor(() => expect(mocks.fetchTaskDetail).toHaveBeenCalledWith('task_22'));
+  });
+
+  it('carries the list it was opened from into the task detail', () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(<AgentTaskItem routeScope="global" task={createTask('agt_owner')} />);
+
+    fireEvent.click(screen.getByText('Hourly trend update'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-22/hourly-trend-update', {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
+  });
+
+  it('prefers the surrounding task list URL over a carried origin', () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(
+      <TaskListOriginContext value={'/agent/agt_owner/tasks?scope=created'}>
+        <AgentTaskItem task={createTask('agt_owner')} />
+      </TaskListOriginContext>,
+    );
+
+    fireEvent.click(screen.getByText('Hourly trend update'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_owner/task/T-22/hourly-trend-update', {
+      state: { taskListOrigin: '/agent/agt_owner/tasks?scope=created' },
+    });
   });
 });

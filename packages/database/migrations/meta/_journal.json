@@ -1505,6 +1505,34 @@
       "when": 1794757089562,
       "tag": "0214_user_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 215,
+      "version": "7",
+      "when": 1794770338614,
+      "tag": "0215_user_connectors_add_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 216,
+      "version": "7",
+      "when": 1794814012290,
+      "tag": "0216_inbound_webhooks",
+      "breakpoints": true
+    },
+    {
+      "idx": 217,
+      "version": "7",
+      "when": 1794843685342,
+      "tag": "0217_artboards",
+      "breakpoints": true
+    },
+    {
+      "idx": 218,
+      "version": "7",
+      "when": 1794852458535,
+      "tag": "0218_channel_and_contacts_schema",
+      "breakpoints": true
     }
   ],
   "version": "6"

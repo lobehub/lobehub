@@ -255,14 +255,34 @@ describe('getSetupGuide', () => {
     expect(getInlineFieldKeys('wechat').size).toBe(0);
   });
 
-  it('walks WeCom from the admin console to the BotID and Secret', () => {
+  it('walks WeCom from the create permission to using the bot in chats', () => {
     const guide = getSetupGuide('wecom', { appName: 'Moss' })!;
-    expect(guide.steps.map((step) => step.key)).toEqual(['create', 'credentials']);
-    expect(guide.steps[0].link).toEqual({
+    expect(guide.steps.map((step) => step.key)).toEqual([
+      'access',
+      'create',
+      'connection',
+      'credentials',
+      'usage',
+    ]);
+    // WeCom has an admin console, not a developer console. Admins skip the permission step,
+    // so the one link sits on the create step that both paths go through.
+    expect(guide.steps[0].link).toBeUndefined();
+    expect(guide.steps[1].link).toEqual({
       href: 'https://work.weixin.qq.com/wework_admin/frame',
-      label: 'openConsole',
+      label: 'openAdminConsole',
     });
+    expect(guide.steps.filter((step) => step.link)).toHaveLength(1);
     expect([...getInlineFieldKeys('wecom')]).toEqual(['applicationId', 'secret']);
+  });
+
+  it('has English copy for every WeCom step and its link', () => {
+    for (const step of getSetupGuide('wecom', { appName: 'Moss' })!.steps) {
+      for (const part of ['title', 'desc'] as const) {
+        const key = `channel.quickSetup.wecom.${step.key}.${part}`;
+        expect(defaultAgentLocale[key as keyof typeof defaultAgentLocale], key).toBeTruthy();
+      }
+    }
+    expect(defaultAgentLocale['channel.quickSetup.link.openAdminConsole']).toBeTruthy();
   });
 
   it('asks to save right after the last step with a credential, before what needs a running bot', () => {
@@ -275,6 +295,15 @@ describe('getSetupGuide', () => {
     expect(at('discord')).toEqual(['create', 'credentials', 'bot', 'intent', 'invite', 'connect']);
     expect(at('telegram')).toEqual(['botfather', 'token', 'connect', 'privacy']);
     expect(at('line')).toEqual(['account', 'messagingApi', 'credentials', 'connect', 'webhook']);
+    // Members can only find and use a WeCom bot once it is connected.
+    expect(at('wecom')).toEqual([
+      'access',
+      'create',
+      'connection',
+      'credentials',
+      'connect',
+      'usage',
+    ]);
     // Stream mode connects on save, so the DingTalk console setup comes first.
     expect(at('dingtalk')).toEqual(['create', 'robot', 'permissions', 'publish', 'connect']);
     expect(connectStepIndex([{ key: 'only' }])).toBe(1);

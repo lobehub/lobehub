@@ -8,10 +8,16 @@ import type {
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
 } from '@lobechat/types';
-import { channelMessageVia } from '@lobechat/types';
+import { agentDisplayName, channelMessageVia, RequestTrigger } from '@lobechat/types';
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { agentOperations, channelJobs, channelMessages, workspaceMembers } from '../../schemas';
+import {
+  agentOperations,
+  agents,
+  channelJobs,
+  channelMessages,
+  workspaceMembers,
+} from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, findThread } from './delivery';
@@ -167,6 +173,67 @@ export class ChannelHistoryRepository {
         .limit(1);
       return { channelId, manifest, requestVia: channelMessageVia(request?.metadata) };
     });
+
+  /**
+   * Who a run relays as, and from where. A Channel run relays from its Channel and request
+   * (`currentRun`, all its checks). A run with no Channel job may only be the requester's own
+   * live bot run, and only when the caller says so (`allowBotRun`): the bot's owner asked their
+   * Agent from an IM platform to post into one of their Channels. Only a caller holding that run's
+   * `channel:message` token, minted only for an owner's bot message, may set it; the trigger is
+   * checked again here so no other run without a Channel can relay.
+   */
+  relaySource = async (
+    operationId: string,
+    { allowBotRun = false }: { allowBotRun?: boolean } = {},
+  ): Promise<{
+    origin?: { channelId: string; threadId: string | null };
+    requestVia?: ChannelMessageVia;
+    self: { agentId: string; name: string };
+  }> => {
+    const [job] = await this.db
+      .select({ id: channelJobs.id })
+      .from(channelJobs)
+      .where(eq(channelJobs.operationId, operationId))
+      .limit(1);
+    if (job || !allowBotRun) {
+      const run = await this.currentRun(operationId);
+      return {
+        origin: { channelId: run.channelId, threadId: run.manifest.threadId },
+        requestVia: run.requestVia,
+        self: { agentId: run.manifest.self.agentId, name: run.manifest.self.name },
+      };
+    }
+
+    const [operation] = await this.db
+      .select({
+        agentId: agentOperations.agentId,
+        agentName: agents.name,
+        agentTitle: agents.title,
+        status: agentOperations.status,
+        trigger: agentOperations.trigger,
+        userId: agentOperations.userId,
+        workspaceId: agentOperations.workspaceId,
+      })
+      .from(agentOperations)
+      .leftJoin(agents, eq(agents.id, agentOperations.agentId))
+      .where(eq(agentOperations.id, operationId))
+      .limit(1);
+    if (
+      !operation?.agentId ||
+      operation.userId !== this.userId ||
+      operation.workspaceId !== this.workspaceId ||
+      operation.trigger !== RequestTrigger.Bot
+    )
+      throw new ChannelError('NOT_FOUND', 'Channel operation not found');
+    if (operation.status !== 'running')
+      throw new ChannelError('CONFLICT', 'Channel operation is no longer active');
+    return {
+      self: {
+        agentId: operation.agentId,
+        name: agentDisplayName({ name: operation.agentName, title: operation.agentTitle }, 'Agent'),
+      },
+    };
+  };
 
   readMessages = async (
     operationId: string,

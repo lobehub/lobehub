@@ -110,6 +110,12 @@ import {
   LocalSystemStreamings,
 } from '@lobechat/builtin-tool-local-system/client';
 import {
+  McpEventsIdentifier,
+  McpEventsInspectors,
+  McpEventsInterventions,
+  McpEventsRenders,
+} from '@lobechat/builtin-tool-mcp-events/client';
+import {
   MemoryInspectors,
   MemoryInterventions,
   MemoryManifest,
@@ -302,6 +308,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
     [BrowserManifest.identifier]: BrowserRenders as Record<string, BuiltinRender>,
     [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
+    [McpEventsIdentifier]: McpEventsRenders,
     [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
     [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
     [NotebookIdentifier]: NotebookRenders,
@@ -387,6 +394,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
     [BrowserManifest.identifier]: BrowserInspectors as Record<string, BuiltinInspector>,
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
+    [McpEventsIdentifier]: McpEventsInspectors,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
@@ -497,6 +505,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LegacyGoalIdentifier]: GoalInterventions as Record<string, BuiltinIntervention>,
     [LobeAgentManifest.identifier]: LobeAgentInterventions as Record<string, BuiltinIntervention>,
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
+    [McpEventsIdentifier]: McpEventsInterventions,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,
     [MessageManifest.identifier]: MessageInterventions as Record<string, BuiltinIntervention>,
     [DashboardManifest.identifier]: DashboardInterventions as Record<string, BuiltinIntervention>,

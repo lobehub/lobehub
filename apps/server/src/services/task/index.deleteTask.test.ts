@@ -19,6 +19,7 @@ const { cancelScheduled, scheduleNextTopic, trashTasksInTransaction } = vi.hoist
 }));
 
 vi.mock('../trash', () => ({ trashTasksInTransaction }));
+vi.mock('../inboundWebhook/lifecycle', () => ({ removeByTopics: vi.fn() }));
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),

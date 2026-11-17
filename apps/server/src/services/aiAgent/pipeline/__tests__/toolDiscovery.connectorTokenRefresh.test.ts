@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
+import { refreshExpiredLinkTokens } from '@/server/services/connector/tokens';
 
 import { discoverTools } from '../toolDiscovery';
 
@@ -29,8 +29,32 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue({}) },
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
-  refreshExpiredConnectorTokens: vi.fn(async (connectors: any[]) =>
-    connectors.map((c) => ({ ...c, credentials: { accessToken: 'fresh', type: 'oauth2' } })),
+  refreshExpiredConnectorTokens: vi.fn(async (connectors: any[]) => connectors),
+  refreshExpiredLinkTokens: vi.fn(async (_connector: unknown, links: any[]) =>
+    links.map((link) => ({ ...link, credentials: { accessToken: 'fresh', type: 'oauth2' } })),
+  ),
+}));
+// The OAuth token lives on the connector's account, read through the link
+// storage; stand that in so the bare runtime needs no database.
+vi.mock('@/server/services/connector/links', async (original) => ({
+  ...(await original<object>()),
+  getConnectorLinkModel: vi.fn().mockReturnValue({}),
+  loadConnectorLinksMap: vi.fn(
+    async (connectors: { id: string }[]) =>
+      new Map(
+        connectors.map((connector) => [
+          connector.id,
+          [
+            {
+              credentials: { accessToken: 'expired', type: 'oauth2' },
+              id: 'lnk_xmind',
+              name: 'Default',
+              status: 'connected',
+              userConnectorId: connector.id,
+            },
+          ],
+        ]),
+      ),
   ),
 }));
 vi.mock('@/server/services/deviceGateway', () => ({
@@ -40,7 +64,7 @@ vi.mock('@/server/services/deviceGateway', () => ({
 const XMIND = 'xmind-mcp';
 
 const oauthConnector = {
-  credentials: { accessToken: 'expired', type: 'oauth2' },
+  credentials: null,
   id: 'conn-xmind',
   identifier: XMIND,
   isEnabled: true,
@@ -48,6 +72,7 @@ const oauthConnector = {
   mcpServerUrl: 'https://app.xmind.com/api/mcp',
   metadata: {},
   name: 'XMind',
+  oidcConfig: { clientId: 'client', scheme: 'dcr' },
 };
 
 const connectorTools = [
@@ -109,13 +134,13 @@ const run = (plugins: string[]) =>
 const manifestToken = (manifest: unknown) =>
   (manifest as { mcpParams?: { auth?: { accessToken?: string } } })?.mcpParams?.auth?.accessToken;
 
-// Manifests carry the connector token for the whole run, so an
-// expired-but-refreshable token used to 401 on the first call after expiry.
+// A single-account manifest carries that account's token for the whole run, so
+// an expired-but-refreshable token used to 401 on the first call after expiry.
 describe('discoverTools — connector OAuth token refresh', () => {
   it('builds a pinned connector manifest from refreshed credentials', async () => {
     const result = await run([XMIND]);
 
-    expect(refreshExpiredConnectorTokens).toHaveBeenCalled();
+    expect(refreshExpiredLinkTokens).toHaveBeenCalled();
     expect(manifestToken(result.toolManifestMap[XMIND])).toBe('fresh');
   });
 

@@ -493,17 +493,8 @@ export default {
     'Custom API service is only available for paid plans. Upgrade now to enjoy global mainstream model services',
   'limitation.providers.prompter.title': 'Subscribe now to use custom API service',
   'limitation.providers.tooltip': 'Custom API service is only available for paid plans',
-  'modelPricing.button': 'View pricing documentation',
-  'modelPricing.desc':
-    '{{name}} prices AI model usage in US dollars. The table below shows the price per 1M Tokens.',
-  'modelPricing.title': 'Text model pricing',
-  'models.context': 'Context',
-  'models.input': 'Input',
   'models.intro': 'Introduction',
   'models.link': 'View',
-  'models.output': 'Output',
-  'models.perMillionTokens': 'USD / 1M tokens',
-  'models.title': 'Models',
   'navPanelUpgrade.desc': 'Upgrade to unlock extended capabilities',
   'navPanelUpgrade.dismiss': 'Hide for now',
   'payDiffPrice': 'Pay difference',
@@ -600,7 +591,7 @@ export default {
   'plans.limits.agentRunFee.tooltip':
     'Charged from your balance when an agent task you start finishes, on top of its model usage. Tasks that fail, or that you stop within 30 seconds, are free.',
   'plans.limits.artifactSiteSize': 'Up to {{value}} per published site',
-  'plans.limits.artifactSites': 'Up to {{value}} active Artifact sites',
+  'plans.limits.artifactSites': '{{value}} active Artifact sites',
   'plans.limits.concurrentAgentRuns': '{{value}} agent tasks at once',
   'plans.limits.concurrentAgentRuns.unlimited': 'Unlimited concurrent agent tasks',
   'plans.limits.documentCharacters': 'Up to {{value}} characters per document',
@@ -616,7 +607,7 @@ export default {
   'plans.limits.rolling5hSpend.tooltip': 'Usage within a 5-hour window has its own limit.',
   'plans.limits.rolling5hSpend.unavailable': 'No 5-hour limit',
   'plans.limits.rolling7dSpend': 'Weekly limit',
-  'plans.limits.rolling7dSpend.multiple': 'Weekly limit: {{multiple}}× that of {{plan}}',
+  'plans.limits.rolling7dSpend.multiple': 'Weekly limit: {{multiple}}× {{plan}}',
   'plans.limits.rolling7dSpend.tooltip':
     'The model usage your plan allows in a week. Usage across your billing month has a limit as well.',
   'plans.limits.sandboxStorage': '{{value}} cloud sandbox storage',
@@ -624,8 +615,7 @@ export default {
   'plans.limits.topUpRate': 'Top-up discount',
   'plans.limits.topUpRate.tooltip': 'Cheaper top-ups than on Free',
   'plans.limits.ultraWeeklySpend': 'Ultra model weekly limit',
-  'plans.limits.ultraWeeklySpend.multiple':
-    'Ultra model weekly limit: {{multiple}}× that of {{plan}}',
+  'plans.limits.ultraWeeklySpend.multiple': 'Ultra limit: {{multiple}}× {{plan}}',
   'plans.limits.ultraWeeklySpend.tooltip':
     'Ultra models are the most capable and most expensive ones. Their usage counts toward your weekly limit and also has a limit of its own; both reset together.',
   'plans.limits.ultraWeeklySpend.unavailable': 'Ultra models',
@@ -988,8 +978,6 @@ export default {
   'usage.window.rule.planMonth': 'Monthly limit',
   'creditUsageReminder.exhausted': "This billing cycle's subscription usage has run out",
   'creditUsageReminder.window.exhausted': '{{rule}} reached',
-  'modelPricing.descUsd':
-    '{{name}} bills AI model usage by tokens. The table below shows the price in USD per 1M tokens.',
   'creditsChip.rolling.topup': 'Top up',
   'usage.window.referral': 'Referral credits',
   'tab.balance': 'Balance',

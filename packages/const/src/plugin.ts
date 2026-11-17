@@ -66,6 +66,46 @@ export const isMarketplaceInstallCompleted = (metadata: unknown): boolean =>
   (metadata as Record<string, unknown>)[MARKETPLACE_INSTALL_COMPLETED_KEY] === true;
 
 /**
+ * `user_connectors.metadata` key holding, on a marketplace MCP an agent
+ * installed from an HTTP listing, the approval the market manifest gives each
+ * tool it lists: tool name → its `humanIntervention` (`null` for none). What
+ * gets synced is what the server itself lists, at the install or any later
+ * sync, so each sync takes a tool's approval from here
+ * ({@link marketplaceToolIntervention}): a declared tool the server only starts
+ * listing later keeps the manifest's policy, and a tool the manifest does not
+ * declare (added later, or renamed), which nobody vouched for, gets `always`.
+ */
+export const MARKETPLACE_TOOL_POLICIES_KEY = 'marketplaceToolPolicies';
+
+/** The per-tool market policies a connector stores, or `undefined` when it stores none. */
+export const marketplaceToolPoliciesOf = (
+  metadata: unknown,
+): ReadonlyMap<string, unknown> | undefined => {
+  const policies =
+    metadata && typeof metadata === 'object'
+      ? (metadata as Record<string, unknown>)[MARKETPLACE_TOOL_POLICIES_KEY]
+      : undefined;
+  return policies && typeof policies === 'object' && !Array.isArray(policies)
+    ? new Map(Object.entries(policies))
+    : undefined;
+};
+
+/**
+ * The `humanIntervention` a tool the server lists is synced with. When the
+ * connector stores market policies, they decide: the tool's own (`null` → none),
+ * or `always` for a tool they do not declare, whatever the listing says.
+ * Otherwise it is the one given (a manifest's, if any).
+ */
+export const marketplaceToolIntervention = (
+  marketPolicies: ReadonlyMap<string, unknown> | undefined,
+  toolName: string,
+  humanIntervention: unknown,
+): unknown => {
+  if (!marketPolicies) return humanIntervention;
+  return marketPolicies.has(toolName) ? (marketPolicies.get(toolName) ?? undefined) : 'always';
+};
+
+/**
  * `user_connectors.metadata` key a custom MCP installed from a protocol link
  * sets. Those installs used to be custom plugins, whose stdio calls ran on the
  * desktop over IPC with or without a device gateway.
@@ -183,3 +223,8 @@ export const withMandatoryApprovalMark = (
   mayRequireMandatoryApproval(humanIntervention)
     ? { ...metadata, [MANDATORY_APPROVAL_KEY]: true }
     : metadata;
+
+export const MCP_EVENT_TAG = 'mcpEvent';
+
+/** Wraps the request a generic inbound webhook woke an Agent with. */
+export const WEBHOOK_EVENT_TAG = 'webhookEvent';

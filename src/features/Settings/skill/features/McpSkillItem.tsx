@@ -3,7 +3,7 @@
 import { Avatar, createModal, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import * as stylex from '@stylexjs/stylex';
-import { memo, Suspense } from 'react';
+import { memo, type ReactNode, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MCPTag from '@/components/Plugins/MCPTag';
@@ -22,6 +22,8 @@ import { styles } from './style';
 interface McpSkillItemProps {
   author?: string;
   avatar?: string;
+  /** Feedback line under the title (list row only). */
+  description?: ReactNode;
   identifier: string;
   isSelected?: boolean;
   onSelect?: () => void;
@@ -31,7 +33,7 @@ interface McpSkillItemProps {
 }
 
 const McpSkillItem = memo<McpSkillItemProps>(
-  ({ identifier, title, avatar, type, runtimeType, author, isSelected, onSelect }) => {
+  ({ identifier, title, avatar, description, type, runtimeType, author, isSelected, onSelect }) => {
     const { t } = useTranslation('plugin');
     const iconSize = useSkillListVariant() === 'page' ? 20 : 18;
     const isMCP = runtimeType === 'mcp';
@@ -68,6 +70,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
       return (
         <SkillListRow
           active={isSelected}
+          description={description}
           title={title}
           icon={() =>
             avatar && avatar !== 'MCP_AVATAR' ? (

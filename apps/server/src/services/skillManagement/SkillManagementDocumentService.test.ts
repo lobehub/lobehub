@@ -8,6 +8,7 @@ import {
   DocumentLoadRule,
   PolicyLoad,
 } from '@/database/models/agentDocuments';
+import { isUuid } from '@/database/utils/uuid';
 
 import type { AgentDocumentEditorSnapshot } from '../agentDocuments/headlessEditor';
 import type { DocumentService } from '../document';
@@ -136,7 +137,7 @@ class InMemoryAgentDocumentModel implements SkillManagementAgentDocumentModel {
   ): Promise<SkillAgentDocument> {
     this.createCalls.push({ agentId, content, filename, params });
 
-    const id = `agent-doc-${this.nextId}`;
+    const id = `00000000-0000-4000-8000-${String(this.nextId).padStart(12, '0')}`;
     const documentId = `document-${this.nextId}`;
     this.nextId += 1;
 
@@ -162,6 +163,10 @@ class InMemoryAgentDocumentModel implements SkillManagementAgentDocumentModel {
   }
 
   async findById(agentDocumentId: string): Promise<SkillAgentDocument | undefined> {
+    if (!isUuid(agentDocumentId)) {
+      throw new Error(`invalid input syntax for type uuid: "${agentDocumentId}"`);
+    }
+
     return this.documents.find((doc) => doc.id === agentDocumentId && !doc.deletedAt);
   }
 
@@ -360,9 +365,9 @@ describe('SkillManagementDocumentService', () => {
         name: 'release-writer',
       }),
     );
-    expect(detail?.bundle.agentDocumentId).toBe('agent-doc-1');
+    expect(detail?.bundle.agentDocumentId).toBe('00000000-0000-4000-8000-000000000001');
     expect(detail?.bundle.documentId).toBe('document-1');
-    expect(detail?.index.agentDocumentId).toBe('agent-doc-2');
+    expect(detail?.index.agentDocumentId).toBe('00000000-0000-4000-8000-000000000002');
     expect(detail?.index.documentId).toBe('document-2');
   });
 
@@ -630,6 +635,117 @@ describe('SkillManagementDocumentService', () => {
         agentId: 'agent-1',
         name: undefined,
       }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('reads a skill whose stored frontmatter is unclosed from its last saved metadata', async () => {
+    const { agentDocumentModel, service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Writes release notes',
+      name: 'broken-index',
+      title: 'Broken Index',
+    });
+    const brokenContent = '---\nname: broken-index\ndescription: Edited by hand\n\n# Skill';
+    const index = agentDocumentModel.documents.find(
+      (doc) => doc.id === created.index.agentDocumentId,
+    )!;
+    index.content = brokenContent;
+
+    const detail = await service.getSkill({
+      agentId: 'agent-1',
+      includeContent: true,
+      name: 'broken-index',
+    });
+
+    expect(detail).toEqual(
+      expect.objectContaining({
+        content: brokenContent,
+        description: 'Writes release notes',
+        frontmatter: { description: 'Writes release notes', name: 'broken-index' },
+        frontmatterError: 'Skill index content must close frontmatter',
+        name: 'broken-index',
+      }),
+    );
+    await expect(service.listSkills({ agentId: 'agent-1' })).resolves.toEqual([
+      expect.objectContaining({
+        frontmatterError: 'Skill index content must close frontmatter',
+        name: 'broken-index',
+      }),
+    ]);
+  });
+
+  it('reads a broken skill index with an empty description when no metadata was saved', async () => {
+    const { agentDocumentModel, service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Has no metadata',
+      name: 'no-metadata',
+      title: 'No Metadata',
+    });
+    const index = agentDocumentModel.documents.find(
+      (doc) => doc.id === created.index.agentDocumentId,
+    )!;
+    index.content = '# Skill without frontmatter';
+    index.metadata = null;
+
+    await expect(service.getSkill({ agentId: 'agent-1', name: 'no-metadata' })).resolves.toEqual(
+      expect.objectContaining({
+        description: '',
+        frontmatterError: 'Skill index content must start with frontmatter',
+        name: 'no-metadata',
+      }),
+    );
+  });
+
+  it('leaves frontmatterError unset for a well-formed skill index', async () => {
+    const { service } = createService();
+    await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Well formed',
+      name: 'well-formed',
+      title: 'Well Formed',
+    });
+
+    const detail = await service.getSkill({ agentId: 'agent-1', name: 'well-formed' });
+
+    expect(detail).not.toHaveProperty('frontmatterError');
+  });
+
+  it('falls back to the name selector when the agent document id is not a uuid', async () => {
+    const { service } = createService();
+    const created = await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Malformed id lookup',
+      name: 'malformed-id-skill',
+      title: 'Malformed Id Skill',
+    });
+
+    await expect(
+      service.getSkill({
+        agentDocumentId: 'docs_AbCdEf123456',
+        agentId: 'agent-1',
+        name: 'malformed-id-skill',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ bundle: created.bundle, index: created.index }));
+  });
+
+  it('stays not-found when the agent document id is not a uuid and no name is given', async () => {
+    const { service } = createService();
+    await service.createSkill({
+      agentId: 'agent-1',
+      bodyMarkdown: skillBody(),
+      description: 'Malformed id only',
+      name: 'malformed-id-only',
+      title: 'Malformed Id Only',
+    });
+
+    await expect(
+      service.getSkill({ agentDocumentId: 'docs_AbCdEf123456', agentId: 'agent-1' }),
     ).resolves.toBeUndefined();
   });
 

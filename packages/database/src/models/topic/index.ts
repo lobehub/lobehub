@@ -5,6 +5,7 @@ import { createTopicModelContext } from './context';
 import * as create from './create';
 import * as remove from './delete';
 import * as find from './find';
+import * as inFlight from './inFlight';
 import * as list from './list';
 import * as memoryExtractor from './memoryExtractor';
 import * as runningOperation from './runningOperation';
@@ -130,11 +131,13 @@ export class TopicModel {
   findByAgentAndDocumentTrigger = this.withContext(find.findByAgentAndDocumentTrigger);
   findRunInitiators = this.withContext(find.findRunInitiators);
   findRecentByBotThread = this.withContext(find.findRecentByBotThread);
+  findByWebhookThread = this.withContext(find.findByWebhookThread);
   queryByKeyword = this.withContext(find.queryByKeyword);
   count = this.withContext(find.countTopics);
   rank = this.withContext(find.rank);
   queryRecent = this.withContext(find.queryRecent);
   getCronTopicsGroupedByCronJob = this.withContext(find.getCronTopicsGroupedByCronJob);
+  countInFlightInDirectory = this.withContext(inFlight.countInFlightInDirectory);
 
   // **************** Agent Share (visitor-scoped) *************** //
 

@@ -3,7 +3,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
 import pMap from 'p-map';
 
@@ -33,6 +33,7 @@ import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { deliverRelayReceipt } from './relayReceipt';
 import { openChannelReply } from './replyOpening';
+import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
@@ -102,10 +103,35 @@ export class ChannelCoordinator {
 
     const members = heads.length
       ? await this.db
-          .select({ config: channelMembers.config })
+          .select({ config: channelMembers.config, id: channelMembers.id })
           .from(channelMembers)
           .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')))
       : [];
+    // A member with no device picked in the Channel runs where the Agent's own settings say, as
+    // its requester: their presence decides whether that device is online. Read it here, outside
+    // the channel lock; the claim only resolves which device it is.
+    const unpicked = new Set(
+      members.filter(({ config }) => !config?.deviceId).map((member) => member.id),
+    );
+    const requesterIds = [
+      ...new Set(
+        heads.filter((job) => unpicked.has(job.memberId)).map((job) => job.requesterMemberId),
+      ),
+    ];
+    const requesters = requesterIds.length
+      ? await this.db
+          .select({ userId: channelMembers.userId })
+          .from(channelMembers)
+          .where(
+            and(eq(channelMembers.channelId, channelId), inArray(channelMembers.id, requesterIds)),
+          )
+      : [];
+    const routedPresence = createRoutedDevicePresence(this.db, channel.workspaceId);
+    await pMap(
+      requesters.flatMap(({ userId }) => (userId ? [userId] : [])),
+      (userId) => routedPresence.prefetch(userId),
+      { concurrency: 5 },
+    );
     const owners = [
       ...new Set(
         members.flatMap(({ config }) => (config?.deviceOwnerId ? [config.deviceOwnerId] : [])),
@@ -123,9 +149,10 @@ export class ChannelCoordinator {
 
     try {
       await pMap(
-        Object.values(groupBy(pending, (job) => job.memberId)),
+        Object.values(groupBy(pending, (job) => `${job.memberId}:${job.threadId ?? ''}`)),
         async (jobs) => {
-          // Recover earlier runs before claiming this member, without delaying other members.
+          // Recover a branch's earlier runs before claiming in it, without delaying other
+          // members or the member's other branches.
           for (const job of jobs) {
             if (job.status !== 'queued') {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
@@ -138,6 +165,7 @@ export class ChannelCoordinator {
                 leaseMs: LEASE_MS,
                 leaseOwner: crypto.randomUUID(),
                 onlineDeviceIds,
+                routedDevice: (run) => resolveChannelRoutedDevice(this.db, run, routedPresence),
                 serverDefaultAgentConfig: getServerDefaultAgentConfig(),
               });
             let claim = await claimNow();

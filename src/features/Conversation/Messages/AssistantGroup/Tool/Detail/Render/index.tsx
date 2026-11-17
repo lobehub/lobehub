@@ -79,6 +79,8 @@ const ToolRender = memo<ToolRenderProps>(
     const fallback = (
       <FallbackArgumentRender
         content={resolvedContent}
+        identifier={plugin?.identifier}
+        messageId={messageId}
         requestArgs={plugin?.arguments}
         toolCallId={toolCallId}
       />

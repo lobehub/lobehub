@@ -4,6 +4,8 @@ import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { BuiltinToolResolveContext, LobeBuiltinTool } from '@lobechat/types';
 import debug from 'debug';
 
+import { injectConnectorLinkParam, resolveConnectorLinkParam } from './connectorLinks';
+
 const log = debug('mecha:manifestPool');
 
 /** A connector tool's permission as the connectors settings store it. */
@@ -24,6 +26,7 @@ export interface ConnectorToolFacts {
 export interface ConnectorFacts {
   identifier: string;
   isEnabled?: boolean | null;
+  links?: { id: string; name: string }[];
   name: string;
   tools: ConnectorToolFacts[];
 }
@@ -115,6 +118,7 @@ export const buildConnectorManifest = (
     : [];
   if (modelTools.length === 0 && !entries.length) return undefined;
 
+  const param = resolveConnectorLinkParam(connector.tools.map((tool) => tool.inputSchema));
   const api = modelTools.map((tool) => {
     const parameters = (tool.inputSchema ?? { properties: {}, type: 'object' }) as Record<
       string,
@@ -127,7 +131,11 @@ export const buildConnectorManifest = (
           : (tool.description ?? ''),
       humanIntervention: connectorToolIntervention(tool),
       name: tool.toolName,
-      parameters,
+      // A disabled tool's call is refused whatever it names: no account to select
+      parameters:
+        (connector.links?.length ?? 0) > 1 && tool.permission !== 'disabled'
+          ? injectConnectorLinkParam(parameters, connector.links!, param)
+          : parameters,
     };
   });
 

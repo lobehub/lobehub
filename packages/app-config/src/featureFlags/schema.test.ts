@@ -559,3 +559,13 @@ describe('mapFeatureFlagsEnvToState', () => {
     });
   });
 });
+
+describe('webhook flag', () => {
+  it('defaults off and only enables allowlisted users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.webhook).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'u1').enableWebhook).toBe(false);
+    expect(mapFeatureFlagsEnvToState({ webhook: true }, 'u1').enableWebhook).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ webhook: ['u1'] }, 'u1').enableWebhook).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ webhook: ['u1'] }, 'u2').enableWebhook).toBe(false);
+  });
+});

@@ -286,6 +286,57 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
       });
     });
 
+    // The selector names the account whose token goes out; the server never sees it
+    it("sends the selected account's token and strips the selector for a connector holding several", async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      environment.isDesktop = true;
+      mockGetToolStoreState.mockReturnValue({
+        connectors: [
+          {
+            ...connector,
+            links: [
+              { id: 'lnk_a', name: 'Alice' },
+              { id: 'lnk_b', name: 'Bob' },
+            ],
+            metadata: { connectVia: 'device' },
+          },
+        ],
+      });
+      vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+        ...connector,
+        credentials: null,
+        metadata: { connectVia: 'device' },
+        oidcConfig: { clientId: 'cid', issuer: 'https://auth.example.com' },
+        tools: [
+          { inputSchema: { properties: { dir: {} } }, permission: 'auto', toolName: 'list_files' },
+        ],
+      } as never);
+      vi.mocked(lambdaClient.connector.getLocalCallToken.mutate).mockResolvedValue({
+        accessToken: 'bob-access',
+        type: 'oauth2',
+      } as never);
+
+      await mcpService.invokeMcpToolCall(
+        { ...payload, arguments: '{"dir":"/","link_id":"lnk_b"}' } as ChatToolPayload,
+        {},
+      );
+
+      expect(lambdaClient.connector.getLocalCallToken.mutate).toHaveBeenCalledWith({
+        id: 'nas-id',
+        linkId: 'lnk_b',
+      });
+      const sent = superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0]);
+      expect(sent).toMatchObject({
+        args: { dir: '/' },
+        http: { auth: { accessToken: 'bob-access', type: 'oauth2' } },
+      });
+      expect((sent as { args: Record<string, unknown> }).args).not.toHaveProperty('link_id');
+
+      await expect(mcpService.invokeMcpToolCall(payload as ChatToolPayload, {})).rejects.toThrow(
+        'link_id is required',
+      );
+    });
+
     it('leaves one set to connect through the device to the server on the web', async () => {
       const { lambdaClient } = await import('@/libs/trpc/client');
       useConnector({ connectVia: 'device' });

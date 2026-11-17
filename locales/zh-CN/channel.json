@@ -32,6 +32,13 @@
   "blocked.member_busy": "等待上一条回复完成",
   "blocked.unavailable": "Agent 暂不可用",
   "blocked.workspace_changed": "工作空间已变更",
+  "browse.empty": "暂时没有可加入的公开频道。",
+  "browse.join": "加入",
+  "browse.joinFailed": "加入频道失败，请重试。",
+  "browse.memberCount": "{{count}} 位成员",
+  "browse.noMatches": "没有匹配的公开频道",
+  "browse.search": "搜索公开频道",
+  "browse.title": "浏览频道",
   "cancel": "取消",
   "chooseDevice": "选择设备",
   "chooseDirectory": "选择工作目录",
@@ -220,6 +227,9 @@
   "settings.tab.members": "成员",
   "settings.tab.reply": "回复策略",
   "settings.title": "频道设置",
+  "settings.visibility.privateHint": "只有被邀请的成员能看到这个频道。开启后，工作区里的所有人都可以找到并加入。",
+  "settings.visibility.publicHint": "工作区里的所有人都可以找到并加入这个频道。",
+  "settings.visibility.title": "公开频道",
   "sort.by": "排序方式",
   "sort.by.createdAt": "创建时间",
   "sort.by.title": "名称",
@@ -261,5 +271,7 @@
   "unarchiveThread": "取消归档线程",
   "unarchiveThreadSuccess": "线程已取消归档",
   "unnamedAgent": "未命名 Agent",
-  "unreadMentions": "{{count}} 条未读提及"
+  "unreadMentions": "{{count}} 条未读提及",
+  "visibilityFailed": "修改频道可见范围失败，请重试。",
+  "visibilityForbidden": "只有频道所有者或管理员可以修改可见范围。"
 }

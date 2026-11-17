@@ -1,7 +1,7 @@
-import { ActionIcon, Icon, Progress, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CircleAlertIcon, Loader2Icon, RotateCwIcon, XIcon } from 'lucide-react';
+import { CircleAlertIcon, RotateCwIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
 
 import { openFilePreviewModal } from './FilePreviewModal.loader';
+import UploadIndicator from './UploadIndicator';
 import UploadTooltipContent from './UploadTooltipContent';
 import { getUploadChipState } from './utils';
 
@@ -56,20 +57,6 @@ const styles = stylex.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  badge: {
-    pointerEvents: 'none',
-    position: 'absolute',
-    insetBlockStart: '4px',
-    insetInlineStart: '4px',
-    paddingInline: '4px',
-    borderRadius: cssVar.borderRadiusSM,
-    fontSize: '11px',
-    fontVariantNumeric: 'tabular-nums',
-    fontWeight: 500,
-    lineHeight: '16px',
-    color: cssVar.colorText,
-    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 85%, transparent)`,
-  },
   close: {
     cursor: 'pointer',
     position: 'absolute',
@@ -106,18 +93,13 @@ const styles = stylex.create({
   overlayActions: { pointerEvents: 'auto' },
 });
 
-interface ImageCardProps extends UploadFileItem {
-  /** Position among the draft's images; matches the inline `[Image #N]` references. */
-  number?: number;
-}
-
-const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
-  const { errorCode, file, id, previewUrl, status } = item;
+const ImageCard = memo<UploadFileItem>((item) => {
+  const { errorCode, file, id, previewUrl } = item;
   const { t } = useTranslation(['chat', 'common']);
   const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
-  const { busy, canRetry, indicator, progress } = getUploadChipState(item);
+  const { busy, canRetry, indicator } = getUploadChipState(item);
   const src = previewUrl || item.fileUrl || item.base64Url;
 
   const handlePreview = useEventCallback(() => {
@@ -144,35 +126,8 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
       </Tooltip>
       {(busy || canRetry) && (
         <div {...stylex.props(styles.overlay)}>
-          {indicator === 'progress' ? (
-            <span
-              aria-label={t('upload.preview.status.uploading')}
-              aria-valuemax={100}
-              aria-valuemin={0}
-              aria-valuenow={progress}
-              role={'progressbar'}
-            >
-              <Progress
-                percent={progress ?? 0}
-                showInfo={false}
-                size={24}
-                status={'normal'}
-                type={'circle'}
-              />
-            </span>
-          ) : indicator === 'loading' ? (
-            <Icon
-              spin
-              icon={Loader2Icon}
-              size={20}
-              aria-label={t(
-                status === 'processing'
-                  ? 'upload.preview.status.processing'
-                  : status === 'pending'
-                    ? 'upload.preview.status.pending'
-                    : 'upload.preview.status.uploading',
-              )}
-            />
+          {indicator === 'busy' ? (
+            <UploadIndicator label={t('upload.preview.status.uploading')} size={24} />
           ) : (
             <>
               <Icon
@@ -197,7 +152,6 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
           )}
         </div>
       )}
-      {number !== undefined && <span {...stylex.props(styles.badge)}>#{number}</span>}
       <button
         aria-label={t('upload.image.remove', { name: file.name })}
         type={'button'}

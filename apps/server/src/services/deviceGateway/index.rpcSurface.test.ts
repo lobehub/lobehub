@@ -157,6 +157,13 @@ const cases: RpcCase[] = [
   },
   {
     address: address(15_000),
+    call: (g) => g.gitAheadBehind({ ...base, branch: 'feat', path: '/p' }),
+    failure: UNDEFINED,
+    name: 'gitAheadBehind (named branch)',
+    payload: { method: 'getGitAheadBehind', params: { branch: 'feat', path: '/p' } },
+  },
+  {
+    address: address(15_000),
     call: (g) => g.listGitWorktrees({ ...base, path: '/p' }),
     failure: UNDEFINED,
     name: 'listGitWorktrees',
@@ -207,6 +214,17 @@ const cases: RpcCase[] = [
   },
   {
     address: address(30_000),
+    call: (g) =>
+      g.checkoutGitBranch({ ...base, branch: 'b', create: true, path: '/p', startPoint: 's' }),
+    failure: errorResult('Checkout failed'),
+    name: 'checkoutGitBranch (start point)',
+    payload: {
+      method: 'checkoutGitBranch',
+      params: { branch: 'b', create: true, path: '/p', startPoint: 's' },
+    },
+  },
+  {
+    address: address(30_000),
     call: (g) => g.renameGitBranch({ ...base, from: 'a', path: '/p', to: 'b' }),
     failure: errorResult('Rename failed'),
     name: 'renameGitBranch',
@@ -235,6 +253,31 @@ const cases: RpcCase[] = [
       method: 'addGitWorktree',
       params: { branch: 'b', path: '/p', worktreePath: '/w' },
     },
+  },
+  {
+    address: address(30_000),
+    call: (g) =>
+      g.addGitWorktree({ ...base, branch: 'b', path: '/p', startPoint: 's', worktreePath: '/w' }),
+    failure: errorResult('Add worktree failed'),
+    name: 'addGitWorktree (start point)',
+    payload: {
+      method: 'addGitWorktree',
+      params: { branch: 'b', path: '/p', startPoint: 's', worktreePath: '/w' },
+    },
+  },
+  {
+    address: address(65_000),
+    call: (g) => g.pullGitBranch({ ...base, branch: 'feat', path: '/p' }),
+    failure: errorResult('Pull failed'),
+    name: 'pullGitBranch (named branch)',
+    payload: { method: 'pullGitBranch', params: { branch: 'feat', path: '/p' } },
+  },
+  {
+    address: address(65_000),
+    call: (g) => g.pushGitBranch({ ...base, branch: 'feat', path: '/p' }),
+    failure: errorResult('Push failed'),
+    name: 'pushGitBranch (named branch)',
+    payload: { method: 'pushGitBranch', params: { branch: 'feat', path: '/p' } },
   },
   {
     address: address(65_000),

@@ -110,6 +110,20 @@ const ChatAppearance = memo(() => {
               {
                 children: (
                   <Flexbox horizontal align={'center'} gap={8}>
+                    {renderSaveHint('showImageReadPreview')}
+                    <Switch
+                      checked={general.showImageReadPreview ?? true}
+                      onChange={(checked) => handleChange('showImageReadPreview', checked)}
+                    />
+                  </Flexbox>
+                ),
+                desc: t('settingChatAppearance.showImageReadPreview.desc'),
+                label: t('settingChatAppearance.showImageReadPreview.title'),
+                minWidth: undefined,
+              },
+              {
+                children: (
+                  <Flexbox horizontal align={'center'} gap={8}>
                     {renderSaveHint('enableMessageLinkIcon')}
                     <Switch
                       checked={general.enableMessageLinkIcon ?? true}
