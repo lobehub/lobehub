@@ -3,6 +3,7 @@ import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { toolSetsFrom } from './helpers/connectorToolSets';
 
 // Verifies that a PINNED skill (DB `agent_skills` row or agent-document bundle)
 // has its SKILL.md body eagerly injected into the operation's skill set — so
@@ -122,6 +123,7 @@ vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     return {
       resolveByIdentifiers: mockConnectorResolveByIdentifiers,
+      resolveToolSets: toolSetsFrom(mockConnectorResolveByIdentifiers),
     };
   }),
 }));

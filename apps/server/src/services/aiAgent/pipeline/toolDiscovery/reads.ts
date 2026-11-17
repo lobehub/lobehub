@@ -119,20 +119,21 @@ const CONNECTOR_REFRESH_CONCURRENCY = 5;
  * expired OAuth tokens first. Rotated credentials are persisted encrypted,
  * which needs the gatekeeper; without one, keep the stored tokens.
  */
-const refreshConnectorTokens = async (
+const refreshConnectorTokens = async <T extends DecryptedConnector>(
   deps: ToolDiscoveryDeps,
   gateKeeper: KeyVaultsGateKeeper | undefined,
-  connectors: DecryptedConnector[],
+  connectors: T[],
   onTimeout: () => void,
   anonymous = false,
-): Promise<DecryptedConnector[]> => {
+): Promise<T[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
   const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
   const linksContext = { connectorModel: model };
   const map = await loadConnectorLinksMap(connectors, linksContext);
   return pMap(
     connectors,
-    async (connector) => {
+    // Every row keeps what it was resolved with (its tool prefix among them)
+    async (connector): Promise<T> => {
       const links = map.get(connector.id) ?? [];
       const choices = links.map(({ id, name, userId }, index) => ({
         id,
@@ -150,17 +151,21 @@ const refreshConnectorTokens = async (
           rowContext.connectorModel,
           { onTimeout },
         );
-        return { ...withLinkCredentials(connector, fresh), links: choices };
+        return { ...connector, ...withLinkCredentials(connector, fresh), links: choices };
       }
-      return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
+      const [fresh] = await refreshExpiredConnectorTokens([connector], model, { onTimeout });
+      return { ...connector, ...fresh };
     },
     { concurrency: CONNECTOR_REFRESH_CONCURRENCY },
   );
 };
 
+/** A connector row the run resolved, with its tool prefix (`resolveToolSets`). */
+type RunConnector = DecryptedConnector & { toolIdentifier: string };
+
 /** Drop unfinished marketplace installs (see `isMarketplaceInstallRunnable`). */
-const filterInstalledMarketplaceConnectors = (
-  connectors: DecryptedConnector[],
+const filterInstalledMarketplaceConnectors = <T extends DecryptedConnector>(
+  connectors: T[],
   installedIds: Set<string>,
 ) =>
   connectors.filter((connector) =>
@@ -186,10 +191,12 @@ const readConnectors = async (
       refreshTimeouts += 1;
     };
     const [resolved, installedIds] = await Promise.all([
+      // One tool set per row: a private agent's own topic keeps the owner's
+      // private and personal rows beside the shared one of an identifier
       candidateIds.length > 0
-        ? deps.connectorModel.resolveByIdentifiers(
-            candidateIds,
+        ? deps.connectorModel.resolveToolSets(
             { agentId: resolvedAgentId, topicId: ctx.topicId },
+            candidateIds,
             connectorGateKeeper,
           )
         : [],
@@ -263,7 +270,7 @@ const readDiscoverableConnectors = async (
   onRefreshTimeout: () => void,
   installedIds: Set<string>,
 ): Promise<{
-  connectorsMcp: DecryptedConnector[];
+  connectorsMcp: RunConnector[];
   manifests: LobeToolManifest[];
   tools: UserConnectorToolItem[];
 }> => {
@@ -271,20 +278,21 @@ const readDiscoverableConnectors = async (
   if (ctx.exclusivePluginIds || ctx.isGoalTurn) return none;
   try {
     const candidates = new Set(ctx.candidateIds);
-    let resolved: DecryptedConnector[];
+    let resolved: RunConnector[];
     if (ctx.shareGrantedExtensionIds) {
       const grantedUnpinnedIds = [...ctx.shareGrantedExtensionIds].filter(
         (identifier) => !candidates.has(identifier),
       );
       if (grantedUnpinnedIds.length === 0) return none;
-      resolved = await deps.connectorModel.resolveByIdentifiers(
-        grantedUnpinnedIds,
+      resolved = await deps.connectorModel.resolveToolSets(
         { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
+        grantedUnpinnedIds,
         gateKeeper,
       );
     } else {
-      resolved = await deps.connectorModel.resolveAll(
+      resolved = await deps.connectorModel.resolveToolSets(
         { agentId: ctx.resolvedAgentId, topicId: ctx.topicId },
+        undefined,
         gateKeeper,
       );
     }

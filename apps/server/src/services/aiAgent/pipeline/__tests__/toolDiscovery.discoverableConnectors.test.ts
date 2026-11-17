@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 import { scheduleStaleConnectorToolsRefresh } from '@/server/services/connector/refresh';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 const explicitConnectorInput = (toolId: string) => ({
@@ -85,6 +86,10 @@ interface RunOptions {
 const connectorModel = {
   resolveAll: vi.fn(),
   resolveByIdentifiers: vi.fn(),
+  resolveToolSets: toolSetsFrom(
+    (ids: string[], target: unknown) => connectorModel.resolveByIdentifiers(ids, target),
+    (target: unknown) => connectorModel.resolveAll(target),
+  ),
 };
 
 const run = (options: RunOptions = {}) => {
@@ -374,9 +379,9 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
 
       // Resolved by identifier only — never the creator's whole connector list.
       expect(connectorModel.resolveAll).not.toHaveBeenCalled();
-      expect(connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(
-        [YINGMI],
+      expect(connectorModel.resolveToolSets).toHaveBeenCalledWith(
         { agentId: 'agent-1', topicId: 'tpc-1' },
+        [YINGMI],
         gateKeeper,
       );
       expect(result.toolManifestMap[YINGMI]).toBeDefined();

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -77,7 +78,10 @@ const run = (options: RunOptions = {}) => {
     {
       agentDocumentsService: { hasDocuments: vi.fn().mockResolvedValue(false) },
       composioService: { getComposioManifests: vi.fn().mockResolvedValue([]) },
-      connectorModel: { resolveByIdentifiers: vi.fn().mockResolvedValue([]) },
+      connectorModel: {
+        resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+        resolveToolSets: toolSetsFrom(),
+      },
       connectorToolModel: {
         queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
         queryByConnector: vi.fn().mockResolvedValue([]),

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { refreshExpiredLinkTokens } from '@/server/services/connector/tokens';
 
+import { toolSetsFrom } from '../../__tests__/helpers/connectorToolSets';
 import { discoverTools } from '../toolDiscovery';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -94,6 +95,10 @@ const run = (plugins: string[]) =>
         resolveAll: vi.fn().mockResolvedValue([oauthConnector]),
         resolveByIdentifiers: vi.fn(async (ids: string[]) =>
           ids.includes(XMIND) ? [oauthConnector] : [],
+        ),
+        resolveToolSets: toolSetsFrom(
+          async (ids: string[]) => (ids.includes(XMIND) ? [oauthConnector] : []),
+          async () => [oauthConnector],
         ),
       },
       connectorToolModel: {
