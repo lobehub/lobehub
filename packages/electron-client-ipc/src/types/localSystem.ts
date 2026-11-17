@@ -809,7 +809,7 @@ export interface InitWorkspaceParams {
 }
 
 /**
- * Project-root agent instructions (`AGENTS.md` / `CLAUDE.md`) read in one shot
+ * Device and project instructions (`AGENTS.md` / `CLAUDE.md`) read in one shot
  * during workspace init. Full body is carried (capped) so the server can inject
  * it into the system role and the web UI can render it without a second call.
  * Mirrors `WorkspaceInstructions` in `@lobechat/types` (kept local — this is a
@@ -817,6 +817,10 @@ export interface InitWorkspaceParams {
  */
 export interface WorkspaceInstructionsItem {
   content: string;
+  /** Absolute path of the instruction file, when recorded by the device. */
+  path?: string;
+  /** Instruction scope. Absent in older scans; defaults to project. */
+  scope?: 'device' | 'project';
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
 

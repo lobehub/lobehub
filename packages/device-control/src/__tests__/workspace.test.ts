@@ -37,6 +37,70 @@ afterEach(async () => {
 });
 
 describe('initWorkspace', () => {
+  it('prepends device AGENTS.md while retaining both project instruction files', async () => {
+    const repo = path.join(base, 'repo');
+    const pkg = path.join(repo, 'pkg');
+    await mkdir(path.join(repo, '.git'), { recursive: true });
+    await write(path.join(home, '.agents', 'AGENTS.md'), 'personal rules');
+    await write(path.join(home, '.claude', 'CLAUDE.md'), 'unused fallback');
+    await write(path.join(repo, 'AGENTS.md'), 'repo rules');
+    await write(path.join(pkg, 'AGENTS.md'), 'package rules');
+    await write(path.join(pkg, 'CLAUDE.md'), 'package Claude rules');
+
+    const result = await initWorkspace({ scope: pkg });
+
+    expect(result.instructions).toEqual([
+      {
+        content: 'personal rules',
+        path: path.join(home, '.agents', 'AGENTS.md'),
+        scope: 'device',
+        source: 'AGENTS.md',
+      },
+      { content: 'repo rules', path: path.join(repo, 'AGENTS.md'), source: 'AGENTS.md' },
+      { content: 'package rules', path: path.join(pkg, 'AGENTS.md'), source: 'AGENTS.md' },
+      { content: 'package Claude rules', path: path.join(pkg, 'CLAUDE.md'), source: 'CLAUDE.md' },
+    ]);
+  });
+
+  it.each(['missing', 'unreadable', 'blank'])(
+    'falls back to device CLAUDE.md when device AGENTS.md is %s',
+    async (state) => {
+      const agentsPath = path.join(home, '.agents', 'AGENTS.md');
+      if (state === 'unreadable') await mkdir(agentsPath, { recursive: true });
+      if (state === 'blank') await write(agentsPath, ' \n\t');
+      await write(path.join(home, '.claude', 'CLAUDE.md'), 'personal Claude rules');
+      const repo = path.join(base, 'repo');
+      await write(path.join(repo, 'AGENTS.md'), 'project rules');
+
+      const result = await initWorkspace({ scope: repo });
+
+      expect(result.instructions).toEqual([
+        {
+          content: 'personal Claude rules',
+          path: path.join(home, '.claude', 'CLAUDE.md'),
+          scope: 'device',
+          source: 'CLAUDE.md',
+        },
+        { content: 'project rules', path: path.join(repo, 'AGENTS.md'), source: 'AGENTS.md' },
+      ]);
+    },
+  );
+
+  it('caps device instructions without consuming the project budget', async () => {
+    const repo = path.join(base, 'repo');
+    await write(path.join(home, '.agents', 'AGENTS.md'), '规'.repeat(30_000));
+    await write(path.join(repo, 'AGENTS.md'), 'a'.repeat(70 * 1024));
+    await write(path.join(repo, 'CLAUDE.md'), 'c'.repeat(70 * 1024));
+
+    const result = await initWorkspace({ scope: repo });
+
+    expect(result.instructions.map((item) => item.content)).toEqual([
+      '规'.repeat(Math.floor((64 * 1024) / 3)),
+      'a'.repeat(64 * 1024),
+      'c'.repeat(64 * 1024),
+    ]);
+  });
+
   it('reads instructions from the working directory up to the repository root, root first', async () => {
     const repo = path.join(base, 'outside', 'repo');
     const pkg = path.join(repo, 'packages', 'web');

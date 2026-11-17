@@ -820,13 +820,16 @@ export const prepareOperation = async (
   // concatenate them. Returning them rather than stamping `agentConfig` keeps
   // run context off the agent's configuration.
   if (workspaceInit.workspace.instructions.length) {
-    projectInstructions = workspaceInit.workspace.instructions.map(({ content, path, source }) => ({
-      content,
-      path,
-      source,
-    }));
+    projectInstructions = workspaceInit.workspace.instructions.map(
+      ({ content, path, scope, source }) => ({
+        content,
+        path,
+        scope,
+        source,
+      }),
+    );
     log(
-      'execAgent: injected %d project instruction file(s): %s',
+      'execAgent: injected %d workspace instruction file(s): %s',
       workspaceInit.workspace.instructions.length,
       workspaceInit.workspace.instructions.map((i) => i.source).join(', '),
     );
