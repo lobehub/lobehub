@@ -76,7 +76,11 @@ const mark = (clientId: string, content: string, path = '/notebook') => ({
 const submitRound = async (
   userId: string,
   contents: string[],
-  delivery?: { status: string; verdicts?: ('failed' | 'passed' | 'uncertain')[] },
+  delivery?: {
+    status: string;
+    taskInWorkspace?: boolean;
+    verdicts?: ('failed' | 'passed' | 'uncertain')[];
+  },
 ) => {
   const review = await model.createDraft({ projectId, siteId: site.id, userId, workspaceId });
   const marks = [];
@@ -92,6 +96,7 @@ const submitRound = async (
     instruction: 'review round',
     seq: 1,
     status: 'completed',
+    workspaceId: delivery.taskInWorkspace ? workspaceId : undefined,
   });
   await model.linkTask(review.id, taskId);
   const [row] = await serverDB
@@ -139,7 +144,44 @@ const submitRound = async (
         workspaceId,
       })),
     );
-  return { deliveryId: row.id, marks, reviewId: review.id, run };
+  return {
+    deliveryId: row.id,
+    identifier: `T-${taskId.slice(0, 6)}`,
+    marks,
+    reviewId: review.id,
+    run,
+  };
+};
+
+const addRun = async (
+  round: { deliveryId?: string; marks: { id: string }[] },
+  roundIndex: number,
+  verdicts: ('failed' | 'passed' | 'uncertain')[],
+) => {
+  const [run] = await serverDB
+    .insert(verifyRuns)
+    .values({
+      acceptanceId: round.deliveryId!,
+      plan: [],
+      planConfirmedAt: new Date(),
+      roundIndex,
+      userId: memberId,
+      workspaceId,
+    })
+    .returning();
+  if (verdicts.length)
+    await serverDB.insert(verifyCheckResults).values(
+      verdicts.map((verdict, index) => ({
+        checkItemId: round.marks[index].id,
+        status: verdict === 'passed' ? ('passed' as const) : ('failed' as const),
+        userId: memberId,
+        verdict,
+        verifierType: 'agent' as const,
+        verifyRunId: run.id,
+        workspaceId,
+      })),
+    );
+  return run;
 };
 
 beforeEach(async () => {
@@ -187,6 +229,7 @@ describe('GET /extension/inbox', () => {
     expect(body.items).toEqual([
       {
         deliveredAt: round.run!.updatedAt.toISOString(),
+        delivery: 1,
         marks: 2,
         name: 'Cards are too tight',
         notPassed: 1,
@@ -196,9 +239,69 @@ describe('GET /extension/inbox', () => {
         round: 1,
         site: { id: site.id, name: 'Marketing site' },
         submittedAt: expect.any(String),
+        task: { identifier: round.identifier, path: `/task/${round.identifier}` },
         url: `${ORIGIN}/page-0`,
       },
     ]);
+  });
+
+  it("links a workspace Task to its page under the workspace's slug", async () => {
+    const round = await submitRound(memberId, ['Spacing'], {
+      status: 'delivered',
+      taskInWorkspace: true,
+      verdicts: ['passed'],
+    });
+
+    const { body } = await inbox(memberId);
+
+    expect(body.items[0].task).toEqual({
+      identifier: round.identifier,
+      path: `/${ownerId}/task/${round.identifier}`,
+    });
+  });
+
+  it('links a running round to its Task but gives it no delivery number', async () => {
+    const round = await submitRound(memberId, ['Spacing'], { status: 'verifying' });
+
+    const { body } = await inbox(memberId);
+
+    expect(body.items[0]).toMatchObject({
+      phase: 'running',
+      task: { identifier: round.identifier },
+    });
+    expect(body.items[0].delivery).toBeUndefined();
+  });
+
+  it('numbers a delivery after a send-back as the second one', async () => {
+    const round = await submitRound(memberId, ['Spacing', 'Colour'], {
+      status: 'delivered',
+      verdicts: ['failed', 'passed'],
+    });
+    await addRun(round, 2, ['passed']);
+
+    const { body } = await inbox(memberId);
+
+    expect(body.items[0].delivery).toBe(2);
+  });
+
+  it('does not count a verify round that produced no result as a delivery', async () => {
+    const round = await submitRound(memberId, ['Spacing'], {
+      status: 'delivered',
+      verdicts: ['passed'],
+    });
+    await addRun(round, 2, []);
+
+    const { body } = await inbox(memberId);
+
+    expect(body.items[0].delivery).toBe(1);
+  });
+
+  it('numbers a delivered round without any Agent result as the first delivery', async () => {
+    await submitRound(memberId, ['Spacing'], { status: 'delivered' });
+
+    const { body } = await inbox(memberId);
+
+    expect(body.items[0].delivery).toBe(1);
   });
 
   it('counts marks without an Agent result as not passed', async () => {
@@ -217,15 +320,23 @@ describe('GET /extension/inbox', () => {
     expect(body.items).toHaveLength(1);
     expect(body.items[0]).toMatchObject({ marks: 1, notPassed: 1, passed: 0, phase: 'running' });
     expect(body.items[0].deliveredAt).toBeUndefined();
+    expect(body.items[0].task).toBeUndefined();
   });
 
-  it('shows a delivery that will never deliver as failed', async () => {
+  it('shows an errored delivery as failed', async () => {
     await submitRound(memberId, ['Spacing'], { status: 'errored' });
+
+    const { body } = await inbox(memberId);
+
+    expect(body.items.map((item: { phase: string }) => item.phase)).toEqual(['failed']);
+  });
+
+  it('shows a delivery the reviewer asked to change as running again', async () => {
     await submitRound(memberId, ['Colour'], { status: 'rejected' });
 
     const { body } = await inbox(memberId);
 
-    expect(body.items.map((item: { phase: string }) => item.phase)).toEqual(['failed', 'failed']);
+    expect(body.items.map((item: { phase: string }) => item.phase)).toEqual(['running']);
   });
 
   it("leaves out accepted and closed rounds, drafts and other people's rounds", async () => {
