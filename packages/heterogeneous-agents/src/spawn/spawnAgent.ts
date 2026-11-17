@@ -21,7 +21,6 @@ import {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
   ClaudeCodeLiveInput,
-  type ClaudeCodeUserMessagePriority,
 } from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
@@ -167,10 +166,7 @@ export interface SpawnAgentHandle {
    * for it when idle. Resolves false once input has closed — the caller then
    * runs the message as a new turn instead.
    */
-  sendUserMessage?: (
-    prompt: AgentPromptInput,
-    options?: { priority?: ClaudeCodeUserMessagePriority; uuid?: string },
-  ) => Promise<boolean>;
+  sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
   /**
    * The agent's native session id, extracted from the `system:init` event.
    * Available after the `events` async iterable has been fully consumed.
@@ -782,13 +778,10 @@ const spawnCliAgent = async (
     ...(live && {
       interruptTurn: () => live.interrupt(),
       sendControlRequest: (request: ClaudeCodeControlRequest) => live.sendControlRequest(request),
-      sendUserMessage: async (
-        prompt: AgentPromptInput,
-        sendOptions?: { priority?: ClaudeCodeUserMessagePriority; uuid?: string },
-      ) => {
+      sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
         if (!live.isOpen) return false;
         const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);
-        return live.send(plan.stdin, sendOptions?.uuid, sendOptions?.priority);
+        return live.send(plan.stdin, sendOptions?.uuid);
       },
     }),
     kill: (signal: NodeJS.Signals = 'SIGINT') => {

@@ -97,24 +97,6 @@ describe('withHeteroSteer', () => {
     ]);
   });
 
-  it('passes a Steer-mode priority through to the session', async () => {
-    const { client } = createClient([{ content: 'stop', messageId: 'msg-1', priority: 'now' }]);
-    const sendUserMessage = vi.fn(async () => true);
-    const stream = createStream();
-
-    const out = collect(
-      withHeteroSteer(
-        { events: stream.events, sendUserMessage },
-        { getTrpcClient: async () => client, operationId: 'op-1' },
-      ),
-    );
-    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
-    stream.end();
-    await out;
-
-    expect(sendUserMessage).toHaveBeenCalledWith('stop', { priority: 'now', uuid: 'msg-1' });
-  });
-
   it('holds follow-ups while the session waits for the user, and gives back one handed out then', async () => {
     const { client, giveBack, wait } = createClient([{ content: 'go', messageId: 'msg-1' }]);
     const sendUserMessage = vi.fn(async () => true);

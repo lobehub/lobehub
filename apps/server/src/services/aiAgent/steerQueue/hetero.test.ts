@@ -129,7 +129,7 @@ describe('takeHeteroSteer', () => {
     const steer = () =>
       takeHeteroSteer(ctx, { agentId: 'agt-1', mode: 'steer', operationId: 'op-1', scope });
 
-    it('merges every leading follow-up that can join into one message read at once', async () => {
+    it('merges every leading follow-up that can join into one message', async () => {
       mocks.drain.mockResolvedValue([
         followUp('b', 2),
         followUp('a', 1),
@@ -139,7 +139,9 @@ describe('takeHeteroSteer', () => {
 
       const message = await steer();
 
-      expect(message).toMatchObject({ content: 'prompt a\n\nprompt b', priority: 'now' });
+      expect(message).toMatchObject({ content: 'prompt a\n\nprompt b' });
+      // Read at the next tool boundary: a steer never cuts a running tool short.
+      expect(message).not.toHaveProperty('priority');
       // A merged batch gets an id of its own, derived from its entries.
       expect(message?.messageId).toMatch(/^msg_[\da-f]{24}$/);
       // The attachment waits for a turn of its own, and `d` stays behind it.
@@ -148,13 +150,12 @@ describe('takeHeteroSteer', () => {
       expect(delivery.entryIds).toEqual(['a', 'b']);
     });
 
-    it('sends a single follow-up as it is, at once', async () => {
+    it('sends a single follow-up as it is', async () => {
       mocks.drain.mockResolvedValue([followUp('a', 1)]);
 
       await expect(steer()).resolves.toEqual({
         content: 'prompt a',
         messageId: 'msg-a',
-        priority: 'now',
       });
     });
 

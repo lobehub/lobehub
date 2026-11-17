@@ -206,7 +206,6 @@ export {
   type ClaudeCodeControlRequestHandle,
   type ClaudeCodeControlResponse,
   ClaudeCodeLiveInput,
-  type ClaudeCodeUserMessagePriority,
 } from './claudeCodeLiveInput';
 export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 export {

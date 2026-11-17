@@ -54,11 +54,6 @@ export interface HeteroSteerMessage {
    */
   imageList?: InlineImage[];
   messageId: string;
-  /**
-   * `now` (Steer mode): the agent reads the message at once, at the next point
-   * it can take input, instead of when it is done with the current step.
-   */
-  priority?: 'now';
 }
 
 /**
@@ -102,9 +97,9 @@ const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) 
  * it wait for the run to end.
  *
  * In Steer mode (`mode: 'steer'`) every leading follow-up that can join, from
- * one author, goes as one merged message the agent reads at once
- * (`priority: 'now'`). Otherwise one follow-up goes per delivery, and the agent
- * reads it when it is ready.
+ * one author, goes as one merged message; otherwise one goes per delivery.
+ * Either way the agent reads it when it is ready (Claude Code: at its next
+ * tool boundary), so a running tool is never cut short.
  *
  * Images pasted into the body go along as `imageList` when the session takes
  * image input (`acceptsImages`). Otherwise the follow-up waits for a turn of
@@ -208,7 +203,6 @@ export const takeHeteroSteer = async (
     content: request.prompt,
     ...(imageList.length > 0 && { imageList }),
     messageId,
-    ...(merging && { priority: 'now' as const }),
   };
 };
 

@@ -266,7 +266,7 @@ describe('ClaudeAgentSdkSession steer', () => {
     sdkQueryMock.mockReset();
   });
 
-  it('hands a steered message to the running query at priority now and waits for its answer', async () => {
+  it('hands a steered message to the running query, with no priority, and waits for its answer', async () => {
     const steeredInputs: any[] = [];
     let ready!: () => void;
     const started = new Promise<void>((resolve) => {
@@ -283,11 +283,11 @@ describe('ClaudeAgentSdkSession steer', () => {
           ready();
           const steered = await input.next();
           steeredInputs.push(steered.value);
-          // Claude Code 2.1.308: the aborted cycle reports a result of its own first.
+          // Written as the cycle ended: its result comes before the message is read.
           yield {
             is_error: false,
             subtype: 'success',
-            terminal_reason: 'aborted_tools',
+            terminal_reason: 'completed',
             type: 'result',
           };
           yield {
@@ -334,7 +334,8 @@ describe('ClaudeAgentSdkSession steer', () => {
     ).toBe(true);
     await running;
 
-    expect(steeredInputs[0]).toMatchObject({ priority: 'now', type: 'user', uuid: 'steer-1' });
+    expect(steeredInputs[0]).toMatchObject({ type: 'user', uuid: 'steer-1' });
+    expect(steeredInputs[0]).not.toHaveProperty('priority');
     expect(queryOptions.extraArgs).toMatchObject({ 'replay-user-messages': null });
     // Input has closed: a later steer goes as a turn of its own.
     expect(session.steer({ message: { content: 'late', role: 'user' } } as any, 'steer-2')).toBe(

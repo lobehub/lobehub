@@ -30,7 +30,7 @@ const readLines = (stream: PassThrough) => {
 };
 
 describe('steerAgentSession', () => {
-  it('writes into a live Claude Code CLI at priority now, under the delivery id', async () => {
+  it('writes into a live Claude Code CLI under the delivery id, with no priority', async () => {
     const stdin = new PassThrough();
     const written = readLines(stdin);
     const liveInput = new ClaudeCodeLiveInput(stdin);
@@ -40,7 +40,9 @@ describe('steerAgentSession', () => {
     });
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(written[0]).toMatchObject({ priority: 'now', type: 'user', uuid: 'steer-1' });
+    expect(written[0]).toMatchObject({ type: 'user', uuid: 'steer-1' });
+    // Read at the next tool boundary: `priority: 'now'` would abort the running tool.
+    expect(written[0]).not.toHaveProperty('priority');
     expect(JSON.stringify(written[0].message)).toContain('also run the tests');
   });
 

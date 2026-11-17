@@ -28,46 +28,6 @@ describe('ClaudeCodeLiveInput', () => {
     vi.useRealTimers();
   });
 
-  it('marks a steer read at once with its priority', async () => {
-    const { live, written } = setup();
-
-    live.send(userLine('steer'), 'u-2', 'now');
-    await flush();
-
-    expect(written[0]).toMatchObject({ priority: 'now', type: 'user', uuid: 'u-2' });
-  });
-
-  it('keeps input open across the cycle a `now` steer aborts, until the steer is answered', async () => {
-    const { ended, live } = setup();
-    live.send(userLine('first'), 'u-1');
-    live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
-    live.observe(line({ message: { content: [] }, type: 'assistant' }));
-
-    live.send(userLine('steer'), 'u-2', 'now');
-    // Claude Code 2.1.308: the running tool is aborted and its cycle ends
-    // with a non-error result before the steer is replayed.
-    live.observe(
-      line({
-        is_error: false,
-        stop_reason: 'tool_use',
-        terminal_reason: 'aborted_tools',
-        type: 'result',
-      }),
-    );
-    await flush();
-    expect(live.isOpen).toBe(true);
-    expect(live.lastTurn).toEqual({ aborted: false, terminalReason: 'aborted_tools' });
-
-    live.observe(line({ subtype: 'init', type: 'system' }));
-    live.observe(line({ isReplay: true, type: 'user', uuid: 'u-2' }));
-    live.observe(line({ message: { content: [] }, type: 'assistant' }));
-    live.observe(line({ is_error: false, terminal_reason: 'completed', type: 'result' }));
-    await flush();
-
-    expect(live.isOpen).toBe(false);
-    expect(ended).toHaveBeenCalled();
-  });
-
   it('stamps each delivered message with the uuid it is replayed under', async () => {
     const { live, written } = setup();
 

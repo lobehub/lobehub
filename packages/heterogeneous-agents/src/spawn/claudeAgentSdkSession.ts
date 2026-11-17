@@ -325,9 +325,10 @@ export class ClaudeAgentSdkSession {
   }
 
   /**
-   * Deliver a user message into the running session at `priority: 'now'`: the
-   * work in flight stops and the message is answered at once. Claude Code
-   * replays it under `uuid` once read (with `replayUserMessages`); until then
+   * Deliver a user message into the running session. Claude Code reads it at
+   * its next tool boundary, so a running tool is never cut short (a message
+   * sent with `priority: 'now'` would abort it). Claude Code replays it under
+   * `uuid` once read (with `replayUserMessages`); until then
    * input stays open for it.
    *
    * @returns false once input has closed, so the caller runs it as a new turn
@@ -336,7 +337,7 @@ export class ClaudeAgentSdkSession {
     if (this.closeInput || this.abortController.signal.aborted) return false;
 
     this.unconsumed.add(uuid);
-    this.steerQueue.push({ ...message, priority: 'now', uuid: uuid as SDKUserMessage['uuid'] });
+    this.steerQueue.push({ ...message, uuid: uuid as SDKUserMessage['uuid'] });
     return true;
   }
 
@@ -467,8 +468,8 @@ export class ClaudeAgentSdkSession {
 
   private maybeCloseInputAfterResult(message: SDKMessage): void {
     if (message.type !== 'result') return;
-    // A `now` steer ends the cycle it interrupts with a result of its own;
-    // the steered message still has to be read and answered.
+    // A message written as a cycle ends is read after that cycle's result;
+    // it still has to be read and answered.
     if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
 
     if (message.origin?.kind === 'task-notification') {
