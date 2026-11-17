@@ -488,30 +488,61 @@ describe('review follow-ups', () => {
       ...extra,
     });
 
-  it('presents the creation receipt to the device for cleanup and restore', async () => {
-    const receipt = 'receipt-0123456789abcdef';
-    await insert(
-      't-receipt',
-      autoCreated({
-        workingDirectoryConfig: {
-          git: { activeWorktree: WT, autoCreated: true, branch: BRANCH, ownerToken: receipt },
-          path: '/code/repo',
-          sessionPath: WT,
-        },
-      }),
-    );
-    answers({ outcome: 'removed' });
-    await service().retireTopics(['t-receipt'], 'archived');
-    expect(gateway.cleanupOwnedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ ownerToken: receipt }),
-    );
+  it("presents the creation receipt only for its creator's own topic", async () => {
+    const previous = process.env.KEY_VAULTS_SECRET;
+    process.env.KEY_VAULTS_SECRET = 'test-secret';
+    try {
+      const { issueWorktreeReceipt } = await import('./receipt');
+      const receipt = issueWorktreeReceipt(userId)!;
+      const withReceipt = (extra: Partial<ChatTopicMetadata> = {}) =>
+        autoCreated({
+          workingDirectoryConfig: {
+            git: {
+              activeWorktree: WT,
+              autoCreated: true,
+              branch: BRANCH,
+              ownerNonce: receipt.nonce,
+              ownerToken: receipt.token,
+            },
+            path: '/code/repo',
+            sessionPath: WT,
+          },
+          ...extra,
+        });
+      await insert('t-receipt', withReceipt());
+      answers({ outcome: 'removed' });
+      await service().retireTopics(['t-receipt'], 'archived');
+      expect(gateway.cleanupOwnedWorktree).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ownerToken: receipt.token }),
+      );
 
-    await db.update(topics).set({ status: 'active' }).where(eq(topics.id, 't-receipt'));
-    gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'restored' });
-    await service().restore('t-receipt', WT);
-    expect(gateway.restoreOwnedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ ownerToken: receipt }),
-    );
+      await db.update(topics).set({ status: 'active' }).where(eq(topics.id, 't-receipt'));
+      gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'restored' });
+      await service().restore('t-receipt', WT);
+      expect(gateway.restoreOwnedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerToken: receipt.token }),
+      );
+
+      // The same receipt copied into another user's topic is never presented.
+      const otherId = 'worktree-cleanup-copier';
+      await db.insert(users).values({ id: otherId });
+      try {
+        await insert('t-copied', withReceipt(), { userId: otherId });
+        const copier = new WorktreeCleanupService(db, otherId, undefined, {
+          gateway: gateway as any,
+          now: () => now,
+        });
+        await copier.retireTopics(['t-copied'], 'archived');
+        expect(gateway.cleanupOwnedWorktree).toHaveBeenLastCalledWith(
+          expect.objectContaining({ ownerToken: undefined }),
+        );
+      } finally {
+        await db.delete(topics).where(eq(topics.userId, otherId));
+        await db.delete(users).where(eq(users.id, otherId));
+      }
+    } finally {
+      process.env.KEY_VAULTS_SECRET = previous;
+    }
   });
 
   it('only hands the desktop the jobs of topics the caller may act on', async () => {

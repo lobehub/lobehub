@@ -127,13 +127,16 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
               else if (state === 'pending')
                 toast.info(t('workingPanel.overview.keptWorktree.discardPending'));
               else
-                toast.error(
-                  written?.cleanup?.reason || t('workingPanel.overview.keptWorktree.discardFailed'),
-                );
+                // A readable title; the device's own message stays as detail.
+                toast.error({
+                  description: written?.cleanup?.reason,
+                  title: t('workingPanel.overview.keptWorktree.discardFailed'),
+                });
             } catch (error) {
-              toast.error(
-                (error as Error)?.message || t('workingPanel.overview.keptWorktree.discardFailed'),
-              );
+              toast.error({
+                description: (error as Error)?.message,
+                title: t('workingPanel.overview.keptWorktree.discardFailed'),
+              });
             } finally {
               pending.close();
               setBusy(undefined);
@@ -155,9 +158,10 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
         toast.success(t('workingPanel.overview.keptWorktree.keptToast'));
         await mutate();
       } catch (error) {
-        toast.error(
-          (error as Error)?.message || t('workingPanel.overview.keptWorktree.keepFailed'),
-        );
+        toast.error({
+          description: (error as Error)?.message,
+          title: t('workingPanel.overview.keptWorktree.keepFailed'),
+        });
       } finally {
         setBusy(undefined);
       }

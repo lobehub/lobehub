@@ -21,6 +21,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { deviceGateway as defaultGateway } from '@/server/services/deviceGateway';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
+import { attestedOwnerToken } from './receipt';
+
 const log = debug('lobe-server:worktree-cleanup');
 
 /**
@@ -68,6 +70,13 @@ export interface WorktreeCleanupSummary {
 }
 
 const key = (topicId: string, path: string) => `${topicId}:${path}`;
+
+/** The record as handed to an executor: its receipt only if this topic's creator holds it. */
+const withAttestedToken = (topicUserId: string, entry: OwnedWorktree): OwnedWorktree => {
+  const { ownerNonce: _nonce, ownerToken: _token, ...rest } = entry;
+  const ownerToken = attestedOwnerToken(topicUserId, entry);
+  return ownerToken ? { ...rest, ownerToken } : rest;
+};
 
 const isHeld = (row: OwnedWorktreeTopicRow, previousStatus?: string | null) =>
   [row.status, previousStatus].some(
@@ -189,6 +198,7 @@ export class WorktreeCleanupService {
     topicId: string,
     entry: OwnedWorktree,
     trigger: OwnedWorktreeCleanupTrigger,
+    topicUserId: string,
   ): Promise<OwnedWorktree | undefined> {
     if (!entry.deviceId)
       return this.recordCleanupResult(topicId, entry.path, trigger, {
@@ -199,7 +209,8 @@ export class WorktreeCleanupService {
     const result = await this.gateway.cleanupOwnedWorktree({
       deviceId: entry.deviceId,
       discard: trigger === 'discarded',
-      ownerToken: entry.ownerToken,
+      // Presented only when issued to this topic's creator (see `./receipt`).
+      ownerToken: attestedOwnerToken(topicUserId, entry),
       sourcePath: entry.sourcePath,
       userId: this.userId,
       workspaceId: this.workspaceId,
@@ -256,7 +267,7 @@ export class WorktreeCleanupService {
         summary.results[id] = 'skipped';
         continue;
       }
-      const written = await this.execute(row.id, claimed, trigger).catch((error) => {
+      const written = await this.execute(row.id, claimed, trigger, row.userId).catch((error) => {
         log('cleanup of %s failed: %O', entry.path, error);
         return this.recordCleanupResult(row.id, entry.path, trigger, {
           error: (error as Error)?.message,
@@ -338,7 +349,7 @@ export class WorktreeCleanupService {
         if (entry.deviceId !== deviceId) continue;
         const taken = await this.takePending(row, entry);
         if (!taken) continue;
-        const written = await this.execute(row.id, taken.claimed, taken.trigger);
+        const written = await this.execute(row.id, taken.claimed, taken.trigger, row.userId);
         summary.results[key(row.id, entry.path)] = written?.cleanup?.state ?? 'skipped';
       }
     }
@@ -377,7 +388,7 @@ export class WorktreeCleanupService {
         if (taken)
           claimed.push({
             discard: taken.trigger === 'discarded',
-            entry: taken.claimed,
+            entry: withAttestedToken(row.userId, taken.claimed),
             topicId: row.id,
           });
       }
@@ -406,6 +417,8 @@ export class WorktreeCleanupService {
     // Never under a live run: neither this topic's nor another topic's that
     // works in the same folder.
     if (await this.inUse(topicId, path)) return undefined;
+    const [row] = await this.topicModel.findOwnedWorktreeTopics([topicId]);
+    if (!row) return undefined;
     const claimed = await this.claim(
       topicId,
       path,
@@ -417,8 +430,10 @@ export class WorktreeCleanupService {
         (entry.cleanup?.state === 'pending' && entry.cleanup.trigger === 'discarded') ||
         this.isStaleClaim(entry.cleanup),
     );
-    if (!claimed || local) return claimed;
-    return this.execute(topicId, claimed, 'discarded');
+    if (!claimed) return undefined;
+    // The desktop runs it over IPC with the receipt, if this topic's creator holds one.
+    if (local) return withAttestedToken(row.userId, claimed);
+    return this.execute(topicId, claimed, 'discarded', row.userId);
   }
 
   /** "Keep": never clean this worktree automatically again. */
@@ -495,7 +510,7 @@ export class WorktreeCleanupService {
         answer = await this.gateway.restoreOwnedWorktree({
           branch: entry.branch,
           deviceId: entry.deviceId,
-          ownerToken: entry.ownerToken,
+          ownerToken: attestedOwnerToken(row.userId, entry),
           sourcePath: entry.sourcePath,
           userId: this.userId,
           workspaceId: this.workspaceId,

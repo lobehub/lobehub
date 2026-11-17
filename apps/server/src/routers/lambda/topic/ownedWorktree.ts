@@ -9,6 +9,7 @@ import type { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { WorktreeCleanupService } from '@/server/services/worktreeCleanup';
+import { issueWorktreeReceipt } from '@/server/services/worktreeCleanup/receipt';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { assertCanUseTopicTargets } from '../_helpers/conversationResourceGuard';
@@ -116,6 +117,16 @@ const assertTopicCreator = (ctx: OwnedWorktreeCtx, topicUserId: string) =>
   assertWorkspaceRowManageable(ctx, topicUserId, 'topic');
 
 export const ownedWorktreeRouter = router({
+  /**
+   * A creation receipt for the worktree the composer is about to create for a
+   * new topic: signed over the caller's user id, so only that user's topics
+   * can later present it to the device. `null` when the server has no secret
+   * to sign with (the worktree then has no receipt: never discarded by force).
+   */
+  issueWorktreeReceipt: ownedWorktreeProcedure.mutation(
+    async ({ ctx }) => issueWorktreeReceipt(ctx.userId) ?? null,
+  ),
+
   /**
    * Discard a kept worktree's changes and delete it — the topic creator's
    * call, on a device they may operate. `local`: the desktop runs it over IPC,

@@ -57,6 +57,11 @@ export interface OwnedWorktree {
    */
   deviceId?: string;
   /**
+   * The nonce the server signed {@link ownerToken} with, over the creator's
+   * user id: the server presents the token only for a topic of that creator.
+   */
+  ownerNonce?: string;
+  /**
    * The worktree's creation receipt (`WorkingDirGitState.ownerToken`); the
    * device cleans or restores it only for the matching token. Absent on
    * worktrees created before receipts: those are only ever cleaned
@@ -129,6 +134,7 @@ export const claimAutoCreatedWorktree = <T extends OwnedWorktreeMetadata>(
     createdAt: git.autoCreatedAt ?? now(),
     ...(metadata.boundDeviceId && { deviceId: metadata.boundDeviceId }),
     ...(git.ownerToken && { ownerToken: git.ownerToken }),
+    ...(git.ownerNonce && { ownerNonce: git.ownerNonce }),
     path,
     sourcePath: config.path,
   };

@@ -89,6 +89,8 @@ export interface WorkingDirGitState {
    * the source path itself.
    */
   isWorktree?: boolean;
+  /** The nonce the server signed {@link ownerToken} with, for the creator only. */
+  ownerNonce?: string;
   /**
    * The creation receipt the device wrote into {@link activeWorktree} when the
    * app created it (set with {@link autoCreated}, only once the device echoed
@@ -139,6 +141,7 @@ export const dropStaleAutoCreated = <T extends WorkingDirGitState>(
     delete git.autoCreated;
     delete git.autoCreatedAt;
     delete git.ownerToken;
+    delete git.ownerNonce;
   }
   return git;
 };
@@ -205,6 +208,7 @@ export const workingDirConfigSchema = z.object({
         })
         .optional(),
       isWorktree: z.boolean().optional(),
+      ownerNonce: z.string().max(64).optional(),
       ownerToken: z.string().max(128).optional(),
       // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
       // unvalidated — zod strips it, so it would never survive a write.

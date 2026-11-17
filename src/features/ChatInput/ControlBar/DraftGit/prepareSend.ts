@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 
 import { deviceService } from '@/services/device';
 import { gitService, isDeviceGitOutdated } from '@/services/git';
+import { issueWorktreeReceipt } from '@/services/ownedWorktree';
 import { parseSingleAgentMentionDirectRoute } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { gitStatusKey } from '@/store/device/gitStatus/projection';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
@@ -133,9 +134,11 @@ const createWorktree = async (
     return fail(t('workingDirectory.deviceOutdated'));
 
   const branch = generateWorktreeBranchName({ exclude: await listBranchNames(target) });
-  // The creation receipt: the device writes it into the worktree, and only a
-  // cleanup presenting it may later remove the folder (`ownedWorktrees`).
-  const ownerToken = crypto.randomUUID();
+  // The creation receipt, signed by the server for this user: the device
+  // writes it into the worktree, and only a cleanup presenting it — which the
+  // server does only for this user's topics — may later remove the folder.
+  const receipt = await issueWorktreeReceipt();
+  const ownerToken = receipt?.token;
   const homeDir = target.deviceId
     ? undefined
     : desktopStateSelectors.userHomePath(getElectronStoreState()) || undefined;
@@ -168,7 +171,8 @@ const createWorktree = async (
           autoCreated: true,
           autoCreatedAt: new Date().toISOString(),
           // Only what the device confirms it recorded.
-          ...(result.ownerToken === ownerToken && { ownerToken }),
+          ...(ownerToken &&
+            result.ownerToken === ownerToken && { ownerNonce: receipt?.nonce, ownerToken }),
           branch,
           isWorktree: true,
         },

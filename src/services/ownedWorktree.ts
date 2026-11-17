@@ -139,6 +139,20 @@ export const discardOwnedWorktree = async (
   return lambdaClient.topic.discardOwnedWorktree.mutate({ path: entry.path, topicId });
 };
 
+/**
+ * A server-signed creation receipt for a worktree about to be created for a
+ * new topic; `undefined` when the server cannot issue one (the worktree is
+ * then cleaned up only when clean, never discarded by force).
+ */
+export const issueWorktreeReceipt = async () => {
+  try {
+    return (await lambdaClient.topic.issueWorktreeReceipt.mutate()) ?? undefined;
+  } catch (error) {
+    console.warn('[ownedWorktree] could not get a worktree receipt:', error);
+    return undefined;
+  }
+};
+
 /** "Keep": never clean this worktree up automatically again. */
 export const keepOwnedWorktree = (topicId: string, entry: OwnedWorktree) =>
   lambdaClient.topic.keepOwnedWorktree.mutate({ path: entry.path, topicId });

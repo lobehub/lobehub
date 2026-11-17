@@ -53,6 +53,7 @@ function expected(): Array<
     ['hasTopics', 'query', 11],
     ['importHeteroSessions', 'mutation', 13],
     ['importTopic', 'mutation', 13],
+    ['issueWorktreeReceipt', 'mutation', 13],
     ['keepOwnedWorktree', 'mutation', 14],
     ['markTopicRead', 'mutation', 13],
     ['queryTopics', 'query', 12],
