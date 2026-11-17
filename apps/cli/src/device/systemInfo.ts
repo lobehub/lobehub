@@ -11,6 +11,7 @@ import { getShellInfo } from '@lobechat/local-file-shell';
 
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 import { cliVersion } from '../pkg';
+import { SCM_CREDENTIAL_TOOL } from '../scm/credentialEnv';
 import type { BrowserDevice } from '../tools/browser';
 import type { ComputerUseDevice } from '../tools/computerUse';
 
@@ -96,6 +97,7 @@ export async function collectSystemInfo(
   browser?: BrowserDevice,
 ): Promise<DeviceSystemInfo> {
   const supportedTools = [
+    SCM_CREDENTIAL_TOOL,
     ...(computerUse ? [COMPUTER_USE_IDENTIFIER] : []),
     ...(browser ? [BROWSER_IDENTIFIER] : []),
   ];

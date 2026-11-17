@@ -7,6 +7,7 @@ import { createFileSearchModule } from '@lobechat/local-file-shell';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import { CLI_DISPLAY_NAME } from '../constants/identity';
+import { withToolCallScmCredential } from '../scm/toolCallEnv';
 import {
   editLocalFile,
   grepContent,
@@ -110,5 +111,10 @@ export async function runLocalSystemTool(
   // `trustArgsCwd` — args reach the CLI only after the server runtime has
   // stripped any inbound `cwd` and re-injected the device-bound one, so the
   // `cwd` in `args` here is server-controlled rather than model-chosen.
+  if (apiName === 'runCommand') {
+    return withToolCallScmCredential(args, (commandArgs) =>
+      runtime.executeToolCall(apiName, commandArgs, { trustArgsCwd: true }),
+    );
+  }
   return runtime.executeToolCall(apiName, args, { trustArgsCwd: true });
 }

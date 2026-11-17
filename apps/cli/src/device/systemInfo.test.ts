@@ -62,6 +62,12 @@ describe('probeNativeRuntimes', () => {
   });
 
   /** @example The server tunnels stdio / local-network MCP calls only to a CLI that says it runs them. */
+  it('advertises that it can hand out the requester GitHub credential', async () => {
+    await expect(collectSystemInfo(uncachedProbe)).resolves.toMatchObject({
+      supportedTools: expect.arrayContaining(['scm-credential']),
+    });
+  });
+
   it('reports that this client runs tunneled MCP calls', async () => {
     await expect(collectSystemInfo(uncachedProbe)).resolves.toMatchObject({
       supportedToolCallTypes: ['tool', 'mcp'],

@@ -86,6 +86,8 @@ export {
   createCodexJwtFile,
   LOBEHUB_JWT_FILE_ENV,
   refreshCodexJwtFiles,
+  SCM_CREDENTIAL_MARKER_ENV,
+  SCM_JWT_FILE_ENV,
   toTomlBasicString,
 } from './codexShellEnv';
 export {
