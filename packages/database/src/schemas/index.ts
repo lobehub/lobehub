@@ -27,6 +27,7 @@ export * from './chatGroup';
 export * from './connector';
 export * from './contact';
 export * from './dashboard';
+export * from './developerWebhook';
 export * from './device';
 export * from './documentComment';
 export * from './documentHistory';
