@@ -48,7 +48,7 @@ describe('HeterogeneousAgentCtr.stopBackgroundTask', () => {
     expect(stopTask).toHaveBeenCalledWith('bys1w0wxo');
   });
 
-  it('writes stop_task into a CLI spawned with live input (Steer)', async () => {
+  it('writes stop_task into the open input of a CLI run', async () => {
     const stdin = new PassThrough();
     const written: any[] = [];
     stdin.on('data', (chunk: Buffer) => {
@@ -72,7 +72,7 @@ describe('HeterogeneousAgentCtr.stopBackgroundTask', () => {
     await expect(stopping).resolves.toBeUndefined();
   });
 
-  it('refuses a one-shot CLI run, whose stdin closed after the prompt', async () => {
+  it('refuses a run whose input has closed', async () => {
     const ctr = createCtr({ cli: { process: {} } });
 
     await expect(ctr.stopBackgroundTask({ sessionId: 'cli', taskId: 't' })).rejects.toThrow(

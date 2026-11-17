@@ -68,8 +68,10 @@ export interface SendPromptParams {
    * reach the renderer they must already carry the operation they belong to.
    */
   /**
-   * Keep the session able to take messages while it runs (Follow-up behavior:
-   * Steer): Claude Code keeps its input open and replays each message it reads.
+   * The renderer writes queued messages into this run while it runs (Follow-up
+   * behavior: Steer). Claude Code's input stays open either way (the CLI always
+   * replays what it reads); this only makes the SDK session replay each message
+   * it reads, which is how a steer is confirmed.
    */
   liveSteer?: boolean;
   operationId: string;
@@ -148,7 +150,7 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
-  /** Open input of a live Claude Code CLI run (Follow-up behavior: Steer). */
+  /** Open input of a Claude Code CLI run (kept open for every run, like `lh hetero exec`). */
   liveInput?: ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
