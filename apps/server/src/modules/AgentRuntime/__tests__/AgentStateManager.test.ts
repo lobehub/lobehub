@@ -21,6 +21,7 @@ const { redisMock, pipelineMock } = vi.hoisted(() => {
     exists: vi.fn(),
     expire: vi.fn(),
     get: vi.fn(),
+    hget: vi.fn(),
     hgetall: vi.fn(),
     hmset: vi.fn(),
     keys: vi.fn(),
@@ -109,6 +110,28 @@ describe('AgentStateManager', () => {
       await expect(stateManager.saveAgentState(operationId, state as any)).resolves.not.toThrow();
     });
 
+    it('writes the status to the metadata hash in the same MULTI as the blob', async () => {
+      await stateManager.saveAgentState('op-meta', {
+        cost: { total: 2 },
+        status: 'interrupted',
+        stepCount: 3,
+      } as any);
+
+      expect(redisMock.multi).toHaveBeenCalledTimes(1);
+      expect(pipelineMock.setex).toHaveBeenCalledWith(
+        'agent_runtime_state:op-meta',
+        2 * 3600,
+        expect.any(String),
+      );
+      expect(pipelineMock.hmset).toHaveBeenCalledWith(
+        'agent_runtime_meta:op-meta',
+        expect.objectContaining({ status: 'interrupted', totalCost: 2 }),
+      );
+      expect(pipelineMock.exec).toHaveBeenCalledTimes(1);
+      expect(redisMock.setex).not.toHaveBeenCalled();
+      expect(redisMock.hmset).not.toHaveBeenCalled();
+    });
+
     it('omits the messages array from the persisted state blob', async () => {
       const state = {
         cost: { total: 1 },
@@ -120,7 +143,7 @@ describe('AgentStateManager', () => {
 
       await stateManager.saveAgentState('op-strip', state as any);
 
-      const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+      const serialized = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
       expect(JSON.parse(serialized).messages).toBeUndefined();
       // Other fields are retained.
       expect(JSON.parse(serialized).status).toBe('running');
@@ -132,7 +155,7 @@ describe('AgentStateManager', () => {
         const messages = [{ content: 'private transcript', id: 'private-1', role: 'user' }];
         const state = { messages, origin, status: 'running', stepCount: 1 };
         await stateManager.saveAgentState('private-op', state as any);
-        const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+        const serialized = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
         expect(JSON.parse(serialized).messages).toEqual(messages);
 
         await stateManager.saveStepResult('private-op', {
@@ -159,10 +182,35 @@ describe('AgentStateManager', () => {
 
       await stateManager.saveAgentState('op-ephemeral', state as any);
 
-      const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+      const serialized = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
       const persisted = JSON.parse(serialized);
       expect(persisted.messages).toHaveLength(2);
       expect(persisted.messages[1].content).toBe('respond to the group');
+    });
+  });
+
+  describe('loadAgentStatus', () => {
+    it('reads the status from the metadata hash without loading the blob', async () => {
+      redisMock.hget.mockResolvedValueOnce('interrupted');
+
+      await expect(stateManager.loadAgentStatus('op-status')).resolves.toBe('interrupted');
+      expect(redisMock.hget).toHaveBeenCalledWith('agent_runtime_meta:op-status', 'status');
+      expect(redisMock.get).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the blob when the hash has no status', async () => {
+      redisMock.hget.mockResolvedValueOnce(null);
+      redisMock.get.mockResolvedValueOnce(JSON.stringify({ status: 'done', stepCount: 2 }));
+
+      await expect(stateManager.loadAgentStatus('op-legacy')).resolves.toBe('done');
+      expect(redisMock.get).toHaveBeenCalledWith('agent_runtime_state:op-legacy');
+    });
+
+    it('returns null when neither the hash nor the blob exists', async () => {
+      redisMock.hget.mockResolvedValueOnce(null);
+      redisMock.get.mockResolvedValueOnce(null);
+
+      await expect(stateManager.loadAgentStatus('op-missing')).resolves.toBeNull();
     });
   });
 
@@ -269,7 +317,7 @@ describe('AgentStateManager', () => {
         2 * 3600,
         JSON.stringify(toolSet),
       );
-      const blob = redisMock.setex.mock.calls.find(
+      const blob = pipelineMock.setex.mock.calls.find(
         (c) => c[0] === 'agent_runtime_state:op-ots-strip',
       );
       expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
@@ -287,7 +335,7 @@ describe('AgentStateManager', () => {
         (c) => c[0] === `agent_runtime_toolset:${op}`,
       );
       expect(writes).toHaveLength(1);
-      expect(redisMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+      expect(pipelineMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
     });
 
     it('refreshes the tool-set TTL inside the step pipeline and strips the blob', async () => {
@@ -364,11 +412,11 @@ describe('AgentStateManager', () => {
       expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
         false,
       );
-      expect(redisMock.expire).not.toHaveBeenCalledWith(
+      expect(pipelineMock.expire).not.toHaveBeenCalledWith(
         `agent_runtime_toolset:${op}`,
         expect.anything(),
       );
-      const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
     });
 
@@ -428,8 +476,8 @@ describe('AgentStateManager', () => {
         2 * 3600,
         JSON.stringify(toolSet),
       );
-      expect(redisMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
-      const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(pipelineMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
     });
 
@@ -466,18 +514,14 @@ describe('AgentStateManager', () => {
         stepIndex: 1,
       } as any);
 
-      const saveBlob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
-      const stepBlob = pipelineMock.setex.mock.calls.find(
+      // Both saves write the blob through a MULTI: saveAgentState first.
+      const [saveBlob, stepBlob] = pipelineMock.setex.mock.calls.filter(
         (c) => c[0] === `agent_runtime_state:${op}`,
       );
       expect(saveBlob![2]).toBe(JSON.stringify(state));
       expect(stepBlob![2]).toBe(JSON.stringify(state));
       expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
         false,
-      );
-      expect(redisMock.expire).not.toHaveBeenCalledWith(
-        `agent_runtime_toolset:${op}`,
-        expect.anything(),
       );
       expect(pipelineMock.expire).not.toHaveBeenCalledWith(
         `agent_runtime_toolset:${op}`,
@@ -506,8 +550,7 @@ describe('AgentStateManager', () => {
       expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
         false,
       );
-      const saveBlob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
-      const stepBlob = pipelineMock.setex.mock.calls.find(
+      const [saveBlob, stepBlob] = pipelineMock.setex.mock.calls.filter(
         (c) => c[0] === `agent_runtime_state:${op}`,
       );
       expect(JSON.parse(saveBlob![2] as string).operationToolSet).toEqual(toolSet);
@@ -527,7 +570,7 @@ describe('AgentStateManager', () => {
       } as any);
 
       expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
-      const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
     });
 
@@ -542,7 +585,7 @@ describe('AgentStateManager', () => {
         stepCount: 1,
       } as any);
 
-      const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
     });
 
