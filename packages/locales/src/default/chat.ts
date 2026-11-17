@@ -1814,7 +1814,7 @@ export default {
   'plus.addAttachments': 'Attachments',
   'plus.addSkills': 'Add Skills...',
   'plus.title': 'Add',
-  'plus.tooltip': 'Add files, skills, and more context...',
+  'plus.contextTooltip': 'Add files, tools, and more context…',
   'chatMode.agentCap.env': 'Runtime env',
   'chatMode.agentCap.files': 'File access',
   'chatMode.agentCap.memory': 'Memory',
@@ -4174,6 +4174,17 @@ export default {
   'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
+  'workingPanel.skills.manage.noneEnabled':
+    'No skills selected. Use the settings icon to choose skills.',
+  'workingPanel.skills.manage.noPermission':
+    'You do not have permission to change skills for this agent.',
+  'workingPanel.skills.manage.save': 'Save',
+  'workingPanel.skills.manage.saveFailed':
+    'Could not save changes. Your selections are kept; try saving again.',
+  'workingPanel.skills.manage.selected': 'Selected skills: {{count}}',
+  'workingPanel.skills.manage.selectResults': 'Select all results ({{count}})',
+  'workingPanel.skills.manage.title': 'Choose the skills this agent can use',
+  'workingPanel.skills.manage.unsaved': 'Unsaved changes',
   'workingPanel.skills.title': 'Skills',
   'workingPanel.files.openNeedsTopic':
     'Send a message first — this environment’s files open once the conversation has a session.',

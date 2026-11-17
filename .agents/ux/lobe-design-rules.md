@@ -157,3 +157,15 @@ Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled
 Use the shared form's `autoSubmitOnTimeout` result for countdown wording. Provider-owned option IDs suppress inferred answers, so those cards must say they close unanswered instead of promising option 1. Keep the legacy fallback wording only where the form actually submits fallback answers. Do not infer the policy from a renderer's provider name.
 
 Enforcement: `packages/shared-tool-ui/src/AskUserQuestion/useAskUserForm.test.ts` checks the exposed policy together with actual timeout submission and non-submission. Verify both countdown messages on the rendered cards. Source: real Codex question-card acceptance (2026-11-17), where the footer promised option 1 despite the hook correctly refusing to select it.
+
+## LOBE-UX-022 — Conversation skill lists are invocation pickers
+
+User, device, project and Agent skill rows share the default skill glyph, not marketplace/custom avatars. This applies to conversation invocation lists; the agent's skill configuration page may show community skills' publisher icons via `MarketSkillIcon`, with the default skill glyph as fallback. Clicking a row in a conversation inserts the skill into the composer. Do not add per-row file counts or view/rename/delete actions, including right-click equivalents; section totals may remain.
+
+Enforcement: `SkillsList` owns the glyph and exposes neither custom icons, file counts nor management-action props. `AgentDocumentsGroup.test.tsx` checks the real list's click/keyboard behavior and the absence of hover/context-menu management controls; `UserLevelSkills.test.ts` guards source-independent row data.
+
+User-skill enablement belongs in a separate management view entered through the section's settings icon (with a tooltip and accessible name). Keep the section collapsible when adding that action: use the Accordion action slot outside its trigger, and keep settings reachable while collapsed. `AgentDocumentsGroup.test.tsx` exercises the real section's collapse/expand and independent settings entry. In that view, checkboxes represent the pending enabled set: keep search, scoped bulk selection, and Save/Cancel; do not add saved-state Enabled/Disabled tabs that duplicate or conflict with the draft. `useUserSkillsManagement.test.ts` guards selection visibility and persistence across search.
+
+The title itself states the task and scope: “Choose the skills this agent can use” / 「选择当前助理可以使用的技能」. Merge useful explanatory copy into that title rather than dropping the scope or repeating it in a subtitle. Counts describe selected skills, not checked boxes; do not foreground checkbox mechanics or add uninstall disclaimers to this selection surface. Fixed-height virtual skill lists use the same row-height constant for the rendered rows, virtualizer, and short-list viewport, rather than reserving an estimated extra row.
+
+Source: user corrections while simplifying the conversation Skills panel, including removal of redundant status tabs, the text management button, and checkbox-centric copy.

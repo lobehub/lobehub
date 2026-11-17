@@ -4663,6 +4663,11 @@ When I am ___, I need ___
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',
+  'tools.picker.add': 'Add tools…',
+  'tools.picker.disabled': 'This model does not support tool calling.',
+  'tools.picker.management': 'Manage tools',
+  'tools.picker.search': 'Search tools…',
+  'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
   'tools.plugins.groupName': 'Skills',
   'tools.plugins.management': 'Skill Management',
