@@ -9,6 +9,7 @@ import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import type { AgentShareGate } from '../shareGate';
+import { resolveShareVisitorDeviceAccess } from '../shareGate/deviceAccess';
 import type { ExecRunContext } from '../types';
 import { type OperationInitDeps, runOperationInit } from './operationInit';
 import { resolveOperationInitSlots } from './operationInitSlots';
@@ -50,6 +51,11 @@ const resolveShareGate = async (
 
   return {
     agentId: share.agentId,
+    canUseDevice: await resolveShareVisitorDeviceAccess(
+      deps.db,
+      share.shareConfig,
+      shareVisitor.visitorUserId,
+    ),
     shareConfig: share.shareConfig,
     shareId: share.shareId,
     visitorUserId: shareVisitor.visitorUserId,
