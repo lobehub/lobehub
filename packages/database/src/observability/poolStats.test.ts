@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events';
 
-import { Pool } from 'pg';
-import { describe, expect, it } from 'vitest';
+import { Client, Pool } from 'pg';
+import { describe, expect, it, vi } from 'vitest';
 
 import { type MeteredPool, PoolGroup, registerPoolStats, takePoolStatsLine } from './poolStats';
 
@@ -81,6 +81,36 @@ describe('PoolGroup', () => {
       total: 0,
     });
     expect(group.take()).toMatchObject({ maxBorrowed: 0, maxBorrowedPerPool: 0 });
+  });
+
+  it('forwards the connected client to callback consumers', () => {
+    const group = new PoolGroup();
+    const client = new group.Client();
+    const callback = vi.fn();
+    const connect = vi.spyOn(Client.prototype, 'connect').mockImplementation(function (
+      this: Client,
+      callback,
+    ) {
+      (callback as (error: null, client: Client) => void)(null, this);
+    });
+    try {
+      client.connect(callback);
+      expect(callback).toHaveBeenCalledExactlyOnceWith(null, client);
+      expect(group.take().connectErrors).toBe(0);
+    } finally {
+      connect.mockRestore();
+    }
+  });
+
+  it('preserves rejected promise connections and counts the failure once', async () => {
+    const group = new PoolGroup();
+    const client = new group.Client({ connectionTimeoutMillis: 2000, host: '127.0.0.1', port: 1 });
+    try {
+      await expect(client.connect()).rejects.toThrow();
+      expect(group.take().connectErrors).toBe(1);
+    } finally {
+      await client.end();
+    }
   });
 
   it('counts a physical connection that fails to open, through a real pg.Pool', async () => {

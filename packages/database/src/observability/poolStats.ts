@@ -62,15 +62,17 @@ export class PoolGroup {
     };
     class MeteredClient extends Client {
       // Same overloads as pg.Client#connect: callback (pg.Pool) or promise.
-      connect(callback?: (error: Error) => void): any {
+      connect(): Promise<Client>;
+      connect(callback: Parameters<Client['connect']>[0]): void;
+      connect(callback?: Parameters<Client['connect']>[0]): Promise<Client> | void {
         if (!callback)
           return super.connect().catch((error: unknown) => {
             onConnectError();
             throw error;
           });
-        return super.connect((error: Error) => {
-          if (error) onConnectError();
-          callback(error);
+        return super.connect((...args: [Error] | [null, Client]) => {
+          if (args[0]) onConnectError();
+          Reflect.apply(callback, undefined, args);
         });
       }
     }
