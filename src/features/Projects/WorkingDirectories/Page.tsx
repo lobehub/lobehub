@@ -5,6 +5,7 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { MAX_WIDTH } from '@/const/layoutTokens';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -24,7 +25,16 @@ interface SectionItem {
   key: string;
   label: string;
   render: () => ReactNode;
+  /**
+   * A list-beside-detail section takes the width the settings page's own
+   * repository manager has, so picking a row opens it to the right rather
+   * than below the list.
+   */
+  wide?: boolean;
 }
+
+/** The reading width of the form-shaped sections. */
+const FORM_WIDTH = 800;
 
 export function ProjectDirectoriesPage() {
   const { t } = useTranslation('project');
@@ -69,6 +79,7 @@ export function ProjectDirectoriesPage() {
           shared={Boolean(detail.project.workspaceId) && detail.project.visibility === 'public'}
         />
       ),
+      wide: true,
     },
     {
       key: 'directories',
@@ -95,7 +106,14 @@ export function ProjectDirectoriesPage() {
 
   return (
     <Flexbox flex={1} padding={isMobile ? 16 : 32} style={{ overflow: 'auto' }}>
-      <Flexbox gap={28} style={{ width: '100%', maxWidth: 800, marginInline: 'auto' }}>
+      <Flexbox
+        gap={28}
+        style={{
+          marginInline: 'auto',
+          maxWidth: activeSection.wide ? MAX_WIDTH : FORM_WIDTH,
+          width: '100%',
+        }}
+      >
         <Text fontSize={24} weight={600}>
           {t('settings.title')}
         </Text>
