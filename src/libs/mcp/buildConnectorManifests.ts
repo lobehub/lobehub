@@ -1,5 +1,5 @@
 import { buildConnectorManifest, resolveConnectorLinkParam } from '@lobechat/mecha';
-import type { ToolManifest } from '@lobechat/types';
+import { needsConnectorReauthorization, type ToolManifest } from '@lobechat/types';
 import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -45,12 +45,16 @@ export function buildConnectorManifests(
     );
     if (!manifest) continue;
 
+    const reauthorizationRequired = needsConnectorReauthorization(connector.credentials);
     manifests.push({
       ...(manifest as ToolManifest),
       // @ts-ignore — mcpParams is a runtime-only field not in the public type
       mcpParams: buildMcpParams(
-        (connector.links?.length ?? 0) > 1 ? { ...connector, credentials: null } : connector,
+        reauthorizationRequired || (connector.links?.length ?? 0) > 1
+          ? { ...connector, credentials: null }
+          : connector,
       ),
+      ...(reauthorizationRequired && { connectorReauthorizationRequired: true }),
       ...((connector.links?.length ?? 0) > 1
         ? {
             connectorLinks: {

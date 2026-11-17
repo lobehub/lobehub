@@ -1,7 +1,7 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { getDisabledPluginIds } from '@lobechat/types';
+import { getDisabledPluginIds, needsConnectorReauthorization } from '@lobechat/types';
 import {
   connectorDeviceBinding,
   connectorMcpEndpoint,
@@ -388,6 +388,17 @@ const resolveCallAccount = async (
     const fresh = resolved.linkId
       ? resolved.connector
       : await ensureFreshConnectorToken(connector, ctx.connectorModel);
+    if (needsConnectorReauthorization(fresh.credentials)) {
+      return {
+        failure: failedToolResult(
+          buildMcpAuthorizationErrorContent(connector.identifier, {
+            isShareVisitor: false,
+            linkName: resolved.linkName,
+          }),
+          'AUTHORIZATION_ERROR',
+        ),
+      };
+    }
     return { argsStr: resolved.argsStr, fresh, linkName: resolved.linkName };
   } catch (error) {
     if (error instanceof ConnectorLinkSelectionError)
