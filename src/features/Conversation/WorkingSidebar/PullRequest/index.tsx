@@ -6,13 +6,13 @@ import { GlobeIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { electronSystemService } from '@/services/electron/system';
 import {
   useFetchGitAheadBehind,
   useFetchGitPullRequestActivity,
   useFetchGitPullRequestDetail,
   useFetchGitPullRequestMergeContext,
 } from '@/store/device';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { OverviewRow } from '../Overview/OverviewRow';
 import { sectionProps } from '../Overview/sectionStyles';
@@ -167,7 +167,7 @@ const PullRequest = memo<PullRequestProps>(
                 <Button
                   icon={<Icon icon={GlobeIcon} size={12} />}
                   size={'small'}
-                  onClick={() => void electronSystemService.openExternalLink(externalUrl)}
+                  onClick={() => openTrustedExternalUrl(externalUrl)}
                 >
                   {t('workingPanel.pr.ghMissing.open')}
                 </Button>
