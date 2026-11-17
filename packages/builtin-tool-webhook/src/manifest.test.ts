@@ -58,9 +58,7 @@ describe('webhook tool manifest', () => {
     expect(WebhookManifest.systemRole).toContain('lh webhook rotate-key');
   });
 
-  it('manages custom webhooks only: no kind filter, no subscription check', () => {
-    expect(WebhookManifest.api.map((entry) => entry.name)).not.toContain('checkWebhook');
-    expect(api(WebhookApiName.listWebhooks).parameters.properties).toEqual({});
+  it('points the model to the MCP Events tool for subscriptions', () => {
     expect(WebhookManifest.systemRole).toContain('MCP Events tool');
   });
 

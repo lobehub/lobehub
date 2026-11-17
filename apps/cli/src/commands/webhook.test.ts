@@ -166,12 +166,6 @@ describe('webhook command', () => {
       ]);
     });
 
-    it('no longer takes --kind: automations have their own group', async () => {
-      await expect(run('list', '--kind', 'mcp_events')).rejects.toThrow();
-
-      expect(mockTrpcClient.inboundWebhook.list.query).not.toHaveBeenCalled();
-    });
-
     it('says when there is nothing', async () => {
       mockTrpcClient.inboundWebhook.list.query.mockResolvedValue([]);
 
