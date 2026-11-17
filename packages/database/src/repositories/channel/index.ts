@@ -32,6 +32,7 @@ import {
   requireAgentMember,
   requireChannelAgent,
 } from './agent';
+import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
@@ -57,10 +58,11 @@ import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
 import { audit, lockChannel } from './transaction';
-import type { ChannelAccess, ChannelWriteOptions } from './types';
+import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView } from './view';
 
 export type { ChannelAddAgentInput } from './agent';
+export { memberEnvironment } from './agent';
 export {
   CHANNEL_ROUTING_BATCH_SIZE,
   CHANNEL_ROUTING_LEASE_MS,
@@ -82,7 +84,8 @@ export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
-export type { ChannelAccess, ChannelWriteOptions } from './types';
+export type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
+export { channelAgentPairKey } from './types';
 export type { ChannelWorktreeCandidate } from './worktree';
 
 /** Recycle-bin row title: the start of the thread's root message. */
@@ -523,6 +526,18 @@ export class ChannelRepository {
       { allowArchived: true, allowTrashed: true },
     );
 
+  /** Pins the conversation atop the caller's own list, or unpins it; nobody else sees it. */
+  setPinned = async (channelId: string, pinned: boolean) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        const pinnedAt = pinned ? (member.pinnedAt ?? new Date()) : null;
+        await tx.update(channelMembers).set({ pinnedAt }).where(eq(channelMembers.id, member.id));
+        return pinnedAt;
+      },
+      { allowArchived: true, allowTrashed: true },
+    );
+
   /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list. Active open
@@ -539,6 +554,7 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
+        pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sharedAgentHandle: string | null;
         unreadCount: number;
@@ -553,6 +569,7 @@ export class ChannelRepository {
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
+        pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
@@ -659,25 +676,28 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    const joined = rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
-      const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
-      return {
-        ...channel,
-        agentIds: agentIdsOf.get(channel.id) ?? [],
-        sharedAgent,
-        // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-        sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
-        canDelete: hasRole(role, 'admin'),
-        joined: true,
-        lastMessage: lastMessageOf.get(channel.id) ?? null,
-        memberAvatars: avatarsOf.get(channel.id) ?? [],
-        memberRole: role,
-        mentionCount: mentionCountOf.get(channel.id) ?? 0,
-        peerUserId: peerOf(channel, this.userId),
-        replyJobs: replyJobsOf.get(channel.id) ?? [],
-        unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
-      };
-    });
+    const joined = rows.map(
+      ({ channel, lastReadSequence, pinnedAt, role, shareId, shareSlug, ...agent }) => {
+        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
+        return {
+          ...channel,
+          agentIds: agentIdsOf.get(channel.id) ?? [],
+          sharedAgent,
+          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
+          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          canDelete: hasRole(role, 'admin'),
+          joined: true,
+          lastMessage: lastMessageOf.get(channel.id) ?? null,
+          memberAvatars: avatarsOf.get(channel.id) ?? [],
+          memberRole: role,
+          mentionCount: mentionCountOf.get(channel.id) ?? 0,
+          peerUserId: peerOf(channel, this.userId),
+          pinnedAt,
+          replyJobs: replyJobsOf.get(channel.id) ?? [],
+          unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+        };
+      },
+    );
     return [
       ...joined,
       // Not joined: nothing is unread or pending for the caller yet.
@@ -693,6 +713,7 @@ export class ChannelRepository {
         memberRole: null,
         mentionCount: 0,
         peerUserId: peerOf(channel, this.userId),
+        pinnedAt: null,
         replyJobs: [],
         unreadCount: 0,
       })),
@@ -735,6 +756,12 @@ export class ChannelRepository {
       });
       return { channel, member };
     });
+
+  /** The conversation in which one of the caller's Agents asks another. See {@link openAgentPair}. */
+  openAgentPair = (params: Parameters<typeof openAgentPair>[2]): Promise<ChannelAgentPairAccess> =>
+    this.db.transaction((tx) =>
+      openAgentPair(tx, { userId: this.userId, workspaceId: this.workspaceId }, params),
+    );
 
   /**
    * The caller's active Channels with their active Agent members, newest first: where the caller

@@ -985,6 +985,7 @@ export default {
   'heteroAgent.executionTarget.deviceGroupSummary': '{{online}} online · {{total}} total',
   'heteroAgent.executionTarget.devicesGroup': 'Devices',
   'heteroAgent.executionTarget.myDevicesGroup': 'My devices',
+  'heteroAgent.executionTarget.sandboxGroup': 'Sandboxes',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
@@ -1082,6 +1083,15 @@ export default {
   'inputQueue.queuedMergeHint': 'Merged and sent when the current step finishes',
   'inputQueue.queuedRunEndHint': 'Sends when the current run finishes',
   'inputQueue.queuedRunEndMergeHint': 'Merged and sent when the current run finishes',
+  'inputQueue.queuedOneByOneHint': 'Sent one at a time after the current run finishes',
+  'inputQueue.steerDeliveryUnknownHint':
+    'Couldn’t confirm the agent got this. Send it again or delete it',
+  'inputQueue.steerHint': 'Joins the current run',
+  'inputQueue.steerMergeHint': 'Joins the current run as one message',
+  'inputQueue.steerUnsupportedHint':
+    'This agent can’t take messages mid-run. Queued until the run finishes',
+  'inputQueue.steerUnsupportedMergeHint':
+    'This agent can’t take messages mid-run. Queued, merged and sent when the run finishes',
   'inputQueue.sendNow': 'Send now (interrupts current run)',
   'inputQueue.sendNowFailed': 'Couldn’t interrupt the current run. Try again.',
   'inputQueue.alreadyDelivered': 'Already sent to the agent',
@@ -3204,6 +3214,11 @@ export default {
   'goalPage.metrics.delivered': 'Needs you',
   'goalPage.metrics.pursuing': 'Others',
   'goalPage.metrics.total': 'Total goals',
+  'goalPage.searchEmptyDescription': 'Try another keyword or switch tabs.',
+  'goalPage.searchEmptyTitle': 'No goals match “{{keyword}}”',
+  'goalPage.searchPartial':
+    'Only the newest {{loaded}} of {{total}} goals were searched here. Use global search to find older ones.',
+  'goalPage.searchPlaceholder': 'Search goals',
   'goalPage.title': 'Overview',
   'goalPage.view.card': 'Cards',
   'goalPage.view.list': 'List',
@@ -4501,8 +4516,19 @@ export default {
   'taskProject.inheritedFromParent': "A subtask stays in its parent's project",
   'taskProject.label': 'Project',
   'taskProject.loadFailed': 'Failed to load projects',
-  'taskProject.moveRefused':
-    "Can't move this task while its parent, subtasks or dependencies stay in the current project. Move or detach them first.",
+  'taskProject.moveFailed': "Can't move this task to the project.",
+  'taskProject.moveRefusedDependency':
+    'Tasks here depend on tasks outside this task tree. Remove those dependencies first.',
+  'taskProject.moveRefusedFiledSubtask':
+    "Some subtasks already belong to a project, so the task tree can't move together.",
+  'taskProject.moveRefusedHasParent':
+    "A subtask stays in its parent's project. Move the top-level task instead.",
+  'taskProject.moveRefusedSplitSubtasks':
+    "This task's subtasks can't be left behind. Only a task tree without a project can move into one together.",
+  'taskProject.moveTree.content':
+    'This task and all of its subtasks ({{count}}) will move to “{{project}}”.',
+  'taskProject.moveTree.ok': 'Move all',
+  'taskProject.moveTree.title': 'Move with subtasks?',
   'taskProject.noMatch': 'No matching project',
   'taskProject.none': 'No project',
   'taskProject.searchPlaceholder': 'Search projects…',

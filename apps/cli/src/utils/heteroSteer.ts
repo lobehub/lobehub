@@ -30,6 +30,7 @@ export interface HeteroSteerClient {
           acceptsControl?: boolean;
           acceptsImages?: boolean;
           blockMs?: number;
+          holdSteer?: boolean;
           operationId: string;
         },
         options?: { signal?: AbortSignal },
@@ -72,6 +73,8 @@ export const buildSteerPrompt = (message: HeteroSteerMessage): AgentPromptInput 
 
 export interface HeteroSteerContext {
   getTrpcClient: () => Promise<HeteroSteerClient>;
+  /** Whether the session waits for the user (a question or an approval): nothing is steered then. */
+  isWaitingForUser?: () => boolean;
   operationId: string;
 }
 
@@ -145,6 +148,8 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   // its queue hint changed.
   let supported = false;
   let markedLive = false;
+  // While the session waits on a question or approval nothing is steered.
+  const waitingForUser = () => !!context.isWaitingForUser?.();
 
   const report = async (
     client: HeteroSteerClient,
@@ -197,6 +202,7 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
             acceptsImages: true,
             // The first poll answers at once, so the run is marked steerable early.
             ...(!answered && { blockMs: 1 }),
+            ...(waitingForUser() && { holdSteer: true }),
             operationId,
           },
           { signal: abort.signal },
@@ -217,6 +223,14 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
         continue;
       }
       if (!message) continue;
+      // Handed out just as the session started waiting for the user: it goes
+      // back, and comes again once the user answered.
+      if (waitingForUser()) {
+        await client.aiAgent.returnHeteroSteer
+          .mutate({ messageId: message.messageId, operationId })
+          .catch((error) => log.debug('Returning steer message failed: %s', String(error)));
+        continue;
+      }
 
       const steer = message;
       const options = { uuid: steer.messageId };

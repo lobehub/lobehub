@@ -147,6 +147,8 @@
   "cmdk.search.files": "Bestanden",
   "cmdk.search.folder": "Map",
   "cmdk.search.folders": "Mappen",
+  "cmdk.search.goal": "Doel",
+  "cmdk.search.goals": "Doelen",
   "cmdk.search.knowledgeBase": "Bibliotheek",
   "cmdk.search.knowledgeBases": "Bibliotheken",
   "cmdk.search.loading": "Zoeken...",

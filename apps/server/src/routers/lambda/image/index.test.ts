@@ -1,3 +1,4 @@
+import { TRPCClientError } from '@trpc/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
@@ -721,6 +722,48 @@ describe('imageRouter', () => {
         );
       } finally {
         process.off('unhandledRejection', unhandled);
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it('fails and refunds a task right away when the async router refuses the call', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      // An internal JWT that expired before the async function verified it
+      const rejection = new TRPCClientError('Invalid JWT token', {
+        result: { error: { code: -32001, data: { code: 'UNAUTHORIZED' }, message: '' } },
+      } as any);
+      mockAsyncCallerCreateImage.mockResolvedValueOnce(undefined).mockRejectedValueOnce(rejection);
+      mockChargeBeforeGenerate.mockResolvedValue({
+        prechargeItems: [{ reservationKey: 'k-1' }, { reservationKey: 'k-2' }],
+      });
+
+      try {
+        const caller = imageRouter.createCaller(createMockCtx());
+        const result = await caller.createImage(createDefaultInput());
+        await vi.waitFor(() => expect(mockChargeAfterGenerate).toHaveBeenCalledTimes(1));
+
+        expect(result.success).toBe(true);
+        const rejectedTaskId = result.data.generations[1].asyncTaskId;
+        expect(mockAsyncTaskModelUpdate).toHaveBeenCalledTimes(1);
+        expect(mockAsyncTaskModelUpdate).toHaveBeenCalledWith(
+          rejectedTaskId,
+          expect.objectContaining({
+            error: expect.objectContaining({
+              body: expect.objectContaining({
+                detail: 'start async task error: Invalid JWT token',
+              }),
+            }),
+            status: AsyncTaskStatus.Error,
+          }),
+        );
+        expect(mockChargeAfterGenerate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            isError: true,
+            metadata: expect.objectContaining({ asyncTaskId: rejectedTaskId }),
+            prechargeResult: { reservationKey: 'k-2' },
+          }),
+        );
+      } finally {
         consoleErrorSpy.mockRestore();
       }
     });

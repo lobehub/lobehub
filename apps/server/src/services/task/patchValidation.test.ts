@@ -302,6 +302,7 @@ describe('resolveTaskPatchInvariants project', () => {
     await expect(
       resolveTaskPatchInvariants(context, { data: { projectId }, id: 'task-1' }),
     ).rejects.toMatchObject({
+      cause: { data: { projectMoveRefusal: 'has_parent' } },
       code: 'BAD_REQUEST',
       message: 'Subtask must belong to the same project as its parent',
     });
@@ -340,7 +341,11 @@ describe('resolveTaskPatchInvariants project', () => {
     taskModel.hasSubtaskOutsideProject.mockResolvedValue(true);
     await expect(
       resolveTaskPatchInvariants(context, { data: { projectId: 'project-2' }, id: 'task-1' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('subtasks') });
+    ).rejects.toMatchObject({
+      cause: { data: { projectMoveRefusal: 'split_subtasks' } },
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('subtasks'),
+    });
     expect(taskModel.hasSubtaskOutsideProject).toHaveBeenCalledWith('task-1', 'project-2');
   });
 
@@ -350,6 +355,7 @@ describe('resolveTaskPatchInvariants project', () => {
     await expect(
       resolveTaskPatchInvariants(context, { data: { projectId: 'project-2' }, id: 'task-1' }),
     ).rejects.toMatchObject({
+      cause: { data: { projectMoveRefusal: 'external_dependency' } },
       code: 'BAD_REQUEST',
       message: expect.stringContaining('dependencies cannot cross project boundaries'),
     });

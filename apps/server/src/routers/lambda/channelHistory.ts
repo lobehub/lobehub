@@ -99,7 +99,7 @@ export const channelHistoryProcedures = {
       z
         .object({
           agentIds: z.array(z.string().min(1)).min(1).max(5),
-          channelId: z.string().min(1),
+          channelId: z.string().min(1).optional(),
           content: z.string().min(1),
           /** Repeat it to retry without posting twice. */
           requestKey: z.string().min(1).max(100),

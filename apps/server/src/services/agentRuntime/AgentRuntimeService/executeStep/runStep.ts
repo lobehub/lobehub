@@ -86,13 +86,13 @@ export async function runAndReconcileStep(
 
   // Check if the operation was interrupted while the step was executing
   // (e.g., user clicked abort during a long LLM call). Prefer the tiny
-  // sentinel, but fall back to the state once at the step boundary while
-  // old workers that only write `status: 'interrupted'` may still be
-  // running during a rolling deployment.
+  // sentinel, then check the persisted status: some stops (share-run gate,
+  // client LLM wait, intervention) persist `status: 'interrupted'` without
+  // the sentinel. Only the status is read, not the whole state blob.
   const sentinelInterrupted = await deps.coordinator.isInterrupted(operationId);
   const wasInterrupted = sentinelInterrupted
     ? true
-    : (await deps.coordinator.loadAgentState(operationId))?.status === 'interrupted';
+    : (await deps.coordinator.loadAgentStatus(operationId)) === 'interrupted';
   logToolCallPc(operationId, stepIndex, 'post.latest_state_loaded', () => ({
     interrupted: wasInterrupted,
   }));

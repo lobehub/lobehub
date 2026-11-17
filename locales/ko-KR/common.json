@@ -147,6 +147,8 @@
   "cmdk.search.files": "파일",
   "cmdk.search.folder": "폴더",
   "cmdk.search.folders": "폴더들",
+  "cmdk.search.goal": "목표",
+  "cmdk.search.goals": "목표",
   "cmdk.search.knowledgeBase": "도서관",
   "cmdk.search.knowledgeBases": "도서관들",
   "cmdk.search.loading": "검색 중…",

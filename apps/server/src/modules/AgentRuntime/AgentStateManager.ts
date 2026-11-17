@@ -394,18 +394,23 @@ export class AgentStateManager {
       const { stripToolSet } = persistOptions;
       if (stripToolSet) await this.externalizeToolSet(operationId, state);
       const serializedState = this.serializeStateForPersist(state, persistOptions);
-      await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
+      // One MULTI, like `saveStepResult`: `loadAgentStatus` reads the status
+      // from the metadata hash, so it must never disagree with the blob.
+      const pipeline = this.redis.multi();
+      pipeline.setex(stateKey, this.DEFAULT_TTL, serializedState);
       // Keep the externalized tool set alive in lockstep with the blob so a
       // long run never loads a stripped blob whose tool set has expired.
-      if (stripToolSet) await this.redis.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
-
-      // Update metadata
-      await this.updateOperationMetadata(operationId, {
+      if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
+      const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
+      const metadata: Partial<AgentOperationMetadata> = {
         lastActiveAt: new Date().toISOString(),
         status: state.status,
         totalCost: state.cost?.total || 0,
         totalSteps: getLlmCallCount(state),
-      });
+      };
+      pipeline.hmset(metaKey, metadata as any);
+      pipeline.expire(metaKey, this.DEFAULT_TTL);
+      await pipeline.exec();
 
       // State change events are recorded through the events array in saveStepResult
 
@@ -443,6 +448,18 @@ export class AgentStateManager {
       console.error('Failed to load agent state:', error);
       throw error;
     }
+  }
+
+  /**
+   * Read only the persisted status. Both save paths write it to the metadata
+   * hash in the same MULTI as the blob, so this is the blob's status without
+   * downloading the blob, which can run to hundreds of KB. Falls back to the blob
+   * only when the hash has no status field.
+   */
+  async loadAgentStatus(operationId: string): Promise<AgentState['status'] | null> {
+    const status = await this.redis.hget(`${this.METADATA_PREFIX}:${operationId}`, 'status');
+    if (status) return status as AgentState['status'];
+    return (await this.loadAgentState(operationId))?.status ?? null;
   }
 
   /**
@@ -658,37 +675,6 @@ export class AgentStateManager {
     } catch (error) {
       console.error('Failed to create operation metadata:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Update operation metadata
-   */
-  private async updateOperationMetadata(
-    operationId: string,
-    updates: Partial<AgentOperationMetadata>,
-  ): Promise<void> {
-    const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
-
-    try {
-      const redisUpdates: Record<string, string> = {};
-
-      Object.entries(updates).forEach(([key, value]) => {
-        if (value !== undefined) {
-          if (typeof value === 'object') {
-            redisUpdates[key] = JSON.stringify(value);
-          } else {
-            redisUpdates[key] = value.toString();
-          }
-        }
-      });
-
-      if (Object.keys(redisUpdates).length > 0) {
-        await this.redis.hmset(metaKey, redisUpdates);
-        await this.redis.expire(metaKey, this.DEFAULT_TTL);
-      }
-    } catch (error) {
-      console.error('Failed to update session metadata:', error);
     }
   }
 

@@ -11,7 +11,6 @@ import { t } from 'i18next';
 import { cacheScope, createReplicaSlice, recordLens, revalidateReplica } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
-import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import { goalGraphResource } from '@/store/goal/projection';
@@ -33,6 +32,7 @@ import {
   buildOptimisticPropertyActivity,
 } from './optimisticActivity';
 import { taskDetailResource } from './projection';
+import { projectMoveRefusalTitle } from './projectMoveRefusal';
 import type { TaskDetailDispatch } from './reducer';
 import { findSubtaskParentId, taskDetailReducer } from './reducer';
 
@@ -698,13 +698,13 @@ export class TaskDetailSliceActionImpl {
               ...options,
               source: 'external',
             }));
-        // A refused project move repeats on retry until its links are moved, and the
-        // server's reason is English-only, so the toast says what to do instead.
-        if (data.projectId !== undefined && normalizeAsyncError(error).code === 'BAD_REQUEST') {
-          saveToast(error, {
-            hideCause: true,
-            title: t('taskProject.moveRefused', { ns: 'chat' }),
-          });
+        // A refused project move has nothing unsaved: the rollback refetch above
+        // already shows the server's value, so the header must not stay on
+        // "failed". The toast names what blocks the move, with no retry.
+        const refusal = data.projectId !== undefined ? projectMoveRefusalTitle(error) : undefined;
+        if (refusal) {
+          saveToast(error, { hideCause: true, title: refusal });
+          this.#get().internal_setTaskSaveStatus(id, 'idle');
           return;
         }
         saveToast(error, { retry });
@@ -738,6 +738,43 @@ export class TaskDetailSliceActionImpl {
         assigneeAgentId !== undefined ? revalidateReplica(goalGraphResource) : undefined,
       ]).catch(() => {});
     }
+  };
+
+  /**
+   * File a task without a project, together with all its subtasks, under
+   * `projectId`. `updateTask` moves one row, which the server refuses for a task
+   * with subtasks; this moves the whole tree in one write. No optimistic patch:
+   * the subtasks are spread over lists and cached details, so a refetch shows
+   * the result instead.
+   */
+  moveTaskTreeToProject = async (id: string, projectId: string): Promise<boolean> => {
+    id = this.#get().taskRefIndex[id] ?? id;
+    const moved = await runMutation(this.#set, this.#get, {
+      mutate: async () => {
+        await taskService.moveTreeToProject(id, projectId);
+        return true;
+      },
+      name: 'moveTaskTreeToProject',
+      onError: (error) => {
+        const refusal = projectMoveRefusalTitle(error);
+        if (refusal) {
+          saveToast(error, { hideCause: true, title: refusal });
+          this.#get().internal_setTaskSaveStatus(id, 'idle');
+          return;
+        }
+        saveToast(error, {
+          retry: () => void this.#get().moveTaskTreeToProject(id, projectId),
+        });
+      },
+      rethrow: false,
+      setStatus: (status) => this.#get().internal_setTaskSaveStatus(id, status),
+    });
+    if (!moved) return false;
+
+    await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]).catch(
+      () => {},
+    );
+    return true;
   };
 
   useFetchTaskDetail = (taskRef?: string) => {

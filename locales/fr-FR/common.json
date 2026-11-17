@@ -147,6 +147,8 @@
   "cmdk.search.files": "Fichiers",
   "cmdk.search.folder": "Dossier",
   "cmdk.search.folders": "Dossiers",
+  "cmdk.search.goal": "Objectif",
+  "cmdk.search.goals": "Objectifs",
   "cmdk.search.knowledgeBase": "Bibliothèque",
   "cmdk.search.knowledgeBases": "Bibliothèques",
   "cmdk.search.loading": "Recherche en cours...",

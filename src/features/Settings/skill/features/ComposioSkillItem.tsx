@@ -28,6 +28,7 @@ import {
   renderConnectorRowDescription,
 } from './ConnectorRowFeedback';
 import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
+import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -382,7 +383,40 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // ChatInput skills dropdown UX: connected → green check; pending/errored →
     // Re-authorize; not connected → Connect. All open the OAuth flow inline so
     // users can tell what is connected instead of hitting a blank detail panel.
+    // Page row: `+` connects in place and a connected row gets the manage menu.
+    // A restricted or stale (pending / errored) connection keeps its explicit
+    // control, since a bare `+` would not say why the first try did not stick.
+    const renderPageExtra = () => {
+      if (isConnected)
+        return (
+          <RowMoreMenu
+            items={[
+              {
+                danger: true,
+                disabled: !canEdit || !canManage,
+                icon: <Icon icon={Unplug} />,
+                key: 'disconnect',
+                label: t('tools.composio.disconnect', { defaultValue: 'Disconnect' }),
+                onClick: handleDisconnect,
+              },
+            ]}
+            onOpenDetail={onSelect}
+          />
+        );
+      return (
+        <RowAddAction
+          disabled={!canCreate || !canEdit || !canManage}
+          disabledReason={!canCreate ? createReason : editReason}
+          label={t('connectorMarket.action.connect')}
+          loading={isConnecting || isWaitingAuth}
+          onClick={handleConnect}
+        />
+      );
+    };
+
     const renderNavExtra = () => {
+      if (isPage && (isConnected || (!isRestricted && !isPending && !isError)))
+        return renderPageExtra();
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }

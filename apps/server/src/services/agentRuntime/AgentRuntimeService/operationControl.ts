@@ -2,6 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import { redisService } from '@/server/services/redis';
 
 import { hookDispatcher } from '../hooks';
@@ -38,6 +39,7 @@ export type OperationControlDeps = Pick<
   | 'endExpiredClientLlmWait'
   | 'messageModel'
   | 'queueService'
+  | 'serverDB'
   | 'streamManager'
   | 'traceRecorder'
   | 'userId'
@@ -280,10 +282,14 @@ export async function readQueuedMessagesFlag(
   state?: AgentState,
 ): Promise<boolean> {
   try {
-    if (await deps.coordinator.hasQueuedMessages(operationId)) return true;
-
     const scope = state && steerQueueScopeOf(state, deps.userId);
-    return scope ? (await redisService.steerQueue.length(scope, operationId)) > 0 : false;
+    const pending =
+      (await deps.coordinator.hasQueuedMessages(operationId)) ||
+      (!!scope && (await redisService.steerQueue.length(scope, operationId)) > 0);
+    if (!pending) return false;
+
+    // Queue mode lets the run finish: its follow-ups start once it ends.
+    return (await readFollowUpMode(deps.serverDB, deps.userId)) !== 'queue';
   } catch (error) {
     log('[%s][%d] Queued messages flag read failed: %O', operationId, stepIndex, error);
     return false;
@@ -353,6 +359,9 @@ export async function injectQueuedFollowUp(
 
   try {
     if ((await redisService.steerQueue.length(scope, operationId)) === 0) return;
+    // A person's follow-ups wait for the run to end in Queue mode; a parent's
+    // steer of its sub-agent always joins.
+    if (topLevelScope && (await readFollowUpMode(deps.serverDB, deps.userId)) === 'queue') return;
 
     const injected = await deps.delegate.injectQueuedFollowUp({ operationId, scope, state });
     // It answers again with the steer in context, so it reads its queue again.

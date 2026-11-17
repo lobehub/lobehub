@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import { type FollowUpMode, resolveFollowUpMode } from '@lobechat/types';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { type Locales, normalizeLocale } from '@/locales/resources';
@@ -51,6 +52,16 @@ const fontAntialiasing = (s: UserStore) => generalConfig(s).fontAntialiasing ?? 
 const workflowStreamingExpandLevel = (s: UserStore) =>
   generalConfig(s).expandWorkflowWhileStreaming ? 'full' : 'collapsed';
 
+/**
+ * What a message sent during a run does. `legacy` (lab off) keeps the
+ * behavior from before the setting existed; the setting defaults to steer.
+ */
+const followUpBehavior = (s: UserStore): FollowUpMode =>
+  resolveFollowUpMode(
+    s.preference.lab?.enableBetterCodingExperience,
+    generalConfig(s).followUpBehavior,
+  );
+
 export const userGeneralSettingsSelectors = {
   animationMode,
   config: generalConfig,
@@ -58,6 +69,7 @@ export const userGeneralSettingsSelectors = {
   enableAutoScrollOnStreaming,
   enableMessageLinkIcon,
   enablePasteAutoConvert,
+  followUpBehavior,
   fontAntialiasing,
   fontSize,
   highlighterTheme,

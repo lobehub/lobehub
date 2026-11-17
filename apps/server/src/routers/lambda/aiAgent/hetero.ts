@@ -20,6 +20,7 @@ import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import {
   renewHeteroSteers,
   returnHeteroSteer,
@@ -156,6 +157,11 @@ const WaitHeteroSteerSchema = z.object({
    */
   acceptsImages: z.boolean().optional(),
   blockMs: z.number().int().positive().max(25_000).default(20_000),
+  /**
+   * The session waits for the user (a question or an approval): hand it no
+   * follow-up now, only control messages. Older producers omit it.
+   */
+  holdSteer: z.boolean().optional(),
   operationId: z.string().min(1),
 });
 
@@ -587,7 +593,7 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
-      const { acceptsControl, acceptsImages, operationId, blockMs } = input;
+      const { acceptsControl, acceptsImages, holdSteer, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -635,6 +641,8 @@ export const heteroRouter = router({
         : undefined;
 
       if (scope) await renewHeteroSteers(operationId);
+      // Queue mode leaves the follow-ups to the run end; read once per poll.
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
 
       const deadline = Date.now() + blockMs;
       for (;;) {
@@ -649,10 +657,11 @@ export const heteroRouter = router({
           const control = await takeHeteroControl(operationId);
           if (control) return answer(null, control);
         }
-        if (scope) {
+        if (scope && followUpMode !== 'queue' && !holdSteer) {
           const message = await takeHeteroSteer(storeCtx, {
             acceptsImages,
             agentId: operation.agentId,
+            mode: followUpMode,
             operationId,
             scope,
           });

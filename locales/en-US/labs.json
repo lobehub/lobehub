@@ -14,7 +14,7 @@
   "features.betterCodingExperience.title": "Better Coding Experience",
   "features.claudeCodeSdk.desc": "Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.",
   "features.claudeCodeSdk.title": "Claude Code SDK Runtime",
-  "features.codexAppServer.desc": "Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.",
+  "features.codexAppServer.desc": "Run Codex through App Server on desktop or a connected device for interactive questions and native turn control. Applies to subsequent runs.",
   "features.codexAppServer.title": "Codex App Server Runtime",
   "features.desktopSplitView.desc": "Show two desktop tabs side by side, with independent navigation and a resizable divider.",
   "features.desktopSplitView.title": "Split Tab View",

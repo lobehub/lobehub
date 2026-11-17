@@ -6,6 +6,11 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
+import {
+  getRememberedSandboxDirectory,
+  getRememberedSandboxRepository,
+  rememberSandboxSelection,
+} from './rememberedSandboxDirectory';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
 import {
   isPersistentSelection,
@@ -53,17 +58,34 @@ export const useSandboxModeSelect = (
 
     // Remembered only once the conversation has moved: a failed write leaves
     // it where it was, and new conversations must not start elsewhere.
-    if (onDrive) await setSelection(temporarySelection(selection));
+    // Leaving the drive, the conversation starts from the repository the
+    // agent's last temporary sandbox used, or none.
+    if (onDrive) {
+      const next =
+        getRememberedSandboxRepository({ userId, workspaceId }, agentId) ??
+        temporarySelection(selection);
+      await setSelection(next);
+      // What the conversation now runs on is what the next temporary sandbox
+      // starts from, as a pick in the chip would be.
+      rememberSandboxSelection({ userId, workspaceId }, agentId, next);
+    }
     setPrefersTemporarySandbox({ userId, workspaceId }, agentId, true);
   }, [agentId, driveStatus, onDrive, selection, setSelection, userId, workspaceId]);
 
   const toPersistent = useCallback(async () => {
     if (!onDrive) {
-      const next = resolveDefaultSandboxSelection(workspaceId);
+      // Back on the drive in the folder the agent's last conversation used,
+      // the same default a new conversation gets.
+      const next = resolveDefaultSandboxSelection(
+        workspaceId,
+        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
+      );
       // A conversation not started yet gets the default as a default, not as a
       // pick: a project conversation is then still given its repository checkout.
-      if (scopeTopicId) await setSelection(next);
-      else seedPendingSandboxSelection(agentId, next);
+      if (scopeTopicId) {
+        await setSelection(next);
+        rememberSandboxSelection({ userId, workspaceId }, agentId, next);
+      } else seedPendingSandboxSelection(agentId, next);
     }
     // After the move, as above: a failed write keeps the old preference too.
     setPrefersTemporarySandbox({ userId, workspaceId }, agentId, false);

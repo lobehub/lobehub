@@ -1,3 +1,4 @@
+import { isModelImageFileType } from '@/database/models/message/attachments';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFinalReplyImageUrls } from '@/server/services/agentRuntime/finalReplyImages';
 
@@ -26,7 +27,7 @@ export interface InlineImage {
  * be handed over as image input.
  *
  * Only the caller's files resolve (scoped by user / workspace); other links,
- * missing files and non-image files are dropped. `excludeIds` skips images
+ * missing files and files that are not model-readable images are dropped. `excludeIds` skips images
  * already delivered as attachments.
  */
 export const resolveInlineImages = async (
@@ -44,6 +45,6 @@ export const resolveInlineImages = async (
 
   const items = await resolveAttachmentMetadata({ ...scope, fileIds });
   return items
-    .filter((item) => item.fileType.startsWith('image') && !!item.url)
+    .filter((item) => isModelImageFileType(item.fileType) && !!item.url)
     .map(({ id, url }) => ({ id, url }));
 };

@@ -25,6 +25,7 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
     args,
     cliVersion,
     helpers,
+    liveInput,
     mcpConfigPath,
     promptInput,
     resumeSessionId,
@@ -44,9 +45,12 @@ export const claudeCodeDriver: HeterogeneousAgentDriver = {
         // does not accept inline JSON for `--mcp-config`.
         ...(mcpConfigPath ? ['--mcp-config', mcpConfigPath] : []),
         ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+        // A live session replays each message it reads: how a steer is known to be picked up.
+        ...(liveInput ? ['--replay-user-messages'] : []),
         ...lobeHubCli.args,
         ...args,
       ],
+      ...(liveInput && { liveInput: true }),
       stdinPayload,
     };
   },
