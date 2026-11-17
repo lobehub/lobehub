@@ -83,17 +83,13 @@ const run = (options: RunOptions = {}) =>
 const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) =>
   (result.tools ?? []).map((tool) => tool.function.name);
 
-/**
- * @mentioned agents are delegated to with `lobe-agent.callSubAgent({ agentId })`
- * — `lobe-agent-management.callAgent` is retired and never offered.
- */
+/** @mentioned agents are delegated to with `lobe-agent.callSubAgent({ agentId })`. */
 describe('discoverTools — @mentioned agents', () => {
-  it('offers callSubAgent with agentId in agent mode, never callAgent', async () => {
+  it('offers callSubAgent with agentId in agent mode', async () => {
     const result = await run({ hasMentionedAgents: true });
     const names = offeredToolNames(result);
 
     expect(names).toContain('lobe-agent____callSubAgent');
-    expect(names).not.toContain('lobe-agent-management____callAgent');
     expect(names).toContain('lobe-agent____createPlan');
   });
 

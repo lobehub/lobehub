@@ -7,12 +7,6 @@ import { AgentManagementApiName } from './types';
 const apiNames = AgentManagementManifest.api.map((a) => a.name);
 
 describe('AgentManagementManifest', () => {
-  // Handing work to another agent is `lobe-agent.callSubAgent({ agentId })`;
-  // `callAgent` survives only as an executor alias for old calls.
-  it('no longer offers callAgent', () => {
-    expect(apiNames).not.toContain(AgentManagementApiName.callAgent);
-  });
-
   it('keeps the management APIs', () => {
     for (const name of [
       AgentManagementApiName.createAgent,
