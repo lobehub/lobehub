@@ -360,13 +360,16 @@ export class TabPagesActionImpl {
       tabs[0].id === fallbackHomeTabId &&
       isSameTabTarget(tabs[0], tabScopeHomeUrl(activeTabScope));
 
-    let nextTabs = isUntouchedFallback ? [] : tabs;
+    // Only tabs open before this reopen count as "already open": a bulk close can take two
+    // tabs on the same page (addNewTab allows that), and both must come back.
+    const openBefore = isUntouchedFallback ? [] : tabs;
+    let nextTabs = openBefore;
     let focusId = '';
     const hadActive = group.some((closed) => closed.wasActive);
     const now = Date.now();
 
     for (const closed of group.toSorted((a, b) => a.index - b.index)) {
-      const existing = nextTabs.find((t) => isSameTabTarget(t, closed.url));
+      const existing = openBefore.find((t) => isSameTabTarget(t, closed.url));
       const id = existing?.id ?? generateTabId();
 
       if (!existing) {
