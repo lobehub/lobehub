@@ -138,6 +138,30 @@ describe('AgentModel workspace device binding', () => {
         }),
       ).rejects.toThrow(/requires a public device/);
     });
+
+    it('allows a private agent to save a fixed private-device target until it is published', async () => {
+      const privateDeviceId = 'workspace-private-device';
+      await serverDB.insert(devices).values({
+        deviceId: privateDeviceId,
+        identitySource: 'machine-id',
+        userId,
+        visibility: 'private',
+        workspaceId: wsId,
+      });
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+
+      const agent = await wsModel.create({
+        agencyConfig: {
+          boundDeviceId: privateDeviceId,
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        title: 'Private fixed WS agent',
+        visibility: 'private',
+      });
+
+      expect(agent.agencyConfig?.boundDeviceId).toBe(privateDeviceId);
+    });
   });
 
   describe('updateConfig', () => {
@@ -220,6 +244,71 @@ describe('AgentModel workspace device binding', () => {
           },
         }),
       ).resolves.toBeDefined();
+    });
+  });
+
+  describe('private fixed agent (T-14315)', () => {
+    const privateDeviceId = 'workspace-private-device';
+
+    const createPrivateFixedSandboxAgent = async () => {
+      await serverDB.insert(devices).values({
+        deviceId: privateDeviceId,
+        identitySource: 'machine-id',
+        userId,
+        visibility: 'private',
+        workspaceId: wsId,
+      });
+      const wsModel = new AgentModel(serverDB, userId, wsId);
+      const agent = await wsModel.create({
+        agencyConfig: { executionTarget: 'sandbox', executionTargetSelectionPolicy: 'fixed' },
+        title: 'Private fixed sandbox agent',
+        visibility: 'private',
+      });
+      return { agent, wsModel };
+    };
+
+    it('lets the owner switch a private fixed agent to their private workspace device', async () => {
+      const { agent, wsModel } = await createPrivateFixedSandboxAgent();
+
+      await wsModel.updateConfig(agent.id, {
+        agencyConfig: {
+          boundDeviceId: privateDeviceId,
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+      });
+
+      const stored = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(stored?.agencyConfig?.executionTarget).toBe('device');
+      expect(stored?.agencyConfig?.boundDeviceId).toBe(privateDeviceId);
+    });
+
+    it('still rejects publishing it while bound to the private device', async () => {
+      const { agent, wsModel } = await createPrivateFixedSandboxAgent();
+      await wsModel.updateConfig(agent.id, {
+        agencyConfig: { boundDeviceId: privateDeviceId, executionTarget: 'device' },
+      });
+
+      await expect(wsModel.publishToWorkspace(agent.id)).rejects.toThrow(
+        /requires a public device/,
+      );
+      await expect(wsModel.setVisibility(agent.id, 'public')).rejects.toThrow(
+        /requires a public device/,
+      );
+
+      const stored = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(stored?.visibility).toBe('private');
+    });
+
+    it('still rejects a private workspace device on a public fixed agent', async () => {
+      const { agent, wsModel } = await createPrivateFixedSandboxAgent();
+      await serverDB.update(agents).set({ visibility: 'public' }).where(eq(agents.id, agent.id));
+
+      await expect(
+        wsModel.updateConfig(agent.id, {
+          agencyConfig: { boundDeviceId: privateDeviceId, executionTarget: 'device' },
+        }),
+      ).rejects.toThrow(/requires a public device/);
     });
   });
 

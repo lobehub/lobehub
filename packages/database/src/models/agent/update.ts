@@ -362,7 +362,11 @@ export const updateConfig = async (
     replaceWorkingDirDeviceIds,
   );
 
-  await ctx.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
+  await ctx.assertFixedExecutionTarget(
+    agent.workspaceId,
+    mergedValue.agencyConfig,
+    agent.visibility,
+  );
 
   // Timestamp fields are left to Drizzle's $onUpdate.
   touchedColumns.delete('updatedAt');

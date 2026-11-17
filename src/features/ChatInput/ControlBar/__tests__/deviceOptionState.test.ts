@@ -61,4 +61,16 @@ describe('getDeviceOptionState', () => {
       false,
     );
   });
+
+  // T-14315: a private device on a published fixed Agent would be rejected by
+  // the server, so the row says why and cannot be picked even while online.
+  it('keeps a blocked device unselectable even while it is online', () => {
+    const online = { identitySource: 'machine-id', online: true };
+
+    expect(getDeviceOptionState(online, known).selectable).toBe(true);
+    expect(getDeviceOptionState(online, { ...known, blocked: true }).selectable).toBe(false);
+    expect(getDeviceOptionState(sleepingManaged, { ...known, blocked: true }).selectable).toBe(
+      false,
+    );
+  });
 });
