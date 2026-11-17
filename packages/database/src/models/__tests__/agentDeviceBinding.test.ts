@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { agents, devices, type NewAgent, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import type { AgentModelContext } from '../agent/context';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -33,6 +34,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await serverDB.delete(users);
 });
 
@@ -309,6 +311,73 @@ describe('AgentModel workspace device binding', () => {
           agencyConfig: { boundDeviceId: privateDeviceId, executionTarget: 'device' },
         }),
       ).rejects.toThrow(/requires a public device/);
+    });
+
+    // Race: each side validated a row the other side changed before writing.
+    const interleaveAfterCheck = (wsModel: AgentModel, interleave: () => Promise<unknown>) => {
+      const ctx = (wsModel as unknown as { ctx: AgentModelContext }).ctx;
+      const original = ctx.assertFixedExecutionTarget;
+      let fired = false;
+      vi.spyOn(ctx, 'assertFixedExecutionTarget').mockImplementation(async (...args) => {
+        await original(...args);
+        if (fired) return;
+        fired = true;
+        await interleave();
+      });
+    };
+
+    it('does not save a private device onto an agent published after the check', async () => {
+      const { agent, wsModel } = await createPrivateFixedSandboxAgent();
+      interleaveAfterCheck(wsModel, () =>
+        serverDB.update(agents).set({ visibility: 'public' }).where(eq(agents.id, agent.id)),
+      );
+
+      await expect(
+        wsModel.updateConfig(agent.id, {
+          agencyConfig: { boundDeviceId: privateDeviceId, executionTarget: 'device' },
+        }),
+      ).rejects.toThrow(/concurrently/);
+
+      const stored = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(stored?.visibility).toBe('public');
+      expect(stored?.agencyConfig?.executionTarget).toBe('sandbox');
+      expect(stored?.agencyConfig?.boundDeviceId).toBeUndefined();
+    });
+
+    it.each(['publishToWorkspace', 'setVisibility'] as const)(
+      'does not %s an agent whose config changed to a private device after the check',
+      async (method) => {
+        const { agent, wsModel } = await createPrivateFixedSandboxAgent();
+        interleaveAfterCheck(wsModel, () =>
+          serverDB
+            .update(agents)
+            .set({
+              agencyConfig: {
+                boundDeviceId: privateDeviceId,
+                executionTarget: 'device',
+                executionTargetSelectionPolicy: 'fixed',
+              },
+            })
+            .where(eq(agents.id, agent.id)),
+        );
+
+        await expect(
+          method === 'publishToWorkspace'
+            ? wsModel.publishToWorkspace(agent.id)
+            : wsModel.setVisibility(agent.id, 'public'),
+        ).rejects.toThrow(/concurrently|already published/);
+
+        const stored = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+        expect(stored?.visibility).toBe('private');
+      },
+    );
+
+    it('publishes once the check and the write see the same config', async () => {
+      const { agent, wsModel } = await createPrivateFixedSandboxAgent();
+
+      await expect(wsModel.publishToWorkspace(agent.id)).resolves.toMatchObject({
+        visibility: 'public',
+      });
     });
   });
 

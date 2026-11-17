@@ -309,10 +309,13 @@ export class AgentModel {
           this.ctx.ownership(),
           eq(agents.userId, this.ctx.userId),
           eq(agents.visibility, 'private'),
+          update.sameAgencyConfig(agent.agencyConfig),
         ),
       )
       .returning();
 
+    // Also misses when a concurrent publication or config write changed the
+    // row between the read above and this write.
     if (!result) {
       throw new Error('Agent not found, already published, or access denied');
     }
