@@ -139,6 +139,7 @@ export class ClaudeCodeLiveInput {
   private readonly idleCloseMs: number;
   private lastOutcome: ClaudeCodeTurnOutcome | undefined;
   private lineBuffer = '';
+  private readonly listeners = new Set<(message: unknown) => void>();
   private readonly pendingControl = new Map<string, (answer: ClaudeCodeControlResponse) => void>();
   private turnOpen = true;
   private readonly unconsumed = new Set<string>();
@@ -204,6 +205,25 @@ export class ClaudeCodeLiveInput {
     return { requestId, response };
   }
 
+  /**
+   * Answer a control request Claude Code sent the host (`can_use_tool` under
+   * `--permission-prompt-tool stdio`). Returns false once input has closed.
+   */
+  respondToControlRequest(requestId: string, response: Record<string, unknown>): boolean {
+    if (this.closed) return false;
+
+    this.stdin.write(
+      `${JSON.stringify({ response: { request_id: requestId, response, subtype: 'success' }, type: 'control_response' })}\n`,
+    );
+    return true;
+  }
+
+  /** Watch every record Claude Code writes, as `observe` parses it. */
+  subscribe(listener: (message: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   /** Feed raw stdout so the session state tracks what Claude Code reports. */
   observe(chunk: Buffer | string): void {
     this.lineBuffer += chunk.toString();
@@ -222,6 +242,7 @@ export class ClaudeCodeLiveInput {
         }
         // Turns still run after input closes, so keep tracking them.
         this.observeMessage(message);
+        for (const listener of this.listeners) listener(message);
       } catch {
         // Non-JSON noise on stdout carries no session state.
       }
