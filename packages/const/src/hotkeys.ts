@@ -109,7 +109,8 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.SwitchTab,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
+    // Mod is ⌘ on macOS and Ctrl elsewhere, matching browsers' tab shortcuts.
+    keys: combineKeys([KeyEnum.Mod, KeyEnum.Number]),
     nonEditable: true,
     scopes: [HotkeyScopeEnum.Global],
   },
