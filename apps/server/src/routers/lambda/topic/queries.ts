@@ -27,26 +27,24 @@ import { guardCtx, topicProcedure, topicSearchProcedure } from './procedures';
 import { readTopicTranscript, topicTranscriptInput } from './transcript';
 
 /**
- * Child topics may run any agent of the workspace: keep only those whose
- * agent the caller may view (another member's private agent stays hidden).
+ * Child topics may run any agent of the workspace: the ones among `agentIds`
+ * the caller may view (another member's private agent stays hidden).
  */
-const onlyViewableAgentTopics = async <T extends { agentId?: null | string }>(
+const viewableAgentIds = async (
   ctx: Parameters<typeof guardCtx>[0],
-  items: T[],
-): Promise<T[]> => {
-  if (!ctx.workspaceId) return items;
-  const agentIds = [...new Set(items.map((item) => item.agentId).filter(Boolean))] as string[];
-  const viewable = new Set<string>();
-  // One page holds few distinct agents; each check is a lookup.
+  agentIds: string[],
+): Promise<string[]> => {
+  const viewable: string[] = [];
+  // A topic's children run few distinct agents; each check is a lookup.
   for (const agentId of agentIds) {
     try {
       await assertCanViewConversationTargets(guardCtx(ctx), [{ agentId }]);
-      viewable.add(agentId);
+      viewable.push(agentId);
     } catch {
       // Not viewable: left out.
     }
   }
-  return items.filter((item) => !item.agentId || viewable.has(item.agentId));
+  return viewable;
 };
 
 export const queryRouter = router({
@@ -168,16 +166,24 @@ export const queryRouter = router({
       // Child topics of one topic: authorized on the parent, then per child agent.
       if (openedByTopicId) {
         await assertCanViewTopicTargets(guardCtx(ctx), [openedByTopicId]);
+        // Decide which child agents the caller may view first, so paging and
+        // the total only ever count what can be shown.
+        const openedByAgentIds = ctx.workspaceId
+          ? await viewableAgentIds(
+              ctx,
+              await ctx.topicModel.listChildTopicAgentIds(openedByTopicId),
+            )
+          : undefined;
         const result = await ctx.topicModel.query({
           excludeStatuses,
           excludeTriggers,
           includeTriggers,
+          openedByAgentIds,
           openedByTopicId,
           triggers,
           ...rest,
         });
-        const items = await onlyViewableAgentTopics(ctx, result.items);
-        return { items, total: result.total - (result.items.length - items.length) };
+        return { items: result.items, total: result.total };
       }
 
       // If groupId is provided, query by groupId directly

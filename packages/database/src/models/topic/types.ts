@@ -169,6 +169,11 @@ export interface QueryTopicParams {
    */
   onlyMine?: boolean;
   /**
+   * With `openedByTopicId`: only children of these agents (plus agent-less
+   * ones) — the agents the caller may view, applied before paging and counting.
+   */
+  openedByAgentIds?: string[];
+  /**
    * Only the topics opened from this one (its child topics:
    * `metadata.openedBy.topicId`, not unlinked), whatever their agent. Takes
    * precedence over the agent / group / container scopes; `agentId` still

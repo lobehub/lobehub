@@ -79,6 +79,7 @@ const PUBLIC_METHODS = [
   'getCronTopicsGroupedByCronJob',
   'getLatestRunStatus',
   'isRunningOperationAlive',
+  'listChildTopicAgentIds',
   'listOpenedDescendants',
   'listOpenedTopics',
   'listTopicsForMemoryExtractor',
