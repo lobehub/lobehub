@@ -13,8 +13,8 @@ const DEFAULT_IDLE_CLOSE_MS = 30 * 60 * 1000;
 /**
  * How long a task that ends between turns may wait for the main-agent turn its
  * notification wakes. Claude Code opens that turn within milliseconds; the
- * grace only bounds an end that wakes nothing, such as a task killed between
- * turns.
+ * grace only bounds an end that unexpectedly wakes nothing. A stopped task
+ * never wakes one, so it does not wait (see `observeSystem`).
  */
 const DEFAULT_WAKE_UP_GRACE_MS = 30 * 1000;
 
@@ -283,7 +283,13 @@ export class ClaudeCodeLiveInput {
         TERMINAL_TASK_STATUSES.has(message.patch?.status as string));
     if (ended && message.task_id) {
       this.activeTasks.delete(message.task_id);
-      this.awaitWakeUpTurn();
+      // Claude Code wakes the model for a task that ended on its own, never for
+      // one that was stopped: nothing is left to wait for.
+      const stopped =
+        message.patch?.status === 'killed' ||
+        (message.subtype === 'task_notification' && message.status === 'stopped');
+      if (stopped) this.closeIfIdle();
+      else this.awaitWakeUpTurn();
     }
   }
 
