@@ -48,7 +48,7 @@ import {
  */
 const WorkspaceRoutes = new Hono();
 
-const businessOnly = requireBusinessFeature('Team workspaces');
+const businessOnly = requireBusinessFeature('Team workspace management');
 const workspaceRead = requireApiKeyScope('workspace:read');
 const workspaceWrite = requireApiKeyScope('workspace:write');
 const memberManage = requireApiKeyScope(API_KEY_FULL_ACCESS_SCOPE);

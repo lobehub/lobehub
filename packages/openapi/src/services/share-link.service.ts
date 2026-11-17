@@ -55,7 +55,7 @@ export class ShareLinkRestService extends BaseService {
       throw new ApiException(
         501,
         'feature_unavailable',
-        `Sharing a ${resourceType} is not available on this deployment`,
+        `${resourceType.charAt(0).toUpperCase()}${resourceType.slice(1)} sharing is not available on this deployment`,
       );
     }
   }

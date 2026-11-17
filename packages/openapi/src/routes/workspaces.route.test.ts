@@ -245,7 +245,12 @@ describe('self-hosted build', () => {
     const res = await call(path, { key: KEYS.ownerFull, method });
 
     expect(res.status).toBe(501);
-    expect((await json(res)).code).toBe('feature_unavailable');
+    expect(await json(res)).toMatchObject({
+      code: 'feature_unavailable',
+      error: 'Team workspace management is not available on this deployment',
+      message: 'Team workspace management is not available on this deployment',
+      success: false,
+    });
     expect(holder.calls).toEqual([]);
   });
 });
