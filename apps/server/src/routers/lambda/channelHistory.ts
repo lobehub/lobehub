@@ -94,6 +94,30 @@ export const channelHistoryProcedures = {
         .strict(),
     )
     .query(({ ctx, input }) => ctx.channelMessaging.listChannels(input)),
+  listPeople: messagingProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(20).optional(),
+          query: z.string().max(200).optional(),
+        })
+        .strict(),
+    )
+    .query(({ ctx, input }) => ctx.channelMessaging.listPeople(input)),
+  messagePerson: messagingProcedure
+    .input(
+      z
+        .object({
+          content: z.string().min(1),
+          /** Repeat it to retry without posting twice. */
+          requestKey: z.string().min(1).max(100),
+          userId: z.string().min(1),
+        })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { requestKey, ...params } }) =>
+      ctx.channelMessaging.messagePerson(params, `cli:${requestKey}`),
+    ),
   sendMessage: messagingProcedure
     .input(
       z

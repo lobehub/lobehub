@@ -387,6 +387,41 @@ describe('external contacts of a workspace', () => {
   });
 });
 
+describe('people to message', () => {
+  const ids = (page: Awaited<ReturnType<ContactModel['listPeople']>>) =>
+    page.people.map((person) => person.id);
+
+  it('lists personal contacts only, narrowed by name or handle', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(await aliceModel.listPeople({ limit: 10 })).toEqual({
+      hasMore: false,
+      people: [{ avatar: null, fullName: 'Bob', id: bob, username: 'Bob' }],
+    });
+    expect(ids(await aliceModel.listPeople({ limit: 10, query: ' bo ' }))).toEqual([bob]);
+    expect(ids(await aliceModel.listPeople({ limit: 10, query: '@bo' }))).toEqual([bob]);
+    expect(ids(await aliceModel.listPeople({ limit: 10, query: 'carol' }))).toEqual([]);
+    expect(ids(await carolModel.listPeople({ limit: 10 }))).toEqual([]);
+  });
+
+  it('lists fellow members, then the external contacts paired with the caller', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await aliceInTeam.listPeople({ limit: 10 }))).toEqual([carol, bob]);
+    // Bob is not paired with Carol, so she cannot message him.
+    expect(ids(await carolInTeam.listPeople({ limit: 10 }))).toEqual([alice]);
+    expect(ids(await aliceInTeam.listPeople({ limit: 10, query: '@CAR' }))).toEqual([carol]);
+    expect(await aliceInTeam.listPeople({ limit: 1 })).toMatchObject({
+      hasMore: true,
+      people: [{ id: carol }],
+    });
+    // An external contact reaches only the members paired with them.
+    expect(ids(await bobInTeam().listPeople({ limit: 10 }))).toEqual([alice]);
+  });
+});
+
 describe('search', () => {
   it('finds people by exact username, case-insensitively, with their relation', async () => {
     const [result] = await aliceModel.search('@BOB');
