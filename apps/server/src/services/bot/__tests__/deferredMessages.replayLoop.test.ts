@@ -13,6 +13,8 @@ const { getOriginMessageId } = await import('../mergeMessages');
 /** In-memory Redis with the list / hash commands the deferred queue uses. */
 function createStatefulRedis() {
   const lists = new Map<string, string[]>();
+  /** Set to lose every acknowledgement, the way a crash between the run and the `LREM` would. */
+  const faults = { loseAcks: false };
   const hashes = new Map<string, Map<string, number>>();
   const list = (key: string) => {
     if (!lists.has(key)) lists.set(key, []);
@@ -30,7 +32,7 @@ function createStatefulRedis() {
     lrem: (key: string, count: number, value: string) => {
       const items = list(key);
       const index = items.indexOf(value);
-      if (count !== 1 || index === -1) return 0;
+      if (faults.loseAcks || count !== 1 || index === -1) return 0;
       items.splice(index, 1);
       return 1;
     },
@@ -45,6 +47,7 @@ function createStatefulRedis() {
     rpush: (key: string, ...values: string[]) => list(key).push(...values),
   };
   return {
+    faults,
     hmget: async (key: string, ...fields: string[]) =>
       fields.map((field) => {
         const count = hashes.get(key)?.get(field);
@@ -135,22 +138,41 @@ describe('deferred replay loop', () => {
     expect(redis.lists.get(KEY)).toEqual([]);
   });
 
-  it('drops a message once it has been replayed the maximum number of times', async () => {
-    const replay = vi.fn(async (entries: { id: string }[]) => {
-      // The worst case: every replay finds the topic busy and parks the message again.
-      await deferBotMessages(
-        'app-1',
-        'feishu:group:oc_1',
-        entries.map((entry) => asMessage(`${getOriginMessageId(entry)}:replay:1:0`)),
-      );
-    });
+  it('drops a message once it has been run the maximum number of times', async () => {
+    // A loop the collapse cannot see: every lap runs the message, and it is never removed.
+    redis.faults.loseAcks = true;
     await deferBotMessages('app-1', 'feishu:group:oc_1', [asMessage('om_1')]);
+    const replay = vi.fn().mockResolvedValue(undefined);
 
     for (let round = 0; round < MAX_REPLAYS_PER_MESSAGE + 2; round++) {
       await replayDeferredBotMessages('app-1', 'feishu:group:oc_1', replay);
     }
 
     expect(replay).toHaveBeenCalledTimes(MAX_REPLAYS_PER_MESSAGE);
+  });
+
+  it('keeps the budget of messages parked again while other senders take the runs', async () => {
+    const senders = ['om_a', 'om_b', 'om_c', 'om_d', 'om_e'];
+    await deferBotMessages('app-1', 'feishu:group:oc_1', senders.map(asMessage));
+    const runs: string[] = [];
+
+    // Each completion drains the queue: one sender's message starts the run, and every other
+    // sender's message finds the topic busy and is parked again under a replay id.
+    const deliver = async (entries: { id: string }[]): Promise<void> => {
+      const [first, ...rest] = entries;
+      runs.push(getOriginMessageId(first));
+      await deferBotMessages(
+        'app-1',
+        'feishu:group:oc_1',
+        rest.map((entry) => asMessage(`${getOriginMessageId(entry)}:replay:${runs.length}:0`)),
+      );
+    };
+
+    for (let completion = 0; completion < senders.length + 2; completion++) {
+      await replayDeferredBotMessages('app-1', 'feishu:group:oc_1', deliver);
+    }
+
+    expect(runs).toEqual(senders);
     expect(redis.lists.get(KEY)).toEqual([]);
   });
 

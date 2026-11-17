@@ -3,7 +3,7 @@ import debug from 'debug';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 
-import { getOriginMessageId } from './mergeMessages';
+import { getOriginMessageId, isReplayMessage } from './mergeMessages';
 
 const log = debug('lobe-server:bot:deferred-messages');
 
@@ -43,6 +43,18 @@ export const buildDeferredMessagesKey = (applicationId: string, platformThreadId
   `bot:deferred-messages:${applicationId}:${platformThreadId}`;
 
 /**
+ * How many times one platform message may be delivered to a run. A replay parked again because the
+ * topic is still busy (another sender's message took the run) did not run, and gets its lap back
+ * when it is parked; one that keeps being run and coming back is looping (each lap is a full agent
+ * run and a reply in the chat) and is dropped instead.
+ */
+export const MAX_REPLAYS_PER_MESSAGE = 3;
+
+/** Per-thread hash of replay counts, keyed by the message's origin id. */
+export const buildReplayCountKey = (applicationId: string, platformThreadId: string): string =>
+  `bot:deferred-replays:${applicationId}:${platformThreadId}`;
+
+/**
  * Whether deferral is available at all — it needs Redis because the replay
  * happens in the callback process, not the one that received the message.
  */
@@ -68,12 +80,21 @@ export async function deferBotMessages(
   const key = buildDeferredMessagesKey(applicationId, platformThreadId);
   try {
     const payloads = messages.map((message) => JSON.stringify(message.toJSON()));
-    const results = await redis
+    const transaction = redis
       .multi()
       .rpush(key, ...payloads)
       .ltrim(key, -MAX_DEFERRED_PER_THREAD, -1)
-      .expire(key, TTL_SECONDS)
-      .exec();
+      .expire(key, TTL_SECONDS);
+    // A replay parked again was delivered without running: give back the lap its delivery is
+    // about to be counted for, so waiting behind other senders never spends the budget.
+    const reparked = messages.filter((message) => isReplayMessage(message));
+    if (reparked.length > 0) {
+      const countKey = buildReplayCountKey(applicationId, platformThreadId);
+      for (const message of reparked)
+        transaction.hincrby(countKey, getOriginMessageId(message), -1);
+      transaction.expire(countKey, TTL_SECONDS);
+    }
+    const results = await transaction.exec();
     const failure = results?.find(([error]) => error)?.[0];
     if (!results || failure) throw failure ?? new Error('Deferred write aborted');
     log(
@@ -89,17 +110,6 @@ export async function deferBotMessages(
     return false;
   }
 }
-
-/**
- * How many times one platform message may be replayed. A replay that finds the topic busy is
- * parked again, so a message can legitimately go round twice; one that keeps coming back is
- * looping (each lap is a full agent run and a reply in the chat) and is dropped instead.
- */
-export const MAX_REPLAYS_PER_MESSAGE = 3;
-
-/** Per-thread hash of replay counts, keyed by the message's origin id. */
-export const buildReplayCountKey = (applicationId: string, platformThreadId: string): string =>
-  `bot:deferred-replays:${applicationId}:${platformThreadId}`;
 
 interface DeferredSnapshotEntry {
   message: DeferredBotMessage;
@@ -207,7 +217,7 @@ const recordReplays = async (
  * entries available for retry. Delivery is at-least-once if a batch partially
  * succeeds or completion callbacks overlap; copies of one message are replayed
  * once, and a message is delivered at most {@link MAX_REPLAYS_PER_MESSAGE} times
- * (failed deliveries do not count).
+ * (failed deliveries and replays parked again while the topic is busy do not count).
  */
 export async function replayDeferredBotMessages(
   applicationId: string,
