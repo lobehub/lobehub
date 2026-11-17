@@ -263,6 +263,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * device is a preference the target policy may override.
    */
   requireDevice?: boolean;
+  /** Stable assistant row for a worker dispatching a pre-persisted worktree turn. */
+  reservedAssistantMessageId?: string;
   /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
   reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */

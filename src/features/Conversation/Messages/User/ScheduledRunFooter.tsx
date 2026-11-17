@@ -1,11 +1,12 @@
 'use client';
 
-import { ActionIcon, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Button, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import { BanIcon, ClockIcon } from 'lucide-react';
-import { memo } from 'react';
+import { BanIcon, ClockIcon, LoaderCircleIcon } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { aiAgentService } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -26,26 +27,75 @@ interface ScheduledRunFooterProps {
  */
 const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
   const { t } = useTranslation('chat');
+  const { t: tDevice } = useTranslation('device');
+  const { t: tCommon } = useTranslation('common');
+  const topicId = useConversationStore((s) => s.context.topicId);
+  const [retrying, setRetrying] = useState(false);
 
-  const runAt = useChatStore((s) => {
-    const topic = topicSelectors.currentActiveTopic(s);
-    if (topic?.status !== 'scheduled') return;
-
-    const scheduledRun = topic.metadata?.scheduledRun;
-    if (scheduledRun?.kind !== 'delayed_start' || scheduledRun.userMessageId !== id) return;
-
-    return scheduledRun.runAt;
+  const run = useChatStore((s) => {
+    if (!topicId) return;
+    const topic = topicSelectors.getTopicById(topicId)(s);
+    const scheduledRun = topic?.metadata?.scheduledRun;
+    if (!scheduledRun || scheduledRun.userMessageId !== id) return;
+    if (
+      topic.status === 'scheduled' ||
+      (topic.status === 'failed' &&
+        scheduledRun.kind === 'worktree_start' &&
+        scheduledRun.error !== undefined)
+    )
+      return scheduledRun;
   });
 
   const cancelScheduledRun = useConversationStore((s) => s.cancelScheduledRun);
+  const retryWorktree = async () => {
+    if (!topicId) return;
+    setRetrying(true);
+    try {
+      await aiAgentService.retryWorktreeTurn(topicId);
+      await useChatStore.getState().refreshTopicDetail(topicId, true);
+    } catch (error) {
+      console.error('[ScheduledRunFooter] retry worktree failed', error);
+      toast.error(tDevice('workingDirectory.worktreeCreateFailed'));
+    } finally {
+      setRetrying(false);
+    }
+  };
 
-  if (!runAt) return null;
+  if (run?.kind === 'worktree_start') {
+    const failed = run.error !== undefined;
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={6}
+        justify={'flex-end'}
+        paddingBlock={4}
+        role="status"
+      >
+        {!failed && <Icon spin icon={LoaderCircleIcon} size={14} />}
+        <Text style={{ fontSize: 12 }} type={failed ? 'danger' : 'secondary'}>
+          {failed
+            ? tDevice('workingDirectory.worktreeCreateFailed')
+            : run.waitingForDevice
+              ? tDevice('workingDirectory.worktreeWaitingForDevice')
+              : tDevice('workingDirectory.preparingWorktree')}
+          {run.error ? ` ${run.error}` : null}
+        </Text>
+        {failed && run.retryable && (
+          <Button loading={retrying} size="small" type="text" onClick={retryWorktree}>
+            {tCommon('retry')}
+          </Button>
+        )}
+      </Flexbox>
+    );
+  }
+  if (run?.kind !== 'delayed_start') return null;
 
   return (
     <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'} paddingBlock={4}>
       <Icon icon={ClockIcon} size={14} style={{ color: cssVar.colorTextQuaternary }} />
       <Text style={{ fontSize: 12 }} type={'secondary'}>
-        {t('input.schedule.pending', { time: dayjs(runAt).format('MM-DD HH:mm') })}
+        {t('input.schedule.pending', { time: dayjs(run.runAt).format('MM-DD HH:mm') })}
       </Text>
       <ActionIcon
         icon={BanIcon}

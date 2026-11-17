@@ -17,7 +17,7 @@ export interface ScheduledRunContext {
 }
 
 type ScheduledRunHandlers = {
-  [K in TopicScheduledRunKind]: (
+  [K in Exclude<TopicScheduledRunKind, 'worktree_start'>]: (
     run: Extract<TopicScheduledRun, { kind: K }>,
     ctx: ScheduledRunContext,
   ) => Promise<ExecAgentResult>;
@@ -153,7 +153,7 @@ const HANDLERS: ScheduledRunHandlers = {
  * {@link TopicScheduledRun} and an entry here; the type forces the pairing.
  */
 export const dispatchScheduledRun = (
-  run: TopicScheduledRun,
+  run: Exclude<TopicScheduledRun, { kind: 'worktree_start' }>,
   ctx: ScheduledRunContext,
 ): Promise<ExecAgentResult> => {
   const handler = HANDLERS[run.kind] as (

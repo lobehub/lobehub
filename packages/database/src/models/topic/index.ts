@@ -213,6 +213,7 @@ export class TopicModel {
 
   cancelRateLimitContinuation = this.withContext(scheduledRun.cancelRateLimitContinuation);
   armScheduledRun = this.withContext(scheduledRun.armScheduledRun);
+  retryWorktreeStart = this.withContext(scheduledRun.retryWorktreeStart);
 
   // **************** Memory extraction *************** //
 
@@ -223,6 +224,8 @@ export class TopicModel {
   // **************** Scheduled run (backend cron) *************** //
 
   static getDueScheduledTopics = scheduledRun.getDueScheduledTopics;
+
+  static finishWorktreeStart = scheduledRun.finishWorktreeStart;
 
   static claimScheduledTopic = scheduledRun.claimScheduledTopic;
 

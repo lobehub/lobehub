@@ -1,8 +1,8 @@
 import {
   type ConversationContext,
+  type FirstSendWorktree,
   type SendMessageParams,
   type UploadFileItem,
-  type WorkingDirConfig,
 } from '@lobechat/types';
 
 type SendMessage = (
@@ -18,7 +18,12 @@ interface SendVoiceMessageOptions {
    * the recording as a retryable failed turn.
    */
   prepare?: () => Promise<
-    { ok: false } | { newTopicWorkingDirectory?: WorkingDirConfig; ok: true }
+    | { ok: false }
+    | {
+        firstSendWorktree?: FirstSendWorktree;
+        ok: true;
+        onMessagePersisted?: () => void;
+      }
   >;
   signal?: AbortSignal;
   /**
@@ -66,9 +71,10 @@ export const sendVoiceMessage = async (
         accepted = true;
         resolve();
       },
+      onMessagePersisted: prepared?.ok ? prepared.onMessagePersisted : undefined,
       preserveComposer: true,
-      ...(prepared?.ok && prepared.newTopicWorkingDirectory
-        ? { newTopicWorkingDirectory: prepared.newTopicWorkingDirectory }
+      ...(prepared?.ok && prepared.firstSendWorktree
+        ? { firstSendWorktree: prepared.firstSendWorktree }
         : {}),
       ...(context ? { conversationContext: context } : {}),
       ...(optimisticUserMessageId ? { optimisticUserMessageId } : {}),

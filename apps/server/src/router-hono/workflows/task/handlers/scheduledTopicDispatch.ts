@@ -6,6 +6,8 @@ import type { Context } from 'hono';
 
 import { TopicModel } from '@/database/models/topic';
 import { getServerDB } from '@/database/server';
+import { dispatchWorktreeTurn } from '@/server/services/aiAgent/pipeline/dispatchWorktreeTurn';
+import { wakeWorktreeTurn } from '@/server/services/aiAgent/pipeline/wakeWorktreeTurn';
 
 import { dispatchScheduledRun } from './scheduledRunKinds';
 
@@ -17,6 +19,8 @@ const CLAIM_LEASE_MS = 5 * 60 * 1000;
 export interface ScheduledTopicDispatchPayload {
   /** When true, only report which topics are due without claiming/dispatching. */
   dryRun?: boolean;
+  /** An immediate wakeup can target one topic; a scheduled sweep targets all. */
+  topicId?: string;
 }
 
 /**
@@ -43,84 +47,99 @@ export interface ScheduledTopicDispatchPayload {
  *
  * Signature verification is handled by the `qstashAuth` middleware on the route.
  */
-export async function scheduledTopicDispatch(c: Context) {
-  try {
-    const body = (await c.req.json().catch(() => ({}))) as ScheduledTopicDispatchPayload;
-    const { dryRun = false } = body ?? {};
+export async function dispatchDueScheduledTopics({
+  dryRun = false,
+  topicId,
+}: ScheduledTopicDispatchPayload = {}) {
+  const db = await getServerDB();
+  const now = new Date();
+  const due = topicId
+    ? await TopicModel.getDueScheduledTopics(db, now, topicId)
+    : await TopicModel.getDueScheduledTopics(db, now);
 
-    const db = await getServerDB();
-    const now = new Date();
-    const due = await TopicModel.getDueScheduledTopics(db, now);
+  log('scan: due=%d dryRun=%s', due.length, dryRun);
 
-    log('scan: due=%d dryRun=%s', due.length, dryRun);
+  if (dryRun || due.length === 0) {
+    return { claimed: 0, dispatched: 0, dryRun, due: due.length, success: true };
+  }
 
-    if (dryRun || due.length === 0) {
-      return c.json({ claimed: 0, dispatched: 0, dryRun, due: due.length, success: true });
+  let claimed = 0;
+  let dispatched = 0;
+  let discarded = 0;
+  for (const topic of due) {
+    // Reads the current payload and the pre-`kind` legacy one alike — the due
+    // query selects both, so this must dispatch both.
+    const run = parseTopicScheduledRun(topic.metadata?.scheduledRun);
+    if (!run) {
+      // A due topic whose payload we can't dispatch would re-surface on every
+      // tick forever, so drop the schedule instead of skipping it. Back to
+      // `active`: the topic itself is intact, only the schedule is unusable.
+      console.error(
+        '[scheduled-topic-dispatch] discarding unparseable scheduledRun topic=%s: %O',
+        topic.id,
+        topic.metadata?.scheduledRun,
+      );
+      await TopicModel.clearScheduledRun(db, topic.id, 'active').catch(() => undefined);
+      discarded += 1;
+      continue;
     }
 
-    let claimed = 0;
-    let dispatched = 0;
-    let discarded = 0;
-    for (const topic of due) {
-      // Reads the current payload and the pre-`kind` legacy one alike — the due
-      // query selects both, so this must dispatch both.
-      const run = parseTopicScheduledRun(topic.metadata?.scheduledRun);
-      if (!run) {
-        // A due topic whose payload we can't dispatch would re-surface on every
-        // tick forever, so drop the schedule instead of skipping it. Back to
-        // `active`: the topic itself is intact, only the schedule is unusable.
-        console.error(
-          '[scheduled-topic-dispatch] discarding unparseable scheduledRun topic=%s: %O',
-          topic.id,
-          topic.metadata?.scheduledRun,
-        );
-        await TopicModel.clearScheduledRun(db, topic.id, 'active').catch(() => undefined);
-        discarded += 1;
+    const claim = {
+      claimedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + CLAIM_LEASE_MS).toISOString(),
+      id: randomUUID(),
+    };
+
+    const won = await TopicModel.claimScheduledTopic(db, topic.id, claim, now).catch((err) => {
+      console.error('[scheduled-topic-dispatch] claim failed topic=%s: %O', topic.id, err);
+      return false;
+    });
+    if (!won) continue;
+    claimed += 1;
+
+    const workspaceId = topic.workspaceId ?? undefined;
+    try {
+      if (run.kind === 'worktree_start') {
+        const result = await dispatchWorktreeTurn({ ...run, claim }, { db, topic, workspaceId });
+        await TopicModel.finishWorktreeStart(db, topic.id, claim.id, result);
+        if (result.success) dispatched += 1;
+        if (result.retryAt) await wakeWorktreeTurn(topic.id, result.retryAt);
         continue;
       }
-
-      const claim = {
-        claimedAt: now.toISOString(),
-        expiresAt: new Date(now.getTime() + CLAIM_LEASE_MS).toISOString(),
-        id: randomUUID(),
-      };
-
-      const won = await TopicModel.claimScheduledTopic(db, topic.id, claim, now).catch((err) => {
-        console.error('[scheduled-topic-dispatch] claim failed topic=%s: %O', topic.id, err);
-        return false;
+      const result = await dispatchScheduledRun(run, {
+        claimId: claim.id,
+        db,
+        topic,
+        workspaceId,
       });
-      if (!won) continue;
-      claimed += 1;
-
-      const workspaceId = topic.workspaceId ?? undefined;
-      try {
-        const result = await dispatchScheduledRun(run, {
-          claimId: claim.id,
-          db,
-          topic,
-          workspaceId,
-        });
-        if (!result.success) {
-          throw new Error(result.error || result.message || 'Scheduled run dispatch failed');
-        }
-
-        // Success — execAgent now owns the run; clear the scheduled state.
-        await TopicModel.clearScheduledRun(db, topic.id, 'running', claim.id);
-        dispatched += 1;
-        log(
-          'dispatched topic=%s kind=%s device=%s',
-          topic.id,
-          run.kind,
-          topic.metadata?.boundDeviceId,
-        );
-      } catch (err) {
-        // Leave the topic `scheduled` (e.g. device offline). The claim lease
-        // expires and the next tick retries — scheduled state is never lost.
-        console.error('[scheduled-topic-dispatch] dispatch failed topic=%s: %O', topic.id, err);
+      if (!result.success) {
+        throw new Error(result.error || result.message || 'Scheduled run dispatch failed');
       }
-    }
 
-    return c.json({ claimed, discarded, dispatched, due: due.length, success: true });
+      // Success — execAgent now owns the run; clear the scheduled state.
+      await TopicModel.clearScheduledRun(db, topic.id, 'running', claim.id);
+      dispatched += 1;
+      log(
+        'dispatched topic=%s kind=%s device=%s',
+        topic.id,
+        run.kind,
+        topic.metadata?.boundDeviceId,
+      );
+    } catch (err) {
+      // Leave the topic `scheduled` (e.g. device offline). The claim lease
+      // expires and the next tick retries — scheduled state is never lost.
+      console.error('[scheduled-topic-dispatch] dispatch failed topic=%s: %O', topic.id, err);
+    }
+  }
+
+  return { claimed, discarded, dispatched, due: due.length, success: true };
+}
+
+export async function scheduledTopicDispatch(c: Context) {
+  try {
+    const body = (await c.req.json().catch(() => ({}))) as
+      (ScheduledTopicDispatchPayload & { payload?: ScheduledTopicDispatchPayload }) | null;
+    return c.json(await dispatchDueScheduledTopics(body?.payload ?? body ?? {}));
   } catch (error) {
     console.error('[task/scheduled-topic-dispatch] Error:', error);
     return c.json({ error: error instanceof Error ? error.message : 'Internal error' }, 500);

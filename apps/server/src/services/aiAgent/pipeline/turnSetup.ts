@@ -364,6 +364,7 @@ export interface TurnSetupInput {
   requestedDeviceId?: string;
   /** See `InternalExecAgentParams.requireDevice`. */
   requireDevice?: boolean;
+  reservedOperationId?: string;
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
@@ -475,6 +476,7 @@ export const setupTurn = async (
     providerOverride,
     requestedDeviceId,
     requireDevice,
+    reservedOperationId,
     resolvedAgentId,
     resume,
     runFromHistory,
@@ -716,6 +718,17 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      const pendingRun = existingTopic?.metadata?.scheduledRun;
+      if (
+        existingTopic?.status === 'scheduled' &&
+        pendingRun?.kind === 'worktree_start' &&
+        pendingRun.operationId !== reservedOperationId
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This conversation is preparing its worktree.',
+        });
+      }
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
       turnProjectId = await resolveTurnProjectId(deps, {
         shareGate,

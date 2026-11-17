@@ -5,10 +5,7 @@ import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
 import { collectHeteroAttachedFiles } from '@lobechat/heterogeneous-agents';
 import type {
-  ChatAudioItem,
-  ChatImageItem,
   ChatTopicMetadata,
-  ChatVideoItem,
   ConversationContext,
   MessageMetadata,
   SendMessageParams,
@@ -74,7 +71,10 @@ import {
   sendQueuedTurn,
 } from '@/store/chat/slices/agentRun/actions/lifecycle/queuedFollowUp';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
-import { buildQueuedFollowUpRequest } from '@/store/chat/slices/agentRun/actions/transports/gateway/execRequest';
+import {
+  buildQueuedFollowUpRequest,
+  resolveUserInterventionConfig,
+} from '@/store/chat/slices/agentRun/actions/transports/gateway/execRequest';
 import {
   canQueueOnServer,
   findServerHeldQueueKey,
@@ -109,7 +109,6 @@ import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
-import { rememberLocalImagePreview } from '@/utils/localImagePreview';
 import { toTitleText } from '@/utils/markdownToTxt';
 import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
@@ -133,6 +132,7 @@ import { type ContextCompressionOptions, executeContextCompression } from './com
 import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
+import { getSendMediaPreviews } from './sendMediaPreviews';
 
 /**
  * Extended params for sendMessage with context
@@ -267,7 +267,7 @@ export class ConversationLifecycleActionImpl {
     contextSelections,
     inputEditor,
     messages: inputMessages,
-    newTopicWorkingDirectory,
+    firstSendWorktree,
     optimisticUserMessageId,
     parentId: inputParentId,
     pageSelections,
@@ -538,21 +538,8 @@ export class ConversationLifecycleActionImpl {
     // for a topic that does not exist on the server yet.
     const willCreateNewTopic = !context.topicId;
 
-    /**
-     * The id this send's topic will be created under, minted up front and
-     * adopted by the WHOLE send: the operation context, the optimistic message
-     * bucket, `activeTopicId` and the sidebar row all use it from the first
-     * frame, and the server honours it verbatim (`newTopic.id` / `clientIds`).
-     *
-     * This removes the server-confirmation re-key: optimistic messages use the
-     * final topic key immediately, so the virtualized list does not repaint from
-     * an empty viewport when the server responds. The composer still pivots once
-     * from `_new` to this minted key below, and its pending context is migrated
-     * before that switch.
-     *
-     * Isolated-topic callers keep the legacy flow (they re-subscribe via
-     * `onTopicCreated` and never render the main conversation surface).
-     */
+    // The optimistic topic, its messages and the server share one final id.
+    // Isolated callers re-subscribe via onTopicCreated instead.
     const mintedTopicId =
       willCreateNewTopic && !context.isolatedTopic ? generateEntityId('topics') : undefined;
 
@@ -924,37 +911,7 @@ export class ConversationLifecycleActionImpl {
       runtimeType,
     });
 
-    // Construct local media preview for server-mode temporary messages (S3 URL takes priority).
-    // Use the captured `files` param (not the global file store) so the optimistic preview
-    // also works on the queue-drain path, where chatUploadFileList has already been cleared.
-    const filesForPreview = files ?? [];
-    const imageFiles = filesForPreview.filter((f) => f.file?.type?.startsWith('image'));
-    // The message, optimistic and saved alike, shows these from the local copy (see
-    // `localImagePreview`); an upload's id is its server file id once it has finished.
-    for (const f of imageFiles) {
-      if (f.status === 'success' && f.previewUrl) rememberLocalImagePreview(f.id, f.previewUrl);
-    }
-    const tempImages: ChatImageItem[] = imageFiles.map((f) => ({
-      ...f.dimensions,
-      id: f.id,
-      url: f.fileUrl || f.base64Url || f.previewUrl || '',
-      alt: f.file?.name || f.id,
-    }));
-    const tempVideos: ChatVideoItem[] = filesForPreview
-      .filter((f) => f.file?.type?.startsWith('video'))
-      .map((f) => ({
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
-    const tempAudios: ChatAudioItem[] = filesForPreview
-      .filter((f) => f.audioMetadata || f.file?.type?.startsWith('audio'))
-      .map((f) => ({
-        ...f.audioMetadata,
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
+    const { tempAudios, tempImages, tempVideos } = getSendMediaPreviews(files);
 
     const optimisticUserMessage = {
       content: message,
@@ -1108,10 +1065,6 @@ export class ConversationLifecycleActionImpl {
         agencyConfig,
         chatConfig: agentConfig?.chatConfig,
         currentDeviceId,
-        // Prepared on the composer agent's machine: a send routed to another
-        // agent (`@Agent` direct route) resolves its own device and directory.
-        draftWorkingDirectory:
-          willCreateNewTopic && agentId === ownerAgentId ? newTopicWorkingDirectory : undefined,
         existingTopic,
         heterogeneousProvider,
         inheritedTopic,
@@ -1187,50 +1140,19 @@ export class ConversationLifecycleActionImpl {
       : undefined;
     let optimisticTopicActive = false;
 
-    const addResolvedTopicPlaceholder = (
-      topicId: string,
-      title: string,
-      action: string,
-      extra?: {
-        metadata?: ChatTopicMetadata;
-        model?: string;
-        /**
-         * True only for the client-only placeholder inserted before the server
-         * has created the topic. The topic slice keeps those ids so a refetch
-         * landing mid-send re-prepends the row instead of wiping it.
-         */
-        optimistic?: boolean;
-        provider?: string;
-      },
-    ) => {
-      this.#get().internal_dispatchTopic(
-        {
-          ...optimisticTopicScope,
-          ...(extra?.optimistic ? { optimistic: true } : {}),
-          type: 'addTopic',
-          value: {
-            id: topicId,
-            ...(extra?.metadata ? { metadata: extra.metadata } : {}),
-            ...(extra?.model ? { model: extra.model, provider: extra.provider } : {}),
-            ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
-            title,
-          },
-        },
-        action,
-      );
-    };
-
     const resolveOptimisticTopic = (topicId: string, title = optimisticTopic?.title) => {
+      const value = {
+        ...(optimisticTopic?.metadata ? { metadata: optimisticTopic.metadata } : {}),
+        ...(optimisticTopic?.model
+          ? { model: optimisticTopic.model, provider: optimisticTopic.provider }
+          : {}),
+        ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
+        title: title || t('defaultTitle', { ns: 'topic' }),
+      };
       if (!optimisticTopic || !optimisticTopicActive) {
-        addResolvedTopicPlaceholder(
-          topicId,
-          title || t('defaultTitle', { ns: 'topic' }),
+        this.#get().internal_dispatchTopic(
+          { ...optimisticTopicScope, type: 'addTopic', value: { ...value, id: topicId } },
           'sendMessage/reconcileOptimisticTopic/add',
-          {
-            metadata: optimisticTopic?.metadata,
-            model: optimisticTopic?.model,
-            provider: optimisticTopic?.provider,
-          },
         );
         return;
       }
@@ -1239,14 +1161,7 @@ export class ConversationLifecycleActionImpl {
         ...optimisticTopicScope,
         nextId: topicId,
         previousId: optimisticTopic.id,
-        value: {
-          ...(optimisticTopic.metadata ? { metadata: optimisticTopic.metadata } : {}),
-          ...(optimisticTopic.model
-            ? { model: optimisticTopic.model, provider: optimisticTopic.provider }
-            : {}),
-          ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
-          title: title || t('defaultTitle', { ns: 'topic' }),
-        },
+        value,
       });
       optimisticTopicActive = false;
     };
@@ -1299,6 +1214,66 @@ export class ConversationLifecycleActionImpl {
         );
       }
       optimisticTopicActive = true;
+    }
+
+    if (
+      firstSendWorktree &&
+      willCreateNewTopic &&
+      !directMentionRoute &&
+      ownerAgentId === agentId
+    ) {
+      try {
+        const { topic } = await aiAgentService.submitWorktreeTurn(
+          {
+            ...newTopicProject,
+            agentId,
+            assistantMessageId: tempAssistantId,
+            fileIds: fileIdList,
+            mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
+            prompt: message,
+            selectedSkillIds: selectedSkills.map(({ identifier }) => identifier),
+            selectedToolIds: selectedTools.map(({ identifier }) => identifier),
+            topicId: mintedTopicId ?? generateEntityId('topics'),
+            userInterventionConfig: resolveUserInterventionConfig(),
+            userMessage: toComposerUserMessage({ editorData, metadata: userMessageMetadata }),
+            userMessageId: tempId,
+            worktree: firstSendWorktree,
+          },
+          sendOriginWorkspaceId,
+        );
+        notifyMessagePersisted();
+        this.#get().internal_replaceTopicId({
+          ...optimisticTopicScope,
+          nextId: topic.id,
+          previousId: mintedTopicId ?? topic.id,
+          value: {
+            metadata: topic.metadata ?? undefined,
+            status: topic.status,
+            title: topic.title ?? undefined,
+          },
+        });
+        optimisticTopicActive = false;
+        cleanupTempMessages({ preserveOptimisticUser: true });
+        this.#get().completeOperation(operationId);
+        if (context.isolatedTopic) await onTopicCreated?.(topic.id);
+        return {
+          assistantMessageId: tempAssistantId,
+          createdTopicId: topic.id,
+          userMessageId: tempId,
+        };
+      } catch (error) {
+        if (hasNotifiedMessageAccepted) throw error;
+        this.#get().failOperation(operationId, {
+          message: error instanceof Error ? error.message : String(error),
+          type: 'GatewayError',
+        });
+        restoreComposerAfterFailedSend(error);
+        cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
+        detachUnacceptedCallerAbort();
+        rollbackOptimisticTopic('sendMessage/worktreeSubmissionFailed');
+        restoreUnacceptedVoiceMessageContext();
+        return;
+      }
     }
 
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──

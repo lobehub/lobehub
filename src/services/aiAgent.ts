@@ -398,10 +398,19 @@ class AiAgentService {
     return await lambdaClient.agentSteerQueue.remove.mutate(params);
   }
 
-  /**
-   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
-   * the backend cron fires once `runAt` passes; nothing runs now.
-   */
+  /** Persist a first send before the device checkout starts. */
+  async submitWorktreeTurn(
+    params: Parameters<typeof lambdaClient.aiAgent.submitWorktreeTurn.mutate>[0],
+    workspaceId: string | null,
+  ) {
+    return createWorkspaceLambdaClient(workspaceId).aiAgent.submitWorktreeTurn.mutate(params);
+  }
+
+  async retryWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.retryWorktreeTurn.mutate({ topicId });
+  }
+
+  /** Persist a scheduled turn for the backend to dispatch at the selected time. */
   async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
     return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
   }

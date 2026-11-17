@@ -211,6 +211,9 @@ export default {
   'workingDirectory.switchRiskUncommitted_other':
     'Uncommitted changes may be lost ({{count}} files).',
   'workingDirectory.worktreeCreateFailed': 'Could not create the worktree',
+  'workingDirectory.worktreeDeviceRequired':
+    'Connect this device before sending with a new worktree.',
+  'workingDirectory.worktreeWaitingForDevice': 'Waiting for the device to connect…',
   'workingDirectory.worktreeToggle': 'New worktree',
   'workingDirectory.worktreeToggleOffHint':
     'Turn on to run this topic in a new branch and worktree',

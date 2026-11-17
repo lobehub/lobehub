@@ -178,6 +178,7 @@
   "workingDirectory.useFolder": "选择此文件夹",
   "workingDirectory.useFolderFailed": "无法使用此文件夹。",
   "workingDirectory.worktreeCreateFailed": "无法创建工作树",
+  "workingDirectory.worktreeDeviceRequired": "请先连接此设备，再使用新工作树发送消息。",
   "workingDirectory.worktreeSearchPlaceholder": "搜索 worktree",
   "workingDirectory.worktreeToggle": "新建工作树",
   "workingDirectory.worktreeToggleOffHint": "开启后，这个话题会在新的分支和工作树中进行",
@@ -185,6 +186,7 @@
   "workingDirectory.worktreeToggleOnHint": "发送时基于 {{branch}} 新建分支和工作树，当前目录保持不变",
   "workingDirectory.worktreeToggleSaveFailed": "无法保存「新建工作树」设置",
   "workingDirectory.worktreeUnavailable": "不可用",
+  "workingDirectory.worktreeWaitingForDevice": "正在等待设备连接…",
   "workingDirectory.worktreesEmpty": "未发现 worktree",
   "workingDirectory.worktreesHeading": "Worktree",
   "workingDirectory.worktreesNoMatch": "无匹配的 worktree"

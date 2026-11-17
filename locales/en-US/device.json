@@ -178,6 +178,7 @@
   "workingDirectory.useFolder": "Use this folder",
   "workingDirectory.useFolderFailed": "Couldn’t use this folder.",
   "workingDirectory.worktreeCreateFailed": "Could not create the worktree",
+  "workingDirectory.worktreeDeviceRequired": "Connect this device before sending with a new worktree.",
   "workingDirectory.worktreeSearchPlaceholder": "Search worktrees",
   "workingDirectory.worktreeToggle": "New worktree",
   "workingDirectory.worktreeToggleOffHint": "Turn on to run this topic in a new branch and worktree",
@@ -185,6 +186,7 @@
   "workingDirectory.worktreeToggleOnHint": "Sending creates a new branch and worktree from {{branch}}; this directory stays as it is",
   "workingDirectory.worktreeToggleSaveFailed": "Could not save the New worktree setting",
   "workingDirectory.worktreeUnavailable": "unavailable",
+  "workingDirectory.worktreeWaitingForDevice": "Waiting for the device to connect…",
   "workingDirectory.worktreesEmpty": "No worktrees found",
   "workingDirectory.worktreesHeading": "Worktrees",
   "workingDirectory.worktreesNoMatch": "No matching worktrees"
