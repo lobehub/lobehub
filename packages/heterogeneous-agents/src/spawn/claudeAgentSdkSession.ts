@@ -439,13 +439,19 @@ export class ClaudeAgentSdkSession {
     }
   }
 
+  /**
+   * Close the input once nothing can still need it. It stays open while a task
+   * lives: stopping one is a control request written to it, and with the input
+   * closed Claude Code never reads the request.
+   */
   private maybeCloseInputAfterResult(message: SDKMessage): void {
     if (message.type !== 'result') return;
 
     if (message.origin?.kind === 'task-notification') {
       this.taskNotificationPending = false;
-      this.closeInput = true;
-      return;
+      // A resumed session first reports the previous run's leftover tasks and
+      // ends that pass with an empty result, before this run's own turn.
+      if (message.num_turns === 0) return;
     }
 
     if (this.activeTasks.size === 0 && !this.taskNotificationPending) {

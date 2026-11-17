@@ -318,3 +318,107 @@ describe('ClaudeAgentSdkSession.stopTask', () => {
     await expect(session.stopTask('bys1w0wxo')).rejects.toThrow('no longer running');
   });
 });
+
+describe('ClaudeAgentSdkSession input lifetime', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  const sessionWith = (script: (input: { ended: () => boolean }) => AsyncGenerator<any>) => {
+    sdkQueryMock.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+      let inputEnded = false;
+      void (async () => {
+        for await (const _ of prompt) {
+          // drain
+        }
+        inputEnded = true;
+      })();
+      const messages = script({ ended: () => inputEnded });
+      return { [Symbol.asyncIterator]: () => messages, close: vi.fn(), stopTask: vi.fn() };
+    });
+    return new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-sdk-input',
+      resumeSessionId: 'cc-session',
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'hi', role: 'user' }, type: 'user' })}\n`,
+    });
+  };
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 1200));
+  const result = (extra: Record<string, unknown> = {}) => ({
+    is_error: false,
+    num_turns: 1,
+    result: 'done',
+    subtype: 'success',
+    type: 'result',
+    ...extra,
+  });
+  const notificationResult = (numTurns: number) =>
+    result({ num_turns: numTurns, origin: { kind: 'task-notification' }, result: '' });
+  const taskStarted = (id: string) => ({
+    description: 'ping',
+    subtype: 'task_started',
+    task_id: id,
+    tool_use_id: `toolu_${id}`,
+    type: 'system',
+  });
+  const taskNotification = (id: string) => ({
+    output_file: '',
+    status: 'completed',
+    subtype: 'task_notification',
+    summary: 'ping',
+    task_id: id,
+    type: 'system',
+  });
+
+  // Recorded from a resumed desktop SDK run: the previous run's stopped task is
+  // reported, its empty pass closes, then this run's own turn starts a task.
+  it('keeps the input open for a task started after a resumed session reports leftovers', async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield taskNotification('leftover');
+      yield notificationResult(0);
+      yield { model: 'claude-haiku', session_id: 'cc-session', subtype: 'init', type: 'system' };
+      yield taskStarted('b1');
+      yield result();
+      await settle();
+      seen.push(ended());
+      yield taskNotification('b1');
+      yield notificationResult(1);
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+
+  it('keeps the input open while a second task still runs after the first one ends', async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield taskStarted('b1');
+      yield taskStarted('b2');
+      yield result();
+      yield taskNotification('b1');
+      yield notificationResult(1);
+      await settle();
+      seen.push(ended());
+      yield taskNotification('b2');
+      yield notificationResult(1);
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+});
