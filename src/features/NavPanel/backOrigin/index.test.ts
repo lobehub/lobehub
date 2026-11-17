@@ -150,6 +150,38 @@ describe('createBackOriginRecorder', () => {
     expect(getBackOrigin('tab-2', '/agent/agt_1')).toBe('/projects');
   });
 
+  it('restores an agent origin when browser Back revisits its history entry', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/agent/agt_1', 1, 'agent');
+    record('main', '/settings', 2, 'settings');
+    record('main', '/agent/agt_1', 1, 'agent');
+
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
+  });
+
+  it('restores the origin when browser Forward skips over it', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/settings', 1, 'settings');
+    record('main', '/group/grp_1', 2, 'group');
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/group/grp_1', 2, 'group');
+
+    expect(getBackOrigin('main', '/group/grp_1')).toBe('/settings');
+  });
+
+  it('records a fresh origin for a new visit that reuses a history index', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/agent/agt_1', 1, 'first-agent');
+    record('main', '/tasks', 0, 'tasks');
+    record('main', '/settings', 0, 'settings');
+    record('main', '/agent/agt_1', 1, 'second-agent');
+
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/settings');
+  });
+
   it('keeps the hash of the origin page', () => {
     const record = createBackOriginRecorder();
     record('main', '/page/docs_1#notes');

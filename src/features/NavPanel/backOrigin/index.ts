@@ -47,6 +47,9 @@ const MAX_STACK = 50;
  * in order, each holding the latest location seen inside it.
  */
 let stacks: Stacks = {};
+// React Router gives each browser entry its own key, even when a new entry
+// reuses an index after navigating back.
+const browserStacks = new Map<string, readonly BackEntry[]>();
 const listeners = new Set<Listener>();
 
 const subscribe = (listener: Listener) => {
@@ -131,9 +134,16 @@ export const recordBackLocation = (
 export const createBackOriginRecorder = () => {
   let lastOwner: string | null = null;
 
-  return (owner: string, location: string, historyIndex?: number): void => {
+  return (owner: string, location: string, historyIndex?: number, locationKey?: string): void => {
     const sourceOwner = lastOwner;
     lastOwner = owner;
+
+    const browserKey = owner === MAIN_OWNER && historyIndex !== undefined ? locationKey : undefined;
+    const previous = browserKey === undefined ? undefined : browserStacks.get(browserKey);
+    if (previous?.at(-1)?.location === location) {
+      if (previous !== stacks[owner]) setStack(owner, previous);
+      return;
+    }
 
     const source = sourceOwner ? stacks[sourceOwner] : undefined;
     if (!stacks[owner] && source?.at(-1)?.location === location) {
@@ -141,6 +151,13 @@ export const createBackOriginRecorder = () => {
       return;
     }
     recordBackLocation(owner, location, historyIndex);
+    if (browserKey === undefined) return;
+
+    browserStacks.set(browserKey, stacks[owner]);
+    if (browserStacks.size > MAX_STACK) {
+      const oldest = browserStacks.keys().next();
+      if (!oldest.done) browserStacks.delete(oldest.value);
+    }
   };
 };
 
@@ -173,6 +190,7 @@ export const historyDeltaTo = (
 /** Test-only: forget every recorded trail. */
 export const resetBackOrigins = (): void => {
   stacks = {};
+  browserStacks.clear();
   listeners.forEach((listener) => listener());
 };
 
