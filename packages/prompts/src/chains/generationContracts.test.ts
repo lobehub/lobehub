@@ -112,6 +112,17 @@ describe('application generation chains', () => {
     expect(messages[1].content).toContain('Nasa 帮我查下昨天部署失败的原因');
   });
 
+  it('tells the bot reply opener when the subject lives in an attachment', () => {
+    const { messages } = chainBotReplyOpener({
+      canOpenThread: true,
+      hasAttachments: true,
+      message: '解读下这个',
+    });
+
+    expect(messages[1].content).toContain('(It comes with an attachment you cannot see.)');
+    expect(messages[0].content).toContain('never borrow the subject of the earlier messages');
+  });
+
   it('tells the bot reply opener when a thread is not available', () => {
     const { messages } = chainBotReplyOpener({ canOpenThread: false, message: 'hi' });
 
