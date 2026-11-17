@@ -146,8 +146,14 @@ export class InterventionController {
     // device cancellation is symmetric across every caller.
     let resolvedTopicId = topicId;
     let operationRow: Awaited<ReturnType<AgentOperationModel['findById']>> | undefined;
+    // Best-effort: without the row there is just no topic or device route to use.
     const readOperationRow = async () => {
-      operationRow ??= await this.deps.agentOperationModel.findById(resolvedOperationId!);
+      operationRow ??= await this.deps.agentOperationModel
+        .findById(resolvedOperationId!)
+        .catch((error: unknown) => {
+          log('interruptTask: reading operation %s failed: %O', resolvedOperationId, error);
+          return undefined;
+        });
       return operationRow;
     };
     if (!resolvedTopicId) {

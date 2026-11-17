@@ -66,4 +66,46 @@ describe('MessagesEngine — @mentioned agent delegation', () => {
     expect(payload).not.toContain('<mentioned_agents>');
     expect(payload).not.toContain('agt_writer');
   });
+
+  // The instruction says to call the tool and not answer: it must not reach a
+  // run that cannot make that call.
+  describe('when the delegation tool is not available', () => {
+    const lobeAgentManifest = (apis: string[]) => ({
+      api: apis.map((name) => ({ description: name, name, parameters: {} })),
+      identifier: 'lobe-agent',
+      meta: {},
+      type: 'builtin',
+    });
+
+    it('keeps the mention context when callSubAgent is offered', async () => {
+      const payload = await process({
+        agentManagementContext,
+        toolsConfig: { manifests: [lobeAgentManifest(['callSubAgent'])] as any },
+      });
+
+      expect(payload).toContain('<mentioned_agents>');
+    });
+
+    it('drops it when the run offers no callSubAgent', async () => {
+      const payload = await process({
+        agentManagementContext,
+        toolsConfig: { manifests: [lobeAgentManifest(['createPlan'])] as any },
+      });
+
+      expect(payload).not.toContain('<mentioned_agents>');
+      // The rest of the agent-management context is unaffected.
+      expect(payload).toContain('agt_writer');
+    });
+
+    it('drops it when the model cannot call tools', async () => {
+      const payload = await process({
+        agentManagementContext,
+        capabilities: { isCanUseFC: () => false },
+        enableAgentMode: false,
+        toolsConfig: { manifests: [lobeAgentManifest(['callSubAgent'])] as any },
+      });
+
+      expect(payload).not.toContain('<mentioned_agents>');
+    });
+  });
 });

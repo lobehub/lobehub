@@ -92,6 +92,7 @@ const log = debug('context-engine:MessagesEngine');
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
 const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
+const LOBE_AGENT_TOOL_ID = 'lobe-agent';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -229,12 +230,33 @@ export class MessagesEngine {
     // Anything else — system role, knowledge bases, memory, web-browsing tool
     // prompts — remains untouched.
     const isAgentMode = enableAgentMode !== false;
+    // @mentioned agents are delegated to through `lobe-agent____callSubAgent`.
+    // Its instruction tells the model to call that tool and not answer itself,
+    // so it ships only when the tool is offered and the model can call tools.
+    // A host that passes no manifests leaves the decision to its own gates.
+    const canDelegateToMentioned =
+      !toolsConfig?.manifests ||
+      (!!(capabilities?.isCanUseFC ?? (() => true))(model, provider) &&
+        toolsConfig.manifests.some(
+          (manifest) =>
+            manifest.identifier === LOBE_AGENT_TOOL_ID &&
+            manifest.api?.some((api) => api.name === 'callSubAgent'),
+        ));
+    const { mentionedAgents: rawMentionedAgents, ...agentManagementFacts } =
+      agentManagementContext ?? {};
+    const mentionedAgents = canDelegateToMentioned ? rawMentionedAgents : undefined;
     // Chat mode keeps only the @mentioned agents: the delegation-only
     // `lobe-agent` is offered there exactly so they can be delegated to.
+    const agentModeContext = {
+      ...agentManagementFacts,
+      ...(mentionedAgents && { mentionedAgents }),
+    };
     const effectiveAgentManagementContext = isAgentMode
-      ? agentManagementContext
-      : agentManagementContext?.mentionedAgents?.length
-        ? { mentionedAgents: agentManagementContext.mentionedAgents }
+      ? Object.keys(agentModeContext).length > 0
+        ? agentModeContext
+        : undefined
+      : mentionedAgents?.length
+        ? { mentionedAgents }
         : undefined;
     const isAgentManagementEnabled = !!effectiveAgentManagementContext;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;

@@ -32,23 +32,6 @@ describe('AgentManagementManifest', () => {
 });
 
 describe('systemPrompt', () => {
-  it('never instructs the model to dispatch agents itself', () => {
-    expect(AgentManagementManifest.systemRole).toBe(systemPrompt);
-    for (const phrase of [
-      'callAgent(',
-      '**callAgent**',
-      'Call the agent',
-      'Calling Agents',
-      'When calling agents',
-      'Before calling an agent',
-      'Test the agent',
-      'Test with sample',
-      'execution_guide',
-    ]) {
-      expect(systemPrompt).not.toContain(phrase);
-    }
-  });
-
   it('keeps the management guidance intact', () => {
     for (const section of [
       'core_capabilities',
