@@ -14,8 +14,9 @@ import { notifyContactRequestAfterResponse } from '@/server/services/contact/not
 
 /**
  * The address book belongs to the Channel experience: contacts are who you can message there.
- * People are the caller's own in every scope. Shared Agents belong to the active scope: the
- * caller's own in the personal space, the workspace's — seen by every member — in a workspace.
+ * People are personal and listed only in the personal space; a workspace's colleagues are its
+ * members. Shared Agents belong to the active scope: the caller's own in the personal space, the
+ * workspace's — seen by every member — in a workspace.
  */
 const contactProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   if (!(await isChannelEnabled(ctx.userId)))

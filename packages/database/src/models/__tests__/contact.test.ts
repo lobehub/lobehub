@@ -252,12 +252,14 @@ describe('shared Agents in a workspace', () => {
     expect((await aliceModel.search('bob-helper'))[0]).toMatchObject({ relation: 'none' });
   });
 
-  it('keeps people personal in every scope', async () => {
+  it('lists people only in the personal space', async () => {
     await bobModel.sendRequest(alice);
     const [request] = await aliceModel.listRequests();
     await aliceModel.acceptRequest(request.id);
-    expect(await aliceInTeam.list()).toMatchObject([{ type: 'user', user: { id: bob } }]);
-    expect(await carolInTeam.list()).toEqual([]);
+    expect(await aliceModel.list()).toMatchObject([{ type: 'user', user: { id: bob } }]);
+    // A personal contact is not a colleague: the workspace lists its members instead.
+    expect(await aliceInTeam.list()).toEqual([]);
+    expect(await aliceInTeam.isContact(bob)).toBe(true);
   });
 
   it('holds an Agent once per workspace, apart from personal entries', async () => {

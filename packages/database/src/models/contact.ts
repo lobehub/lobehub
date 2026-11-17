@@ -86,8 +86,8 @@ export const parseContactHandle = (query: string): string | undefined => {
 
 /**
  * A person's address book and contact requests. Every method acts as `userId`; another
- * person's rows are only touched as the second half of a mutual relation. People are the same in
- * every scope. Agents are the scope's: in the personal space the caller's own, in a workspace
+ * person's rows are only touched as the second half of a mutual relation. People are personal: a
+ * workspace lists none, its colleagues being its members. Agents are the scope's: in the personal space the caller's own, in a workspace
  * the ones any member added there, which every member sees and may remove.
  */
 export class ContactModel {
@@ -114,12 +114,14 @@ export class ContactModel {
 
   list = async (): Promise<ContactItem[]> => {
     const [people, sharedAgents] = await Promise.all([
-      this.db
-        .select({ createdAt: userContacts.createdAt, user: userProfileColumns })
-        .from(userContacts)
-        .innerJoin(users, eq(users.id, userContacts.contactUserId))
-        .where(and(eq(userContacts.userId, this.userId), eq(userContacts.type, 'user')))
-        .orderBy(desc(userContacts.createdAt)),
+      this.workspaceId
+        ? []
+        : this.db
+            .select({ createdAt: userContacts.createdAt, user: userProfileColumns })
+            .from(userContacts)
+            .innerJoin(users, eq(users.id, userContacts.contactUserId))
+            .where(and(eq(userContacts.userId, this.userId), eq(userContacts.type, 'user')))
+            .orderBy(desc(userContacts.createdAt)),
       this.db
         .select({ createdAt: userContacts.createdAt, ...agentProfileColumns })
         .from(userContacts)
