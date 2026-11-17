@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import pMap from 'p-map';
 
 import { removeAgentFromProjectChannels } from '@/database/repositories/channel';
 
@@ -17,7 +18,9 @@ export const leaveProjectChannels = async (
 ) => {
   const { channelIds, writers } = await removeAgentFromProjectChannels(db, projectId, agentId);
   await new ChannelCoordinator(db).stopWriters(writers);
-  await Promise.all(
-    channelIds.flatMap((channelId) => [wakeChannel(channelId), notifyChannel(db, channelId)]),
+  await pMap(
+    channelIds,
+    (channelId) => Promise.all([wakeChannel(channelId), notifyChannel(db, channelId)]),
+    { concurrency: 5 },
   );
 };
