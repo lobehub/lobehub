@@ -160,6 +160,19 @@ describe('generic webhook management', () => {
     expect(moved.identifier).toBe('ci-alerts');
   });
 
+  it("never gives two of an agent's webhooks the same identifier", async () => {
+    const first = await caller().create({ agentId, name: '告警' });
+    const second = await caller().create({ agentId, name: '通知' });
+    const third = await caller().create({ agentId, name: 'CI alerts' });
+    const fourth = await caller().create({ agentId, name: 'CI  Alerts!' });
+    expect([first, second, third, fourth].map(({ item }) => item.identifier)).toEqual([
+      'webhook',
+      'webhook-2',
+      'ci-alerts',
+      'ci-alerts-2',
+    ]);
+  });
+
   it('lists one kind when asked', async () => {
     const { item } = await caller().create({ agentId });
     expect((await caller().list({ kind: 'generic' })).map((row) => row.id)).toEqual([item.id]);

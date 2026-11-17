@@ -500,6 +500,8 @@
   "builtins.lobe-mcp-events.intervention.costTitle": "Runs the agent on every event",
   "builtins.lobe-mcp-events.intervention.filter": "Filter",
   "builtins.lobe-mcp-events.intervention.instructions": "When it fires",
+  "builtins.lobe-mcp-events.intervention.unsubscribeDesc": "It is also ended on its MCP server, and its events stop running the agent. To get them again, ask the agent to subscribe.",
+  "builtins.lobe-mcp-events.intervention.unsubscribeTitle": "End this subscription?",
   "builtins.lobe-mcp-events.render.connectorError": "Couldn't read events from {{connector}}",
   "builtins.lobe-mcp-events.render.deliversToChannel": "Results post to the Channel's main timeline",
   "builtins.lobe-mcp-events.render.deliversToThread": "Results post to this thread",

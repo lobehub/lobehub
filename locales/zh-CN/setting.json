@@ -320,7 +320,7 @@
   "automations.remedy.reconnect": "去重新连接",
   "automations.rename.done": "已重命名",
   "automations.rename.failed": "重命名没有成功，请重试",
-  "automations.rename.hint": "用于在自动化列表中显示。留空则显示「{{fallback}}」。",
+  "automations.rename.hint": "名称只用于界面显示，助理识别它用的标识不会变。留空则显示「{{fallback}}」。",
   "automations.rename.ok": "保存",
   "automations.rename.title": "重命名自动化",
   "automations.source.moreArgs": "{{text}} +{{count}}",

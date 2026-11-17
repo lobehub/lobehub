@@ -5275,7 +5275,8 @@ When I am ___, I need ___
   'automations.actions.rename': 'Rename',
   'automations.rename.done': 'Renamed',
   'automations.rename.failed': "Couldn't rename it. Try again.",
-  'automations.rename.hint': 'Shown in automation lists. Leave it empty to show "{{fallback}}".',
+  'automations.rename.hint':
+    'Only people see this name; the agent keeps using its identifier. Leave it empty to show "{{fallback}}".',
   'automations.rename.ok': 'Save',
   'automations.rename.title': 'Rename automation',
   'automations.actions.noPermission':

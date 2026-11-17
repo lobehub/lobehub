@@ -94,8 +94,9 @@ export type GenericWebhookTopicMode = (typeof GENERIC_WEBHOOK_TOPIC_MODES)[numbe
 
 /** A generic webhook's fixed identifier: lowercase letters, digits and dashes. */
 export const GENERIC_WEBHOOK_IDENTIFIER_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
-/** What a webhook is known as when its name gives no identifier, and before identifiers existed. */
+/** What a webhook is known as when its name gives no identifier. */
 export const GENERIC_WEBHOOK_DEFAULT_IDENTIFIER = 'webhook';
+const GENERIC_WEBHOOK_IDENTIFIER_MAX = 48;
 
 /**
  * The identifier a webhook gets from its name at creation: lowercase ASCII words joined by
@@ -114,6 +115,29 @@ export const genericWebhookIdentifierFromName = (name: string | null | undefined
   return slug || GENERIC_WEBHOOK_DEFAULT_IDENTIFIER;
 };
 
+/**
+ * `base`, or `base-2`, `base-3`… when the agent already has a webhook known by it, so two of an
+ * agent's webhooks (two "CI alerts", or two CJK names that both give `webhook`) never share one.
+ */
+export const uniqueGenericWebhookIdentifier = (base: string, taken: ReadonlySet<string>) => {
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const candidate = `${base.slice(0, GENERIC_WEBHOOK_IDENTIFIER_MAX - suffix.length).replaceAll(/-+$/g, '')}${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+};
+
+/**
+ * The identifier a webhook is known by. One made before identifiers existed has none stored and
+ * goes by `webhook-` and the start of its id, so it stays distinct and never changes either.
+ */
+export const genericWebhookIdentifierOf = (row: {
+  config: { identifier?: string };
+  id: string;
+}): string =>
+  row.config.identifier ?? `${GENERIC_WEBHOOK_DEFAULT_IDENTIFIER}-${row.id.slice(0, 8)}`;
+
 /** Longest caller-supplied thread key (`?thread=` / `X-Thread-Key`). */
 export const GENERIC_WEBHOOK_THREAD_KEY_MAX = 200;
 
@@ -129,7 +153,8 @@ export interface GenericWebhookConfig {
   /**
    * How the Agent knows this webhook (`<webhookEvent identifier=…>`), made from the name when it
    * is created and never changed after, so renaming it for people does not change what the
-   * Agent's instructions refer to. Absent on webhooks made before it existed: `webhook`.
+   * Agent's instructions refer to. Unique among the agent's webhooks. Absent on webhooks made
+   * before it existed: see `genericWebhookIdentifierOf`.
    */
   identifier?: string;
   /**

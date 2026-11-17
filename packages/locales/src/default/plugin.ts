@@ -31,6 +31,9 @@ export default {
     "The message wasn't sent. Check the Channel and its Agents, then try again.",
   'builtins.lobe-channel.sentTo': 'Sent to {{agents}} in #{{channel}}',
   'builtins.lobe-mcp-events.title': 'Event subscriptions',
+  'builtins.lobe-mcp-events.intervention.unsubscribeTitle': 'End this subscription?',
+  'builtins.lobe-mcp-events.intervention.unsubscribeDesc':
+    'It is also ended on its MCP server, and its events stop running the agent. To get them again, ask the agent to subscribe.',
   'builtins.lobe-mcp-events.apiName.listEventTypes': 'List connector events',
   'builtins.lobe-mcp-events.apiName.subscribeEvent': 'Subscribe to event',
   'builtins.lobe-mcp-events.apiName.listSubscriptions': 'List subscriptions in this topic',

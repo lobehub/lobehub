@@ -3,7 +3,12 @@ import type {
   InboundWebhookChannelDelivery,
   InboundWebhookStatus,
 } from '@lobechat/types';
-import { genericWebhookIdentifierFromName, isInboundWebhookOfKind } from '@lobechat/types';
+import {
+  genericWebhookIdentifierFromName,
+  genericWebhookIdentifierOf,
+  isInboundWebhookOfKind,
+  uniqueGenericWebhookIdentifier,
+} from '@lobechat/types';
 
 import type { InboundWebhookView, InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
@@ -115,13 +120,21 @@ export async function createGenericWebhook(
   const topicId = await pinnedTopic(db, scope, input.agentId, topicMode, input.topicId);
   const autoApprove = input.autoApprove ?? false;
   const delivery = await checkedDelivery(db, scope, input.agentId, input.delivery, autoApprove);
+  const taken = new Set(
+    (await model.query({ agentId: input.agentId, includeHidden: true, kind: 'generic' }))
+      .filter((row) => isInboundWebhookOfKind(row, 'generic'))
+      .map((row) => genericWebhookIdentifierOf(row as InboundWebhookViewOf<'generic'>)),
+  );
   const row = await model.createWithLimits({
     agentId: input.agentId,
     config: {
       autoApprove,
       ...(delivery && { delivery }),
       // Fixed from here on: renaming the webhook for people leaves what the Agent knows it as.
-      identifier: genericWebhookIdentifierFromName(input.name),
+      identifier: uniqueGenericWebhookIdentifier(
+        genericWebhookIdentifierFromName(input.name),
+        taken,
+      ),
       topicMode,
       ...(topicId && { topicId }),
     },

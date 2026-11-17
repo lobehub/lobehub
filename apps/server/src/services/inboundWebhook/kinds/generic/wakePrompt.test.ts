@@ -53,11 +53,11 @@ describe('buildGenericWebhookPrompt', () => {
     expect(prompt).not.toContain('<instruction>');
   });
 
-  it('names a webhook made before identifiers existed `webhook`', () => {
+  it('names a webhook made before identifiers existed after the start of its id', () => {
     const prompt = buildGenericWebhookPrompt({
       row: row({ config: { autoApprove: false, topicMode: 'new' } }),
       signals: [signal('s1', {})],
     });
-    expect(prompt.split('\n')[0]).toBe('<webhookEvent webhookId="wh-1" identifier="webhook">');
+    expect(prompt.split('\n')[0]).toBe('<webhookEvent webhookId="wh-1" identifier="webhook-wh-1">');
   });
 });

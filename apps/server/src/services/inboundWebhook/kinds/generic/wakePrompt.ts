@@ -1,6 +1,6 @@
 import { WEBHOOK_EVENT_TAG } from '@lobechat/const';
 import type { SignalItem } from '@lobechat/types';
-import { GENERIC_WEBHOOK_DEFAULT_IDENTIFIER } from '@lobechat/types';
+import { genericWebhookIdentifierOf } from '@lobechat/types';
 
 import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 
@@ -21,7 +21,7 @@ export function buildGenericWebhookPrompt(params: {
 }): string {
   const { row, signals, threadKey } = params;
   const lines = [
-    `<${WEBHOOK_EVENT_TAG} webhookId="${attribute(row.id)}" identifier="${attribute(row.config.identifier ?? GENERIC_WEBHOOK_DEFAULT_IDENTIFIER)}"${threadKey ? ` thread="${attribute(threadKey)}"` : ''}>`,
+    `<${WEBHOOK_EVENT_TAG} webhookId="${attribute(row.id)}" identifier="${attribute(genericWebhookIdentifierOf(row))}"${threadKey ? ` thread="${attribute(threadKey)}"` : ''}>`,
   ];
   for (const signal of signals.slice(0, MAX_EVENTS_PER_PROMPT)) {
     const receivedAt = (signal.occurredAt ?? signal.createdAt).toISOString().replace('.000Z', 'Z');

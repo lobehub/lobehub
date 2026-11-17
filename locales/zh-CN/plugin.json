@@ -500,6 +500,8 @@
   "builtins.lobe-mcp-events.intervention.costTitle": "每次事件都会运行助理",
   "builtins.lobe-mcp-events.intervention.filter": "订阅范围",
   "builtins.lobe-mcp-events.intervention.instructions": "事件到达时",
+  "builtins.lobe-mcp-events.intervention.unsubscribeDesc": "MCP 服务器上的订阅也会一并结束，之后的事件不再运行助理。如需恢复，请让助理重新订阅。",
+  "builtins.lobe-mcp-events.intervention.unsubscribeTitle": "结束这个订阅？",
   "builtins.lobe-mcp-events.render.connectorError": "无法读取 {{connector}} 的事件",
   "builtins.lobe-mcp-events.render.deliversToChannel": "结果发到频道主时间线",
   "builtins.lobe-mcp-events.render.deliversToThread": "结果发到这个线程",
