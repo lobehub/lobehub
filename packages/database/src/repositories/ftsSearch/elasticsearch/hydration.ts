@@ -27,6 +27,7 @@ import {
   userMemories,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { isStandaloneAgent } from '../../../utils/agentListable';
 import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { libraryVisibleFile, notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
@@ -166,6 +167,9 @@ export const hydrateAgents = async (
           hits.map(({ id }) => id),
         ),
         buildWorkspaceWhere(scope, agents),
+        // The ES index carries no ownership field; the postgres hydration drops
+        // a project's own coordinator instead, so no reindex is needed.
+        isStandaloneAgent(),
       ),
     );
 

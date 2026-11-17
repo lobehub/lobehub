@@ -3,6 +3,7 @@ import type { AgentRankItem } from '@lobechat/types';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { agents, topics } from '../../schemas';
+import { isStandaloneAgent } from '../../utils/agentListable';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../../utils/genWhere';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
@@ -169,6 +170,8 @@ export const buildQueryAgentsWhere = (
     includeInbox
       ? or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID))
       : or(eq(agents.virtual, false), isNull(agents.virtual)),
+    // A project's own coordinator is configured through its project, not listed.
+    isStandaloneAgent(),
     // A client that marks the agents it creates with a tag
     // lists only those: filtered here so `limit` is spent on matching rows.
     tag === undefined ? undefined : sql`${agents.tags} @> ${JSON.stringify([tag])}::jsonb`,

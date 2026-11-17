@@ -3,6 +3,7 @@ import { and, asc, count, eq, inArray, not } from 'drizzle-orm';
 import type { AgentLabelItem } from '../schemas';
 import { agentLabelAssignments, agentLabels, agents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { isStandaloneAgent } from '../utils/agentListable';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface AgentLabelWithUsage extends AgentLabelItem {
@@ -73,6 +74,8 @@ export class AgentLabelModel {
         and(
           eq(agents.id, agentLabelAssignments.agentId),
           not(eq(agents.virtual, true)),
+          // Hidden from the agents list, so it must not inflate a label's count.
+          isStandaloneAgent(),
           this.agentOwnership(),
         ),
       )

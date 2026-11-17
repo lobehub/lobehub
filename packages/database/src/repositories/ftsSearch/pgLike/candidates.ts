@@ -34,6 +34,7 @@ import {
   userMemoriesPreferences,
   userPersonaDocuments,
 } from '../../../schemas';
+import { isStandaloneAgent } from '../../../utils/agentListable';
 import { isUserKnowledgeBase } from '../../../utils/knowledgeBaseType';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
@@ -296,6 +297,7 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
     where: (scope, filters) => [
       buildWorkspaceWhere(scope, agents),
       filters.excludeVirtual ? not(eq(agents.virtual, true)) : undefined,
+      filters.excludeProjectOwned ? isStandaloneAgent() : undefined,
     ],
   },
   chatGroups: {

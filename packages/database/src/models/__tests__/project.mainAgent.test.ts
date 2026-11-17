@@ -65,9 +65,11 @@ describe('the main agent a project creates', () => {
     expect(await labelsOf(agent.id)).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, workspaceId: null }),
     ]);
-    // The label shows up in the agents list with the agent counted under it.
+    // The agent is the project's own, so the agents list hides it and the label
+    // counts no visible agent under it (T-14329); the assignment row is kept.
+    expect(agent.ownerProjectId).toBe(project.id);
     expect(await new AgentLabelModel(serverDB, userId).query()).toEqual([
-      expect.objectContaining({ name: PROJECT_AGENT_LABEL, usageCount: 1 }),
+      expect.objectContaining({ name: PROJECT_AGENT_LABEL, usageCount: 0 }),
     ]);
   });
 

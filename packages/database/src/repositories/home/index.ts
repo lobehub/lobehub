@@ -19,6 +19,7 @@ import {
   workspaces,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
+import { isStandaloneAgent } from '../../utils/agentListable';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
@@ -123,6 +124,8 @@ export class HomeRepository {
             visibility: agents.visibility,
           }),
           not(eq(agents.virtual, true)),
+          // A project's own coordinator is reached from its project, not listed here.
+          isStandaloneAgent(),
         ),
       )
       .orderBy(desc(agents.updatedAt));
@@ -549,7 +552,7 @@ export class HomeRepository {
       ? await Promise.all([
           this.ftsSearchCandidateSource.ftsSearchCandidates({
             entity: 'agents',
-            filters: { excludeVirtual: true },
+            filters: { excludeProjectOwned: true, excludeVirtual: true },
             pagination: {},
             query: { fields: ['title', 'description'], text: keyword },
           }),
@@ -586,6 +589,7 @@ export class HomeRepository {
           and(
             buildWorkspaceWhere(this.scope, agents),
             not(eq(agents.virtual, true)),
+            isStandaloneAgent(),
             agentCandidateIds
               ? inJsonStringArray(agents.id, agentCandidateIds)
               : sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,

@@ -11,6 +11,7 @@ import {
   messages,
   topics,
 } from '../../../schemas';
+import { isStandaloneAgent } from '../../../utils/agentListable';
 import {
   libraryVisibleFileSource,
   notAgentShareFileReference,
@@ -98,7 +99,14 @@ export async function searchAgents(
       workspaceId: agents.workspaceId,
     })
     .from(agents)
-    .where(and(context.scanScopeWhere(agents), dialect.match(AGENT_FIELDS, preparedQuery)))
+    .where(
+      and(
+        context.scanScopeWhere(agents),
+        // A project's own coordinator is reached from its project, not from Cmd+K.
+        isStandaloneAgent(),
+        dialect.match(AGENT_FIELDS, preparedQuery),
+      ),
+    )
     .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('agent_hits');

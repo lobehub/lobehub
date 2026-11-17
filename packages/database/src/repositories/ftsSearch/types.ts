@@ -233,6 +233,8 @@ export interface FtsSearchBackendFilters {
   agentId?: string;
   documentKind?: 'folder' | 'knowledgeBaseDocument' | 'page';
   excludeKnowledgeBaseIds?: string[];
+  /** Leave out a project's own coordinator (`agents.owner_project_id` set). */
+  excludeProjectOwned?: boolean;
   excludeVirtual?: boolean;
   knowledgeBaseIds?: string[];
   memoryCategories?: string[];

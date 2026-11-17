@@ -828,7 +828,7 @@ describe('HomeRepository', () => {
       expect(ftsSearchCandidates).toHaveBeenCalledTimes(2);
       expect(ftsSearchCandidates).toHaveBeenCalledWith({
         entity: 'agents',
-        filters: { excludeVirtual: true },
+        filters: { excludeProjectOwned: true, excludeVirtual: true },
         pagination: {},
         query: { fields: ['title', 'description'], text: 'candidate' },
       });

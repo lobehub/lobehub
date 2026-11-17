@@ -13,6 +13,7 @@ import {
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { isStandaloneAgent } from '../utils/agentListable';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { notTrashed } from '../utils/softDelete';
 import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
@@ -178,6 +179,7 @@ export class RecentModel {
                   buildWorkspaceWhere(scope, agents),
                   sharedOnly ? sharedParentWhere(agents.visibility) : undefined,
                   or(eq(agents.slug, 'inbox'), ne(agents.virtual, true)),
+                  isStandaloneAgent(),
                 ),
               ),
               or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),

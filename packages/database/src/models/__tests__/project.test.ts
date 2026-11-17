@@ -307,7 +307,9 @@ describe('ProjectModel', () => {
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
     ).toEqual([expect.objectContaining({ title: 'Apollo Project Agent', virtual: false })]);
-    expect(await new AgentModel(serverDB, userId).queryAgents()).toContainEqual(
+    // The project's own coordinator stays out of the standalone agent list (T-14329)
+    // while the project lists it as its lead.
+    expect(await new AgentModel(serverDB, userId).queryAgents()).not.toContainEqual(
       expect.objectContaining({ id: project.coordinatorAgentId }),
     );
     expect(await model.listAgents(project.id)).toEqual([
@@ -322,10 +324,13 @@ describe('ProjectModel', () => {
     expect(updated?.name).toBe('Apollo 2');
     expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await model.findById(project.id)).toBeNull();
-    // The main agent is an ordinary agent and stays with the user.
+    // The main agent is an ordinary agent and stays with the user, back in the list.
     expect(
       await serverDB.select().from(agents).where(eq(agents.id, project.coordinatorAgentId)),
     ).toHaveLength(1);
+    expect(await new AgentModel(serverDB, userId).queryAgents()).toContainEqual(
+      expect.objectContaining({ id: project.coordinatorAgentId }),
+    );
   });
 
   it('resolves a project by slug without escaping the current scope', async () => {
