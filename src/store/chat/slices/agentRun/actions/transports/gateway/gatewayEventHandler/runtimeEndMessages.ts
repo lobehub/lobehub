@@ -22,7 +22,10 @@ interface ReconcileRuntimeEndParams {
   lastMessagePatchRevision: number;
   /** Revision the last `step_start` announced, kept even when its read failed. */
   lastStepStartRevision: number;
-  /** Reads the conversation into the store; `undefined` when a newer snapshot won. */
+  /**
+   * Reads the conversation into the store; `undefined` when a newer snapshot won
+   * or a newer operation took the conversation while the read was in flight.
+   */
   refresh: () => Promise<UIChatMessage[] | undefined>;
 }
 

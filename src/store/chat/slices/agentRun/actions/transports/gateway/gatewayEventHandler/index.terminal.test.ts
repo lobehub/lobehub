@@ -37,6 +37,35 @@ vi.mock('@/store/tool/slices/builtin/executors', () => ({
   registerBuiltinToolExecutors: vi.fn().mockResolvedValue(undefined),
 }));
 
+/** Starts a follow-up send in the same conversation, which then owns it. */
+const startNewerSend = (store: ReturnType<typeof createMockStore>) => {
+  const context = { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any;
+  Object.assign(store.operations['op-1'], {
+    id: 'op-1',
+    status: 'running',
+    type: 'execServerAgentRuntime',
+  });
+  store.operations['op-2'] = {
+    context,
+    id: 'op-2',
+    metadata: { startTime: 1 },
+    status: 'running',
+    type: 'sendMessage',
+  };
+  store.operationsByContext = { [messageMapKey(context)]: ['op-1', 'op-2'] };
+};
+
+/** Holds the next conversation read open until the test resolves it. */
+const holdNextRead = () => {
+  let resolve!: (messages: any[]) => void;
+  vi.mocked(messageService.getMessages).mockReturnValueOnce(
+    new Promise((r) => {
+      resolve = r;
+    }) as any,
+  );
+  return (messages: any[]) => resolve(messages);
+};
+
 describe('createGatewayEventHandler — terminal and error events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -250,25 +279,27 @@ describe('createGatewayEventHandler — terminal and error events', () => {
 
       it('skips that read when a newer send owns the conversation', async () => {
         const { handler, store } = await startStreamedRun();
-        const context = { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any;
-        Object.assign(store.operations['op-1'], {
-          id: 'op-1',
-          status: 'running',
-          type: 'execServerAgentRuntime',
-        });
-        store.operations['op-2'] = {
-          context,
-          id: 'op-2',
-          metadata: { startTime: 1 },
-          status: 'running',
-          type: 'sendMessage',
-        };
-        store.operationsByContext = { [messageMapKey(context)]: ['op-1', 'op-2'] };
+        startNewerSend(store);
 
         handler(interruptedEnd(3));
         await flush();
 
         expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('drops that read when a newer send starts before it returns', async () => {
+        const { handler, store } = await startStreamedRun();
+        const resolveRead = holdNextRead();
+
+        handler(interruptedEnd(3));
+        await flush();
+        startNewerSend(store);
+        resolveRead([{ content: 'summary', id: 'group-1', role: 'compressedGroup' }]);
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
         expect(store.replaceMessages).not.toHaveBeenCalled();
         expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       });
@@ -285,6 +316,49 @@ describe('createGatewayEventHandler — terminal and error events', () => {
         expect(store.replaceMessages).not.toHaveBeenCalled();
         expect(store.completeOperation).toHaveBeenCalledWith('op-1');
         consoleError.mockRestore();
+      });
+    });
+
+    // A send can start while a terminal read is in flight; that read's list
+    // predates the send and would erase its optimistic rows.
+    describe('a newer send that starts during the terminal read', () => {
+      afterEach(() => {
+        vi.mocked(messageService.getMessages).mockReset().mockResolvedValue([]);
+      });
+
+      it('keeps its list when a completed patch-mode run reads the missing revision', async () => {
+        const store = createMockStore();
+        const handler = createHandler(store);
+        handler(makeEvent('message_patch', { deletes: [], revision: 1, upserts: [] }));
+        await flush();
+        store.replaceMessages.mockClear();
+        const resolveRead = holdNextRead();
+
+        handler(makeEvent('agent_runtime_end', { messagePatchMode: true, messageRevision: 3 }));
+        await flush();
+        startNewerSend(store);
+        resolveRead([{ content: 'final', id: 'msg-1', role: 'assistant' }]);
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      });
+
+      it('keeps its list when the fallback read returns', async () => {
+        const store = createMockStore();
+        const handler = createHandler(store);
+        const resolveRead = holdNextRead();
+
+        handler(makeEvent('agent_runtime_end'));
+        await flush();
+        startNewerSend(store);
+        resolveRead([{ content: 'final', id: 'msg-1', role: 'assistant' }]);
+        await flush();
+
+        expect(messageService.getMessages).toHaveBeenCalledTimes(1);
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       });
     });
   });

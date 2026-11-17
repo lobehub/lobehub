@@ -85,12 +85,15 @@ const fetchAndReplaceMessages = async (
      */
     skipWorks?: boolean;
     snapshotGeneration?: { current: number };
+    /** Checked after the read: a newer operation took the conversation, so keep its list. */
+    isSuperseded?: () => boolean;
   },
 ): Promise<UIChatMessage[] | undefined> => {
   const skipWorks = options?.skipWorks;
   const snapshotGeneration = options?.snapshotGeneration;
   const started = snapshotGeneration?.current;
   const messages = await readConversationMessages(skipWorks ? { ...context, skipWorks } : context);
+  if (options?.isSuperseded?.()) return undefined;
   if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
   if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
@@ -421,7 +424,7 @@ export const createGatewayEventHandler = (
   // otherwise last-write-wins the older list over the next step.
   const snapshotGeneration = { current: 0 };
 
-  const refreshMessagesFromDb = (options?: { skipWorks?: boolean }) =>
+  const refreshMessagesFromDb = (options?: { isSuperseded?: () => boolean; skipWorks?: boolean }) =>
     fetchAndReplaceMessages(get, context, { ...options, snapshotGeneration });
 
   const applyPushedSnapshot = (
@@ -1231,19 +1234,20 @@ export const createGatewayEventHandler = (
 
           // Reconcile messages FIRST so the terminal run lifecycle's notification
           // (afterRunComplete) can read the final assistant content from the store.
+          // Ownership is checked again after each read: Stop lets a new send
+          // start while the read is in flight.
+          const isSuperseded = () =>
+            operationSelectors.hasNewerConversationOperation(operationId, context)(get());
           const settled = await reconcileRuntimeEndMessages({
             applySnapshot: (messages) =>
               applyPushedSnapshot(messages, { action: 'gateway/agent_runtime_end' }),
             currentMessages: () => get().dbMessagesMap[messageMapKey(context)] ?? [],
             data,
             hasStreamedContent,
-            isSuperseded: operationSelectors.hasNewerConversationOperation(
-              operationId,
-              context,
-            )(get()),
+            isSuperseded: isSuperseded(),
             lastMessagePatchRevision,
             lastStepStartRevision,
-            refresh: () => refreshMessagesFromDb(),
+            refresh: () => refreshMessagesFromDb({ isSuperseded }),
           });
           lastMessagePatchRevision = settled.lastMessagePatchRevision;
           const { terminalMessages } = settled;
