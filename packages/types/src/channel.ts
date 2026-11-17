@@ -555,6 +555,11 @@ export interface ChannelListItem {
   /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
   mentionCount?: number;
   /**
+   * When the caller muted the conversation's notifications, null when not muted; set by the
+   * Channel list. Personal: other members never see it, and messages still count as unread.
+   */
+  mutedAt?: Date | null;
+  /**
    * On a conversation between two people, the other person (relative to the viewer), who is also
    * the only entry of `memberAvatars`; null otherwise.
    */

@@ -289,6 +289,13 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
       success: true,
     })),
+  /** Mutes or unmutes the conversation's notifications for the caller only. */
+  setMuted: channelProcedure
+    .input(z.object({ channelId, muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setMuted(input.channelId, input.muted),
+      success: true,
+    })),
   remove: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
     await ctx.channelService.remove(input.channelId);
     return { success: true };

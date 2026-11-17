@@ -1,0 +1,1 @@
+ALTER TABLE "channel_members" ADD COLUMN IF NOT EXISTS "muted_at" timestamp with time zone;

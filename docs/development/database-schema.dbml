@@ -1645,6 +1645,7 @@ table channel_members {
   role text
   last_read_sequence integer
   pinned_at "timestamp with time zone"
+  muted_at "timestamp with time zone"
   agent_id text
   name text
   description text [not null, default: '']

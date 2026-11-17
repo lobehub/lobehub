@@ -159,6 +159,11 @@ export const channelMembers = pgTable(
     lastReadSequence: integer('last_read_sequence'),
     /** When this person pinned the conversation atop their own list; NULL when not pinned. */
     pinnedAt: timestamptz('pinned_at'),
+    /**
+     * When this person muted the conversation's notifications for themselves; NULL when not
+     * muted. Unrelated to `config.muted`, which silences an Agent member for everyone.
+     */
+    mutedAt: timestamptz('muted_at'),
 
     // Agent members
     /** NULL after Agent deletion; keep membership and authored history. */

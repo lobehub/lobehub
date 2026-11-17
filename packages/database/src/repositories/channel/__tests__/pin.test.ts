@@ -37,3 +37,24 @@ describe('Channel pin', () => {
     await expect(asOwner.setPinned(channel.id, true)).resolves.toBeInstanceOf(Date);
   });
 });
+
+describe('Channel mute', () => {
+  it('mutes a conversation for the caller only and keeps the first mute time', async () => {
+    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+
+    const mutedAt = await asOwner.setMuted(channel.id, true);
+    expect(mutedAt).toBeInstanceOf(Date);
+    await expect(asOwner.setMuted(channel.id, true)).resolves.toEqual(mutedAt);
+
+    expect(await asOwner.list()).toEqual([expect.objectContaining({ id: channel.id, mutedAt })]);
+    // Someone else's mute leaves a workspace member's notifications alone.
+    expect(await asMember.list()).toEqual([
+      expect.objectContaining({ id: channel.id, mutedAt: null }),
+    ]);
+
+    await expect(asOwner.setMuted(channel.id, false)).resolves.toBeNull();
+    expect(await asOwner.list()).toEqual([
+      expect.objectContaining({ id: channel.id, mutedAt: null }),
+    ]);
+  });
+});

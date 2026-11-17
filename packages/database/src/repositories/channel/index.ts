@@ -539,6 +539,21 @@ export class ChannelRepository {
     );
 
   /**
+   * Mutes the conversation's notifications for the caller, or unmutes them; nobody else is
+   * affected. Messages still arrive and count as unread.
+   */
+  setMuted = async (channelId: string, muted: boolean) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        const mutedAt = muted ? (member.mutedAt ?? new Date()) : null;
+        await tx.update(channelMembers).set({ mutedAt }).where(eq(channelMembers.id, member.id));
+        return mutedAt;
+      },
+      { allowArchived: true, allowTrashed: true },
+    );
+
+  /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list. Active open
    * project Channels the caller has not joined follow with `joined: false`.
@@ -554,6 +569,7 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
+        mutedAt: Date | null;
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sharedAgentHandle: string | null;
@@ -569,6 +585,7 @@ export class ChannelRepository {
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
+        mutedAt: channelMembers.mutedAt,
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         shareId: agentShares.id,
@@ -677,7 +694,7 @@ export class ChannelRepository {
     }
 
     const joined = rows.map(
-      ({ channel, lastReadSequence, pinnedAt, role, shareId, shareSlug, ...agent }) => {
+      ({ channel, lastReadSequence, mutedAt, pinnedAt, role, shareId, shareSlug, ...agent }) => {
         const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
         return {
           ...channel,
@@ -692,6 +709,7 @@ export class ChannelRepository {
           memberRole: role,
           mentionCount: mentionCountOf.get(channel.id) ?? 0,
           peerUserId: peerOf(channel, this.userId),
+          mutedAt,
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
           unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
@@ -713,6 +731,7 @@ export class ChannelRepository {
         memberRole: null,
         mentionCount: 0,
         peerUserId: peerOf(channel, this.userId),
+        mutedAt: null,
         pinnedAt: null,
         replyJobs: [],
         unreadCount: 0,
