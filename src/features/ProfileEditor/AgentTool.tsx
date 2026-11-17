@@ -10,6 +10,7 @@ import { PlusIcon } from 'lucide-react';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import ComposioServerItem from '@/features/ChatInput/ActionBar/Tools/ComposioServerItem';
 import ComposioSkillIcon, {
@@ -18,7 +19,6 @@ import ComposioSkillIcon, {
 import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from '@/features/ChatInput/ActionBar/Tools/MarketAgentSkillPopoverContent';
-import MarketSkillIcon from '@/features/ChatInput/ActionBar/Tools/MarketSkillIcon';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ToolItemDetailPopover from '@/features/ChatInput/ActionBar/Tools/ToolItemDetailPopover';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
