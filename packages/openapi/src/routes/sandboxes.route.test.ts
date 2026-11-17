@@ -189,8 +189,8 @@ describe('sandboxes', () => {
     expect(auditLines()).toEqual([
       expect.objectContaining({
         action: 'sandbox.created',
-        metadata: expect.objectContaining({ sandboxId: sandbox.id, success: true }),
-        resourceId: ENV_OWNER,
+        metadata: expect.objectContaining({ environmentId: ENV_OWNER, success: true }),
+        resourceId: sandbox.id,
         resourceType: 'sandbox',
         userId: OWNER,
       }),

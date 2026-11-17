@@ -135,39 +135,54 @@ export class SandboxRestService extends BaseService {
   }
 
   async createSandbox(request: CreateSandboxRequest): Promise<SandboxResponse> {
-    const created = await this.audited(
-      {
+    const metadata = {
+      environmentId: request.environmentId,
+      workingDirectory: request.workingDirectory ?? null,
+    };
+
+    let created;
+    try {
+      created = request.workingDirectory
+        ? await this.caller.createInstance({
+            environmentId: request.environmentId,
+            name: request.name ?? request.workingDirectory,
+            workingDirectory: request.workingDirectory,
+          })
+        : await this.caller.createInstanceForEnvironment({ environmentId: request.environmentId });
+    } catch (error) {
+      // no sandbox exists yet, so the refused attempt is filed under its environment
+      await this.audit({
         action: 'sandbox.created',
         metadata: {
-          environmentId: request.environmentId,
-          workingDirectory: request.workingDirectory ?? null,
+          ...metadata,
+          error: error instanceof Error ? error.message : String(error),
+          success: false,
         },
-        // the id is only known once the row exists; until then the environment names it
         resourceId: request.environmentId,
-      },
-      () =>
-        request.workingDirectory
-          ? this.caller.createInstance({
-              environmentId: request.environmentId,
-              name: request.name ?? request.workingDirectory,
-              workingDirectory: request.workingDirectory,
-            })
-          : this.caller.createInstanceForEnvironment({ environmentId: request.environmentId }),
-      (instance) => ({
-        sandboxId: instance.id,
-        success: true,
-        workingDirectory: instance.workingDirectory,
-      }),
-    );
+      });
+      throw error;
+    }
 
     // What the app's dialog fires next: start the build of an instance that
     // has something to clone or install. Returns once the build has started; a
-    // failure to start leaves the sandbox `pending`, which `GET` reports.
+    // failure to start leaves the sandbox `pending`, and the reason is recorded.
+    let buildStartError: string | null = null;
     if (created.status === 'pending') {
       await this.caller.startInstanceBuild({ id: created.id }).catch((error: unknown) => {
-        console.warn('[openapi] sandbox build did not start', created.id, error);
+        buildStartError = error instanceof Error ? error.message : String(error);
       });
     }
+
+    await this.audit({
+      action: 'sandbox.created',
+      metadata: {
+        ...metadata,
+        buildStartError,
+        success: true,
+        workingDirectory: created.workingDirectory,
+      },
+      resourceId: created.id,
+    });
 
     return this.getSandbox(created.id);
   }
