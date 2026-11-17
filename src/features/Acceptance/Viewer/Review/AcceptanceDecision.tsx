@@ -9,10 +9,12 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { verifyService } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
+import { sx } from '@/styles/sx';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { decisionSegments } from '../Checks/checkDecision';
 import { isException } from '../Checks/checkState';
+import { columnStyles } from '../columnStyles';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { flowPlanPhase } from '../Plan/planReview';
 import { acceptanceCheckPath, useAcceptanceRouteBase } from '../routes';
@@ -31,10 +33,14 @@ import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './moda
 import { rejectCopyOnly } from './rejectCopyOnly';
 
 interface AcceptanceDecisionProps {
+  /** Rendered after the page's body column rather than inside it: the bar
+      docks across the frame, and the notice that replaces it on a past round
+      wraps itself in a column of this width. */
+  dockedMaxWidth?: number;
   onDraftToComposer?: (text: string) => boolean;
 }
 
-const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
+const AcceptanceDecision = ({ dockedMaxWidth, onDraftToComposer }: AcceptanceDecisionProps) => {
   const { t } = useTranslation('verify');
   const navigate = useWorkspaceAwareNavigate();
   const hydrated = useIsHydrated();
@@ -60,7 +66,12 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
 
   if (turn !== null && turn !== data.rounds.at(-1)?.run.roundIndex)
     return (
-      <Flexbox gap={8}>
+      <Flexbox
+        gap={8}
+        {...(dockedMaxWidth === undefined
+          ? {}
+          : sx(columnStyles.column, { maxWidth: dockedMaxWidth, paddingBlockEnd: 20 }))}
+      >
         <Text type={'secondary'}>{t('acceptance.review.historicalReadOnly')}</Text>
         <Button style={{ minHeight: 44 }} onClick={() => setTurn(null)}>
           {t('acceptance.filter.roundAll')}
@@ -129,6 +140,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
     <>
       <DecisionBar
         acceptedCount={acceptedCount}
+        dockedMaxWidth={dockedMaxWidth}
         embedded={embedded}
         feedbackCount={feedbackEntries.filter((entry) => !entry.stale).length}
         ignoredCount={ignoredCount}
