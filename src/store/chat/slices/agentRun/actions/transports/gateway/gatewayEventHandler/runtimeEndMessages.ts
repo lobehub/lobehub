@@ -79,8 +79,10 @@ export const reconcileRuntimeEndMessages = async ({
     // frame is the last one the client gets. That step is persisted and the
     // next one has not streamed yet, so read it; otherwise its changes (a
     // compressed group, fields the stream never carried) stay stale until a
-    // reload.
+    // reload. A newer send that already owns the conversation keeps its own
+    // list: replacing it would erase that turn's optimistic rows.
     if (
+      !isSuperseded &&
       data.messagePatchMode &&
       typeof data.messageRevision === 'number' &&
       data.messageRevision - Math.max(lastMessagePatchRevision, lastStepStartRevision) >= 2

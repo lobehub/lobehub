@@ -4,6 +4,7 @@ import { messageService } from '@/services/message';
 import type * as WorkServiceModule from '@/services/work';
 import { workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { createHandler, createMockStore, flush, makeEvent } from '../testUtils';
 
@@ -245,6 +246,31 @@ describe('createGatewayEventHandler — terminal and error events', () => {
         expect(store.replaceMessages).not.toHaveBeenCalled();
         expect(store.completeOperation).toHaveBeenCalledWith('op-1');
         consoleError.mockRestore();
+      });
+
+      it('skips that read when a newer send owns the conversation', async () => {
+        const { handler, store } = await startStreamedRun();
+        const context = { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any;
+        Object.assign(store.operations['op-1'], {
+          id: 'op-1',
+          status: 'running',
+          type: 'execServerAgentRuntime',
+        });
+        store.operations['op-2'] = {
+          context,
+          id: 'op-2',
+          metadata: { startTime: 1 },
+          status: 'running',
+          type: 'sendMessage',
+        };
+        store.operationsByContext = { [messageMapKey(context)]: ['op-1', 'op-2'] };
+
+        handler(interruptedEnd(3));
+        await flush();
+
+        expect(messageService.getMessages).not.toHaveBeenCalled();
+        expect(store.replaceMessages).not.toHaveBeenCalled();
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
       });
 
       it('keeps the messages it has and still settles when that read fails', async () => {
