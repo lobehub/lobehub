@@ -478,6 +478,14 @@ describe('/api/v1/mcp tools', () => {
     });
     expect(binary.isError).toBeFalsy();
     expect(binary.data.file).toMatchObject({ fileType: 'application/pdf', name: 'spec.pdf' });
+
+    // Unpadded and URL-safe base64 decode too.
+    const unpadded = await callJson(client, 'upload_file', {
+      data: Buffer.from('hi?>').toString('base64url'),
+      mimeType: 'text/plain',
+      name: 'b.txt',
+    });
+    expect(unpadded.isError).toBeFalsy();
   });
 
   it('refuses an upload with both text and data', async () => {

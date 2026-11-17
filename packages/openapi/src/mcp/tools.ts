@@ -60,7 +60,8 @@ const limit = (max: number, fallback: number) =>
 
 const keyword = z.string().trim().max(100).optional();
 
-const BASE64 = /^(?:[\d+/A-Za-z]{4})*(?:[\d+/A-Za-z]{2}==|[\d+/A-Za-z]{3}=)?$/;
+/** Standard or URL-safe base64, padding optional. */
+const BASE64 = /^[\w+/-]*={0,2}$/;
 
 export const AGENT_READ = getScopePermissions('AGENT_READ', ['ALL', 'OWNER']);
 export const TOPIC_READ = getAllScopePermissions('TOPIC_READ');
@@ -75,10 +76,19 @@ const KNOWLEDGE_BASE_READ = getAllScopePermissions('KNOWLEDGE_BASE_READ');
  * each permission group maps to — the same projection the REST permission
  * gates document as `x-required-scopes`. Keys without them never see the tool.
  */
-export const toolScopes = (tool: McpToolDefinition): string[] =>
-  tool.scopes
-    ? [...tool.scopes]
-    : [...new Set(tool.permissions.flatMap((codes) => documentedScopes([...codes], 'OR').scopes))];
+export const toolScopes = (tool: McpToolDefinition): string[] => {
+  if (tool.scopes) return [...tool.scopes];
+  return [
+    ...new Set(
+      tool.permissions.flatMap((codes) => {
+        const { error, scopes } = documentedScopes([...codes], 'OR');
+        // An either-or group cannot be written as all-of scopes; declare `scopes`.
+        if (error) throw new Error(`MCP tool ${tool.name}: ${error}`);
+        return scopes;
+      }),
+    ),
+  ];
+};
 
 const AGENT_SUMMARY_FIELDS = [
   'id',
@@ -110,8 +120,15 @@ const RUN_POLL_MAX_MS = 2000;
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true });
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 
 const summarizeRun = (run: Run) => ({
@@ -382,7 +399,8 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         throw namedError('ValidationError', '`mimeType` is required with `data`');
       }
       // `Buffer.from(…, 'base64')` silently drops invalid characters.
-      if (data !== undefined && !BASE64.test(data.replaceAll(/\s/g, ''))) {
+      const compact = data?.replaceAll(/\s/g, '');
+      if (compact !== undefined && (!BASE64.test(compact) || compact.length % 4 === 1)) {
         throw namedError('ValidationError', '`data` is not valid base64');
       }
       const body = text === undefined ? Buffer.from(data!, 'base64') : Buffer.from(text, 'utf8');
