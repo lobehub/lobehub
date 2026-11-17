@@ -44,7 +44,16 @@ export class McpEventsService {
     private workspaceId?: string,
   ) {}
 
-  private async context(agentId: string, topicId?: string, operationId?: string) {
+  /**
+   * `channelOrigin` is asked for by subscribing only: a subscription made in a Channel run must
+   * know which Channel or Thread its results go to. Discovering events and listing subscriptions
+   * work in a Channel topic like in any other.
+   */
+  private async context(
+    agentId: string,
+    topicId?: string,
+    channelOrigin?: { operationId?: string },
+  ) {
     if (!(await isWebhookEnabled(this.userId)))
       throw new McpEventsServiceError('feature_disabled', 'MCP Events is disabled.');
     if (!(await new AgentModel(this.db, this.userId, this.workspaceId).existsById(agentId)))
@@ -56,7 +65,8 @@ export class McpEventsService {
         throw new McpEventsServiceError('forbidden', 'This topic is not available to this agent.');
       // A Channel run works in a hidden Topic of its own; events run there too, and their result
       // is posted back to the Channel or Thread the run answers.
-      if (topic.trigger === CHANNEL_TOPIC_TRIGGER) {
+      if (channelOrigin && topic.trigger === CHANNEL_TOPIC_TRIGGER) {
+        const { operationId } = channelOrigin;
         channel = operationId ? await channelOriginOfRun(this.db, operationId) : undefined;
         if (!channel)
           throw new McpEventsServiceError(
@@ -173,11 +183,9 @@ export class McpEventsService {
   private async createSubscription(
     input: SubscribeEventArgs & { agentId: string; operationId?: string; topicId: string },
   ): Promise<SubscribeEventState> {
-    const { channel, connectorModel, model } = await this.context(
-      input.agentId,
-      input.topicId,
-      input.operationId,
-    );
+    const { channel, connectorModel, model } = await this.context(input.agentId, input.topicId, {
+      operationId: input.operationId,
+    });
     // In a Thread, results go to that Thread unless the agent was asked for the main timeline.
     const delivery = channel && {
       channelId: channel.channelId,

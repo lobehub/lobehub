@@ -240,17 +240,24 @@ describe('MCP event subscription service scope', () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it('refuses a Channel Topic outside a Channel job, where no Channel says where to post', async () => {
+  it('refuses to subscribe in a Channel Topic outside a Channel job, where no Channel says where to post', async () => {
     mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
     mocks.channelOrigin.mockResolvedValue(undefined);
     for (const call of [
-      () => service().listEventTypes({ agentId: 'agent', topicId: 'topic' }),
       () => service().subscribeEvent(args),
       () => service().subscribeEvent({ ...args, operationId: 'op-unknown' }),
-      () => service().listSubscriptions(args),
     ])
       await expect(call()).rejects.toMatchObject({ code: 'channel_unsupported' });
     expect(mocks.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('discovers events and lists subscriptions in a Channel Topic, before subscribing there', async () => {
+    mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
+    mocks.channelOrigin.mockResolvedValue(undefined);
+    const found = await service().listEventTypes({ agentId: 'agent', topicId: 'topic' });
+    expect(found.eventTypes.map((event) => event.name)).toEqual(['issue.created']);
+    await expect(service().listSubscriptions(args)).resolves.toMatchObject({ subscriptions: [] });
+    expect(mocks.channelOrigin).not.toHaveBeenCalled();
   });
 
   it.each([
