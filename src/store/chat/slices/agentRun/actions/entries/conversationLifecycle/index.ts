@@ -129,10 +129,10 @@ import { pageConversationNeedsGateway, preparePageConversation } from '../pageCo
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { getOptimisticMessageMedia } from './optimisticMessageMedia';
 import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
-import { getSendMediaPreviews } from './sendMediaPreviews';
 
 /**
  * Extended params for sendMessage with context
@@ -912,8 +912,6 @@ export class ConversationLifecycleActionImpl {
       runtimeType,
     });
 
-    const { tempAudios, tempImages, tempVideos } = getSendMediaPreviews(files);
-
     const optimisticUserMessage = {
       content: message,
       editorData: editorData ?? undefined,
@@ -924,9 +922,7 @@ export class ConversationLifecycleActionImpl {
       // if there is topicId, then add topicId to message
       topicId: operationContext.topicId ?? undefined,
       threadId: operationContext.threadId ?? undefined,
-      audioList: tempAudios.length > 0 ? tempAudios : undefined,
-      imageList: tempImages.length > 0 ? tempImages : undefined,
-      videoList: tempVideos.length > 0 ? tempVideos : undefined,
+      ...getOptimisticMessageMedia(files),
       // Pass metadata for immediate display
       metadata: userMessageMetadata,
     };
@@ -937,8 +933,8 @@ export class ConversationLifecycleActionImpl {
       (item) => item.id === tempId && item.role === 'user',
     );
 
-    // A voice message can render a local-only row before its binary upload finishes. Adopt that
-    // row in place so the formal send lifecycle keeps its stable position and never duplicates it.
+    // Voice uploads and forced steers can render a local-only row before sending. Adopt
+    // that row in place so the formal send keeps its position and never duplicates it.
     if (existingOptimisticUserMessage) {
       this.#get().internal_dispatchMessage(
         {

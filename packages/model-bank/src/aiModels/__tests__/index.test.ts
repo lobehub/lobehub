@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(9);
+    expect(models).toHaveLength(11);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -309,6 +309,66 @@ describe('vendor provider cards', () => {
 });
 
 describe('recent direct-provider models', () => {
+  it.each([
+    {
+      cutoff: '2026-05',
+      id: 'gpt-6.2-astra',
+      rates: [
+        [8, 16],
+        [0.4, 0.8],
+        [10, 20],
+        [40, 60],
+      ],
+    },
+    {
+      cutoff: '2026-06',
+      id: 'gpt-6.2-sol',
+      rates: [
+        [2, 4],
+        [0.1, 0.2],
+        [2.5, 5],
+        [10, 15],
+      ],
+    },
+  ])('registers OpenAI $id with its published limits and rates', ({ cutoff, id, rates }) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === ModelProvider.OpenAI && entry.id === id,
+    );
+
+    expect(model).toMatchObject({
+      abilities: {
+        functionCall: true,
+        reasoning: true,
+        search: true,
+        structuredOutput: true,
+        vision: true,
+      },
+      contextWindowTokens: 1_050_000,
+      enabled: true,
+      family: 'gpt',
+      generation: 'gpt-6.2',
+      isOfficial: true,
+      knowledgeCutoff: cutoff,
+      maxOutput: 128_000,
+      releasedAt: '2026-11-17',
+      settings: { extendParams: ['gpt6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
+      type: 'chat',
+    });
+    expect(model?.pricing?.units).toEqual(
+      ['textInput', 'textInput_cacheRead', 'textInput_cacheWrite', 'textOutput'].map(
+        (name, index) => ({
+          name,
+          strategy: 'tiered',
+          tiers: [
+            { rate: rates[index][0], upTo: 272_000 },
+            { rate: rates[index][1], upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        }),
+      ),
+    );
+  });
+
   it('registers GPT-6.1 Sol with its published limits, pricing, and reasoning controls', () => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
       (entry) => entry.providerId === ModelProvider.OpenAI && entry.id === 'gpt-6.1-sol',
@@ -405,6 +465,8 @@ describe('Gemini 4 Carbon introductory pricing', () => {
 
 describe('subscription model catalogs', () => {
   it.each([
+    ['chatgpt', 'gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['chatgpt', 'gpt-6.2-sol', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6.1-sol', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6.1-terra', 'gpt5_6ReasoningEffort'],
@@ -418,13 +480,16 @@ describe('subscription model catalogs', () => {
     expect(model?.settings?.extendParams).toContain(reasoningParam);
   });
 
-  it('keeps the ChatGPT context cap and thinking preservation', () => {
-    const model = LOBE_DEFAULT_MODEL_LIST.find(
-      (entry) => entry.providerId === 'chatgpt' && entry.id === 'gpt-6-astra',
-    );
-    expect(model?.contextWindowTokens).toBe(272_000);
-    expect(model?.settings?.extendParams).toContain('preserveThinking');
-  });
+  it.each(['gpt-6-astra', 'gpt-6.2-astra', 'gpt-6.2-sol'])(
+    'keeps the ChatGPT context cap and thinking preservation for %s',
+    (id) => {
+      const model = LOBE_DEFAULT_MODEL_LIST.find(
+        (entry) => entry.providerId === 'chatgpt' && entry.id === id,
+      );
+      expect(model?.contextWindowTokens).toBe(272_000);
+      expect(model?.settings?.extendParams).toContain('preserveThinking');
+    },
+  );
 });
 
 describe('Anthropic cache-write pricing', () => {
