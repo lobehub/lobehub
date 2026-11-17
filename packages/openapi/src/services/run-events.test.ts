@@ -233,4 +233,33 @@ describe('runEventStream', () => {
     // Once, for the end event — never as a poll in between.
     expect(readRun).toHaveBeenCalledTimes(1);
   });
+
+  it('never asks the journal to block for 0 ms, which Redis reads as forever', async () => {
+    const journal = {
+      getStreamHistoryPage: vi.fn().mockResolvedValue({
+        available: true,
+        events: [],
+        hasMore: false,
+        nextCursor: '1-0',
+      }),
+      readEventsOnce: vi.fn().mockResolvedValue({ events: [], lastEventId: '1-0' }),
+    };
+    const readRun = vi.fn().mockResolvedValue({ interventions: [], run: { status: 'running' } });
+
+    await collect(
+      runEventStream({
+        after: '1-0',
+        followBlockMs: 0,
+        journal,
+        maxDurationMs: 30,
+        pollMs: 1,
+        readRun,
+        runId: 'op-1',
+      }),
+    );
+
+    expect(journal.readEventsOnce).toHaveBeenCalled();
+    for (const [, , blockMs] of journal.readEventsOnce.mock.calls)
+      expect(blockMs).toBeGreaterThan(0);
+  });
 });

@@ -258,7 +258,8 @@ export async function* runEventStream({
   /** The next batch after the cursor, and whether the journal still exists. */
   const read = async (): Promise<{ available: boolean; events: StreamEvent[]; more: boolean }> => {
     if (!replaying && journal.readEventsOnce) {
-      const block = Math.max(0, Math.min(followBlockMs, deadline - Date.now()));
+      // Never 0: Redis reads `XREAD BLOCK 0` as "wait forever".
+      const block = Math.max(1, Math.min(followBlockMs, deadline - Date.now()));
       const { events } = await journal.readEventsOnce(runId, cursor, block);
       return { available: true, events, more: false };
     }
