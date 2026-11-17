@@ -1,15 +1,10 @@
 /**
  * @vitest-environment happy-dom
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
-
-const mocks = vi.hoisted(() => ({
-  leftPanelOpen: false,
-  toggleLeftPanel: vi.fn(),
-}));
+const mocks = vi.hoisted(() => ({ isLoadingInitial: false }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -18,23 +13,11 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/store/global/selectors', () => ({
-  systemStatusSelectors: {
-    showLeftPanel: () => mocks.leftPanelOpen,
-  },
-}));
-
-vi.mock('@/store/global', () => ({
-  useGlobalStore: (selector: (state: any) => unknown) =>
-    selector({ leftPanelOpen: mocks.leftPanelOpen, toggleLeftPanel: mocks.toggleLeftPanel }),
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: any) => unknown) => selector({ settings: {} }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  settingsSelectors: { getHotkeyById: () => () => undefined },
+// The gallery's only chrome outside the cards is the content-side header that
+// hosts the left panel toggle; the toggle itself is covered by the NavHeader
+// tests (`getNavHeaderLeading`), so the page only has to keep it mounted.
+vi.mock('@/features/NavHeader', () => ({
+  default: () => <div data-testid={'works-nav-header'} />,
 }));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -60,7 +43,7 @@ vi.mock('./hooks', () => ({
   useWorkspaceWorksInfinite: () => ({
     error: undefined,
     hasMore: false,
-    isLoadingInitial: false,
+    isLoadingInitial: mocks.isLoadingInitial,
     isLoadingMore: false,
     items: [],
     loadMore: vi.fn(),
@@ -72,27 +55,21 @@ vi.mock('./useOpenWork', () => ({ useOpenWork: () => vi.fn() }));
 
 const { default: WorkGallery } = await import('./index');
 
-describe('WorkGallery left panel toggle', () => {
+describe('WorkGallery page chrome', () => {
   beforeEach(() => {
-    mocks.leftPanelOpen = false;
-    mocks.toggleLeftPanel.mockClear();
+    mocks.isLoadingInitial = false;
   });
 
-  it('keeps a panel toggle on the page once the left panel is collapsed', () => {
+  it('renders the content side header that keeps the left panel toggle reachable', () => {
     render(<WorkGallery galleryKey={'all'} />);
 
-    const toggle = document.querySelector(`#${TOGGLE_BUTTON_ID}`);
-    expect(toggle).not.toBeNull();
-
-    fireEvent.click(toggle!);
-    expect(mocks.toggleLeftPanel).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('works-nav-header')).toBeTruthy();
   });
 
-  it('hides that header while the left panel is open, so the page keeps its layout', () => {
-    mocks.leftPanelOpen = true;
+  it('keeps that header while the gallery is still loading', () => {
+    mocks.isLoadingInitial = true;
     render(<WorkGallery galleryKey={'all'} />);
 
-    expect(document.querySelector(`#${TOGGLE_BUTTON_ID}`)).toBeNull();
-    expect(screen.queryByText('work.empty.title')).not.toBeNull();
+    expect(screen.getByTestId('works-nav-header')).toBeTruthy();
   });
 });
