@@ -66,4 +66,41 @@ describe('ChannelRepository.deleteMessage', () => {
     const [stopped] = await jobsOf(db, sent.id);
     expect(stopped).toMatchObject({ publicationRevoked: true, status: 'cancelled' });
   });
+
+  it('refuses to edit a tombstone back into a message', async () => {
+    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+    const sent = await asMember.send(channel.id, {
+      content: 'Oops',
+      requestKey: 'oops',
+      routing: 'fallback',
+    });
+
+    await asMember.deleteMessage(channel.id, sent.id);
+
+    await expect(asMember.editMessage(channel.id, sent.id, 'Back again')).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    const [seen] = (await asOwner.detail(channel.id)).messages;
+    expect(seen).toMatchObject({ content: '', deletedAt: expect.any(Date), id: sent.id });
+  });
+
+  it('refuses to route a deleted message again', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    await fixture.addAgent(channel.id, 'Coder');
+    const sent = await asOwner.send(channel.id, {
+      content: 'Who knows?',
+      requestKey: 'who',
+      routing: 'decision',
+    });
+
+    // A pending message deleted before routing finished is left `unassigned`, which is exactly
+    // the status `retryRouting` accepts.
+    await asOwner.deleteMessage(channel.id, sent.id);
+
+    await expect(asOwner.retryRouting(channel.id, sent.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    const [kept] = (await asOwner.detail(channel.id)).messages;
+    expect(kept).toMatchObject({ content: '', deletedAt: expect.any(Date), id: sent.id });
+  });
 });
