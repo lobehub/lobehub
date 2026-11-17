@@ -101,7 +101,27 @@ describe('spawnHeteroSandbox', () => {
       expect.objectContaining({
         command: expect.stringContaining("'--model' 'opus' '--effort' 'high'"),
       }),
+      { heteroLaunch: true },
     );
+  });
+
+  // T-14185: the launch states it is one, so Market injects the Claude Code
+  // credential for this call and no longer has to infer it from command text.
+  it('marks its runCommand as the hetero launch', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(mockCallTool).toHaveBeenCalledTimes(1);
+    expect(mockCallTool.mock.calls[0][2]).toEqual({ heteroLaunch: true });
+    expect(mockCallTool.mock.calls[0][1]).not.toHaveProperty('heteroExec');
   });
 
   it('shell-escapes selector args before interpolating the sandbox command', async () => {

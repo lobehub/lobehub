@@ -27,6 +27,7 @@ import {
 } from './environmentInit';
 import { isSandboxAccessDeniedError, isSandboxAuthError } from './errors';
 import type {
+  SandboxCallOptions,
   SandboxCommandResult,
   SandboxProvider,
   SandboxProviderCapabilities,
@@ -60,6 +61,7 @@ export class SandboxMiddlewareService implements SandboxService {
   async callTool(
     toolName: string,
     params: Record<string, unknown>,
+    options?: SandboxCallOptions,
   ): Promise<SandboxCallToolResult> {
     const report = await this.ensureEnvironmentInitialized();
     if (report) this.pendingEnvironmentReport = report;
@@ -70,10 +72,10 @@ export class SandboxMiddlewareService implements SandboxService {
       if (mimeType) return this.readSandboxImageFile(params.path, mimeType);
     }
 
-    const result = await this.provider.callTool(
-      toolName,
-      this.applyEnvironmentVariables(toolName, params),
-    );
+    const toolParams = this.applyEnvironmentVariables(toolName, params);
+    const result = await (options
+      ? this.provider.callTool(toolName, toolParams, options)
+      : this.provider.callTool(toolName, toolParams));
 
     // Held until a shell result can carry it: a first call that lists or
     // reads files has no output to put it in, and dropping it would hide a
