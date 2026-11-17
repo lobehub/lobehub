@@ -1,5 +1,5 @@
 import type { AgentOperationStatus } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, not } from 'drizzle-orm';
 
 import { TopicModel } from '@/database/models/topic';
 import { agentOperations } from '@/database/schemas';
@@ -58,4 +58,40 @@ export const findOwnLiveRuns = async (
   const live: string[] = [];
   for (const { id } of candidates) if (await isRunAlive(ctx, scope.userId, id)) live.push(id);
   return live;
+};
+
+/**
+ * Of `topicIds`, the ones with a live top-level run that another member (not
+ * `userId`) started on the main line. The caller cannot stop those runs, so a
+ * flow that retires the topics must leave them alone.
+ */
+export const findTopicsRunByOthers = async (
+  ctx: LiveRunContext,
+  params: { topicIds: string[]; userId: string },
+): Promise<string[]> => {
+  if (params.topicIds.length === 0) return [];
+  const candidates = await ctx.db
+    .select({
+      id: agentOperations.id,
+      topicId: agentOperations.topicId,
+      userId: agentOperations.userId,
+    })
+    .from(agentOperations)
+    .where(
+      and(
+        inArray(agentOperations.topicId, params.topicIds),
+        isNull(agentOperations.threadId),
+        isNull(agentOperations.parentOperationId),
+        not(eq(agentOperations.userId, params.userId)),
+        inArray(agentOperations.status, LIVE_STATUSES),
+        ctx.workspaceId ? eq(agentOperations.workspaceId, ctx.workspaceId) : undefined,
+      ),
+    );
+
+  const topics = new Set<string>();
+  for (const row of candidates) {
+    if (!row.topicId || topics.has(row.topicId)) continue;
+    if (await isRunAlive(ctx, row.userId, row.id)) topics.add(row.topicId);
+  }
+  return [...topics];
 };

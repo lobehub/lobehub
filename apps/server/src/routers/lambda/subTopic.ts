@@ -20,7 +20,10 @@ import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/wor
 import { AiAgentService } from '@/server/services/aiAgent';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
-import { findOwnLiveRuns } from '@/server/services/aiAgent/steerQueue/liveRuns';
+import {
+  findOwnLiveRuns,
+  findTopicsRunByOthers,
+} from '@/server/services/aiAgent/steerQueue/liveRuns';
 import {
   RETIRED_TOPIC_STATUSES,
   SubTopicError,
@@ -122,6 +125,8 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       new AiAgentService(db, ctx.userId, { workspaceId }).execAgent(params as any),
     findLiveRunIds: (topicId) =>
       findOwnLiveRuns({ db, workspaceId }, { threadId: null, topicId, userId: ctx.userId }),
+    findTopicsRunByOthers: (topicIds) =>
+      findTopicsRunByOthers({ db, workspaceId }, { topicIds, userId: ctx.userId }),
     findLatestRunStatus: (topicId) => topicModel.getLatestRunStatus(topicId),
     findTopic: (topicId) => topicModel.findById(topicId) as any,
     issueWorktreeReceipt: () => issueWorktreeReceipt(ctx.userId),
@@ -355,6 +360,9 @@ export const subTopicRouter = router({
     ),
 
   send: subTopicProcedure
+    // Starts a run that writes the user message: the same scoped permission
+    // `aiAgent.execAgent` / `agentSteerQueue.append` require.
+    .use(withScopedPermission('message:create'))
     .input(
       z.object({
         message: z.string().min(1),
@@ -365,6 +373,9 @@ export const subTopicRouter = router({
     .mutation(({ ctx, input }) => run(() => createSubTopicService(ctx).send(input))),
 
   open: subTopicProcedure
+    // Starts a run that writes the user message: the same scoped permission
+    // `aiAgent.execAgent` / `agentSteerQueue.append` require.
+    .use(withScopedPermission('message:create'))
     .input(
       z.object({
         agentId: z.string().optional(),

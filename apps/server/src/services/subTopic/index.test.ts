@@ -53,6 +53,7 @@ const createDeps = () =>
     filterViewableAgents: vi.fn(async (ids: string[]) => new Set(ids)),
     findLatestRunStatus: vi.fn().mockResolvedValue(null),
     findLiveRunIds: vi.fn().mockResolvedValue([]),
+    findTopicsRunByOthers: vi.fn().mockResolvedValue([]),
     findTopic: vi.fn(async (id: string) => {
       if (id === 'tpc_parent') return opener;
       if (id === 'tpc_run') return { agentId: 'agt_lobe', id, trigger: 'task' };
@@ -627,6 +628,51 @@ describe('SubTopicService.retire — runs', () => {
     await expect(new SubTopicService(deps).stop('tpc_cross')).rejects.toThrow(
       /could not be confirmed stopped/,
     );
+  });
+});
+
+describe('SubTopicService — review fixes', () => {
+  it('pins a new worktree sub-topic to the device the worktree was created on', async () => {
+    const deps = createDeps();
+
+    await new SubTopicService(deps).open({
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+      workspace: 'new-worktree',
+    });
+
+    expect(deps.execAgent.mock.calls[0][0]).toMatchObject({
+      deviceId: 'dev_mac',
+      requireDevice: true,
+    });
+  });
+
+  it('checks the topic itself before "only this one" moves its sub-topics up', async () => {
+    const deps = createDeps();
+    deps.listOpened.mockResolvedValue([{ id: 'tpc_same' }] as any);
+    deps.assertCanEditTopics.mockImplementation(async (ids: string[]) => {
+      if (ids.includes('tpc_parent')) throw new Error('FORBIDDEN');
+    });
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'archive', mode: 'self', topicId: 'tpc_parent' }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanEditTopics.mock.calls[0][0]).toEqual(['tpc_parent']);
+    expect(deps.detachTopics).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cascade over a sub-topic another member is running', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue([
+      { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, trigger: 'sub_topic' },
+    ] as any);
+    deps.findTopicsRunByOthers.mockResolvedValue(['tpc_same']);
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'trash', mode: 'all', topicId: 'tpc_parent' }),
+    ).rejects.toThrow(/being run by another member/);
+    expect(deps.interrupt).not.toHaveBeenCalled();
+    expect(deps.trashTopic).not.toHaveBeenCalled();
   });
 });
 

@@ -1,12 +1,15 @@
 import type { AgentSenderMetadata, ChatTopicMetadata, TopicOpenedBy } from '@lobechat/types';
 import debug from 'debug';
-import { sql } from 'drizzle-orm';
+import { and, eq, gte, like, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { assertCanUseTopicTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { MAX_AGENT_RELAY_HOPS } from '@/server/services/aiAgent/sourceAttribution';
 
 const log = debug('lobe-server:sub-topic:receipt');
@@ -70,6 +73,16 @@ export interface SubTopicReceiptDeps {
    * that failed to enqueue; without the queue a second call would wake twice.
    */
   canQueue?: () => boolean;
+  /**
+   * Whether the member whose turn settled may run the opener: writing into it
+   * and waking it starts the opener's agent under this member. Defaults to the
+   * checks `aiAgent.execAgent` applies (`use` on its agent / group and topic).
+   */
+  canRunOpener?: (opener: {
+    agentId: string;
+    groupId?: null | string;
+    id: string;
+  }) => Promise<boolean>;
   /** Shared wake-up channel; see `ResultWakeChannel.queueWakeup`. */
   queueWakeup: (params: {
     agentId: string;
@@ -80,7 +93,7 @@ export interface SubTopicReceiptDeps {
 }
 
 export type SubTopicReceiptOutcome =
-  'delivered' | 'duplicate' | 'hop_limit' | 'not_reportable' | 'opener_gone';
+  'delivered' | 'duplicate' | 'hop_limit' | 'not_reportable' | 'opener_forbidden' | 'opener_gone';
 
 /**
  * Report a finished sub-topic turn to the conversation that opened it: a
@@ -97,6 +110,46 @@ export type SubTopicReceiptOutcome =
  * send. Past the bound the receipt is still written but the opener is not
  * woken: a person has to step in.
  */
+/**
+ * The sub-topic receipts written into `topicId` since `since` — results that
+ * landed while one of its runs was going (see `onSubTopicTurnSettled`).
+ */
+export const listReceiptsSince = async (
+  db: LobeChatDatabase,
+  topicId: string,
+  since: Date,
+): Promise<string[]> => {
+  const rows = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.topicId, topicId),
+        like(messages.id, `${SUB_TOPIC_RECEIPT_PREFIX}%`),
+        gte(messages.createdAt, since),
+      ),
+    );
+  return rows.map((row) => row.id);
+};
+
+const defaultCanRunOpener =
+  (scope: { db: LobeChatDatabase; userId: string; workspaceId?: string }) =>
+  async (opener: { agentId: string; groupId?: null | string; id: string }) => {
+    if (!scope.workspaceId) return true;
+    await assertCanUseWorkspaceAgent({
+      agentId: opener.agentId,
+      db: scope.db,
+      groupId: opener.groupId,
+      userId: scope.userId,
+      workspaceId: scope.workspaceId,
+    });
+    await assertCanUseTopicTargets(
+      { db: scope.db, userId: scope.userId, workspaceId: scope.workspaceId },
+      [opener.id],
+    );
+    return true;
+  };
+
 export const deliverSubTopicReceipt = async (
   deps: SubTopicReceiptDeps,
   params: SubTopicReceiptParams,
@@ -130,6 +183,17 @@ export const deliverSubTopicReceipt = async (
   const opener = await topicModel.findById(openedBy.topicId);
   if (!opener?.agentId || (opener.status && RETIRED_STATUSES.has(opener.status))) {
     return 'opener_gone';
+  }
+  // A member may use a shared sub-topic yet only view its opener: their turn
+  // must not write into the opener or wake it under their identity.
+  const canRunOpener = deps.canRunOpener ?? defaultCanRunOpener({ db, userId, workspaceId });
+  if (
+    !(await canRunOpener({ agentId: opener.agentId, groupId: opener.groupId, id: opener.id }).catch(
+      () => false,
+    ))
+  ) {
+    log('%s may not run the opener %s; nothing reported', userId, opener.id);
+    return 'opener_forbidden';
   }
 
   const messageModel = new MessageModel(db, userId, workspaceId);
@@ -188,6 +252,8 @@ export const deliverSubTopicReceipt = async (
         parentId,
         role: 'user',
         topicId: opener.id,
+        // A group conversation's transcript only reads its own messages.
+        ...(opener.groupId && { groupId: opener.groupId }),
       },
       messageId,
     );

@@ -1,5 +1,6 @@
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import {
@@ -7,7 +8,7 @@ import {
   type WakeChannelExecAgent,
 } from '@/server/services/taskResultBridge/wakeChannel';
 
-import { deliverSubTopicReceipt, SUB_TOPIC_RECEIPT_PREFIX } from './receipt';
+import { deliverSubTopicReceipt, listReceiptsSince, SUB_TOPIC_RECEIPT_PREFIX } from './receipt';
 
 const log = debug('lobe-server:sub-topic:settle');
 
@@ -55,11 +56,21 @@ export const onSubTopicTurnSettled = async (
   }
 
   try {
-    if (!ResultWakeChannel.canQueue()) return;
     const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
-    if (topic?.agentId) {
+    if (!topic?.agentId) return;
+    if (ResultWakeChannel.canQueue()) {
       await bridge.drainIfPending(topic.agentId, topicId, SUB_TOPIC_RECEIPT_PREFIX);
+      return;
     }
+    // Without the queue, a receipt that arrived while this run held the topic
+    // got no wake (the direct one could not reserve it). Catch up now, once,
+    // for every receipt written since this run started.
+    const run = await new AgentOperationModel(db, userId, workspaceId)
+      .findById(params.operationId)
+      .catch(() => undefined);
+    if (!run?.createdAt) return;
+    const receiptIds = await listReceiptsSince(db, topicId, run.createdAt);
+    await bridge.wakeDirect({ agentId: topic.agentId, originTopicId: topicId, receiptIds });
   } catch (error) {
     log('waking %s for sub-topic receipts that arrived while it ran failed: %O', topicId, error);
   }

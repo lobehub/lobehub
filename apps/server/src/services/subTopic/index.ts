@@ -130,6 +130,11 @@ export interface SubTopicDeps {
   findLiveRunIds: (topicId: string) => Promise<string[]>;
   findTopic: (topicId: string) => Promise<TopicRow | null | undefined>;
   /**
+   * Of `topicIds`, the ones with a live top-level run another member started:
+   * the caller cannot stop those, so a cascade must not retire them.
+   */
+  findTopicsRunByOthers: (topicIds: string[]) => Promise<string[]>;
+  /**
    * Cancel a run. `success: false` means the cancellation was not confirmed
    * (e.g. a device-hosted agent whose process may still be running) and the
    * run stays live so the stop can be retried.
@@ -359,7 +364,10 @@ export class SubTopicService {
         ...(deviceId && { deviceId }),
         // A device asked for by name must be the one it runs on: fail rather than
         // fall back to the cloud when it is offline.
-        ...(input.deviceId && { requireDevice: true }),
+        // So is the device a new worktree was just created on: running
+        // anywhere else would use the wrong filesystem, and cleanup would look
+        // for the folder on the wrong machine.
+        ...((input.deviceId || createdWorktree) && { requireDevice: true }),
         ...(!input.detach && { openedByTopicId: opener.id }),
         prompt: input.prompt,
         ...(input.sourceOperationId && { sourceOperationId: input.sourceOperationId }),
@@ -601,6 +609,15 @@ export class SubTopicService {
       // Every topic this touches is edited — stopped, then archived or
       // trashed: check them all before the first run is cancelled.
       await this.deps.assertCanEditTopics([root.id, ...descendants.map((item) => item.id)]);
+      // A run another member started cannot be stopped from here; retiring
+      // its topic would leave it running under an archived conversation.
+      const runByOthers = await this.deps.findTopicsRunByOthers(descendants.map((item) => item.id));
+      if (runByOthers.length > 0) {
+        throw new SubTopicError(
+          'CONFLICT',
+          `${runByOthers.length} sub-topic(s) are being run by another member, so nothing was archived or deleted. Ask them to stop, or archive only this topic.`,
+        );
+      }
       // Ask each one for its live runs rather than trusting a status field: a
       // server-run turn never writes `topics.status`.
       await this.interruptAll(descendants.map((item) => item.id));
@@ -611,6 +628,9 @@ export class SubTopicService {
     }
 
     const children = await this.deps.listOpened([root.id]);
+    // The topic itself is archived after its sub-topics move: check it first,
+    // so a refusal never leaves them moved under a topic that stayed put.
+    await this.deps.assertCanEditTopics([root.id]);
     const detached = await this.detachChecked(children.map((child) => child.id));
     await retireOne(root.id);
     return { detached: this.describeMoves(root, detached), retired: [root.id] };

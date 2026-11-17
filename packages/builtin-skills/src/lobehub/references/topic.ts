@@ -12,13 +12,9 @@ Manage conversation topics (chat sessions).
 - \`lh topic delete <ids...> [--yes]\` - Delete one or more topics
 - \`lh topic stop <id>\` - Stop the topic's running turn (the runs you started)
 - \`lh topic archive <id>\` / \`lh topic unarchive <id>\` - Archive a topic (it leaves the agent list; an auto-created worktree is cleaned up) or bring it back
-- \`lh topic send --new -c <text> [--parent-topic-id <id> | --detach]\` - Open a new topic; run inside a conversation it is linked to that conversation as its parent unless \`--detach\`
 - \`lh topic recent [-L <limit>]\` - List recently accessed topics
 - \`lh topic send <id> -c <message>\` - Send a message to a topic and have its agent act on it (queued behind a running turn)
 - \`lh topic send --new -c <message> [--agent-id <id>] [--where inherit|new-worktree|none] [--base-branch <branch>] [--parent-topic-id <id> | --detach]\` - Open a new topic; run from inside a conversation (or with \`--parent-topic-id\`) it is a sub-topic of it, and \`--detach\` makes it a plain, unlinked topic
-- \`lh topic list --opened-by-me [--parent-topic-id <id>]\` - List the sub-topics this conversation opened, with their state
-- \`lh topic stop <id>\` - Stop a topic's current turn
-- \`lh topic archive <id> [--all]\` - Archive a topic; \`--all\` also stops and archives its sub-topics
 
 ## Sub-topics and other ways to hand work off
 

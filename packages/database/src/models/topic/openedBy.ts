@@ -2,9 +2,10 @@ import type { AgentOperationStatus, ChatTopicStatus, TopicOpenedBy } from '@lobe
 import { and, desc, eq, inArray, isNull, not, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { agentOperations, topics } from '../../schemas';
+import { agentOperations, taskTopics, topics } from '../../schemas';
 import { notTrashed } from '../../utils/softDelete';
 import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
+import { topicsOwnership } from '../task/context';
 import type { TopicModelContext } from './context';
 
 /**
@@ -79,6 +80,22 @@ const walkOpenedTopics = async (
       ? or(isNull(topics.status), not(inArray(topics.status, excludeStatuses)))
       : undefined;
   const runStartedAt = topicRunStartedAtColumn(ctx.db);
+  // A task run is listed only when the caller may see that run of its task:
+  // a private task's runs stay with their runner and the task's creator.
+  const visibleTaskRun = ctx.db
+    .select({ one: sql`1` })
+    .from(taskTopics)
+    .where(
+      and(
+        // The outer row's id: qualified, or it would resolve against task_topics.
+        sql`${taskTopics.topicId} = ${sql.identifier('topics')}.${sql.identifier('id')}`,
+        topicsOwnership({ db: ctx.db, userId: ctx.userId, workspaceId: ctx.workspaceId }),
+      ),
+    );
+  const taskVisibilityCondition = or(
+    not(eq(topics.trigger, 'task')),
+    sql`exists (${visibleTaskRun})`,
+  );
 
   // The latest top-level run decides what a sub-topic is doing: server runs
   // keep `topics.status` as it was and only write the operation row.
@@ -118,6 +135,7 @@ const walkOpenedTopics = async (
           ctx.ownership(),
           inArray(topics.trigger, [...OPENED_BY_TRIGGERS]),
           inArray(openedByTopicId, frontier),
+          taskVisibilityCondition,
           // Never a jsonb null test in a qual — see the note on `TopicModel`.
           sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
           statusCondition,

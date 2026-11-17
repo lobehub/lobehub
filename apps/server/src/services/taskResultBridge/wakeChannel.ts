@@ -66,6 +66,15 @@ export class ResultWakeChannel {
     await this.drain(agentId, originTopicId);
   }
 
+  /**
+   * Wake the topic now for results already on its main line — the no-Redis
+   * path's catch-up when a direct wake could not reserve a busy topic.
+   */
+  async wakeDirect(params: { agentId: string; originTopicId: string; receiptIds: string[] }) {
+    if (params.receiptIds.length === 0) return;
+    await this.startCreatorRun(params);
+  }
+
   /** Whether receipts are queued (and batched); see {@link queueWakeup}. */
   static canQueue(): boolean {
     return TaskResultCallbackRedisStore.isAvailable();

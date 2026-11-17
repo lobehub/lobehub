@@ -7,13 +7,22 @@ const mocks = vi.hoisted(() => ({
   canQueue: vi.fn(() => true),
   deliver: vi.fn(),
   drainIfPending: vi.fn(),
+  findOperation: vi.fn(),
   findTopic: vi.fn(),
+  listReceiptsSince: vi.fn(),
   queueWakeup: vi.fn(),
+  wakeDirect: vi.fn(),
 }));
 
 vi.mock('./receipt', () => ({
   SUB_TOPIC_RECEIPT_PREFIX: 'subtopic-cb-',
   deliverSubTopicReceipt: mocks.deliver,
+  listReceiptsSince: mocks.listReceiptsSince,
+}));
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn(function () {
+    return { findById: mocks.findOperation };
+  }),
 }));
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(function () {
@@ -23,7 +32,11 @@ vi.mock('@/database/models/topic', () => ({
 vi.mock('@/server/services/taskResultBridge/wakeChannel', () => ({
   ResultWakeChannel: Object.assign(
     vi.fn(function () {
-      return { drainIfPending: mocks.drainIfPending, queueWakeup: mocks.queueWakeup };
+      return {
+        drainIfPending: mocks.drainIfPending,
+        queueWakeup: mocks.queueWakeup,
+        wakeDirect: mocks.wakeDirect,
+      };
     }),
     { canQueue: mocks.canQueue },
   ),
@@ -55,6 +68,23 @@ describe('onSubTopicTurnSettled', () => {
     );
     // Only sub-topic receipts pull the wake forward; task callbacks keep their timing.
     expect(mocks.drainIfPending).toHaveBeenCalledWith('agt_a', 'tpc_a', 'subtopic-cb-');
+  });
+
+  it('without the queue, wakes the topic once for receipts that landed while this run held it', async () => {
+    mocks.canQueue.mockReturnValue(false);
+    const startedAt = new Date('2026-11-18T00:00:00.000Z');
+    mocks.findOperation.mockResolvedValue({ createdAt: startedAt, id: 'op_1' });
+    mocks.listReceiptsSince.mockResolvedValue(['subtopic-cb-op_x', 'subtopic-cb-op_y']);
+
+    await onSubTopicTurnSettled(params, { execAgent: vi.fn() });
+
+    expect(mocks.listReceiptsSince).toHaveBeenCalledWith(params.db, 'tpc_a', startedAt);
+    expect(mocks.wakeDirect).toHaveBeenCalledWith({
+      agentId: 'agt_a',
+      originTopicId: 'tpc_a',
+      receiptIds: ['subtopic-cb-op_x', 'subtopic-cb-op_y'],
+    });
+    expect(mocks.drainIfPending).not.toHaveBeenCalled();
   });
 
   it('never throws, even when the receipt fails', async () => {

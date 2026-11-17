@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations, agents, topics, users } from '../../../schemas';
+import { agentOperations, agents, tasks, taskTopics, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 
@@ -79,6 +79,18 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
         userId: otherUserId,
       },
     ]);
+
+    // A task run belongs to its task: listed only through a visible run row.
+    await serverDB.insert(tasks).values({
+      createdByUserId: userId,
+      id: 'task-1',
+      identifier: 'T-1',
+      instruction: 'run it',
+      seq: 1,
+    } as any);
+    await serverDB
+      .insert(taskTopics)
+      .values({ seq: 1, taskId: 'task-1', topicId: 'child-task', userId } as any);
   });
 
   afterEach(async () => {

@@ -120,6 +120,34 @@ describe('deliverSubTopicReceipt', () => {
     });
   });
 
+  it('writes and wakes nothing when the settling member may not run the opener', async () => {
+    const canRunOpener = vi.fn().mockResolvedValue(false);
+
+    expect(await deliverSubTopicReceipt({ canRunOpener, queueWakeup }, params)).toBe(
+      'opener_forbidden',
+    );
+    expect(canRunOpener).toHaveBeenCalledWith({
+      agentId: 'agt_lobe',
+      groupId: undefined,
+      id: 'tpc_parent',
+    });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).not.toHaveBeenCalled();
+  });
+
+  it("keeps a group conversation's identity on the receipt, so its transcript shows it", async () => {
+    mocks.findTopic.mockImplementation(async (id: string) =>
+      id === 'tpc_child' ? child : { ...parent, groupId: 'grp_1' },
+    );
+
+    await deliverSubTopicReceipt({ queueWakeup }, params);
+
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({
+      groupId: 'grp_1',
+      topicId: 'tpc_parent',
+    });
+  });
+
   it('counts a turn a person started as hop 1', async () => {
     mocks.findLatestUserTurnHop.mockResolvedValue(undefined);
 
