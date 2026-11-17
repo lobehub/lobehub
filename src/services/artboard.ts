@@ -46,12 +46,16 @@ class ArtboardService {
 
   getConversation = (topicId: string) => lambdaClient.topic.getTopicDetail.query({ id: topicId });
 
+  getPublish = (id: string) => lambdaClient.artboard.getPublish.query({ id });
+
   getRevision = (id: string) => lambdaClient.artboard.getRevision.query({ id });
 
   listByProject = (projectId: string) => lambdaClient.artboard.listByProject.query({ projectId });
 
   listComments = (id: string): Promise<ArtboardCommentThreadView[]> =>
     lambdaClient.artboard.listComments.query({ id });
+
+  publish = (id: string): Promise<{ url: string }> => lambdaClient.artboard.publish.mutate({ id });
 
   reopenComment = (commentId: string) => lambdaClient.artboard.reopenComment.mutate({ commentId });
 
@@ -69,6 +73,8 @@ class ArtboardService {
     roundIds: string[],
   ): Promise<{ artboard: ArtboardItem; submitted: number }> =>
     lambdaClient.artboard.submitRounds.mutate({ id, roundIds });
+
+  unpublish = (id: string) => lambdaClient.artboard.unpublish.mutate({ id });
 }
 
 export const artboardService = new ArtboardService();

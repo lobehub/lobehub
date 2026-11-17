@@ -24,6 +24,7 @@ import OpenConversation from '../Gallery/OpenConversation';
 import { artboardActions, useArtboardStore } from '../store';
 import type { BoardMode, VerifyView } from '../types';
 import PageMenu from './PageMenu';
+import ShareButton from './ShareButton';
 import { useTitleBarInset } from './useTitleBarInset';
 
 const BAR_PADDING = 12;
@@ -193,6 +194,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
         />
       )}
       {gallery && <OpenConversation onLeave={onExitFullscreen} />}
+      <ShareButton />
       <ActionIcon
         icon={onExitFullscreen ? Minimize2Icon : Maximize2Icon}
         size={'small'}
