@@ -16,7 +16,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { redisService } from '@/server/services/redis';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
-import { ChannelDeliveryError } from './channelDelivery';
+import { assertChannelDelivery, ChannelDeliveryError } from './channelDelivery';
 import { listInboundWebhookDeliveries } from './deliveries';
 import { isWebhookEnabled } from './featureGate';
 import { canConfigureInboundWebhook, canManageInboundWebhook, inboundWebhookItems } from './items';
@@ -319,6 +319,34 @@ export class InboundWebhookManager {
     });
   }
 
+  /**
+   * Whether results can still reach the Channel a row posts to, checked as its creator: a check
+   * reports `channel_unavailable` before the next event finds out, and clears it once the Channel
+   * takes posts again.
+   */
+  private async checkChannelDelivery(model: InboundWebhookModel, row: InboundWebhookView) {
+    const delivery = row.config.delivery;
+    if (!delivery) return;
+    let available = true;
+    try {
+      await assertChannelDelivery(
+        this.db,
+        { userId: row.userId, workspaceId: row.workspaceId ?? undefined },
+        row.agentId,
+        delivery,
+      );
+    } catch (error) {
+      if (!(error instanceof ChannelDeliveryError)) throw error;
+      available = false;
+    }
+    const current = await model.findById(row.id);
+    if (!current) return;
+    if (!available && !current.lastError)
+      await model.update(row.id, { lastError: 'channel_unavailable' });
+    else if (available && current.lastError === 'channel_unavailable')
+      await model.update(row.id, { lastError: null });
+  }
+
   /** Check an MCP Events subscription with its server now, renewing or recovering it. */
   check(id: string): Promise<InboundWebhookItem> {
     return guard(async () => {
@@ -348,6 +376,7 @@ export class InboundWebhookManager {
         await KeyVaultsGateKeeper.initWithEnvKey(),
       );
       await kind.maintain({ db: this.db, featureEnabled: true, model, row });
+      await this.checkChannelDelivery(model, row);
       const updated = await model.findById(row.id);
       if (!updated || updated.status === 'deleting') throw notFound();
       return this.item(updated);

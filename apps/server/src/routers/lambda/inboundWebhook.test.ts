@@ -348,6 +348,18 @@ describe('inboundWebhook tRPC resource contract', () => {
     expect(maintain).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a Channel that no longer takes its results when checked', async () => {
+    const row = await seed();
+    const model = new InboundWebhookModel(db, creator, undefined, gateKeeper);
+    await model.update(row.id, {
+      config: { arguments: {}, delivery: { channelId: 'chn_gone' }, eventName: 'issue.created' },
+    });
+    expect(await caller().check({ id: row.id })).toMatchObject({
+      lastError: 'channel_unavailable',
+      status: 'active',
+    });
+  });
+
   it('returns discovered delivery errors as rows instead of throwing', async () => {
     const row = await seed();
     maintain.mockImplementation(async ({ model, row: current }) => {

@@ -173,6 +173,17 @@ describe('generic webhook management', () => {
     ]);
   });
 
+  it('gives webhooks created at the same moment different identifiers', async () => {
+    const created = await Promise.all(
+      Array.from({ length: 3 }, () => caller().create({ agentId, name: 'CI alerts' })),
+    );
+    expect(created.map(({ item }) => item.identifier).sort()).toEqual([
+      'ci-alerts',
+      'ci-alerts-2',
+      'ci-alerts-3',
+    ]);
+  });
+
   it('lists one kind when asked', async () => {
     const { item } = await caller().create({ agentId });
     expect((await caller().list({ kind: 'generic' })).map((row) => row.id)).toEqual([item.id]);
