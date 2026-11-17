@@ -41,6 +41,29 @@ interface ResolveArgs {
 
 const dedupe = (ids: string[]) => Array.from(new Set(ids));
 
+const missingAttachmentWarning = (id: string) => `Attachment "${id}" was not found and skipped.`;
+
+/**
+ * The ids among `fileIds` that match no file the caller can read, in caller
+ * order. A failed or unfinished upload leaves one behind when a client sends its
+ * placeholder id anyway. Desktop 2.2.15 does that, because the server now refuses
+ * its upload request.
+ */
+export const findUnresolvedAttachmentIds = async ({
+  db,
+  fileAccessScope = ordinaryFileAccessScope,
+  fileIds,
+  userId,
+  workspaceId,
+}: ResolveArgs): Promise<string[]> => {
+  const ids = dedupe(fileIds);
+  if (ids.length === 0) return [];
+
+  const records = await new FileModel(db, userId, workspaceId).findByIds(ids, fileAccessScope);
+  const found = new Set(records.map((record) => record.id));
+  return ids.filter((id) => !found.has(id));
+};
+
 const getAudioMetadata = (
   metadata: unknown,
   fileType: string,
@@ -90,6 +113,7 @@ export const resolveAttachmentsByFileIds = async ({
   const fileRecords = await fileModel.findByIds(dedupedFileIds, fileAccessScope);
   if (fileRecords.length === 0) {
     log('no file records found for fileIds=%O', dedupedFileIds);
+    result.warnings.push(...dedupedFileIds.map(missingAttachmentWarning));
     return result;
   }
 
@@ -130,7 +154,7 @@ export const resolveAttachmentsByFileIds = async ({
 
   for (const entry of resolved) {
     if ('missing' in entry) {
-      result.warnings.push(`Attachment "${entry.id}" was not found and skipped.`);
+      result.warnings.push(missingAttachmentWarning(entry.id));
       continue;
     }
     const { file, fileType, resolvedUrl } = entry;

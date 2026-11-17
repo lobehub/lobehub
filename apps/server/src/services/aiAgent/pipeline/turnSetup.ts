@@ -35,7 +35,10 @@ import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSign
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
-import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
+import {
+  findUnresolvedAttachmentIds,
+  resolveAttachmentsByFileIds,
+} from '@/server/services/file/resolveAttachments';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import type { DeviceAccessReason } from '../deviceAccessPolicy';
@@ -561,6 +564,39 @@ export const setupTurn = async (
     });
   }
 
+  // Suppose a turn has only attachments, and none of them resolve to a file.
+  // Running it would save an empty user message and run the agent on it. A
+  // client sends such a turn when an upload failed and it passes the
+  // placeholder id on anyway (Desktop 2.2.15 does). Refuse it before any row is
+  // written, so the sender sees why. A turn with some attachments missing still
+  // runs, and `resolveRunAttachments` skips the missing ones.
+  const fileAccessScope = shareGate
+    ? agentShareFileAccessScope(shareGate)
+    : ordinaryFileAccessScope;
+  if (
+    attachedFileIds?.length &&
+    !prompt.trim() &&
+    !files?.length &&
+    !userMessage?.metadata?.contextSelections?.length &&
+    !userMessage?.metadata?.pageSelections?.length
+  ) {
+    const unresolved = await findUnresolvedAttachmentIds({
+      db: deps.db,
+      fileAccessScope,
+      fileIds: attachedFileIds,
+      userId: deps.userId,
+      workspaceId: deps.workspaceId,
+    });
+    if (unresolved.length === new Set(attachedFileIds).size) {
+      log('execAgent: refusing an attachment-only turn with no readable file: %O', unresolved);
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          'The attached file did not finish uploading, so nothing was sent. Attach it again, or update LobeHub if uploads keep failing',
+      });
+    }
+  }
+
   const assertProjectDirectoryAccess = () => {
     if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
       throw new Error('Project directory access denied');
@@ -909,7 +945,7 @@ export const setupTurn = async (
   const runAttachments = await traceTurnStage('attachments', async (span) => {
     const resolved = await resolveRunAttachments(deps, {
       attachedFileIds,
-      fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+      fileAccessScope,
       files,
       throwIfAborted: throwIfExecutionAborted,
     });
