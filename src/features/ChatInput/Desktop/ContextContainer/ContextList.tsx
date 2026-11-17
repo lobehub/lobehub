@@ -5,8 +5,7 @@ import { memo } from 'react';
 
 import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
-import { isImageUpload } from '@/features/ChatInput/utils/imageUploads';
-import { getChatInputImageKey } from '@/features/ChatInput/utils/sentImageFlight';
+import { getChatInputImageKey, isImageUpload } from '@/features/ChatInput/utils/imageUploads';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import ContextItem from './ContextItem';

@@ -7,10 +7,6 @@ import { useTranslation } from 'react-i18next';
 
 import { FileUploadErrorActions } from '@/business/client/features/FileUploadErrorActions';
 import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
-import {
-  CHAT_INPUT_IMAGE_ATTR,
-  getChatInputImageKey,
-} from '@/features/ChatInput/utils/sentImageFlight';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
@@ -114,15 +110,7 @@ const ImageCard = memo<UploadFileItem>((item) => {
       ref={cardRef}
       {...stylex.props(styles.card, canRetry && styles.cardError)}
     >
-      {src && (
-        <img
-          alt={file.name}
-          draggable={false}
-          src={src}
-          {...{ [CHAT_INPUT_IMAGE_ATTR]: getChatInputImageKey(item) }}
-          {...stylex.props(styles.image)}
-        />
-      )}
+      {src && <img alt={file.name} draggable={false} src={src} {...stylex.props(styles.image)} />}
       <Tooltip title={<UploadTooltipContent {...item} />}>
         <button
           aria-label={t('upload.image.preview', { name: file.name })}

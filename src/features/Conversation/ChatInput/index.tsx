@@ -27,7 +27,6 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
-import { flySentImages } from '@/features/ChatInput/utils/sentImageFlight';
 import { checkProjectExecution } from '@/features/Projects/WorkingDirectories/checkExecution';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -424,9 +423,6 @@ const ChatInput = memo<ChatInputProps>(
           editorUnchanged: getMarkdownContent() === message,
           stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
         });
-        // The sent images fly from their thumbnails into the message, so they are captured
-        // before the composer empties.
-        flySentImages(currentFileList);
         if (handoff.clearEditor) clearContent();
         fileStore.clearChatUploadFileList(contextKey);
         fileStore.clearChatContextSelections(contextKey);

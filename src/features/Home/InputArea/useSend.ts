@@ -9,7 +9,6 @@ import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { getDraft, saveDraft } from '@/features/ChatInput/draftStorage';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
-import { flySentImages } from '@/features/ChatInput/utils/sentImageFlight';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { usePermission } from '@/hooks/usePermission';
@@ -299,8 +298,6 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
             await ensureAgentConfigLoaded(selectedAgentId);
 
-            // The images fly from the home composer into the conversation it opens.
-            flySentImages(fileList);
             sendMessage({
               context: {
                 agentId: selectedAgentId,
