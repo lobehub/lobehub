@@ -141,6 +141,29 @@ export class ConnectorModel {
   getLinkModel = () =>
     new ConnectorLinkModel(this.db, this.userId, this.workspaceId, this.gateKeeper);
 
+  /** Serialize refresh state changes with account writes, reauthorization and deletion. */
+  withOAuthRefreshLock = <T>(
+    connector: Pick<DecryptedConnector, 'id' | 'workspaceId'>,
+    action: (row: DecryptedConnector, model: ConnectorModel) => Promise<T>,
+  ): Promise<T | undefined> =>
+    this.db.transaction(async (tx) => {
+      // A workspace run can resolve an owner's personal connector. Keep its
+      // refresh writes in personal scope, still constrained to the same owner.
+      const model = new ConnectorModel(
+        tx,
+        this.userId,
+        connector.workspaceId === null ? undefined : this.workspaceId,
+        this.gateKeeper,
+      );
+      model.evaluationDatasetId = this.evaluationDatasetId;
+      const [row] = await tx
+        .select()
+        .from(userConnectors)
+        .where(and(eq(userConnectors.id, connector.id), model.ownership()))
+        .for('update');
+      if (row) return action(await decryptRow(row, this.gateKeeper), model);
+    });
+
   private ownership = () =>
     connectorAccessScope(
       this.db,

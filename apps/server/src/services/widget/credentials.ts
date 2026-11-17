@@ -1,4 +1,4 @@
-import type { WidgetEnvRequirement } from '@lobechat/types';
+import { needsConnectorReauthorization, type WidgetEnvRequirement } from '@lobechat/types';
 
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import type { DecryptedConnectorLink } from '@/database/models/connectorLink';
@@ -327,13 +327,14 @@ export const resolveWidgetEnv = async (
     if (connector) {
       const link = accountOf.get(connector.id);
       connector = link
-        ? withLinkCredentials(
-            connector,
-            await ensureFreshLinkToken(connector, link, model.getLinkModel(), model),
-          )
+        ? withLinkCredentials(connector, await ensureFreshLinkToken(connector, link, model))
         : await ensureFreshConnectorToken(connector, model);
     }
-    const selection = selectConnectorSecret(connector?.credentials ?? null, requirement.field);
+    const credentials = connector?.credentials ?? null;
+    const selection = selectConnectorSecret(
+      needsConnectorReauthorization(credentials) ? null : credentials,
+      requirement.field,
+    );
     if ('error' in selection) {
       // A manifest that does not pick one header is wrong whether or not the
       // variable is optional: report it rather than silently dropping it.

@@ -240,9 +240,11 @@ const Render = memo<MarkdownElementProps<McpEventAttributes>>(({ children, node 
             </EventPill>
             {card.notice.namesEvent && eventPill}
             <Text type={'secondary'}>
-              {t(`mcpEvent.noticeReason.${card.notice.reason}` as any, {
-                defaultValue: t('mcpEvent.noticeReason.unknown'),
-              })}
+              {card.notice.reason === 'access_revoked'
+                ? t('mcpEvent.noticeReason.reconnectToResubscribe')
+                : t(`mcpEvent.noticeReason.${card.notice.reason}` as any, {
+                    defaultValue: t('mcpEvent.noticeReason.unknown'),
+                  })}
             </Text>
           </Flexbox>
         )}
