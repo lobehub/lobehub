@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { FILE_LIST_EXAMPLE } from '../common/examples';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { FileController } from '../controllers/file.controller';
@@ -44,7 +45,12 @@ const app = new Hono();
  */
 app.get(
   '/',
-  routeDoc({ data: FileListResponseSchema, summary: 'List files', tags: ['files'] }),
+  routeDoc({
+    data: FileListResponseSchema,
+    responseExample: FILE_LIST_EXAMPLE,
+    summary: 'List files',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_READ'),
@@ -240,7 +246,12 @@ app.delete(
  */
 app.post(
   '/:id/parses',
-  routeDoc({ data: FileParseResultSchema, summary: 'Parse file content', tags: ['files'] }),
+  routeDoc({
+    operationId: 'files.parse',
+    data: FileParseResultSchema,
+    summary: 'Parse file content',
+    tags: ['files'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('FILE_UPDATE'),
@@ -333,6 +344,7 @@ app.get(
 app.post(
   '/batches',
   routeDoc({
+    operationId: 'files.uploadBatch',
     data: BatchFileUploadResponseSchema,
     errors: [400],
     requestBody: {
@@ -390,6 +402,7 @@ app.post(
 app.post(
   '/queries',
   routeDoc({
+    operationId: 'files.query',
     data: BatchGetFilesResponseSchema,
     summary: 'Get several files',
     tags: ['files'],
