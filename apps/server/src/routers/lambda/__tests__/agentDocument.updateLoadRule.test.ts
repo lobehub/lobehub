@@ -42,7 +42,7 @@ describe('agentDocumentRouter.updateLoadRule', () => {
     });
   });
 
-  // T-14044: the input schema had no `mode`, so zod stripped it and a
+  // The input schema had no `mode`, so zod stripped it and a
   // progressive document could never be switched to "always" from the client.
   it('passes the load mode through to the service', async () => {
     mocks.updateLoadRuleById.mockResolvedValue({ id: 'agd-1', policyLoad: 'always' });

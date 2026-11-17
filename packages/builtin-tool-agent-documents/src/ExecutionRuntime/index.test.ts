@@ -784,7 +784,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
     });
   });
 
-  // T-14044: maxTokens/priority were accepted on a progressive document and the
+  // maxTokens/priority were accepted on a progressive document and the
   // result read as plain success, yet nothing was ever injected. The result now
   // reports the stored mode, and `mode` reaches the service.
   describe('updateLoadRule', () => {

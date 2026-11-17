@@ -11,7 +11,7 @@ const alwaysDoc = (content: string, maxTokens?: number) => ({
 });
 
 describe('formatDocument maxTokens', () => {
-  // T-14044: the cap counted whitespace-separated words, so a Chinese document
+  // The cap counted whitespace-separated words, so a Chinese document
   // (one "word" per paragraph) was injected whole under maxTokens: 900.
   it('caps Chinese content that has no spaces', () => {
     const content = '发布前确认数据库迁移已在预发环境执行完成，并检查回滚脚本。'.repeat(200);

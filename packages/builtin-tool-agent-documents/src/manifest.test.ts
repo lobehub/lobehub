@@ -9,7 +9,7 @@ const updateLoadRuleApi = AgentDocumentsManifest.api.find(
 const ruleProperties = (updateLoadRuleApi.parameters as any).properties.rule.properties;
 
 describe('AgentDocumentsManifest.updateLoadRule', () => {
-  // T-14044: the schema only offered maxTokens/priority, which apply to
+  // The schema only offered maxTokens/priority, which apply to
   // "always" documents, while created documents start progressive — so the
   // model had no way to get a document injected.
   it('lets the model switch a document between progressive and always', () => {

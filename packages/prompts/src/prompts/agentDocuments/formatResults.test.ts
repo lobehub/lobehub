@@ -70,7 +70,7 @@ describe('agentDocuments formatResults', () => {
   });
 
   // A maxTokens/priority-only update used to read as plain success while the
-  // document stayed progressive, so agents promised automatic loading (T-14044).
+  // document stayed progressive, so agents promised automatic loading.
   describe('update-load-rule effect', () => {
     it('says a progressive document is not injected and its cap is inert', () => {
       expect(

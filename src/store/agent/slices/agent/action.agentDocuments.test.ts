@@ -48,7 +48,7 @@ describe('agent context documents cache', () => {
     expect(resolveAgentDocumentsContext).toHaveBeenCalledTimes(2);
   });
 
-  // T-14044: in browser-run chats, a document created or switched to "always"
+  // In browser-run chats, a document created or switched to "always"
   // by a tool call stayed out of the model context until a page reload.
   it('refetches after an agent document mutation', async () => {
     vi.mocked(resolveAgentDocumentsContext)
