@@ -12,6 +12,9 @@ import { canSteerClientRun } from '../client/clientSteer';
 
 const log = debug('lobe-store:local-steer');
 
+/** How often a message waiting for the runtime to come up checks again. */
+const STARTUP_RETRY_MS = 500;
+
 /**
  * Whether a local heterogeneous run can take a message mid-run: Claude Code
  * (SDK input stream, or a CLI whose input stays open), Codex over app-server
@@ -38,6 +41,11 @@ export interface LocalSteerOptions {
   contextKey: string;
   get: () => ChatStore;
   ipcSessionId: string;
+  /**
+   * Whether the agent's runtime is up (it has streamed output). Before that the
+   * session has no way in yet, so a message waits instead of being refused.
+   */
+  isReady: () => boolean;
   /** Whether the run waits for the user (a pending question or approval); nothing is steered then. */
   isWaitingForUser: () => boolean;
   operationId: string;
@@ -100,8 +108,16 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
     get().updateOperationMetadata(operationId, { liveSteer: false, steerUnsupported: true });
   };
 
+  let startupTimer: ReturnType<typeof setTimeout> | undefined;
+
   const pump = async () => {
     if (stopped || pending || pumping || options.isWaitingForUser()) return;
+    // Queue chosen meanwhile: what waits now goes once the run ends.
+    if (getFollowUpMode() !== 'steer') return;
+    if (!options.isReady()) {
+      if (hasJoinable()) startupTimer ??= setTimeout(retryAfterStartup, STARTUP_RETRY_MS);
+      return;
+    }
     // Taking from the queue notifies its subscribers, this pump among them.
     pumping = true;
     let again = false;
@@ -114,13 +130,24 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
     if (again) schedule();
   };
 
-  /** @returns whether the steer was read before its write was answered, so the pump runs again */
-  const pumpOnce = async (): Promise<boolean> => {
+  /** How many queued messages, from the head, can join a running turn. */
+  const joinableCount = () => {
     const queue = get().queuedMessages[contextKey] ?? [];
     const firstHeld = queue.findIndex(
       (message) => !canSteerClientRun(message) || !!message.localSteer,
     );
-    const joinable = firstHeld === -1 ? queue.length : firstHeld;
+    return firstHeld === -1 ? queue.length : firstHeld;
+  };
+  const hasJoinable = () => joinableCount() > 0;
+
+  const retryAfterStartup = () => {
+    startupTimer = undefined;
+    schedule();
+  };
+
+  /** @returns whether the steer was read before its write was answered, so the pump runs again */
+  const pumpOnce = async (): Promise<boolean> => {
+    const joinable = joinableCount();
     if (joinable === 0) return false;
 
     const taken = get().drainQueuedMessages(contextKey, { limit: joinable });
@@ -242,6 +269,7 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
    */
   const settle = () => {
     stopped = true;
+    if (startupTimer) clearTimeout(startupTimer);
     unsubscribe();
     const steer = pending;
     pending = undefined;

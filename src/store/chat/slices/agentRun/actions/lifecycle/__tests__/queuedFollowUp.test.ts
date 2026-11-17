@@ -3,16 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessage } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
-import { drainQueuedTurn, scheduleQueuedFollowUp } from '../queuedFollowUp';
+import { drainQueuedTurn, findOrphanedQueueKey, scheduleQueuedFollowUp } from '../queuedFollowUp';
 
 const mode = vi.hoisted(() => ({ value: 'legacy' as 'legacy' | 'queue' | 'steer' }));
 vi.mock('../followUpMode', () => ({ getFollowUpMode: () => mode.value }));
 
-const queued = (id: string, content: string): QueuedMessage => ({
+const queued = (
+  id: string,
+  content: string,
+  extra: Partial<QueuedMessage> = {},
+): QueuedMessage => ({
   content,
   createdAt: Number(id.slice(1)),
   id,
   interruptMode: 'soft',
+  ...extra,
 });
 
 const createStore = (messages: QueuedMessage[]) => {
@@ -85,5 +90,23 @@ describe('scheduleQueuedFollowUp', () => {
     expect(params.message).toBe('first');
     expect(params.queueHead).toBe(true);
     expect(state.queue.map((m) => m.id)).toEqual(['q2']);
+  });
+});
+
+describe('findOrphanedQueueKey', () => {
+  it('ignores a steer that may already be with the agent', () => {
+    const { get } = createStore([queued('q1', 'maybe', { localSteer: 'unknown' } as any)]);
+    (get() as any).queuedMessages = {
+      key: [queued('q1', 'maybe', { localSteer: 'unknown' } as any)],
+    };
+
+    expect(findOrphanedQueueKey(get, ['key'], false)).toBeUndefined();
+  });
+
+  it('still finds a queue a send must take along', () => {
+    const { get } = createStore([]);
+    (get() as any).queuedMessages = { key: [queued('q1', 'waiting')] };
+
+    expect(findOrphanedQueueKey(get, ['key'], false)).toBe('key');
   });
 });

@@ -11,6 +11,8 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: { steerSession: vi.fn() },
 }));
 vi.mock('@/services/message', () => ({ messageService: { createMessage: vi.fn() } }));
+const mode = vi.hoisted(() => ({ value: 'steer' as 'legacy' | 'queue' | 'steer' }));
+vi.mock('../../lifecycle/followUpMode', () => ({ getFollowUpMode: () => mode.value }));
 
 const queued = (
   id: string,
@@ -25,7 +27,7 @@ const queued = (
 });
 
 /** A store with just the queue and the calls the steer makes, notifying on queue changes. */
-const createHarness = (messages: QueuedMessage[], waiting = false) => {
+const createHarness = (messages: QueuedMessage[], waiting = false, ready = { value: true }) => {
   let queue = [...messages];
   const listeners = new Set<() => void>();
   const setQueue = (next: QueuedMessage[]) => {
@@ -61,6 +63,7 @@ const createHarness = (messages: QueuedMessage[], waiting = false) => {
     contextKey: 'key',
     get: () => store,
     ipcSessionId: 'ipc-1',
+    isReady: () => ready.value,
     isWaitingForUser: () => waiting,
     operationId: 'op-1',
     rows,
@@ -77,6 +80,7 @@ const steerCall = () => vi.mocked(heterogeneousAgentService.steerSession).mock.c
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mode.value = 'steer';
   vi.mocked(heterogeneousAgentService.steerSession).mockResolvedValue({ status: 'accepted' });
   vi.mocked(messageService.createMessage).mockResolvedValue({ id: 'x' } as any);
 });
@@ -262,6 +266,29 @@ describe('createLocalSteer', () => {
     h.steer.settle();
 
     expect(h.getQueue().map((m) => m.id)).toEqual(['q1', 'q2']);
+  });
+
+  it('waits for the runtime to come up instead of taking a refusal for good', async () => {
+    vi.useFakeTimers();
+    const ready = { value: false };
+    createHarness([queued('q1', 'first')], false, ready);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(heterogeneousAgentService.steerSession).not.toHaveBeenCalled();
+
+    ready.value = true;
+    await vi.advanceTimersByTimeAsync(600);
+    expect(heterogeneousAgentService.steerSession).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('leaves new messages for the run end once the user switches to Queue', async () => {
+    const h = createHarness([]);
+    mode.value = 'queue';
+    h.setQueue([queued('q1', 'first')]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(heterogeneousAgentService.steerSession).not.toHaveBeenCalled();
+    expect(h.getQueue().map((m) => m.id)).toEqual(['q1']);
   });
 
   it('steers nothing while the run waits for the user', async () => {

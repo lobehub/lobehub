@@ -2,6 +2,7 @@ import type { ConversationContext, UploadFileItem } from '@lobechat/types';
 
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import {
+  isSendableQueuedMessage,
   mergeQueuedMessages,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
@@ -22,7 +23,8 @@ export const findOrphanedQueueKey = (
   willCreateNewTopic: boolean,
 ): string | undefined =>
   keys.find((key) => {
-    if ((get().queuedMessages[key]?.length ?? 0) === 0) return false;
+    // A steer that may already be with the agent is not sent again on its own.
+    if (!(get().queuedMessages[key] ?? []).some(isSendableQueuedMessage)) return false;
     if (!willCreateNewTopic) return true;
     return (get().operationsByContext[key] || []).some((id) => {
       const operation = get().operations[id];

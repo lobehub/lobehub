@@ -384,6 +384,14 @@ export interface QueuedMessage {
   serverUnconfirmed?: boolean;
 }
 
+/**
+ * Whether the queued message is one a send can take: a steer that may already
+ * be with the agent (`localSteer: 'unknown'`) is never sent on its own, so it
+ * holds no turn and no queue hand-off back.
+ */
+export const isSendableQueuedMessage = (message: QueuedMessage): boolean =>
+  message.localSteer !== 'unknown';
+
 /** Whether only this client holds the queued message, so only it can send it. */
 export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
   !message.serverDelivery;

@@ -19,6 +19,7 @@ import {
   type AfterCompletionCallback,
   AI_RUNTIME_OPERATION_TYPES,
   isClientHeldQueuedMessage,
+  isSendableQueuedMessage,
   type Operation,
   type OperationCancelContext,
   type OperationContext,
@@ -962,7 +963,7 @@ export class OperationActionsImpl {
     if (!queue.every(isClientHeldQueuedMessage)) return [];
 
     // A steer that may already be with the agent is never sent on its own.
-    const sendable = queue.filter((message) => message.localSteer !== 'unknown');
+    const sendable = queue.filter(isSendableQueuedMessage);
     const messages = options?.limit ? sendable.slice(0, options.limit) : sendable;
     if (messages.length === 0) return [];
 

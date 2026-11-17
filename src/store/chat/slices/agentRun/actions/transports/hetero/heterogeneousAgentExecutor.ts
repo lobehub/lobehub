@@ -2048,7 +2048,6 @@ export const executeHeterogeneousAgent = async (
       // (OpStatusTray → calculateOperationUsageMetrics), so there is no separate
       // accumulation here. Not forwarded (bookkeeping).
       if (event.type === 'step_complete' && event.data?.phase === 'user_message') {
-        // A steered message was read: it joins the spine (Follow-up behavior: Steer).
         persistQueue = persistQueue.then(async () => void (await localSteer?.confirm(event.data)));
         return;
       }
@@ -2491,6 +2490,7 @@ export const executeHeterogeneousAgent = async (
       contextKey: messageMapKey(context),
       get,
       ipcSessionId: ipcRunSessionId,
+      isReady: () => sawStreamedEvent,
       isWaitingForUser: () =>
         [...mainState.interventionsByCallId.values()].some((i) => i.transition === 'pending'),
       operationId,
