@@ -76,7 +76,10 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
  * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
-  const grants = resolveEffectiveShareToolGrants(gate.shareConfig);
+  const grants = resolveEffectiveShareToolGrants({
+    ...gate.shareConfig,
+    canUseDevice: gate.canUseDevice,
+  });
 
   // A tool must clear BOTH gates: the owner's own `toolGrants` picker
   // (`grants` — toolset-level OR scoped to at least one API), AND — for
@@ -190,7 +193,8 @@ const applyShareGateToCloudSandbox = (toolSet: ShareGateToolSet): void => {
  * Fit `lobe-activator` to the gated set, or drop it when that set leaves it
  * nothing to activate.
  *
- * Its grant is implied by any tool grant (`resolveEffectiveShareToolGrants`),
+ * Its grant is implied by any tool grant or the device grant
+ * (`resolveEffectiveShareToolGrants`),
  * but the activator only ever discovers what is left in `manifestMap` and not
  * already enabled — the same difference `buildToolDiscoveryConfig` renders as
  * `<available_tools>`. A historical activation in `activatableToolIds` counts

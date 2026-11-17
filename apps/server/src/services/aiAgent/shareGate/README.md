@@ -137,7 +137,8 @@ absence of a known exploit.
 
 - `lobe-activator`: widens the run's tool surface at runtime, so it is
   allowed only because every source it reads is already the gated set.
-  Never picked by the owner: any tool grant implies it, scoped to
+  Never picked by the owner: any tool grant implies it, and so does the
+  device grant (Computer Use is discoverable, not enabled), scoped to
   `activateTools` (`shareGate/grants.ts:132`, which also overrides a stored entry so
   nothing widens it to the runtime's unlisted `activateSkill`), and assembly
   drops it again when no granted tool is left to activate, counting restored
