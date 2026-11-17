@@ -10,9 +10,9 @@ import { useFollowSent } from './useFollowSent';
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(MemoryRouter, { initialEntries: ['/channels/chn_1'] }, children);
 
-const render = (threadId: string | null, onOpenThread = vi.fn()) => {
+const render = (threadId: string | null, onOpenThread = vi.fn(), covered = false) => {
   const hook = renderHook(
-    () => ({ follow: useFollowSent(threadId, onOpenThread), navigate: useNavigate() }),
+    () => ({ follow: useFollowSent(threadId, onOpenThread, covered), navigate: useNavigate() }),
     { wrapper },
   );
   return { ...hook, onOpenThread };
@@ -64,6 +64,14 @@ describe('useFollowSent', () => {
 
     scope = 'other';
     await act(async () => gate.resolve({ threadId: 'thread' }));
+
+    expect(onOpenThread).not.toHaveBeenCalled();
+  });
+
+  it('stays where the user is while the Channel is covered by a thread page', async () => {
+    const { result, onOpenThread } = render(null, vi.fn(), true);
+
+    await act(async () => result.current.follow(Promise.resolve({ threadId: 'thread' })));
 
     expect(onOpenThread).not.toHaveBeenCalled();
   });

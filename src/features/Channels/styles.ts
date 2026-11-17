@@ -20,6 +20,10 @@ export const styles = stylex.create({
     minWidth: 0,
     minHeight: 0,
   },
+  // A Channel kept mounted behind a thread page, so its composer keeps the user's draft.
+  bodyCovered: {
+    display: 'none',
+  },
   conversations: {
     position: 'relative',
     overflow: 'hidden',
