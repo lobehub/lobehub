@@ -303,6 +303,30 @@ export async function listBindingStatesByRefs(
 }
 
 /**
+ * Which of the given backing document ids still have a `documents` row, in any scope.
+ *
+ * Use when:
+ * - Telling a permanently deleted document (row gone, nothing left to tombstone it) apart from
+ *   one that exists but is out of the caller's scope, e.g. another owner's knowledge-base page.
+ *
+ * Returns:
+ * - The existing subset of `documentIds`. Only existence is exposed, never content.
+ */
+export async function listExistingDocumentIds(
+  ctx: AgentDocumentContext,
+  documentIds: string[],
+): Promise<string[]> {
+  const ids = [...new Set(documentIds)].filter((id) => id.length > 0 && !isUuid(id));
+  if (ids.length === 0) return [];
+
+  const rows = await ctx.db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(inArray(documents.id, ids));
+  return rows.map((row) => row.id);
+}
+
+/**
  * Which backing documents are knowledge-base items: filed directly under a knowledge base or
  * backed by a file added to one.
  *

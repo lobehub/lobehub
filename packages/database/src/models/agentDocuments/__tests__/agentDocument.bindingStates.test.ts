@@ -84,6 +84,15 @@ describe('AgentDocumentModel binding states', () => {
     expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
   });
 
+  it('reports which documents still exist, regardless of owner', async () => {
+    const doc = await model.create(agentId, 'exists.md', 'exists');
+    const otherModel = new AgentDocumentModel(serverDB, otherUserId);
+
+    expect(
+      await otherModel.listExistingDocumentIds([doc.documentId, 'docs_never_existed', doc.id]),
+    ).toEqual([doc.documentId]);
+  });
+
   it('never reports a plain document that no agent was bound to', async () => {
     const [doc] = await serverDB
       .insert(documents)

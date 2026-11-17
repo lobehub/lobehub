@@ -618,6 +618,20 @@ describe('gatherContextFacts — revoked document reads', () => {
     expect(noAgent.revokedDocumentIds).toBeUndefined();
   });
 
+  it('checks the edited agent while the agent builder is active', async () => {
+    const findRevokedAgentDocumentIds = vi.fn(async () => []);
+    await gatherContextFacts(
+      request({
+        editingAgentId: 'agt_edit',
+        enabledToolIds: ['lobe-agent-builder'],
+        messages: [readKnowledge(['docs_a'])],
+      }),
+      { findRevokedAgentDocumentIds },
+    );
+
+    expect(findRevokedAgentDocumentIds).toHaveBeenCalledWith('agt_edit', ['docs_a']);
+  });
+
   it('leaves the fact out when nothing is revoked or the lookup fails', async () => {
     const none = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
       findRevokedAgentDocumentIds: async () => [],

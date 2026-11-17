@@ -38,6 +38,7 @@ import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
@@ -45,7 +46,6 @@ import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 import { type AgentDocumentIndexTurn, resolveServerAgentDocumentIndex } from './agentDocumentIndex';
-import { revokedAgentDocumentRefs } from './revokedAgentDocuments';
 
 export interface ServerContextFactSource {
   ctx: RuntimeExecutorContext;
@@ -150,17 +150,12 @@ export const createServerContextFactProviders = ({
       return doc ? { content: doc.content, title: doc.title } : null;
     },
 
-    findRevokedAgentDocumentIds: async (agentId, documentIds) => {
-      const model = new AgentDocumentModel(db, userId, workspaceId, documentAccessScope);
-      const revoked = revokedAgentDocumentRefs(
+    findRevokedAgentDocumentIds: async (agentId, documentIds) =>
+      findRevokedDocumentReads(
+        new AgentDocumentModel(db, userId, workspaceId, documentAccessScope),
+        agentId,
         documentIds,
-        await model.listBindingStatesByRefs(agentId, documentIds),
-      );
-      // A page that is still a knowledge-base item stays readable there, so its
-      // earlier reads keep their content.
-      const knowledgeBaseMembers = new Set(await model.listKnowledgeBaseMemberIds(revoked));
-      return revoked.filter((id) => !knowledgeBaseMembers.has(id));
-    },
+      ),
 
     findTopic: async (topicId) => {
       const topic = await new TopicModel(db, userId, ctx.workspaceId).findById(topicId);

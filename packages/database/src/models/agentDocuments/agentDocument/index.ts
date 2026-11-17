@@ -381,6 +381,10 @@ export class AgentDocumentModel {
     return queries.listDeletedFromAllAgents(this.ctx, documentIds);
   }
 
+  async listExistingDocumentIds(documentIds: string[]): Promise<string[]> {
+    return queries.listExistingDocumentIds(this.ctx, documentIds);
+  }
+
   async listKnowledgeBaseMemberIds(documentIds: string[]): Promise<string[]> {
     return queries.listKnowledgeBaseMemberIds(this.ctx, documentIds);
   }

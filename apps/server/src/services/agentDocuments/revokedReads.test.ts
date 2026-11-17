@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { revokedAgentDocumentRefs } from './revokedAgentDocuments';
+import { findRevokedDocumentReads, revokedAgentDocumentRefs } from './revokedReads';
 
 const binding = (
   overrides: Partial<Parameters<typeof revokedAgentDocumentRefs>[1][number]> = {},
@@ -52,5 +52,46 @@ describe('revokedAgentDocumentRefs', () => {
         [binding({ deletedAt: new Date() })],
       ),
     ).toEqual([]);
+  });
+});
+
+describe('findRevokedDocumentReads', () => {
+  const model = (overrides: Record<string, unknown> = {}) => ({
+    listBindingStatesByRefs: vi.fn(async () => [] as any[]),
+    listExistingDocumentIds: vi.fn(async (ids: string[]) => ids),
+    listKnowledgeBaseMemberIds: vi.fn(async () => [] as string[]),
+    ...overrides,
+  });
+
+  it('revokes a docs_* id whose document was permanently deleted', async () => {
+    const m = model({
+      listExistingDocumentIds: vi.fn(async () => ['docs_live']),
+    });
+
+    expect(
+      await findRevokedDocumentReads(m, 'agt_1', ['docs_gone', 'docs_live', 'file_x']),
+    ).toEqual(['docs_gone']);
+    expect(m.listExistingDocumentIds).toHaveBeenCalledWith(['docs_gone', 'docs_live']);
+  });
+
+  it('keeps a removed agent document that is still a knowledge-base page', async () => {
+    const m = model({
+      listBindingStatesByRefs: vi.fn(async () => [
+        { accessSelf: 31, deletedAt: new Date(), documentId: 'docs_kb', id: 'b-1' },
+        { accessSelf: 31, deletedAt: new Date(), documentId: 'docs_rule', id: 'b-2' },
+      ]),
+      listKnowledgeBaseMemberIds: vi.fn(async () => ['docs_kb']),
+    });
+
+    expect(await findRevokedDocumentReads(m, 'agt_1', ['docs_kb', 'docs_rule'])).toEqual([
+      'docs_rule',
+    ]);
+  });
+
+  it('does no lookups without ids', async () => {
+    const m = model();
+
+    expect(await findRevokedDocumentReads(m, 'agt_1', [])).toEqual([]);
+    expect(m.listBindingStatesByRefs).not.toHaveBeenCalled();
   });
 });

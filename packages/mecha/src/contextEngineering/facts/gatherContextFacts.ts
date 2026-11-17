@@ -153,9 +153,9 @@ const gatherDocumentReferences = async (
 /**
  * Documents that earlier turns read and that have since been deleted or
  * disabled. Injection already follows the live bindings; this covers the
- * read results persisted in the conversation. Looked up only when the history
- * holds a document read, and never for a share visitor (who never reads the
- * creator's documents through the tool).
+ * read results persisted in the conversation. Checked against the agent whose
+ * documents the model reads (the edited agent in the agent builder), only when
+ * the history holds a document read, and never for a share visitor.
  */
 const gatherRevokedDocumentIds = async (
   request: ContextFactRequest,
@@ -550,7 +550,7 @@ export const gatherContextFacts = async (
     () => gatherGroupAgentBuilderContext(request, providers),
     () => gatherOnboardingContext(request, providers),
     () => gatherPlanTodo(request, providers),
-    () => gatherRevokedDocumentIds(request, providers, request.agentId),
+    () => gatherRevokedDocumentIds(request, providers, docsAgentId),
     () =>
       attempt('sandboxFiles', () =>
         sandboxEnabled && request.topicId
