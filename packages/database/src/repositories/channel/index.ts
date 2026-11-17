@@ -1,5 +1,6 @@
 import type {
   ChannelAvatarMember,
+  ChannelLastMessage,
   ChannelMemberConfig,
   ChannelMemberRole,
   ChannelReplyJob,
@@ -36,6 +37,7 @@ import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
+import { channelLastMessages } from './lastMessage';
 import { setMemberMuted } from './mute';
 import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import {
@@ -98,9 +100,6 @@ const WORKSPACE_MANAGER_ROLES = ['owner', 'admin'];
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
-/** Characters of the latest message a Channel list item carries as its preview. */
-const LIST_PREVIEW_LENGTH = 200;
-
 /** A member config with its reply strategy set, or without one when `wake` is empty. */
 /** An environment plus the member's own settings that live beside it: reply strategy and mute. */
 const withMemberWake = (
@@ -591,7 +590,7 @@ export class ChannelRepository {
       ChannelItem & {
         agentIds: string[];
         canDelete: boolean;
-        lastMessage: { content: string; createdAt: Date } | null;
+        lastMessage: ChannelLastMessage | null;
         memberAvatars: ChannelAvatarMember[];
         mentionCount: number;
         replyJobs: ChannelReplyJob[];
@@ -619,28 +618,9 @@ export class ChannelRepository {
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
-    // The newest main-channel message of each, for a conversation-list preview.
-    const latest = rows.length
-      ? await this.db
-          .selectDistinctOn([channelMessages.channelId], {
-            channelId: channelMessages.channelId,
-            content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
-            createdAt: channelMessages.createdAt,
-          })
-          .from(channelMessages)
-          .where(
-            and(
-              inArray(
-                channelMessages.channelId,
-                rows.map(({ channel }) => channel.id),
-              ),
-              isNull(channelMessages.threadId),
-            ),
-          )
-          .orderBy(channelMessages.channelId, desc(channelMessages.sequence))
-      : [];
-    const lastMessageOf = new Map(
-      latest.map(({ channelId, ...message }) => [channelId, message] as const),
+    const lastMessageOf = await channelLastMessages(
+      this.db,
+      rows.map(({ channel }) => channel.id),
     );
 
     // Main-conversation replies the list row shows as in progress: ones that can still publish,

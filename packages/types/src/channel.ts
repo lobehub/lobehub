@@ -472,6 +472,17 @@ export interface ChannelAvatarMember {
   name: string | null;
 }
 
+/** A Channel's newest message as its list row previews it. */
+export interface ChannelLastMessage {
+  content: string;
+  createdAt: Date;
+  /**
+   * The Thread it was posted in, named by its title or else the first line of its root message;
+   * null for the main conversation.
+   */
+  thread: { id: string; title: string | null } | null;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -485,8 +496,8 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
-  /** The newest main-channel message, cut for a preview; set by the Channel list. */
-  lastMessage?: { content: string; createdAt: Date } | null;
+  /** The newest message, Threads included, cut for a preview; set by the Channel list. */
+  lastMessage?: ChannelLastMessage | null;
   /**
    * The first members besides the caller, oldest first, for a group Channel's list avatar;
    * set by the Channel list.
