@@ -9,6 +9,8 @@ import {
   type GitDeleteBranchResult,
   type GitFileRevertResult,
   type GitLinkedPullRequestResult,
+  type GitOwnedWorktreeCleanupResult,
+  type GitOwnedWorktreeRestoreResult,
   type GitPullRequestAction,
   type GitPullRequestActionResult,
   type GitPullRequestActivity,
@@ -171,6 +173,22 @@ class ElectronGitService {
     worktreePath: string;
   }): Promise<GitAddWorktreeResult> {
     return this.ipc.git.addGitWorktree(params);
+  }
+
+  async cleanupOwnedWorktree(params: {
+    discard?: boolean;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeCleanupResult> {
+    return this.ipc.git.cleanupOwnedWorktree(params);
+  }
+
+  async restoreOwnedWorktree(params: {
+    branch: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeRestoreResult> {
+    return this.ipc.git.restoreOwnedWorktree(params);
   }
 }
 

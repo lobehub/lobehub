@@ -1,5 +1,6 @@
 export * from './branches';
 export * from './info';
+export * from './ownedWorktree';
 export * from './pullRequest';
 export * from './repoType';
 export * from './sync';
