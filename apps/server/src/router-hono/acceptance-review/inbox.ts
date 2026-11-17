@@ -1,10 +1,18 @@
 import type { AcceptanceReview } from '@lobechat/types';
-import { and, desc, eq, isNull, notInArray, or } from 'drizzle-orm';
+import { and, countDistinct, desc, eq, isNull, notInArray, or } from 'drizzle-orm';
 import type { Context } from 'hono';
 import pMap from 'p-map';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
-import { acceptanceReviews, acceptances, projectSites, verifyRuns } from '@/database/schemas';
+import {
+  acceptanceReviews,
+  acceptances,
+  projectSites,
+  tasks,
+  verifyCheckResults,
+  verifyRuns,
+  workspaces,
+} from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
 import { projectReview } from '@/server/services/acceptanceReview/projection';
@@ -14,7 +22,7 @@ import type { ReviewEnv } from './auth';
 const INBOX_LIMIT = 50;
 const CANDIDATE_LIMIT = 200;
 const IO_CONCURRENCY = 5;
-const NEVER_DELIVERS = new Set(['errored', 'rejected']);
+const NEVER_DELIVERS = new Set(['errored']);
 const FINISHED = new Set(['accepted', 'closed']);
 
 type InboxPhase = 'delivered' | 'failed' | 'running';
@@ -27,6 +35,29 @@ const latestRunTime = async (db: LobeChatDatabase, acceptanceId: string) => {
     .orderBy(desc(verifyRuns.roundIndex))
     .limit(1);
   return run?.updatedAt.toISOString();
+};
+
+// A send-back reruns the Task without recording a reject decision, so deliveries are counted from
+// the verify rounds that produced a result: every run of the Task opens one.
+const deliveryNumber = async (db: LobeChatDatabase, acceptanceId: string) => {
+  const [row] = await db
+    .select({ n: countDistinct(verifyRuns.id) })
+    .from(verifyRuns)
+    .innerJoin(verifyCheckResults, eq(verifyCheckResults.verifyRunId, verifyRuns.id))
+    .where(eq(verifyRuns.acceptanceId, acceptanceId));
+  return Math.max(Number(row?.n ?? 0), 1);
+};
+
+const taskLink = async (db: LobeChatDatabase, taskId: string) => {
+  const [row] = await db
+    .select({ identifier: tasks.identifier, slug: workspaces.slug })
+    .from(tasks)
+    .leftJoin(workspaces, eq(workspaces.id, tasks.workspaceId))
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  if (!row?.identifier) return undefined;
+  const path = `/task/${row.identifier}`;
+  return { identifier: row.identifier, path: row.slug ? `/${row.slug}${path}` : path };
 };
 
 const createSiteLookup = (db: LobeChatDatabase, userId: string) => {
@@ -68,15 +99,18 @@ const describeRound = async (
       : projection.phase === 'delivered'
         ? 'delivered'
         : 'running';
-  const deliveredAt =
-    phase === 'delivered' && projection.deliveryId
-      ? await latestRunTime(db, projection.deliveryId)
-      : undefined;
+  const delivered = phase === 'delivered' && projection.deliveryId;
+  const [deliveredAt, delivery, task] = await Promise.all([
+    delivered ? latestRunTime(db, projection.deliveryId!) : undefined,
+    delivered ? deliveryNumber(db, projection.deliveryId!) : undefined,
+    projection.task ? taskLink(db, projection.task.id) : undefined,
+  ]);
   const first = marks[0];
   const index = site.order.indexOf(row.id);
   const passed = projection.counts.agentPassed;
   return {
     deliveredAt,
+    delivery,
     marks: marks.length,
     name: first?.content ?? '',
     notPassed: marks.length - passed,
@@ -86,6 +120,7 @@ const describeRound = async (
     round: index < 0 ? 0 : site.order.length - index,
     site: { id: row.siteId, name: site.name },
     submittedAt: (row.submittedAt ?? row.createdAt).toISOString(),
+    task,
     url: first?.url ?? '',
   };
 };
