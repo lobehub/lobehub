@@ -90,6 +90,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
             documents: result.documents,
             errors: result.errors,
             fileResults: result.fileResults,
+            indexStatus: result.indexStatus,
             searchedKnowledgeBaseIds: effectiveKnowledgeIds,
           };
         },

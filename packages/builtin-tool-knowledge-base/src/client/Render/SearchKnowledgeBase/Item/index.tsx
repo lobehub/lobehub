@@ -1,16 +1,16 @@
 'use client';
 
 import type { FileSearchResult } from '@lobechat/types';
-import { Center, Flexbox, MaterialFileTypeIcon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Center, cx, Flexbox, MaterialFileTypeIcon, Text, Tooltip } from '@lobehub/ui';
 import { useTheme } from 'next-themes';
 import { memo } from 'react';
 
 import { styles } from './style';
 
-export interface FileItemProps extends FileSearchResult {
+export interface FileItemProps extends Pick<FileSearchResult, 'fileId' | 'fileName'> {
   index: number;
+  /** Vector similarity (0–1). Keyword hits have no comparable score, so they show none. */
+  relevanceScore?: number;
 }
 
 const FileItem = memo<FileItemProps>(({ fileId, fileName, relevanceScore }) => {
@@ -28,9 +28,11 @@ const FileItem = memo<FileItemProps>(({ fileId, fileName, relevanceScore }) => {
       <MaterialFileTypeIcon filename={fileName} size={20} type={'file'} variant={'raw'} />
       <Flexbox horizontal gap={12} justify={'space-between'} style={{ maxWidth: 200 }}>
         <Text ellipsis>{fileName}</Text>
-        <Tooltip title={`Relevance: ${(relevanceScore * 100).toFixed(1)}%`}>
-          <Center className={styles.badge}>{relevanceScore.toFixed(2)}</Center>
-        </Tooltip>
+        {relevanceScore !== undefined && (
+          <Tooltip title={`Relevance: ${(relevanceScore * 100).toFixed(1)}%`}>
+            <Center className={styles.badge}>{relevanceScore.toFixed(2)}</Center>
+          </Tooltip>
+        )}
       </Flexbox>
     </Flexbox>
   );

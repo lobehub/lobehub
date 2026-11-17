@@ -12,7 +12,7 @@ const SearchKnowledgeBase = memo<
   BuiltinRenderProps<SearchKnowledgeBaseArgs, SearchKnowledgeBaseState>
 >(({ pluginState }) => {
   const { t } = useTranslation('plugin');
-  const { fileResults, scope } = pluginState || {};
+  const { documents, fileResults, scope } = pluginState || {};
 
   // Nothing was searched — saying "No results" would read as "the files don't
   // contain it" when the agent simply has no library to look in.
@@ -20,15 +20,34 @@ const SearchKnowledgeBase = memo<
     return <Empty description={t('builtins.lobe-knowledge-base.render.noScope')} />;
   }
 
-  if (!fileResults || fileResults.length === 0) {
+  // Keyword matches (`documents`) are hits too; a card listing only the
+  // vector matches would read "No results" while the model got pages back.
+  const fileHits = fileResults ?? [];
+  const documentHits = documents ?? [];
+
+  if (fileHits.length === 0 && documentHits.length === 0) {
     return <Empty description={t('builtins.lobe-knowledge-base.inspector.noResults')} />;
   }
 
   return (
     <Flexbox horizontal gap={8} wrap={'wrap'}>
-      {fileResults.map((file, index) => {
-        return <FileItem index={index} key={file.fileId} {...file} />;
-      })}
+      {fileHits.map((file, index) => (
+        <FileItem
+          fileId={file.fileId}
+          fileName={file.fileName}
+          index={index}
+          key={file.fileId}
+          relevanceScore={file.relevanceScore}
+        />
+      ))}
+      {documentHits.map((doc, index) => (
+        <FileItem
+          fileId={doc.documentId}
+          fileName={doc.title}
+          index={fileHits.length + index}
+          key={doc.documentId}
+        />
+      ))}
     </Flexbox>
   );
 });

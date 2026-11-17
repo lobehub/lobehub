@@ -20,35 +20,51 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * is exactly what got dropped — and it must survive an empty result, which is
  * why the chip distinguishes "0 hits" from "not settled yet".
  */
-const createSearchResultProjector = (...listKeys: string[]): ToolProjector => {
+const createSearchResultProjector = ({
+  countKeys,
+  listKeys,
+}: {
+  /** The lists the card renders as hits; the chip counts their combined length. */
+  countKeys: string[];
+  /** Every hit list the card needs and the chip does not. */
+  listKeys: string[];
+}): ToolProjector => {
   const dropped = new Set(listKeys);
 
   return ({ pluginState }) => {
     if (!isRecord(pluginState)) return { content: null, storedPayloadNeededBy: 'render' };
 
-    const hits = listKeys.map((k) => pluginState[k]).find(Array.isArray);
+    const hits = countKeys.map((k) => pluginState[k]).filter(Array.isArray);
     const rest = Object.fromEntries(
       Object.entries(pluginState).filter(([key]) => !dropped.has(key)),
     );
 
     return {
       content: null,
-      pluginState: { ...rest, ...(hits && { resultCount: hits.length }) },
+      pluginState: {
+        ...rest,
+        ...(hits.length > 0 && {
+          resultCount: hits.reduce((total, list) => total + list.length, 0),
+        }),
+      },
       storedPayloadNeededBy: 'render',
     };
   };
 };
 
 /** `lobe-web-browsing/search` — `{ costTime, query, resultNumbers, results }`. */
-export const webSearchProjector = createSearchResultProjector('results');
+export const webSearchProjector = createSearchResultProjector({
+  countKeys: ['results'],
+  listKeys: ['results'],
+});
 
 /**
- * `lobe-knowledge-base/searchKnowledgeBase`. Three parallel hit lists, one of
- * which (`fileResults`) is what the chip counts; `chunks` and `documents` are
- * the same matches in other shapes and are equally card-only.
+ * `lobe-knowledge-base/searchKnowledgeBase`. Two kinds of hits, both listed by
+ * the card and counted by the chip: `fileResults` (vector matches grouped by
+ * file) and `documents` (keyword matches). `chunks` are the raw vector matches
+ * behind `fileResults`, so they are card-only and not counted again.
  */
-export const searchKnowledgeBaseProjector = createSearchResultProjector(
-  'fileResults',
-  'chunks',
-  'documents',
-);
+export const searchKnowledgeBaseProjector = createSearchResultProjector({
+  countKeys: ['fileResults', 'documents'],
+  listKeys: ['fileResults', 'chunks', 'documents'],
+});

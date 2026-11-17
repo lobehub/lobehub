@@ -195,6 +195,7 @@ export const chunkRouter = router({
         documents: result.documents,
         errors: result.errors,
         fileResults: result.fileResults,
+        indexStatus: result.indexStatus,
         totalResults: result.totalResults,
       };
     }),
