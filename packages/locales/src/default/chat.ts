@@ -4131,6 +4131,7 @@ export default {
     'Uninstall the skill “{{name}}”? This cannot be undone.',
   'workingPanel.skills.detail.title': 'Skill details',
   'workingPanel.skills.empty': 'No skills available',
+  'workingPanel.skills.manualOnly': 'Manual only',
   'workingPanel.skills.noSearchResults': 'No matching skills',
   'workingPanel.skills.rename.action': 'Rename',
   'workingPanel.skills.rename.error': 'Failed to rename skill',
