@@ -6,6 +6,7 @@ import type React from 'react';
 import { lazy, memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
   filterSkillItems,
@@ -64,6 +65,10 @@ export const useUserSkills = (enabled = true): SkillListItem[] => {
         ? EMPTY_ITEMS
         : agentSkills.map((skill) => ({
             description: skill.description ?? undefined,
+            icon:
+              skill.source === 'market' ? (
+                <MarketSkillIcon identifier={skill.identifier} name={skill.name} />
+              ) : undefined,
             // `identifier` is what the runtime resolves through the skill registry,
             // and is unique per skill — reuse it as both the React key and the
             // drag payload's `type`.

@@ -9,6 +9,7 @@ import About from '../about';
 import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
+import Automations from '../automations';
 import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
@@ -62,6 +63,7 @@ export const componentMap = {
   [SettingsTabs.Security]: Security,
   [SettingsTabs.Skill]: Skill,
   [SettingsTabs.Connector]: Connector,
+  [SettingsTabs.Automations]: Automations,
   [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,

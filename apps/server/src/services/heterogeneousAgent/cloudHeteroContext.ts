@@ -81,7 +81,10 @@ export function buildCloudHeteroContext(params: {
             : "You are running inside a LobeHub cloud sandbox. Your working directory is the root of the user's **network drive**: files written there survive session expiry and are still there in your next session. The machine itself starts fresh every session, so installed packages do not carry over."
           : `You are running inside a LobeHub cloud sandbox. Your working directory is ${sandbox?.cwd ? `\`${sandbox.cwd}\`, ` : ''}an **environment directory** on the user's drive: its files and the packages its setup installed survive session expiry and are restored in your next session.`,
         'Other folders on the drive belong to other work — reachable with relative paths, but do not write into them unless the user asks.',
-        'The workspace is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Install packages and build where the toolchain puts things by default.',
+        'The workspace is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes.',
+        // The persistent sandbox is for everyday work whose results should
+        // stay; coding is what the temporary Cloud Sandbox is for.
+        "This persistent sandbox is meant for everyday tasks, not coding: a repository's dependencies, virtual environments, caches and build output would take up a lot of the user's drive space. Keep those outside the working directory, and when the task is mainly programming on a codebase, suggest the user switch this conversation to the Cloud Sandbox, which is discarded after use.",
         '',
         '## Sandbox Persistence',
         'Files in your working directory persist across sessions; anything written outside it may not.',

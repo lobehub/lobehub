@@ -17,7 +17,11 @@ import {
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { buildAntigravityArgs } from './antigravity';
-import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
+import {
+  type ClaudeCodeControlRequest,
+  type ClaudeCodeControlRequestHandle,
+  ClaudeCodeLiveInput,
+} from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
@@ -149,6 +153,13 @@ export interface SpawnAgentHandle {
   kill: (signal?: NodeJS.Signals) => void;
   /** Spawned child PID, undefined if spawn failed pre-PID. */
   pid: number | undefined;
+  /**
+   * (Claude Code `liveInput` only) Write a stream-json `control_request` into
+   * the running session; `undefined` once input has closed.
+   */
+  sendControlRequest?: (
+    request: ClaudeCodeControlRequest,
+  ) => ClaudeCodeControlRequestHandle | undefined;
   /**
    * (Claude Code `liveInput` only) Deliver a user message into the running
    * session; Claude Code reads it at its next tool boundary, or starts a turn
@@ -766,6 +777,7 @@ const spawnCliAgent = async (
     exit,
     ...(live && {
       interruptTurn: () => live.interrupt(),
+      sendControlRequest: (request: ClaudeCodeControlRequest) => live.sendControlRequest(request),
       sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
         if (!live.isOpen) return false;
         const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);

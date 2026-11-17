@@ -3,15 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelMessagingService } from './ChannelMessagingService';
 
-const { currentRun, directory, send } = vi.hoisted(() => ({
-  currentRun: vi.fn(),
+const { directory, relaySource, send } = vi.hoisted(() => ({
+  relaySource: vi.fn(),
   directory: vi.fn(),
   send: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelHistoryRepository: class {
-    currentRun = currentRun;
+    relaySource = relaySource;
   },
   ChannelRepository: class {
     directory = directory;
@@ -32,10 +32,12 @@ vi.mock('./ChannelService', () => ({
 
 const self = { agentId: 'agent-self', memberId: 'member-self', name: 'Project Agent' };
 const run = (requestVia?: { agentId: string; name: string }) => ({
-  channelId: 'channel-current',
-  manifest: { self, threadId: null },
+  origin: { channelId: 'channel-current', threadId: null },
   requestVia,
+  self: { agentId: self.agentId, name: self.name },
 });
+/** An owner's bot run: no Channel of its own. */
+const botRun = { self: { agentId: self.agentId, name: self.name } };
 const lobehub = {
   agents: [
     {
@@ -55,7 +57,7 @@ const current = {
 describe('ChannelMessagingService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    currentRun.mockResolvedValue(run());
+    relaySource.mockResolvedValue(run());
     directory.mockResolvedValue([current, lobehub]);
     send.mockResolvedValue({ id: 'message-sent' });
   });
@@ -126,7 +128,7 @@ describe('ChannelMessagingService', () => {
 
   it('refuses relays that would loop, target the current Channel or miss the Agent', async () => {
     const message = { agentIds: ['agent-lobehub'], channelId: 'channel-lobehub', content: 'Hi' };
-    currentRun.mockResolvedValueOnce(run({ agentId: 'agent-other', name: 'Other Agent' }));
+    relaySource.mockResolvedValueOnce(run({ agentId: 'agent-other', name: 'Other Agent' }));
     await expect(service().sendMessage(message, 'call')).rejects.toThrow('relayed by Other Agent');
     await expect(
       service().sendMessage({ ...message, channelId: 'channel-current' }, 'call'),
@@ -144,5 +146,37 @@ describe('ChannelMessagingService', () => {
       'content',
     );
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('only lets the token-checked route relay from a bot run', async () => {
+    await service().listChannels();
+    expect(relaySource).toHaveBeenLastCalledWith('op-current', {});
+    const fromBot = new ChannelMessagingService({} as never, 'user-1', 'op-current', undefined, {
+      allowBotRun: true,
+    });
+    await fromBot.listChannels();
+    expect(relaySource).toHaveBeenLastCalledWith('op-current', { allowBotRun: true });
+  });
+
+  it("relays an owner's bot request with no current Channel and no receipt origin", async () => {
+    relaySource.mockResolvedValue(botRun);
+    expect((await service().listChannels()).channels.map(({ current }) => current)).toEqual([
+      false,
+      false,
+    ]);
+
+    await service().sendMessage(
+      { agentIds: ['agent-lobehub'], channelId: 'channel-lobehub', content: 'Please fix T-1' },
+      'call-1',
+    );
+    expect(send.mock.calls[0][1].metadata).toEqual({
+      via: { agentId: 'agent-self', name: 'Project Agent', operationId: 'op-current' },
+    });
+    await expect(
+      service().sendMessage(
+        { agentIds: ['agent-self'], channelId: 'channel-current', content: 'Hi' },
+        'call-2',
+      ),
+    ).rejects.toThrow('yourself');
   });
 });

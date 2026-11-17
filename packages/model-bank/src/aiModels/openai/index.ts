@@ -91,6 +91,73 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
+      'GPT-6.1 Terra is a fast, efficient model for visual reasoning, precise computer use, and clear, natural writing.',
+    displayName: 'GPT-6.1 Terra',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-6.1',
+    id: 'gpt-6.1-terra',
+    isOfficial: true,
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    /** @see https://developers.openai.com/api/docs/models/gpt-6.1-terra */
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1, upTo: 272_000 },
+            { rate: 2, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.05, upTo: 272_000 },
+            { rate: 0.1, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1.25, upTo: 272_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 5, upTo: 272_000 },
+            { rate: 7.5, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-10-26',
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description:
       'OpenAI’s most capable model for complex reasoning, coding, computer use, research, and document creation.',
     displayName: 'GPT-6 Astra',
     enabled: true,

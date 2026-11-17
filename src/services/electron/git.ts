@@ -114,23 +114,30 @@ class ElectronGitService {
     return this.ipc.git.getGitBranchDiff(payload);
   }
 
-  async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
-    return this.ipc.git.getGitAheadBehind(dirPath);
+  /**
+   * Counts for HEAD, or for `branch` when named. A HEAD read keeps sending the
+   * bare path so a main process that predates the branch option still answers.
+   */
+  async getGitAheadBehind(dirPath: string, branch?: string): Promise<GitAheadBehind> {
+    return this.ipc.git.getGitAheadBehind(
+      branch === undefined ? dirPath : { branch, path: dirPath },
+    );
   }
 
   async checkoutGitBranch(params: {
     branch: string;
     create?: boolean;
     path: string;
+    startPoint?: string;
   }): Promise<GitCheckoutResult> {
     return this.ipc.git.checkoutGitBranch(params);
   }
 
-  async pullGitBranch(params: { path: string }): Promise<GitPullResult> {
+  async pullGitBranch(params: { branch?: string; path: string }): Promise<GitPullResult> {
     return this.ipc.git.pullGitBranch(params);
   }
 
-  async pushGitBranch(params: { path: string }): Promise<GitPushResult> {
+  async pushGitBranch(params: { branch?: string; path: string }): Promise<GitPushResult> {
     return this.ipc.git.pushGitBranch(params);
   }
 
@@ -160,6 +167,7 @@ class ElectronGitService {
   async addGitWorktree(params: {
     branch: string;
     path: string;
+    startPoint?: string;
     worktreePath: string;
   }): Promise<GitAddWorktreeResult> {
     return this.ipc.git.addGitWorktree(params);

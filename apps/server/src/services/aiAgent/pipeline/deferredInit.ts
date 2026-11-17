@@ -109,6 +109,7 @@ const restoreRunContext = async (
       viewedGoal: request.viewedGoal,
     } as ExecRunContext['appContext'],
     assistantMessageId: origin.assistantMessageId,
+    autoSkillIds: state.world?.autoSkillIds ?? [],
     botContext: state.principal?.actor?.bot,
     botPlatformContext: channel?.botPlatform,
     canUseDevice: deviceAccess?.canUseDevice ?? false,

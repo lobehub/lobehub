@@ -9,13 +9,10 @@ import {
   channelMemberGrants,
   channelMembers,
   channelMessages,
-  channelThreads,
   devices,
 } from '../../schemas';
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
-import { notTrashed } from '../../utils/softDelete';
-import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
@@ -70,7 +67,9 @@ export interface ChannelClaim {
   topic: TopicItem;
 }
 
-const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
+/** Jobs in the same conversation branch: one Thread, or the main timeline. */
+export const sameBranch = (threadId: string | null) =>
+  threadId ? eq(channelJobs.threadId, threadId) : isNull(channelJobs.threadId);
 
 /**
  * Records why a queued job cannot start; clients read the code, never the text. A job waiting
@@ -160,7 +159,10 @@ const deviceBlock = async (
     return { code: 'unavailable', reason: 'The device owner did not allow this environment' };
 };
 
-/** Another live writer in the same device directory, from any channel or member. */
+/**
+ * Another live writer in the same device directory, from any channel or member. Holds the
+ * directory's advisory lock until the claim commits, so two claims never both take it.
+ */
 const directoryBlock = async (
   tx: Transaction,
   deviceId: string | undefined,
@@ -168,6 +170,11 @@ const directoryBlock = async (
 ): Promise<Block | undefined> => {
   if (!deviceId || !workingDirectory) return;
 
+  // Claims in other channels race for the same directory, and no channel lock covers them:
+  // this lock orders them, so the read below sees a writer the other claim just committed.
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`channel-directory:${JSON.stringify([deviceId, workingDirectory])}`}))`,
+  );
   const [busy] = await tx
     .select({ id: channelJobs.id })
     .from(channelJobs)
@@ -272,24 +279,23 @@ export const claimJob = async (
     .select()
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
-  // An earlier undecided message may still enqueue this member. Checking only jobs
-  // would let an explicit follow-up overtake it while another worker routes it.
+  // An earlier undecided message in this branch may still enqueue this member ahead of it, and
+  // so may the Thread's root while it is undecided. Checking only jobs would let a later
+  // request overtake it while another worker routes it. Other branches never hold this one.
   const [pendingRoute] = await tx
     .select({ id: channelMessages.id })
     .from(channelMessages)
-    .leftJoin(channelThreads, eq(channelThreads.id, channelMessages.threadId))
     .where(
       and(
         eq(channelMessages.channelId, channel.id),
         eq(channelMessages.routingStatus, 'pending'),
         lt(channelMessages.sequence, request.sequence),
-        or(
-          isNull(channelMessages.threadId),
-          and(
-            notTrashed(channelThreads.isDeleted),
-            sql`${channelThreads.followerMemberIds} @> ${JSON.stringify([job.memberId])}::jsonb`,
-          ),
-        ),
+        job.threadId
+          ? or(
+              eq(channelMessages.threadId, job.threadId),
+              thread ? eq(channelMessages.id, thread.rootMessageId) : undefined,
+            )
+          : isNull(channelMessages.threadId),
       ),
     )
     .limit(1);
@@ -298,15 +304,44 @@ export const claimJob = async (
     return null;
   }
 
-  // Each member answers in message order.
+  // Each member answers a branch in message order; its other branches run alongside.
   const [head] = await tx
     .select({ id: channelJobs.id })
     .from(channelJobs)
     .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-    .where(and(eq(channelJobs.memberId, job.memberId), eq(channelJobs.status, 'queued')))
+    .where(
+      and(
+        eq(channelJobs.memberId, job.memberId),
+        eq(channelJobs.status, 'queued'),
+        sameBranch(job.threadId),
+      ),
+    )
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
     .limit(1);
   if (head?.id !== job.id) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
+
+  // A Thread follows its root: the member answers the root on the main timeline first.
+  const [rootReply] = thread
+    ? await tx
+        .select({ id: channelJobs.id })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.memberId, job.memberId),
+            eq(channelJobs.messageId, thread.rootMessageId),
+            isNull(channelJobs.threadId),
+            or(
+              eq(channelJobs.status, 'queued'),
+              and(eq(channelJobs.writerHeld, true), isNull(channelJobs.isolatedAt)),
+            ),
+          ),
+        )
+        .limit(1)
+    : [];
+  if (rootReply) {
     await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
     return null;
   }
@@ -325,6 +360,7 @@ export const claimJob = async (
         eq(channelJobs.memberId, member.id),
         eq(channelJobs.writerHeld, true),
         isNull(channelJobs.isolatedAt),
+        sameBranch(job.threadId),
       ),
     )
     .limit(1);
@@ -426,70 +462,57 @@ export const claimJob = async (
   }
 
   const now = new Date();
-  let claimed: Omit<ChannelClaim, 'member'>;
-  try {
-    // A savepoint, so losing the directory race to another channel keeps this transaction
-    // and leaves no topic or operation behind.
-    claimed = await tx.transaction(async (savepoint) => {
-      const topic = await resolveTopic(
-        savepoint,
-        channel,
-        job,
-        member,
-        scope,
-        request.sequence,
-        executionConfig,
-      );
-      const manifest = buildManifest({
-        job,
-        member,
-        primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
-        request,
-        thread,
-      });
-      // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
-      // derives the Agent and topic from the operation ID.
-      const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
-      await savepoint.insert(agentOperations).values({
-        id: operationId,
-        userId: scope.userId,
-        workspaceId: scope.workspaceId,
-        topicId: topic.id,
-        agentId: member.agentId,
-        trigger: 'channel',
-        status: 'idle',
-        model: executionConfig.model,
-        provider: executionConfig.provider,
-      });
-      const [updated] = await savepoint
-        .update(channelJobs)
-        .set({
-          claimedAt: sql`clock_timestamp()`,
-          blockedCode: null,
-          blockedReason: null,
-          // Only a device picked in the Channel; a wait marker from `block` must not linger.
-          deviceId: member.config!.deviceId ?? null,
-          executionConfig,
-          leaseExpiresAt: new Date(now.getTime() + options.leaseMs),
-          leaseOwner: options.leaseOwner,
-          manifest,
-          operationId,
-          topicId: topic.id,
-          status: 'running',
-          workingDirectory: executionConfig.workingDirectory,
-          writerHeld: true,
-        })
-        .where(eq(channelJobs.id, job.id))
-        .returning();
-      return { job: updated, topic };
-    });
-  } catch (error) {
-    const constraint = uniqueViolationConstraint(error);
-    if (constraint === undefined) throw error;
-    if (constraint === DIRECTORY_LOCK)
-      await block(tx, job, 'directory_locked', 'Another run is using this directory');
-    return null;
-  }
+  const topic = await resolveTopic(
+    tx,
+    channel,
+    job,
+    member,
+    scope,
+    request.sequence,
+    executionConfig,
+  );
+  const manifest = buildManifest({
+    job,
+    member,
+    primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
+    request,
+    thread,
+  });
+  // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
+  // derives the Agent and topic from the operation ID.
+  const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
+  await tx.insert(agentOperations).values({
+    id: operationId,
+    userId: scope.userId,
+    workspaceId: scope.workspaceId,
+    topicId: topic.id,
+    agentId: member.agentId,
+    trigger: 'channel',
+    status: 'idle',
+    model: executionConfig.model,
+    provider: executionConfig.provider,
+  });
+  const [updated] = await tx
+    .update(channelJobs)
+    .set({
+      claimedAt: sql`clock_timestamp()`,
+      blockedCode: null,
+      blockedReason: null,
+      // Only a device picked in the Channel; a wait marker from `block` must not linger.
+      deviceId: member.config!.deviceId ?? null,
+      executionConfig,
+      leaseExpiresAt: new Date(now.getTime() + options.leaseMs),
+      leaseOwner: options.leaseOwner,
+      manifest,
+      operationId,
+      topicId: topic.id,
+      status: 'running',
+      workingDirectory: executionConfig.workingDirectory,
+      writerHeld: true,
+    })
+    .where(eq(channelJobs.id, job.id))
+    .returning();
+  const claimed = { job: updated, topic };
 
   await audit(tx, channel.id, 'run_claimed', job.id, {
     cutoff: claimed.job.manifest!.cutoffSequence,

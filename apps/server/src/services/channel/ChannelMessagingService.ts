@@ -31,6 +31,11 @@ const escapeRegExp = (value: string) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, 
  * identity, so the target Channel's own membership, routing and permissions decide what happens;
  * `metadata.via` only records which Agent relayed it. The run itself (live, unrevoked, requester
  * still a member) is checked first, exactly as a history read checks it.
+ *
+ * The bot's owner messaging their Agent on an IM platform may do the same from that bot run. It
+ * has no Channel of its own, so nothing is current, and the reply stays in the target Channel:
+ * there is no origin to deliver a receipt back to. Only the CLI route, which has checked the
+ * run's operation token for `channel:message`, opts in (`allowBotRun`).
  */
 export class ChannelMessagingService {
   private readonly history: ChannelHistoryRepository;
@@ -41,6 +46,7 @@ export class ChannelMessagingService {
     private readonly userId: string,
     private readonly operationId: string,
     private readonly workspaceId?: string,
+    private readonly options: { allowBotRun?: boolean } = {},
   ) {
     this.history = new ChannelHistoryRepository(db, userId, workspaceId);
     this.channels = new ChannelRepository(db, userId, workspaceId);
@@ -48,7 +54,7 @@ export class ChannelMessagingService {
 
   listChannels = async (params: ChannelListChannelsParams = {}): Promise<ChannelDirectoryPage> => {
     await assertChannelEnabled(this.userId);
-    const run = await this.history.currentRun(this.operationId);
+    const run = await this.history.relaySource(this.operationId, this.options);
     const limit = params.limit ?? DEFAULT_LIMIT;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT)
       throw new ChannelError('BAD_REQUEST', `Expected a limit between 1 and ${MAX_LIMIT}`);
@@ -64,7 +70,7 @@ export class ChannelMessagingService {
     return {
       channels: matched.slice(0, limit).map(({ agents, channel }) => ({
         agents: agents.map(({ agentId, description, name }) => ({ agentId, description, name })),
-        current: channel.id === run.channelId,
+        current: channel.id === run.origin?.channelId,
         id: channel.id,
         kind: channel.agentId ? 'direct' : 'group',
         projectId: channel.projectId,
@@ -83,7 +89,7 @@ export class ChannelMessagingService {
     requestId: string,
   ): Promise<ChannelSentMessage> => {
     await assertChannelEnabled(this.userId);
-    const run = await this.history.currentRun(this.operationId);
+    const run = await this.history.relaySource(this.operationId, this.options);
     // One hop only: a relayed request is answered where it arrived, so two Agents cannot keep
     // relaying to each other on the requester's behalf.
     if (run.requestVia)
@@ -91,7 +97,7 @@ export class ChannelMessagingService {
         'FORBIDDEN',
         `This request was relayed by ${run.requestVia.name}; answer it here instead of relaying it again`,
       );
-    if (params.channelId === run.channelId)
+    if (params.channelId === run.origin?.channelId)
       throw new ChannelError(
         'BAD_REQUEST',
         'That is the Channel you are answering in; your final answer is posted there',
@@ -105,7 +111,7 @@ export class ChannelMessagingService {
         'BAD_REQUEST',
         `Address between 1 and ${MAX_RECIPIENTS} Agents with agentIds`,
       );
-    if (agentIds.includes(run.manifest.self.agentId))
+    if (agentIds.includes(run.self.agentId))
       throw new ChannelError('BAD_REQUEST', 'You cannot send a message to yourself');
 
     const target = (await this.channels.directory()).find(
@@ -138,11 +144,11 @@ export class ChannelMessagingService {
         mentions: agents.map(({ memberId }) => memberId),
         metadata: {
           via: {
-            agentId: run.manifest.self.agentId,
-            name: run.manifest.self.name,
+            agentId: run.self.agentId,
+            name: run.self.name,
             operationId: this.operationId,
             // Where the addressed Agents' replies are delivered back (`deliverRelayReceipts`).
-            origin: { channelId: run.channelId, threadId: run.manifest.threadId },
+            ...(run.origin && { origin: run.origin }),
           },
         },
         requestKey: `agent-relay:${this.operationId}:${requestId}`,

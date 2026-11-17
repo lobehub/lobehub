@@ -8,7 +8,7 @@ import type {
   ContactUserItem,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import { agents, agentShares, userContactRequests, userContacts, users } from '../schemas';
@@ -86,32 +86,49 @@ export const parseContactHandle = (query: string): string | undefined => {
 
 /**
  * A person's address book and contact requests. Every method acts as `userId`; another
- * person's rows are only touched as the second half of a mutual relation.
+ * person's rows are only touched as the second half of a mutual relation. People are personal: a
+ * workspace lists none, its colleagues being its members. Agents are the scope's: in the personal space the caller's own, in a workspace
+ * the ones any member added there, which every member sees and may remove.
  */
 export class ContactModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId: string | null;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string | null) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId || null;
+  }
+
+  /** The Agent entries of this scope's address book. */
+  private agentEntryWhere() {
+    return this.workspaceId
+      ? and(eq(userContacts.type, 'agent'), eq(userContacts.workspaceId, this.workspaceId))
+      : and(
+          eq(userContacts.userId, this.userId),
+          eq(userContacts.type, 'agent'),
+          isNull(userContacts.workspaceId),
+        );
   }
 
   list = async (): Promise<ContactItem[]> => {
     const [people, sharedAgents] = await Promise.all([
-      this.db
-        .select({ createdAt: userContacts.createdAt, user: userProfileColumns })
-        .from(userContacts)
-        .innerJoin(users, eq(users.id, userContacts.contactUserId))
-        .where(and(eq(userContacts.userId, this.userId), eq(userContacts.type, 'user')))
-        .orderBy(desc(userContacts.createdAt)),
+      this.workspaceId
+        ? []
+        : this.db
+            .select({ createdAt: userContacts.createdAt, user: userProfileColumns })
+            .from(userContacts)
+            .innerJoin(users, eq(users.id, userContacts.contactUserId))
+            .where(and(eq(userContacts.userId, this.userId), eq(userContacts.type, 'user')))
+            .orderBy(desc(userContacts.createdAt)),
       this.db
         .select({ createdAt: userContacts.createdAt, ...agentProfileColumns })
         .from(userContacts)
         .innerJoin(agents, eq(agents.id, userContacts.agentId))
         .innerJoin(agentShares, eq(agentShares.agentId, agents.id))
         .leftJoin(owners, eq(owners.id, agents.userId))
-        .where(and(eq(userContacts.userId, this.userId), eq(userContacts.type, 'agent')))
+        .where(this.agentEntryWhere())
         .orderBy(desc(userContacts.createdAt)),
     ]);
 
@@ -306,7 +323,7 @@ export class ContactModel {
 
   // ── Agents ────────────────────────────────────────────────────────────
 
-  /** Add another person's Agent through its link share (share id or custom handle). */
+  /** Add another person's Agent in this scope through its link share (share id or handle). */
   addAgent = async (shareIdOrSlug: string): Promise<ContactAgentProfile> => {
     const share = await this.findLinkShare(shareIdOrSlug);
     if (!share) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
@@ -315,7 +332,12 @@ export class ContactModel {
 
     await this.db
       .insert(userContacts)
-      .values({ agentId: share.agentId, type: 'agent', userId: this.userId })
+      .values({
+        agentId: share.agentId,
+        type: 'agent',
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      })
       .onConflictDoNothing();
     return toAgentProfile(share);
   };
@@ -323,12 +345,13 @@ export class ContactModel {
   removeAgent = async (agentId: string) => {
     await this.db
       .delete(userContacts)
-      .where(and(eq(userContacts.userId, this.userId), eq(userContacts.agentId, agentId)));
+      .where(and(this.agentEntryWhere(), eq(userContacts.agentId, agentId)));
   };
 
   /**
-   * The live share that authorizes me to message another person's Agent: my contact entry for
-   * it plus its link share. Returns undefined for my own Agents, which need no share.
+   * The live share that authorizes me to message another person's Agent: its entry in this
+   * scope's address book plus its link share. Returns undefined for my own Agents, which need no
+   * share.
    */
   findAgentAccess = async (agentId: string) => {
     const [row] = await this.db
@@ -345,7 +368,7 @@ export class ContactModel {
       .innerJoin(agentShares, eq(agentShares.agentId, agents.id))
       .where(
         and(
-          eq(userContacts.userId, this.userId),
+          this.agentEntryWhere(),
           eq(userContacts.agentId, agentId),
           eq(agentShares.visibility, 'link'),
           notTrashed(agents.isDeleted),

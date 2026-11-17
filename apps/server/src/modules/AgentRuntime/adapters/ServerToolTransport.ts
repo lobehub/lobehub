@@ -317,6 +317,7 @@ export class ServerToolTransport implements ToolTransport {
               projectId: context.state.origin?.projectId,
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
+              runSkillIds: context.state.plan?.skills?.skills?.map((skill) => skill.identifier),
               scope: context.state.origin?.scope,
               serverDB,
               skipResultTruncation: true,

@@ -272,6 +272,10 @@ export function defineConfig(config: CustomNextConfig) {
           ],
           source: '/.well-known/assetlinks.json',
         },
+        {
+          source: '/.well-known/mcp-webhook-receiver.json',
+          headers: [{ key: 'Content-Type', value: 'application/json' }],
+        },
         ...(config.headers ?? []),
       ];
     },

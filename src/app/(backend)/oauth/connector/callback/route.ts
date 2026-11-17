@@ -20,6 +20,7 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
+import { scheduleRefreshByConnector } from '@/server/services/inboundWebhook/lifecycle';
 
 const log = debug('lobe-server:connector:oauth-callback');
 
@@ -225,6 +226,12 @@ export const GET = async (req: NextRequest) => {
     }).catch((err) => {
       log('recording the OAuth completion of connector=%s failed: %O', payload.connectorId, err);
     });
+    // After the response: the popup must not wait on renewing this connector's subscriptions.
+    scheduleRefreshByConnector(
+      serverDB,
+      { userId: payload.lobeUserId, workspaceId: payload.workspaceId },
+      payload.connectorId,
+    );
     return renderResultPage({
       connectorId: payload.connectorId,
       success: true,

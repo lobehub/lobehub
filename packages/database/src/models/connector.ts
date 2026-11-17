@@ -6,14 +6,23 @@ import pMap from 'p-map';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
 import { agentEvalDatasets, ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import {
   buildWorkspacePayload,
   buildWorkspaceWhere,
   normalizeWorkspaceId,
 } from '../utils/workspace';
 import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
+import {
+  type BaseIdentifierScope,
+  claimBaseIdentifier,
+  ConnectorIdentifierHeldError,
+  moveToBaseUnlessIdentifierHeld,
+  queryBaseHolders,
+  sameBaseVisibility,
+} from './connectorIdentifierClaim';
 import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
+import { deleteIfMetadataContains, updateMetadataIfContains } from './connectorMetadataGuard';
 import {
   connectorAccessScope,
   connectorAgentConfigScope,
@@ -21,6 +30,7 @@ import {
   type ConnectorRunTarget,
 } from './connectorScope';
 
+export { ConnectorIdentifierHeldError } from './connectorIdentifierClaim';
 export type { ConnectorRunTarget } from './connectorScope';
 
 /**
@@ -304,65 +314,126 @@ export class ConnectorModel {
     return this;
   };
 
+  /**
+   * Create a connector. An agent's own row is inserted as is. A base row
+   * (`agent_id IS NULL`) is claimed like {@link createUnlessIdentifierHeld}, under
+   * the identifier lock, and throws {@link ConnectorIdentifierHeldError} when a
+   * base row of the scope already holds the identifier: no caller can add a
+   * second base row for an identifier between another writer's lookup and insert.
+   */
   create = async (
     params: CreateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<UserConnectorItem> => {
-    return this.db.transaction(async (tx) => {
-      if (!this.evaluationDatasetId && params.metadata?.agentEval) {
-        throw new EvalConnectorUpdateError(
-          'Use the Dataset connection API for evaluation connections',
-        );
-      }
-      if (this.evaluationDatasetId) {
-        const [dataset] = await tx
-          .select({ id: agentEvalDatasets.id })
-          .from(agentEvalDatasets)
-          .where(
-            and(
-              eq(agentEvalDatasets.id, this.evaluationDatasetId),
-              buildWorkspaceWhere(
-                { userId: this.userId, workspaceId: this.workspaceId },
-                agentEvalDatasets,
-              ),
-            ),
-          )
-          .for('share');
-        if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
-        if (params.credentials && !gateKeeper)
-          throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
-        if (params.agentId || params.metadata?.mountedByAgentId)
-          throw new EvalConnectorUpdateError(
-            'Evaluation connections cannot be assigned to a normal Agent',
-          );
-        const marker = params.metadata?.agentEval;
-        params = {
-          ...params,
-          metadata: {
-            ...params.metadata,
-            agentEval: {
-              ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
-              datasetId: this.evaluationDatasetId,
-            },
-          },
-        };
-      }
-      const credentials = params.credentials
-        ? await encryptCredentials(params.credentials, gateKeeper)
-        : null;
+    if (params.agentId)
+      return this.db.transaction((tx) => this.insertInTransaction(tx, params, gateKeeper));
 
-      const [result] = await tx
-        .insert(userConnectors)
-        .values(
-          buildWorkspacePayload(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { ...params, credentials },
+    const claim = await this.createUnlessIdentifierHeld(params, { gateKeeper });
+    if ('holder' in claim) throw new ConnectorIdentifierHeldError(params.identifier);
+    return claim.created;
+  };
+
+  /**
+   * Create a base connector (`agent_id IS NULL`) unless a row in this scope
+   * already holds its identifier in its visibility. The lookup and the insert
+   * are one step, serialized on the identifier lock every base-row writer takes
+   * ({@link claimBaseIdentifier}). `canReplace` may let the holding rows go:
+   * they are deleted, with their tools, in that step; one that may not go
+   * keeps the identifier and is returned.
+   */
+  createUnlessIdentifierHeld = async (
+    params: Omit<CreateConnectorParams, 'agentId'>,
+    options: {
+      canReplace?: (holder: UserConnectorItem) => boolean;
+      gateKeeper?: GateKeeper;
+    } = {},
+  ): Promise<{ created: UserConnectorItem } | { holder: UserConnectorItem }> => {
+    const { canReplace, gateKeeper = this.gateKeeper } = options;
+
+    return this.db.transaction(async (tx) => {
+      const holder = await claimBaseIdentifier(tx, this.baseIdentifierScope(), params, canReplace);
+      if (holder) return { holder };
+      return {
+        created: await this.insertInTransaction(tx, { ...params, agentId: null }, gateKeeper),
+      };
+    });
+  };
+
+  /** See {@link moveToBaseUnlessIdentifierHeld}. */
+  moveToBaseUnlessIdentifierHeld = async (id: string, identifier: string) =>
+    moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
+
+  /** See {@link queryBaseHolders}. */
+  queryBaseHolders = async (
+    identifier: string,
+    visibility?: ConnectorVisibility,
+  ): Promise<UserConnectorItem[]> =>
+    queryBaseHolders(this.db, this.baseIdentifierScope(), identifier, visibility);
+
+  private baseIdentifierScope = (): BaseIdentifierScope => ({
+    ownership: this.ownership,
+    userId: this.userId,
+    workspaceId: this.workspaceId,
+  });
+
+  private insertInTransaction = async (
+    tx: Transaction,
+    params: CreateConnectorParams,
+    gateKeeper: GateKeeper | undefined,
+  ): Promise<UserConnectorItem> => {
+    if (!this.evaluationDatasetId && params.metadata?.agentEval) {
+      throw new EvalConnectorUpdateError(
+        'Use the Dataset connection API for evaluation connections',
+      );
+    }
+    if (this.evaluationDatasetId) {
+      const [dataset] = await tx
+        .select({ id: agentEvalDatasets.id })
+        .from(agentEvalDatasets)
+        .where(
+          and(
+            eq(agentEvalDatasets.id, this.evaluationDatasetId),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              agentEvalDatasets,
+            ),
           ),
         )
-        .returning();
+        .for('share');
+      if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
+      if (params.credentials && !gateKeeper)
+        throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
+      if (params.agentId || params.metadata?.mountedByAgentId)
+        throw new EvalConnectorUpdateError(
+          'Evaluation connections cannot be assigned to a normal Agent',
+        );
+      const marker = params.metadata?.agentEval;
+      params = {
+        ...params,
+        metadata: {
+          ...params.metadata,
+          agentEval: {
+            ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
+            datasetId: this.evaluationDatasetId,
+          },
+        },
+      };
+    }
+    const credentials = params.credentials
+      ? await encryptCredentials(params.credentials, gateKeeper)
+      : null;
 
-      return result;
-    });
+    const [result] = await tx
+      .insert(userConnectors)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...params, credentials },
+        ),
+      )
+      .returning();
+
+    return result;
   };
 
   /**
@@ -416,6 +487,17 @@ export class ConnectorModel {
   delete = async (id: string): Promise<void> => {
     await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
   };
+
+  /** See {@link deleteIfMetadataContains}. */
+  deleteIfMetadataContains = async (id: string, match: Record<string, unknown>) =>
+    deleteIfMetadataContains(this.db, this.ownership, id, match);
+
+  /** See {@link updateMetadataIfContains}. */
+  updateMetadataIfContains = async (
+    id: string,
+    match: Record<string, unknown>,
+    metadata: NonNullable<DecryptedConnector['metadata']>,
+  ) => updateMetadataIfContains(this.db, this.ownership, id, match, metadata);
 
   query = async (
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
@@ -572,7 +654,7 @@ export class ConnectorModel {
    */
   queryAvailableForAgent = async (
     agentId?: string,
-  ): Promise<Pick<UserConnectorItem, 'identifier' | 'isEnabled' | 'status'>[]> => {
+  ): Promise<Pick<UserConnectorItem, 'id' | 'identifier' | 'isEnabled' | 'status'>[]> => {
     const base = this.evaluationDatasetId
       ? this.ownership()
       : connectorAgentConfigScope(
@@ -586,7 +668,8 @@ export class ConnectorModel {
       .where(this.agentNarrowing(base, agentId))
       .orderBy(...this.resolutionOrder());
 
-    return this.pickByPriority(rows, agentId).map(({ identifier, isEnabled, status }) => ({
+    return this.pickByPriority(rows, agentId).map(({ id, identifier, isEnabled, status }) => ({
+      id,
       identifier,
       isEnabled,
       status,
@@ -611,12 +694,6 @@ export class ConnectorModel {
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
     visibility: ConnectorVisibility = 'public',
   ): Promise<DecryptedConnector | null> => {
-    const sameVisibility =
-      !agentId && normalizeWorkspaceId(this.workspaceId)
-        ? visibility === 'private'
-          ? and(eq(userConnectors.visibility, 'private'), eq(userConnectors.userId, this.userId))
-          : eq(userConnectors.visibility, 'public')
-        : undefined;
     const [row] = await this.db
       .select()
       .from(userConnectors)
@@ -625,7 +702,7 @@ export class ConnectorModel {
           this.ownership(),
           eq(userConnectors.identifier, identifier),
           agentId ? eq(userConnectors.agentId, agentId) : isNull(userConnectors.agentId),
-          sameVisibility,
+          agentId ? undefined : sameBaseVisibility(this.baseIdentifierScope(), visibility),
         ),
       )
       .limit(1);
@@ -893,19 +970,24 @@ export class ConnectorModel {
     return row ?? null;
   };
 
+  /**
+   * Returns whether the row was there to update: one deleted after the caller
+   * read it (a claim that replaced it, see {@link createUnlessIdentifierHeld})
+   * is not, and its writer must look again for what holds it now.
+   */
   update = async (
     id: string,
     patch: UpdateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
-  ): Promise<void> => {
-    await this.db.transaction(async (tx) => {
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
       const [current] = await tx
         .select()
         .from(userConnectors)
         .where(and(eq(userConnectors.id, id), this.ownership()))
         .limit(1)
         .for('update');
-      if (!current) return;
+      if (!current) return false;
       const normalized = await normalizeEvalConnectorPatch(
         current,
         patch,
@@ -955,8 +1037,8 @@ export class ConnectorModel {
           updatedAt: new Date(),
         })
         .where(and(eq(userConnectors.id, id), this.ownership()));
+      return true;
     });
-  };
 
   updateStatus = async (id: string, status: ConnectorStatus): Promise<void> => {
     await this.db

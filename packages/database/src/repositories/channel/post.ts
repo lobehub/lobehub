@@ -42,7 +42,7 @@ export const postAgentMessage = async (
   if (existing) return existing;
 
   const [member] = await tx
-    .select({ id: channelMembers.id })
+    .select({ config: channelMembers.config, id: channelMembers.id })
     .from(channelMembers)
     .where(
       and(
@@ -54,6 +54,8 @@ export const postAgentMessage = async (
     )
     .limit(1);
   if (!member) throw new ChannelError('CONFLICT', 'The Agent is not a member of this Channel');
+  if (member.config?.muted)
+    throw new ChannelError('CONFLICT', 'The Agent is muted in this Channel');
 
   const message = await appendMessage(tx, {
     agentId: input.agentId,

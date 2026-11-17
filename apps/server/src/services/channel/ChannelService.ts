@@ -215,12 +215,13 @@ export class ChannelService {
 
   /**
    * Another person's Agent the caller added to their contacts through its link share; the entry
-   * shows they reached the share. The repository rechecks the live share. Always a personal
-   * direct conversation, run in the cloud as the owner.
+   * shows they reached the share. The repository rechecks the live share. A direct conversation
+   * in the scope the Agent was added in, run in the cloud as the owner.
    */
   private createSharedDirect = async (agentId: string) => {
-    if (this.workspaceId) return;
-    const shared = await new ContactModel(this.db, this.userId).findAgentAccess(agentId);
+    const shared = await new ContactModel(this.db, this.userId, this.workspaceId).findAgentAccess(
+      agentId,
+    );
     if (!shared) return;
     return this.repository.create({
       agentConfig: {},
@@ -236,8 +237,6 @@ export class ChannelService {
    * signed in. Adding it to contacts stays optional. One's own Agent opens as usual.
    */
   openShared = async (share: string) => {
-    if (this.workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'A shared Agent is messaged from a personal scope');
     const key = parseContactHandle(share);
     const found = key ? await AgentShareModel.findBySlugOrId(this.db, key) : null;
     if (!found || found.visibility !== 'link')
@@ -269,7 +268,8 @@ export class ChannelService {
   };
 
   /**
-   * The personal conversation with a contact. The stored title is the other person's name for
+   * The one-on-one conversation with a contact (personal space) or a fellow member (workspace).
+   * The stored title is the other person's name for
    * whoever opened it; clients title it with whoever the viewer is talking to.
    */
   openPeer = async (peerUserId: string) => {
@@ -328,6 +328,12 @@ export class ChannelService {
     const channel = await this.repository.rename(channelId, title);
     await this.changed(channelId);
     return channel;
+  };
+
+  editMessage = async (channelId: string, messageId: string, content: string) => {
+    const message = await this.repository.editMessage(channelId, messageId, content);
+    await this.changed(channelId);
+    return message;
   };
 
   addUser = async (channelId: string, userId: string) => {
@@ -429,6 +435,13 @@ export class ChannelService {
     const job = await this.repository.retryJob(channelId, jobId);
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return job;
+  };
+
+  /** A muted Agent answers only @mentions; muting also stops what it is answering now. */
+  setMemberMuted = async (channelId: string, memberId: string, muted: boolean) => {
+    const writers = await this.repository.setMemberMuted(channelId, memberId, muted);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
   };
 
   stop = async (channelId: string, scope: ChannelStopScope) => {

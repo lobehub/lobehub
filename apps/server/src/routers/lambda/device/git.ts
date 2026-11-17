@@ -1,9 +1,11 @@
+import { WORKTREE_BRANCH_PREFIX } from '@lobechat/const';
 import { deriveWorktreePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
 import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
@@ -130,15 +132,36 @@ export const gitRouter = router({
       return result ?? null;
     }),
   gitAheadBehind: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        /** Count this local branch instead of HEAD; the device echoes it back. */
+        branch: z.string().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitAheadBehind({
+        branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
       return result ?? null;
+    }),
+  /**
+   * How many conversations are running in a directory on a device, so the
+   * composer can confirm before a send switches that checkout's branch. Spans
+   * every member's conversations in a workspace and returns only a count —
+   * never which topics, or whose. Reads the database, not the device, so it
+   * answers for an offline device too.
+   */
+  countRunningTopicsInDirectory: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      return topicModel.countInFlightInDirectory({ deviceId: input.deviceId, path: input.path });
     }),
   /**
    * List the git worktrees attached to the same repository as a directory on a
@@ -190,6 +213,8 @@ export const gitRouter = router({
         create: z.boolean().optional(),
         deviceId: z.string(),
         path: z.string(),
+        /** With `create`, cut the new branch from this branch instead of HEAD. */
+        startPoint: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -198,6 +223,7 @@ export const gitRouter = router({
         create: input.create,
         deviceId: input.deviceId,
         path: input.path,
+        startPoint: input.startPoint,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       }),
@@ -289,6 +315,15 @@ export const gitRouter = router({
         path: z.string(),
         /** The repo's main checkout, which keys the folder; `path` may be a linked worktree. */
         sourcePath: z.string().optional(),
+        /** Fork the worktree's branch from this branch instead of HEAD. */
+        startPoint: z.string().optional(),
+        /**
+         * Name the folder after the branch without the app's own namespace
+         * (`lobehub/x` → `…/x`). A flag rather than a prefix string: the server
+         * owns which namespace is dropped, so the request can only choose
+         * between two server-derived folders under the same root.
+         */
+        stripBranchPrefix: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -310,9 +345,13 @@ export const gitRouter = router({
         branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
+        startPoint: input.startPoint,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-        worktreePath: deriveWorktreePath(keyPath, input.branch, { homeDir }),
+        worktreePath: deriveWorktreePath(keyPath, input.branch, {
+          homeDir,
+          stripBranchPrefix: input.stripBranchPrefix ? WORKTREE_BRANCH_PREFIX : undefined,
+        }),
       });
     }),
   /**
@@ -320,9 +359,17 @@ export const gitRouter = router({
    * the device's `pullGitBranch` RPC.
    */
   pullGitBranch: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        /** Sync this local branch instead of HEAD; the device echoes it back. */
+        branch: z.string().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pullGitBranch({
+        branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
@@ -334,9 +381,17 @@ export const gitRouter = router({
    * `pushGitBranch` RPC.
    */
   pushGitBranch: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        /** Sync this local branch instead of HEAD; the device echoes it back. */
+        branch: z.string().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pushGitBranch({
+        branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,

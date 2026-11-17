@@ -106,6 +106,11 @@ export interface ChannelMemberConfig {
    */
   deviceOwnerId?: string;
   /**
+   * The Agent stays quiet here: nothing reaches it unless a person @mentions it, and it cannot
+   * post on its own. Kept beside the environment and reply strategy, never part of execution.
+   */
+  muted?: boolean;
+  /**
    * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
    * shared wake schema; never part of the execution environment.
    */
@@ -208,6 +213,14 @@ export const channelMessageReceipt = (
         messageId: receipt.messageId,
       }
     : undefined;
+};
+
+/** When a person last edited their message (`metadata.editedAt`); null if never. */
+export const channelMessageEditedAt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): Date | null => {
+  const editedAt = metadata?.editedAt;
+  return typeof editedAt === 'string' ? new Date(editedAt) : null;
 };
 
 /** `metadata.via` of a relayed request, or undefined for anything else. */
@@ -522,6 +535,8 @@ export interface ChannelPublicMember {
   description: string | null;
   id: string;
   joinedAt: Date;
+  /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
+  muted?: boolean;
   name: string | null;
   role: ChannelMemberRole | null;
   status: ChannelMemberStatus;
@@ -541,6 +556,8 @@ export interface ChannelPublicMessage {
   };
   content: string;
   createdAt: Date;
+  /** Set once the author has edited the text; shown as "(edited)". */
+  editedAt?: Date | null;
   fileIds: string[];
   id: string;
   mentions: string[];

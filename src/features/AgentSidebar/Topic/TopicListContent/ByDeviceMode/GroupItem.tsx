@@ -32,10 +32,12 @@ import { deviceSelectors } from '@/store/device/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useProjectDirectories } from '@/store/projectWorkingDirectory';
 
-import TopicItem from '../../List/Item';
 import { useTopicListScope } from '../../TopicListScope';
 import { deviceCategoryKey } from '../ByProjectMode/deviceIdentity';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
+import { renderSubGroupTopic } from '../TopicSubGroupItem';
+import { sectionsDeviceGroupByDirectory } from './directorySections';
+import DirectoryTopicList from './DirectoryTopicList';
 import {
   findDeviceTopicDirectory,
   hasNamesakeDevice,
@@ -102,6 +104,8 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
     });
   };
 
+  const sectionByDirectory = sectionsDeviceGroupByDirectory(id, !!scope);
+
   return (
     <AccordionItem value={id}>
       <AccordionHeader>
@@ -154,21 +158,13 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         )}
       </AccordionHeader>
       <AccordionPanel contentStyle={{ padding: 0 }}>
-        <Flexbox gap={1} paddingBlock={1}>
-          {children.map((topic) => (
-            <TopicItem
-              fav={topic.favorite}
-              hasGoal={topic.hasGoal}
-              id={topic.id}
-              key={topic.id}
-              metadata={topic.metadata}
-              runStartedAt={topic.runStartedAt}
-              status={topic.status}
-              title={topic.title}
-              userId={topic.userId}
-            />
-          ))}
-        </Flexbox>
+        {sectionByDirectory ? (
+          <DirectoryTopicList topics={children} />
+        ) : (
+          <Flexbox gap={1} paddingBlock={1}>
+            {children.map((topic) => renderSubGroupTopic(topic))}
+          </Flexbox>
+        )}
       </AccordionPanel>
     </AccordionItem>
   );

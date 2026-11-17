@@ -49,6 +49,7 @@ function expected(): Array<[name: string, type: 'mutation' | 'query']> {
     ['refreshGatewayToken', 'query'],
     ['refreshHeteroOperationToken', 'mutation'],
     ['releaseSubAgentLlmRelay', 'mutation'],
+    ['reportHeteroControlResult', 'mutation'],
     ['resolveAgentIntervention', 'mutation'],
     ['resolveAgentInterventionBySource', 'mutation'],
     ['resolveHeteroIntervention', 'mutation'],

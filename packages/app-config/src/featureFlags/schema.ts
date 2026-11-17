@@ -75,6 +75,16 @@ export const FeatureFlagsSchema = z.object({
   agent_runtime_strip_operation_toolset: FeatureFlagValue.optional(),
 
   /**
+   * Keep copies the per-operation tool set already holds out of the agent state
+   * blob rewritten at every step (`initialContext.payload.tools`, the manifests
+   * of `activatedStepTools`, the deprecated top-level `expertise` mirror); they
+   * are restored on load. Off: the blob keeps them inline. Server only;
+   * `AGENT_RUNTIME_SLIM_STATE=0|1` overrides it. Array values are user ids (the
+   * operation's owner).
+   */
+  agent_runtime_slim_state: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -98,6 +108,14 @@ export const FeatureFlagsSchema = z.object({
    * ids.
    */
   artboard: FeatureFlagValue.optional(),
+
+  /**
+   * Inbound webhooks wake Agents: MCP Events subscriptions, generic webhooks (the Agent Profile
+   * Webhook tab) and the Automations lists. Off: deliveries are still verified, stored and
+   * acknowledged, but run nothing, and the subscription tools, the Webhook and Automations
+   * entries are hidden. Array values are user ids.
+   */
+  webhook: FeatureFlagValue.optional(),
 
   /**
    * Rollout gate for moving an agent's documents into its dedicated knowledge
@@ -220,6 +238,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_deferred_init: false,
   agent_deferred_hetero_dispatch: false,
   agent_runtime_strip_operation_toolset: false,
+  agent_runtime_slim_state: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
@@ -229,6 +248,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
+  webhook: false,
   agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -293,8 +313,14 @@ export const mapFeatureFlagsEnvToState = (
       userId,
       'agent_runtime_strip_operation_toolset',
     ),
+    enableSlimAgentState: evaluateFeatureFlag(
+      config.agent_runtime_slim_state,
+      userId,
+      'agent_runtime_slim_state',
+    ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
+    enableWebhook: evaluateFeatureFlag(config.webhook, userId, 'webhook'),
     enableAgentKnowledgeSpace: evaluateFeatureFlag(
       config.agent_knowledge_space,
       userId,

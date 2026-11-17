@@ -236,7 +236,10 @@ export const channelRouter = router({
       const access = await ctx.channelService.openShared(input.share);
       return { data: access?.channel.id ?? null, success: true };
     }),
-  /** The personal conversation with a contact; both people must still be contacts. */
+  /**
+   * The one-on-one conversation with another person: a mutual contact in the personal space, a
+   * fellow member in a workspace.
+   */
   openPeer: channelProcedure
     .input(z.object({ userId: z.string().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
@@ -267,6 +270,24 @@ export const channelRouter = router({
     await ctx.channelService.remove(input.channelId);
     return { success: true };
   }),
+  setMemberMuted: channelProcedure
+    .input(z.object({ channelId, memberId: z.uuid(), muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.setMemberMuted(input.channelId, input.memberId, input.muted);
+      return { success: true };
+    }),
+  editMessage: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        content: z.string().max(CHANNEL_LIMITS.contentLength),
+        messageId: z.uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
+      success: true,
+    })),
   rename: channelProcedure
     .input(z.object({ channelId, title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength) }))
     .mutation(async ({ ctx, input }) => ({

@@ -132,6 +132,7 @@ export const execAgentTurn = async (
     steer,
     trigger,
     cronJobId,
+    webhookThread,
     taskId,
     evalContext,
     evalRuntime,
@@ -259,6 +260,7 @@ export const execAgentTurn = async (
     agentConfig,
     agentSlug,
     assistantAgentId,
+    autoSkillIds,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
@@ -444,6 +446,7 @@ export const execAgentTurn = async (
         createdThreadId,
         externalOrigin,
         cronJobId,
+        webhookThread,
         files,
         modelOverride,
         operationTaskId,
@@ -504,6 +507,7 @@ export const execAgentTurn = async (
           }
         : appContext,
     assistantMessageId: turn.assistantMessageId,
+    autoSkillIds,
     botContext,
     botPlatformContext,
     canUseDevice,
@@ -577,6 +581,7 @@ export const execAgentTurn = async (
           operationTaskId,
           // The hetero run settles its fee on `heteroFinish` under this id, so the
           // fee moves to it as soon as the durable operation row exists.
+          markTopicRunning: params.markTopicRunning,
           onOperationCreated: async (operationId) => {
             await bindRunFee(runFee, deps.userId, operationId);
             await params.onOperationCreated?.(operationId);
@@ -800,8 +805,10 @@ export const execAgentTurn = async (
         approvalClaim,
         approvalSourceOperationId,
         approvalSourceToolMessageIds,
+        autoSkillIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
+        markTopicRunning: params.markTopicRunning,
         // From here the run's completion releases the slot and settles the
         // fee; a run that never started (failed, or created without
         // auto-start) gives both back.

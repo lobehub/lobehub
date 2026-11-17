@@ -4,12 +4,13 @@ import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { isManagedCloudDevice } from '@lobechat/types';
-import { Button, Flexbox, Icon, Popover, toast, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Popover, Tag, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   ExternalLinkIcon,
+  HardDriveIcon,
   InfoIcon,
   MonitorDownIcon,
   SettingsIcon,
@@ -18,6 +19,7 @@ import {
 import { memo, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import InstantSwitch from '@/components/InstantSwitch';
 import { DOWNLOAD_URL } from '@/const/url';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
@@ -53,6 +55,7 @@ import { getDevicePoolStatus } from './devicePoolStatus';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
 import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
+import { useSandboxModeSelect } from './useSandboxModeSelect';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
@@ -360,11 +363,41 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   });
 
   const handleSelect = useCallback(
-    async (target: DeviceExecutionTarget, deviceId?: string, localSandbox?: boolean) => {
+    async (
+      target: DeviceExecutionTarget,
+      deviceId?: string,
+      localSandbox?: boolean,
+      afterApply?: () => Promise<void>,
+    ) => {
       setOpen(false);
-      await selectTarget(target, deviceId, localSandbox);
+      await selectTarget(target, deviceId, localSandbox, afterApply);
     },
     [selectTarget],
+  );
+
+  // The cloud sandbox comes as two rows — temporary, and persistent on the
+  // drive — that share the `sandbox` target and differ in where this
+  // conversation keeps its files. The drive is asked about once the menu could
+  // show it, or the chip has to name it.
+  const sandboxMode = useSandboxModeSelect(agentId, {
+    enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
+    topicId,
+  });
+  const offersPersistentSandbox =
+    supportsSandbox &&
+    (sandboxMode.driveStatus === 'ready' || sandboxMode.driveStatus === 'upgrade');
+  const selectSandbox = useCallback(
+    (persistent: boolean) =>
+      handleSelect('sandbox', undefined, undefined, async () => {
+        try {
+          await (persistent ? sandboxMode.toPersistent() : sandboxMode.toTemporary());
+        } catch {
+          // The target moved but the conversation kept its folder; said rather
+          // than left looking switched.
+          toast.error(t('sandboxEnvironment.saveFailed'));
+        }
+      }),
+    [handleSelect, sandboxMode, t],
   );
 
   // Setting up the backend raises an elevation prompt and creates a dedicated
@@ -528,7 +561,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
-  if (chipExecutionTarget === 'none') {
+  if (chipExecutionTarget === 'sandbox' && sandboxMode.persistent) {
+    chipIcon = <Icon icon={HardDriveIcon} size={14} />;
+    chipLabel = t('heteroAgent.executionTarget.persistentSandbox');
+  } else if (chipExecutionTarget === 'none') {
     chipIcon = <ExecutionTargetIcon target={'none'} />;
     chipLabel = t('heteroAgent.executionTarget.none');
   } else if (chipExecutionTarget === 'auto') {
@@ -743,18 +779,51 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('local', undefined, true)}
         />
       ) : null}
+      {/* Two sandboxes on one `sandbox` target, the persistent one first: it is
+          where everyday work belongs, keeping its results and the work behind
+          them on the drive. The temporary one is discarded after use, which
+          suits coding and one-off data processing — a repository's
+          dependencies and build output would only fill the drive. A plan
+          without a drive sees the persistent row in the same place, tagged,
+          as the way to one; with no drive at all only the temporary row is
+          left, described as it always was. */}
+      {offersPersistentSandbox ? (
+        <OptionRow
+          active={isActive('sandbox') && sandboxMode.persistent}
+          desc={t('heteroAgent.executionTarget.persistentSandboxDesc')}
+          icon={<Icon icon={HardDriveIcon} size={14} />}
+          label={t('heteroAgent.executionTarget.persistentSandbox')}
+          badge={
+            sandboxMode.driveStatus === 'upgrade' ? (
+              <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
+                {t('pro', { ns: 'common' })}
+              </Tag>
+            ) : undefined
+          }
+          onClick={() => {
+            if (sandboxMode.driveStatus === 'upgrade') {
+              setOpen(false);
+              openSandboxStorageUpsell();
+              return;
+            }
+            void selectSandbox(true);
+          }}
+        />
+      ) : null}
       <OptionRow
-        active={isActive('sandbox')}
+        active={isActive('sandbox') && !sandboxMode.persistent}
         disabled={!supportsSandbox}
         icon={<ExecutionTargetIcon target={'sandbox'} />}
         label={t('heteroAgent.executionTarget.sandbox')}
         desc={t(
-          supportsSandbox
-            ? 'heteroAgent.executionTarget.sandboxDesc'
-            : 'heteroAgent.executionTarget.sandboxUnsupported',
+          !supportsSandbox
+            ? 'heteroAgent.executionTarget.sandboxUnsupported'
+            : offersPersistentSandbox
+              ? 'heteroAgent.executionTarget.temporarySandboxDesc'
+              : 'heteroAgent.executionTarget.sandboxDesc',
           { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
         )}
-        onClick={() => void handleSelect('sandbox')}
+        onClick={() => void selectSandbox(false)}
       />
       {deviceRows.length > 0 ? (
         showDeviceGroups ? (

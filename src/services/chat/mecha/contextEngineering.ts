@@ -69,6 +69,12 @@ interface ContextEngineeringContext {
    */
   attachmentPreviewFileIds?: string[];
   /**
+   * Library skills the agent set to `auto` (`agents.plugins` tri-state). A
+   * library skill is opt-in per agent, so one that is neither here nor in
+   * `plugins` (pinned) is left out of the client skill pool.
+   */
+  autoSkillIds?: string[];
+  /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
    * out of `plugins` (pinned) — so a disabled skill is neither listed in
@@ -135,6 +141,7 @@ export const contextEngineering = async ({
   historyCount,
   historySummary,
   agentId,
+  autoSkillIds,
   disabledPluginIds,
   enableAgentMode,
   groupId,
@@ -307,6 +314,7 @@ export const contextEngineering = async ({
         // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
         // which the lobehub skill teaches.
         mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
+        autoSkillIds,
       )
     ).skills;
   }

@@ -3,7 +3,14 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, inboundWebhooks, topics, users, workspaces } from '../../schemas';
+import {
+  agents,
+  inboundWebhooks,
+  topics,
+  users,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { CreateInboundWebhook, InboundWebhookPatch } from '../inboundWebhook';
 import { InboundWebhookLimitError, InboundWebhookModel } from '../inboundWebhook';
 
@@ -335,6 +342,27 @@ describe('InboundWebhookModel maintenance and quotas', () => {
     expect((await InboundWebhookModel.queryStalePending(db)).map((r) => r.id)).toEqual([stale.id]);
   });
 
+  it('pages due rows earliest first, continuing after a given row', async () => {
+    const at = (offset: number) => new Date(Date.now() - 10_000 + offset);
+    const rows = await Promise.all(
+      [0, 1000, 1000, 2000].map((offset) =>
+        model.create(input({ nextMaintenanceAt: at(offset), status: 'active' })),
+      ),
+    );
+    const all = await InboundWebhookModel.queryMaintenance(db);
+    expect(all.map((r) => r.id).sort()).toEqual(rows.map((r) => r.id).sort());
+    const pages = [];
+    let after: { id: string; nextMaintenanceAt: Date } | undefined;
+    for (;;) {
+      const page = await InboundWebhookModel.queryMaintenance(db, 1, after);
+      if (!page.length) break;
+      pages.push(page[0].id);
+      after = { id: page[0].id, nextMaintenanceAt: page[0].nextMaintenanceAt! };
+    }
+    // Every row exactly once, in the same order as one unpaged read, ties included.
+    expect(pages).toEqual(all.map((r) => r.id));
+  });
+
   it('atomically reserves a bounded number of wakes and resets an expired hour', async () => {
     const row = await model.create(input({ status: 'active' }));
     const reservations = await Promise.all(
@@ -396,6 +424,44 @@ describe('InboundWebhookModel maintenance and quotas', () => {
     ).rejects.toMatchObject({ code: 'limit_reached', message: expect.stringContaining('user') });
   });
 
+  it("counts a member's webhooks per scope, and a workspace's per active member", async () => {
+    const ws = 'inbound-limit-ws';
+    await db.insert(workspaces).values({ id: ws, name: 'Team', primaryOwnerId: userId, slug: ws });
+    await db.insert(workspaceMembers).values([
+      { role: 'owner', userId, workspaceId: ws },
+      { deletedAt: new Date(), role: 'member', userId: otherUserId, workspaceId: ws },
+    ]);
+    try {
+      const limits = { perMember: 2, topic: 10, user: 5 };
+      // A personal webhook does not count against the same member's workspace quota.
+      await model.createWithLimits(input({ topicId: null }), { ...limits, user: 1 });
+      const inTeam = new InboundWebhookModel(db, userId, ws, gateKeeper);
+      await inTeam.createWithLimits(input({ topicId: null }), { ...limits, user: 1 });
+      await expect(
+        inTeam.createWithLimits(input({ topicId: null }), { ...limits, user: 1 }),
+      ).rejects.toMatchObject({ message: expect.stringContaining('user') });
+      // One active member (the other left): two webhooks in the whole workspace.
+      await inTeam.createWithLimits(input({ kind: 'mcp_events', topicId: null }), limits);
+      await expect(inTeam.createWithLimits(input({ topicId: null }), limits)).rejects.toMatchObject(
+        { message: expect.stringContaining('workspace') },
+      );
+      expect(await InboundWebhookModel.activeMemberCount(db, ws)).toBe(1);
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, ws));
+    }
+  });
+
+  it('opens a new run window ten minutes after the last one started', async () => {
+    const row = await model.create(input());
+    for (let i = 0; i < 30; i++) expect(await model.reserveWake(row.id)).toBeDefined();
+    expect(await model.reserveWake(row.id)).toBeUndefined();
+    await db
+      .update(inboundWebhooks)
+      .set({ wakeWindowStartedAt: new Date(Date.now() - 11 * 60_000) })
+      .where(eq(inboundWebhooks.id, row.id));
+    expect(await model.reserveWake(row.id)).toBeDefined();
+  });
+
   it('serializes quota checks from simultaneous subscription requests', async () => {
     const results = await Promise.allSettled(
       Array.from({ length: 4 }, () => model.createWithLimits(input(), { topic: 2, user: 2 })),
@@ -414,8 +480,13 @@ describe('InboundWebhookModel delivery recovery', () => {
       lastError: 'http_5xx',
       lastDeliveryAt: null,
     });
+    // A control envelope (gap, terminated) is not an event: it must not move "last event".
     await model.recordDelivery(row.id, false);
-    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'http_5xx' });
+    expect(await model.findById(row.id)).toMatchObject({
+      status: 'error',
+      lastError: 'http_5xx',
+      lastDeliveryAt: null,
+    });
     await model.recordDelivery(row.id, true);
     expect(await model.findById(row.id)).toMatchObject({
       status: 'active',
@@ -431,5 +502,19 @@ describe('InboundWebhookModel delivery recovery', () => {
       status: 'deleting',
       lastError: 'http_5xx',
     });
+  });
+
+  it('clears only the run errors once a run starts, in scope', async () => {
+    const row = await model.create(input({ lastError: 'wake_cap' }));
+    await otherModel.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBe('wake_cap');
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { lastError: 'insufficient_budget' });
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { status: 'error', lastError: 'auth' });
+    await model.recordRunStarted(row.id);
+    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'auth' });
   });
 });

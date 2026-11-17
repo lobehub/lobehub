@@ -7,6 +7,7 @@ import { ChannelError } from '@/database/repositories/channel';
 import { ChannelService } from './ChannelService';
 
 const {
+  contactScope,
   create,
   createGroupFromDirect,
   findAccess,
@@ -19,6 +20,7 @@ const {
   querySystemInfo,
   statPath,
 } = vi.hoisted(() => ({
+  contactScope: vi.fn(),
   create: vi.fn(),
   createGroupFromDirect: vi.fn(),
   findAccess: vi.fn(),
@@ -44,6 +46,9 @@ vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
 vi.mock('@/database/models/contact', async (original) => ({
   ...(await original<object>()),
   ContactModel: class {
+    constructor(_db: unknown, userId: string, workspaceId?: string) {
+      contactScope(userId, workspaceId);
+    }
     findAgentAccess = findSharedAgent;
   },
 }));
@@ -152,13 +157,18 @@ describe('the direct Channel of a new Agent', () => {
     });
   });
 
-  it('never opens a shared Agent in a workspace', async () => {
+  it('opens a shared Agent added in a workspace in that workspace', async () => {
     getAgent.mockResolvedValue(null);
     findSharedAgent.mockResolvedValue({ name: null, ownerId: 'other', title: 'Shared Helper' });
-    await expect(
-      new ChannelService({} as never, 'owner', 'ws_1').createDirect('agt_1'),
-    ).resolves.toBeUndefined();
-    expect(findSharedAgent).not.toHaveBeenCalled();
+    await new ChannelService({} as never, 'owner', 'ws_1').createDirect('agt_1');
+    // The entry is looked up among those added in this workspace.
+    expect(contactScope).toHaveBeenCalledWith('owner', 'ws_1');
+    expect(create).toHaveBeenCalledWith({
+      agentConfig: {},
+      agentId: 'agt_1',
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
   });
 });
 
@@ -269,7 +279,10 @@ describe('opening another person’s Agent from its share', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('is personal only', async () => {
-    await expect(openShared('shared-helper', 'ws_1')).rejects.toThrow('personal scope');
+  it('opens in a workspace as well', async () => {
+    await expect(openShared('shared-helper', 'ws_1')).resolves.toMatchObject({
+      channel: { id: 'chn_shared' },
+    });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ sharedAgent: true }));
   });
 });

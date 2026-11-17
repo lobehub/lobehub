@@ -66,6 +66,10 @@ export const setPendingSandboxSelection = (agentId: string, selection?: SandboxS
  */
 const seeded = new WeakSet<SandboxSelection>();
 
+/** Whether a selection is the composer's default rather than anyone's pick. */
+export const isSeededSandboxSelection = (selection: SandboxSelection): boolean =>
+  seeded.has(selection);
+
 /** Fill an agent's empty slot with the default placement, marked as not chosen by anyone. */
 export const seedPendingSandboxSelection = (agentId: string, selection: SandboxSelection): void => {
   seeded.add(selection);

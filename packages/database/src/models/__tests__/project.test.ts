@@ -997,6 +997,16 @@ describe('ProjectModel', () => {
     await expect(model.attachEnvironment(project.id, randomUUID())).rejects.toThrow(
       'access denied',
     );
+
+    await expect(otherModel.detachEnvironment(project.id, env.id)).rejects.toThrow('access denied');
+    await model.detachEnvironment(project.id, env.id);
+    await model.detachEnvironment(project.id, env.id);
+    expect(await model.listEnvironments(project.id)).toEqual([]);
+    // Unlinking leaves the environment itself for the other places using it.
+    await model.attachEnvironment(project.id, env.id);
+    expect(await model.listEnvironments(project.id)).toEqual([
+      expect.objectContaining({ id: env.id }),
+    ]);
   });
 
   it('lists project conversations with or without directories, retaining each agent', async () => {
