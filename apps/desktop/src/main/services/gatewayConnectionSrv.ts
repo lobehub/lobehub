@@ -42,10 +42,6 @@ import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
 import { safeGetPath } from '@/utils/user-path';
 
-import { discoverDeviceGateway } from '../gatewayDiscovery';
-import { collectBundledCliAgentRuntimes, collectGatewaySystemInfo } from '../gatewaySystemInfo';
-import { prepareToolCallReply, serializeWireError, toWireResult } from '../gatewayToolCallReply';
-import { ServiceModule } from '../index';
 import type {
   AgentRunHandler,
   ConnectedHandler,
@@ -56,9 +52,13 @@ import type {
   ToolCallHandler,
   WorkspaceDeviceChecker,
   WorkspaceTokenProvider,
-} from './handlers';
+} from './gatewayConnectionHandlers';
+import { discoverDeviceGateway } from './gatewayDiscovery';
+import { collectBundledCliAgentRuntimes, collectGatewaySystemInfo } from './gatewaySystemInfo';
+import { prepareToolCallReply, serializeWireError, toWireResult } from './gatewayToolCallReply';
+import { ServiceModule } from './index';
 
-export type { WorkspaceDeviceRegistration } from './handlers';
+export type { WorkspaceDeviceRegistration } from './gatewayConnectionHandlers';
 
 const logger = createLogger('services:GatewayConnectionSrv');
 

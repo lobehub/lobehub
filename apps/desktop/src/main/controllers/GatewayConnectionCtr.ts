@@ -36,21 +36,21 @@ import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
-import BrowserControlCtr from '../BrowserControlCtr';
-import { executeGatewayAgentRun, type PlatformTaskEntry } from '../gatewayAgentRun';
-import { createDesktopDeviceControlDeps } from '../gatewayDeviceControlDeps';
-import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
-import { ControllerModule, createProtocolHandler, IpcMethod } from '../index';
-import LocalFileCtr from '../LocalFileCtr';
-import McpCtr from '../McpCtr';
-import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
-import ShellCommandCtr from '../ShellCommandCtr';
+import BrowserControlCtr from './BrowserControlCtr';
+import { executeGatewayAgentRun, type PlatformTaskEntry } from './gatewayAgentRun';
+import { createDesktopDeviceControlDeps } from './gatewayDeviceControlDeps';
 import {
   type AgentNotifyParams,
   postAgentNotify,
   postDeviceRegistration,
   requestWorktreeCleanupDrain,
-} from './deviceServerCalls';
+} from './gatewayDeviceServerCalls';
+import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
+import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
+import LocalFileCtr from './LocalFileCtr';
+import McpCtr from './McpCtr';
+import RemoteServerConfigCtr from './RemoteServerConfigCtr';
+import ShellCommandCtr from './ShellCommandCtr';
 
 /**
  * How long an orphaned `hetero exec` group may take to exit after cancellation.
