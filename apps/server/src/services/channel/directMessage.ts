@@ -11,7 +11,7 @@ interface SentMessage {
 }
 
 /**
- * Ping the other person of a personal conversation between two contacts about a message the
+ * Ping the other person of a one-on-one conversation between two people about a message the
  * sender posted there. Every message counts, @mention or not. Runs after the response and never
  * fails the send; a retried send returns the same message, so its notification dedupes. The
  * business slot is a no-op outside Cloud.
@@ -21,9 +21,7 @@ export const notifyChannelDirectMessages = (
   context: { userId: string; workspaceId?: string },
   message: SentMessage,
 ) => {
-  const { userId, workspaceId } = context;
-  // Conversations between people are personal.
-  if (workspaceId) return;
+  const { userId } = context;
 
   after(async () => {
     try {

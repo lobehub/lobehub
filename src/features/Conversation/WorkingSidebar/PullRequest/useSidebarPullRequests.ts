@@ -1,0 +1,80 @@
+import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
+import { useCallback, useMemo, useState } from 'react';
+
+import type { TopicPullRequestView } from '@/features/TopicPullRequests/pullRequestView';
+import { useTopicPullRequests } from '@/features/TopicPullRequests/useTopicPullRequests';
+import { workService } from '@/services/work';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+
+import { type PullRequestSnapshot, useLinkedPullRequest } from './useLinkedPullRequest';
+
+export const toLinkedPullRequest = (view: TopicPullRequestView): DeviceGitLinkedPullRequest => ({
+  ...(view.ciStatus ? { ciStatus: view.ciStatus } : {}),
+  isDraft: view.isDraft,
+  mergedAt: view.mergedAt ?? null,
+  number: view.number,
+  state: view.state,
+  title: view.title,
+  url: view.url,
+});
+
+/**
+ * The pull request(s) the Working Sidebar shows. Without Better Coding
+ * Experience: the PR linked to the working directory's branch, exactly as
+ * before. With it: every PR the topic's Work rows link (Overview lists them
+ * all), and the PR tab shows the one picked there — only among PRs the device
+ * read in the working directory's own repository, since the pane reads that
+ * number in that directory. Mutations stay locked until the GitHub App or this
+ * session's device read confirmed the PR.
+ */
+export const useSidebarPullRequests = (params: {
+  available: boolean;
+  deviceId?: string;
+  gitPath?: string;
+  isGithub: boolean;
+  snapshot?: PullRequestSnapshot;
+  topicId?: string | null;
+  workingDirectory?: string;
+}) => {
+  const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+  // The branch → PR guess is not even asked under the lab.
+  const legacy = useLinkedPullRequest(
+    betterCoding ? { ...params, gitPath: undefined, isGithub: false, snapshot: undefined } : params,
+  );
+  const linked = useTopicPullRequests({
+    deviceId: params.deviceId,
+    path: params.available ? params.workingDirectory : undefined,
+    topicId: params.topicId,
+  });
+  const [picked, setPicked] = useState<string>();
+
+  const openable = useMemo(() => linked.views.filter((view) => view.localDetail), [linked.views]);
+  const selected =
+    openable.find((view) => view.identifier === picked) ??
+    (linked.primary?.localDetail ? linked.primary : openable[0]);
+
+  const refresh = useCallback(
+    () => workService.refreshTopicPullRequests(params.topicId),
+    [params.topicId],
+  );
+
+  if (!linked.enabled) {
+    return { ...legacy, pickPullRequest: undefined, probes: [], pullRequests: undefined };
+  }
+
+  return {
+    confirmError: undefined,
+    confirmed: !!selected?.confirmed,
+    onRetryConfirm: () => void refresh(),
+    /** Open a listed PR: in the PR tab when the pane can read it, else on GitHub. */
+    pickPullRequest: (view: TopicPullRequestView) => {
+      setPicked(view.identifier);
+      return view.localDetail;
+    },
+    probes: linked.probes,
+    pullRequest: selected ? toLinkedPullRequest(selected) : undefined,
+    pullRequests: linked.views,
+    refresh,
+  };
+};

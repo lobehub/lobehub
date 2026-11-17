@@ -7,9 +7,8 @@ import {
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
 import { resolveShareAllowedSkillIds } from '@lobechat/const';
-import { describeLockedDevicePicker, getDisabledPluginIds } from '@lobechat/types';
+import { describeLockedDevicePicker } from '@lobechat/types';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import {
@@ -18,6 +17,7 @@ import {
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
+import { resolveAgentSkillGates } from './librarySkillGate';
 import { REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { type ServerRuntimeRegistration } from './types';
 
@@ -80,12 +80,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // model that already knows its name (prior turn, or a guess) could
       // still activate and use it. Re-derive the disabled set here so this
       // independent resolution path enforces the same tri-state.
-      let disabledSkillIds = new Set<string>();
-      if (context.agentId) {
-        const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-        const agentConfig = await agentModel.getAgentConfigById(context.agentId);
-        disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
-      }
+      const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(context);
 
       // An Agent Share visitor reaches only the skills the creator listed in
       // `shareConfig.skillGrants`. `activateTools` falls back to this runtime
@@ -97,6 +92,8 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       const isSkillReachable = (identifier: string) =>
         !disabledSkillIds.has(identifier) &&
         (!shareVisitor || resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0);
+      const isLibrarySkillReachable = (identifier: string) =>
+        isSkillReachable(identifier) && (isLibrarySkillEnabled?.(identifier) ?? true);
 
       skillsRuntime = new SkillsExecutionRuntime({
         // Same device gate as the skills runtime: device-only skills are
@@ -108,18 +105,18 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         service: {
           findAll: async () => {
             const result = await skillModel.findAll();
-            if (!shareVisitor) return result;
+            if (!shareVisitor && !isLibrarySkillEnabled) return result;
 
-            const data = result.data.filter((skill) => isSkillReachable(skill.identifier));
+            const data = result.data.filter((skill) => isLibrarySkillReachable(skill.identifier));
             return { data, total: data.length };
           },
           findById: async (id) => {
             const skill = await skillModel.findById(id);
-            return skill && isSkillReachable(skill.identifier) ? skill : undefined;
+            return skill && isLibrarySkillReachable(skill.identifier) ? skill : undefined;
           },
           findByName: async (name) => {
             const skill = await skillModel.findByName(name);
-            return skill && isSkillReachable(skill.identifier) ? skill : undefined;
+            return skill && isLibrarySkillReachable(skill.identifier) ? skill : undefined;
           },
           readResource: async () => {
             throw new Error('readResource not available in tools runtime');

@@ -28,6 +28,7 @@ export function MembersSection({ detail }: { detail: ChannelDetail }) {
                   member.status === 'active' && member.agentId ? [member.agentId] : [],
                 ),
                 id: channel.id,
+                projectId: channel.projectId,
                 workspaceId: channel.workspaceId,
               })
             }

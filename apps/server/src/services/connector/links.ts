@@ -7,7 +7,7 @@ import {
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
 
-import { ensureFreshLinkToken } from './tokens';
+import { ensureFreshConnectorToken, ensureFreshLinkToken } from './tokens';
 
 export interface ConnectorLinksContext {
   connectorLinkModel?: ConnectorLinkModel;
@@ -80,6 +80,56 @@ export const withLinkCredentials = (
 
 export const pickPrimaryLink = <T extends { status: string }>(links: readonly T[]): T | undefined =>
   links.find((link) => link.status === 'connected') ?? links[0];
+
+/** The connector account a call was pinned to no longer exists. */
+export class ConnectorAccountGoneError extends Error {
+  constructor() {
+    super('Connector account no longer exists');
+    this.name = 'ConnectorAccountGoneError';
+  }
+}
+
+/**
+ * The connector ready to call: an OAuth connector's credentials live on its accounts, not on the
+ * row, so this picks the account (`linkId`, else the primary one), refreshes its token and puts its
+ * credentials on the connector. A connector without accounts refreshes its own token. Returns the
+ * account used, so a caller that must keep talking as the same identity can pin it, and how many
+ * accounts the connector has.
+ */
+export const resolveConnectorAccount = async (
+  connector: DecryptedConnector,
+  ctx: ConnectorLinksContext,
+  linkId?: string,
+): Promise<{
+  accountCount: number;
+  connector: DecryptedConnector;
+  /** The account used, as stored; none for a connector without accounts. */
+  link?: DecryptedConnectorLink;
+  linkId?: string;
+}> => {
+  // Read and refreshed in the row's own scope (a personal row in a workspace run)
+  const rowContext = connectorLinksContextForRow(ctx, connector);
+  const links = (await loadConnectorLinksMap([connector], rowContext)).get(connector.id) ?? [];
+  const link = linkId ? links.find((l) => l.id === linkId) : pickPrimaryLink(links);
+  if (linkId && !link) throw new ConnectorAccountGoneError();
+  if (!link)
+    return {
+      accountCount: links.length,
+      connector: await ensureFreshConnectorToken(connector, rowContext.connectorModel),
+    };
+  const fresh = await ensureFreshLinkToken(
+    connector,
+    link,
+    getConnectorLinkModel(rowContext),
+    rowContext.connectorModel,
+  );
+  return {
+    accountCount: links.length,
+    connector: withLinkCredentials(connector, fresh),
+    link,
+    linkId: link.id,
+  };
+};
 
 export class ConnectorLinkSelectionError extends Error {}
 

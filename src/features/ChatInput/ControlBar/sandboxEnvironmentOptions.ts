@@ -1,4 +1,3 @@
-import { projectCheckoutDirectory } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
 import type { SandboxSelection } from './useSandboxPlacement';
@@ -62,25 +61,12 @@ export const environmentChipState = ({
 };
 
 /**
- * Where a conversation works once a repository is picked. A repository is only
- * cloned into an empty folder, so it never inherits the folder the
- * conversation was on: it starts in a temporary sandbox — or, in a project, in
- * the project's own checkout of it, which every conversation there shares (the
- * run makes the folder when it first needs it). A private checkout stays on the
- * member's own drive; the public one is every member's.
+ * Where a conversation works once a repository is picked: a fresh temporary
+ * sandbox the repository is cloned into. A repository is only cloned into an
+ * empty folder, so it never inherits the folder the conversation was on, and
+ * it is never checked out on the drive — the persistent sandbox is for keeping
+ * a folder of the drive, not a repository.
  */
-export const repositorySelection = (
-  environment: { id: string; name: string },
-  {
-    projectId,
-    published,
-    workspace,
-  }: { projectId?: string; published: boolean; workspace: boolean },
-): SandboxSelection =>
-  projectId
-    ? {
-        ...(workspace && { drive: published ? 'public' : 'personal' }),
-        environmentId: environment.id,
-        workingDirectory: projectCheckoutDirectory(projectId, environment.id),
-      }
-    : { environmentId: environment.id };
+export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
+  environmentId: environment.id,
+});

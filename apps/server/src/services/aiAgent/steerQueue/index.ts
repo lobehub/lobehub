@@ -17,6 +17,7 @@ import { redisService } from '@/server/services/redis';
 import type { SteerQueueEntry, SteerQueueScope } from '@/server/services/redis/steerQueue';
 
 import { type ComposerRunContext, type ComposerRunRequest, startComposerRun } from '../composerRun';
+import { readFollowUpMode } from './followUpMode';
 import { findOwnLiveRuns, isRunAlive } from './liveRuns';
 
 const log = debug('lobe-server:steer-queue');
@@ -365,8 +366,13 @@ export const startQueuedFollowUp = async (
   if (drained.entries.length === 0) return;
 
   // One author per turn; the run this starts picks the others up when it ends.
-  const { agentSender, rest, taken: entries } = takeSameSenderFollowUps(drained.entries);
-  await returnFollowUps(scope, drained, rest, 'sent by another author');
+  // Queue mode starts one follow-up per turn the same way.
+  const sameSender = takeSameSenderFollowUps(drained.entries);
+  const { agentSender } = sameSender;
+  const oneEach = (await readFollowUpMode(ctx.db, ctx.userId)) === 'queue';
+  const entries = oneEach ? sameSender.taken.slice(0, 1) : sameSender.taken;
+  const rest = drained.entries.filter((entry) => !entries.includes(entry));
+  await returnFollowUps(scope, drained, rest, oneEach ? 'one turn each' : 'sent by another author');
 
   const merged = mergeQueuedFollowUps(entries);
   const userMessageId = queuedUserMessageId(ctx.userId, entries, merged);

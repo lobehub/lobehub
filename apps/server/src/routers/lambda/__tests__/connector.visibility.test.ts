@@ -72,6 +72,7 @@ describe('connectorRouter visibility', () => {
     connectorModelMock = {
       copyToAgent: vi.fn().mockResolvedValue({ id: 'copied' }),
       create: vi.fn().mockResolvedValue({ id: 'created' }),
+      createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'created' } }),
       findById: vi.fn(),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
@@ -107,7 +108,7 @@ describe('connectorRouter visibility', () => {
         id: 'created',
         isNew: true,
       });
-      expect(connectorModelMock.create).toHaveBeenCalledWith(
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
         expect.objectContaining({ visibility: 'private' }),
       );
     });
@@ -134,7 +135,7 @@ describe('connectorRouter visibility', () => {
         visibility: 'private',
       });
 
-      expect(connectorModelMock.create).toHaveBeenCalledWith(
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
         expect.objectContaining({ metadata: { avatar: '🔌' } }),
       );
     });
@@ -150,7 +151,7 @@ describe('connectorRouter visibility', () => {
         metadata: { avatar: '🔌', mountedByAgentId: 'agt-victim' },
       });
 
-      expect(connectorModelMock.create).toHaveBeenCalledWith(
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
         expect.objectContaining({ metadata: { avatar: '🔌' }, visibility: 'public' }),
       );
     });
@@ -159,14 +160,31 @@ describe('connectorRouter visibility', () => {
       await member().create(createInput);
       await callerFor({}).create({ ...createInput, visibility: 'private' });
 
-      expect(connectorModelMock.create).toHaveBeenNthCalledWith(
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({ visibility: 'public' }),
       );
-      expect(connectorModelMock.create).toHaveBeenNthCalledWith(
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({ visibility: 'public' }),
       );
+    });
+    it('claims a private row within its visibility and re-adds over the holder it finds', async () => {
+      // A concurrent add of the same private connector won the claim: this add
+      // rewrites that row instead of inserting a second one.
+      connectorModelMock.createUnlessIdentifierHeld.mockResolvedValue({
+        holder: { agentId: null, id: 'held', metadata: null, userId: 'me', visibility: 'private' },
+      });
+      connectorModelMock.update.mockResolvedValue({ id: 'held' });
+
+      await expect(member().create({ ...createInput, visibility: 'private' })).resolves.toEqual({
+        id: 'held',
+        isNew: false,
+      });
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'my-mcp', visibility: 'private' }),
+      );
+      expect(connectorModelMock.update).toHaveBeenCalledWith('held', expect.anything());
     });
   });
 
@@ -220,37 +238,34 @@ describe('connectorRouter visibility', () => {
       visibility,
     });
 
-    it('returns a private agent row to the private slot beside a shared sibling', async () => {
+    it('returns a private agent row to the base scope beside a shared sibling', async () => {
       // Regression: the base-slot check looked among shared rows only, so the
       // shared connector of the same identifier blocked the private row's
-      // return with CONFLICT although its private slot was empty.
+      // return with CONFLICT although its private slot was empty. The move
+      // looks for a holder in the row's own visibility (see the model).
       connectorModelMock.findById.mockResolvedValue(agentRow('private'));
+      connectorModelMock.moveToBaseUnlessIdentifierHeld = vi
+        .fn()
+        .mockResolvedValue({ moved: true });
 
       await expect(member().unbindAgent({ connectorId: CONNECTOR_ID })).resolves.toEqual({
         id: CONNECTOR_ID,
       });
-      expect(connectorModelMock.findScopedByIdentifier).toHaveBeenCalledWith(
+      expect(connectorModelMock.moveToBaseUnlessIdentifierHeld).toHaveBeenCalledWith(
+        CONNECTOR_ID,
         'my-mcp',
-        undefined,
-        undefined,
-        'private',
       );
-      expect(connectorModelMock.update).toHaveBeenCalledWith(CONNECTOR_ID, { agentId: null });
     });
 
     it('still refuses to return a row into an occupied slot of its visibility', async () => {
       connectorModelMock.findById.mockResolvedValue(agentRow('public'));
-      connectorModelMock.findScopedByIdentifier.mockResolvedValue({ id: 'base-row' });
+      connectorModelMock.moveToBaseUnlessIdentifierHeld = vi
+        .fn()
+        .mockResolvedValue({ holder: { id: 'base-row' } });
 
       await expect(member().unbindAgent({ connectorId: CONNECTOR_ID })).rejects.toMatchObject({
         code: 'CONFLICT',
       });
-      expect(connectorModelMock.findScopedByIdentifier).toHaveBeenCalledWith(
-        'my-mcp',
-        undefined,
-        undefined,
-        'public',
-      );
       expect(connectorModelMock.update).not.toHaveBeenCalled();
     });
   });

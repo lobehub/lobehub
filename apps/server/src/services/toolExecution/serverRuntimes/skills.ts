@@ -19,7 +19,6 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { resolveShareAllowedSkillIds } from '@lobechat/const';
 import {
   type BuiltinSkill,
-  getDisabledPluginIds,
   type SkillItem,
   type SkillListItem,
   type SkillResourceContent,
@@ -27,7 +26,6 @@ import {
 import { toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
-import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { TaskModel } from '@/database/models/task';
@@ -59,6 +57,7 @@ import {
   UserSkillService,
 } from '@/server/services/userSkill';
 
+import { resolveAgentSkillGates } from './librarySkillGate';
 import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
@@ -175,6 +174,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private sandboxSpecification?: SandboxSessionSpecification;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
+  private isLibrarySkillEnabled?: (identifier: string) => boolean;
   private resolveUserSkillArchive?: (
     name: string,
   ) => Promise<{ fileHash: string; url: string } | undefined>;
@@ -194,6 +194,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     disabledSkillIds?: Set<string>;
     fileModel: FileModel;
     fileService: FileService;
+    /** Library skills are opt-in per agent; see `resolveAgentSkillGates`. */
+    isLibrarySkillEnabled?: (identifier: string) => boolean;
     /**
      * Agent Share only: answers "may this visitor reach the skill with this
      * identifier". Absent on a creator's own run, where the creator reaches
@@ -249,6 +251,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.sandboxSpecification = options.sandboxSpecification;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
+    this.isLibrarySkillEnabled = options.isLibrarySkillEnabled;
     this.isSkillGranted = options.isSkillGranted;
     this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
     this.wrapSandbox = options.wrapSandbox;
@@ -260,6 +263,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
    * together so no lookup path can honor one and miss the other:
    *
    * - `disabledSkillIds` — the agent's own tri-state (`agents.plugins`);
+   * - `isLibrarySkillEnabled` — a library skill the agent never turned on is off;
    * - `isSkillGranted` — an Agent Share visitor's per-skill allowlist
    *   (`shareConfig.skillGrants`). Absent for a creator's own run.
    *
@@ -268,16 +272,18 @@ class SkillServerRuntimeService implements SkillRuntimeService {
    * carries the identifier the grant is written against.
    */
   private isSkillReachable = (identifier: string): boolean =>
-    !this.disabledSkillIds.has(identifier) && (this.isSkillGranted?.(identifier) ?? true);
+    !this.disabledSkillIds.has(identifier) &&
+    (this.isLibrarySkillEnabled?.(identifier) ?? true) &&
+    (this.isSkillGranted?.(identifier) ?? true);
 
   findAll = async (): Promise<{ data: SkillListItem[]; total: number }> => {
     const result = await this.skillModel.findAll();
-    if (!this.isSkillGranted) return result;
+    if (!this.isSkillGranted && !this.isLibrarySkillEnabled) return result;
 
-    // A share visitor must not learn the creator's catalog. This list is not
-    // just an internal lookup: `activateSkill` echoes it back in its
-    // not-found message ("Available skills: ..."), so an unfiltered read here
-    // hands every skill name and description to anyone with the link.
+    // A share visitor must not learn the creator's catalog, and no run should be
+    // offered a skill its agent never turned on. This list is not just an
+    // internal lookup: `activateSkill` echoes it back in its not-found message
+    // ("Available skills: ..."), handing every name and description to the model.
     const data = result.data.filter((skill) => this.isSkillReachable(skill.identifier));
     return { data, total: data.length };
   };
@@ -906,17 +912,9 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
     }
 
-    // Independent of `<available_skills>` (built once, earlier, in
-    // aiAgent/index.ts) — this runtime resolves skills fresh by name/id, so a
-    // model that already knows a disabled skill's name (prior turn, or a
-    // guess) could otherwise still activate/run it. Re-derive the disabled
-    // set here so this path enforces the same tri-state.
-    let disabledSkillIds = new Set<string>();
-    if (context.agentId) {
-      const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
-      const agentConfig = await agentModel.getAgentConfigById(context.agentId);
-      disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
-    }
+    // This runtime resolves skills fresh by name/id, so the agent's own
+    // tri-state is enforced here too (see `resolveAgentSkillGates`).
+    const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(context);
 
     // The share's own opt-out, for the same reason: the creator named the
     // skills a visitor may load (`shareConfig.skillGrants`), and the
@@ -1051,6 +1049,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       disabledSkillIds,
       fileModel,
       fileService,
+      isLibrarySkillEnabled,
       isSkillGranted,
       marketService,
       // The run this runtime belongs to, so an `lh agent run` it preprocesses in

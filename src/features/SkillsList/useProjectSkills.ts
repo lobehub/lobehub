@@ -71,6 +71,7 @@ export const useProjectSkills = (
     () =>
       (data?.skills ?? []).map((skill) => ({
         description: skill.description,
+        disableModelInvocation: skill.disableModelInvocation,
         fileCount: skill.fileCount,
         files: skill.files,
         id: skill.skillDir,

@@ -1,6 +1,7 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import type { ConnectorVisibility } from '@lobechat/types';
 import { CONNECTOR_VISIBILITIES, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
@@ -30,9 +31,13 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getConnectorRedirectUri } from '@/server/services/connector/oauth';
 import { loadConnectorPresentation } from '@/server/services/connector/presentation';
 import {
-  pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
+  writeConnectorToolSyncInputs,
 } from '@/server/services/connector/sync';
+import {
+  removeByConnector,
+  scheduleRefreshByConnector,
+} from '@/server/services/inboundWebhook/lifecycle';
 import {
   DeviceMcpManifestInputSchema,
   getDeviceMcpManifest,
@@ -400,9 +405,8 @@ const connectorCoreRouter = router({
       oidcConfig: input.oidcConfig ?? null,
     };
 
-    // Idempotent on (user_id, identifier): re-adding or re-authorizing the same
-    // connector updates the existing row instead of violating the unique index.
-    // Status resets to `disconnected` — the OAuth callback / tool sync promotes
+    // Idempotent on (scope, visibility, identifier): re-adding or
+    // re-authorizing the same connector updates the existing row. Status resets to `disconnected` — the OAuth callback / tool sync promotes
     // it back to `connected` on success.
     //
     // `sourceType` is honored on update so the legacy customPlugin → connector
@@ -423,56 +427,96 @@ const connectorCoreRouter = router({
     // A private connector is looked up among the caller's own private rows, so
     // adding one never rewrites the shared connector of the same identifier.
     const visibility = agentId ? 'public' : resolveWriteVisibility(ctx, input.visibility);
-    const existing = await ctx.connectorModel.findScopedByIdentifier(
-      input.identifier,
-      agentId,
-      undefined,
-      visibility,
-    );
+    const row = {
+      ...fields,
+      isEnabled: input.isEnabled ?? true,
+      sourceType: input.sourceType,
+      status: ConnectorStatus.disconnected,
+    };
     // Adding a workspace connector follows the member policy. Re-adding over
     // someone else's row rewrites its server/command while the row stays theirs
     // (their runs would execute it, and they could read the new credentials), so
     // that keeps the creator-or-owner rule. A private connector is the caller's
     // own and skips the member policy.
-    if (existing && existing.userId !== ctx.userId)
-      await assertConnectorCredentialsManageable(ctx, existing);
-    else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId, visibility });
-    // An upsert keeps the row's creator and visibility (an agent's row may be
-    // a private copy)
-    await assertConnectorDeviceBindingAllowed(ctx, {
-      connector: {
-        userId: existing?.userId ?? ctx.userId,
-        visibility: existing?.visibility ?? visibility,
-      },
-      metadata: input.metadata,
-      previous: existing
-        ? { metadata: existing.metadata, visibility: existing.visibility }
-        : undefined,
-    });
-    if (existing) {
-      await ctx.connectorModel.update(existing.id, {
-        ...fields,
-        isEnabled: input.isEnabled ?? true,
-        sourceType: input.sourceType,
-        status: ConnectorStatus.disconnected,
+    const assertWritable = async (existing?: {
+      agentId: string | null;
+      metadata?: Record<string, unknown> | null;
+      userId: string;
+      visibility: ConnectorVisibility;
+    }) => {
+      if (existing && existing.userId !== ctx.userId)
+        await assertConnectorCredentialsManageable(ctx, existing);
+      else
+        await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId, visibility });
+      // An upsert keeps the row's creator and visibility (an agent's row may
+      // be a private copy)
+      await assertConnectorDeviceBindingAllowed(ctx, {
+        connector: {
+          userId: existing?.userId ?? ctx.userId,
+          visibility: existing?.visibility ?? visibility,
+        },
+        metadata: input.metadata,
+        previous: existing
+          ? { metadata: existing.metadata, visibility: existing.visibility }
+          : undefined,
       });
-      // `isNew` lets clients tell a fresh row from an updated pre-existing one —
-      // client-side caches can't answer this reliably (the connector list may
-      // not be fetched yet), and rollback-on-sync-failure must never delete a
-      // connector the user already had.
-      return { id: existing.id, isNew: false };
-    }
+    };
+    // `isNew` lets clients tell a fresh row from an updated pre-existing one —
+    // client-side caches can't answer this reliably (the connector list may
+    // not be fetched yet), and rollback-on-sync-failure must never delete a
+    // connector the user already had.
+    // Nothing when the row is gone by its update (see the retry below).
+    const reAdd = async (existing: {
+      agentId: string | null;
+      id: string;
+      metadata?: Record<string, unknown> | null;
+      userId: string;
+      visibility: ConnectorVisibility;
+    }) => {
+      await assertWritable(existing);
+      const updated = await ctx.connectorModel.update(existing.id, row);
+      return updated ? { id: existing.id, isNew: false } : undefined;
+    };
 
-    const created = await ctx.connectorModel.create({
-      ...fields,
-      agentId: agentId ?? null,
-      identifier: input.identifier,
-      isEnabled: input.isEnabled ?? true,
-      sourceType: input.sourceType,
-      status: ConnectorStatus.disconnected,
-      visibility,
-    });
-    return { id: created.id, isNew: true };
+    const add = async () => {
+      const existing = await ctx.connectorModel.findScopedByIdentifier(
+        input.identifier,
+        agentId,
+        undefined,
+        visibility,
+      );
+      if (existing) return reAdd(existing);
+      await assertWritable();
+
+      if (agentId) {
+        const created = await ctx.connectorModel.create({
+          ...row,
+          agentId,
+          identifier: input.identifier,
+          visibility,
+        });
+        return { id: created.id, isNew: true };
+      }
+      // A base row is claimed under the identifier lock every base-row writer
+      // takes (an Agent Builder install among them), so concurrent adds create
+      // it once. The claim holds the identifier within this row's visibility.
+      const claim = await ctx.connectorModel.createUnlessIdentifierHeld({
+        ...row,
+        identifier: input.identifier,
+        visibility,
+      });
+      if ('holder' in claim) return reAdd(claim.holder);
+      return { id: claim.created.id, isNew: true };
+    };
+
+    const added = await add();
+    if (added) return added;
+    // The row the re-add read was deleted before its update (an Agent Builder
+    // install replaces a stale unfinished one under the identifier lock): start
+    // over once, against the fresh replacement no install takes over in turn.
+    const retried = await add();
+    if (retried) return retried;
+    throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
   }),
 
   /** Update connector configuration while preserving server-resolved OAuth state. */
@@ -578,6 +622,17 @@ const connectorCoreRouter = router({
                 ...(credentials === null ? { tokenExpiresAt: null } : {}),
               }),
         } as any);
+        const headersChanged =
+          patch.metadata !== undefined &&
+          JSON.stringify(metadata?.customHeaders) !==
+            JSON.stringify(target.metadata?.customHeaders);
+        if (credentials !== undefined || headersChanged) {
+          scheduleRefreshByConnector(
+            ctx.serverDB,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            input.id,
+          );
+        }
       } catch (error) {
         if (error instanceof EvalConnectorUpdateError)
           throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
@@ -619,6 +674,11 @@ const connectorCoreRouter = router({
         }
       }
 
+      await removeByConnector(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        input.id,
+      );
       await ctx.connectorModel.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's
@@ -814,18 +874,12 @@ const connectorCoreRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
-      const syncInputs = await toClientToolSyncInputs(input.tools, ctx.userId);
-
-      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
-      if (input.pruneMissingAutoTools) {
-        await pruneMissingAutoConnectorTools(
-          ctx.connectorToolModel,
-          input.id,
-          syncInputs.map((tool) => tool.toolName),
-        );
-      }
-      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
-      return { toolCount: syncInputs.length };
+      return writeConnectorToolSyncInputs(
+        input.id,
+        await toClientToolSyncInputs(input.tools, ctx.userId, target.metadata),
+        ctx,
+        { pruneMissingAutoTools: input.pruneMissingAutoTools },
+      );
     }),
 
   /**

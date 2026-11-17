@@ -146,6 +146,17 @@ describe('MCPClient HTTP SSRF boundary', () => {
     expect(servers.requests).toEqual([]);
   });
 
+  it('keeps the guard on a client that announces MCP Events', async () => {
+    // Events wraps the transport fetch to add Mcp-Name; that wrapper must sit on the guarded fetch.
+    const client = new MCPClient(
+      { name: 'ssrf-test', type: 'http', url: `http://${PRIVATE_HOST}:${port}/legacy` },
+      { mcpEvents: true },
+    );
+    clients.push(client);
+    await expectSSRFBlocked(client.initialize());
+    expect(servers.requests).toEqual([]);
+  });
+
   it('refuses the cloud metadata address', async () => {
     await expectSSRFBlocked(clientFor('http://169.254.169.254/latest/mcp').initialize());
   });

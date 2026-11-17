@@ -67,21 +67,18 @@ export const connectorAgentScopeRouter = router({
       if (!connector.agentId) return { id: input.connectorId }; // already base — no-op
 
       // The base slot it returns to is its own visibility's: a private row and a
-      // shared row of one identifier live side by side in the base scope
-      const existingBase = await ctx.connectorModel.findScopedByIdentifier(
+      // shared row of one identifier live side by side in the base scope. The
+      // lookup and the move are one step under the identifier lock.
+      const moved = await ctx.connectorModel.moveToBaseUnlessIdentifierHeld(
+        input.connectorId,
         connector.identifier,
-        undefined,
-        undefined,
-        connector.visibility,
       );
-      if (existingBase) {
+      if ('holder' in moved) {
         throw new TRPCError({
           code: 'CONFLICT',
           message: `A personal "${connector.identifier}" connector already exists; delete the agent connector instead`,
         });
       }
-
-      await ctx.connectorModel.update(input.connectorId, { agentId: null });
       return { id: input.connectorId };
     }),
 

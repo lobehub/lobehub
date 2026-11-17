@@ -1,4 +1,26 @@
 export default {
+  'connectorMarket.action.connect': 'Connect',
+  'connectorMarket.action.details': 'View details',
+  'connectorMarket.action.install': 'Install',
+  'connectorMarket.action.manage': 'Manage',
+  'connectorMarket.add': 'Add',
+  'connectorMarket.add.browseStore': 'Browse Skill Store',
+  'connectorMarket.add.browseStoreDesc': 'Built-in tools, skills and MCP servers',
+  'connectorMarket.add.custom': 'Add custom connector',
+  'connectorMarket.add.customDesc': 'Connect your own MCP server',
+  'connectorMarket.detail.byAuthor': 'By {{author}}',
+  'connectorMarket.detail.information': 'Information',
+  'connectorMarket.detail.tools': 'Tools',
+  'connectorMarket.detail.type': 'Type',
+  'connectorMarket.empty.clear': 'Clear search',
+  'connectorMarket.empty.search': 'No connectors match “{{keyword}}”',
+  'connectorMarket.empty.searchDesc': 'Try another name, or find more in the Skill Store.',
+  'connectorMarket.refresh': 'Refresh',
+  'connectorMarket.search.placeholder': 'Search connectors',
+  'connectorMarket.section.installed': 'Installed',
+  'connectorMarket.section.showAll': 'Show all',
+  'connectorMarket.section.showLess': 'Show less',
+  'connectorMarket.source': 'Source',
   'systemAgent.channelRouting.title': 'Channel decision model',
   'systemAgent.channelRouting.modelDesc':
     'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',
@@ -1565,6 +1587,11 @@ export default {
   'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChatAppearance.chatBehavior.title': 'Chat Behavior',
   'settingChatAppearance.workflowStreamingExpand.title': 'Expand Tool Steps While Running',
+  'settingChatAppearance.followUpBehavior.desc':
+    'Queue follow-ups while the agent runs, or steer the current run',
+  'settingChatAppearance.followUpBehavior.options.queue': 'Queue',
+  'settingChatAppearance.followUpBehavior.options.steer': 'Steer',
+  'settingChatAppearance.followUpBehavior.title': 'Follow-up behavior',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',
   'settingChatAppearance.fontSize.title': 'Font Size',
@@ -1954,12 +1981,18 @@ When I am ___, I need ___
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
+  'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
+  'skillView.empty.search': 'No skills match “{{keyword}}”',
+  'skillView.empty.title': 'No skills yet',
   'skillView.privateConnectorsDesc':
     'Only you can see these connectors, and only your private agents use them. Workspace agents never load them.',
   'skillView.privateConnectorsEmpty.desc':
     'Add a custom connector here to keep it to yourself and your private agents.',
   'skillView.privateConnectorsEmpty.title': 'No private connectors yet',
+  'skillView.search.placeholder': 'Search skills',
   'skillView.skills': 'Skills',
+  'skillView.skillsDesc':
+    'Give your agents task-specific skills. Open a skill to see its instructions and resources.',
   'skillView.workspaceConnectorsDesc':
     'Shared with every member, and every agent in this workspace can use them. Open one to see its account and tools.',
   'startConversation': 'Start Conversation',
@@ -1980,6 +2013,15 @@ When I am ___, I need ___
     'Copy agent groups and their member agents into another workspace or personal account.',
   'storage.actions.copyAgentGroups.title': 'Agent Groups Copy',
   'storage.actions.export.button': 'Export',
+  'storage.actions.export.download': 'Download',
+  'storage.actions.export.downloadError': 'Download failed. Please try again.',
+  'storage.actions.export.exporting': 'Exporting…',
+  'storage.actions.export.exportingDesc':
+    'Preparing your data in the background. You can leave this page; we will notify you when it is ready.',
+  'storage.actions.export.failed': 'The last export failed. Please try again.',
+  'storage.actions.export.ready': 'Last export: {{time}} · {{size}}',
+  'storage.actions.export.rerun': 'Export Again',
+  'storage.actions.export.startError': 'Could not start the export. Please try again later.',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',
   'storage.actions.export.exportType.agentWithMessage': 'Export Agent and Messages',
   'storage.actions.export.exportType.all': 'Export Global Settings and All Agent Data',
@@ -5220,4 +5262,78 @@ When I am ___, I need ___
   'taskLabels.tabs.task': 'Task labels',
   'taskLabels.usage': '{{count}} tasks',
   'taskLabels.actions.more': 'More actions',
+  'tab.automations': 'Automations',
+  'settingsSearch.tabKeywords.automations':
+    'automations, events, event subscriptions, triggers, webhooks',
+  'automations.desc':
+    'Connector events your agents subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+  'automations.descWorkspace':
+    'Connector events the agents in this workspace subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
+  'automations.descAgent':
+    'Connector events this agent subscribed to, and webhooks that wake it. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+  'automations.columns.subscription': 'Subscription',
+  'automations.columns.status': 'Status',
+  'automations.columns.target': 'Agent & topic',
+  'automations.columns.topic': 'Topic',
+  'automations.columns.lastDelivery': 'Last event',
+  'automations.source.moreArgs': '{{text}} +{{count}}',
+  'automations.source.webhook': 'Webhook',
+  'automations.source.topicMode.new': 'New topic per call',
+  'automations.source.topicMode.reuse': 'One shared topic',
+  'automations.untitledTopic': 'Untitled topic',
+  'automations.target.webhookCalls': 'Calls and topics',
+  'automations.lastDelivery.never': 'No events yet',
+  'automations.status.active': 'Active',
+  'automations.status.reconnect': 'Reconnect needed',
+  'automations.status.deliveryError': 'Delivery failing',
+  'automations.status.terminated': 'Ended',
+  'automations.status.paused': 'Paused',
+  'automations.error.auth': "The connector's authorization has expired.",
+  'automations.error.connection_refused':
+    'The connector could not connect to LobeHub to deliver events.',
+  'automations.error.timeout': 'The connector timed out delivering events to LobeHub.',
+  'automations.error.tls_error': 'The connector could not open a secure connection to LobeHub.',
+  'automations.error.http_4xx': "LobeHub rejected the connector's deliveries.",
+  'automations.error.http_5xx': "LobeHub failed while receiving the connector's deliveries.",
+  'automations.error.challenge_failed':
+    "The connector could not verify LobeHub's callback address.",
+  'automations.error.delivery_suspended':
+    'The connector had paused delivery after repeated failures and has been asked to resume. This clears when the next event arrives.',
+  'automations.error.wake_cap':
+    'Events arrived too often, so some runs in the last 10 minutes were skipped.',
+  'automations.error.insufficient_budget':
+    'Not enough credits to run the agent. Later events run once you top up.',
+  'automations.error.access_revoked':
+    'Access was revoked; the subscription ended. Delete it and ask the agent to resubscribe.',
+  'automations.error.event_unavailable':
+    'The connector no longer offers this event, so the subscription ended.',
+  'automations.error.server_unreachable': "Could not reach the connector's server.",
+  'automations.error.unknown':
+    'The subscription reported an error without details. Check to retry.',
+  'automations.error.terminated': 'The connector ended this subscription.',
+  'automations.remedy.reconnect': 'Reconnect',
+  'automations.actions.check': 'Check',
+  'automations.actions.checkTooltip':
+    'Confirm with the connector that events are still delivered; paused delivery resumes',
+  'automations.actions.delete': 'Delete',
+  'automations.actions.noPermission':
+    'Only the member who approved it or a workspace admin can do this',
+  'automations.check.healthy': 'Subscription is working',
+  'automations.check.problem': 'Checked: {{reason}}',
+  'automations.check.tooSoon': 'Just checked. Try again in 30 seconds',
+  'automations.check.notFound': 'This subscription no longer exists',
+  'automations.check.unsupported': "This automation can't be checked",
+  'automations.check.failed': "Couldn't finish the check. Try again",
+  'automations.delete.title': 'Delete this subscription?',
+  'automations.delete.content':
+    '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
+  'automations.delete.contentWebhook':
+    'The URL of "{{name}}" stops working at once, and calls to it no longer run "{{agent}}". This cannot be undone.',
+  'automations.delete.ok': 'Delete',
+  'automations.delete.cancel': 'Cancel',
+  'automations.delete.failed': "Couldn't delete the subscription. Try again",
+  'automations.delete.alreadyGone': 'This subscription was already removed',
+  'automations.empty.title': 'No automations yet',
+  'automations.empty.desc':
+    'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
 };

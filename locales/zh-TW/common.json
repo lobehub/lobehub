@@ -147,6 +147,8 @@
   "cmdk.search.files": "檔案",
   "cmdk.search.folder": "資料夾",
   "cmdk.search.folders": "資料夾",
+  "cmdk.search.goal": "目標",
+  "cmdk.search.goals": "目標",
   "cmdk.search.knowledgeBase": "圖書館",
   "cmdk.search.knowledgeBases": "圖書館",
   "cmdk.search.loading": "搜尋中...",

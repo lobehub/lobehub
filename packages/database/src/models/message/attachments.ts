@@ -117,3 +117,42 @@ export const materializeChatAudioItem = ({
     url,
   };
 };
+
+/**
+ * Image formats that vision models accept. Only these are sent to the model as
+ * images; other `image/*` uploads (a CAD drawing reported as `image/vnd.dwg`, SVG,
+ * TIFF) stay ordinary files, because providers reject the whole request on an
+ * unsupported image format.
+ */
+const MODEL_IMAGE_MIME_TYPES = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+]);
+
+const mimeTypeOf = (fileType: string | null | undefined) =>
+  (fileType || '').split(';')[0].trim().toLowerCase();
+
+/** Whether a file of this MIME type can be handed to a model as an image. */
+export const isModelImageFileType = (fileType: string | null | undefined) =>
+  MODEL_IMAGE_MIME_TYPES.has(mimeTypeOf(fileType));
+
+/** Splits a message's related files into the image, video, audio and file lists it renders. */
+export const groupMessageFilesByKind = <T extends { fileType: string | null }>(files: T[]) => {
+  const imageList: T[] = [];
+  const videoList: T[] = [];
+  const audioList: T[] = [];
+  const fileList: T[] = [];
+
+  for (const file of files) {
+    const mimeType = mimeTypeOf(file.fileType);
+    if (isModelImageFileType(mimeType)) imageList.push(file);
+    else if (mimeType.startsWith('video')) videoList.push(file);
+    else if (mimeType.startsWith('audio')) audioList.push(file);
+    else fileList.push(file);
+  }
+
+  return { audioList, fileList, imageList, videoList };
+};

@@ -34,11 +34,17 @@ export const RedisKeyNamespace = {
    * shared by every instance that may receive a delivery.
    */
   AGENT_IDENTITY: 'agent-identity',
+  INBOUND_WEBHOOK: 'inbound-webhook',
   /**
    * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
    * silent-wake budget and the per-channel wake scheduler.
    */
   BOT_WAKE: 'bot-wake',
+  /**
+   * Replay bookkeeping for bot messages parked while their topic was busy: how many times each
+   * parked message reached a run, so one that keeps coming back stops looping.
+   */
+  BOT_DEFERRED: 'bot-deferred',
   /**
    * Short-lived reply routes an IM platform hands out with an inbound message
    * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
@@ -85,6 +91,16 @@ export const RedisKeyNamespace = {
  * ```
  */
 export const RedisKeys = {
+  inboundWebhook: {
+    wake: (id: string) => `wake:v1:${id}`,
+    check: (id: string) => `check:v1:${id}`,
+    maintenance: (id: string) => `maintenance:v1:${id}`,
+    sweep: () => 'sweep:v1:slot',
+    /** Ingress counter of a scope (workspace or personal space) for the current minute, all kinds. */
+    deliveries: (scope: string, minute: number) => `deliveries:v2:${scope}:${minute}`,
+    /** Active member count of a workspace, cached for the per-scope delivery limit. */
+    members: (workspaceId: string) => `members:v1:${workspaceId}`,
+  },
   /**
    * Agent Signal spend bounds — see {@link RedisKeyNamespace.AGENT_SIGNAL}. Per-user
    * counters and quotas that keep background self-iteration work within its limits.
@@ -112,6 +128,15 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot deferred-replay scope — see {@link RedisKeyNamespace.BOT_DEFERRED}. */
+  botDeferred: {
+    /**
+     * Times one parked message (by its origin platform id) was replayed into a run.
+     * Full key: bot-deferred:replays:v1:{applicationId}:{threadId}:{messageId}
+     */
+    replays: (applicationId: string, threadId: string, messageId: string): string =>
+      `replays:v1:${applicationId}:${threadId}:${messageId}`,
   },
   /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
   botReply: {
@@ -227,6 +252,18 @@ export const RedisKeys = {
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
     /**
+     * Control messages waiting for a heterogeneous run's poller, oldest first.
+     * Each one is popped exactly once, when a poller claims it.
+     * Full key: agentSteer:hetero_control:v1:{operationId}
+     */
+    heteroControl: (operationId: string): string => `hetero_control:v1:${operationId}`,
+    /**
+     * Where each control message of that run stands (field = control id):
+     * pending, claimed, expired, or the result the run reported.
+     * Full key: agentSteer:hetero_control_state:v1:{operationId}
+     */
+    heteroControlState: (operationId: string): string => `hetero_control_state:v1:${operationId}`,
+    /**
      * Marks a sub-agent run whose final queue read came back empty: it ends
      * without reading again, so a steer appended behind it must be taken back.
      * Full key: agentSteer:sealed_run:v1:{operationId}
@@ -339,11 +376,13 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  inboundWebhook: RedisKeyNamespace.INBOUND_WEBHOOK,
   agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentRun: RedisKeyNamespace.AGENT_RUN,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botDeferred: RedisKeyNamespace.BOT_DEFERRED,
   botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,

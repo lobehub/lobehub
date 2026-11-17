@@ -39,7 +39,9 @@ const operationProcedure = (capability: HeteroOperationCapability) =>
       const result = await next({
         ctx: {
           channelHistory: new ChannelHistoryService(...args),
-          channelMessaging: new ChannelMessagingService(...args),
+          // The token was checked for this capability above; an owner's bot run carries
+          // `channel:message` without a Channel of its own.
+          channelMessaging: new ChannelMessagingService(...args, { allowBotRun: true }),
         },
       });
       if (!result.ok && result.error.cause instanceof ChannelError)
@@ -97,7 +99,7 @@ export const channelHistoryProcedures = {
       z
         .object({
           agentIds: z.array(z.string().min(1)).min(1).max(5),
-          channelId: z.string().min(1),
+          channelId: z.string().min(1).optional(),
           content: z.string().min(1),
           /** Repeat it to retry without posting twice. */
           requestKey: z.string().min(1).max(100),

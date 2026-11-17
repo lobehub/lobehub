@@ -18,6 +18,8 @@ export interface HeterogeneousAgentBuildPlan {
    * persisting conversation content for CLIs that cannot read prompts on stdin.
    */
   argvPayload?: string;
+  /** Keep stdin open after the prompt so messages can reach the running session (Claude Code). */
+  liveInput?: boolean;
   stdinPayload?: string;
 }
 
@@ -30,6 +32,8 @@ export interface HeterogeneousAgentBuildPlanParams {
   /** CLI version spawn preflight detected, when known. */
   cliVersion?: string;
   helpers: HeterogeneousAgentBuildPlanHelpers;
+  /** The run takes messages while it runs (Follow-up behavior: Steer); drivers that can't ignore it. */
+  liveInput?: boolean;
   /**
    * Optional path to an MCP config JSON written by the controller (e.g. for
    * the local `lobe_cc` AskUserQuestion server). Drivers that recognize the

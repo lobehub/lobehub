@@ -172,4 +172,25 @@ describe('GenerationModel with music assets', () => {
     expect((result.asset as any).coverUrl).toBeUndefined();
     expect(mockGetFullFileUrl).not.toHaveBeenCalled();
   });
+
+  it('resolves a song that has no stored file yet by its asset url', async () => {
+    const result = await generationModel.transformGeneration({
+      asset: { ...musicAsset } as any,
+      asyncTaskId: null,
+      createdAt: new Date(),
+      fileId: null,
+      id: 'gen-3',
+      seed: null,
+    } as any);
+
+    // No `files` row yet: the access url is asked without a fileId, and the
+    // cover is still resolved from the asset key.
+    expect(mockGetFileAccessUrl).toHaveBeenCalledWith({
+      fileId: undefined,
+      url: 'generations/music/song_audio.mp3',
+    });
+    expect((result.asset as any).coverUrl).toBe(
+      'https://s3.example.com/generations/music/song_cover.jpg',
+    );
+  });
 });

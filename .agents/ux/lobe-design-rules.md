@@ -110,9 +110,13 @@ Source: user clarification during acceptance round 6 (2026-10-27).
 
 An unreleased feature's settings, search results and settings summary counts use the same per-user feature flag as the feature itself. Channel decision settings are visible only when `serverConfigSelectors.enableChannels` is true; a default-on preference does not bypass the `channel` rollout gate.
 
+Platform visibility follows where the user can use the setting, not where its implementation process runs. A runtime available to Web conversations through a connected device belongs in General Labs; reserve `desktopOnly` for capabilities that require the Electron shell. Codex App Server dispatch reads the same user preference on Web and Desktop. Verify the Web toggle, persistence after refresh, and the selected runtime on the receiving device; a merged adapter or a successful native probe alone does not prove that conversations use it.
+
 Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
 
 Source: user correction about the unreleased Channel feature (2026-10-28).
+
+Additional source: Codex question-flow reproduction (2026-11-17): the CLI contained the native question bridge and advertised support, but the user's unset Lab flag selected `codex exec`; `desktopOnly` hid the enabling control on Web.
 
 ## LOBE-UX-016 — A stage path is `Steps`, and its current step is the blue live dot
 
@@ -147,3 +151,9 @@ A Channel day divider is the full date alone ("2026 年 6 月 22 日"), not a da
 Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelMessageTime`) covers today, the yesterday boundary, and earlier dates in this and previous years in zh-CN and en-US.
 
 Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled message had no visible date — "应该得是像 discord 这样改". This replaces the WeChat-style divider from PR #22556 (2026-11-08), which kept today as the time alone ("今天应该显示时间").
+
+## LOBE-UX-021 — Timeout copy follows the form's actual answer policy
+
+Use the shared form's `autoSubmitOnTimeout` result for countdown wording. Provider-owned option IDs suppress inferred answers, so those cards must say they close unanswered instead of promising option 1. Keep the legacy fallback wording only where the form actually submits fallback answers. Do not infer the policy from a renderer's provider name.
+
+Enforcement: `packages/shared-tool-ui/src/AskUserQuestion/useAskUserForm.test.ts` checks the exposed policy together with actual timeout submission and non-submission. Verify both countdown messages on the rendered cards. Source: real Codex question-card acceptance (2026-11-17), where the footer promised option 1 despite the hook correctly refusing to select it.

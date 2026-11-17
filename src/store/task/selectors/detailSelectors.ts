@@ -102,6 +102,13 @@ const activeTaskRuntimeConfig =
 
 const activeTaskSubtasks = (s: TaskStoreState) => activeTaskDetail(s)?.subtasks ?? [];
 
+type SubtaskNode = NonNullable<TaskDetailData['subtasks']>[number];
+const countSubtasks = (nodes: SubtaskNode[] = []): number =>
+  nodes.reduce((total, node) => total + 1 + countSubtasks(node.children), 0);
+
+/** Subtasks of the active task at every depth that the caller can see. */
+const activeTaskSubtaskCount = (s: TaskStoreState) => countSubtasks(activeTaskDetail(s)?.subtasks);
+
 const activeTaskDependencies = (s: TaskStoreState) => activeTaskDetail(s)?.dependencies ?? [];
 
 const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
@@ -210,6 +217,7 @@ export const taskDetailSelectors = {
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
   activeTaskStatus,
+  activeTaskSubtaskCount,
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskVerifyConfig,

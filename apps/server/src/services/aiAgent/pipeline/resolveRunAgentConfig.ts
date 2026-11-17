@@ -4,6 +4,7 @@ import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
 import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
+  getAutoPluginIds,
   getDisabledPluginIds,
   resolveAgentAgencyConfig,
   resolveHeterogeneousModelOverride,
@@ -57,6 +58,8 @@ export interface ResolvedRunAgentConfig {
   agentSlug?: string | null;
   /** Agent id stamped on the assistant row (conversation-aware). */
   assistantAgentId: string;
+  /** Library skills the agent set to `auto`, captured before pinned-id collapse. */
+  autoSkillIds: string[];
   canManageAgent: boolean;
   /** Agent id stamped on the user row (conversation-aware). */
   conversationAgentId: string;
@@ -262,6 +265,9 @@ export const resolveRunAgentConfig = async (
   // collapses plugins to pinned ids: they later filter the auto-discovery
   // candidate pool so a disabled plugin can't be rediscovered.
   const disabledPluginIds = getDisabledPluginIds(row.plugins);
+  // Same for the explicit `auto` entries: a library skill is opt-in per agent,
+  // so the skill pool needs the ones this agent opted into without pinning.
+  const autoSkillIds = getAutoPluginIds(row.plugins);
 
   // One mutable object from here on — later stages append to `systemRole` and
   // `createOperation` must see those writes.
@@ -363,6 +369,7 @@ export const resolveRunAgentConfig = async (
     agentConfig,
     agentSlug: row.slug,
     assistantAgentId,
+    autoSkillIds,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,

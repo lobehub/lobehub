@@ -23,11 +23,15 @@ export interface DeviceOptionState {
  *   it through the desktop app.
  * - A managed device that cannot be woken (failed, deleting) has no control:
  *   the desktop app cannot reach it.
+ * - A device the current agent cannot bind (`blocked`, e.g. a private device on
+ *   a published fixed Agent) is not selectable, whatever its presence: the
+ *   save would be rejected. Its reconnect control stays, as reconnecting is
+ *   still useful elsewhere.
  */
 export const getDeviceOptionState = (
   // Structural, so a `managedPhase` on the list row narrows it when present.
   device: Parameters<typeof isWakeableManagedDevice>[0],
-  { presenceUnknown }: { presenceUnknown: boolean },
+  { blocked = false, presenceUnknown }: { blocked?: boolean; presenceUnknown: boolean },
 ): DeviceOptionState => {
   const wakeable = isWakeableManagedDevice(device);
 
@@ -38,7 +42,7 @@ export const getDeviceOptionState = (
     reconnectLabelKey: wakeable
       ? 'heteroAgent.executionTarget.wake'
       : 'heteroAgent.executionTarget.reconnect',
-    selectable: device.online || wakeable,
+    selectable: !blocked && (device.online || wakeable),
     showReconnect:
       !device.online && !presenceUnknown && (wakeable || !isManagedCloudDevice(device)),
   };

@@ -424,7 +424,8 @@ export const executeDeviceRpc = async (
     }
 
     case 'getGitAheadBehind': {
-      return getGitAheadBehind((params as { path: string }).path);
+      const { branch, path } = params as { branch?: string; path: string };
+      return getGitAheadBehind(path, { branch });
     }
 
     case 'listGitBranches': {
@@ -440,7 +441,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'checkoutGitBranch': {
-      return checkoutGitBranch(params as { branch: string; create?: boolean; path: string });
+      return checkoutGitBranch(
+        params as { branch: string; create?: boolean; path: string; startPoint?: string },
+      );
     }
 
     case 'renameGitBranch': {
@@ -456,15 +459,17 @@ export const executeDeviceRpc = async (
     }
 
     case 'addGitWorktree': {
-      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
+      return addGitWorktree(
+        params as { branch: string; path: string; startPoint?: string; worktreePath: string },
+      );
     }
 
     case 'pullGitBranch': {
-      return pullGitBranch(params as { path: string });
+      return pullGitBranch(params as { branch?: string; path: string });
     }
 
     case 'pushGitBranch': {
-      return pushGitBranch(params as { path: string });
+      return pushGitBranch(params as { branch?: string; path: string });
     }
 
     case 'revertGitFile': {

@@ -206,26 +206,25 @@ async function upsertComposioConnector(
   // updated here, or the upsert would create a second, public row for the same
   // account and republish the private connection to the workspace.
   const { existing } = params;
+  const fields = {
+    metadata,
+    name: params.label,
+    sourceType: ConnectorSourceType.marketplace,
+    status,
+  };
   let connectorId: string;
   if (existing) {
-    await connectorModel.update(existing.id, {
-      metadata,
-      name: params.label,
-      sourceType: ConnectorSourceType.marketplace,
-      status,
-    });
+    await connectorModel.update(existing.id, fields);
     connectorId = existing.id;
   } else {
-    const created = await connectorModel.create({
-      agentId: params.agentId ?? null,
-      identifier: params.identifier,
-      isEnabled: true,
-      metadata,
-      name: params.label,
-      sourceType: ConnectorSourceType.marketplace,
-      status,
-    });
-    connectorId = created.id;
+    const newRow = { ...fields, identifier: params.identifier, isEnabled: true };
+    const claim = params.agentId
+      ? { created: await connectorModel.create({ ...newRow, agentId: params.agentId }) }
+      : // A base row is claimed under the identifier lock every base-row writer
+        // takes; one a concurrent writer added meanwhile is updated as if found.
+        await connectorModel.createUnlessIdentifierHeld(newRow);
+    if ('holder' in claim) await connectorModel.update(claim.holder.id, fields);
+    connectorId = 'holder' in claim ? claim.holder.id : claim.created.id;
   }
 
   if (params.tools) {

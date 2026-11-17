@@ -75,8 +75,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -121,7 +123,7 @@ jobs:
               context,
               workflowId: 'e2e.yml',
               artifactName: 'bundle-size-baseline-web',
-              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+              targetSha: context.sha,
             });
 
       - name: Download web dist size baseline
@@ -165,7 +167,7 @@ jobs:
               context,
               workflowId: 'e2e.yml',
               artifactName: 'bundle-size-baseline-entry-graph',
-              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+              targetSha: context.sha,
             });
 
       - name: Download entry-graph baseline
@@ -284,8 +286,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"

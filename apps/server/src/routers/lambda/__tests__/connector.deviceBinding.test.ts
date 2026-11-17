@@ -75,6 +75,7 @@ describe('connectorRouter device binding by visibility', () => {
     mocks.findWorkspaceDeviceById.mockImplementation(async (id: string) => devices.get(id));
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'created' }),
+      createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'created' } }),
       findById: vi.fn(),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
@@ -99,7 +100,7 @@ describe('connectorRouter device binding by visibility', () => {
           visibility: 'private',
         }),
       ).resolves.toEqual({ id: 'created', isNew: true });
-      expect(connectorModelMock.create).toHaveBeenCalledWith(
+      expect(connectorModelMock.createUnlessIdentifierHeld).toHaveBeenCalledWith(
         expect.objectContaining({
           metadata: expect.objectContaining({ boundDeviceId: 'my-laptop' }),
           visibility: 'private',
@@ -121,7 +122,7 @@ describe('connectorRouter device binding by visibility', () => {
       await expect(
         member().create({ ...stdioInput, metadata: { boundDeviceId: 'my-laptop' } }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      expect(connectorModelMock.create).not.toHaveBeenCalled();
+      expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
     });
 
     it('binds a shared connector to a shared device', async () => {

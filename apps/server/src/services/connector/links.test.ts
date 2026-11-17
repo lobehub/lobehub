@@ -3,10 +3,19 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
 
-import { loadConnectorLinksMap, pickPrimaryLink, resolveLinkedCall } from './links';
+import {
+  ConnectorAccountGoneError,
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  resolveConnectorAccount,
+  resolveLinkedCall,
+} from './links';
 import { ensureFreshLinkToken } from './tokens';
 
-vi.mock('./tokens', () => ({ ensureFreshLinkToken: vi.fn(async (_c, link) => link) }));
+vi.mock('./tokens', () => ({
+  ensureFreshConnectorToken: vi.fn(async (c) => ({ ...c, refreshed: true })),
+  ensureFreshLinkToken: vi.fn(async (_c, link) => link),
+}));
 const connector = {
   id: 'c',
   credentials: null,
@@ -186,6 +195,21 @@ describe("a personal connector's accounts in a workspace run", () => {
     expect(map.get('s')?.map((link) => link.id)).toEqual(['lnk_s']);
   });
 
+  it("resolves a personal row's primary account through the personal scope", async () => {
+    const { ctx, personalLinks, personalModel, workspaceLinks } = setup();
+
+    const result = await resolveConnectorAccount(personal, ctx);
+
+    expect(result).toMatchObject({ accountCount: 1, linkId: 'lnk_a' });
+    expect(workspaceLinks.listByConnectorIds).not.toHaveBeenCalled();
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(
+      personal,
+      links[0],
+      personalLinks,
+      personalModel,
+    );
+  });
+
   it('calls as, and refreshes through, the personal scope', async () => {
     const { ctx, personalLinks, personalModel, workspaceLinks } = setup();
 
@@ -199,5 +223,33 @@ describe("a personal connector's accounts in a workspace run", () => {
       personalLinks,
       personalModel,
     );
+  });
+});
+
+describe('resolveConnectorAccount', () => {
+  it('calls as the primary account, with its refreshed credentials, and says which one', async () => {
+    const result = await resolveConnectorAccount(connector, context());
+    expect(result).toMatchObject({
+      accountCount: 2,
+      connector: { credentials: { accessToken: 'alice-token' } },
+      linkId: 'lnk_a',
+    });
+    expect(ensureFreshLinkToken).toHaveBeenCalled();
+  });
+
+  it('keeps to a pinned account even when it is not the primary one', async () => {
+    const result = await resolveConnectorAccount(connector, context(), 'lnk_b');
+    expect(result.connector.credentials).toMatchObject({ accessToken: 'bob-token' });
+  });
+
+  it('fails when the pinned account is gone, and uses the row without accounts', async () => {
+    await expect(resolveConnectorAccount(connector, context(), 'lnk_x')).rejects.toBeInstanceOf(
+      ConnectorAccountGoneError,
+    );
+    const bearer = { ...connector, oidcConfig: null, credentials: { type: 'bearer' } } as never;
+    expect(await resolveConnectorAccount(bearer, context())).toMatchObject({
+      accountCount: 0,
+      connector: { refreshed: true },
+    });
   });
 });

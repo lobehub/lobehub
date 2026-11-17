@@ -1169,11 +1169,11 @@ export const createGatewayEventHandler = (
         break;
       }
 
+      case 'background_task':
       case 'step_complete': {
+        // Sub-agent progress, live steer reads and background tasks, not step boundaries.
+        const sideEvent = resolveStepSideEvent(get, event, context, dispatchContext);
         const data = event.data as StepCompleteData | undefined;
-
-        // Sub-agent progress and live steer reads, not step boundaries.
-        const sideEvent = resolveStepSideEvent(get, data, context, dispatchContext);
         if (sideEvent) {
           if (sideEvent.apply) enqueue(sideEvent.apply);
           break;

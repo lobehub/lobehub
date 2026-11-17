@@ -3,10 +3,7 @@ import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
-import {
-  collectHeteroAttachedFiles,
-  isRemoteHeterogeneousType,
-} from '@lobechat/heterogeneous-agents';
+import { collectHeteroAttachedFiles } from '@lobechat/heterogeneous-agents';
 import type {
   ChatAudioItem,
   ChatImageItem,
@@ -19,8 +16,6 @@ import type {
 } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
-  getWorkingDirEffectivePath,
-  getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
   toComposerUserMessage,
 } from '@lobechat/types';
@@ -36,18 +31,10 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import {
-  resolveAgentWorkingDirectory,
-  resolveAgentWorkingDirectoryConfig,
-  resolveTargetDeviceId,
-} from '@/helpers/agentWorkingDirectory';
-import {
   applyTopicDeviceBinding,
   getTopicBoundDeviceId,
-  resolveExecutionTarget,
-  resolveToolMode,
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
-import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { agentService } from '@/services/agent';
 import { aiAgentService, MAX_CLIENT_OPERATION_SNAPSHOT } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -82,8 +69,9 @@ import {
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import {
+  drainQueuedTurn,
   findOrphanedQueueKey,
-  sendQueuedMessages,
+  sendQueuedTurn,
 } from '@/store/chat/slices/agentRun/actions/lifecycle/queuedFollowUp';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { buildQueuedFollowUpRequest } from '@/store/chat/slices/agentRun/actions/transports/gateway/execRequest';
@@ -113,7 +101,6 @@ import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
-import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
@@ -143,7 +130,7 @@ import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../p
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
 import { findRunningBlockingOp } from './queueBlockingOp';
-import { resolveRunCwd, resolveSendProjectRun, type SourceTopicDirectory } from './runCwd';
+import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
 
 /**
@@ -279,6 +266,7 @@ export class ConversationLifecycleActionImpl {
     contextSelections,
     inputEditor,
     messages: inputMessages,
+    newTopicWorkingDirectory,
     optimisticUserMessageId,
     parentId: inputParentId,
     pageSelections,
@@ -287,6 +275,7 @@ export class ConversationLifecycleActionImpl {
     onMessagePersisted,
     onTopicCreated,
     preserveComposer,
+    queueHead,
     signal,
     sourceTopic,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
@@ -312,8 +301,7 @@ export class ConversationLifecycleActionImpl {
       if (hasNotifiedMessageAccepted) return;
 
       hasNotifiedMessageAccepted = true;
-      // Queued messages are accepted before a send operation exists. For actual
-      // sends, acceptance ends the optimistic phase for every runtime.
+      // Queued messages are accepted before a send operation exists; a send's acceptance ends its optimistic phase.
       if (sendOperationId) {
         this.#get().updateOperationMetadata(sendOperationId, { inputEditorTempState: null });
       }
@@ -636,17 +624,14 @@ export class ConversationLifecycleActionImpl {
     const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
     // ━━━ Message Queue: enqueue if this context is already busy ━━━
-    // Include the initial `sendMessage` persist/create-topic phase. Example:
-    // first send from a blank chat is still creating topic A (`topicId=null`);
-    // a fast second Enter must queue on `main_<agent>_new` instead of starting
-    // topic B.
+    // Include the initial `sendMessage` persist/create-topic phase: while a first
+    // send is still creating topic A, a fast second Enter queues on
+    // `main_<agent>_new` instead of starting topic B.
     const currentContextKey = messageMapKey(operationContext);
-    // A new-topic send must ALSO queue behind a send that is still creating its
-    // topic for this same conversation surface. That earlier send's operation is
-    // registered under ITS minted topic's bucket (the context adopted the id up
-    // front), so probing only this send's key would miss it — a fast second
-    // Enter would start a concurrent topic instead of queueing. `creatingTopicIds`
-    // names exactly those in-flight buckets.
+    // A new-topic send must ALSO queue behind a send still creating its topic for
+    // this surface. That send's operation is registered under ITS minted topic's
+    // bucket, so probing only this send's key would miss it and a fast second
+    // Enter would start a concurrent topic. `creatingTopicIds` names those buckets.
     const queueCandidateKeys = [
       currentContextKey,
       ...(willCreateNewTopic
@@ -669,9 +654,11 @@ export class ConversationLifecycleActionImpl {
         break;
       }
     }
+    // The head of a queue drained one per turn starts its turn; the rest waits behind it.
     const queueDrainPending =
       !runningQueueBlockingOp &&
       !onlyAddUserMessage &&
+      !queueHead &&
       operationSelectors.isQueueDrainPending(operationContext)(this.#get());
     const canQueue = (key: string) =>
       !onlyAddUserMessage &&
@@ -731,7 +718,7 @@ export class ConversationLifecycleActionImpl {
       queueCandidateKeys,
       willCreateNewTopic,
     );
-    if (orphanedQueueKey && !onlyAddUserMessage) {
+    if (orphanedQueueKey && !onlyAddUserMessage && !queueHead) {
       this.#get().enqueueMessage(orphanedQueueKey, {
         content: message,
         createdAt: Date.now(),
@@ -743,11 +730,11 @@ export class ConversationLifecycleActionImpl {
         interruptMode: 'soft',
         metadata: userMessageMetadata,
       });
-      const restarted = this.#get().drainQueuedMessages(orphanedQueueKey);
+      const restarted = drainQueuedTurn(this.#get, orphanedQueueKey);
       notifyMessageAccepted();
 
       setTimeout(() => {
-        sendQueuedMessages(this.#get, operationContext, restarted).catch((error: unknown) => {
+        sendQueuedTurn(this.#get, operationContext, restarted).catch((error: unknown) => {
           console.error('[sendMessage] restarting queued content after Stop failed:', error);
         });
       }, 0);
@@ -1111,87 +1098,23 @@ export class ConversationLifecycleActionImpl {
       topicId: willCreateNewTopic ? undefined : operationContext.topicId,
     });
     const currentDeviceId = await getElectronStoreState().resolveGatewayDeviceId();
-    // Resolve the cwd for every run that lands on a MACHINE — a hetero CLI
-    // (in-process `hetero` runtime) and a NATIVE agent alike, as long as the
-    // effective target routes to a device. The server can only honour a cwd the
-    // client resolved (per-user legacy slot included) if it rides along as the
-    // new topic's initial metadata, and a topic that is born unbound renders
-    // under "No directory" while every later turn re-resolves the agent-level
-    // default. Sandbox/none targets must NOT resolve one: the desktop/home
-    // fallback is a local machine path that doesn't exist in an ephemeral cloud
-    // sandbox and would pollute the topic's metadata. Plain-chat agents have no
-    // execution environment at all, so they stay unbound too.
-    const isHeteroRun = !!heterogeneousProvider;
-    const runEffectiveTarget =
-      isHeteroRun || resolveToolMode(agentConfig?.chatConfig) !== 'chat'
-        ? resolveExecutionTarget(agencyConfig, {
-            clientExecutionAvailable: isDesktop,
-            // A web client can't run tools in-process, but its backend may still
-            // route a bound `local` target to the user's machine — where the cwd
-            // does apply.
-            deviceRoutingAvailable: isGatewayMode,
-            isHetero: isHeteroRun,
-            workspaceScoped,
-          })
-        : undefined;
-    const resolvesRunCwd =
-      runEffectiveTarget === 'local' ||
-      runEffectiveTarget === 'device' ||
-      runEffectiveTarget === 'auto';
-    // Same precedence as `useEffectiveWorkingDirectory` (and the server's
-    // `resolveDeviceWorkingDirectoryConfig`), but over the MERGED config — the
-    // agent selector reads the raw shared row internally, which could fall back
-    // to a cwd registered for another member's device.
-    const runCwdDeviceId = resolvesRunCwd
-      ? resolveTargetDeviceId(agencyConfig, currentDeviceId, { workspaceScoped })
-      : undefined;
-    // Desktop/home is the last resort for hetero CLIs ONLY: they always spawn in
-    // some directory, so an unconfigured agent still needs one. A native agent
-    // with nothing configured stays unbound instead — pinning it to `~/Desktop`
-    // would file every desktop conversation under a project the user never
-    // picked.
-    const heteroCwdContext =
-      resolvesRunCwd && isHeteroRun && isDesktop
-        ? globalAgentContextManager.getContext()
-        : undefined;
-    const runCwdParams = resolvesRunCwd
-      ? {
-          agencyConfig,
-          currentDeviceId,
-          deviceDefaultCwd:
-            deviceSelectors.getDeviceDefaultCwd(runCwdDeviceId)(getDeviceStoreState()),
-          fallback: heteroCwdContext?.desktopPath ?? heteroCwdContext?.homePath,
-          legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
-          // A project's staged directory, not the agent default, is the new topic's cwd.
-          topicWorkingDirectory: stagedDirectory?.path,
-          workspaceScoped,
-        }
-      : undefined;
-    const agentWorkingDirectory = runCwdParams && resolveAgentWorkingDirectory(runCwdParams);
-    const agentWorkingDirectoryConfig =
-      runCwdParams && resolveAgentWorkingDirectoryConfig(runCwdParams);
-    // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
-    // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
-    // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
-    // sessionId consistent and never drops the conversation context. The active
-    // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
-    // record. The per-cwd session store is a LOCAL CLI trait — remote platform
-    // agents (openclaw / hermes) run through the gateway with no such
-    // constraint, so they (like non-hetero runtimes) keep the effective
-    // (worktree) path.
-    const isLocalCliHetero =
-      !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
-    const resolveWorkingDirPath = isLocalCliHetero
-      ? getWorkingDirSourcePath
-      : getWorkingDirEffectivePath;
-    const { workingDirectory, workingDirectoryConfig } = await resolveRunCwd({
-      agentWorkingDirectory,
-      agentWorkingDirectoryConfig,
-      existingTopic,
-      inheritedTopic: !stagedDirectory && resolvesRunCwd ? inheritedTopic : undefined,
-      resolvePath: resolveWorkingDirPath,
-      runMachine: { deviceId: runCwdDeviceId, target: runEffectiveTarget },
-    });
+    const { runCwdDeviceId, runEffectiveTarget, workingDirectory, workingDirectoryConfig } =
+      await resolveSendRunCwd({
+        agencyConfig,
+        chatConfig: agentConfig?.chatConfig,
+        currentDeviceId,
+        // Prepared on the composer agent's machine: a send routed to another
+        // agent (`@Agent` direct route) resolves its own device and directory.
+        draftWorkingDirectory:
+          willCreateNewTopic && agentId === ownerAgentId ? newTopicWorkingDirectory : undefined,
+        existingTopic,
+        heterogeneousProvider,
+        inheritedTopic,
+        isGatewayMode,
+        legacyAgentWorkingDirectory: agentState.localAgentWorkingDirectoryMap[agentId],
+        stagedDirectoryPath: stagedDirectory?.path,
+        workspaceScoped,
+      });
     // Record which machine a new conversation runs on, so its next turn — and
     // the device picker — stay on it after the agent default changes. `auto`
     // has not picked a machine yet; the server stamps the one it routes to.

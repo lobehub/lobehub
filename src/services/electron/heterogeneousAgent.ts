@@ -54,6 +54,8 @@ class HeterogeneousAgentService {
     /** Workspace the run belongs to — recovery is workspace-scoped. */
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
+    /** Keep the run able to take messages while it runs (Follow-up behavior: Steer). */
+    liveSteer?: boolean;
     operationId: string;
     prompt: string;
     /**
@@ -73,8 +75,28 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.sendPrompt(params);
   }
 
+  /**
+   * Deliver a message into the session's running turn (Follow-up behavior:
+   * Steer). `accepted` means it was written; the agent confirms reading it
+   * with a `step_complete { phase: 'user_message' }` event naming `messageId`
+   * (or, for Pi, its text). Throws when the outcome is unknown.
+   */
+  async steerSession(params: {
+    imageList?: Array<{ id: string; url: string }>;
+    messageId: string;
+    prompt: string;
+    sessionId: string;
+  }): Promise<{ deliveredText?: string; status: 'accepted' | 'rejected' | 'unsupported' }> {
+    return this.ipc.heterogeneousAgent.steerSession(params);
+  }
+
   async cancelSession(sessionId: string) {
     return this.ipc.heterogeneousAgent.cancelSession({ sessionId });
+  }
+
+  /** Stop one background task of a local Claude Code SDK run. */
+  async stopBackgroundTask(sessionId: string, taskId: string) {
+    return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
   }
 
   async stopSession(sessionId: string) {

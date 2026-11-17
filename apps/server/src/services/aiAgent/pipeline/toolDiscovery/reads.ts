@@ -27,10 +27,12 @@ import {
 } from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
+import { hasSupportedEventConnector } from './eventConnectors';
 import { readProjectToolScope } from './projectScope';
 import type { ToolDiscoveryDeps } from './types';
 
@@ -232,6 +234,10 @@ const readConnectors = async (
       connectorGateKeeper,
       connectors,
       connectorsMcp,
+      hasEventConnector:
+        !ctx.shareGate &&
+        hasSupportedEventConnector([...connectorsMcp, ...discoverable.connectorsMcp]) &&
+        (await isWebhookEnabled(deps.userId)),
       connectorTools,
       discoverableConnectorManifests: discoverable.manifests,
       discoverableConnectorsMcp: discoverable.connectorsMcp,

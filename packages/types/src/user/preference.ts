@@ -138,6 +138,13 @@ export interface WorkspaceUserPreference {
    *   nothing reads or writes this key.
    */
   topicOnlyMine?: boolean;
+  /**
+   * Directories (`<deviceId>::<path>`, see `getWorktreeModeKey`) where this
+   * member keeps the composer's "New worktree" switch on, most recent first and
+   * capped. Written only through `workspaceUserSettings.setWorktreeModeDir`,
+   * which applies the cap server-side.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export interface LobeUser {
@@ -176,6 +183,11 @@ export const UserGuideSchema = z.object({
 export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
+  /**
+   * one switch for the experiments that improve how agents write and work with
+   * code; every coding-experience improvement reads this flag
+   */
+  enableBetterCodingExperience: z.boolean().optional(),
   /**
    * enable agent identity: give an agent its own mail address
    */
@@ -406,6 +418,13 @@ export interface UserPreference {
   useCmdEnterToSend?: boolean;
   /** This user's own view over the workspaces they belong to. */
   workspace?: UserWorkspacePreference;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.worktreeModeDirs}.
+   * Written only through `user.setWorktreeModeDir`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals` —
+   * `updatePreference` deep-merges arrays by index, which would scramble it.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export type ReferralStatusString =

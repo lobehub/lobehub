@@ -17,6 +17,7 @@ import {
 import {
   Archive,
   Bot,
+  Braces,
   CalendarRange,
   ChevronDown,
   FolderClosed,
@@ -166,15 +167,24 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'completed', labelKey: 'management.filters.status.completed' },
 ];
 
-const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'channel', 'bot', 'api', 'task', 'eval'];
+const TRIGGER_OPTIONS: TriggerFilter[] = [
+  'chat',
+  'channel',
+  'bot',
+  'webhook',
+  'api',
+  'task',
+  'eval',
+];
 
 const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
-  api: Webhook,
+  api: Braces,
   bot: Bot,
   channel: Hash,
   chat: MessageCircle,
   eval: TestTubeIcon,
   task: ListTodoIcon,
+  webhook: Webhook,
 };
 
 const TIME_OPTIONS: TimeRangeFilter[] = ['all', 'today', 'week', 'month'];

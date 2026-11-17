@@ -1,8 +1,13 @@
-import type { ConversationContext, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
+import { getSlicedMessages } from '@lobechat/context-engine';
+import type {
+  ConversationContext,
+  FollowUpMode,
+  OpenAIChatMessage,
+  UIChatMessage,
+} from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
-import type { SendButtonProps } from '@/features/ChatInput/store/initialState';
-import { chatHelpers } from '@/store/chat/helpers';
+import type { ContextWindow, SendButtonProps } from '@/features/ChatInput/store/initialState';
 import { operationSelectors } from '@/store/chat/selectors';
 import {
   type QueuedMessage,
@@ -79,12 +84,25 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
  */
 export const getQueuedHintKey = ({
   count,
+  mode = 'legacy',
   waitsForRunEnd,
 }: {
   count: number;
+  /** The Follow-up behavior in effect (`legacy` while its lab is off). */
+  mode?: FollowUpMode;
   waitsForRunEnd: boolean;
 }) => {
   const merged = count > 1;
+
+  // Queue: every follow-up waits for the run end, then goes one per turn.
+  if (mode === 'queue')
+    return merged ? 'inputQueue.queuedOneByOneHint' : 'inputQueue.queuedRunEndHint';
+  // Steer: joins the running turn, unless this run cannot take one mid-run.
+  if (mode === 'steer') {
+    if (waitsForRunEnd)
+      return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
+    return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
+  }
 
   if (waitsForRunEnd)
     return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';
@@ -103,13 +121,60 @@ export const toChatInputMessages = (messages: UIChatMessage[]): ChatInputMessage
     role: m.role,
   }));
 
-export const getContextWindowMessages = (
+const getRecordedInputTokens = (message: UIChatMessage) =>
+  message.usage?.totalInputTokens ??
+  message.metadata?.usage?.totalInputTokens ??
+  message.metadata?.totalInputTokens;
+
+/**
+ * Resolves what the conversation's next request carries before the composer draft.
+ *
+ * Use when:
+ * - Feeding the composer's context breakdown.
+ *
+ * Expects:
+ * - `messages` are the conversation's flat DB messages in send order.
+ *
+ * Returns:
+ * - `history`: the window the next request includes, sliced with the context
+ *   engine's own group-aware history truncation.
+ * - `request`, when the latest assistant message carries
+ *   `metadata.contextAccounting`: that request's accounting and model. Without
+ *   a history count it also carries the messages sent since — the reply
+ *   itself, its tool results and later turns — which the next request appends
+ *   to the recorded one. With a history count every request re-truncates, so
+ *   those older messages may drop out and only `history` is reliable.
+ */
+export const getContextWindow = (
   messages: UIChatMessage[],
   options: {
     enableHistoryCount?: boolean;
     historyCount?: number;
   },
-) => toChatInputMessages(chatHelpers.getSlicedMessages(messages, options));
+): ContextWindow => {
+  const history = getSlicedMessages(messages, options) as UIChatMessage[];
+  const historyTruncated = !!options.enableHistoryCount && options.historyCount !== undefined;
+
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    const accounting = message.role === 'assistant' && message.metadata?.contextAccounting;
+    if (!accounting) continue;
+
+    const inputTokens = getRecordedInputTokens(message);
+    return {
+      history,
+      request: {
+        accounting,
+        ...(inputTokens ? { inputTokens } : {}),
+        ...(historyTruncated ? {} : { messages: messages.slice(index) }),
+        model: message.model ?? undefined,
+        provider: message.provider ?? undefined,
+      },
+    };
+  }
+
+  return { history };
+};
 
 export const getConversationSendButtonProps = (
   defaults: SendButtonProps,

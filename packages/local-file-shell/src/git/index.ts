@@ -2,6 +2,7 @@ export * from './branches';
 export * from './info';
 export * from './pullRequest';
 export * from './repoType';
+export * from './sync';
 export * from './types';
 export * from './upstream';
 export * from './workingTree';

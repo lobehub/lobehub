@@ -373,6 +373,28 @@ describe('spawnAgent live input (Claude Code)', () => {
     fake.exit(0);
   });
 
+  it('writes a generic control request into the live session', async () => {
+    const fake = createLiveProc();
+    nextFakeProc = fake.proc;
+
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      liveInput: true,
+      operationId: 'op-live',
+      prompt: 'long task',
+    });
+
+    const sent = handle.sendControlRequest!({ subtype: 'stop_task', task_id: 't-1' });
+    await tick();
+
+    expect(fake.stdinLines[1]).toEqual({
+      request: { subtype: 'stop_task', task_id: 't-1' },
+      request_id: sent!.requestId,
+      type: 'control_request',
+    });
+    fake.exit(0);
+  });
+
   it('leaves non-live runs with one-shot stdin and no live controls', async () => {
     const fake = createLiveProc();
     nextFakeProc = fake.proc;
@@ -388,6 +410,7 @@ describe('spawnAgent live input (Claude Code)', () => {
     expect(fake.stdinEnded).toBe(true);
     expect(handle.sendUserMessage).toBeUndefined();
     expect(handle.interruptTurn).toBeUndefined();
+    expect(handle.sendControlRequest).toBeUndefined();
     fake.exit(0);
   });
 });

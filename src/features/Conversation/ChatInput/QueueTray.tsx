@@ -9,6 +9,7 @@ import FileIcon from '@/components/FileIcon';
 import { useSingleton } from '@/hooks/useSingleton';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { canSteerClientRun } from '@/store/chat/slices/agentRun/actions/transports/client/clientSteer';
 import {
   isServerDeliveringQueuedMessage,
   type QueuedFile,
@@ -17,6 +18,8 @@ import {
 } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -208,6 +211,7 @@ const QueueTray = memo(() => {
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
   const waitsForRunEnd = useChatStore(operationSelectors.isQueueDrainedAtRunEnd(context));
+  const followUpMode = useUserStore(userGeneralSettingsSelectors.followUpBehavior);
   const withdrawQueuedMessage = useChatStore((s) => s.withdrawQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
@@ -310,8 +314,10 @@ const QueueTray = memo(() => {
   // CLI run only drains once the whole run ends, not after the current step.
   // One a run already took is no longer part of that merge: it says where it
   // is instead and offers nothing to do with it.
-  const waitingCount = queuedMessages.filter((msg) => !isServerDeliveringQueuedMessage(msg)).length;
-  const hintText = t(getQueuedHintKey({ count: waitingCount, waitsForRunEnd }));
+  const waitingCount = queuedMessages.filter(
+    (msg) => !isServerDeliveringQueuedMessage(msg) && !msg.localSteer,
+  ).length;
+  const hintText = t(getQueuedHintKey({ count: waitingCount, mode: followUpMode, waitsForRunEnd }));
 
   return (
     <Flexbox className={styles.container} gap={0}>
@@ -319,8 +325,17 @@ const QueueTray = memo(() => {
         const previews = msg.filesPreview ?? [];
         // A "send now" in progress keeps its row as is: it is interrupting the
         // run to take this message back, and shows that with its spinner.
-        const delivering = isServerDeliveringQueuedMessage(msg) && sendingId !== msg.id;
-        const rowHint = delivering ? t('inputQueue.deliveringHint') : hintText;
+        const delivering =
+          (isServerDeliveringQueuedMessage(msg) || msg.localSteer === 'delivering') &&
+          sendingId !== msg.id;
+        const rowHint = delivering
+          ? t('inputQueue.deliveringHint')
+          : msg.localSteer === 'unknown'
+            ? t('inputQueue.steerDeliveryUnknownHint')
+            : // An attachment or selection cannot join a running turn; it starts the next one.
+              followUpMode === 'steer' && !waitsForRunEnd && !canSteerClientRun(msg)
+              ? t('inputQueue.queuedHint')
+              : hintText;
         return (
           <Flexbox
             horizontal

@@ -8,6 +8,7 @@ import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protoco
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   ClaudeAgentSdkSession,
+  ClaudeCodeLiveInput,
   CodexThreadSession,
   DshAcpSessionHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -66,6 +67,11 @@ export interface SendPromptParams {
    * Required: producer-side conversion is the V3 contract — by the time events
    * reach the renderer they must already carry the operation they belong to.
    */
+  /**
+   * Keep the session able to take messages while it runs (Follow-up behavior:
+   * Steer): Claude Code keeps its input open and replays each message it reads.
+   */
+  liveSteer?: boolean;
   operationId: string;
   prompt: string;
   /**
@@ -142,6 +148,8 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
+  /** Open input of a live Claude Code CLI run (Follow-up behavior: Steer). */
+  liveInput?: ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
@@ -817,3 +825,33 @@ export const sendPromptWithAcpSession = async (
     });
   }
 };
+
+export interface CancelSessionParams {
+  sessionId: string;
+}
+
+export interface SubmitInterventionParams {
+  cancelled?: boolean;
+  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
+  cancelReason?: 'timeout' | 'user_cancelled';
+  /** Operation id stamped on the request the renderer is responding to. */
+  operationId: string;
+  /** Structured user answer; ignored when `cancelled` is true. */
+  result?: unknown;
+  /** Correlation key carried on the original `agent_intervention_request`. */
+  toolCallId: string;
+}
+
+export interface StopSessionParams {
+  sessionId: string;
+}
+
+export interface GetSessionInfoParams {
+  sessionId: string;
+}
+
+export interface StopBackgroundTaskParams {
+  sessionId: string;
+  /** Claude Code `task_id` of the background task to stop. */
+  taskId: string;
+}

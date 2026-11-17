@@ -125,6 +125,67 @@ describe('takeHeteroSteer', () => {
     expect(mocks.deliveries.get('msg-a')).toContain(`"drainId":"${drained}"`);
   });
 
+  describe('Steer mode', () => {
+    const steer = () =>
+      takeHeteroSteer(ctx, { agentId: 'agt-1', mode: 'steer', operationId: 'op-1', scope });
+
+    it('merges every leading follow-up that can join into one message', async () => {
+      mocks.drain.mockResolvedValue([
+        followUp('b', 2),
+        followUp('a', 1),
+        followUp('c', 3, { fileIds: ['f1'] }),
+        followUp('d', 4),
+      ]);
+
+      const message = await steer();
+
+      expect(message).toMatchObject({ content: 'prompt a\n\nprompt b' });
+      // Read at the next tool boundary: a steer never cuts a running tool short.
+      expect(message).not.toHaveProperty('priority');
+      // A merged batch gets an id of its own, derived from its entries.
+      expect(message?.messageId).toMatch(/^msg_[\da-f]{24}$/);
+      // The attachment waits for a turn of its own, and `d` stays behind it.
+      expect(mocks.settle.mock.calls[0][2]).toEqual(['c', 'd']);
+      const delivery = JSON.parse(mocks.deliveries.get(message!.messageId)!);
+      expect(delivery.entryIds).toEqual(['a', 'b']);
+    });
+
+    it('sends a single follow-up as it is', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1)]);
+
+      await expect(steer()).resolves.toEqual({
+        content: 'prompt a',
+        messageId: 'msg-a',
+      });
+    });
+
+    it('rebinds a merged delivery that lapsed back, instead of merging it again with newer ones', async () => {
+      mocks.deliveries.set(
+        'msg_ab',
+        JSON.stringify({ drainId: 'old', entryId: 'a', entryIds: ['a', 'b'], scope }),
+      );
+      mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2), followUp('c', 3)]);
+
+      await expect(steer()).resolves.toBeUndefined();
+
+      // The session already has A+B; only C goes back, for the next join.
+      const [, drainId, returned] = mocks.settle.mock.calls[0];
+      expect(returned).toEqual(['c']);
+      expect(JSON.parse(mocks.deliveries.get('msg_ab')!).drainId).toBe(drainId);
+      expect(mocks.deliveries.size).toBe(1);
+    });
+
+    it('returns every merged follow-up when the session refuses the message', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2)]);
+      const message = await steer();
+      mocks.settle.mockClear();
+
+      await returnHeteroSteer('op-1', message!.messageId);
+
+      expect(mocks.settle).toHaveBeenCalledWith(scope, expect.any(String), ['a', 'b']);
+    });
+  });
+
   it('leaves the queue to the run end when the first follow-up cannot join', async () => {
     mocks.drain.mockResolvedValue([followUp('a', 1, { fileIds: ['f1'] }), followUp('b', 2)]);
 

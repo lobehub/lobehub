@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 
-import type { ConnectorModel } from '@/database/models/connector';
+import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorMetadata } from '@/database/schemas';
 import { ConnectorStatus } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -81,15 +81,19 @@ export async function upsertConnectorEntry(
     metadata.composio = params.composio;
   }
 
-  if (row) {
-    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
+  const refresh = async (target: Pick<DecryptedConnector, 'id' | 'metadata' | 'userId'>) => {
+    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || target.userId === ctx.userId);
     if (writable) {
       // Preserve runtime-owned metadata (especially Composio account identity)
       // while refreshing display fields from the latest plugin manifest.
-      await ctx.connectorModel.update(row.id, { metadata: { ...row.metadata, ...metadata } });
+      await ctx.connectorModel.update(target.id, {
+        metadata: { ...target.metadata, ...metadata },
+      });
     }
-    return { connectorId: row.id, writable };
-  }
+    return { connectorId: target.id, writable };
+  };
+
+  if (row) return refresh(row);
 
   if (accountIsTeammatePrivate) return { connectorId: null, writable: false };
 
@@ -97,7 +101,9 @@ export async function upsertConnectorEntry(
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Viewers cannot install connectors' });
   }
 
-  const created = await ctx.connectorModel.create({
+  // Claimed under the identifier lock every base-row writer takes, so a
+  // concurrent install of the same identifier never adds a second base row.
+  const claim = await ctx.connectorModel.createUnlessIdentifierHeld({
     identifier: params.identifier,
     isEnabled: true,
     metadata,
@@ -105,5 +111,6 @@ export async function upsertConnectorEntry(
     sourceType: params.sourceType as any,
     status: ConnectorStatus.connected,
   });
-  return { connectorId: created.id, writable: true };
+  if ('holder' in claim) return refresh(claim.holder);
+  return { connectorId: claim.created.id, writable: true };
 }

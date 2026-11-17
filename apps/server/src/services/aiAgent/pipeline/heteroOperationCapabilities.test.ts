@@ -10,6 +10,15 @@ describe('heteroOperationCapabilities', () => {
     expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:read');
     expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:message');
   });
+  it("lets an owner's bot run message Channels, but not read one", () => {
+    const capabilities = heteroOperationCapabilities('tell the LobeHub agent', {
+      ownerBotTurn: true,
+    });
+    expect(capabilities).toContain('channel:message');
+    expect(capabilities).not.toContain('channel:read');
+    expect(capabilities).not.toContain('goal:manage');
+  });
+
   it('grants goal management to a /goal run', () => {
     expect(heteroOperationCapabilities('/goal ship the report')).toContain('goal:manage');
   });

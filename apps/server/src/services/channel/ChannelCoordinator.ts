@@ -27,6 +27,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
+import { reportAgentExchange } from './agentExchange';
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
 import { notifyChannel } from './notify';
@@ -149,9 +150,10 @@ export class ChannelCoordinator {
 
     try {
       await pMap(
-        Object.values(groupBy(pending, (job) => job.memberId)),
+        Object.values(groupBy(pending, (job) => `${job.memberId}:${job.threadId ?? ''}`)),
         async (jobs) => {
-          // Recover earlier runs before claiming this member, without delaying other members.
+          // Recover a branch's earlier runs before claiming in it, without delaying other
+          // members or the member's other branches.
           for (const job of jobs) {
             if (job.status !== 'queued') {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
@@ -424,6 +426,13 @@ export class ChannelCoordinator {
       const replyMessageId = await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
       await notifyChannel(this.db, channelId);
+      // Between Agents, an answer wakes the Agent that asked, and what that Agent concludes from
+      // it is posted where its asking began.
+      if (await this.executions.deliverAnswerToAsker(channelId, replyMessageId))
+        await wakeChannel(channelId);
+      await reportAgentExchange(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
+        console.error('[channel:agent-exchange]', error),
+      );
       // A reply to a relayed request also goes back to the Agent that relayed it.
       await deliverRelayReceipt(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
         console.error('[channel:relay-receipt]', error),

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   connectedAccountsLink: vi.fn(),
   connectedAccountsList: vi.fn(),
   connectorCreate: vi.fn(),
+  connectorCreateUnlessIdentifierHeld: vi.fn(),
   connectorDelete: vi.fn(),
   connectorFindManageableByIdentifier: vi.fn(),
   connectorFindScopedByIdentifier: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     return {
       create: mocks.connectorCreate,
+      createUnlessIdentifierHeld: mocks.connectorCreateUnlessIdentifierHeld,
       delete: mocks.connectorDelete,
       findManageableByIdentifier: mocks.connectorFindManageableByIdentifier,
       findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
@@ -89,6 +91,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.connectorFindManageableByIdentifier.mockResolvedValue(null);
   mocks.connectorCreate.mockResolvedValue({ id: 'conn-new' });
+  mocks.connectorCreateUnlessIdentifierHeld.mockResolvedValue({ created: { id: 'conn-new' } });
   mocks.pluginFindById.mockResolvedValue(undefined);
   mocks.pluginQueryComposioMirrors.mockResolvedValue([]);
   // By default the account a write names is held by the row the write resolves
@@ -159,7 +162,7 @@ describe('composioRouter.createConnection dual-write', () => {
 
     expect(mocks.authConfigsList).not.toHaveBeenCalled();
     expect(mocks.connectedAccountsLink).not.toHaveBeenCalled();
-    expect(mocks.connectorCreate).not.toHaveBeenCalled();
+    expect(mocks.connectorCreateUnlessIdentifierHeld).not.toHaveBeenCalled();
   });
 
   it('mirrors a pending connection into user_connectors + tools', async () => {
@@ -174,8 +177,8 @@ describe('composioRouter.createConnection dual-write', () => {
     // plugin write kept (backward compat)
     expect(mocks.pluginCreate).toHaveBeenCalledTimes(1);
     // connector projection created with PENDING composio metadata
-    expect(mocks.connectorCreate).toHaveBeenCalledTimes(1);
-    expect(mocks.connectorCreate.mock.calls[0][0]).toMatchObject({
+    expect(mocks.connectorCreateUnlessIdentifierHeld).toHaveBeenCalledTimes(1);
+    expect(mocks.connectorCreateUnlessIdentifierHeld.mock.calls[0][0]).toMatchObject({
       identifier: 'gmail',
       metadata: { composio: { connectedAccountId: 'ca-1', status: 'PENDING' } },
       status: 'disconnected',
@@ -208,8 +211,8 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
     const res = await caller().updateComposioPlugin(input);
 
     expect(res).toEqual({ savedCount: 1 });
-    expect(mocks.connectorCreate).toHaveBeenCalledTimes(1);
-    expect(mocks.connectorCreate.mock.calls[0][0]).toMatchObject({
+    expect(mocks.connectorCreateUnlessIdentifierHeld).toHaveBeenCalledTimes(1);
+    expect(mocks.connectorCreateUnlessIdentifierHeld.mock.calls[0][0]).toMatchObject({
       metadata: { composio: { connectedAccountId: 'ca-1', status: 'ACTIVE' } },
       status: 'connected',
     });

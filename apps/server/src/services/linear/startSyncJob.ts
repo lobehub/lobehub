@@ -6,6 +6,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { LinearSyncJobModel, LinearSyncRuleModel } from '@/database/models/linear';
 import type { LobeChatDatabase } from '@/database/type';
 import { createAsyncCaller } from '@/server/routers/async';
+import { isAsyncCallRejectedBeforeRun } from '@/server/routers/async/rejection';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { toLinearSyncJobView } from './syncJob';
@@ -142,7 +143,7 @@ const dispatchJob = async (
         // An error without an answer (a dropped connection) may still be on
         // its way to the router, which must be able to claim it; that job
         // times out as unclaimed if it never arrives.
-        if (!isRejectedHandOff(error)) {
+        if (!isAsyncCallRejectedBeforeRun(error)) {
           console.error('[linear-sync] hand-off of sync %s failed: %O', taskId, error);
           if (isAnsweredHandOff(error)) await fail();
           return;
@@ -171,7 +172,3 @@ const dispatchJob = async (
 const isAnsweredHandOff = (error: unknown) =>
   error instanceof TRPCClientError &&
   (error.meta?.response !== undefined || error.cause instanceof SyntaxError);
-
-/** The async router refused the call before running it, so the job is still unclaimed. */
-const isRejectedHandOff = (error: unknown) =>
-  error instanceof TRPCClientError && error.data?.code === 'UNAUTHORIZED';

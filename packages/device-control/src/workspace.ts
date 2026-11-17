@@ -152,6 +152,7 @@ const listSkillFilesRecursive = async (dir: string): Promise<string[]> => {
 
 interface SkillFrontmatterFields {
   description?: string;
+  disableModelInvocation?: boolean;
   name?: string;
 }
 
@@ -169,6 +170,7 @@ const parseSkillFrontmatter = (raw: string): SkillFrontmatterFields => {
     const { data } = matter(raw) as { data: Record<string, unknown> };
     return {
       description: readStringField(data, 'description'),
+      disableModelInvocation: data['disable-model-invocation'] === true,
       name: readStringField(data, 'name'),
     };
   } catch {
@@ -206,6 +208,7 @@ const scanSkillsInSource = async ({
           const files = await listSkillFilesRecursive(skillDir);
           return {
             description: fields.description || undefined,
+            disableModelInvocation: fields.disableModelInvocation,
             fileCount: files.length,
             files,
             name: fields.name || entry.name,
@@ -339,8 +342,10 @@ export const listProjectSkills = async (
 /**
  * One-call "workspace init" scan: merge project and execution-device skills
  * (deduped by name, project winning) and read the agent instructions from the
- * working directory up to the repository root. Approves the project root regardless of what was found, since
- * the run is now bound to this root.
+ * working directory up to the repository root. Without a working directory,
+ * discover only home-directory skills: neither the daemon's cwd nor the home
+ * directory becomes an implicit project or supplies project instructions.
+ * Approves the selected project root and discovered skill preview roots.
  */
 export const initWorkspace = async (
   params: InitWorkspaceParams,
@@ -348,14 +353,14 @@ export const initWorkspace = async (
 ): Promise<InitWorkspaceResult> => {
   const root = params.scope;
 
-  const dirs = await resolveAgentFileDirs(root);
+  const dirs = root ? await resolveAgentFileDirs(root) : [];
   const skills = await collectSkills([
-    ...createProjectSkillRoots(root, dirs),
+    ...(root ? createProjectSkillRoots(root, dirs) : []),
     ...createDeviceSkillRoots(),
   ]);
   const instructions = await readWorkspaceInstructions(dirs);
 
-  await approvePreviewRoots(skills, deps, [root]);
+  await approvePreviewRoots(skills, deps, root ? [root] : []);
 
   return { instructions, root, skills };
 };

@@ -42,6 +42,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   // the workspace.
   'appearance',
   'audit-log',
+  // Automations (event subscriptions) are listed per workspace.
+  'automations',
   'billing',
   'budget',
   // Personal chat-assist preferences, reachable by every member.

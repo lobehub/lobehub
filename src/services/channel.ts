@@ -62,10 +62,15 @@ class ChannelService {
   /** Without a Channel, the people a new Channel in the active workspace can start with. */
   userCandidates = async (channelId: string | undefined, search: string) =>
     (await lambdaClient.channel.userCandidates.query({ channelId, search })).data;
-  addAgent = (channelId: string, agent: ChannelAgentSelection) =>
-    lambdaClient.channel.addAgent.mutate({ agent, channelId });
+  /** In a project Channel, `joinProject` adds an Agent from outside to the project first. */
+  addAgent = (channelId: string, agent: ChannelAgentSelection, joinProject?: boolean) =>
+    lambdaClient.channel.addAgent.mutate({ agent, channelId, joinProject });
+  removeMember = (channelId: string, memberId: string) =>
+    lambdaClient.channel.removeMember.mutate({ channelId, memberId });
+  leave = (channelId: string) => lambdaClient.channel.leave.mutate({ channelId });
   create = (input: {
     agents: ChannelAgentSelection[];
+    joinProject?: boolean;
     projectId?: string;
     title: string;
     userIds?: string[];

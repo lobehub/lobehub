@@ -65,6 +65,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     workspaceMocks.getConnectorMemberManage.mockResolvedValue('all_members');
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
+      createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'conn-new' } }),
       // The row a write updates — the caller's own row in either visibility.
       findManageableByIdentifier: vi.fn().mockResolvedValue(null),
       // The shared row only (the lookup a create of a new row uses).
@@ -596,7 +597,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       memberCaller().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
   });
 
   it('still lets a workspace admin connect when members are restricted', async () => {

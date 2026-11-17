@@ -7,6 +7,7 @@ const { executions, executeToolCall, interruptTask } = vi.hoisted(() => ({
   interruptTask: vi.fn().mockResolvedValue({ success: true }),
   executions: {
     input: vi.fn(),
+    deliverAnswerToAsker: vi.fn(),
     publish: vi.fn(),
     releaseWriter: vi.fn(),
     retireReservation: vi.fn().mockResolvedValue(false),
