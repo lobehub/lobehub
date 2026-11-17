@@ -72,20 +72,16 @@ export const selectMcpAppEntrypoints = (
   agentId?: string,
 ): AppEntrypoint[] => {
   if (!enabled) return [];
+  // Each row under its tool prefix, as the server names it: a private row is
+  // its own app beside the shared one of its connector, and a row mounted on
+  // the agent keeps its own prefix (only an agent-owned row is bare)
+  const reserved = new Set(state.connectors.map((c) => c.identifier));
+  const prefixOf = (connector: (typeof state.connectors)[number]) =>
+    connectorToolIdentifier(connector, undefined, reserved);
   const identifiers = new Set([
     ...state.installedPlugins.map((plugin) => plugin.identifier),
-    // Each base row under its tool prefix: a private row is its own app beside
-    // the shared one of its connector
-    ...state.connectors.map((connector) =>
-      connectorToolIdentifier(
-        connector,
-        undefined,
-        new Set(state.connectors.map((c) => c.identifier)),
-      ),
-    ),
-    ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(
-      (connector) => connector.identifier,
-    ),
+    ...state.connectors.map(prefixOf),
+    ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(prefixOf),
   ]);
   return [...identifiers].flatMap((identifier) => {
     const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(state);

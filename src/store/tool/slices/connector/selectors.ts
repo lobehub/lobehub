@@ -332,14 +332,18 @@ const connectorByIdentifierForAgent =
     { includePrivate = true }: { includePrivate?: boolean } = {},
   ) =>
   (s: ToolStore): ConnectorWithTools | undefined => {
+    // Named as the server names them: no own row reads as a listed identifier
+    const reserved = new Set((s.connectors ?? []).map((c) => c.identifier));
+    // An agent-owned row keeps its identifier; a row mounted on the agent keeps
+    // the prefix of its own visibility (a mounted private row is suffixed)
     const agentRows = agentId
-      ? (s.agentConnectors?.[agentId] ?? []).filter((c) => c.identifier === identifier)
+      ? (s.agentConnectors?.[agentId] ?? []).filter(
+          (c) => connectorToolIdentifier(c, undefined, reserved) === identifier,
+        )
       : [];
 
     // A base connector another agent mounted serves only that agent, as the
     // server's scope rule has it (`ConnectorModel.scopePredicate`).
-    // Named as the server names them: no own row reads as a listed identifier
-    const reserved = new Set((s.connectors ?? []).map((c) => c.identifier));
     const baseRows = (s.connectors ?? []).filter(
       (c) =>
         connectorToolIdentifier(c, undefined, reserved) === identifier &&

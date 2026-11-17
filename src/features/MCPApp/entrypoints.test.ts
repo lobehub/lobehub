@@ -57,6 +57,30 @@ describe('sidebar app entries', () => {
     const scoped = { ...state, agentConnectors: { agent: [connector] } } as unknown as ToolStore;
     expect(selectMcpAppEntrypoints(scoped, true, 'agent')).toEqual([]);
   });
+  it('lists a private row mounted on the agent once, under the prefix its calls run by', () => {
+    // Regression: the mounted row is in both the base and the agent list; the
+    // agent list added its bare identifier, a second entry the server refuses.
+    const mounted = {
+      agentId: null,
+      id: '3f9a1c2e-mounted',
+      identifier: 'notes',
+      isEnabled: true,
+      mcpServerUrl: 'https://example.com',
+      metadata: { mountedByAgentId: 'agent' },
+      tools: [{ toolName: 'open', permission: 'auto', metadata: { threadEntry: entry } }],
+      visibility: 'private',
+    };
+    const scoped = {
+      ...state,
+      agentConnectors: { agent: [mounted] },
+      connectors: [mounted],
+      installedPlugins: [],
+    } as unknown as ToolStore;
+
+    expect(selectMcpAppEntrypoints(scoped, true, 'agent')).toEqual([
+      { ...entry, connectorIdentifier: 'notes', identifier: 'notes-3f9a1c2e' },
+    ]);
+  });
   it('round trips entry identifiers containing colons and rejects malformed tabs', () => {
     expect(parseMcpEntryTab(mcpEntryTabKey('notes:mine', 'open/page'))).toEqual({
       identifier: 'notes:mine',

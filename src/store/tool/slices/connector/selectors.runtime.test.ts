@@ -200,6 +200,22 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
     ).toBe(undefined);
   });
 
+  it('resolves a private row mounted on the agent by its own prefix, never the bare one', () => {
+    const mounted = connector({
+      id: '3f9a1c2e-mounted',
+      metadata: { mountedByAgentId: 'agt_a' },
+      visibility: 'private',
+    });
+    const s = { ...state([mounted]), agentConnectors: { agt_a: [mounted] } } as never;
+
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market-3f9a1c2e', 'agt_a')(s)?.id,
+    ).toBe('3f9a1c2e-mounted');
+    expect(connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a')(s)).toBe(
+      undefined,
+    );
+  });
+
   it('resolves a base connector that is free or mounted by this agent', () => {
     expect(
       connectorSelectors.connectorByIdentifierForAgent(
