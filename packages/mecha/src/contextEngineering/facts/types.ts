@@ -6,6 +6,7 @@ import type {
   AvailablePluginInfo,
   AvailableProviderInfo,
   OnboardingContext,
+  RevokedDocumentReads,
 } from '@lobechat/context-engine';
 import type {
   AgentAccountContext,
@@ -136,6 +137,19 @@ export interface ContextFactProviders {
     agentId: string,
     documentId: string,
   ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
+  /**
+   * Of the given document ids (`documents.id` or `agent_documents.id`) that
+   * `agentId` read in earlier turns, those whose content must no longer reach
+   * the model: `documentIds` for every read route, `agentDocumentReadIds` for
+   * `readDocument` only (still a knowledge-base page). Ids never bound to the
+   * agent (knowledge-base documents, uploads) are not revoked.
+   */
+  findRevokedDocumentReads?: (
+    agentId: string,
+    documentIds: string[],
+  ) => Promise<
+    { agentDocumentReadIds?: Iterable<string>; documentIds?: Iterable<string> } | undefined
+  >;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */
@@ -206,6 +220,8 @@ export interface ContextFactProviders {
 export interface GatheredContextFacts {
   agentDocumentChanges?: AgentDocumentChangesByMessage;
   agentDocuments?: AgentContextDocument[];
+  /** Documents whose earlier reads must no longer reach the model, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   step: ContextStepSnapshot & { agentManagementContext?: AgentManagementContext };
   variables: ContextVariables;
 }

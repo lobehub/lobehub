@@ -340,6 +340,7 @@ export const contextEngineering = async ({
       identity: { name: agentMeta?.name, title: agentMeta?.title },
       inputTemplate,
       knowledge: { fileContents, knowledgeBases },
+      revokedDocumentReads: facts.revokedDocumentReads,
       systemRole,
     },
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.

@@ -21,6 +21,7 @@ import {
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
+  RevokedDocumentResultFilter,
   StaleToolResultTrimProcessor,
   SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
@@ -201,6 +202,7 @@ export class MessagesEngine {
       agentGroup,
       agentDocuments,
       agentDocumentChanges,
+      revokedDocumentReads,
       planTodo,
       userMemory,
       initialContext,
@@ -566,6 +568,13 @@ export class MessagesEngine {
       // Task-callback cards: surface a finished task's handoff as a user turn
       // so the creator agent reads it and continues
       new TaskCallbackMessageProcessor(),
+      // Revoked document reads — withholds historical readKnowledge /
+      // readDocument bodies of documents deleted or disabled since they were
+      // read, so a removed standing rule stops steering the agent. MUST run
+      // AFTER the flatten steps (nested tool results become `role: 'tool'`
+      // rows there) and BEFORE the group role transforms below, which fold
+      // other members' results into user text and drop `plugin`.
+      new RevokedDocumentResultFilter({ revokedDocumentReads }),
       // Supervisor role restore
       new SupervisorRoleRestoreProcessor(),
       // Compressed group role transform

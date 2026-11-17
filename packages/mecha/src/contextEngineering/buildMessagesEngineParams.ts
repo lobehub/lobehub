@@ -84,6 +84,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     historyCount: agent.historyCount,
     inputTemplate: agent.inputTemplate,
     knowledge: agent.knowledge,
+    ...(agent.revokedDocumentReads?.length && { revokedDocumentReads: agent.revokedDocumentReads }),
     systemRole: agent.systemRole,
 
     // --- model ---
