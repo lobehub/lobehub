@@ -36,7 +36,10 @@ export const githubPushShellWorkScanner: ShellWorkScanner = {
           cumulativeUsage: input.cumulativeUsage,
           identifier,
           messageId: input.messageId,
-          ...(pullRequest.headRef ? { metadata: { headBranch: pullRequest.headRef } } : {}),
+          metadata: {
+            ...(pullRequest.headRef ? { headBranch: pullRequest.headRef } : {}),
+            pullRequestLink: 'push',
+          },
           patchFields: pullRequest.title ? ['identifier', 'title', 'url'] : ['identifier', 'url'],
           resourceId: identifier,
           resourceType: 'github_pull_request',

@@ -81,7 +81,7 @@ describe('registerShellWorks · pull request linking', () => {
       expect.objectContaining({
         changeType: 'updated',
         messageId: 'm1',
-        metadata: { headBranch: 'feat/x' },
+        metadata: { headBranch: 'feat/x', pullRequestLink: 'push' },
         patchFields: ['identifier', 'title', 'url'],
         resourceId: 'lobehub/lobehub#12',
         resourceType: 'github_pull_request',
