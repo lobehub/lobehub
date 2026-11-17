@@ -4,6 +4,8 @@ export type ClientOptions = {
     baseUrl: 'https://app.lobehub.com' | (string & {});
 };
 
+export type Webhooks = PostRunStartedWebhookRequest | PostRunCompletedWebhookRequest | PostRunFailedWebhookRequest | PostRunInterventionRequestedWebhookRequest | PostMessageCreatedWebhookRequest | PostTopicCreatedWebhookRequest | PostTaskStatusChangedWebhookRequest | PostGoalStatusChangedWebhookRequest | PostFileParsedWebhookRequest | PostNotificationCreatedWebhookRequest | PostWebhookTestWebhookRequest;
+
 export type ApiError = {
     code: ApiErrorCode;
     details?: Array<{
@@ -226,7 +228,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write'> | null;
     updatedAt: string;
 };
 
@@ -237,7 +239,7 @@ export type CreatedApiKey = {
     id: string;
     lastUsedAt: string | null;
     name: string;
-    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write'> | null;
+    scopes: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write'> | null;
     updatedAt: string;
     key: string;
 };
@@ -3069,6 +3071,461 @@ export type Usage = {
     }>;
 };
 
+export type Webhook = {
+    /**
+     * Deliveries in a row that exhausted their retries since the last success.
+     */
+    consecutiveFailures: number;
+    createdAt: string;
+    description: string | null;
+    /**
+     * Why the endpoint stopped receiving events: turned off by hand, or after too many failed deliveries. `null` while enabled.
+     */
+    disabledReason: 'manual' | 'consecutive_failures' | null;
+    enabled: boolean;
+    events: Array<'run.started' | 'run.completed' | 'run.failed' | 'run.intervention_requested' | 'message.created' | 'topic.created' | 'task.status_changed' | 'goal.status_changed' | 'file.parsed' | 'notification.created'>;
+    /**
+     * `whk_…`
+     */
+    id: string;
+    /**
+     * When a delivery last settled (succeeded or ran out of retries).
+     */
+    lastDeliveryAt: string | null;
+    /**
+     * Last characters of the signing secret, to tell secrets apart.
+     */
+    secretHint: string;
+    updatedAt: string;
+    url: string;
+    workspaceId: string | null;
+};
+
+export type WebhookWithSecret = {
+    /**
+     * Deliveries in a row that exhausted their retries since the last success.
+     */
+    consecutiveFailures: number;
+    createdAt: string;
+    description: string | null;
+    /**
+     * Why the endpoint stopped receiving events: turned off by hand, or after too many failed deliveries. `null` while enabled.
+     */
+    disabledReason: 'manual' | 'consecutive_failures' | null;
+    enabled: boolean;
+    events: Array<'run.started' | 'run.completed' | 'run.failed' | 'run.intervention_requested' | 'message.created' | 'topic.created' | 'task.status_changed' | 'goal.status_changed' | 'file.parsed' | 'notification.created'>;
+    /**
+     * `whk_…`
+     */
+    id: string;
+    /**
+     * When a delivery last settled (succeeded or ran out of retries).
+     */
+    lastDeliveryAt: string | null;
+    /**
+     * Last characters of the signing secret, to tell secrets apart.
+     */
+    secretHint: string;
+    updatedAt: string;
+    url: string;
+    workspaceId: string | null;
+    /**
+     * The signing secret (`whsec_…`). Returned only by create and rotate-secret: store it now.
+     */
+    secret: string;
+};
+
+export type WebhookDelivery = {
+    /**
+     * Attempts made so far, the first one included.
+     */
+    attempts: number;
+    createdAt: string;
+    deliveredAt: string | null;
+    /**
+     * Duration of the latest attempt.
+     */
+    durationMs: number | null;
+    /**
+     * Why the latest attempt failed (HTTP status, timeout, blocked address).
+     */
+    error: string | null;
+    eventId: string;
+    eventType: 'run.started' | 'run.completed' | 'run.failed' | 'run.intervention_requested' | 'message.created' | 'topic.created' | 'task.status_changed' | 'goal.status_changed' | 'file.parsed' | 'notification.created' | 'webhook.test';
+    /**
+     * `whd_…`; sent as the `X-LobeHub-Delivery-Id` header.
+     */
+    id: string;
+    /**
+     * When the next retry is due.
+     */
+    nextAttemptAt: string | null;
+    payload: WebhookEvent;
+    /**
+     * The delivery this one resends.
+     */
+    redeliveryOf: string | null;
+    /**
+     * Start of the response body of the latest attempt.
+     */
+    responseBody: string | null;
+    responseStatus: number | null;
+    status: 'pending' | 'retrying' | 'succeeded' | 'failed';
+    webhookId: string;
+};
+
+/**
+ * The JSON body of a delivery, discriminated by `type`. See the top-level `webhooks` section for each event.
+ */
+export type WebhookEvent = WebhookRunStartedEvent | WebhookRunCompletedEvent | WebhookRunFailedEvent | WebhookRunInterventionRequestedEvent | WebhookMessageCreatedEvent | WebhookTopicCreatedEvent | WebhookTaskStatusChangedEvent | WebhookGoalStatusChangedEvent | WebhookFileParsedEvent | WebhookNotificationCreatedEvent | WebhookTestEvent;
+
+/**
+ * An agent run started.
+ */
+export type WebhookRunStartedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookRunStartedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'run.started';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookRunStartedEventData = {
+    /**
+     * Agent that ran
+     */
+    agentId: string | null;
+    /**
+     * Run id (the agent operation id)
+     */
+    runId: string;
+    /**
+     * Topic the run wrote to
+     */
+    topicId: string | null;
+};
+
+/**
+ * An agent run finished.
+ */
+export type WebhookRunCompletedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookRunCompletedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'run.completed';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookRunCompletedEventData = {
+    /**
+     * Agent that ran
+     */
+    agentId: string | null;
+    /**
+     * Run id (the agent operation id)
+     */
+    runId: string;
+    /**
+     * Topic the run wrote to
+     */
+    topicId: string | null;
+    /**
+     * Final assistant message of the run
+     */
+    assistantMessageId: string | null;
+    /**
+     * LLM calls the run made
+     */
+    steps: number;
+};
+
+/**
+ * An agent run ended with an error.
+ */
+export type WebhookRunFailedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookRunFailedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'run.failed';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookRunFailedEventData = {
+    /**
+     * Agent that ran
+     */
+    agentId: string | null;
+    /**
+     * Run id (the agent operation id)
+     */
+    runId: string;
+    /**
+     * Topic the run wrote to
+     */
+    topicId: string | null;
+    /**
+     * Error message, when the runtime recorded one
+     */
+    error: string | null;
+};
+
+/**
+ * An agent run paused for a person: a tool call waits for approval or an answer.
+ */
+export type WebhookRunInterventionRequestedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookRunInterventionRequestedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'run.intervention_requested';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookRunInterventionRequestedEventData = {
+    /**
+     * Agent that ran
+     */
+    agentId: string | null;
+    /**
+     * Run id (the agent operation id)
+     */
+    runId: string;
+    /**
+     * Topic the run wrote to
+     */
+    topicId: string | null;
+};
+
+/**
+ * A message was written to a conversation.
+ */
+export type WebhookMessageCreatedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookMessageCreatedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'message.created';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookMessageCreatedEventData = {
+    agentId: string | null;
+    messageId: string;
+    /**
+     * `user`, `assistant`, `tool`, …
+     */
+    role: string;
+    threadId: string | null;
+    topicId: string | null;
+};
+
+/**
+ * A conversation topic was created.
+ */
+export type WebhookTopicCreatedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookTopicCreatedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'topic.created';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookTopicCreatedEventData = {
+    agentId: string | null;
+    title: string | null;
+    topicId: string;
+};
+
+/**
+ * A task moved to another status.
+ */
+export type WebhookTaskStatusChangedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookTaskStatusChangedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'task.status_changed';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookTaskStatusChangedEventData = {
+    /**
+     * Human-readable task id, e.g. `T-12`
+     */
+    identifier: string | null;
+    previousStatus: string | null;
+    status: string;
+    taskId: string;
+};
+
+/**
+ * A goal moved to another status.
+ */
+export type WebhookGoalStatusChangedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookGoalStatusChangedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'goal.status_changed';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookGoalStatusChangedEventData = {
+    goalId: string;
+    previousStatus: string | null;
+    status: string;
+};
+
+/**
+ * A file finished parsing into chunks (successfully or not).
+ */
+export type WebhookFileParsedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookFileParsedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'file.parsed';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookFileParsedEventData = {
+    /**
+     * Why parsing failed; `null` on success
+     */
+    error: string | null;
+    fileId: string;
+    name: string | null;
+    status: 'success' | 'error';
+};
+
+/**
+ * An inbox notification was created for the owner.
+ */
+export type WebhookNotificationCreatedEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookNotificationCreatedEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'notification.created';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookNotificationCreatedEventData = {
+    category: string;
+    notificationId: string;
+    title: string | null;
+    type: string;
+};
+
+/**
+ * Sent by `POST /webhooks/{id}/test` to check an endpoint.
+ */
+export type WebhookTestEvent = {
+    /**
+     * When the event happened.
+     */
+    createdAt: string;
+    data: WebhookTestEventData;
+    /**
+     * `evt_…`; stays the same across retries and redeliveries — dedupe on it.
+     */
+    id: string;
+    type: 'webhook.test';
+    /**
+     * Workspace the event happened in; `null` for a personal space.
+     */
+    workspaceId: string | null;
+};
+
+export type WebhookTestEventData = {
+    message: string;
+    webhookId: string;
+};
+
 /**
  * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
  */
@@ -4405,7 +4862,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'agent:credential:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write' | 'run:read' | 'run:write' | 'webhook:read' | 'webhook:write'> | null;
     };
     headers?: {
         /**
@@ -15700,3 +16157,689 @@ export type GetApiV1UsageResponses = {
 };
 
 export type GetApiV1UsageResponse = GetApiV1UsageResponses[keyof GetApiV1UsageResponses];
+
+export type GetApiV1WebhooksData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/webhooks';
+};
+
+export type GetApiV1WebhooksErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1WebhooksError = GetApiV1WebhooksErrors[keyof GetApiV1WebhooksErrors];
+
+export type GetApiV1WebhooksResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<Webhook>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1WebhooksResponse = GetApiV1WebhooksResponses[keyof GetApiV1WebhooksResponses];
+
+export type PostApiV1WebhooksData = {
+    body: {
+        description?: string | null;
+        /**
+         * Defaults to `true`.
+         */
+        enabled?: boolean;
+        /**
+         * Event types this endpoint receives. Duplicates are ignored.
+         */
+        events: Array<'run.started' | 'run.completed' | 'run.failed' | 'run.intervention_requested' | 'message.created' | 'topic.created' | 'task.status_changed' | 'goal.status_changed' | 'file.parsed' | 'notification.created'>;
+        /**
+         * Where deliveries are POSTed. Must be an http(s) URL reachable from the internet.
+         */
+        url: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/webhooks';
+};
+
+export type PostApiV1WebhooksErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1WebhooksError = PostApiV1WebhooksErrors[keyof PostApiV1WebhooksErrors];
+
+export type PostApiV1WebhooksResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: WebhookWithSecret;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1WebhooksResponse = PostApiV1WebhooksResponses[keyof PostApiV1WebhooksResponses];
+
+export type DeleteApiV1WebhooksByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/webhooks/{id}';
+};
+
+export type DeleteApiV1WebhooksByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1WebhooksByIdError = DeleteApiV1WebhooksByIdErrors[keyof DeleteApiV1WebhooksByIdErrors];
+
+export type DeleteApiV1WebhooksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1WebhooksByIdResponse = DeleteApiV1WebhooksByIdResponses[keyof DeleteApiV1WebhooksByIdResponses];
+
+export type GetApiV1WebhooksByIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/webhooks/{id}';
+};
+
+export type GetApiV1WebhooksByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1WebhooksByIdError = GetApiV1WebhooksByIdErrors[keyof GetApiV1WebhooksByIdErrors];
+
+export type GetApiV1WebhooksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Webhook;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1WebhooksByIdResponse = GetApiV1WebhooksByIdResponses[keyof GetApiV1WebhooksByIdResponses];
+
+export type PatchApiV1WebhooksByIdData = {
+    body: {
+        description?: string | null;
+        /**
+         * Turning an endpoint back on also clears its failure streak and `disabledReason`.
+         */
+        enabled?: boolean;
+        /**
+         * Event types this endpoint receives. Duplicates are ignored.
+         */
+        events?: Array<'run.started' | 'run.completed' | 'run.failed' | 'run.intervention_requested' | 'message.created' | 'topic.created' | 'task.status_changed' | 'goal.status_changed' | 'file.parsed' | 'notification.created'>;
+        /**
+         * Where deliveries are POSTed. Must be an http(s) URL reachable from the internet.
+         */
+        url?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/webhooks/{id}';
+};
+
+export type PatchApiV1WebhooksByIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1WebhooksByIdError = PatchApiV1WebhooksByIdErrors[keyof PatchApiV1WebhooksByIdErrors];
+
+export type PatchApiV1WebhooksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Webhook;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1WebhooksByIdResponse = PatchApiV1WebhooksByIdResponses[keyof PatchApiV1WebhooksByIdResponses];
+
+export type PostApiV1WebhooksByIdRotateSecretData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/webhooks/{id}/rotate-secret';
+};
+
+export type PostApiV1WebhooksByIdRotateSecretErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1WebhooksByIdRotateSecretError = PostApiV1WebhooksByIdRotateSecretErrors[keyof PostApiV1WebhooksByIdRotateSecretErrors];
+
+export type PostApiV1WebhooksByIdRotateSecretResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: WebhookWithSecret;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1WebhooksByIdRotateSecretResponse = PostApiV1WebhooksByIdRotateSecretResponses[keyof PostApiV1WebhooksByIdRotateSecretResponses];
+
+export type PostApiV1WebhooksByIdTestData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/webhooks/{id}/test';
+};
+
+export type PostApiV1WebhooksByIdTestErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1WebhooksByIdTestError = PostApiV1WebhooksByIdTestErrors[keyof PostApiV1WebhooksByIdTestErrors];
+
+export type PostApiV1WebhooksByIdTestResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: WebhookDelivery;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1WebhooksByIdTestResponse = PostApiV1WebhooksByIdTestResponses[keyof PostApiV1WebhooksByIdTestResponses];
+
+export type GetApiV1WebhooksByIdDeliveriesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        /**
+         * Page size, 1–100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/webhooks/{id}/deliveries';
+};
+
+export type GetApiV1WebhooksByIdDeliveriesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1WebhooksByIdDeliveriesError = GetApiV1WebhooksByIdDeliveriesErrors[keyof GetApiV1WebhooksByIdDeliveriesErrors];
+
+export type GetApiV1WebhooksByIdDeliveriesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: {
+            items: Array<WebhookDelivery>;
+            hasMore: PageHasMore;
+            nextCursor: PageNextCursor;
+            total: PageTotal;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1WebhooksByIdDeliveriesResponse = GetApiV1WebhooksByIdDeliveriesResponses[keyof GetApiV1WebhooksByIdDeliveriesResponses];
+
+export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        deliveryId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/webhooks/{id}/deliveries/{deliveryId}/redeliver';
+};
+
+export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverError = PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverErrors[keyof PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverErrors];
+
+export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data: WebhookDelivery;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponse = PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponses[keyof PostApiV1WebhooksByIdDeliveriesByDeliveryIdRedeliverResponses];
+
+export type PostRunStartedWebhookPayload = WebhookRunStartedEvent;
+
+export type PostRunStartedWebhookRequest = {
+    body: PostRunStartedWebhookPayload;
+    key: 'run.started';
+    path?: never;
+    query?: never;
+};
+
+export type PostRunCompletedWebhookPayload = WebhookRunCompletedEvent;
+
+export type PostRunCompletedWebhookRequest = {
+    body: PostRunCompletedWebhookPayload;
+    key: 'run.completed';
+    path?: never;
+    query?: never;
+};
+
+export type PostRunFailedWebhookPayload = WebhookRunFailedEvent;
+
+export type PostRunFailedWebhookRequest = {
+    body: PostRunFailedWebhookPayload;
+    key: 'run.failed';
+    path?: never;
+    query?: never;
+};
+
+export type PostRunInterventionRequestedWebhookPayload = WebhookRunInterventionRequestedEvent;
+
+export type PostRunInterventionRequestedWebhookRequest = {
+    body: PostRunInterventionRequestedWebhookPayload;
+    key: 'run.intervention_requested';
+    path?: never;
+    query?: never;
+};
+
+export type PostMessageCreatedWebhookPayload = WebhookMessageCreatedEvent;
+
+export type PostMessageCreatedWebhookRequest = {
+    body: PostMessageCreatedWebhookPayload;
+    key: 'message.created';
+    path?: never;
+    query?: never;
+};
+
+export type PostTopicCreatedWebhookPayload = WebhookTopicCreatedEvent;
+
+export type PostTopicCreatedWebhookRequest = {
+    body: PostTopicCreatedWebhookPayload;
+    key: 'topic.created';
+    path?: never;
+    query?: never;
+};
+
+export type PostTaskStatusChangedWebhookPayload = WebhookTaskStatusChangedEvent;
+
+export type PostTaskStatusChangedWebhookRequest = {
+    body: PostTaskStatusChangedWebhookPayload;
+    key: 'task.status_changed';
+    path?: never;
+    query?: never;
+};
+
+export type PostGoalStatusChangedWebhookPayload = WebhookGoalStatusChangedEvent;
+
+export type PostGoalStatusChangedWebhookRequest = {
+    body: PostGoalStatusChangedWebhookPayload;
+    key: 'goal.status_changed';
+    path?: never;
+    query?: never;
+};
+
+export type PostFileParsedWebhookPayload = WebhookFileParsedEvent;
+
+export type PostFileParsedWebhookRequest = {
+    body: PostFileParsedWebhookPayload;
+    key: 'file.parsed';
+    path?: never;
+    query?: never;
+};
+
+export type PostNotificationCreatedWebhookPayload = WebhookNotificationCreatedEvent;
+
+export type PostNotificationCreatedWebhookRequest = {
+    body: PostNotificationCreatedWebhookPayload;
+    key: 'notification.created';
+    path?: never;
+    query?: never;
+};
+
+export type PostWebhookTestWebhookPayload = WebhookTestEvent;
+
+export type PostWebhookTestWebhookRequest = {
+    body: PostWebhookTestWebhookPayload;
+    key: 'webhook.test';
+    path?: never;
+    query?: never;
+};

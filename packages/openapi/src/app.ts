@@ -1,3 +1,6 @@
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { Scalar } from '@scalar/hono-api-reference';
 import type { Context } from 'hono';
 import { Hono } from 'hono';

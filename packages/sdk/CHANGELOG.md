@@ -4,6 +4,13 @@ All notable changes to `@lobehub/sdk`. The format follows [Keep a Changelog](htt
 
 Each release sorts its entries into `### Breaking`, `### Added`, `### Changed` and `### Fixed`. A `Breaking` entry needs a major bump and an `Added` one at least a minor bump; the release workflow refuses to publish a version whose bump is smaller than its section requires (see "Releasing" in the README).
 
+## \[1.2.0] - 2026-11-18
+
+### Added
+
+- `lobehub.webhooks`: register developer webhook endpoints (`create`, `list`, `get`, `update`, `delete`), rotate their signing secret (`rotateSecret`), send a test event (`test`), and read or resend deliveries (`listDeliveries`, `redeliver`).
+- `verifyWebhookSignature()` and `constructWebhookEvent()` check a delivery's `X-LobeHub-Signature` (HMAC-SHA256 over `<timestamp>.<raw body>`, constant-time, several `v1=` values accepted) and its `X-LobeHub-Timestamp` (5-minute tolerance by default) with Web Crypto, then parse the body into the typed `WebhookEvent` union. Also exported: `WEBHOOK_EVENT_TYPES`, `WEBHOOK_HEADERS`, `WebhookEventType`, `WebhookEventOf<T>`, `WebhookEventData<T>` and `WebhookSignatureVerificationError`.
+
 ## \[1.1.0] - 2026-11-17
 
 First semver release. Versions before it were published as `1.0.<UTC timestamp>` on every push.

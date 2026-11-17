@@ -76,6 +76,7 @@ type ScopeGroupKey =
   | 'run'
   | 'usage'
   | 'user'
+  | 'webhook'
   | 'workspace';
 
 /**
@@ -138,6 +139,13 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
   },
   { key: 'mcp', label: 'apikey.scopes.groups.mcp', read: 'mcp:read', write: 'mcp:write' },
   { key: 'usage', label: 'apikey.scopes.groups.usage', read: 'usage:read' },
+  // Developer webhook endpoints and their delivery log (`/api/v1/webhooks`).
+  {
+    key: 'webhook',
+    label: 'apikey.scopes.groups.webhook',
+    read: 'webhook:read',
+    write: 'webhook:write',
+  },
   {
     key: 'workspace',
     label: 'apikey.scopes.groups.workspace',

@@ -20,3 +20,20 @@ export type { ServerSentEvent } from './streaming';
 export { parseServerSentEvents, ResponseStream } from './streaming';
 export { DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, IDEMPOTENCY_KEY_HEADER } from './transport';
 export type { Uploadable, UploadOptions } from './uploads';
+export type {
+  VerifyWebhookSignatureOptions,
+  WebhookDeliveryEventType,
+  WebhookEventData,
+  WebhookEventOf,
+  WebhookEventType,
+  WebhookHeaders,
+  WebhookSignatureErrorCode,
+} from './webhooks';
+export {
+  constructWebhookEvent,
+  DEFAULT_WEBHOOK_TOLERANCE_SECONDS,
+  verifyWebhookSignature,
+  WEBHOOK_EVENT_TYPES,
+  WEBHOOK_HEADERS,
+  WebhookSignatureVerificationError,
+} from './webhooks';

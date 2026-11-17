@@ -64,6 +64,13 @@ export const API_KEY_SCOPES = [
    */
   'run:read',
   'run:write',
+  /**
+   * Developer webhooks over the public REST API (`/api/v1/webhooks`): reading
+   * endpoints and their delivery log, and managing them (create, update,
+   * delete, rotate the signing secret, send a test, redeliver).
+   */
+  'webhook:read',
+  'webhook:write',
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
@@ -252,6 +259,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   dashboard: rw('agent:read', null),
   device: 'blocked',
   deviceMetric: 'blocked',
+  // the settings page for developer webhooks: same scopes as `/api/v1/webhooks`
+  developerWebhook: rw('webhook:read', 'webhook:write'),
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),

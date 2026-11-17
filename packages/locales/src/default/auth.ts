@@ -80,6 +80,7 @@ export default {
   'apikey.scopes.groups.run': 'Agent runs',
   'apikey.scopes.groups.usage': 'Usage',
   'apikey.scopes.groups.user': 'User',
+  'apikey.scopes.groups.webhook': 'Webhooks',
   'apikey.scopes.groups.workspace': 'Workspace',
   'apikey.scopes.invoke': 'Invoke',
   'apikey.scopes.modelInvoke': 'Invoke models',

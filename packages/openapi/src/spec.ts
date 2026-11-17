@@ -16,6 +16,7 @@ import { REQUIRED_SCOPES_EXTENSION } from './middleware/permission-check';
 import { RATE_LIMIT_HEADERS } from './middleware/rate-limit';
 import { REQUEST_ID_HEADER } from './middleware/request-id';
 import { OPENAPI_WORKSPACE_HEADER } from './middleware/workspace';
+import { addWebhookEvents } from './webhook-spec';
 
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
@@ -314,6 +315,9 @@ export const collectSpecDocument = async (app: GenerateSpecsApp) => {
       }
     }
   }
+
+  // Outbound events LobeHub POSTs to registered endpoints (OpenAPI 3.1 `webhooks`).
+  addWebhookEvents(spec as Parameters<typeof addWebhookEvents>[0]);
 
   return { invalid, spec, undocumented };
 };
