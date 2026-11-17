@@ -15,18 +15,20 @@ function createStatefulRedis() {
   const lists = new Map<string, string[]>();
   /** Set to lose every acknowledgement, the way a crash between the run and the `LREM` would. */
   const faults = { loseAcks: false };
-  const hashes = new Map<string, Map<string, number>>();
+  const counters = new Map<string, number>();
+  const ttls = new Map<string, number>();
   const list = (key: string) => {
     if (!lists.has(key)) lists.set(key, []);
     return lists.get(key)!;
   };
   const commands = {
-    expire: () => 1,
-    hincrby: (key: string, field: string, by: number) => {
-      if (!hashes.has(key)) hashes.set(key, new Map());
-      const hash = hashes.get(key)!;
-      const next = (hash.get(field) ?? 0) + by;
-      hash.set(field, next);
+    expire: (key: string, seconds: number) => {
+      ttls.set(key, seconds);
+      return 1;
+    },
+    incrby: (key: string, by: number) => {
+      const next = (counters.get(key) ?? 0) + by;
+      counters.set(key, next);
       return next;
     },
     lrem: (key: string, count: number, value: string) => {
@@ -47,13 +49,12 @@ function createStatefulRedis() {
     rpush: (key: string, ...values: string[]) => list(key).push(...values),
   };
   return {
+    counters,
     faults,
-    hmget: async (key: string, ...fields: string[]) =>
-      fields.map((field) => {
-        const count = hashes.get(key)?.get(field);
-        return count === undefined ? null : String(count);
-      }),
     lists,
+    mget: async (...keys: string[]) =>
+      keys.map((key) => (counters.has(key) ? String(counters.get(key)) : null)),
+    ttls,
     lrange: async (key: string) => [...list(key)],
     multi: () => {
       const queued: Array<() => unknown> = [];
@@ -192,5 +193,22 @@ describe('deferred replay loop', () => {
     expect(replay).toHaveBeenCalledTimes(MAX_REPLAYS_PER_MESSAGE + 3);
     expect(replay.mock.lastCall?.[0].map((entry: { id: string }) => entry.id)).toEqual(['om_1']);
     expect(redis.lists.get(KEY)).toEqual([]);
+  });
+
+  it('keeps each message counter under its own TTL instead of one per-thread record', async () => {
+    const replay = vi.fn().mockResolvedValue(undefined);
+    for (const id of ['om_1', 'om_2']) {
+      await deferBotMessages('app-1', 'feishu:group:oc_1', [asMessage(id)]);
+      await replayDeferredBotMessages('app-1', 'feishu:group:oc_1', replay);
+    }
+
+    // Traffic on the thread only refreshes the counter of the message it replays, so an old
+    // message's counter still expires while the thread stays busy.
+    const counterKeys = [...redis.counters.keys()];
+    expect(counterKeys).toEqual([
+      'bot:deferred-replays:app-1:feishu:group:oc_1:om_1',
+      'bot:deferred-replays:app-1:feishu:group:oc_1:om_2',
+    ]);
+    for (const key of counterKeys) expect(redis.ttls.get(key)).toBe(30 * 60);
   });
 });

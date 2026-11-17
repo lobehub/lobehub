@@ -50,9 +50,15 @@ export const buildDeferredMessagesKey = (applicationId: string, platformThreadId
  */
 export const MAX_REPLAYS_PER_MESSAGE = 3;
 
-/** Per-thread hash of replay counts, keyed by the message's origin id. */
-export const buildReplayCountKey = (applicationId: string, platformThreadId: string): string =>
-  `bot:deferred-replays:${applicationId}:${platformThreadId}`;
+/**
+ * One counter per origin message, each with its own TTL: a thread that keeps replaying traffic
+ * must not keep every past message's counter alive, so they expire one by one.
+ */
+export const buildReplayCountKey = (
+  applicationId: string,
+  platformThreadId: string,
+  originMessageId: string,
+): string => `bot:deferred-replays:${applicationId}:${platformThreadId}:${originMessageId}`;
 
 /**
  * Whether deferral is available at all — it needs Redis because the replay
@@ -88,11 +94,13 @@ export async function deferBotMessages(
     // A replay parked again was delivered without running: give back the lap its delivery is
     // about to be counted for, so waiting behind other senders never spends the budget.
     const reparked = messages.filter((message) => isReplayMessage(message));
-    if (reparked.length > 0) {
-      const countKey = buildReplayCountKey(applicationId, platformThreadId);
-      for (const message of reparked)
-        transaction.hincrby(countKey, getOriginMessageId(message), -1);
-      transaction.expire(countKey, TTL_SECONDS);
+    for (const message of reparked) {
+      const countKey = buildReplayCountKey(
+        applicationId,
+        platformThreadId,
+        getOriginMessageId(message),
+      );
+      transaction.incrby(countKey, -1).expire(countKey, TTL_SECONDS);
     }
     const results = await transaction.exec();
     const failure = results?.find(([error]) => error)?.[0];
@@ -171,9 +179,10 @@ const withinReplayBudget = async (
   const redis = getAgentRuntimeRedisClient();
   if (!redis || messages.length === 0) return messages;
   try {
-    const counts = await redis.hmget(
-      buildReplayCountKey(applicationId, platformThreadId),
-      ...messages.map((message) => getOriginMessageId(message)),
+    const counts = await redis.mget(
+      ...messages.map((message) =>
+        buildReplayCountKey(applicationId, platformThreadId, getOriginMessageId(message)),
+      ),
     );
     return messages.filter((message, index) => {
       // No count (never replayed, or a missing reply) is not evidence of a loop.
@@ -200,11 +209,12 @@ const recordReplays = async (
 ): Promise<void> => {
   const redis = getAgentRuntimeRedisClient();
   if (!redis || messages.length === 0) return;
-  const key = buildReplayCountKey(applicationId, platformThreadId);
   try {
     const transaction = redis.multi();
-    for (const message of messages) transaction.hincrby(key, getOriginMessageId(message), 1);
-    transaction.expire(key, TTL_SECONDS);
+    for (const message of messages) {
+      const key = buildReplayCountKey(applicationId, platformThreadId, getOriginMessageId(message));
+      transaction.incrby(key, 1).expire(key, TTL_SECONDS);
+    }
     await transaction.exec();
   } catch (error) {
     log('Could not count replays for thread=%s: %O', platformThreadId, error);

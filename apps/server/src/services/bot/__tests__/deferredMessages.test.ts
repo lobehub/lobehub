@@ -18,7 +18,7 @@ const {
 function createRedis(execResult: unknown = []) {
   const calls: Array<[string, ...unknown[]]> = [];
   const chain: any = {};
-  for (const cmd of ['rpush', 'ltrim', 'expire', 'lrem', 'hincrby']) {
+  for (const cmd of ['rpush', 'ltrim', 'expire', 'lrem', 'incrby']) {
     chain[cmd] = vi.fn((...args: unknown[]) => {
       calls.push([cmd, ...args]);
       return chain;
@@ -28,7 +28,7 @@ function createRedis(execResult: unknown = []) {
   return {
     calls,
     chain,
-    hmget: vi.fn().mockResolvedValue([]),
+    mget: vi.fn().mockResolvedValue([]),
     lrange: vi.fn().mockResolvedValue([]),
     multi: vi.fn(() => chain),
   };
