@@ -89,6 +89,16 @@ describe('buildMessagesEngineParams', () => {
     expect(disabled.enableStaleToolResultTrim).toBe(false);
   });
 
+  it('maps the Channel turn compaction flag through to the engine params', () => {
+    expect(buildMessagesEngineParams(baseSnapshot()).compactChannelTurns).toBeUndefined();
+
+    const channel = buildMessagesEngineParams({
+      ...baseSnapshot(),
+      agent: { ...baseSnapshot().agent, compactChannelTurns: true },
+    });
+    expect(channel.compactChannelTurns).toBe(true);
+  });
+
   it('renders placeholders from the run timezone and lets host variables win', () => {
     const generators = buildMessagesEngineParams({
       ...baseSnapshot(),

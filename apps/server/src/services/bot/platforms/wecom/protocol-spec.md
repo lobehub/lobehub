@@ -63,15 +63,15 @@
 
 ### 3.1 消息体（`aibot_msg_callback.body`）
 
-| 字段          | 说明                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------ |
-| `msgid`       | 本次回调唯一标识，作为 chat SDK `Message.id`                                                           |
-| `aibotid`     | 机器人 ID；与本 adapter 的 BotID 不一致的帧被忽略                                                      |
-| `chattype`    | `single` 单聊 / `group` 群聊                                                                           |
-| `chatid`      | 仅群聊有                                                                                               |
-| `from.userid` | 发送者。机器人创建者是超级管理员时为明文 userid，否则为 open\_userid（加密但对同一机器人稳定，未实测） |
-| `msgtype`     | `text` / `image` / `mixed` / `voice` / `file` / `video`                                                |
-| `quote`       | 引用的消息（可选）                                                                                     |
+| 字段          | 说明                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------- |
+| `msgid`       | 本次回调唯一标识，作为 chat SDK `Message.id`                                                          |
+| `aibotid`     | 机器人 ID；与本 adapter 的 BotID 不一致的帧被忽略                                                     |
+| `chattype`    | `single` 单聊 / `group` 群聊                                                                          |
+| `chatid`      | 仅群聊有                                                                                              |
+| `from.userid` | 发送者。机器人创建者是超级管理员时为明文 userid，否则为 open_userid（加密但对同一机器人稳定，未实测） |
+| `msgtype`     | `text` / `image` / `mixed` / `voice` / `file` / `video`                                               |
+| `quote`       | 引用的消息（可选）                                                                                    |
 
 群聊里只收得到 text /mixed/quote（官方文档）。语音到达时已转成文字（`voice.content`）。
 

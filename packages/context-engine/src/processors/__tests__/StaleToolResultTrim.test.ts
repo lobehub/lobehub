@@ -66,6 +66,25 @@ const createProcessor = () =>
   new StaleToolResultTrimProcessor({ keepRecentMessages: 3, minTotalToolChars: 0 });
 
 describe('StaleToolResultTrimProcessor', () => {
+  it('reduces old Channel history reads to a pointer, and keeps recent ones', async () => {
+    const page = 'Mia: we are fixing the parser\n'.repeat(200);
+    const messages = [
+      toolMessage('lobe-channel', 'readMessages', page),
+      toolMessage('lobe-channel', 'readMessage', page),
+      ...recencyPadding(3),
+      toolMessage('lobe-channel', 'readMessages', page),
+    ];
+
+    const result = await createProcessor().process(createContext(messages));
+
+    expect(result.messages[0].content).toBe(
+      '[Earlier lobe-channel.readMessages result trimmed. The Channel history it read is unchanged; call readMessages again if you need it.]',
+    );
+    expect(result.messages[1].content).toContain('lobe-channel.readMessage result trimmed');
+    expect(result.messages.at(-1)!.content).toBe(page);
+    expect(result.metadata.staleToolResultTrim?.byRule).toEqual({ staleChannelHistory: 2 });
+  });
+
   it('trims a readFile result superseded by a later write to the same path', async () => {
     const messages = [
       readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
