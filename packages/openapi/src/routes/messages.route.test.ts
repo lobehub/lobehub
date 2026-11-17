@@ -119,6 +119,11 @@ describe('message routes answer their documented payloads', () => {
     });
   });
 
+  it('DELETE /:id answers 404 for a message it did not delete', async () => {
+    const res = await request('/msg_missing', { method: 'DELETE' });
+    expect(res.status).toBe(404);
+  });
+
   it('DELETE / counts only the messages it actually removed', async () => {
     const res = await request('/', {
       body: { messageIds: ['msg_route_1', 'msg_route_2', 'msg_missing'] },

@@ -115,7 +115,12 @@ MessageRoutes.post(
 // DELETE /api/v1/messages/:id - Delete a single message (requires message delete permission)
 MessageRoutes.delete(
   '/:id',
-  routeDoc({ data: DeletedResourceSchema, summary: 'Delete a message', tags: ['messages'] }),
+  routeDoc({
+    data: DeletedResourceSchema,
+    errors: [404],
+    summary: 'Delete a message',
+    tags: ['messages'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('MESSAGE_DELETE'),

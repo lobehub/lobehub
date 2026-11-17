@@ -674,8 +674,10 @@ export class MessageService extends BaseService {
           .delete(messages)
           .where(and(...whereConditions))
           .returning({ id: messages.id });
+        // Only unlink files of a message this caller actually deleted.
+        if (rows.length === 0) return false;
         await trx.delete(messagesFiles).where(eq(messagesFiles.messageId, messageId));
-        return rows.length > 0;
+        return true;
       });
 
       this.log('info', '消息删除成功', { messageId, removed });

@@ -133,7 +133,8 @@ export class MessageController extends BaseController {
 
       const db = await this.getDatabase();
       const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
-      await messageService.deleteMessage(id);
+      const removed = await messageService.deleteMessage(id);
+      if (!removed) return this.error(c, 'Message not found', 404);
 
       return this.success<DeletedResource>(
         c,

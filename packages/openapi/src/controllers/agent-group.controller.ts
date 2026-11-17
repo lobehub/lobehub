@@ -118,8 +118,7 @@ export class AgentGroupController extends BaseController {
         this.getUserId(c),
         this.getWorkspaceId(c),
       );
-      await agentGroupService.updateAgentGroup(request);
-      const updated = await agentGroupService.getAgentGroupById(groupId);
+      const updated = await agentGroupService.updateAgentGroup(request);
 
       return this.success(c, updated, 'Agent category updated successfully');
     } catch (error) {
