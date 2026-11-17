@@ -1,7 +1,7 @@
 import { generateWorktreeBranchName } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { WorktreeStartRun } from '@lobechat/types';
-import { getWorkingDirEffectivePath, RequestTrigger, toComposerUserMessage } from '@lobechat/types';
+import type { ExecAgentResult, WorktreeStartRun } from '@lobechat/types';
+import { RequestTrigger, toComposerUserMessage } from '@lobechat/types';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
@@ -11,6 +11,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { scheduleWorktreeCleanup } from '@/server/services/worktreeCleanup';
 
 import { createFirstSendWorktree } from './createFirstSendWorktree';
 import type { WorktreeTurnJob } from './submitWorktreeTurn';
@@ -50,8 +51,14 @@ export const dispatchWorktreeTurn = async (
   // The reserved id is consumed by execAgent. A redelivered job must never
   // start a second turn after another worker has consumed that reservation.
   if (operation.status !== 'idle') {
-    const succeeded = operation.status === 'running' || operation.status === 'done';
-    return { error: succeeded ? undefined : operation.error?.message, success: succeeded };
+    const succeeded =
+      operation.status === 'done' || operation.metadata?.firstSendWorktreeHandedOff === true;
+    return {
+      error: succeeded
+        ? undefined
+        : (operation.error?.message ?? 'The queued turn could not be confirmed as dispatched.'),
+      success: succeeded,
+    };
   }
   let job = operation.metadata?.firstSendWorktree as WorktreeTurnJob | undefined;
   if (!job || job.userMessageId !== message.id)
@@ -106,27 +113,31 @@ export const dispatchWorktreeTurn = async (
     };
   }
 
-  const latest = await topics.findById(topic.id);
-  if (
-    latest?.status !== 'scheduled' ||
-    latest.isDeleted ||
-    latest.metadata?.scheduledRun?.claim?.id !== run.claim?.id
-  ) {
-    throw new Error('The queued worktree turn lost its dispatch claim.');
+  const { canDispatch, cleanupTrigger } = await topics.recordFirstSendWorktreeCheckout(topic.id, {
+    claimId: run.claim?.id,
+    deviceId,
+    workingDirectoryConfig: workingDirectory,
+  });
+  if (cleanupTrigger) {
+    scheduleWorktreeCleanup({
+      db,
+      topicIds: [topic.id],
+      trigger: cleanupTrigger,
+      userId,
+      workspaceId,
+    });
   }
   if (!job.checkout)
     await operations.mergeMetadata(operation.id, {
       firstSendWorktree: { ...job, checkout: workingDirectory },
     });
 
-  await topics.updateMetadata(topic.id, {
-    boundDeviceId: deviceId,
-    workingDirectory: getWorkingDirEffectivePath(workingDirectory),
-    workingDirectoryConfig: workingDirectory,
-  });
+  if (!canDispatch)
+    return { error: 'The queued worktree turn lost its dispatch claim.', success: false };
 
+  let result: ExecAgentResult;
   try {
-    return await new AiAgentService(db, userId, {
+    result = await new AiAgentService(db, userId, {
       withholdGatewayToken: true,
       workspaceId,
     }).execAgent({
@@ -154,11 +165,28 @@ export const dispatchWorktreeTurn = async (
     });
   } catch (error) {
     const current = await operations.findById(operation.id);
-    if (current?.status !== 'idle') throw error;
+    if (current?.status === 'done') return { success: true };
+    const reason = error instanceof Error ? error.message : String(error);
+    if (current?.status === 'running') {
+      if (!(await operations.recordDispatchFailure(operation.id, reason))) throw error;
+      await messages
+        .update(job.assistantMessageId, {
+          error: { message: reason, type: 'AgentRuntimeError' },
+        })
+        .catch((updateError) => {
+          console.error(
+            '[dispatchWorktreeTurn] could not update the failed assistant message',
+            updateError,
+          );
+        });
+    }
     return {
-      error: error instanceof Error ? error.message : String(error),
-      retryable: true,
+      error: reason,
+      retryable: current?.status === 'idle',
       success: false,
     };
   }
+  if (result.success)
+    await operations.mergeMetadata(operation.id, { firstSendWorktreeHandedOff: true });
+  return result;
 };

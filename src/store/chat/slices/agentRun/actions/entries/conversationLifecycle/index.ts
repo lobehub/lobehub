@@ -133,6 +133,7 @@ import { getOptimisticMessageMedia } from './optimisticMessageMedia';
 import { findRunningBlockingOp } from './queueBlockingOp';
 import { resolveSendProjectRun, resolveSendRunCwd, type SourceTopicDirectory } from './runCwd';
 import { showSendErrorInContext } from './sendErrorNotice';
+import { submitFirstSendWorktree } from './submitFirstSendWorktree';
 
 /**
  * Extended params for sendMessage with context
@@ -1216,58 +1217,41 @@ export class ConversationLifecycleActionImpl {
     }
 
     if (firstSendWorktree && willCreateNewTopic && ownerAgentId === agentId) {
-      try {
-        const { topic } = await aiAgentService.submitWorktreeTurn(
-          {
-            ...newTopicProject,
-            agentId,
-            assistantMessageId: tempAssistantId,
-            fileIds: fileIdList,
-            mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
-            prompt: message,
-            selectedSkillIds: selectedSkills.map(({ identifier }) => identifier),
-            selectedToolIds: selectedTools.map(({ identifier }) => identifier),
-            topicId: mintedTopicId ?? generateEntityId('topics'),
-            userInterventionConfig: resolveUserInterventionConfig(),
-            userMessage: toComposerUserMessage({ editorData, metadata: userMessageMetadata }),
-            userMessageId: tempId,
-            worktree: firstSendWorktree,
-          },
-          sendOriginWorkspaceId,
-        );
-        notifyMessagePersisted();
-        this.#get().internal_replaceTopicId({
-          ...optimisticTopicScope,
-          nextId: topic.id,
-          previousId: mintedTopicId ?? topic.id,
-          value: {
-            metadata: topic.metadata ?? undefined,
-            status: topic.status,
-            title: topic.title ?? undefined,
-          },
-        });
-        optimisticTopicActive = false;
-        cleanupTempMessages({ preserveOptimisticUser: true });
-        this.#get().completeOperation(operationId);
-        if (context.isolatedTopic) await onTopicCreated?.(topic.id);
-        return {
+      return submitFirstSendWorktree(this.#get, {
+        abandon: (error) => {
+          restoreComposerAfterFailedSend(error);
+          cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
+          detachUnacceptedCallerAbort();
+          rollbackOptimisticTopic('sendMessage/worktreeSubmissionFailed');
+          restoreUnacceptedVoiceMessageContext();
+        },
+        accepted: () => hasNotifiedMessageAccepted,
+        complete: () => {
+          optimisticTopicActive = false;
+          cleanupTempMessages({ preserveOptimisticUser: true });
+        },
+        mintedTopicId,
+        onMessagePersisted: notifyMessagePersisted,
+        onTopicCreated: context.isolatedTopic ? onTopicCreated : undefined,
+        operationId,
+        request: () => ({
+          ...newTopicProject,
+          agentId,
           assistantMessageId: tempAssistantId,
-          createdTopicId: topic.id,
+          fileIds: fileIdList,
+          mentionedAgents: hasMentionedAgents ? mentionedAgents : undefined,
+          prompt: message,
+          selectedSkillIds: selectedSkills.map(({ identifier }) => identifier),
+          selectedToolIds: selectedTools.map(({ identifier }) => identifier),
+          topicId: mintedTopicId ?? generateEntityId('topics'),
+          userInterventionConfig: resolveUserInterventionConfig(),
+          userMessage: toComposerUserMessage({ editorData, metadata: userMessageMetadata }),
           userMessageId: tempId,
-        };
-      } catch (error) {
-        if (hasNotifiedMessageAccepted) throw error;
-        this.#get().failOperation(operationId, {
-          message: error instanceof Error ? error.message : String(error),
-          type: 'GatewayError',
-        });
-        restoreComposerAfterFailedSend(error);
-        cleanupTempMessages({ preserveOptimisticUser: Boolean(optimisticUserMessageId) });
-        detachUnacceptedCallerAbort();
-        rollbackOptimisticTopic('sendMessage/worktreeSubmissionFailed');
-        restoreUnacceptedVoiceMessageContext();
-        return;
-      }
+          worktree: firstSendWorktree,
+        }),
+        scope: optimisticTopicScope,
+        workspaceId: sendOriginWorkspaceId,
+      });
     }
 
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──

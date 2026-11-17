@@ -13,25 +13,28 @@ const mocks = vi.hoisted(() => ({
   message: vi.fn(),
   mergeMetadata: vi.fn(),
   operation: vi.fn(),
-  topic: vi.fn(),
-  updateTopic: vi.fn(),
+  recordDispatchFailure: vi.fn(),
+  saveCheckout: vi.fn(),
+  scheduleCleanup: vi.fn(),
+  updateMessage: vi.fn(),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: class {
     findById = mocks.operation;
     mergeMetadata = mocks.mergeMetadata;
+    recordDispatchFailure = mocks.recordDispatchFailure;
   },
 }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: class {
     findById = mocks.message;
+    update = mocks.updateMessage;
   },
 }));
 vi.mock('@/database/models/topic', () => ({
   TopicModel: class {
-    findById = mocks.topic;
-    updateMetadata = mocks.updateTopic;
+    recordFirstSendWorktreeCheckout = mocks.saveCheckout;
   },
 }));
 vi.mock('@/server/services/aiAgent', () => ({
@@ -52,6 +55,9 @@ vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: { listGitBranches: mocks.listBranches },
 }));
 vi.mock('./createFirstSendWorktree', () => ({ createFirstSendWorktree: mocks.createCheckout }));
+vi.mock('@/server/services/worktreeCleanup', () => ({
+  scheduleWorktreeCleanup: mocks.scheduleCleanup,
+}));
 
 const now = '2026-11-17T18:00:00.000Z';
 const run: WorktreeStartRun = {
@@ -112,8 +118,10 @@ beforeEach(() => {
     userId: topic.userId,
   });
   mocks.devices.mockResolvedValue([{ deviceId: request.deviceId, online: true }]);
-  mocks.topic.mockResolvedValue(topic);
+  mocks.saveCheckout.mockResolvedValue({ canDispatch: true });
+  mocks.recordDispatchFailure.mockResolvedValue(true);
   mocks.mergeMetadata.mockResolvedValue(true);
+  mocks.updateMessage.mockResolvedValue(undefined);
   mocks.listBranches.mockResolvedValue([{ name: 'lobehub' }]);
   mocks.createCheckout.mockResolvedValue(checkout);
   mocks.execAgent.mockResolvedValue({ success: true });
@@ -173,10 +181,10 @@ describe('dispatchWorktreeTurn', () => {
       userId: topic.userId,
       workspaceId: undefined,
     });
-    expect(mocks.updateTopic).toHaveBeenCalledBefore(mocks.execAgent);
-    expect(mocks.updateTopic).toHaveBeenCalledWith(topic.id, {
-      boundDeviceId: request.deviceId,
-      workingDirectory: checkout.sessionPath,
+    expect(mocks.saveCheckout).toHaveBeenCalledBefore(mocks.execAgent);
+    expect(mocks.saveCheckout).toHaveBeenCalledWith(topic.id, {
+      claimId: run.claim!.id,
+      deviceId: request.deviceId,
       workingDirectoryConfig: checkout,
     });
     expect(mocks.execAgent).toHaveBeenCalledWith(
@@ -231,12 +239,63 @@ describe('dispatchWorktreeTurn', () => {
     });
   });
 
-  it('does not dispatch again when a prior delivery consumed the operation reservation', async () => {
+  it('does not report success or dispatch again for a consumed reservation without a handoff', async () => {
     mocks.operation.mockResolvedValue({ ...operation, status: 'running' });
-    await expect(dispatch()).resolves.toMatchObject({ success: true });
+    await expect(dispatch()).resolves.toMatchObject({ success: false });
     expect(mocks.createCheckout).not.toHaveBeenCalled();
     expect(mocks.execAgent).not.toHaveBeenCalled();
   });
+
+  it('uses the durable handoff receipt to acknowledge a redelivery', async () => {
+    await expect(dispatch()).resolves.toMatchObject({ success: true });
+    expect(mocks.mergeMetadata).toHaveBeenLastCalledWith(run.operationId, {
+      firstSendWorktreeHandedOff: true,
+    });
+    mocks.operation.mockResolvedValue({
+      ...operation,
+      metadata: { firstSendWorktreeHandedOff: true },
+      status: 'running',
+    });
+    await expect(dispatch()).resolves.toMatchObject({ success: true });
+    expect(mocks.execAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles a startup failure after consuming the reservation', async () => {
+    mocks.execAgent.mockImplementationOnce(async () => {
+      mocks.operation.mockResolvedValue({ ...operation, status: 'running' });
+      throw new Error('Could not prepare the resume session');
+    });
+
+    await expect(dispatch()).resolves.toMatchObject({
+      error: 'Could not prepare the resume session',
+      retryable: false,
+      success: false,
+    });
+    expect(mocks.recordDispatchFailure).toHaveBeenCalledWith(
+      run.operationId,
+      'Could not prepare the resume session',
+    );
+    expect(mocks.updateMessage).toHaveBeenCalledWith(
+      'msg_2',
+      expect.objectContaining({ error: expect.any(Object) }),
+    );
+  });
+
+  it.each(['archived', 'trashed'])(
+    'queues cleanup for a checkout completed after retirement (%s)',
+    async (trigger) => {
+      mocks.saveCheckout.mockResolvedValue({ canDispatch: false, cleanupTrigger: trigger });
+      await expect(dispatch()).resolves.toMatchObject({ success: false });
+      expect(mocks.scheduleCleanup).toHaveBeenCalledWith(
+        expect.objectContaining({ topicIds: [topic.id], trigger, userId: topic.userId }),
+      );
+      expect(mocks.mergeMetadata).toHaveBeenCalledWith(
+        run.operationId,
+        expect.objectContaining({ firstSendWorktree: expect.objectContaining({ checkout }) }),
+      );
+      expect(mocks.execAgent).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns the checkout error and leaves the saved message available', async () => {
     const error = new Error('Base branch no longer exists');
@@ -246,7 +305,7 @@ describe('dispatchWorktreeTurn', () => {
       retryable: true,
       success: false,
     });
-    expect(mocks.updateTopic).not.toHaveBeenCalled();
+    expect(mocks.saveCheckout).not.toHaveBeenCalled();
     expect(mocks.execAgent).not.toHaveBeenCalled();
   });
 });

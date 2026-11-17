@@ -8,7 +8,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicRepository } from '@/database/repositories/topic';
-import { agents, topics, users } from '@/database/schemas';
+import { agents, messages, topics, users } from '@/database/schemas';
 
 import { submitWorktreeTurn } from '../submitWorktreeTurn';
 
@@ -79,6 +79,26 @@ describe('submitWorktreeTurn', () => {
     expect((await topicModel.findById(input.topicId))?.metadata?.scheduledRun).toEqual(run);
   });
 
+  it('keeps the worktree request when the run consumes its reservation', async () => {
+    const input = request();
+    await submitWorktreeTurn(deps, input);
+    const operationId = `op_worktree_${input.topicId}`;
+    await operationModel.recordStart({
+      agentId,
+      metadata: { assistantMessageId: input.assistantMessageId },
+      operationId,
+      requireReservation: true,
+      topicId: input.topicId,
+    });
+    await expect(operationModel.findById(operationId)).resolves.toMatchObject({
+      metadata: {
+        assistantMessageId: input.assistantMessageId,
+        firstSendWorktree: { worktree: input.worktree },
+      },
+      status: 'running',
+    });
+  });
+
   it('persists the selected worktree device as explicit for later turns of an auto agent', async () => {
     const input = request();
     await submitWorktreeTurn(deps, input);
@@ -139,6 +159,84 @@ describe('submitWorktreeTurn', () => {
     });
     await expect(operationModel.findById(operationId)).resolves.toMatchObject({
       status: 'interrupted',
+    });
+  });
+
+  it.each(['archived', 'trashed'] as const)(
+    'records a late checkout for cleanup after the topic is %s',
+    async (trigger) => {
+      const input = request();
+      await submitWorktreeTurn(deps, input);
+      const now = new Date();
+      const claim = {
+        claimedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 5000).toISOString(),
+        id: 'checkout-worker',
+      };
+      await expect(TopicModel.claimScheduledTopic(db, input.topicId, claim, now)).resolves.toBe(
+        true,
+      );
+      await db
+        .update(topics)
+        .set(trigger === 'trashed' ? { isDeleted: true } : { status: 'completed' })
+        .where(eq(topics.id, input.topicId));
+      const path = '/checkout/late';
+      await expect(
+        topicModel.recordFirstSendWorktreeCheckout(input.topicId, {
+          claimId: claim.id,
+          deviceId: input.worktree.deviceId,
+          workingDirectoryConfig: {
+            git: {
+              activeWorktree: path,
+              autoCreated: true,
+              branch: 'lobehub/late',
+              ownerNonce: 'saved-nonce',
+            },
+            path: input.worktree.sourcePath,
+            repoType: 'git',
+            sessionPath: path,
+          },
+        }),
+      ).resolves.toEqual({ canDispatch: false, cleanupTrigger: trigger });
+      const [owned] = await topicModel.findOwnedWorktreeTopics([input.topicId]);
+      expect(owned.status).toBe(trigger === 'trashed' ? 'active' : 'completed');
+      expect(owned.metadata).toMatchObject({
+        ownedWorktrees: [
+          {
+            cleanup: { state: 'pending', trigger },
+            deviceId: input.worktree.deviceId,
+            ownerNonce: 'saved-nonce',
+            path,
+          },
+        ],
+        scheduledRun: null,
+      });
+      expect(owned.metadata?.workingDirectoryConfig).toBeUndefined();
+      await expect(
+        db.query.messages.findFirst({ where: eq(messages.id, input.userMessageId) }),
+      ).resolves.toMatchObject({ content: input.prompt, topicId: input.topicId });
+    },
+  );
+
+  it('shows a startup failure after the running marker has been rolled back', async () => {
+    const input = request();
+    await submitWorktreeTurn(deps, input);
+    const now = new Date();
+    const claim = {
+      claimedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 5000).toISOString(),
+      id: 'startup-worker',
+    };
+    await expect(TopicModel.claimScheduledTopic(db, input.topicId, claim, now)).resolves.toBe(true);
+    await db.update(topics).set({ status: 'active' }).where(eq(topics.id, input.topicId));
+
+    await TopicModel.finishWorktreeStart(db, input.topicId, claim.id, {
+      error: 'Could not prepare the resume session',
+      success: false,
+    });
+    await expect(topicModel.findById(input.topicId)).resolves.toMatchObject({
+      metadata: { scheduledRun: { error: 'Could not prepare the resume session' } },
+      status: 'failed',
     });
   });
 

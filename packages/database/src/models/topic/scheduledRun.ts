@@ -189,7 +189,8 @@ export async function finishWorktreeStart(
                 },
         },
         status:
-          row.status === 'scheduled' && !result.retryAt
+          (row.status === 'scheduled' || (row.status === 'active' && !result.success)) &&
+          !result.retryAt
             ? result.success
               ? 'running'
               : 'failed'

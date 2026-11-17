@@ -146,6 +146,7 @@ export class TopicModel {
   findWaitingCleanupTopicsUnder = this.withContext(ownedWorktree.findWaitingCleanupTopicsUnder);
   countLiveTopicsUsingWorktree = this.withContext(ownedWorktree.countLiveTopicsUsingWorktree);
   updateOwnedWorktree = this.withContext(ownedWorktree.updateOwnedWorktree);
+  recordFirstSendWorktreeCheckout = this.withContext(ownedWorktree.recordFirstSendWorktreeCheckout);
 
   // **************** Agent Share (visitor-scoped) *************** //
 

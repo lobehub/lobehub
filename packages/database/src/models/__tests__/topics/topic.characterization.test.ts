@@ -88,6 +88,7 @@ const PUBLIC_METHODS = [
   'queryTopics',
   'rank',
   'recomputeUsage',
+  'recordFirstSendWorktreeCheckout',
   'releaseTaskCallbackReservation',
   'removeRunningOperationChild',
   'repairAgentInterventionContinuation',
