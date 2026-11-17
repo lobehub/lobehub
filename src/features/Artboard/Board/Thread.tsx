@@ -14,6 +14,7 @@ import { addThread, replyThread, settleThread } from '../data/commentActions';
 import { isAnswered, isQuestion, threadPlace } from '../data/commentModel';
 import { artboardActions } from '../store';
 import type { CommentDraft } from '../store/initialState';
+import { useSubmitBatch } from './useSubmitBatch';
 
 const styles = stylex.create({
   avatar: {
@@ -89,22 +90,31 @@ interface ReplyBoxProps {
   action?: string;
   autoFocus?: boolean;
   extra?: React.ReactNode;
-  onSend: (text: string) => Promise<unknown>;
+  nowAction?: string;
+  onSend: (text: string, now: boolean) => Promise<unknown>;
   placeholder: string;
   primary?: boolean;
 }
 
-const ReplyBox = ({ action, autoFocus, extra, onSend, placeholder, primary }: ReplyBoxProps) => {
+const ReplyBox = ({
+  action,
+  autoFocus,
+  extra,
+  nowAction,
+  onSend,
+  placeholder,
+  primary,
+}: ReplyBoxProps) => {
   const { t } = useTranslation('project');
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const send = async () => {
+  const send = async (now = false) => {
     const content = text.trim();
     if (!content || sending) return;
     setSending(true);
     try {
-      await onSend(content);
+      await onSend(content, now);
       setText('');
     } catch (error) {
       toast.error({
@@ -117,12 +127,11 @@ const ReplyBox = ({ action, autoFocus, extra, onSend, placeholder, primary }: Re
   };
 
   return (
-    <Flexbox horizontal align="center" gap={8}>
+    <Flexbox gap={8}>
       <Input
         autoFocus={autoFocus}
         disabled={sending}
         placeholder={placeholder}
-        style={{ flex: 1 }}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -132,17 +141,24 @@ const ReplyBox = ({ action, autoFocus, extra, onSend, placeholder, primary }: Re
           }
         }}
       />
-      {action && (
-        <Button
-          disabled={!text.trim()}
-          loading={sending}
-          type={primary ? 'primary' : 'default'}
-          onClick={send}
-        >
-          {action}
-        </Button>
-      )}
-      {extra}
+      <Flexbox horizontal align="center" gap={8} justify="flex-end">
+        {action && (
+          <Button
+            disabled={!text.trim()}
+            loading={sending}
+            type={primary ? 'primary' : 'default'}
+            onClick={() => send()}
+          >
+            {action}
+          </Button>
+        )}
+        {nowAction && (
+          <Button disabled={!text.trim()} loading={sending} onClick={() => send(true)}>
+            {nowAction}
+          </Button>
+        )}
+        {extra}
+      </Flexbox>
     </Flexbox>
   );
 };
@@ -152,6 +168,7 @@ export const ThreadCard = ({ thread }: { thread: ArtboardCommentThreadView }) =>
   const board = useBoard();
   const artboardId = board.artboard.id;
   const [settling, setSettling] = useState(false);
+  const submitBatch = useSubmitBatch();
   const question = isQuestion(thread);
   const resolved = !!thread.resolvedAt;
   const place = threadPlace(thread, board);
@@ -203,6 +220,7 @@ export const ThreadCard = ({ thread }: { thread: ArtboardCommentThreadView }) =>
         ) : (
           <ReplyBox
             action={question ? t('artboard.question.answer') : undefined}
+            nowAction={t('artboard.comment.sendNow')}
             placeholder={t(question ? 'artboard.question.placeholder' : 'artboard.comment.reply')}
             primary={question && !isAnswered(thread)}
             extra={
@@ -212,7 +230,10 @@ export const ThreadCard = ({ thread }: { thread: ArtboardCommentThreadView }) =>
                 </Button>
               )
             }
-            onSend={(text) => replyThread(artboardId, thread.id, text)}
+            onSend={async (text, now) => {
+              await replyThread(artboardId, thread.id, text);
+              if (now) await submitBatch([]);
+            }}
           />
         )}
         {question && !resolved && (
@@ -227,7 +248,9 @@ export const ThreadCard = ({ thread }: { thread: ArtboardCommentThreadView }) =>
 
 export const DraftCard = ({ draft }: { draft: CommentDraft }) => {
   const { t } = useTranslation('project');
-  const artboardId = useBoard().artboard.id;
+  const board = useBoard();
+  const submitBatch = useSubmitBatch();
+  const artboardId = board.artboard.id;
   const { x: _x, y: _y, ...target } = draft;
 
   return (
@@ -236,10 +259,12 @@ export const DraftCard = ({ draft }: { draft: CommentDraft }) => {
         autoFocus
         primary
         action={t('artboard.comment.send')}
+        nowAction={t('artboard.comment.sendNow')}
         placeholder={t('artboard.comment.placeholder')}
-        onSend={async (text) => {
+        onSend={async (text, now) => {
           const thread = await addThread(artboardId, target, text);
           artboardActions.openThread(thread.id);
+          if (now) await submitBatch([]);
         }}
       />
     </Flexbox>

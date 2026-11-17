@@ -103,6 +103,12 @@ export const artboardRouter = router({
       ),
     ),
 
+  deliverComments: artboardProcedureWrite
+    .input(idInput)
+    .mutation(({ ctx, input }) =>
+      run('deliverComments', () => ctx.artboardService.takeUndeliveredComments(input.id)),
+    ),
+
   countUndeliveredComments: artboardProcedure
     .input(idInput)
     .query(({ ctx, input }) =>

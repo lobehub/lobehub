@@ -1,15 +1,15 @@
-import { Button, Flexbox, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { SendIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
-import { sendToBoardConversation } from '../data/boardConversation';
-import { submitBoardRounds, summarizeRounds } from '../data/submitRounds';
-import { mutateArtboard } from '../data/useArtboard';
+import { pendingThreads, summarizeRounds } from '../data/submitBatch';
+import { useArtboardComments } from '../data/useArtboardComments';
 import { artboardActions } from '../store';
 import { floatStyles } from '../Viewport/floatStyles';
+import { useSubmitBatch } from './useSubmitBatch';
 
 const styles = stylex.create({
   bar: {
@@ -44,39 +44,17 @@ const styles = stylex.create({
 const SubmitBar = ({ narrow }: { narrow: boolean }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
+  const submitBatch = useSubmitBatch();
+  const { data: threads } = useArtboardComments(board.artboard.id);
   const [submitting, setSubmitting] = useState(false);
   const summary = useMemo(() => summarizeRounds(board.openRounds), [board.openRounds]);
-  if (!summary.total || board.finalized) return null;
-
-  const { artboard } = board;
-  const resend = (message: string) =>
-    sendToBoardConversation(artboard.topicId, message)
-      .then((status) => status === 'messageFailed' && notifyFailed(message))
-      .catch(() => notifyFailed(message));
-  const notifyFailed = (message: string) =>
-    toast.error({
-      actions: [{ label: t('artboard.submit.resend'), onClick: () => void resend(message) }],
-      title: t('artboard.submit.messageFailed'),
-    });
+  const comments = useMemo(() => pendingThreads(board, threads ?? []).length, [board, threads]);
+  if (!summary.total && !comments) return null;
 
   const submit = async () => {
     setSubmitting(true);
     try {
-      const roundIds = board.openRounds.map((round) => round.id);
-      const { message, status } = await submitBoardRounds(artboard, roundIds, (count) =>
-        [
-          t('artboard.submit.message', { count }),
-          `> artboard ${artboard.id} · ${artboard.title}`,
-        ].join('\n\n'),
-      );
-      if (status === 'noConversation') toast.info(t('artboard.submit.noConversation'));
-      if (status === 'messageFailed') notifyFailed(message);
-    } catch (error) {
-      void mutateArtboard(artboard.id);
-      toast.error({
-        description: (error as Error).message,
-        title: t('artboard.submit.failed'),
-      });
+      await submitBatch(board.openRounds.map((round) => round.id));
     } finally {
       setSubmitting(false);
     }
@@ -99,9 +77,11 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
       {...stylex.props(floatStyles.float, styles.bar, narrow && styles.raised)}
     >
       <Text strong {...stylex.props(styles.title)}>
-        {t('artboard.submit.title', { count: summary.total })}
+        {summary.total
+          ? t('artboard.submit.title', { count: summary.total })
+          : t('artboard.submit.commentsTitle', { count: comments })}
       </Text>
-      {summary.undecided > 0 ? (
+      {!summary.total ? null : summary.undecided > 0 ? (
         <Text type="warning" {...stylex.props(styles.undecided)} onClick={showUndecided}>
           {t('artboard.submit.undecided', { count: summary.undecided })}
         </Text>
@@ -113,6 +93,7 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
                 rest: summary.byRecommendation,
               })
             : t('artboard.submit.allPicked', { picked: summary.picked })}
+          {comments > 0 && ` · ${t('artboard.submit.comments', { count: comments })}`}
         </Text>
       )}
       <Button

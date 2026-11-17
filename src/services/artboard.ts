@@ -36,6 +36,9 @@ class ArtboardService {
   ): Promise<{ artboard: ArtboardItem }> =>
     lambdaClient.artboard.chooseBoard.mutate({ boardId, id, roundId });
 
+  deliverComments = (id: string): Promise<ArtboardCommentThreadView[]> =>
+    lambdaClient.artboard.deliverComments.mutate({ id });
+
   countUndeliveredComments = (id: string): Promise<number> =>
     lambdaClient.artboard.countUndeliveredComments.query({ id });
 
