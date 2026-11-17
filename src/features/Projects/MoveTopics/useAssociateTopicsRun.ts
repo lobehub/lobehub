@@ -1,5 +1,5 @@
 import { useModalContext } from '@lobehub/ui';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import {
@@ -8,17 +8,29 @@ import {
   useProjectDirectoryStore,
 } from '@/store/projectWorkingDirectory';
 
+/** The topics a failed run never reached: neither filed nor skipped with a reason. */
+export const remainingTopicIds = (topicIds: string[], result: AssociateTopicsResult) => {
+  const settled = new Set([
+    ...result.movedTopicIds,
+    ...result.skippedTopics.map((topic) => topic.id),
+  ]);
+  return topicIds.filter((id) => !settled.has(id));
+};
+
 /**
  * Drive one group filing: progress while the batches run, the result after.
  * The modal cannot be dismissed mid-run, so a long run is not lost behind it.
+ * After a failed batch, `retry` files only the topics the run never reached.
  */
 export const useAssociateTopicsRun = () => {
   const associateTopics = useProjectDirectoryStore((s) => s.associateTopics);
   const { setCanDismissByClickOutside } = useModalContext();
   const [progress, setProgress] = useState<AssociateTopicsProgress>();
   const [result, setResult] = useState<AssociateTopicsResult>();
+  const lastRun = useRef<{ projectId: string; topicIds: string[] }>(undefined);
 
   const run = async (projectId: string, topicIds: string[]) => {
+    lastRun.current = { projectId, topicIds };
     setResult(undefined);
     setCanDismissByClickOutside?.(false);
     try {
@@ -33,5 +45,21 @@ export const useAssociateTopicsRun = () => {
     }
   };
 
-  return { progress, result, run, running: !!progress };
+  const retry = async () => {
+    if (!lastRun.current || !result) return;
+    const { projectId, topicIds } = lastRun.current;
+    const previous = result;
+    const next = await run(projectId, remainingTopicIds(topicIds, previous));
+    // Report the whole group, not only the retried tail.
+    const merged: AssociateTopicsResult = {
+      ...next,
+      movedTopicIds: [...previous.movedTopicIds, ...next.movedTopicIds],
+      skippedTopics: [...previous.skippedTopics, ...next.skippedTopics],
+    };
+    lastRun.current = { projectId, topicIds };
+    setResult(merged);
+    return merged;
+  };
+
+  return { progress, result, retry, run, running: !!progress };
 };

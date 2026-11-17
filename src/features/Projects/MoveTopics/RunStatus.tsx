@@ -1,5 +1,6 @@
-import { Alert, cssVar, Flexbox, Icon, Progress, Text } from '@lobehub/ui';
-import { CircleCheck } from 'lucide-react';
+import { Alert, Button, cssVar, Flexbox, Icon, Progress, Text } from '@lobehub/ui';
+import { CircleAlert, CircleCheck } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -27,18 +28,49 @@ export const RunProgress = ({ progress }: { progress: AssociateTopicsProgress })
   );
 };
 
+/** One readable line for a failed run; the raw message only on demand. */
+const RunError = ({ error, partial }: { error: unknown; partial: boolean }) => {
+  const { t } = useTranslation('project');
+  const [showDetails, setShowDetails] = useState(false);
+  const message = error instanceof Error ? error.message : undefined;
+  return (
+    <Flexbox gap={4}>
+      <Flexbox horizontal align="center" gap={8}>
+        <Icon color={cssVar.colorError} icon={CircleAlert} size={16} />
+        <Text type="danger">
+          {partial ? t('moveTopics.failedPartial') : t('moveTopics.failedNone')}
+        </Text>
+        {message && (
+          <Button size="small" type="link" onClick={() => setShowDetails((v) => !v)}>
+            {showDetails ? t('moveTopics.hideDetails') : t('moveTopics.showDetails')}
+          </Button>
+        )}
+      </Flexbox>
+      {showDetails && message && (
+        <Text fontSize={12} style={{ paddingInlineStart: 24 }} type="secondary">
+          {message}
+        </Text>
+      )}
+    </Flexbox>
+  );
+};
+
 export const RunResult = ({ result }: { result: AssociateTopicsResult }) => {
   const { t } = useTranslation('project');
+  const moved = result.movedTopicIds.length;
   const counts = REASONS.map((reason) => ({
     count: result.skippedTopics.filter((topic) => topic.reason === reason).length,
     reason,
   })).filter((item) => item.count > 0);
   return (
     <Flexbox gap={12} paddingBlock={16}>
-      <Flexbox horizontal align="center" gap={8}>
-        <Icon color={cssVar.colorSuccess} icon={CircleCheck} size={20} />
-        <Text weight={500}>{t('moveTopics.done', { count: result.movedTopicIds.length })}</Text>
-      </Flexbox>
+      {(moved > 0 || !result.error) && (
+        <Flexbox horizontal align="center" gap={8}>
+          <Icon color={cssVar.colorSuccess} icon={CircleCheck} size={20} />
+          <Text weight={500}>{t('moveTopics.done', { count: moved })}</Text>
+        </Flexbox>
+      )}
+      {result.error ? <RunError error={result.error} partial={moved > 0} /> : null}
       {counts.length > 0 && (
         <Alert
           showIcon
@@ -55,14 +87,6 @@ export const RunResult = ({ result }: { result: AssociateTopicsResult }) => {
           }
         />
       )}
-      {result.error ? (
-        <Alert
-          showIcon
-          description={result.error instanceof Error ? result.error.message : undefined}
-          title={t('moveTopics.failed')}
-          type="error"
-        />
-      ) : null}
     </Flexbox>
   );
 };

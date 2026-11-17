@@ -25,7 +25,7 @@ function FileTopicsToProjectContent({ onDone, topicIds }: FileTopicsToProjectPro
   const projectSync = useProjectStore((s) => s.useFetchProjectList)();
   const projects = useCurrentProjectList();
   const [projectId, setProjectId] = useState<string>();
-  const { progress, result, run, running } = useAssociateTopicsRun();
+  const { progress, result, retry, run, running } = useAssociateTopicsRun();
 
   if (progress) return <RunProgress progress={progress} />;
   if (result && projectId)
@@ -34,16 +34,28 @@ function FileTopicsToProjectContent({ onDone, topicIds }: FileTopicsToProjectPro
         <RunResult result={result} />
         <Flexbox horizontal gap={8} justify="flex-end">
           <Button onClick={close}>{t('moveTopics.close')}</Button>
-          {result.movedTopicIds.length > 0 && (
+          {result.error ? (
             <Button
               type="primary"
-              onClick={() => {
-                close();
-                navigate(getProjectHomePath(projectId));
+              onClick={async () => {
+                const next = await retry();
+                if (next?.movedTopicIds.length) onDone?.();
               }}
             >
-              {t('topics.viewProject')}
+              {t('moveTopics.retry')}
             </Button>
+          ) : (
+            result.movedTopicIds.length > 0 && (
+              <Button
+                type="primary"
+                onClick={() => {
+                  close();
+                  navigate(getProjectHomePath(projectId));
+                }}
+              >
+                {t('topics.viewProject')}
+              </Button>
+            )
           )}
         </Flexbox>
       </Flexbox>

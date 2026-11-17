@@ -1,4 +1,10 @@
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type {
+  AssociateProjectTopicsResult,
+  ChatTopicMetadata,
+  MovableProjectTopic,
+  SkippedProjectTopic,
+  SkippedProjectTopicReason,
+} from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
@@ -34,16 +40,10 @@ export class ProjectDirectoryError extends TRPCError {
   }
 }
 
-export type SkippedProjectTopicReason =
-  'differentLocation' | 'needsDirectory' | 'notFound' | 'otherProject' | 'running';
+export type { SkippedProjectTopic, SkippedProjectTopicReason } from '@lobechat/types';
 
 /** The most conversations the project-side picker lists at once. */
 export const MOVABLE_TOPICS_LIMIT = 200;
-
-export interface SkippedProjectTopic {
-  id: string;
-  reason: SkippedProjectTopicReason;
-}
 
 /**
  * Point a conversation at another device directory. The cwd and CLI session
@@ -66,6 +66,28 @@ const pinTopicToDirectory = (
     boundDeviceId: deviceId,
     workingDirectory: path,
     workingDirectoryConfig: { path },
+  };
+};
+
+/**
+ * File a conversation into a project directory at the location it already
+ * works in. Device and path are unchanged, so the structured config — the
+ * active worktree and the CLI session's cwd — is kept; only the path is
+ * written in the directory's canonical form.
+ */
+const fileTopicIntoDirectory = (
+  metadata: ChatTopicMetadata | null | undefined,
+  directory: { deviceId: string; path: string },
+): ChatTopicMetadata => {
+  const config = metadata?.workingDirectoryConfig;
+  return {
+    ...metadata,
+    boundDeviceId: directory.deviceId,
+    workingDirectory: directory.path,
+    workingDirectoryConfig:
+      config && typeof config === 'object'
+        ? { ...config, path: directory.path }
+        : { path: directory.path },
   };
 };
 
@@ -308,7 +330,10 @@ export class ProjectDirectoryRepository {
    * any project yet, live, and not a share visitor's. Newest first, so the
    * project-side picker starts with what the user just worked on.
    */
-  async listMovableTopics(projectId: string, options: { keyword?: string; limit?: number } = {}) {
+  async listMovableTopics(
+    projectId: string,
+    options: { keyword?: string; limit?: number } = {},
+  ): Promise<MovableProjectTopic[]> {
     await this.assertManageableProject(projectId);
     const keyword = options.keyword?.trim();
     return this.db
@@ -347,7 +372,10 @@ export class ProjectDirectoryRepository {
    * same location when there is exactly one, and skipped otherwise — creating
    * a directory binding stays an explicit, per-location step.
    */
-  async associateTopics(projectId: string, topicIds: string[]) {
+  async associateTopics(
+    projectId: string,
+    topicIds: string[],
+  ): Promise<AssociateProjectTopicsResult> {
     await this.assertManageableProject(projectId);
     const ids = [...new Set(topicIds)];
     if (ids.length === 0) return { movedTopicIds: [], skippedTopics: [] };
@@ -435,12 +463,7 @@ export class ProjectDirectoryRepository {
         await db
           .update(topics)
           .set({
-            metadata: {
-              ...metadata,
-              boundDeviceId: directory.deviceId,
-              workingDirectory: directory.path,
-              workingDirectoryConfig: { path: directory.path },
-            },
+            metadata: fileTopicIntoDirectory(metadata, directory),
             projectId,
             projectWorkingDirectoryId: directory.id,
           })
@@ -524,12 +547,7 @@ export class ProjectDirectoryRepository {
           ...(directory
             ? {
                 projectWorkingDirectoryId: directory.id,
-                metadata: {
-                  ...topic.metadata,
-                  boundDeviceId: directory.deviceId,
-                  workingDirectory: directory.path,
-                  workingDirectoryConfig: { path: directory.path },
-                },
+                metadata: fileTopicIntoDirectory(topic.metadata, directory),
               }
             : {}),
         })

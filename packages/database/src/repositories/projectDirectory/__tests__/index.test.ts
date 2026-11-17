@@ -872,6 +872,29 @@ describe('ProjectDirectoryRepository.associateTopics', () => {
     });
   });
 
+  it('keeps the worktree and CLI session state of a topic filed at its own location', async () => {
+    const directory = await repo.bind(base);
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/work/repo-wt', isWorktree: true },
+      path: '/work/repo/',
+      sessionPath: '/work/repo-wt',
+    };
+    await db.insert(topics).values([
+      { id: 'batch-wt', agentId: 'repo-agent', userId, metadata: { workingDirectoryConfig } },
+      { id: 'single-wt', agentId: 'repo-agent', userId, metadata: { workingDirectoryConfig } },
+    ]);
+    await repo.associateTopics(base.projectId, ['batch-wt']);
+    await repo.associateTopic(base.projectId, 'single-wt', directory.id);
+    for (const id of ['batch-wt', 'single-wt']) {
+      const [topic] = await db.select().from(topics).where(eq(topics.id, id));
+      expect(topic.metadata?.workingDirectoryConfig).toEqual({
+        ...workingDirectoryConfig,
+        path: base.path,
+      });
+      expect(topic.projectWorkingDirectoryId).toBe(directory.id);
+    }
+  });
+
   it('refuses a project the caller cannot manage', async () => {
     await db.insert(topics).values({ id: 'mine', agentId: 'repo-agent', userId });
     await expect(otherRepo.associateTopics(base.projectId, ['mine'])).rejects.toThrow(

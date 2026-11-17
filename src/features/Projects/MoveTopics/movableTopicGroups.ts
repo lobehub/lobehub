@@ -1,12 +1,6 @@
-export interface MovableTopic {
-  agentAvatar: string | null;
-  agentBackgroundColor: string | null;
-  agentId: string | null;
-  agentTitle: string | null;
-  id: string;
-  title: string | null;
-  updatedAt: Date | string;
-}
+import type { MovableProjectTopic } from '@lobechat/types';
+
+export type MovableTopic = MovableProjectTopic;
 
 export interface MovableTopicGroup {
   agentAvatar: string | null;

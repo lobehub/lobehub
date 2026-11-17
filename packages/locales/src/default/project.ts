@@ -524,7 +524,6 @@ export default {
   'moveTopics.done_one': 'Moved {{count}} topic into the project',
   'moveTopics.done_other': 'Moved {{count}} topics into the project',
   'moveTopics.empty': 'All your topics already belong to a project',
-  'moveTopics.failed': 'Moving stopped partway; the topics moved so far stay in the project',
   'moveTopics.fileDesc_one': 'Move {{count}} topic into a project',
   'moveTopics.fileDesc_other': 'Move {{count}} topics into a project',
   'moveTopics.fileTitle': 'Move into project',
@@ -547,4 +546,9 @@ export default {
   'moveTopics.submit_other': 'Move {{count}} topics',
   'moveTopics.untitledAgent': 'Untitled agent',
   'moveTopics.untitledTopic': 'Untitled topic',
+  'moveTopics.failedNone': 'The topics could not be moved. Try again.',
+  'moveTopics.failedPartial': 'Some topics were not moved. Try again to move the rest.',
+  'moveTopics.hideDetails': 'Hide details',
+  'moveTopics.retry': 'Retry',
+  'moveTopics.showDetails': 'Show details',
 };

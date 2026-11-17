@@ -1,3 +1,4 @@
+import type { SkippedProjectTopic } from '@lobechat/types';
 import type { StoreApi } from 'zustand';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn, type UseBoundStoreWithEqualityFn } from 'zustand/traditional';
@@ -39,7 +40,7 @@ export const PROJECT_TOPICS_POLL_INTERVAL = 5000;
 /** Conversations filed per `associateTopics` request; matches the server's cap. */
 export const ASSOCIATE_TOPICS_BATCH_SIZE = 50;
 
-export type SkippedProjectTopic = ServiceData<'associateTopics'>['skippedTopics'][number];
+export type { SkippedProjectTopic } from '@lobechat/types';
 
 export interface AssociateTopicsProgress {
   done: number;

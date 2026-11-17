@@ -1,4 +1,5 @@
 import { Button, Checkbox, createModal, Flexbox, Input, Text, useModalContext } from '@lobehub/ui';
+import { useDebounce } from 'ahooks';
 import { t } from 'i18next';
 import { SearchIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -19,31 +20,55 @@ import {
 import { RunProgress, RunResult } from './RunStatus';
 import { useAssociateTopicsRun } from './useAssociateTopicsRun';
 
-const movableTopicsKey = (projectId: string) => ['project-movable-topics', projectId] as const;
+const movableTopicsKey = (projectId: string, keyword: string) =>
+  ['project-movable-topics', projectId, keyword] as const;
 
 function MoveTopicsIntoProjectContent({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
   const { close } = useModalContext();
   const [keyword, setKeyword] = useState('');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const request = useClientDataSWR(movableTopicsKey(projectId), () =>
-    projectWorkingDirectoryService.listMovableTopics({ projectId }).then((res) => res.data),
+  // Search on the server: the list is capped, so an older topic is only
+  // reachable through the keyword.
+  const query = useDebounce(keyword.trim(), { wait: 300 });
+  const request = useClientDataSWR(
+    movableTopicsKey(projectId, query),
+    () =>
+      projectWorkingDirectoryService
+        .listMovableTopics({ keyword: query || undefined, projectId })
+        .then((res) => res.data),
+    { keepPreviousData: true },
   );
   const groups = useMemo(
     () => groupMovableTopics(request.data ?? [], keyword),
     [request.data, keyword],
   );
-  const { progress, result, run, running } = useAssociateTopicsRun();
+  const { progress, result, retry, run, running } = useAssociateTopicsRun();
 
   if (progress) return <RunProgress progress={progress} />;
   if (result)
     return (
       <Flexbox>
         <RunResult result={result} />
-        <Flexbox horizontal justify="flex-end">
-          <Button type="primary" onClick={close}>
-            {t('moveTopics.close')}
-          </Button>
+        <Flexbox horizontal gap={8} justify="flex-end">
+          {result.error ? (
+            <>
+              <Button onClick={close}>{t('moveTopics.close')}</Button>
+              <Button
+                type="primary"
+                onClick={async () => {
+                  await retry();
+                  await request.mutate();
+                }}
+              >
+                {t('moveTopics.retry')}
+              </Button>
+            </>
+          ) : (
+            <Button type="primary" onClick={close}>
+              {t('moveTopics.close')}
+            </Button>
+          )}
         </Flexbox>
       </Flexbox>
     );
