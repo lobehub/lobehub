@@ -16977,6 +16977,10 @@ export type PatchApiV1NotebooksByIdErrors = {
      */
     404: ApiError;
     /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
      * Rate limit exceeded
      */
     429: ApiError;

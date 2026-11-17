@@ -127,8 +127,9 @@ NotebookRoutes.patch(
   '/:id',
   routeDoc({
     data: NotebookDocumentSchema,
-    description: 'Updates the title, summary or body. With `append: true` the body is extended.',
-    errors: [404],
+    description:
+      'Updates the title, summary or body. With `append: true` the body is extended. Pages attached to a notebook answer 422; update them through `/documents/{id}`.',
+    errors: [404, 422],
     operationId: 'notebooks.update',
     summary: 'Update a notebook document',
     tags: TAGS,

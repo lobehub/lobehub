@@ -222,7 +222,7 @@ DocumentRoutes.patch(
   routeDoc({
     data: DocumentSchema,
     description:
-      'Updates the title, metadata or body. A Markdown `content` replaces the body; pass `expectedUpdatedAt` to fail with 409 instead of overwriting a newer save.',
+      'Updates the title, metadata or body. A Markdown `content` replaces the body; pass `expectedUpdatedAt` to fail with 409 instead of overwriting a newer save. While members are editing the page live, the body is merged into their session instead, and `expectedUpdatedAt` does not apply.',
     // 409: `expectedUpdatedAt` is stale, or another member holds the page's edit lock.
     errors: [404, 409],
     operationId: 'documents.update',
@@ -315,7 +315,8 @@ DocumentRoutes.post(
   '/:id/versions',
   routeDoc({
     data: DocumentVersionSavedSchema,
-    description: 'Stores the document as it is now as a manual version.',
+    description:
+      'Stores the document as it is now as a manual version, including unsaved edits of members editing it live.',
     errors: [404, 409],
     operationId: 'documents.saveVersion',
     status: 201,

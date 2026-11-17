@@ -1,9 +1,12 @@
 import { TopicModel } from '@/database/models/topic';
+import { TopicDocumentModel } from '@/database/models/topicDocument';
 import type { DocumentItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { documentRouter } from '@/server/routers/lambda/document';
 import { notebookRouter } from '@/server/routers/lambda/notebook';
 
 import { BaseService } from '../common/base.service';
+import { ApiException } from '../common/errors';
 import { resolvePagination } from '../helpers/pagination';
 import type { DeletedResource } from '../types/common.type';
 import type {
@@ -13,6 +16,7 @@ import type {
   NotebookListQuery,
   UpdateNotebookDocumentRequest,
 } from '../types/notebook.type';
+import { NotebookDocumentTypeSchema } from '../types/notebook.type';
 import { toIso } from './document.service';
 
 type NotebookRow = Pick<
@@ -48,9 +52,10 @@ const toNotebookDocument = (row: NotebookRow): NotebookDocumentResponse => ({
  * A topic's notebook is the set of documents attached to it — what an agent
  * writes with the notebook tool. Writes go through the `notebook` tRPC
  * procedures (called server-side) so REST shares their de-duplication of
- * verbatim twins, per-plan length limit and General Access guards. The topic
- * itself is resolved first with the caller's scope, so a topic in another
- * account or workspace reads as missing instead of silently accepting writes.
+ * verbatim twins, per-plan length limit and General Access guards. Topics are
+ * resolved with the caller's scope and documents through the document reader,
+ * so a topic or document in another account or workspace, or in a library the
+ * caller may not browse, reads as missing instead of silently accepting writes.
  */
 export class NotebookRestService extends BaseService {
   private readonly ctx: { userId: string; workspaceId?: string };
@@ -70,10 +75,20 @@ export class NotebookRestService extends BaseService {
     return topic;
   }
 
+  /**
+   * A document in one of the caller's topic notebooks. Read through the document
+   * reader so visibility, General Access and restricted libraries apply exactly
+   * as on `/documents/{id}`; a document in no notebook is not addressable here.
+   */
   private async requireDocument(id: string) {
-    const document = await this.notebook.getDocument({ id });
-    if (!document) throw this.createNotFoundError('Notebook document not found');
-    return document;
+    const document = await documentRouter.createCaller(this.ctx).getDocumentById({ id });
+    const topicIds = document
+      ? await new TopicDocumentModel(this.db, this.userId, this.workspaceId).findByDocumentId(id)
+      : [];
+    if (!document || topicIds.length === 0) {
+      throw this.createNotFoundError('Notebook document not found');
+    }
+    return document as DocumentItem;
   }
 
   async listDocuments(query: NotebookListQuery) {
@@ -104,7 +119,16 @@ export class NotebookRestService extends BaseService {
   }
 
   async updateDocument(id: string, body: UpdateNotebookDocumentRequest) {
-    await this.requireDocument(id);
+    const current = await this.requireDocument(id);
+    // The notebook write stores Markdown only. A Page attached to a notebook keeps
+    // editor state (and maybe a live room) that such a write would leave stale.
+    if (!NotebookDocumentTypeSchema.safeParse(current.fileType).success) {
+      throw new ApiException(
+        422,
+        'unprocessable_entity',
+        'This document is a page, not a notebook note; update it with PATCH /api/v1/documents/{id}',
+      );
+    }
     const document = await this.notebook.updateDocument({ ...body, id });
     if (!document) throw this.createNotFoundError('Notebook document not found');
     return toNotebookDocument(document);

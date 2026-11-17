@@ -2677,7 +2677,7 @@ export class Documents extends HeyApiClient {
     /**
      * Update a document
      *
-     * Updates the title, metadata or body. A Markdown `content` replaces the body; pass `expectedUpdatedAt` to fail with 409 instead of overwriting a newer save.
+     * Updates the title, metadata or body. A Markdown `content` replaces the body; pass `expectedUpdatedAt` to fail with 409 instead of overwriting a newer save. While members are editing the page live, the body is merged into their session instead, and `expectedUpdatedAt` does not apply.
      *
      * **API key scopes:** `document:write`.
      */
@@ -2739,7 +2739,7 @@ export class Documents extends HeyApiClient {
     /**
      * Save a document version
      *
-     * Stores the document as it is now as a manual version.
+     * Stores the document as it is now as a manual version, including unsaved edits of members editing it live.
      *
      * **API key scopes:** `document:write`.
      */
@@ -2996,7 +2996,7 @@ export class Notebooks extends HeyApiClient {
     /**
      * Update a notebook document
      *
-     * Updates the title, summary or body. With `append: true` the body is extended.
+     * Updates the title, summary or body. With `append: true` the body is extended. Pages attached to a notebook answer 422; update them through `/documents/{id}`.
      *
      * **API key scopes:** `document:write`.
      */

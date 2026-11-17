@@ -312,9 +312,22 @@ export class DocumentRestService extends BaseService {
     return { from: fromVersion, to: toVersion_ };
   }
 
-  /** Store the document as it is now as a manual version. */
+  /**
+   * Store the document as it is now as a manual version. A page being edited
+   * live is snapshotted from its room (what the editors see); otherwise the
+   * stored body is versioned.
+   */
   async saveVersion(id: string) {
     const document = await this.requireDocument(id);
+
+    const { recorded } = await this.documents.snapshotPageVersion({
+      documentId: id,
+      saveSource: 'manual',
+    });
+    if (recorded) {
+      const { items } = await this.documents.listDocumentHistory({ documentId: id, limit: 1 });
+      if (items[0]) return { id: items[0].id, savedAt: toIso(items[0].savedAt) };
+    }
     const editorData =
       document.editorData ??
       (

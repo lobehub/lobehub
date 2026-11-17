@@ -251,6 +251,52 @@ describe('notebook documents', () => {
   });
 });
 
+describe('notebook boundary', () => {
+  const createPage = async () =>
+    (
+      await json(
+        await call('/documents', {
+          body: { content: 'Page body', title: 'A page' },
+          key: KEYS.ownerWrite,
+          method: 'POST',
+        }),
+      )
+    ).data;
+
+  it('does not address a document that is in no notebook', async () => {
+    const page = await createPage();
+
+    for (const [method, body] of [
+      ['GET', undefined],
+      ['PATCH', { content: 'overwritten' }],
+      ['DELETE', undefined],
+    ] as const) {
+      const res = await call(`/notebooks/${page.id}`, { body, key: KEYS.ownerWrite, method });
+      expect({ method, status: res.status }).toEqual({ method, status: 404 });
+    }
+    const after = await json(await call(`/documents/${page.id}`, { key: KEYS.ownerRead }));
+    expect(after.data.content).toBe('Page body');
+  });
+
+  it('refuses a Markdown-only write to a page attached to a notebook', async () => {
+    const page = await createPage();
+    await call('/notebooks/associate', {
+      body: { documentId: page.id, topicId: TOPIC },
+      key: KEYS.ownerWrite,
+      method: 'POST',
+    });
+
+    expect((await call(`/notebooks/${page.id}`, { key: KEYS.ownerRead })).status).toBe(200);
+    const res = await call(`/notebooks/${page.id}`, {
+      body: { content: 'overwritten' },
+      key: KEYS.ownerWrite,
+      method: 'PATCH',
+    });
+    expect(res.status).toBe(422);
+    expect((await json(res)).code).toBe('unprocessable_entity');
+  });
+});
+
 describe('ownership', () => {
   it("does not read or write another account's topic notebook", async () => {
     const list = await call(`/notebooks?topicId=${TOPIC}`, { key: KEYS.stranger });

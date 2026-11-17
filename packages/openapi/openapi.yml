@@ -42000,7 +42000,8 @@ paths:
       description: >-
         Updates the title, metadata or body. A Markdown `content` replaces the
         body; pass `expectedUpdatedAt` to fail with 409 instead of overwriting a
-        newer save.
+        newer save. While members are editing the page live, the body is merged
+        into their session instead, and `expectedUpdatedAt` does not apply.
 
 
         **API key scopes:** `document:write`.
@@ -42841,8 +42842,10 @@ paths:
         - $ref: "#/components/parameters/WorkspaceId"
     post:
       operationId: documents.saveVersion
-      description: |-
-        Stores the document as it is now as a manual version.
+      description: >-
+        Stores the document as it is now as a manual version, including unsaved
+        edits of members editing it live.
+
 
         **API key scopes:** `document:write`.
       summary: Save a document version
@@ -45606,7 +45609,8 @@ paths:
       operationId: notebooks.update
       description: >-
         Updates the title, summary or body. With `append: true` the body is
-        extended.
+        extended. Pages attached to a notebook answer 422; update them through
+        `/documents/{id}`.
 
 
         **API key scopes:** `document:write`.
@@ -45696,6 +45700,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
           description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
           headers:
             X-Request-Id:
               $ref: "#/components/headers/RequestId"
