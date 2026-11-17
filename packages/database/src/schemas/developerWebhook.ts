@@ -36,7 +36,8 @@ export const webhookEndpoints = pgTable(
     /** Deliveries that exhausted their retries since the last success. */
     consecutiveFailures: integer('consecutive_failures').notNull().default(0),
     lastDeliveryAt: timestamptz('last_delivery_at'),
-    ...timestamps,
+    createdAt: createdAt(),
+    updatedAt: timestamps.updatedAt,
   },
   (t) => [
     index('webhook_endpoints_user_id_idx').on(t.userId),

@@ -370,11 +370,20 @@ export class TaskModel {
     expected: { id: string; status: string }[],
     status: string,
   ): Promise<string[]> {
-    return rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+    const updated = await rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+    if (updated.length > 0 && hasDatabaseEventListener()) {
+      const previous = new Map(expected.map((entry) => [entry.id, entry.status]));
+      for (const task of await this.findByIds(updated))
+        this.announceStatusChange(task, previous.get(task.id) ?? null);
+    }
+    return updated;
   }
 
   async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
-    return rows.completeIfCompletionRequested(this.ctx, id, operationId);
+    const task = await rows.completeIfCompletionRequested(this.ctx, id, operationId);
+    // Only a running task can be completed this way.
+    if (task) this.announceStatusChange(task, 'running');
+    return task;
   }
 
   async withdrawCompletionRequest(id: string, operationId: string): Promise<boolean> {
@@ -382,7 +391,14 @@ export class TaskModel {
   }
 
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {
-    return rows.batchUpdateStatus(this.ctx, ids, status);
+    const before = hasDatabaseEventListener()
+      ? new Map((await this.findByIds(ids)).map((task) => [task.id, task]))
+      : undefined;
+    const count = await rows.batchUpdateStatus(this.ctx, ids, status);
+    if (before)
+      for (const task of before.values())
+        this.announceStatusChange({ ...task, status }, task.status);
+    return count;
   }
 
   async updateStatusForIds(

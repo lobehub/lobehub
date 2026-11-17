@@ -13,8 +13,18 @@ export const createSealedWebhookSecret = async () => {
   };
 };
 
+/** The stored secret cannot be decrypted, e.g. `KEY_VAULTS_SECRET` changed without a fallback. */
+export class WebhookSecretUnavailableError extends Error {
+  constructor() {
+    super('The signing secret cannot be decrypted; rotate the secret');
+    this.name = 'WebhookSecretUnavailableError';
+  }
+}
+
 export const openWebhookSecret = async (ciphertext: string) => {
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-  const { plaintext } = await gateKeeper.decrypt(ciphertext);
+  const { plaintext, wasAuthentic } = await gateKeeper.decrypt(ciphertext);
+  // A failed decryption yields '' — signing with it would look like a receiver-side mismatch.
+  if (!wasAuthentic || !plaintext) throw new WebhookSecretUnavailableError();
   return plaintext;
 };

@@ -4,7 +4,7 @@ import type {
   WebhookEventEnvelope,
   WebhookEventType,
 } from '@lobechat/types';
-import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, isNull, sql } from 'drizzle-orm';
 
 import type { NewWebhookDeliveryRow, WebhookDeliveryRow, WebhookEndpointRow } from '../schemas';
 import { webhookDeliveries, webhookEndpoints } from '../schemas';
@@ -95,11 +95,17 @@ export class WebhookEndpointModel {
     id: string,
     value: UpdateWebhookEndpointParams,
   ): Promise<WebhookEndpointView | undefined> => {
-    const patch: Partial<WebhookEndpointRow> = { ...value, updatedAt: new Date() };
-    // Re-enabling clears the auto-disable state; disabling by hand records why.
+    const patch: Record<string, unknown> = { ...value, updatedAt: new Date() };
+    // Only a change of `enabled` touches the disable state: turning an endpoint off
+    // records it was by hand, turning it back on clears the failure streak. Saving an
+    // edit that leaves `enabled` as it was keeps an auto-disable reason intact.
     if (value.enabled === true)
-      Object.assign(patch, { consecutiveFailures: 0, disabledReason: null });
-    if (value.enabled === false) patch.disabledReason = 'manual' satisfies WebhookDisabledReason;
+      Object.assign(patch, {
+        consecutiveFailures: sql`CASE WHEN ${webhookEndpoints.enabled} THEN ${webhookEndpoints.consecutiveFailures} ELSE 0 END`,
+        disabledReason: sql`CASE WHEN ${webhookEndpoints.enabled} THEN ${webhookEndpoints.disabledReason} ELSE NULL END`,
+      });
+    if (value.enabled === false)
+      patch.disabledReason = sql`CASE WHEN ${webhookEndpoints.enabled} THEN ${'manual' satisfies WebhookDisabledReason} ELSE ${webhookEndpoints.disabledReason} END`;
 
     const [row] = await this.db
       .update(webhookEndpoints)
@@ -127,6 +133,16 @@ export class WebhookEndpointModel {
       .where(and(eq(webhookEndpoints.id, id), this.ownership()))
       .returning({ id: webhookEndpoints.id });
     return rows.length > 0;
+  };
+
+  /** Whether this owner has any enabled endpoint in this space. */
+  hasEnabled = async (): Promise<boolean> => {
+    const [row] = await this.db
+      .select({ id: webhookEndpoints.id })
+      .from(webhookEndpoints)
+      .where(and(this.ownership(), eq(webhookEndpoints.enabled, true)))
+      .limit(1);
+    return !!row;
   };
 
   /** Enabled endpoints of this owner and space that subscribe to `type`. */
@@ -226,6 +242,26 @@ export class WebhookDeliveryWorkerModel {
       .where(eq(webhookDeliveries.id, deliveryId))
       .limit(1);
     return row;
+  };
+
+  /**
+   * Take the next attempt of an unsettled delivery: bumps `attempts` only if nobody
+   * else did since it was read. Answers the new attempt number, or `null` when
+   * another worker (a duplicate queue message) got there first.
+   */
+  claimAttempt = async (deliveryId: string, readAttempts: number): Promise<number | null> => {
+    const [row] = await this.db
+      .update(webhookDeliveries)
+      .set({ attempts: sql`${webhookDeliveries.attempts} + 1`, updatedAt: new Date() })
+      .where(
+        and(
+          eq(webhookDeliveries.id, deliveryId),
+          eq(webhookDeliveries.attempts, readAttempts),
+          inArray(webhookDeliveries.status, ['pending', 'retrying']),
+        ),
+      )
+      .returning({ attempts: webhookDeliveries.attempts });
+    return row?.attempts ?? null;
   };
 
   /** Record one attempt. `status` is the delivery's state after it. */

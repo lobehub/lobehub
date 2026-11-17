@@ -18,7 +18,11 @@ import { attemptWebhookDelivery } from './deliver';
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: {
     initWithEnvKey: async () => ({
-      decrypt: async (value: string) => ({ plaintext: value.slice('cipher:'.length) }),
+      // `bad:` ciphertexts fail like a rotated KEY_VAULTS_SECRET does: empty and not authentic.
+      decrypt: async (value: string) =>
+        value.startsWith('bad:')
+          ? { plaintext: '', wasAuthentic: false }
+          : { plaintext: value.slice('cipher:'.length), wasAuthentic: true },
       encrypt: async (value: string) => `cipher:${value}`,
     }),
   },
@@ -260,6 +264,41 @@ describe('attemptWebhookDelivery', () => {
       attempts: 1,
       error: 'Blocked: the URL resolves to a private or reserved address',
       responseStatus: null,
+      status: 'failed',
+    });
+  });
+
+  it('sends an attempt once even when two queue messages race for it', async () => {
+    respond = () => ({ delayMs: 50, status: 200 });
+    const endpoint = await createEndpoint('/race');
+    const delivery = await queueEvent(endpoint.id);
+
+    const results = await Promise.all([
+      attemptWebhookDelivery(db, delivery.id),
+      attemptWebhookDelivery(db, delivery.id),
+    ]);
+
+    expect(results.map((r) => r.outcome).sort()).toEqual(['skipped', 'succeeded']);
+    expect(results).toContainEqual({ outcome: 'skipped', reason: 'already_claimed' });
+    expect(received).toHaveLength(1);
+    expect(await loadDelivery(delivery.id)).toMatchObject({ attempts: 1, status: 'succeeded' });
+  });
+
+  it('never signs with a secret it cannot decrypt', async () => {
+    const endpoint = await createEndpoint('/secret');
+    await db
+      .update(webhookEndpoints)
+      .set({ secret: 'bad:ciphertext' })
+      .where(eq(webhookEndpoints.id, endpoint.id));
+    const delivery = await queueEvent(endpoint.id);
+
+    const result = await attemptWebhookDelivery(db, delivery.id);
+
+    expect(result.outcome).toBe('failed');
+    expect(received).toHaveLength(0);
+    expect(await loadDelivery(delivery.id)).toMatchObject({
+      attempts: 1,
+      error: 'The signing secret cannot be decrypted; rotate the secret',
       status: 'failed',
     });
   });

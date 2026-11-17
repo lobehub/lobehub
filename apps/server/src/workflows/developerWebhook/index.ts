@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { WebhookDeliveryWorkerModel } from '@/database/models/developerWebhook';
 import { appEnv } from '@/envs/app';
 import { qstashClient } from '@/libs/qstash';
 import { attemptWebhookDelivery } from '@/server/services/developerWebhook/deliver';
@@ -17,7 +18,8 @@ export const DEVELOPER_WEBHOOK_DELIVER_PATH = '/api/workflows/developer-webhook/
 /**
  * Asynchronous delivery of developer webhooks. With the queue runtime every attempt
  * is one QStash message, published with the backoff delay of the attempt it carries;
- * without it (local dev, desktop) a timer stands in for QStash.
+ * without it (local dev, desktop) an in-process timer stands in for QStash, so a
+ * restart drops the retries it was holding — production deployments use the queue.
  */
 export class DeveloperWebhookWorkflow {
   static async triggerDeliver(payload: DeveloperWebhookDeliverPayload, delaySeconds = 0) {
@@ -55,7 +57,28 @@ export class DeveloperWebhookWorkflow {
     const result = await attemptWebhookDelivery(await getServerDB(), payload.deliveryId);
     if (result.outcome === 'retry') {
       log('schedule retry of %s in %ds', payload.deliveryId, result.delaySeconds);
-      await DeveloperWebhookWorkflow.triggerDeliver(payload, result.delaySeconds);
+      try {
+        await DeveloperWebhookWorkflow.triggerDeliver(payload, result.delaySeconds);
+      } catch (error) {
+        // Nothing would ever send the retry: settle the delivery instead of leaving it waiting.
+        console.error(
+          '[developerWebhook:workflow] cannot schedule retry',
+          payload.deliveryId,
+          error,
+        );
+        await new WebhookDeliveryWorkerModel(await getServerDB()).recordAttempt(
+          payload.deliveryId,
+          {
+            attempts: result.delivery.attempts,
+            durationMs: result.delivery.durationMs,
+            error: 'Could not schedule the retry',
+            nextAttemptAt: null,
+            responseBody: result.delivery.responseBody,
+            responseStatus: result.delivery.responseStatus,
+            status: 'failed',
+          },
+        );
+      }
     }
     return result;
   }

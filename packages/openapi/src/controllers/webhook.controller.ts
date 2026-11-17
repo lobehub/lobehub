@@ -1,6 +1,10 @@
+import type { WebhookEventType } from '@lobechat/types';
 import type { Context } from 'hono';
 
+import { type ApiKeyScope, hasApiKeyScope } from '@/const/apiKeyScope';
+
 import { BaseController } from '../common/base.controller';
+import { ApiException } from '../common/errors';
 import { WebhookRestService } from '../services/webhook.service';
 import type {
   CreateWebhookRequest,
@@ -9,6 +13,42 @@ import type {
   WebhookIdParam,
   WebhookListQuery,
 } from '../types/webhook.type';
+
+/**
+ * The read scope an API key needs to subscribe to an event: an endpoint receives
+ * that domain's data, so `webhook:write` alone must not open it up.
+ */
+export const WEBHOOK_EVENT_READ_SCOPES: Record<WebhookEventType, ApiKeyScope> = {
+  'file.parsed': 'file:read',
+  'goal.status_changed': 'agent:read',
+  'message.created': 'chat:read',
+  'notification.created': 'user:read',
+  'run.completed': 'run:read',
+  'run.failed': 'run:read',
+  'run.intervention_requested': 'run:read',
+  'run.started': 'run:read',
+  'task.status_changed': 'agent:read',
+  'topic.created': 'chat:read',
+};
+
+/** 403 when the calling API key lacks the read scope of a subscribed event. */
+const assertCanSubscribe = (c: Context, events: WebhookEventType[] | undefined) => {
+  if (!events) return;
+  const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+  const missing = [
+    ...new Set(
+      events
+        .map((event) => WEBHOOK_EVENT_READ_SCOPES[event])
+        .filter((scope) => !hasApiKeyScope(scopes, scope)),
+    ),
+  ];
+  if (missing.length > 0)
+    throw new ApiException(
+      403,
+      'insufficient_scope',
+      `insufficient_scope: subscribing to these events needs ${missing.map((s) => `\`${s}\``).join(', ')}`,
+    );
+};
 
 /**
  * Developer webhooks controller.
@@ -42,6 +82,7 @@ export class WebhookController extends BaseController {
   async createWebhook(c: Context): Promise<Response> {
     try {
       const body = await this.getBody<CreateWebhookRequest>(c);
+      assertCanSubscribe(c, body.events);
       const service = await this.service(c);
       return this.success(c, await service.create(body), 'Webhook created', 201);
     } catch (error) {
@@ -65,6 +106,7 @@ export class WebhookController extends BaseController {
     try {
       const { id } = this.getParams<WebhookIdParam>(c);
       const body = await this.getBody<UpdateWebhookRequest>(c);
+      assertCanSubscribe(c, body.events);
       const service = await this.service(c);
       return this.success(c, await service.update(id, body), 'Webhook updated');
     } catch (error) {

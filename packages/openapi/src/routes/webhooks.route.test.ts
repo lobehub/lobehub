@@ -70,6 +70,7 @@ const READ_KEY = 'sk-lh-whkreadowner0001';
 const OTHER_SCOPE_KEY = 'sk-lh-whkchatowner0001';
 const STRANGER_KEY = 'sk-lh-whkstranger00001';
 const WORKSPACE_KEY = 'sk-lh-whkworkspace0001';
+const CHAT_EVENTS_KEY = 'sk-lh-whkchatevents001';
 
 const call = (
   path: string,
@@ -129,15 +130,15 @@ beforeEach(async () => {
     userId,
     workspaceId: workspaceId ?? null,
   });
-  await serverDB
-    .insert(apiKeys)
-    .values([
-      key(WRITE_KEY, OWNER, ['webhook:write']),
-      key(READ_KEY, OWNER, ['webhook:read']),
-      key(OTHER_SCOPE_KEY, OWNER, ['chat:read', 'chat:write']),
-      key(STRANGER_KEY, STRANGER, ['webhook:write']),
-      key(WORKSPACE_KEY, OWNER, ['webhook:write'], WORKSPACE),
-    ]);
+  await serverDB.insert(apiKeys).values([
+    // Subscribing to run.* also takes run:read (the events carry run data).
+    key(WRITE_KEY, OWNER, ['webhook:write', 'run:read']),
+    key(READ_KEY, OWNER, ['webhook:read']),
+    key(OTHER_SCOPE_KEY, OWNER, ['chat:read', 'chat:write']),
+    key(STRANGER_KEY, STRANGER, ['webhook:write', 'run:read']),
+    key(WORKSPACE_KEY, OWNER, ['webhook:write', 'run:read'], WORKSPACE),
+    key(CHAT_EVENTS_KEY, OWNER, ['webhook:write', 'chat:read']),
+  ]);
 });
 
 afterAll(clean);
@@ -179,6 +180,38 @@ describe('webhook routes: authentication and scopes', () => {
       if (op.scope === 'read') expect(res.status, `${op.method} ${op.path}`).toBe(200);
       else expect(res.status, `${op.method} ${op.path}`).toBe(403);
     }
+  });
+});
+
+describe('webhook routes: event subscriptions need the read scope of their data', () => {
+  it('refuses events whose domain the key cannot read, on create and on update', async () => {
+    const refused = await call('', {
+      body: { ...VALID, events: ['message.created', 'run.completed'] },
+      key: WRITE_KEY,
+      method: 'POST',
+    });
+    expect(refused.status).toBe(403);
+    const body = (await refused.json()) as { code: string; message: string };
+    expect(body.code).toBe('insufficient_scope');
+    expect(body.message).toContain('`chat:read`');
+
+    const { id } = await create();
+    const patch = await call(`/${id}`, {
+      body: { events: ['task.status_changed'] },
+      key: WRITE_KEY,
+      method: 'PATCH',
+    });
+    expect(patch.status).toBe(403);
+    expect(((await patch.json()) as { message: string }).message).toContain('`agent:read`');
+  });
+
+  it('accepts them once the key holds that scope', async () => {
+    const res = await call('', {
+      body: { ...VALID, events: ['message.created', 'topic.created'] },
+      key: CHAT_EVENTS_KEY,
+      method: 'POST',
+    });
+    expect(res.status).toBe(201);
   });
 });
 
@@ -280,7 +313,7 @@ describe('webhook routes: happy paths', () => {
     expect(list).toMatchObject({ hasMore: false, nextCursor: null, total: 1 });
 
     const disabled = await call(`/${created.id}`, {
-      body: { enabled: false, events: ['topic.created', 'topic.created'] },
+      body: { enabled: false, events: ['run.started', 'run.started'] },
       key: WRITE_KEY,
       method: 'PATCH',
     });
@@ -288,7 +321,7 @@ describe('webhook routes: happy paths', () => {
     expect(WebhookSchema.parse(await data(disabled))).toMatchObject({
       disabledReason: 'manual',
       enabled: false,
-      events: ['topic.created'],
+      events: ['run.started'],
     });
 
     const rotated = await call(`/${created.id}/rotate-secret`, { key: WRITE_KEY, method: 'POST' });

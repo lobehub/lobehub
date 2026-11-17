@@ -8,7 +8,7 @@ import { users, webhookDeliveries } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import type * as EmitModule from './emit';
-import { emitWebhookEvent } from './emit';
+import { emitWebhookEvent, invalidateWebhookScope } from './emit';
 import { publishRunCompletionWebhook, publishRunStartedWebhook } from './runEvents';
 
 const mocks = vi.hoisted(() => ({ published: vi.fn(), triggerDeliver: vi.fn() }));
@@ -39,6 +39,7 @@ beforeEach(async () => {
   await db.delete(users).where(inArray(users.id, [userId, otherUserId]));
   await db.insert(users).values([{ id: userId }, { id: otherUserId }]);
   mocks.triggerDeliver.mockReset();
+  invalidateWebhookScope({ userId });
 });
 
 afterEach(async () => {
@@ -95,6 +96,19 @@ describe('emitWebhookEvent', () => {
       .where(eq(webhookDeliveries.id, id));
     expect(delivery).toMatchObject({ error: 'Could not queue the delivery', status: 'failed' });
     error.mockRestore();
+  });
+
+  it('skips the endpoint lookup for a while once a space has no endpoint', async () => {
+    const data = { agentId: null, title: 't', topicId: 'tpc_x' };
+    expect(await emitWebhookEvent(db, { userId }, 'topic.created', data)).toEqual([]);
+
+    // Written straight to the table, so nothing tells the emitter: the note still holds.
+    await endpoint(userId, ['topic.created']);
+    expect(await emitWebhookEvent(db, { userId }, 'topic.created', data)).toEqual([]);
+
+    // The service invalidates it on every create / update / delete.
+    invalidateWebhookScope({ userId });
+    expect(await emitWebhookEvent(db, { userId }, 'topic.created', data)).toHaveLength(1);
   });
 
   it('does nothing when nobody subscribes', async () => {

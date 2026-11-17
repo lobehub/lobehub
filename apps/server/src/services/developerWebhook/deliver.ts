@@ -14,7 +14,7 @@ import {
 import type { WebhookDeliveryRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { openWebhookSecret } from './secretVault';
+import { openWebhookSecret, WebhookSecretUnavailableError } from './secretVault';
 import { signWebhookPayload } from './signature';
 
 const log = debug('lobe-server:developer-webhook:deliver');
@@ -23,7 +23,10 @@ export type WebhookDeliveryOutcome =
   | { delivery: WebhookDeliveryRow; outcome: 'succeeded' }
   | { delaySeconds: number; delivery: WebhookDeliveryRow; outcome: 'retry' }
   | { delivery: WebhookDeliveryRow; endpointDisabled: boolean; outcome: 'failed' }
-  | { outcome: 'skipped'; reason: 'already_settled' | 'endpoint_disabled' | 'not_found' };
+  | {
+      outcome: 'skipped';
+      reason: 'already_claimed' | 'already_settled' | 'endpoint_disabled' | 'not_found';
+    };
 
 interface SendResult extends WebhookAttemptResult {
   /** A retry cannot succeed (e.g. the URL resolves to a private address). */
@@ -118,7 +121,8 @@ const send = async (
  * `disableAfterConsecutiveFailures` such deliveries in a row.
  *
  * Test deliveries make one attempt and never touch the endpoint's failure count.
- * Safe to call twice for the same attempt: a settled delivery is skipped.
+ * Safe to call twice for the same attempt (queues deliver at least once): each
+ * attempt is claimed first, and a settled or already-claimed delivery is skipped.
  */
 export const attemptWebhookDelivery = async (
   db: LobeChatDatabase,
@@ -133,7 +137,6 @@ export const attemptWebhookDelivery = async (
     return { outcome: 'skipped', reason: 'already_settled' };
 
   const isTest = delivery.eventType === WEBHOOK_TEST_EVENT_TYPE;
-  const attempts = delivery.attempts + 1;
 
   if (!endpoint.enabled && !isTest) {
     await worker.recordAttempt(deliveryId, {
@@ -148,8 +151,27 @@ export const attemptWebhookDelivery = async (
     return { outcome: 'skipped', reason: 'endpoint_disabled' };
   }
 
-  const secret = await openWebhookSecret(endpoint.secret);
-  const { permanent, ...result } = await send(endpoint.url, secret, delivery);
+  const attempts = await worker.claimAttempt(deliveryId, delivery.attempts);
+  if (attempts === null) return { outcome: 'skipped', reason: 'already_claimed' };
+
+  let sent: SendResult;
+  try {
+    sent = await send(endpoint.url, await openWebhookSecret(endpoint.secret), delivery);
+  } catch (error) {
+    // Nothing reached the receiver, and retrying will not change that: settle the
+    // delivery as failed instead of leaving it claimed with nothing to resume it.
+    sent = {
+      durationMs: null,
+      error:
+        error instanceof WebhookSecretUnavailableError
+          ? error.message
+          : `Delivery failed before sending: ${(error as Error)?.message ?? 'unknown error'}`,
+      permanent: true,
+      responseBody: null,
+      responseStatus: null,
+    };
+  }
+  const { permanent, ...result } = sent;
   const ok = result.responseStatus !== null && result.error === null;
 
   if (ok) {

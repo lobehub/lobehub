@@ -13,6 +13,22 @@ import { DeveloperWebhookWorkflow } from '@/server/workflows/developerWebhook';
 const log = debug('lobe-server:developer-webhook:emit');
 
 /**
+ * Spaces known to have no subscribed endpoint, so the writes that announce events
+ * (every message, topic, task status…) skip the endpoint lookup almost always.
+ * Per process and short-lived: another instance may miss events for up to
+ * `NO_ENDPOINT_TTL_MS` after an endpoint is created there.
+ */
+const NO_ENDPOINT_TTL_MS = 10_000;
+const NO_ENDPOINT_MAX_ENTRIES = 10_000;
+const noEndpointUntil = new Map<string, number>();
+const scopeKey = (scope: WebhookEventScope) => `${scope.userId}:${scope.workspaceId ?? ''}`;
+
+/** Forget the "no endpoint" note of a space after its endpoints change. */
+export const invalidateWebhookScope = (scope: WebhookEventScope) => {
+  noEndpointUntil.delete(scopeKey(scope));
+};
+
+/**
  * Hand one delivery to the queue. If the queue refuses it, the delivery is recorded
  * as failed instead of staying `pending` with nothing left to send it.
  */
@@ -58,9 +74,18 @@ export const emitWebhookEvent = async <T extends WebhookEventType>(
   type: T,
   data: WebhookEventData<T>,
 ): Promise<string[]> => {
+  const key = scopeKey(scope);
+  if ((noEndpointUntil.get(key) ?? 0) > Date.now()) return [];
+
   const model = new WebhookEndpointModel(db, scope.userId, scope.workspaceId);
   const endpoints = await model.findSubscribed(type);
-  if (endpoints.length === 0) return [];
+  if (endpoints.length === 0) {
+    if (!(await model.hasEnabled())) {
+      if (noEndpointUntil.size >= NO_ENDPOINT_MAX_ENTRIES) noEndpointUntil.clear();
+      noEndpointUntil.set(key, Date.now() + NO_ENDPOINT_TTL_MS);
+    }
+    return [];
+  }
 
   const envelope: WebhookEventEnvelope<T> = {
     createdAt: new Date().toISOString(),

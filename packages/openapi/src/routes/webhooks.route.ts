@@ -59,7 +59,7 @@ WebhookRoutes.post(
   routeDoc({
     data: WebhookWithSecretSchema,
     description:
-      'Registers an endpoint and returns its signing secret. The secret is shown only here and on rotate-secret — store it to verify `X-LobeHub-Signature`. At most 20 endpoints per space (409 beyond that).',
+      'Registers an endpoint and returns its signing secret. The secret is shown only here and on rotate-secret — store it to verify `X-LobeHub-Signature`. At most 20 endpoints per space (409 beyond that). Each subscribed event also needs the read scope of its data on an API key: `run:read` for `run.*`, `chat:read` for `message.created` / `topic.created`, `agent:read` for `task.*` / `goal.*`, `file:read` for `file.parsed`, `user:read` for `notification.created` (403 `insufficient_scope` otherwise).',
     errors: [409],
     operationId: 'webhooks.create',
     requestExample: example(CreateWebhookRequestSchema, {
@@ -99,7 +99,7 @@ WebhookRoutes.patch(
   routeDoc({
     data: WebhookSchema,
     description:
-      'Change the URL, events, description, or turn the endpoint on or off. Turning a disabled endpoint back on resets its failure streak.',
+      'Change the URL, events, description, or turn the endpoint on or off. Turning a disabled endpoint back on resets its failure streak. Each subscribed event also needs the read scope of its data on an API key: `run:read` for `run.*`, `chat:read` for `message.created` / `topic.created`, `agent:read` for `task.*` / `goal.*`, `file:read` for `file.parsed`, `user:read` for `notification.created` (403 `insufficient_scope` otherwise).',
     errors: [404],
     operationId: 'webhooks.update',
     summary: 'Update a webhook endpoint',

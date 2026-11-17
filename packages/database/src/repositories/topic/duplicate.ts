@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 
+import { announceTopicCreated } from '../../models/topic/create';
 import { messagePlugins, messages, topics } from '../../schemas';
 import { COPIED_TOPIC_USAGE_RESET } from '../../utils/copiedTranscript';
 import { markCopiedMessageMetadata } from '../../utils/copyMessagesInDatabase';
@@ -92,6 +93,7 @@ export const duplicateTopic = async (
         ),
       )
       .returning();
+    announceTopicCreated(tx, scope, duplicatedTopic);
 
     // Find messages associated with the original topic, ordered by createdAt
     const topicMessages = await tx

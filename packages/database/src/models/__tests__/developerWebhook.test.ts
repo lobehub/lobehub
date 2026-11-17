@@ -3,7 +3,11 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { type DatabaseEventListener, setDatabaseEventListener } from '../../events';
+import {
+  type DatabaseEventListener,
+  instrumentDatabaseEvents,
+  setDatabaseEventListener,
+} from '../../events';
 import { users, webhookEndpoints, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WebhookDeliveryWorkerModel, WebhookEndpointModel } from '../developerWebhook';
@@ -118,6 +122,32 @@ describe('WebhookEndpointModel', () => {
     });
   });
 
+  it('keeps an auto-disable reason when an edit leaves `enabled` as it was', async () => {
+    const model = new WebhookEndpointModel(serverDB, userId);
+    const endpoint = await model.create(endpointInput());
+    const worker = new WebhookDeliveryWorkerModel(serverDB);
+    await worker.markEndpointFailed(endpoint.id, 1);
+
+    // The settings form always sends `enabled`; saving a new description must not
+    // rewrite "disabled after failures" as "disabled by hand".
+    expect(
+      await model.update(endpoint.id, { description: 'renamed', enabled: false }),
+    ).toMatchObject({ disabledReason: 'consecutive_failures', enabled: false });
+
+    // An already enabled endpoint keeps its failure streak on edit.
+    await model.update(endpoint.id, { enabled: true });
+    await serverDB
+      .update(webhookEndpoints)
+      .set({ consecutiveFailures: 3 })
+      .where(eq(webhookEndpoints.id, endpoint.id));
+    expect(
+      await model.update(endpoint.id, { enabled: true, url: 'https://c.example.com' }),
+    ).toMatchObject({
+      consecutiveFailures: 3,
+      disabledReason: null,
+    });
+  });
+
   it('lists deliveries of an endpoint newest first, only for its owner', async () => {
     const model = new WebhookEndpointModel(serverDB, userId);
     const endpoint = await model.create(endpointInput());
@@ -182,6 +212,66 @@ describe('domain events announced by models', () => {
         },
       ],
     ]);
+  });
+
+  it('task.status_changed from deferred completion, CAS batches and bulk updates', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const a = await tasks.create({ instruction: 'A' });
+    const b = await tasks.create({ instruction: 'B' });
+    await tasks.updateStatus(a.id, 'running');
+    await tasks.updateContext(a.id, { completion: { requestedByOperationId: 'op_1' } });
+    const listener = capture();
+
+    await tasks.updateStatusIfCurrentForIds([{ id: b.id, status: b.status }], 'paused');
+    await tasks.batchUpdateStatus([b.id], 'backlog');
+
+    const transitions = () =>
+      listener.mock.calls.map(([, , , data]) => {
+        const { previousStatus, status, taskId } = data as Record<string, string>;
+        return [taskId, previousStatus, status];
+      });
+    expect(transitions()).toEqual([
+      [b.id, b.status, 'paused'],
+      [b.id, 'paused', 'backlog'],
+    ]);
+
+    // The deferred completion a run asked for — the path agent-completed tasks take.
+    expect(await tasks.completeIfCompletionRequested(a.id, 'op_1')).toMatchObject({
+      status: 'completed',
+    });
+    expect(transitions().at(-1)).toEqual([a.id, 'running', 'completed']);
+  });
+
+  it('holds events raised in a transaction until it commits, and drops them on rollback', async () => {
+    const db = instrumentDatabaseEvents(serverDB);
+    const listener = capture();
+
+    await expect(
+      db.transaction(async (tx) => {
+        await new TopicModel(tx as never, userId).create({ title: 'rolled back' });
+        expect(listener).not.toHaveBeenCalled();
+        throw new Error('abort');
+      }),
+    ).rejects.toThrow('abort');
+    expect(listener).not.toHaveBeenCalled();
+
+    await db.transaction(async (tx) => {
+      await new TopicModel(tx as never, userId).create({ title: 'committed' });
+      expect(listener).not.toHaveBeenCalled();
+    });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][3]).toMatchObject({ title: 'committed' });
+  });
+
+  it('topic.created for batch inserts', async () => {
+    const listener = capture();
+    const rows = await new TopicModel(serverDB, userId).batchInsert([
+      { title: 'x' },
+      { title: 'y' },
+    ]);
+    expect(listener.mock.calls.map(([, , type, data]) => [type, (data as any).topicId])).toEqual(
+      rows.map((row) => ['topic.created', row.id]),
+    );
   });
 
   it('goal.status_changed', async () => {

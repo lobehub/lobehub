@@ -14,7 +14,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 
 import { attemptWebhookDelivery } from './deliver';
-import { dispatchWebhookDelivery } from './emit';
+import { dispatchWebhookDelivery, invalidateWebhookScope } from './emit';
 import { createSealedWebhookSecret } from './secretVault';
 
 export { emitWebhookEvent, publishWebhookEvent, type WebhookEventScope } from './emit';
@@ -64,6 +64,8 @@ export class DeveloperWebhookService {
     this.model = new WebhookEndpointModel(db, userId, workspaceId);
   }
 
+  private scope = () => ({ userId: this.userId, workspaceId: this.workspaceId });
+
   list = (params: WebhookListParams) => this.model.list(params);
 
   get = async (id: string): Promise<WebhookEndpointView> => {
@@ -89,6 +91,7 @@ export class DeveloperWebhookService {
       secretHint: secret.hint,
       url: input.url,
     });
+    invalidateWebhookScope(this.scope());
     return { ...endpoint, secret: secret.plaintext };
   };
 
@@ -100,6 +103,7 @@ export class DeveloperWebhookService {
       ...(input.url && { url: input.url }),
     });
     if (!endpoint) throw new DeveloperWebhookError('not_found', 'Webhook not found');
+    invalidateWebhookScope(this.scope());
     return endpoint;
   };
 

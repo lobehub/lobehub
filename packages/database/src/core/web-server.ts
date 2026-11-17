@@ -6,6 +6,7 @@ import ws from 'ws';
 
 import { serverDBEnv } from '@/config/db';
 
+import { instrumentDatabaseEvents } from '../events';
 import * as schema from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
@@ -38,7 +39,7 @@ export const buildPoolOptions = (env: {
   };
 };
 
-export const getDBInstance = (): LobeChatDatabase => {
+const createDBInstance = (): LobeChatDatabase => {
   // In test environment, return a mock instance to avoid initialization errors
   if (process.env.NODE_ENV === 'test') return {} as LobeChatDatabase;
 
@@ -92,3 +93,6 @@ If you don't have it, please run \`openssl rand -base64 32\` to create one.
   });
   return neonDrizzle(client, { schema });
 };
+
+/** The server's database handle; its transactions hold domain events until they commit. */
+export const getDBInstance = (): LobeChatDatabase => instrumentDatabaseEvents(createDBInstance());
