@@ -470,16 +470,23 @@ export class LarkApiClient {
    * record maps a column name to a value already in the column type's wire
    * shape (milliseconds for dates, `[{ id }]` for people, …).
    *
+   * `clientToken` (a UUIDv4) is Feishu's idempotency key: resending the same
+   * batch with the same token after an unconfirmed attempt does not insert
+   * the rows twice.
+   *
    * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/batch_create
    */
   async batchCreateBitableRecords(
     appToken: string,
     tableId: string,
     records: Array<Record<string, unknown>>,
+    options?: { clientToken?: string },
   ): Promise<{ recordIds: string[] }> {
+    const query = new URLSearchParams({ user_id_type: 'open_id' });
+    if (options?.clientToken) query.set('client_token', options.clientToken);
     const data = await this.call(
       'POST',
-      `/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create?user_id_type=open_id`,
+      `/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create?${query.toString()}`,
       { records: records.map((fields) => ({ fields })) },
     );
     return {

@@ -305,6 +305,20 @@ describe('LarkApiClient bitable', () => {
     });
   });
 
+  it('batchCreateBitableRecords sends the idempotency client_token', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: { records: [] }, msg: 'ok' }));
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await api.batchCreateBitableRecords('bascnABC', 'tblNew', [{ 任务: 'a' }], {
+      clientToken: 'fe599b60-450f-46ff-b2ef-9f6675625b97',
+    });
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables/tblNew/records/batch_create?user_id_type=open_id&client_token=fe599b60-450f-46ff-b2ef-9f6675625b97',
+    );
+  });
+
   it('listBitableTables and listBitableFields map the items', async () => {
     fetchMock
       .mockResolvedValueOnce(tokenResponse())

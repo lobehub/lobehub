@@ -39,6 +39,11 @@ const createApi = () => {
   return api as typeof api & LarkApiClient;
 };
 
+/** A definite Feishu rejection: nothing in the batch was written. */
+const REJECTED = new Error(
+  'Lark API POST /bitable/v1/apps/bascnABC/tables/tblNew/records/batch_create failed: 1254290 TooManyRequest',
+);
+
 const FIELDS = [
   { name: '任务', type: 'text' as const },
   { name: '负责人', type: 'person' as const },
@@ -101,18 +106,23 @@ describe('createBitable', () => {
       name: '任务表',
     });
     expect(api.deleteBitableTable).toHaveBeenCalledWith('bascnABC', 'tblDefault');
-    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith('bascnABC', 'tblNew', [
-      {
-        任务: '整理需求',
-        完成: false,
-        工时: 3,
-        截止日期: Date.parse('2026-11-20'),
-        标签: ['后端'],
-        状态: '进行中',
-        负责人: [{ id: 'ou_owner' }],
-        链接: { link: 'https://example.com', text: 'https://example.com' },
-      },
-    ]);
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith(
+      'bascnABC',
+      'tblNew',
+      [
+        {
+          任务: '整理需求',
+          完成: false,
+          工时: 3,
+          截止日期: Date.parse('2026-11-20'),
+          标签: ['后端'],
+          状态: '进行中',
+          负责人: [{ id: 'ou_owner' }],
+          链接: { link: 'https://example.com', text: 'https://example.com' },
+        },
+      ],
+      { clientToken: expect.any(String) },
+    );
     expect(api.addDriveCollaborator).toHaveBeenNthCalledWith(1, 'bascnABC', 'bitable', {
       openId: 'ou_owner',
       perm: 'full_access',
@@ -194,9 +204,12 @@ describe('createBitable', () => {
     );
 
     expect(api.createBitableTable.mock.calls[0][1].fields[0].field_name).toBe('任务');
-    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith('bascnABC', 'tblNew', [
-      { 任务: '写周报' },
-    ]);
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith(
+      'bascnABC',
+      'tblNew',
+      [{ 任务: '写周报' }],
+      { clientToken: expect.any(String) },
+    );
     expect(result.issues).toBeUndefined();
   });
 
@@ -223,7 +236,7 @@ describe('createBitable', () => {
       .mockImplementationOnce(async (_a: string, _t: string, rows: unknown[]) => ({
         recordIds: rows.map((_, i) => `rec${i}`),
       }))
-      .mockRejectedValueOnce(new Error('rate limited'));
+      .mockRejectedValueOnce(REJECTED);
     const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 1 }, (_, i) => ({
       任务: `t${i}`,
     }));
@@ -326,9 +339,12 @@ describe('addBitableRecords', () => {
 
     expect(api.listBitableTables).not.toHaveBeenCalled();
     expect(api.listBitableFields).toHaveBeenCalledWith('bascnABC', 'tblX');
-    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith('bascnABC', 'tblX', [
-      { 任务: '验收', 截止日期: 1_763_600_000_000, 负责人: [{ id: 'ou_1' }, { id: 'ou_2' }] },
-    ]);
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith(
+      'bascnABC',
+      'tblX',
+      [{ 任务: '验收', 截止日期: 1_763_600_000_000, 负责人: [{ id: 'ou_1' }, { id: 'ou_2' }] }],
+      { clientToken: expect.any(String) },
+    );
     expect(result).toEqual({
       appToken: 'bascnABC',
       platform: 'feishu',
@@ -379,13 +395,89 @@ describe('addBitableRecords', () => {
     ).rejects.toThrow('not a Bitable');
   });
 
+  it('retries an unconfirmed batch with the same client token', async () => {
+    const api = createApi();
+    api.batchCreateBitableRecords
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockRejectedValueOnce(
+        new Error('Lark API POST /x failed: 1255040 request timed out, please try again later'),
+      );
+
+    const result = await addBitableRecords(
+      api,
+      { appToken: 'bascnABC', platform: 'feishu', records: [{ 任务: 'a' }] },
+      'feishu',
+    );
+
+    expect(result.recordIds).toEqual(['rec0']);
+    const tokens = api.batchCreateBitableRecords.mock.calls.map((call) => call[3]?.clientToken);
+    expect(tokens).toHaveLength(3);
+    expect(new Set(tokens).size).toBe(1);
+    expect(tokens[0]).toMatch(/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[\da-f]{4}-[\da-f]{12}$/);
+  });
+
+  it('uses a fresh client token for each batch', async () => {
+    const api = createApi();
+    const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 1 }, () => ({ 任务: 'a' }));
+
+    await addBitableRecords(api, { appToken: 'bascnABC', platform: 'feishu', records }, 'feishu');
+
+    const [first, second] = api.batchCreateBitableRecords.mock.calls.map(
+      (call) => call[3]?.clientToken,
+    );
+    expect(first).not.toBe(second);
+  });
+
+  it('reports a batch Feishu never confirmed as unknown, not as unwritten', async () => {
+    const api = createApi();
+    api.batchCreateBitableRecords
+      .mockImplementationOnce(async (_a: string, _t: string, rows: unknown[]) => ({
+        recordIds: rows.map((_, i) => `rec${i}`),
+      }))
+      .mockRejectedValue(new Error('Lark API POST /x failed: 502 Bad Gateway'));
+    const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE * 2 + 3 }, () => ({
+      任务: 'a',
+    }));
+
+    const error = await addBitableRecords(
+      api,
+      { appToken: 'bascnABC', platform: 'feishu', records },
+      'feishu',
+    ).catch((e: Error) => e);
+
+    // 1 committed batch + 3 attempts at the second; the third is never sent.
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledTimes(4);
+    expect(error.message).toContain(
+      `did not confirm whether rows #${BITABLE_RECORD_BATCH_SIZE + 1}–#${BITABLE_RECORD_BATCH_SIZE * 2} were written`,
+    );
+    expect(error.message).toContain('check the table');
+    expect(error.message).toContain(
+      `rows #${BITABLE_RECORD_BATCH_SIZE * 2 + 1}–#${BITABLE_RECORD_BATCH_SIZE * 2 + 3} were not written`,
+    );
+    expect(error.message).not.toContain('retry only');
+  });
+
+  it('does not retry a batch Feishu definitely rejected', async () => {
+    const api = createApi();
+    api.batchCreateBitableRecords.mockRejectedValueOnce(REJECTED);
+
+    await expect(
+      addBitableRecords(
+        api,
+        { appToken: 'bascnABC', platform: 'feishu', records: [{ 任务: 'a' }] },
+        'feishu',
+      ),
+    ).rejects.toThrow('1254290');
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledTimes(1);
+  });
+
   it('says which rows landed when a later batch fails', async () => {
     const api = createApi();
     api.batchCreateBitableRecords
       .mockImplementationOnce(async (_a: string, _t: string, rows: unknown[]) => ({
         recordIds: rows.map((_, i) => `rec${i}`),
       }))
-      .mockRejectedValueOnce(new Error('rate limited'));
+      .mockRejectedValueOnce(REJECTED);
     const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 2 }, () => ({ 任务: 'a' }));
 
     await expect(

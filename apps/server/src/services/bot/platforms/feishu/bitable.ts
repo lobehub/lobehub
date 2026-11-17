@@ -227,21 +227,52 @@ export const toBitableRecords = (
 /**
  * A batch failed after earlier batches were committed. Carries the ids that
  * did land so callers report partial progress instead of inviting a retry
- * that would duplicate them.
+ * that would duplicate them. When Feishu never confirmed the failing batch
+ * either way, its rows are reported as unknown rather than unwritten.
  */
 class PartialRecordWriteError extends Error {
   constructor(
     readonly recordIds: string[],
     readonly total: number,
     cause: unknown,
+    /** 1-based row range whose write state is unknown, if any. */
+    readonly unconfirmed?: { from: number; to: number },
   ) {
-    super(
-      recordIds.length > 0
-        ? `${withHint(cause, BITABLE_ERROR_HINTS).message} — ${recordIds.length} of ${total} rows were already written; retry only rows #${recordIds.length + 1}–#${total}, not the earlier ones`
-        : withHint(cause, BITABLE_ERROR_HINTS).message,
-    );
+    const reason = withHint(cause, BITABLE_ERROR_HINTS).message;
+    const written = recordIds.length;
+    const parts = [reason];
+    if (unconfirmed) {
+      parts.push(
+        `${written} of ${total} rows are confirmed written; Feishu did not confirm whether rows #${unconfirmed.from}–#${unconfirmed.to} were written, so check the table for them before retrying any of them` +
+          (unconfirmed.to < total
+            ? `; rows #${unconfirmed.to + 1}–#${total} were not written`
+            : ''),
+      );
+    } else if (written > 0) {
+      parts.push(
+        `${written} of ${total} rows were already written; retry only rows #${written + 1}–#${total}, not the earlier ones`,
+      );
+    }
+    super(parts.join(' — '));
   }
 }
+
+/**
+ * Whether a failed request may still have been committed by Feishu: the
+ * request never got an answer (network error), the server failed (HTTP 5xx),
+ * or Feishu reported its own write timeout (`1255040`). Any other Feishu
+ * answer is a definite rejection.
+ */
+const isAmbiguousWriteFailure = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  const answered = /^Lark API \S+ \S+ failed: (\d+)/.exec(message);
+  if (!answered) return true;
+  const code = Number(answered[1]);
+  return code === 1_255_040 || (code >= 500 && code < 600);
+};
+
+/** Attempts per batch; retries reuse the batch's `client_token`. */
+const BATCH_WRITE_ATTEMPTS = 3;
 
 const insertRecords = async (
   api: LarkApiClient,
@@ -252,13 +283,29 @@ const insertRecords = async (
   const recordIds: string[] = [];
   for (let start = 0; start < rows.length; start += BITABLE_RECORD_BATCH_SIZE) {
     const batch = rows.slice(start, start + BITABLE_RECORD_BATCH_SIZE);
-    try {
-      const result = await api.batchCreateBitableRecords(appToken, tableId, batch);
-      recordIds.push(...result.recordIds);
-    } catch (error) {
-      // Batches are atomic on Feishu's side, so everything before `start`
-      // is committed and everything from it on is not.
-      throw new PartialRecordWriteError(recordIds, rows.length, error);
+    // One idempotency key per batch, kept across retries, so a batch Feishu
+    // committed without our seeing the answer is not inserted twice.
+    const clientToken = crypto.randomUUID();
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const result = await api.batchCreateBitableRecords(appToken, tableId, batch, {
+          clientToken,
+        });
+        recordIds.push(...result.recordIds);
+        break;
+      } catch (error) {
+        const ambiguous = isAmbiguousWriteFailure(error);
+        if (ambiguous && attempt < BATCH_WRITE_ATTEMPTS) continue;
+        // Batches are atomic on Feishu's side: everything before `start` is
+        // committed and everything after this batch is not. This batch is
+        // unwritten on a definite rejection, unknown otherwise.
+        throw new PartialRecordWriteError(
+          recordIds,
+          rows.length,
+          error,
+          ambiguous ? { from: start + 1, to: start + batch.length } : undefined,
+        );
+      }
     }
   }
   return recordIds;
@@ -317,7 +364,7 @@ export const createBitable = async (
     } catch (error) {
       if (error instanceof PartialRecordWriteError) recordIds = error.recordIds;
       issues.push({
-        error: `${error instanceof PartialRecordWriteError ? error.message : withHint(error, BITABLE_ERROR_HINTS).message} — the table exists; retry the unwritten rows with addBitableRecords`,
+        error: `${error instanceof PartialRecordWriteError ? error.message : withHint(error, BITABLE_ERROR_HINTS).message} — the table exists; add the rows that were not written with addBitableRecords`,
         target: 'records',
       });
     }
