@@ -1545,6 +1545,7 @@
   "heteroAgent.executionTarget.reconnectFailed": "Impossible de reconnecter cet appareil. Assurez-vous que l'application de bureau est en cours d'exécution, puis réessayez.",
   "heteroAgent.executionTarget.sandbox": "Bac à sable cloud",
   "heteroAgent.executionTarget.sandboxDesc": "Exécuter dans un bac à sable cloud éphémère",
+  "heteroAgent.executionTarget.sandboxGroup": "Bacs à sable",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} fonctionne actuellement uniquement sur un appareil local ou connecté",
   "heteroAgent.executionTarget.switchProjectTopic.content": "Ce sujet s'exécutera dans le répertoire du projet \"{{directory}}\" sur {{device}}. Son prochain tour commencera une nouvelle session là-bas.",
   "heteroAgent.executionTarget.switchTopic.content": "Ce sujet s'exécute sur {{name}}, où son répertoire de travail et sa session d'agent sont conservés. Après le changement, son prochain tour démarre une nouvelle session dans le nouvel environnement. Les nouveaux sujets utiliseront également ce choix.",

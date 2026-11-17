@@ -1543,6 +1543,7 @@
   "heteroAgent.executionTarget.reconnectFailed": "تعذر إعادة الاتصال بهذا الجهاز. تأكد من تشغيل تطبيق سطح المكتب، ثم حاول مرة أخرى.",
   "heteroAgent.executionTarget.sandbox": "بيئة سحابية مؤقتة",
   "heteroAgent.executionTarget.sandboxDesc": "تشغيل في بيئة سحابية مؤقتة",
+  "heteroAgent.executionTarget.sandboxGroup": "بيئات الحماية",
   "heteroAgent.executionTarget.sandboxUnsupported": "{{name}} يعمل حاليًا فقط على جهاز محلي أو متصل",
   "heteroAgent.executionTarget.switchProjectTopic.content": "سيتم تشغيل هذا الموضوع في دليل المشروع \"{{directory}}\" على {{device}}. تبدأ دورته التالية بجلسة جديدة هناك.",
   "heteroAgent.executionTarget.switchTopic.content": "تم تشغيل هذا الموضوع على {{name}}، حيث يتم الاحتفاظ بدليل العمل وجلسة الوكيل. بعد التبديل، يبدأ دوره التالي جلسة جديدة في البيئة الجديدة. ستستخدم المواضيع الجديدة هذا الاختيار أيضًا.",

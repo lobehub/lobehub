@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HeteroDeviceSwitcher from '../HeteroDeviceSwitcher';
 
 const state = vi.hoisted(() => ({
+  devices: [] as object[],
   driveStatus: 'ready' as 'hidden' | 'loading' | 'ready' | 'upgrade',
   openUpsell: vi.fn(),
   persistent: false,
@@ -70,8 +71,9 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: object) => unknown) => selector({ agentMap: {} }),
 }));
 vi.mock('@/store/device', () => ({
+  isDevicePresenceUnknown: () => false,
   useDeviceList: () => ({
-    data: [],
+    data: state.devices,
     error: undefined,
     isConfirmed: true,
     isValidating: false,
@@ -83,6 +85,10 @@ vi.mock('@/store/electron', () => ({
     selector({ gatewayDeviceInfo: undefined, useFetchGatewayDeviceInfo: () => () => undefined }),
 }));
 vi.mock('../../hooks/useTopicId', () => ({ useTopicId: () => 'topic-1' }));
+// A device group is one row here; its submenu has tests of its own.
+vi.mock('../DeviceGroupSubmenu', () => ({
+  default: ({ label }: { label: string }) => <div>{label}</div>,
+}));
 vi.mock('../useSandboxNetworkToggle', () => ({ useSandboxNetworkToggle: () => vi.fn() }));
 vi.mock('../useTopicAwareTargetSelect', () => ({
   useTopicAwareTargetSelect: () => ({ selectTarget: state.selectTarget, topicDeviceId: undefined }),
@@ -101,6 +107,7 @@ const TEMPORARY = 'heteroAgent.executionTarget.temporarySandbox';
 const PERSISTENT = 'heteroAgent.executionTarget.persistentSandbox';
 
 beforeEach(() => {
+  state.devices = [];
   state.driveStatus = 'ready';
   state.persistent = false;
   state.openUpsell.mockReset();
@@ -199,5 +206,44 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
     expect(screen.queryByText(PERSISTENT)).toBeNull();
+  });
+});
+
+// The sandboxes are a section of their own, apart from the built-in choices
+// that run nowhere in particular (no device, auto).
+describe('HeteroDeviceSwitcher — sections', () => {
+  const BUILTIN = 'heteroAgent.executionTarget.builtinGroup';
+  const SANDBOXES = 'heteroAgent.executionTarget.sandboxGroup';
+  const follows = (a: Element, b: Element) =>
+    !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('puts the sandboxes under their own label, after no device and auto', () => {
+    state.devices = [
+      {
+        channels: [],
+        deviceId: 'd1',
+        hostname: 'box',
+        online: true,
+        platform: 'linux',
+        scope: 'personal',
+      },
+    ];
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    const builtin = screen.getByText(BUILTIN);
+    const auto = screen.getByText('heteroAgent.executionTarget.autoDesc');
+    const sandboxes = screen.getByText(SANDBOXES);
+    const persistent = screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc');
+
+    expect(follows(builtin, auto)).toBe(true);
+    expect(follows(auto, sandboxes)).toBe(true);
+    expect(follows(sandboxes, persistent)).toBe(true);
+  });
+
+  it('leaves the sections unlabelled on web without devices', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.queryByText(BUILTIN)).toBeNull();
+    expect(screen.queryByText(SANDBOXES)).toBeNull();
   });
 });
