@@ -46,15 +46,21 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
     chatMocks.topics = { t1: topic() };
   });
 
-  it('no longer binds the PR a gh pr create printed', async () => {
+  it('records the push of a push-and-create chain but leaves the PR to the server', async () => {
     await recordGitCommandEffects({
-      command: 'gh pr create --title "Fix"',
-      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
+      command: 'git push -u origin HEAD && gh pr create --title "Fix"',
+      resultContent: [
+        'To github.com:lobehub/lobehub.git',
+        ' * [new branch]      HEAD -> feat/x',
+        'https://github.com/lobehub/lobehub/pull/456',
+      ].join('\n'),
       toolCallId: 'call-1',
       topicId: 't1',
     });
 
-    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+    const git = chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git;
+    expect(git.upstream).toEqual({ branch: 'feat/x', remote: 'origin' });
+    expect(git).not.toHaveProperty('github');
   });
 
   it('still records the upstream of a push, then links its PR through the server', async () => {

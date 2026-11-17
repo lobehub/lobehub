@@ -1,10 +1,15 @@
-import type { TopicPullRequestItem, TopicPullRequestScmState } from '@lobechat/types';
+import type {
+  ScmChangeRequestSnapshot,
+  ScmCiStatus,
+  ScmReviewDecision,
+  TopicPullRequestItem,
+  TopicPullRequestScmState,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessageModel } from '@/database/models/message';
 import { ScmChangeRequestModel } from '@/database/models/scm';
 import { parseGitPushResult, type WorkModel } from '@/database/models/work';
-import type { ScmChangeRequestItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import {
@@ -18,9 +23,19 @@ const log = debug('lobe-server:topic-pull-requests');
 const identityKey = (repoFullName: string, number: number) =>
   `${repoFullName.toLowerCase()}#${number}`;
 
-const toScmState = (row: ScmChangeRequestItem): TopicPullRequestScmState => ({
+/** The fields of a tracked change request this listing reports. */
+type ScmChangeRequestState = Pick<
+  ScmChangeRequestSnapshot,
+  'isDraft' | 'mergedAt' | 'number' | 'repoFullName' | 'state' | 'title'
+> & {
+  ciStatus?: ScmCiStatus | null;
+  reviewDecision?: ScmReviewDecision | null;
+  updatedAt: Date;
+};
+
+const toScmState = (row: ScmChangeRequestState): TopicPullRequestScmState => ({
   ciStatus: row.ciStatus ?? null,
-  isDraft: row.isDraft,
+  isDraft: row.isDraft ?? false,
   mergedAt: row.mergedAt ?? null,
   reviewDecision: row.reviewDecision ?? null,
   state: row.state,
