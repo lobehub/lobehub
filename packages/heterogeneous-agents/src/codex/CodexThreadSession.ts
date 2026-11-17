@@ -7,7 +7,7 @@ import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSes
 import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
 import type { CodexAppServerClient } from './CodexAppServerClient';
-import { CodexAppServerConnectionError } from './CodexAppServerClient';
+import { CodexAppServerConnectionError, CodexAppServerRpcError } from './CodexAppServerClient';
 import type { CodexRunProvenance } from './environment';
 import { isSameCodexRunProvenance, withCodexThreadEnv } from './environment';
 import type {
@@ -57,6 +57,17 @@ interface ActiveTurn {
   transportInterrupted: boolean;
   turnId?: string;
 }
+
+/** `turn/steer` (app-server v2): add input to the active turn, which must still be `expectedTurnId`. */
+interface TurnSteerParams {
+  clientUserMessageId?: string | null;
+  expectedTurnId: string;
+  input: TurnStartParams['input'];
+  threadId: string;
+}
+
+/** How a steer ended: taken by the active turn, or left for a turn of its own. */
+export type CodexSteerOutcome = 'accepted' | 'rejected';
 
 interface ThreadNameSetParams {
   name: string;
@@ -212,6 +223,38 @@ export class CodexThreadSession {
       this.activeTurn = undefined;
       this.interruptRequested = false;
       this.running = false;
+    }
+  }
+
+  /**
+   * Add a user message to the running turn (`turn/steer`). The model reads it
+   * at its next step; the app-server reports it back as a `userMessage` item
+   * carrying `clientUserMessageId`. A turn that cannot take input (none
+   * running, a review or compaction turn, a different turn than the one
+   * started here) refuses it, and the caller sends it as a turn of its own.
+   */
+  async steer(
+    input: TurnStartParams['input'],
+    clientUserMessageId: string,
+  ): Promise<CodexSteerOutcome> {
+    const activeTurn = this.activeTurn;
+    const threadId = this.threadId;
+    if (!activeTurn?.turnId || !threadId || activeTurn.interruptRequested || this.closedByHost)
+      return 'rejected';
+
+    try {
+      const params: TurnSteerParams = {
+        clientUserMessageId,
+        expectedTurnId: activeTurn.turnId,
+        input,
+        threadId,
+      };
+      await this.options.client.request('turn/steer', params);
+      return 'accepted';
+    } catch (error) {
+      // A definite refusal (`activeTurnNotSteerable`, a turn mismatch) was not stored.
+      if (error instanceof CodexAppServerRpcError) return 'rejected';
+      throw error;
     }
   }
 

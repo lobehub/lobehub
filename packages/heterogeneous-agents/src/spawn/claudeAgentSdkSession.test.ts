@@ -260,3 +260,85 @@ describe('ClaudeAgentSdkSession plugins', () => {
     expect(options).not.toHaveProperty('plugins');
   });
 });
+
+describe('ClaudeAgentSdkSession steer', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  it('hands a steered message to the running query at priority now and waits for its answer', async () => {
+    const steeredInputs: any[] = [];
+    let ready!: () => void;
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let queryOptions: any;
+    sdkQueryMock.mockImplementation(({ options, prompt }) => {
+      queryOptions = options;
+      const input = prompt[Symbol.asyncIterator]();
+      return {
+        async *[Symbol.asyncIterator]() {
+          await input.next();
+          yield { session_id: 's', subtype: 'init', type: 'system' };
+          ready();
+          const steered = await input.next();
+          steeredInputs.push(steered.value);
+          // Claude Code 2.1.308: the aborted cycle reports a result of its own first.
+          yield {
+            is_error: false,
+            subtype: 'success',
+            terminal_reason: 'aborted_tools',
+            type: 'result',
+          };
+          yield {
+            isReplay: true,
+            message: { content: 'x', role: 'user' },
+            type: 'user',
+            uuid: 'steer-1',
+          };
+          yield { is_error: false, result: 'ok', subtype: 'success', type: 'result' };
+          // Answered: input closes, and the query ends.
+          expect((await input.next()).done).toBe(true);
+        },
+        close: vi.fn(),
+      };
+    });
+
+    const session = new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-steer',
+      replayUserMessages: true,
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'go', role: 'user' }, type: 'user' })}\n`,
+    });
+    const running = session.run();
+    await started;
+
+    expect(
+      session.steer(
+        {
+          message: { content: 'also this', role: 'user' },
+          parent_tool_use_id: null,
+          type: 'user',
+        } as any,
+        'steer-1',
+      ),
+    ).toBe(true);
+    await running;
+
+    expect(steeredInputs[0]).toMatchObject({ priority: 'now', type: 'user', uuid: 'steer-1' });
+    expect(queryOptions.extraArgs).toMatchObject({ 'replay-user-messages': null });
+    // Input has closed: a later steer goes as a turn of its own.
+    expect(session.steer({ message: { content: 'late', role: 'user' } } as any, 'steer-2')).toBe(
+      false,
+    );
+  });
+});

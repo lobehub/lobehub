@@ -100,6 +100,17 @@ const normalizeToolResult = (result: any): Pick<ToolResultData, 'content' | 'plu
   };
 };
 
+/** The text of a Pi user message (`content` is a string or text/image blocks). */
+const userText = (message: any): string =>
+  typeof message.content === 'string'
+    ? message.content
+    : Array.isArray(message.content)
+      ? message.content
+          .filter((block: any) => block?.type === 'text' && typeof block.text === 'string')
+          .map((block: any) => block.text)
+          .join('\n\n')
+      : '';
+
 /** Maps Pi's `--mode json` session event stream into shared heterogeneous events. */
 export class PiAdapter implements AgentEventAdapter {
   sessionId?: string;
@@ -312,6 +323,13 @@ export class PiAdapter implements AgentEventAdapter {
 
     if (message.role === 'toolResult') {
       return this.completeTool(message.toolCallId, message, message.isError === true);
+    }
+    // A user message read mid-run is a steer the host sent (`steer`): Pi has
+    // no id for it, so its text names the delivery. The run's own prompt is
+    // read before the first turn opens.
+    if (message.role === 'user') {
+      if (!this.started || this.settled) return [];
+      return [this.makeEvent('step_complete', { phase: 'user_message', text: userText(message) })];
     }
     if (message.role !== 'assistant') return [];
     const snapshotEvents = this.emitAssistantSnapshotSuffixes(message);

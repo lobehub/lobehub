@@ -351,6 +351,11 @@ export interface StepCompleteData {
    * CLI provider, not on the wrapped model's native vendor.
    */
   provider?: string;
+  /**
+   * The text of a user message read mid-run (only on `user_message`), for an
+   * agent that reports no id for it (Pi).
+   */
+  text?: string;
   usage?: UsageData;
   /** The replayed message's uuid (only on `user_message`). */
   uuid?: string;

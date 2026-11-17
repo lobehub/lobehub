@@ -29,6 +29,32 @@ const loadParityFixture = async () => {
 };
 
 describe('CodexAppServerAdapter', () => {
+  it('reports a steered user message and answers it in a step of its own', () => {
+    const adapter = new CodexAppServerAdapter({ sessionId: 'thread-1' });
+    const item = (type: string, extra: Record<string, unknown>) => ({
+      item: { id: `${type}-1`, type, ...extra },
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    adapter.adapt('turn/started', { threadId: 'thread-1', turn: { id: 'turn-1' } });
+    adapter.adapt('item/agentMessage/delta', { delta: 'Working on it', itemId: 'm1' });
+
+    // The prompt that started the turn carries no client id: not a steer.
+    expect(adapter.adapt('item/started', item('userMessage', { clientId: null }))).toEqual([]);
+
+    const steered = adapter.adapt('item/started', item('userMessage', { clientId: 'steer-1' }));
+    expect(steered).toEqual([
+      expect.objectContaining({
+        data: { phase: 'user_message', uuid: 'steer-1' },
+        type: 'step_complete',
+      }),
+    ]);
+
+    const answer = adapter.adapt('item/agentMessage/delta', { delta: 'Sure', itemId: 'm2' });
+    expect(answer.map(({ type }) => type)).toEqual(['stream_end', 'stream_start', 'stream_chunk']);
+    expect(answer[1].data).toMatchObject({ newStep: true });
+  });
+
   it('carries the native turn boundary across tool-separated steps', async () => {
     const adapter = new CodexAppServerAdapter({ sessionId: 'native-thread' });
     const events = (await loadFixture()).flatMap(({ method, params }) =>
