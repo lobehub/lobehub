@@ -1,5 +1,4 @@
 import type { ListProjectSkillsResult, ProjectSkillItem } from '@lobechat/electron-client-ipc';
-import path from 'pathe';
 import { useCallback, useMemo } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -17,7 +16,6 @@ export interface UseProjectSkillsResult {
   items: SkillListItem[];
   /** Retry the failed scan. */
   mutate: () => void;
-  onOpenFile: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill: (item: SkillListItem) => void;
   projectItems: SkillListItem[];
   raw: ListProjectSkillsResult | undefined;
@@ -105,15 +103,6 @@ export const useProjectSkills = (
     [deviceId, openLocalFile, previewRoot],
   );
 
-  const onOpenFile = useCallback(
-    (item: SkillListItem, relativePath: string) => {
-      const skill = skillByDir.get(item.id);
-      if (!skill) return;
-      openSkillFile(skill, path.join(skill.skillDir, relativePath));
-    },
-    [openSkillFile, skillByDir],
-  );
-
   const onOpenSkill = useCallback(
     (item: SkillListItem) => {
       const skill = skillByDir.get(item.id);
@@ -133,7 +122,6 @@ export const useProjectSkills = (
     isLoading,
     items,
     mutate: retry,
-    onOpenFile,
     onOpenSkill,
     projectItems,
     raw: data,

@@ -38,16 +38,16 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
   // Local desktop reads over IPC; a bound device reads over RPC. Either path
   // makes the skills list reachable even when this client isn't the desktop.
   const enabled = (isDesktop || !!deviceId) && !!workingDirectory;
-  const { deviceItems, error, isLoading, mutate, onOpenFile, onOpenSkill, projectItems } =
-    useProjectSkills(enabled ? workingDirectory : undefined, deviceId);
+  const { deviceItems, error, isLoading, mutate, projectItems } = useProjectSkills(
+    enabled ? workingDirectory : undefined,
+    deviceId,
+  );
 
   if (!enabled) return null;
 
   const renderList = (items: typeof projectItems) => (
     <SkillsList
       items={items}
-      onOpenFile={onOpenFile}
-      onOpenSkill={onOpenSkill}
       onSelectSkill={onSelectSkill}
       onSkillDragStart={handleSkillDragStart}
     />

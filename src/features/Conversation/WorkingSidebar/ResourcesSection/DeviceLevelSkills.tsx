@@ -38,10 +38,7 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
   ({ deviceId, hideHeader, searchQuery = '', workingDirectory }) => {
     const { t } = useTranslation('chat');
     const onSelectSkill = useSelectSkill('projectSkill');
-    const { deviceItems, error, mutate, onOpenFile, onOpenSkill } = useProjectSkills(
-      workingDirectory,
-      deviceId,
-    );
+    const { deviceItems, error, mutate } = useProjectSkills(workingDirectory, deviceId);
 
     const items = useMemo(
       () => filterSkillItems(deviceItems, searchQuery),
@@ -66,8 +63,6 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
     const list = (
       <SkillsList
         items={items}
-        onOpenFile={onOpenFile}
-        onOpenSkill={onOpenSkill}
         onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
       />

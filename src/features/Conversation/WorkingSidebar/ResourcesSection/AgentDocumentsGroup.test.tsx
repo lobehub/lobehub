@@ -301,11 +301,9 @@ describe('AgentDocumentsGroup', () => {
     useProjectSkillsMock.mockReturnValue({
       deviceItems: [],
       error: undefined,
-      getRowActions: () => [],
       isLoading: false,
       items: [],
       mutate: vi.fn(),
-      onOpenFile: () => undefined,
       onOpenSkill: () => undefined,
       projectItems: [],
       raw: undefined,
@@ -383,13 +381,11 @@ describe('AgentDocumentsGroup', () => {
 
   it('renders project and device filesystem skills as separate sections', () => {
     const projectItem = {
-      fileCount: 1,
       id: 'project-skill',
       name: 'project-writer',
       scope: 'project' as const,
     };
     const deviceItem = {
-      fileCount: 1,
       id: 'device-skill',
       name: 'device-writer',
       scope: 'device' as const,
@@ -397,11 +393,9 @@ describe('AgentDocumentsGroup', () => {
     useProjectSkillsMock.mockReturnValue({
       deviceItems: [deviceItem],
       error: undefined,
-      getRowActions: () => [],
       isLoading: false,
       items: [projectItem, deviceItem],
       mutate: vi.fn(),
-      onOpenFile: () => undefined,
       onOpenSkill: () => undefined,
       projectItems: [projectItem],
       raw: undefined,
@@ -419,7 +413,6 @@ describe('AgentDocumentsGroup', () => {
   it('keeps the filesystem skill scan inert while the pane is disabled', () => {
     const projectItem = {
       description: 'writes things',
-      fileCount: 2,
       files: [],
       id: 'project-skill',
       name: 'project-writer',
@@ -428,11 +421,9 @@ describe('AgentDocumentsGroup', () => {
     useProjectSkillsMock.mockReturnValue({
       deviceItems: [],
       error: undefined,
-      getRowActions: () => [],
       isLoading: false,
       items: [projectItem],
       mutate: vi.fn(),
-      onOpenFile: () => undefined,
       onOpenSkill: () => undefined,
       projectItems: [projectItem],
       raw: undefined,

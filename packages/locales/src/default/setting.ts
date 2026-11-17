@@ -4293,7 +4293,6 @@ When I am ___, I need ___
   'workspaceSetting.tab.connector': 'Connectors',
   'workspaceSetting.tab.skill': 'Skills',
   'tools.add': 'Add Skill',
-  'tools.addSkillOrConnector': 'Add Skills / Connectors',
   'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
   'tools.legacyConnector.configure': 'Configure',
   'tools.legacyConnector.upgradeDesc':
@@ -4429,7 +4428,6 @@ When I am ___, I need ___
     'Are you sure you want to uninstall {{name}}? This skill will be removed from the current agent.',
   'tools.builtins.uninstallConfirm.title': 'Uninstall {{name}}',
   'tools.builtins.uninstalled': 'Uninstalled',
-  'tools.disabled': 'The current model does not support function calls and cannot use the skill',
   'tools.composio.addServer': 'Add Server',
   'tools.composio.authCompleted': 'Authentication Completed',
   'tools.composio.authFailed': 'Authentication Failed',
@@ -4663,7 +4661,6 @@ When I am ___, I need ___
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',
-  'tools.picker.add': 'Add tools…',
   'tools.picker.disabled': 'This model does not support tool calling.',
   'tools.picker.management': 'Manage tools',
   'tools.picker.search': 'Search tools…',

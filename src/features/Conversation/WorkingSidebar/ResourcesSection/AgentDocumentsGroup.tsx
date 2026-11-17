@@ -539,6 +539,9 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         );
       }
 
+      // This is an invocation picker for agent/project/device/user skills, not a
+      // full capability inventory. Builtin bundles intentionally keep their existing
+      // slash/profile entry points instead of being copied into this sidebar.
       // Sections render in fixed order — agent → project → device → user — and each one
       // hides itself when it has nothing to show. When exactly one source has
       // items we drop the group header and render the list flat (no redundant
