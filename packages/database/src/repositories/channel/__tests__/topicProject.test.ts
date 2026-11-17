@@ -61,11 +61,16 @@ const transaction = (rows: unknown[], returned: Record<string, unknown[]>) => {
   const update = vi.fn(() => ({ set: updateSet }));
   const insert = vi.fn(() => ({ values: insertValues }));
 
+  // The check for a run still writing into the topic selects only an id; nothing holds it here.
+  const select = vi.fn((fields?: Record<string, unknown>) =>
+    chain(fields && Object.keys(fields).join() === 'id' ? [] : rows),
+  );
+
   return {
     insert,
     insertValues,
-    select: vi.fn(() => chain(rows)),
-    tx: { insert, select: vi.fn(() => chain(rows)), update } as never,
+    select,
+    tx: { insert, select, update } as never,
     update,
     updateReturning,
     updateSet,
