@@ -1,5 +1,7 @@
 import type { ChannelListItem, ChannelMemberRole, ChannelPublicMember } from '@lobechat/types';
 
+import { isCurrentUserMember } from './memberName';
+
 type GroupChannel = Pick<
   ChannelListItem,
   'agentId' | 'canDelete' | 'joined' | 'memberRole' | 'peerUserId' | 'status'
@@ -30,3 +32,9 @@ export const canLeaveChannel = (channel: GroupChannel) =>
   channel.joined !== false &&
   !!channel.memberRole &&
   channel.memberRole !== 'owner';
+
+/** The caller's role among a Channel's members; undefined when they are not one of them. */
+export const callerMemberRole = (
+  members: Pick<ChannelPublicMember, 'actorType' | 'role' | 'userId'>[] | undefined,
+  userId: string | undefined,
+) => members?.find((member) => isCurrentUserMember(member, userId))?.role;

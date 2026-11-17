@@ -14,7 +14,7 @@ import { ChannelStatus } from './ChannelStatus';
 import type { ChannelStatusTone } from './jobStatus';
 import { channelJobTone, memberCurrentJob, memberJobStatus } from './jobStatus';
 import { MemberAvatar } from './MemberAvatar';
-import { canRemoveMember } from './memberManagement';
+import { callerMemberRole, canRemoveMember } from './memberManagement';
 import { isCurrentUserMember, memberName } from './memberName';
 import { MemberProfileTrigger } from './MemberProfileTrigger';
 import { statusStyles, styles, toneStyles } from './styles';
@@ -194,7 +194,7 @@ export function MemberList({
   const { channel } = detail;
   const manageable = channel.canDelete && channel.status !== 'archived';
   const userId = useUserStore(userProfileSelectors.userId);
-  const selfRole = detail.members.find((member) => isCurrentUserMember(member, userId))?.role;
+  const selfRole = callerMemberRole(detail.members, userId);
   const removeMember = useRemoveMember();
   const { agents, people } = groupMembersByActor(entries);
   const renderRow = (entry: MemberEntry) => (

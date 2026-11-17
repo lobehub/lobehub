@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canLeaveChannel, canRemoveMember } from './memberManagement';
+import { callerMemberRole, canLeaveChannel, canRemoveMember } from './memberManagement';
 
 const group = {
   agentId: null,
@@ -54,5 +54,24 @@ describe('canLeaveChannel', () => {
     expect(canLeaveChannel({ ...group, memberRole: 'owner' })).toBe(false);
     expect(canLeaveChannel({ ...group, joined: false, memberRole: null })).toBe(false);
     expect(canLeaveChannel({ ...group, agentId: 'agt_1' })).toBe(false);
+  });
+});
+
+describe('callerMemberRole', () => {
+  const members = [
+    { actorType: 'user' as const, role: 'owner' as const, userId: 'u1' },
+    { actorType: 'agent' as const, role: null, userId: null },
+    { actorType: 'user' as const, role: 'member' as const, userId: 'u2' },
+  ];
+
+  it("finds the caller's role among the people in the Channel", () => {
+    expect(callerMemberRole(members, 'u2')).toBe('member');
+    expect(callerMemberRole(members, 'u1')).toBe('owner');
+  });
+
+  it('is undefined for a non-member, no user, or no member list', () => {
+    expect(callerMemberRole(members, 'u3')).toBeUndefined();
+    expect(callerMemberRole(members, undefined)).toBeUndefined();
+    expect(callerMemberRole(undefined, 'u1')).toBeUndefined();
   });
 });
