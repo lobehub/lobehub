@@ -120,6 +120,8 @@
   "invite.title": "邀请成员",
   "latestMessages": "最新消息",
   "main": "频道对话",
+  "memberActionsNamed": "{{name}} 的操作",
+  "members.agents": "Agent · {{count}}",
   "members.hide": "收起成员列表",
   "members.show": "展开成员列表",
   "membersCount": "成员 · {{count}}",

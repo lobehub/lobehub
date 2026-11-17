@@ -120,6 +120,8 @@
   "invite.title": "Invite members",
   "latestMessages": "Latest messages",
   "main": "Channel conversation",
+  "memberActionsNamed": "Actions for {{name}}",
+  "members.agents": "Agents · {{count}}",
   "members.hide": "Hide member list",
   "members.show": "Show member list",
   "membersCount": "Members · {{count}}",
