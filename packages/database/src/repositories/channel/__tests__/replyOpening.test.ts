@@ -212,6 +212,69 @@ describe('Channel reply opening', () => {
     expect((await jobById(db, reviewerJob.id)).threadId).toBe(threads[0].id);
   });
 
+  it('tells each Agent mentioned together who else was asked', async () => {
+    const { channel, coderJob, reviewerJob } = await mentionTwoAgents();
+
+    expect(await execution.openingCandidate(channel.id, coderJob.id)).toMatchObject({
+      coAddressed: [{ name: 'Reviewer' }],
+    });
+    expect(await execution.coAddressed(channel.id, reviewerJob.id)).toEqual([
+      expect.objectContaining({ name: 'Coder' }),
+    ]);
+  });
+
+  it('gathers Agents mentioned together into one Thread under the request, acknowledgements included', async () => {
+    const { channel, coder, coderJob, member, message, reviewer, reviewerJob } =
+      await mentionTwoAgents();
+
+    await execution.open(channel.id, coderJob.id, {
+      ack: 'I will start from the build logs.',
+      threadTitle: 'Deploy failure',
+    });
+    // Asked to answer in place, the second Agent still joins the Thread the first one opened.
+    await execution.open(channel.id, reviewerJob.id, { ack: 'I will review the config diff.' });
+
+    const threads = await db
+      .select()
+      .from(channelThreads)
+      .where(eq(channelThreads.channelId, channel.id));
+    expect(threads).toHaveLength(1);
+    expect(threads[0]).toMatchObject({
+      metadata: { title: 'Deploy failure' },
+      rootMessageId: message.id,
+    });
+    expect(new Set(threads[0].followerMemberIds)).toEqual(
+      new Set([member.id, coder.id, reviewer.id]),
+    );
+    const acks = (await messagesOf(channel.id)).filter((row) => row.routingStatus === 'reply');
+    expect(acks.map(({ content, threadId }) => ({ content, threadId }))).toEqual([
+      { content: 'I will start from the build logs.', threadId: threads[0].id },
+      { content: 'I will review the config diff.', threadId: threads[0].id },
+    ]);
+    expect((await jobById(db, coderJob.id)).threadId).toBe(threads[0].id);
+    expect((await jobById(db, reviewerJob.id)).threadId).toBe(threads[0].id);
+
+    // The main timeline keeps only the request; both runs start in the Thread.
+    const detail = await new ChannelRepository(db, fixture.memberId, fixture.workspaceId).detail(
+      channel.id,
+    );
+    expect(detail.messages.map(({ id }) => id)).toEqual([message.id]);
+    expect(await execution.claim(channel.id, reviewerJob.id, lease)).not.toBeNull();
+  });
+
+  it('keeps Agents mentioned together in place when none of them opens a Thread', async () => {
+    const { channel, coderJob, reviewerJob } = await mentionTwoAgents();
+
+    await execution.open(channel.id, coderJob.id, { ack: 'Checking.' });
+    await execution.open(channel.id, reviewerJob.id, { ack: 'Looking too.' });
+
+    expect(
+      await db.select().from(channelThreads).where(eq(channelThreads.channelId, channel.id)),
+    ).toEqual([]);
+    const acks = (await messagesOf(channel.id)).filter((row) => row.routingStatus === 'reply');
+    expect(acks.map(({ threadId }) => threadId)).toEqual([null, null]);
+  });
+
   it('moves a follow-up deferred behind the answer into its Thread, where it reads that answer', async () => {
     const { channel, coder, coderJob, reviewer, reviewerJob } = await mentionTwoAgents();
     await db
