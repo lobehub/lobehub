@@ -1,14 +1,16 @@
 import type { ChannelThreadMention } from '@lobechat/types';
-import { and, desc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 
-import { channelMembers, channelMessages } from '../../schemas';
+import { channelMembers, channelMessages, channelThreads } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 
 /**
  * The newest @mention of each member in each Thread of their Channel, keyed by Channel, however
  * the member's read position stands: opening the main conversation moves that position past
  * Thread messages nobody opened, so whether a Thread mention was seen is left to the client's
  * per-Thread reads. Older mentions are taken as seen, which keeps the scan to recent messages.
+ * Trashed Threads are skipped: they can no longer be opened, so their mentions could never clear.
  */
 export const channelThreadMentions = async (
   db: LobeChatDatabase,
@@ -24,10 +26,17 @@ export const channelThreadMentions = async (
     })
     .from(channelMessages)
     .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
+    .innerJoin(
+      channelThreads,
+      and(
+        eq(channelThreads.channelId, channelMessages.channelId),
+        eq(channelThreads.id, channelMessages.threadId),
+      ),
+    )
     .where(
       and(
         inArray(channelMembers.id, memberIds),
-        isNotNull(channelMessages.threadId),
+        notTrashed(channelThreads.isDeleted),
         gt(channelMessages.createdAt, sql`now() - interval '30 days'`),
         sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
       ),
