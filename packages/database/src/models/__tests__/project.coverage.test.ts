@@ -50,7 +50,7 @@ describe('ProjectModel coverage', () => {
         ),
       );
 
-      expect(await model.delete('t863-proj-race')).toBeNull();
+      expect(await repo.delete('t863-proj-race')).toBeNull();
     });
   });
 
@@ -195,7 +195,7 @@ describe('ProjectModel coverage', () => {
         name: 'Legacy project',
       });
 
-      await model.delete(project.id);
+      await repo.delete(project.id);
 
       expect(await serverDB.select().from(agents).where(eq(agents.id, legacy.id))).toEqual([]);
     });
@@ -208,7 +208,7 @@ describe('ProjectModel coverage', () => {
         name: 'Picked project',
       });
 
-      await model.delete(project.id);
+      await repo.delete(project.id);
 
       expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
     });
