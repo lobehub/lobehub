@@ -17,7 +17,17 @@ import { OverviewRow, rowStyles } from './OverviewRow';
 import { sectionStyles } from './sectionStyles';
 
 const styles = stylex.create({
-  source: { marginInlineStart: '6px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  // In the trailing slot, so a long title truncates before the tag does.
+  source: {
+    flexShrink: 0,
+    paddingInline: '5px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    lineHeight: '16px',
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+  },
 });
 
 interface PullRequestRowProps {
@@ -25,7 +35,9 @@ interface PullRequestRowProps {
   /** Better Coding Experience: remove the PR from the topic's lists. */
   onDismiss?: () => void;
   pullRequest: DeviceGitLinkedPullRequest;
-  /** How the topic came to it, when it was not the agent opening it. */
+  /** The full sentence behind {@link sourceLabel}, shown on hover. */
+  sourceDescription?: string;
+  /** How the topic came to it, when it was not the agent opening it: a short tag. */
   sourceLabel?: string;
   /** Defaults to `#number title`. */
   tooltip?: string;
@@ -35,7 +47,7 @@ interface PullRequestRowProps {
 
 /** One pull request under the repository card's Changes row: state, number, title, CI. */
 const PullRequestRow = memo<PullRequestRowProps>(
-  ({ onClick, onDismiss, pullRequest, sourceLabel, tooltip, unvouched }) => {
+  ({ onClick, onDismiss, pullRequest, sourceDescription, sourceLabel, tooltip, unvouched }) => {
     const { t } = useTranslation('chat');
     const ciStatus = pullRequest.ciStatus;
     const ci = getCiVisual(ciStatus);
@@ -49,6 +61,11 @@ const PullRequestRow = memo<PullRequestRowProps>(
             iconColor={prVisual.color}
             trailing={
               <>
+                {sourceLabel && (
+                  <Tooltip title={sourceDescription}>
+                    <span {...stylex.props(styles.source)}>{sourceLabel}</span>
+                  </Tooltip>
+                )}
                 {unvouched && (
                   <Tooltip title={t('workingPanel.overview.pr.unvouched')}>
                     <Icon
@@ -88,7 +105,6 @@ const PullRequestRow = memo<PullRequestRowProps>(
               <>
                 <span className={rowStyles.num}>#{pullRequest.number}</span>
                 {pullRequest.title}
-                {sourceLabel && <span {...stylex.props(styles.source)}>{sourceLabel}</span>}
               </>
             }
             onClick={onClick}

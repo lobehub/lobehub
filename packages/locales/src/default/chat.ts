@@ -3910,6 +3910,10 @@ export default {
   'workingPanel.overview.pr.source.command': 'Updated by the agent',
   'workingPanel.overview.pr.source.manual': 'Linked by you',
   'workingPanel.overview.pr.source.push': 'Linked by a push',
+  'workingPanel.overview.pr.sourceTag.branch': 'Branch',
+  'workingPanel.overview.pr.sourceTag.command': 'Agent',
+  'workingPanel.overview.pr.sourceTag.manual': 'Manual',
+  'workingPanel.overview.pr.sourceTag.push': 'Push',
   'workingPanel.overview.pr.unvouched':
     "Can't confirm this PR comes from this topic's branch, so merging and closing are locked",
   'workingPanel.overview.ci.pending': 'Running',
