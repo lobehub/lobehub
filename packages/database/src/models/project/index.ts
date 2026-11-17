@@ -3,43 +3,43 @@ import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, max, ne, or, sql } from 'drizzle-orm';
 
-import { agents } from '../schemas/agent';
-import { channelMembers } from '../schemas/channel';
-import { chatGroupsAgents } from '../schemas/chatGroup';
-import { environments } from '../schemas/environment';
-import { knowledgeBases } from '../schemas/file';
+import { agents } from '../../schemas/agent';
+import { channelMembers } from '../../schemas/channel';
+import { chatGroupsAgents } from '../../schemas/chatGroup';
+import { environments } from '../../schemas/environment';
+import { knowledgeBases } from '../../schemas/file';
 import {
   projectAgents,
   projectCompletionReviews,
   projectKnowledgeBases,
   projects,
-} from '../schemas/project';
-import { projectEnvironments } from '../schemas/projectEnvironment';
-import { projectWorks } from '../schemas/projectWork';
-import { agentsToSessions } from '../schemas/relations';
-import { tasks } from '../schemas/task';
-import { topics } from '../schemas/topic';
-import { works } from '../schemas/work';
-import type { LobeChatDatabase } from '../type';
-import { isUserKnowledgeBase } from '../utils/knowledgeBaseType';
-import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
-import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
-import { notChannelTopic } from '../utils/topicVisibility';
+} from '../../schemas/project';
+import { projectEnvironments } from '../../schemas/projectEnvironment';
+import { projectWorks } from '../../schemas/projectWork';
+import { agentsToSessions } from '../../schemas/relations';
+import { tasks } from '../../schemas/task';
+import { topics } from '../../schemas/topic';
+import { works } from '../../schemas/work';
+import type { LobeChatDatabase } from '../../type';
+import { isUserKnowledgeBase } from '../../utils/knowledgeBaseType';
+import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
+import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import {
   buildWorkspacePayload,
   buildWorkspaceWhere,
   normalizeWorkspaceId,
-} from '../utils/workspace';
-import { AgentModel } from './agent';
-import { EnvironmentModel } from './environment';
+} from '../../utils/workspace';
+import { AgentModel } from '../agent';
+import { EnvironmentModel } from '../environment';
 import {
   isProjectIdentifierConflict,
   normalizeProjectIdentifier,
   ProjectIdentifierTakenError,
-} from './projectIdentifier';
-import { topicHasGoal } from './topicGoal';
+} from '../projectIdentifier';
+import { topicHasGoal } from '../topicGoal';
 
-export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from './projectIdentifier';
+export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from '../projectIdentifier';
 
 export interface CreateProjectInput {
   avatar?: string;
