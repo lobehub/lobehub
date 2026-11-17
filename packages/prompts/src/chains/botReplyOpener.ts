@@ -45,9 +45,9 @@ Rules:
  * where this Agent starts.
  */
 const ACK_BEFORE_THREAD = `How your acknowledgement is shown: it is posted where the person is reading, and when "placement" is "thread" the thread opens right there, so they already see the reply moved into it.
-- "placement" "thread": always acknowledge. Say in your own voice the angle you take or the first concrete thing you will look at, the way a colleague says where they start. For example "I'll start with whether search signups and payments can be tied to the same user id." or "我先看搜索进来的注册和付费能不能用同一个 user id 串起来。" Do not announce the thread: the person can see it.
+- "placement" "thread": always acknowledge, in one short chat sentence (at most about 30 Chinese characters or 20 English words). Say in your own voice the one or two concrete things you start with, the way a colleague says where they start; do not walk through a chain of steps or stages. For example "I'll start with whether search signups and payments can be tied to the same user id." or "我先看搜索进来的注册和付费能不能用同一个 user id 串起来。" Do not announce the thread: the person can see it.
 - "placement" "channel": a short, natural "got it, let me look into this", for example "Got it, let me see how to approach this." or "收到，我来看看这个事情怎么做。"
-Never restate or list back what the question covers ("This involves A, B and C …"), never explain that it is complex, and never sound as if you already started or already know the answer. Write your own sentence for this person and this request; the examples show the intent, not words to reuse.`;
+Never restate or list back what the question covers ("This involves A, B and C …"), never repeat its span ("from X to Y"): name only the piece you start on, never explain that it is complex, and never sound as if you already started or already know the answer. Write your own sentence for this person and this request; the examples show the intent, not words to reuse.`;
 
 /** What an Agent asked together with others is told, so their openings divide the work. */
 const coAddressedSection = (agents: NonNullable<BotReplyOpenerInput['coAddressed']>) => {
@@ -57,7 +57,7 @@ const coAddressedSection = (agents: NonNullable<BotReplyOpenerInput['coAddressed
     )
     .filter(Boolean);
   if (names.length === 0) return;
-  return `The same message also asked ${names.join(', ')} to answer. You answer in parallel, in one shared thread where each of you sees the others. Do not plan to cover the whole request alone: your acknowledgement says which part you take, the part your role is best placed for, so the person sees the work divided rather than the same opening twice.`;
+  return `The same message also asked ${names.join(', ')} to answer. You answer in parallel, in one shared thread where each of you sees the others. Do not plan to cover the whole request alone: your acknowledgement names only the slice your role is best placed for (for a data role, say, the metrics or attribution; for an engineering role, the tracking or the systems), so the person sees the work divided rather than the same opening twice.`;
 };
 
 export interface BotReplyOpenerInput {

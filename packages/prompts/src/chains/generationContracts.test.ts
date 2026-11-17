@@ -127,9 +127,11 @@ describe('application generation chains', () => {
       canOpenThread: true,
       message: '帮我排查昨天部署失败的原因',
     });
-    expect(channel.messages[1].content).toContain('the angle you take or the first concrete thing');
+    expect(channel.messages[1].content).toContain('the one or two concrete things you start with');
     expect(channel.messages[1].content).toContain('Do not announce the thread');
     expect(channel.messages[1].content).toContain('Never restate or list back');
+    expect(channel.messages[1].content).toContain('one short chat sentence');
+    expect(channel.messages[1].content).toContain('never repeat its span');
     expect(channel.messages[1].content).not.toContain('开个 thread');
     expect(channel.messages[1].content).toContain('let me look into this');
 
@@ -150,7 +152,7 @@ describe('application generation chains', () => {
     expect(messages[1].content).toContain(
       'The same message also asked Alien (Growth engineer), 数据分析师 to answer.',
     );
-    expect(messages[1].content).toContain('says which part you take');
+    expect(messages[1].content).toContain('names only the slice your role is best placed for');
     expect(
       chainBotReplyOpener({ canOpenThread: true, coAddressed: [], message: 'hi' }).messages[1]
         .content,

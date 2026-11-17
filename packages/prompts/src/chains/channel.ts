@@ -38,7 +38,7 @@ const DEFERRED_WAKE_HINT = `Another participant was asked to answer this request
 
 /** What an Agent asked together with others is told, so the answers divide the work. */
 const peersHint = (names: string[]) =>
-  `This request also asked ${names.join(', ')} to answer. They answer it in parallel, in the same conversation, and the person reads all the answers together. Answer from your own role and expertise: take the part you are best placed for, and leave what is clearly theirs to them instead of covering the whole request yourself. Do not describe this division or say what the others will do.`;
+  `This request also asked ${names.join(', ')} to answer. They answer it in parallel, in the same conversation, and the person reads all the answers together, so a second walk through the whole request is noise. Do not lay out the full picture end to end, even when the request asks for it: answer only the part your own role owns, in depth, and leave the rest to them. Do not describe this division or say what the others will do.`;
 
 /** Longest context excerpt in the request; the history tools return the rest. */
 const CONTEXT_EXCERPT_LENGTH = 2000;

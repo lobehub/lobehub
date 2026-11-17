@@ -131,7 +131,7 @@ describe('Channel request prompt', () => {
     expect(prompt).toMatch(
       /<\/channel_request boundary="b0">\n<channel_peers boundary="b0">\nThis request also asked Analyst \(Data analyst\) to answer\./,
     );
-    expect(prompt).toContain('instead of covering the whole request yourself');
+    expect(prompt).toContain('answer only the part your own role owns');
     expect(CHANNEL_INSTRUCTIONS).toContain('channel_peers');
     expect(buildChannelPrompt(manifest, request, { boundary: 'b0' })).not.toContain(
       '<channel_peers',
