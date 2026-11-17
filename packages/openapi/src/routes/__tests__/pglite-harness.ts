@@ -50,6 +50,14 @@ export const buildRouteApp = (routes: Record<string, Hono>) => {
 
 export const json = async (res: Response) => (await res.json()) as any;
 
+/** An `api_keys` row; `workspaceId` binds the key to that workspace. */
+export const apiKeyRow = (
+  key: string,
+  userId: string,
+  scopes: string[] | null,
+  workspaceId?: string,
+) => ({ key, keyHash: hashApiKey(key), name: key, scopes, userId, workspaceId });
+
 /** Insert users and one API key per `[key, userId, scopes]` entry. */
 export const seedUsersAndKeys = async (
   db: LobeChatDatabase,
@@ -57,13 +65,7 @@ export const seedUsersAndKeys = async (
   keys: [key: string, userId: string, scopes: string[] | null][],
 ) => {
   await db.insert(users).values(userIds.map((id) => ({ id })));
-  await db.insert(apiKeys).values(
-    keys.map(([key, userId, scopes]) => ({
-      key,
-      keyHash: hashApiKey(key),
-      name: key,
-      scopes,
-      userId,
-    })),
-  );
+  await db
+    .insert(apiKeys)
+    .values(keys.map(([key, userId, scopes]) => apiKeyRow(key, userId, scopes)));
 };

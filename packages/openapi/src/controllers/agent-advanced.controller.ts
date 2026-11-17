@@ -170,6 +170,11 @@ export class AgentAdvancedController extends BaseController {
   /** POST /api/v1/agents/:id/transfer */
   async transfer(c: Context) {
     const body = await this.getBody<TransferAgentRequest>(c);
-    return this.run(c, (service, { id }) => service.transfer(id, body), 'Agent transfer started');
+    const viaApiKey = c.get('authType') === 'apikey';
+    return this.run(
+      c,
+      (service, { id }) => service.transfer(id, body, { viaApiKey }),
+      'Agent transfer started',
+    );
   }
 }

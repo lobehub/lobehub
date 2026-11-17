@@ -588,7 +588,7 @@ AgentRoutes.patch(
   routeDoc({
     data: AgentVisibilityStateSchema,
     description: `Publish a private workspace agent to the workspace (\`public\`, optionally with the members' \`accessLevel\`) or take it back to \`private\`. Only the agent's creator may make a published agent private, and it is refused while workspace tasks or group chats depend on it; builtin agents never change visibility. Workspace only: without \`X-Workspace-Id\` this answers 400. ${WORKSPACE_SCOPED}`,
-    errors: [404],
+    errors: [400, 404],
     operationId: 'agents.updateVisibility',
     summary: "Change an agent's workspace visibility",
     tags: ['agents'],
@@ -611,8 +611,8 @@ AgentRoutes.post(
   '/:id/transfer',
   routeDoc({
     data: ResourceTransferResultSchema,
-    description: `Move the agent to another workspace (\`targetWorkspaceId\`), to the caller's personal space (\`targetWorkspaceId: null\`), or hand it to another member of the current workspace (\`targetMemberId\`, which creates a pending request the recipient accepts in the product). Creator-only; the caller needs agent-create rights in the target workspace. Conversation history may keep migrating in the background (\`transferJobId\`). ${WORKSPACE_SCOPED}`,
-    errors: [404, 409],
+    description: `Move the agent to another workspace (\`targetWorkspaceId\`), to the caller's personal space (\`targetWorkspaceId: null\`), or hand it to another member of the current workspace (\`targetMemberId\`, which creates a pending request the recipient accepts in the product). Creator-only; the caller needs agent-create rights in the target workspace. Conversation history may keep migrating in the background (\`transferJobId\`). An API key is bound to one scope, so with API-key auth only the member handover is accepted; a move to another workspace or the personal space answers 403 and must be done in the product (or with a session/OIDC token). ${WORKSPACE_SCOPED}`,
+    errors: [400, 404, 409],
     operationId: 'agents.transfer',
     summary: 'Transfer an agent',
     tags: ['agents'],

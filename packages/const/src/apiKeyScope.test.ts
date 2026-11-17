@@ -183,6 +183,18 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it('requires agent:transfer on top of agent:write to transfer over tRPC', () => {
+    for (const path of ['agent.transferAgent', 'agent.transferAgents', 'group.transferGroup']) {
+      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
+        scopes: ['agent:write', 'agent:transfer'],
+      });
+    }
+    // other agent writes stay on plain agent:write
+    expect(requiredApiKeyScopeForTrpc('agent.updateAgentPinned', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+  });
+
   it('blocks sensitive namespaces for restricted keys', () => {
     expect(requiredApiKeyScopeForTrpc('apiKey.createApiKey', 'mutation')).toEqual({
       blocked: true,

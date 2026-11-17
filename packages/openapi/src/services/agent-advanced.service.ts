@@ -7,6 +7,7 @@ import { agentRouter } from '@/server/routers/lambda/agent';
 import { agentLabelRouter } from '@/server/routers/lambda/agentLabel';
 
 import { BaseService } from '../common/base.service';
+import { ApiException } from '../common/errors';
 import { rethrowCallerError } from '../helpers/trpc-caller';
 import type { AgentDetailResponse } from '../types/agent.type';
 import type {
@@ -97,10 +98,17 @@ export class AgentAdvancedService extends BaseService {
 
     // The procedure inserts the junction rows as given; resolve every file in
     // the caller's own scope first so another account's file cannot be mounted.
+    // A public workspace agent may only mount workspace-shared files — the
+    // same `callerAgentVisibility` rule the product's knowledge picker applies.
     const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
+    const publicAgent =
+      !!this.workspaceId && (await this.agentModel.getAgentVisibility(agentId)) === 'public';
     const fileIds = [...new Set(request.fileIds)];
     const found = await Promise.all(fileIds.map((id) => fileModel.findById(id)));
-    const missing = fileIds.filter((_, index) => !found[index]);
+    const missing = fileIds.filter((_, index) => {
+      const file = found[index];
+      return !file || (publicAgent && file.visibility === 'private');
+    });
     if (missing.length > 0) throw this.createNotFoundError(`File not found: ${missing.join(', ')}`);
 
     await this.agent
@@ -196,15 +204,21 @@ export class AgentAdvancedService extends BaseService {
 
   async getAgentLabels(agentId: string): Promise<PublicAgentLabel[]> {
     await this.assertAgentVisible(agentId);
-    const assigned = new Set(
-      await new AgentLabelModel(this.db, this.userId, this.workspaceId).getAgentLabelIds(agentId),
-    );
-    const registry = await new AgentLabelRestService(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).queryAll();
+    return this.readAgentLabels(agentId);
+  }
+
+  /** The agent's labels with fresh usage counts; the agent is already resolved in scope. */
+  private async readAgentLabels(agentId: string): Promise<PublicAgentLabel[]> {
+    const [assignedIds, registry] = await Promise.all([
+      new AgentLabelModel(this.db, this.userId, this.workspaceId).getAgentLabelIds(agentId),
+      this.labelRegistry(),
+    ]);
+    const assigned = new Set(assignedIds);
     return registry.filter((label) => assigned.has(label.id)).map(projectPublicAgentLabel);
+  }
+
+  private labelRegistry() {
+    return new AgentLabelRestService(this.db, this.userId, this.workspaceId).queryAll();
   }
 
   async setAgentLabels(agentId: string, labelIds: string[]): Promise<PublicAgentLabel[]> {
@@ -213,7 +227,7 @@ export class AgentAdvancedService extends BaseService {
     await this.labels
       .setAgentLabels({ agentId, labelIds: [...new Set(labelIds)] })
       .catch(this.fail('set agent labels'));
-    return this.getAgentLabels(agentId);
+    return this.readAgentLabels(agentId);
   }
 
   async toggleAgentLabel(
@@ -229,15 +243,11 @@ export class AgentAdvancedService extends BaseService {
     await this.labels
       .toggleAgentLabel({ agentId, assigned, labelId })
       .catch(this.fail('toggle agent label'));
-    return this.getAgentLabels(agentId);
+    return this.readAgentLabels(agentId);
   }
 
   private async assertLabelsInScope(labelIds: string[]) {
-    const registry = await new AgentLabelRestService(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).queryAll();
+    const registry = await this.labelRegistry();
     const byId = new Map(registry.map((label) => [label.id, label]));
     const missing = labelIds.filter((id) => !byId.has(id));
     if (missing.length > 0) {
@@ -264,7 +274,26 @@ export class AgentAdvancedService extends BaseService {
 
   // ==================== Transfer ====================
 
-  async transfer(agentId: string, request: TransferAgentRequest): Promise<ResourceTransferResult> {
+  /**
+   * `viaApiKey`: an API key is bound to one scope (a personal key to the
+   * personal space, a workspace key to its workspace — see the workspace
+   * middleware). A move to another workspace or to the personal space would
+   * write outside that binding, which the procedure cannot see because it
+   * only checks the user's own rights in the target. Keys may therefore only
+   * hand an agent to another member of their own workspace.
+   */
+  async transfer(
+    agentId: string,
+    request: TransferAgentRequest,
+    { viaApiKey = false }: { viaApiKey?: boolean } = {},
+  ): Promise<ResourceTransferResult> {
+    if (viaApiKey && request.targetWorkspaceId !== undefined) {
+      throw new ApiException(
+        403,
+        'forbidden',
+        'An API key cannot move an agent out of the scope it is bound to; use targetMemberId to hand it to another member of this workspace, or move it in the product',
+      );
+    }
     await this.assertAgentVisible(agentId);
     const result = await this.agent
       .transferAgent({

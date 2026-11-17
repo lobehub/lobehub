@@ -98,13 +98,16 @@ export class SessionGroupRestService extends BaseService {
     await this.findOrThrow(id);
     const { visibility, ...value } = request;
 
-    if (value.name !== undefined || value.sort !== undefined) {
-      await this.groups.updateSessionGroup({ id, value }).catch(this.fail('update session group'));
-    }
+    // Publish first: it is the step that can be refused (the folder still holds
+    // private items), and doing it before the rename keeps a refused request
+    // from leaving a half-applied change behind.
     if (visibility === 'public') {
       await this.groups
         .publishSessionGroupToWorkspace({ id })
         .catch(this.fail('publish session group'));
+    }
+    if (value.name !== undefined || value.sort !== undefined) {
+      await this.groups.updateSessionGroup({ id, value }).catch(this.fail('update session group'));
     }
     return this.getGroup(id);
   }
@@ -120,8 +123,8 @@ export class SessionGroupRestService extends BaseService {
     if (new Set(ids).size !== ids.length) {
       throw this.createValidationError('Each session group may appear only once');
     }
-    const found = await Promise.all(ids.map((id) => this.model.findById(id)));
-    const missing = ids.filter((_, index) => !found[index]);
+    const inScope = new Set((await this.model.query()).map((group) => group.id));
+    const missing = ids.filter((id) => !inScope.has(id));
     if (missing.length > 0) {
       throw this.createNotFoundError(`Session group not found: ${missing.join(', ')}`);
     }
@@ -129,20 +132,40 @@ export class SessionGroupRestService extends BaseService {
     await this.groups
       .updateSessionGroupOrder({ sortMap: request.items })
       .catch(this.fail('reorder session groups'));
-    return Promise.all(ids.map((id) => this.getGroup(id)));
+    const byId = new Map((await this.model.query()).map((group) => [group.id, group]));
+    return ids.map((id) => projectPublicSessionGroup(byId.get(id)!));
   }
 
   async moveAgents(
     request: MoveAgentsToSessionGroupRequest,
   ): Promise<{ agentIds: string[]; sessionGroupId: string | null }> {
-    if (request.sessionGroupId) await this.findOrThrow(request.sessionGroupId);
+    const folder = request.sessionGroupId ? await this.findOrThrow(request.sessionGroupId) : null;
 
     const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
     const agentIds = [...new Set(request.agentIds)];
-    const visible = await Promise.all(agentIds.map((id) => agentModel.existsById(id)));
-    const missing = agentIds.filter((_, index) => !visible[index]);
+    const visibility = await Promise.all(
+      agentIds.map(async (id) =>
+        (await agentModel.existsById(id)) ? await agentModel.getAgentVisibility(id) : undefined,
+      ),
+    );
+    const missing = agentIds.filter((_, index) => visibility[index] === undefined);
     if (missing.length > 0)
       throw this.createNotFoundError(`Agent not found: ${missing.join(', ')}`);
+
+    // Check every agent against the folder's visibility bucket before moving
+    // any, so a mixed batch is refused whole instead of half-applied (the
+    // procedure enforces the same rule one agent at a time).
+    if (folder && this.workspaceId) {
+      const folderVisibility = folder.visibility ?? 'public';
+      const mismatched = agentIds.filter(
+        (_, index) => (visibility[index] ?? 'public') !== folderVisibility,
+      );
+      if (mismatched.length > 0) {
+        throw this.createValidationError(
+          `Only ${folderVisibility} agents can be moved into a ${folderVisibility} folder: ${mismatched.join(', ')}`,
+        );
+      }
+    }
 
     for (const agentId of agentIds) {
       await this.home

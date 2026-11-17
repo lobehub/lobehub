@@ -17,19 +17,34 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 const { getTestDB } = await import('@/database/core/getTestDB');
-const { agents, apiKeys, files, knowledgeBases, users } = await import('@/database/schemas');
-const { buildRouteApp, json, seedUsersAndKeys } = await import('./__tests__/pglite-harness');
+const {
+  agents,
+  apiKeys,
+  files,
+  knowledgeBases,
+  sessionGroups,
+  users,
+  workspaceMembers,
+  workspaces,
+} = await import('@/database/schemas');
+const { apiKeyRow, buildRouteApp, json, seedUsersAndKeys } =
+  await import('./__tests__/pglite-harness');
 const { AgentDetailSchema } = await import('../types/agent.type');
 const { AgentKnowledgeSchema, AgentPinStateSchema, ResourceTransferResultSchema } =
   await import('../types/agent-advanced.type');
 const { AgentLabelSetSchema } = await import('../types/agent-label.type');
 const AgentRoutes = (await import('./agents.route')).default;
 const AgentLabelRoutes = (await import('./agent-labels.route')).default;
+const SessionGroupRoutes = (await import('./session-groups.route')).default;
 
 const serverDB = await getTestDB();
 holder.serverDB = serverDB;
 
-const { call } = buildRouteApp({ 'agent-labels': AgentLabelRoutes, 'agents': AgentRoutes });
+const { call } = buildRouteApp({
+  'agent-labels': AgentLabelRoutes,
+  'agents': AgentRoutes,
+  'session-groups': SessionGroupRoutes,
+});
 
 const OWNER = 'r8-agent-owner';
 const STRANGER = 'r8-agent-stranger';
@@ -51,6 +66,7 @@ const KEYS = {
 
 beforeEach(async () => {
   await serverDB.delete(apiKeys);
+  await serverDB.delete(workspaces);
   await serverDB.delete(users);
 
   await seedUsersAndKeys(
@@ -144,7 +160,7 @@ describe('another account’s agent reads as missing', () => {
     ['GET', `/agents/${STRANGER_AGENT}/labels`, undefined],
     ['PUT', `/agents/${STRANGER_AGENT}/labels`, { labelIds: [] }],
     ['PATCH', `/agents/${STRANGER_AGENT}/visibility`, { visibility: 'public' }],
-    ['POST', `/agents/${STRANGER_AGENT}/transfer`, { targetWorkspaceId: null }],
+    ['POST', `/agents/${STRANGER_AGENT}/transfer`, { targetMemberId: OWNER }],
     ['GET', '/agents/by-slug/stranger-helper', undefined],
   ])('%s %s → 404', async (method, path, body) => {
     const res = await call(path, { body, key: KEYS.ownerFull, method });
@@ -421,13 +437,14 @@ describe('visibility', () => {
 });
 
 describe('transfer', () => {
-  it('refuses a workspace the caller is not a member of', async () => {
+  it('refuses to move an agent out of the personal space with an API key', async () => {
     const res = await call(`/agents/${AGENT}/transfer`, {
       body: { targetWorkspaceId: 'ws_not_a_member' },
       key: KEYS.ownerTransfer,
       method: 'POST',
     });
     expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('forbidden');
     const row = await serverDB.query.agents.findFirst({
       where: (table, { eq }) => eq(table.id, AGENT),
     });
@@ -453,5 +470,179 @@ describe('transfer', () => {
         transferJobId: null,
       }).status,
     ).toBe('transferred');
+  });
+});
+
+describe('workspace-bound API keys', () => {
+  const MEMBER = 'r8-agent-member';
+  const WS = 'ws_r8_team';
+  const OTHER_WS = 'ws_r8_other';
+  const WS_KEYS = {
+    member: 'sk-lh-r8wsmemberkey001',
+    owner: 'sk-lh-r8wsownerkey0001',
+  } as const;
+
+  beforeEach(async () => {
+    await serverDB.insert(users).values({ id: MEMBER });
+    await serverDB.insert(workspaces).values([
+      { id: WS, name: 'Team', primaryOwnerId: OWNER, slug: 'r8-team' },
+      { id: OTHER_WS, name: 'Other', primaryOwnerId: STRANGER, slug: 'r8-other' },
+    ]);
+    await serverDB.insert(workspaceMembers).values([
+      { role: 'owner', userId: OWNER, workspaceId: WS },
+      { role: 'member', userId: MEMBER, workspaceId: WS },
+      { role: 'owner', userId: STRANGER, workspaceId: OTHER_WS },
+    ]);
+    await serverDB
+      .insert(apiKeys)
+      .values([
+        apiKeyRow(WS_KEYS.member, MEMBER, null, WS),
+        apiKeyRow(WS_KEYS.owner, OWNER, ['agent:write', 'agent:transfer'], WS),
+      ]);
+    await serverDB.insert(agents).values([
+      {
+        id: 'agt_r8_ws_private',
+        title: 'Private',
+        userId: OWNER,
+        visibility: 'private',
+        workspaceId: WS,
+      },
+      {
+        id: 'agt_r8_ws_public',
+        title: 'Public',
+        userId: OWNER,
+        visibility: 'public',
+        workspaceId: WS,
+      },
+      { id: 'agt_r8_ws_other', title: 'Elsewhere', userId: STRANGER, workspaceId: OTHER_WS },
+    ]);
+    await serverDB.insert(files).values({
+      fileType: 'application/pdf',
+      id: 'file_r8_ws_private',
+      name: 'private.pdf',
+      size: 1,
+      url: 'files/private.pdf',
+      userId: OWNER,
+      visibility: 'private',
+      workspaceId: WS,
+    });
+    await serverDB.insert(sessionGroups).values({
+      id: 'sg_r8_ws_private',
+      name: 'Owner only',
+      userId: OWNER,
+      visibility: 'private',
+      workspaceId: WS,
+    });
+  });
+
+  it('scopes reads to the bound workspace and hides another member’s private agent', async () => {
+    expect((await call('/agents/agt_r8_ws_public/knowledge', { key: WS_KEYS.member })).status).toBe(
+      200,
+    );
+    expect(
+      (await call('/agents/agt_r8_ws_private/knowledge', { key: WS_KEYS.member })).status,
+    ).toBe(404);
+    // an agent of another workspace is not reachable through this key
+    expect((await call('/agents/agt_r8_ws_other/knowledge', { key: WS_KEYS.member })).status).toBe(
+      404,
+    );
+    // nor through the personal-space agents of its issuer
+    expect((await call(`/agents/${AGENT}/knowledge`, { key: WS_KEYS.owner })).status).toBe(404);
+  });
+
+  it('refuses an X-Workspace-Id other than the one the key is bound to', async () => {
+    const res = await call('/agents/agt_r8_ws_public/knowledge', {
+      headers: { 'X-Workspace-Id': OTHER_WS },
+      key: WS_KEYS.member,
+    });
+    expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('workspace_mismatch');
+  });
+
+  it('hides another member’s private folder and refuses to move into it', async () => {
+    expect((await call('/session-groups/sg_r8_ws_private', { key: WS_KEYS.member })).status).toBe(
+      404,
+    );
+    const move = await call('/session-groups/move-agents', {
+      body: { agentIds: ['agt_r8_ws_public'], sessionGroupId: 'sg_r8_ws_private' },
+      key: WS_KEYS.member,
+      method: 'POST',
+    });
+    expect(move.status).toBe(404);
+  });
+
+  it('refuses a private agent in a public folder before moving anything', async () => {
+    const folder = (
+      await json(
+        await call('/session-groups', {
+          body: { name: 'Shared' },
+          key: WS_KEYS.owner,
+          method: 'POST',
+        }),
+      )
+    ).data.id;
+    const res = await call('/session-groups/move-agents', {
+      body: { agentIds: ['agt_r8_ws_public', 'agt_r8_ws_private'], sessionGroupId: folder },
+      key: WS_KEYS.owner,
+      method: 'POST',
+    });
+    expect(res.status).toBe(400);
+    const moved = await serverDB.query.agents.findFirst({
+      where: (table, { eq }) => eq(table.id, 'agt_r8_ws_public'),
+    });
+    expect(moved?.sessionGroupId).toBeNull();
+  });
+
+  it('refuses to mount a private file on a public agent', async () => {
+    const res = await call('/agents/agt_r8_ws_public/knowledge/files', {
+      body: { fileIds: ['file_r8_ws_private'] },
+      key: WS_KEYS.owner,
+      method: 'POST',
+    });
+    expect(res.status).toBe(404);
+    // the private agent may mount it
+    const ok = await call('/agents/agt_r8_ws_private/knowledge/files', {
+      body: { fileIds: ['file_r8_ws_private'] },
+      key: WS_KEYS.owner,
+      method: 'POST',
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it('refuses to move an agent out of the workspace the key is bound to', async () => {
+    for (const targetWorkspaceId of [null, OTHER_WS]) {
+      const res = await call('/agents/agt_r8_ws_public/transfer', {
+        body: { targetWorkspaceId },
+        key: WS_KEYS.owner,
+        method: 'POST',
+      });
+      expect(res.status).toBe(403);
+      expect((await json(res)).message).toContain('cannot move an agent out of the scope');
+    }
+    const row = await serverDB.query.agents.findFirst({
+      where: (table, { eq }) => eq(table.id, 'agt_r8_ws_public'),
+    });
+    expect(row?.workspaceId).toBe(WS);
+  });
+
+  it('publishes and re-privatises the creator’s agent', async () => {
+    const pub = await call('/agents/agt_r8_ws_private/visibility', {
+      body: { accessLevel: 'use', visibility: 'public' },
+      key: WS_KEYS.owner,
+      method: 'PATCH',
+    });
+    expect(pub.status).toBe(200);
+    expect((await json(pub)).data).toMatchObject({
+      accessLevel: 'use',
+      creatorId: OWNER,
+      visibility: 'public',
+    });
+
+    const back = await call('/agents/agt_r8_ws_private/visibility', {
+      body: { visibility: 'private' },
+      key: WS_KEYS.owner,
+      method: 'PATCH',
+    });
+    expect((await json(back)).data.visibility).toBe('private');
   });
 });

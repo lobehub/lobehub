@@ -607,7 +607,7 @@ export class Agents extends HeyApiClient {
     /**
      * Transfer an agent
      *
-     * Move the agent to another workspace (`targetWorkspaceId`), to the caller's personal space (`targetWorkspaceId: null`), or hand it to another member of the current workspace (`targetMemberId`, which creates a pending request the recipient accepts in the product). Creator-only; the caller needs agent-create rights in the target workspace. Conversation history may keep migrating in the background (`transferJobId`). Resolved in the workspace named by `X-Workspace-Id` (or the personal space without it); an agent outside that scope answers 404.
+     * Move the agent to another workspace (`targetWorkspaceId`), to the caller's personal space (`targetWorkspaceId: null`), or hand it to another member of the current workspace (`targetMemberId`, which creates a pending request the recipient accepts in the product). Creator-only; the caller needs agent-create rights in the target workspace. Conversation history may keep migrating in the background (`transferJobId`). An API key is bound to one scope, so with API-key auth only the member handover is accepted; a move to another workspace or the personal space answers 403 and must be done in the product (or with a session/OIDC token). Resolved in the workspace named by `X-Workspace-Id` (or the personal space without it); an agent outside that scope answers 404.
      *
      * **API key scopes:** `agent:transfer` + `agent:write`.
      */
