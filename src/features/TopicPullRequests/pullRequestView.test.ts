@@ -116,3 +116,9 @@ describe('resolvePullRequestView · trust', () => {
     });
   });
 });
+
+describe('resolvePullRequestView · untitled', () => {
+  it('names the repository when no title is known yet, not the number again', () => {
+    expect(resolvePullRequestView(item(12, { title: null })).title).toBe('lobehub/lobehub');
+  });
+});

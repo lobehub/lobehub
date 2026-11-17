@@ -87,7 +87,7 @@ export const resolvePullRequestView = (
       localDetail: sameRepo,
       mergedAt: item.scm.mergedAt ? new Date(item.scm.mergedAt).toISOString() : null,
       state: item.scm.state,
-      title: item.scm.title ?? item.title ?? `#${item.number}`,
+      title: item.scm.title ?? item.title ?? item.repoFullName,
     };
   }
 
@@ -113,7 +113,9 @@ export const resolvePullRequestView = (
     isDraft: status === 'draft',
     localDetail: false,
     state: status === 'merged' ? 'merged' : status === 'closed' ? 'closed' : 'open',
-    title: item.title ?? `#${item.number}`,
+    // No title known yet (a PR linked by hand before any read): name its repo
+    // rather than repeat the number the row already shows.
+    title: item.title ?? item.repoFullName,
   };
 };
 
