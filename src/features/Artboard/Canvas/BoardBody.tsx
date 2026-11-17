@@ -1,11 +1,12 @@
 import type { ArtboardBoardView } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { GitForkIcon, ImageOffIcon, LayoutTemplateIcon, type LucideIcon } from 'lucide-react';
+import { ImageOffIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBoardCapabilities } from '../Viewport/capabilities';
+import BoardPlaceholder from './BoardPlaceholder';
+import DecisionPill from './DecisionPill';
 import { canvasStyles } from './styles';
 
 const styles = stylex.create({
@@ -24,25 +25,23 @@ const styles = stylex.create({
   },
 });
 
-const Placeholder = ({ icon, text }: { icon: LucideIcon; text: string }) => (
-  <div {...stylex.props(canvasStyles.noShot)}>
-    <Icon icon={icon} size={22} />
-    <Text ellipsis style={{ maxWidth: '80%' }} type="secondary">
-      {text}
-    </Text>
-  </div>
-);
+const LiveCanvas = memo<{ board: ArtboardBoardView }>(({ board }) => {
+  const { renderCanvas } = useBoardCapabilities();
+  return <div {...stylex.props(styles.canvas, canvasStyles.inert)}>{renderCanvas(board)}</div>;
+});
+
+LiveCanvas.displayName = 'ArtboardLiveCanvas';
 
 interface BoardBodyProps {
   board: ArtboardBoardView;
   imageUrl?: string;
+  k?: number;
   live: boolean;
   screenshotUrl?: string;
 }
 
-const BoardBody = memo<BoardBodyProps>(({ board, imageUrl, live, screenshotUrl }) => {
+const BoardBody = ({ board, imageUrl, k = 1, live, screenshotUrl }: BoardBodyProps) => {
   const { t } = useTranslation('project');
-  const { renderCanvas } = useBoardCapabilities();
   if (screenshotUrl)
     return (
       <img
@@ -54,18 +53,24 @@ const BoardBody = memo<BoardBodyProps>(({ board, imageUrl, live, screenshotUrl }
     );
 
   const { source } = board;
-  if (board.type === 'decision') return <Placeholder icon={GitForkIcon} text={board.title} />;
+  if (board.type === 'decision')
+    return <DecisionPill height={board.rect.h} k={k} title={board.title} width={board.rect.w} />;
   if (!source || (source.kind === 'image' && !imageUrl))
-    return <Placeholder icon={ImageOffIcon} text={t('artboard.board.sourceMissing')} />;
+    return (
+      <BoardPlaceholder
+        icon={ImageOffIcon}
+        k={k}
+        status={t('artboard.board.sourceMissing')}
+        title={board.title}
+      />
+    );
   if (source.kind === 'image')
     return (
       <img alt={board.title} draggable={false} src={imageUrl} {...stylex.props(styles.image)} />
     );
 
-  if (!live) return <Placeholder icon={LayoutTemplateIcon} text={board.title} />;
-  return <div {...stylex.props(styles.canvas, canvasStyles.inert)}>{renderCanvas(board)}</div>;
-});
-
-BoardBody.displayName = 'ArtboardBoardBody';
+  if (!live) return <BoardPlaceholder k={k} title={board.title} />;
+  return <LiveCanvas board={board} />;
+};
 
 export default BoardBody;

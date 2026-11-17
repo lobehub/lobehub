@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { edgeLabelMode, edgeLabelText } from './edgeLabel';
+import { edgeLabelFont, edgeLabelMode, edgeLabelText } from './edgeLabel';
 
 describe('edgeLabelText', () => {
   it('joins the action and the branch condition, and is empty when the edge has neither', () => {
@@ -8,6 +8,14 @@ describe('edgeLabelText', () => {
     expect(edgeLabelText({ condition: null, label: 'Checks out' })).toBe('Checks out');
     expect(edgeLabelText({ condition: 'paid', label: '' })).toBe('paid');
     expect(edgeLabelText({ condition: null, label: '' })).toBe('');
+  });
+});
+
+describe('edgeLabelFont', () => {
+  it('keeps a label at least 11px on screen', () => {
+    expect(edgeLabelFont(1, false)).toBe(32);
+    expect(edgeLabelFont(1, true)).toBe(28);
+    expect(edgeLabelFont(0.25, false)).toBe(44);
   });
 });
 
@@ -30,6 +38,11 @@ describe('edgeLabelMode', () => {
   it('drops a resting label once it is too small to read or has no room', () => {
     expect(edgeLabelMode({ ...resting, k: 0.3 })).toBe('none');
     expect(edgeLabelMode({ ...resting, room: 20 })).toBe('none');
+  });
+
+  it('needs room on screen beyond the arrow reserve', () => {
+    expect(edgeLabelMode({ ...resting, k: 0.5, room: 200 })).toBe('inline');
+    expect(edgeLabelMode({ ...resting, k: 0.5, room: 100 })).toBe('none');
   });
 
   it('shows nothing for an edge without text', () => {

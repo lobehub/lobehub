@@ -1,6 +1,7 @@
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
@@ -12,40 +13,69 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBorderSecondary,
     flex: 'none',
     height: 1,
-    marginBlock: 6,
+    marginBlock: 4,
+    marginInline: -6,
+  },
+  label: {
+    color: cssVar.colorTextTertiary,
+    fontSize: 12,
+    paddingBlockEnd: 4,
+    paddingBlockStart: 6,
+    paddingInline: 9,
   },
   group: {
-    color: cssVar.colorTextSecondary,
+    color: {
+      ':hover': cssVar.colorText,
+      'default': cssVar.colorTextSecondary,
+    },
     cursor: 'pointer',
     fontSize: 12,
     fontWeight: 600,
+    overflow: 'hidden',
     paddingBlock: 6,
-    paddingInline: 8,
+    paddingInline: 9,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   item: {
     backgroundColor: {
       ':hover': cssVar.colorFillTertiary,
       'default': 'transparent',
     },
-    borderRadius: cssVar.borderRadius,
+    borderRadius: 6,
+    color: cssVar.colorTextSecondary,
     cursor: 'pointer',
     fontSize: 13,
     overflow: 'hidden',
     paddingBlock: 5,
-    paddingInline: 8,
+    paddingInline: 9,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   itemActive: {
     backgroundColor: cssVar.colorFillSecondary,
+    color: cssVar.colorText,
+    fontWeight: 500,
   },
   panel: {
-    insetBlockStart: 12,
-    insetInlineStart: 12,
-    maxHeight: 'calc(100% - 80px)',
+    insetBlockStart: 10,
+    insetInlineStart: 10,
+    maxHeight: 'calc(100% - 76px)',
     overflowY: 'auto',
+    padding: 6,
     width: 184,
   },
+});
+
+const pressable = (onActivate: () => void) => ({
+  onClick: onActivate,
+  onKeyDown: (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    onActivate();
+  },
+  role: 'button',
+  tabIndex: 0,
 });
 
 const Outline = () => {
@@ -54,17 +84,15 @@ const Outline = () => {
   const selected = useArtboardStore((s) => s.selected);
 
   return (
-    <Flexbox gap={2} {...stylex.props(floatStyles.float, styles.panel)}>
+    <Flexbox gap={1} {...stylex.props(floatStyles.float, styles.panel)}>
       {board.pages.length > 1 && (
         <>
-          <Text style={{ fontSize: 12, padding: '6px 8px 2px' }} type="secondary">
-            {t('artboard.pages.title')}
-          </Text>
+          <div {...stylex.props(styles.label)}>{t('artboard.pages.title')}</div>
           {board.pages.map((page) => (
             <div
               key={page.id}
               {...stylex.props(styles.item, page.id === board.pageId && styles.itemActive)}
-              onClick={() => artboardActions.setPage(page.id)}
+              {...pressable(() => artboardActions.setPage(page.id))}
             >
               {page.name}
             </div>
@@ -72,17 +100,15 @@ const Outline = () => {
           <div {...stylex.props(styles.divider)} />
         </>
       )}
-      <Text style={{ fontSize: 12, padding: '6px 8px 2px' }} type="secondary">
-        {t('artboard.outline.title')}
-      </Text>
+      <div {...stylex.props(styles.label)}>{t('artboard.outline.title')}</div>
       {board.groups.map((group) => {
         const members = board.boards.filter((b) => b.groupId === group.id);
         if (!members.length) return null;
         return (
-          <Flexbox key={group.id}>
+          <Flexbox gap={1} key={group.id}>
             <div
               {...stylex.props(styles.group)}
-              onClick={() => artboardActions.focus({ id: group.id, kind: 'group' })}
+              {...pressable(() => artboardActions.focus({ id: group.id, kind: 'group' }))}
             >
               {group.title}
             </div>
@@ -90,7 +116,7 @@ const Outline = () => {
               <div
                 key={member.id}
                 {...stylex.props(styles.item, selected === member.id && styles.itemActive)}
-                onClick={() => artboardActions.focusItem(member.id)}
+                {...pressable(() => artboardActions.focusItem(member.id))}
               >
                 {member.title}
               </div>

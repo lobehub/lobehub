@@ -1,89 +1,18 @@
-import { Icon } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import * as stylex from '@stylexjs/stylex';
-import { BotIcon, MessageCircleIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 
-import { sx } from '@/styles/sx';
-
-import { DraftCard, ThreadCard } from '../Board/Thread';
 import { useBoard } from '../BoardContext';
-import { isQuestion, pagePins } from '../data/commentModel';
+import CommentPopover from '../Comments/CommentPopover';
+import DraftCard from '../Comments/DraftCard';
+import { pinTone, threadNumbers } from '../Comments/layout';
+import Pin from '../Comments/Pin';
+import ThreadCard from '../Comments/ThreadCard';
+import { pagePins } from '../data/commentModel';
 import { useArtboardComments } from '../data/useArtboardComments';
 import { artboardActions, useArtboardStore } from '../store';
-import { floatStyles } from '../Viewport/floatStyles';
 import { ownsEscape } from './escapeScope';
 import type { ViewState } from './useViewport';
 
-const PIN = 28;
-const CARD_WIDTH = 352;
-const CARD_HEIGHT = 380;
-const GAP = 12;
-
-const styles = stylex.create({
-  card: {
-    padding: 0,
-    zIndex: 8,
-  },
-  dot: {
-    backgroundColor: cssVar.colorInfo,
-    borderColor: cssVar.colorBgContainer,
-    borderRadius: '50%',
-    borderStyle: 'solid',
-    borderWidth: 2,
-    height: 10,
-    insetBlockStart: -4,
-    insetInlineEnd: -4,
-    position: 'absolute',
-    width: 10,
-  },
-  pin: {
-    alignItems: 'center',
-    backgroundColor: cssVar.colorPrimary,
-    borderColor: cssVar.colorBgContainer,
-    borderTopLeftRadius: '50%',
-    borderTopRightRadius: '50%',
-    borderBottomRightRadius: '50%',
-    borderBottomLeftRadius: '4px',
-    borderStyle: 'solid',
-    borderWidth: 2,
-    boxShadow: cssVar.boxShadowSecondary,
-    color: cssVar.colorBgContainer,
-    cursor: 'pointer',
-    display: 'flex',
-    height: PIN,
-    justifyContent: 'center',
-    position: 'absolute',
-    width: PIN,
-    zIndex: 7,
-  },
-  pinActive: {
-    outlineColor: cssVar.colorInfo,
-    outlineOffset: 2,
-    outlineStyle: 'solid',
-    outlineWidth: 2,
-  },
-  pinQuestion: {
-    backgroundColor: cssVar.colorWarning,
-  },
-  pinResolved: {
-    backgroundColor: cssVar.colorTextQuaternary,
-    boxShadow: 'none',
-  },
-});
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-const cardBox = (x: number, y: number, size: { height: number; width: number }) => {
-  const width = Math.min(CARD_WIDTH, size.width - GAP * 2);
-  const right = x + PIN + GAP;
-  const left = right + width > size.width - GAP ? x - GAP - width : right;
-  return {
-    left: clamp(left, GAP, Math.max(GAP, size.width - width - GAP)),
-    top: clamp(y - PIN, GAP, Math.max(GAP, size.height - CARD_HEIGHT - GAP)),
-    width,
-  };
-};
+const close = () => artboardActions.openThread(null);
 
 interface CommentLayerProps {
   size: { height: number; width: number } | undefined;
@@ -99,6 +28,7 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
     tool: s.tool,
   }));
   const pins = useMemo(() => pagePins(threads ?? [], board), [threads, board]);
+  const numbers = useMemo(() => threadNumbers(threads ?? []), [threads]);
   const open = pins.find((pin) => pin.thread.id === openThreadId);
   const active = !!draft || !!open;
   const marker = useRef<HTMLSpanElement>(null);
@@ -109,7 +39,7 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
       const root = marker.current?.closest('[data-artboard-root]') ?? null;
       if (!ownsEscape(event, root)) return;
       event.stopImmediatePropagation();
-      artboardActions.openThread(null);
+      close();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -122,42 +52,31 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
     <>
       <span hidden ref={marker} />
       {pins.map(({ thread, x, y }) => {
-        const resolved = !!thread.resolvedAt;
         const current = thread.id === openThreadId;
-        if (resolved && tool !== 'comment' && !current) return null;
-        const at = toScreen(x, y);
-        const question = isQuestion(thread);
+        if (thread.resolvedAt && tool !== 'comment' && !current) return null;
+        const number = numbers.get(thread.id);
         return (
-          <div
+          <Pin
+            at={toScreen(x, y)}
             key={thread.id}
-            {...sx(
-              styles.pin,
-              question && styles.pinQuestion,
-              resolved && styles.pinResolved,
-              current && styles.pinActive,
-              { left: at.x, top: at.y - PIN },
-            )}
+            label={number ? `#${number}` : undefined}
+            number={number}
+            open={current}
+            tone={pinTone(thread)}
+            unsent={thread.unread}
             onClick={() => artboardActions.openThread(current ? null : thread.id)}
-          >
-            <Icon icon={question ? BotIcon : MessageCircleIcon} size={14} />
-            {thread.unread && <span {...stylex.props(styles.dot)} />}
-          </div>
+          />
         );
       })}
-      {draft && anchor && (
-        <div
-          {...sx(styles.pin, styles.pinActive, {
-            left: anchor.x,
-            top: anchor.y - PIN,
-          })}
-        >
-          <Icon icon={MessageCircleIcon} size={14} />
-        </div>
-      )}
+      {draft && anchor && <Pin open at={anchor} />}
       {anchor && size && (
-        <div {...sx(floatStyles.float, styles.card, cardBox(anchor.x, anchor.y, size))}>
-          {open ? <ThreadCard thread={open.thread} /> : draft && <DraftCard draft={draft} />}
-        </div>
+        <CommentPopover anchor={anchor} size={size}>
+          {open ? (
+            <ThreadCard number={numbers.get(open.thread.id)} thread={open.thread} onClose={close} />
+          ) : (
+            draft && <DraftCard draft={draft} />
+          )}
+        </CommentPopover>
       )}
     </>
   );

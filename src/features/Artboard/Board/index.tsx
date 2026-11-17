@@ -25,10 +25,23 @@ const NARROW_WIDTH = 768;
 
 const styles = stylex.create({
   body: {
+    backgroundColor: cssVar.colorBgLayout,
     display: 'flex',
     flex: '1',
     minHeight: 0,
     position: 'relative',
+  },
+  card: {
+    backgroundColor: cssVar.colorBgElevated,
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: 12,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: cssVar.boxShadowTertiary,
+    height: 'calc(100% - 20px)',
+    marginBlock: 10,
+    marginInlineEnd: 10,
+    overflow: 'hidden',
   },
   sheet: {
     backgroundColor: cssVar.colorBgContainer,
@@ -80,15 +93,16 @@ const SidePanel = ({
   if (narrow) return open ? <div {...stylex.props(styles.sheet)}>{children}</div> : null;
   return (
     <DraggablePanel
-      backgroundColor={cssVar.colorBgContainer}
-      defaultSize={{ height: '100%', width: 360 }}
+      backgroundColor={'transparent'}
+      defaultSize={{ height: '100%', width: 390 }}
       expand={open}
       expandable={false}
-      maxWidth={520}
-      minWidth={300}
+      maxWidth={530}
+      minWidth={310}
       placement={'right'}
+      showBorder={false}
     >
-      {children}
+      <div {...stylex.props(styles.card)}>{children}</div>
     </DraggablePanel>
   );
 };

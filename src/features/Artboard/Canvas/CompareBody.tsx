@@ -68,18 +68,19 @@ const Half = ({
 interface CompareBodyProps {
   board: ArtboardBoardView;
   imageUrl?: string;
+  k: number;
   screenshotUrl: string;
 }
 
-const CompareBody = ({ board, imageUrl, screenshotUrl }: CompareBodyProps) => {
+const CompareBody = ({ board, imageUrl, k, screenshotUrl }: CompareBodyProps) => {
   const { t } = useTranslation('project');
   return (
     <div {...stylex.props(styles.root)}>
       <Half board={board} label={t('artboard.compare.design')}>
-        <BoardBody live board={board} imageUrl={imageUrl} />
+        <BoardBody live board={board} imageUrl={imageUrl} k={k / 2} />
       </Half>
       <Half board={board} label={t('artboard.compare.real')}>
-        <BoardBody live board={board} screenshotUrl={screenshotUrl} />
+        <BoardBody live board={board} k={k / 2} screenshotUrl={screenshotUrl} />
       </Half>
     </div>
   );

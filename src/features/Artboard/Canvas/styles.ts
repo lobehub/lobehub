@@ -1,6 +1,8 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
+import { artboardTokens } from '../tokens.stylex';
+
 const appear = stylex.keyframes({
   from: { opacity: 0, transform: 'translateY(24px)' },
 });
@@ -17,32 +19,27 @@ export const canvasStyles = stylex.create({
     animationName: appear,
     animationTimingFunction: 'ease-out',
   },
-  edgeLabel: {
+  edgeBranch: {
     backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorderSecondary,
     borderRadius: 999,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    fontSize: 12,
-    paddingBlock: 2,
-    paddingInline: 10,
-    pointerEvents: 'none',
-    position: 'absolute',
-    whiteSpace: 'nowrap',
-    zIndex: 3,
-  },
-  edgeText: {
     color: cssVar.colorTextSecondary,
-    lineHeight: 1.2,
+  },
+  edgeLabel: {
+    backgroundColor: cssVar.colorBgLayout,
+    boxSizing: 'border-box',
+    color: cssVar.colorText,
+    fontWeight: 500,
+    lineHeight: 1.4,
     overflow: 'hidden',
-    paddingBlockEnd: 6,
     pointerEvents: 'none',
     position: 'absolute',
-    textAlign: 'center',
     textOverflow: 'ellipsis',
-    transform: 'translate(-50%, -100%)',
+    transform: 'translate(-50%, -50%)',
     whiteSpace: 'nowrap',
     zIndex: 1,
+  },
+  edgeLabelFull: {
+    zIndex: 3,
   },
   busy: {
     alignItems: 'center',
@@ -94,46 +91,35 @@ export const canvasStyles = stylex.create({
     transitionProperty: 'opacity',
   },
   boardCard: {
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 12,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    boxShadow: '0 1px 3px rgb(0 0 0 / 6%)',
+    backgroundColor: cssVar.colorBgContainer,
     height: '100%',
+    outlineColor: cssVar.colorBorderSecondary,
+    outlineStyle: 'solid',
+    outlineWidth: 1,
     overflow: 'hidden',
     position: 'relative',
     width: '100%',
   },
-  boardPicked: {
-    borderColor: cssVar.colorPrimary,
-    boxShadow: `0 0 0 1px ${cssVar.colorPrimary}`,
+  boardBare: {
+    backgroundColor: 'transparent',
+    outlineStyle: 'none',
+    overflow: 'visible',
   },
-  boardRelated: {
-    outlineColor: cssVar.colorPrimaryBorder,
-    outlineOffset: 4,
-    outlineStyle: 'dashed',
-    outlineWidth: 2,
-  },
-  boardSelected: {
-    outlineColor: cssVar.colorPrimary,
-    outlineOffset: 4,
-    outlineStyle: 'solid',
-    outlineWidth: 3,
-  },
-  group: {
-    backgroundColor: cssVar.colorFillQuaternary,
-    borderColor: cssVar.colorBorder,
-    borderRadius: 24,
-    borderStyle: 'dashed',
-    borderWidth: 1,
+  boardFrame: {
+    borderColor: artboardTokens.accent,
+    borderStyle: 'solid',
+    boxSizing: 'border-box',
+    inset: 0,
     pointerEvents: 'none',
     position: 'absolute',
-    transitionDuration: '0.25s',
-    transitionProperty: 'opacity',
   },
-  groupLocked: {
-    borderColor: cssVar.colorPrimaryBorder,
-    borderStyle: 'solid',
+  boardRelated: {
+    outlineColor: artboardTokens.selectionLine,
+    outlineStyle: 'dashed',
+  },
+  boardSelected: {
+    outlineColor: artboardTokens.selection,
+    outlineStyle: 'solid',
   },
   inert: {
     pointerEvents: 'none',
@@ -141,21 +127,6 @@ export const canvasStyles = stylex.create({
   muted: {
     opacity: 0.25,
     pointerEvents: 'none',
-  },
-  noShot: {
-    alignItems: 'center',
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorder,
-    borderRadius: 12,
-    borderStyle: 'dashed',
-    borderWidth: 2,
-    color: cssVar.colorTextTertiary,
-    display: 'flex',
-    flexDirection: 'column',
-    fontSize: 15,
-    gap: 6,
-    height: '100%',
-    justifyContent: 'center',
   },
   panning: {
     cursor: 'grabbing',
@@ -179,8 +150,9 @@ export const canvasStyles = stylex.create({
   },
   viewport: {
     backgroundColor: cssVar.colorBgLayout,
-    backgroundImage: `radial-gradient(${cssVar.colorFillSecondary} 1px, transparent 1px)`,
+    color: cssVar.colorText,
     cursor: 'grab',
+    fontFamily: cssVar.fontFamily,
     inset: 0,
     overflow: 'hidden',
     position: 'absolute',

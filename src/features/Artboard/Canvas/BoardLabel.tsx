@@ -1,84 +1,110 @@
 import type { ArtboardBoardView } from '@lobechat/types';
-import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ImageIcon, LockIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ImageIcon, LockIcon, StarIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/flowStateColor';
 import { sx } from '@/styles/sx';
 
 import StatusTag, { stateIcon } from '../StatusTag';
+import { artboardTokens } from '../tokens.stylex';
 import { type FlowNodeState, isFlagged } from '../Verify/flow';
-import { canvasStyles } from './styles';
+import {
+  BOARD_LABEL_FONT,
+  boardLabelLayout,
+  boardLabelScale,
+  tagWidth,
+  textWidth,
+} from './boardLabelLayout';
+import ChoiceRadio, { type BoardChoice, RADIO_WIDTH } from './ChoiceRadio';
+import RecommendBadge from './RecommendBadge';
+
+const ICON_WIDTH = 16;
+const LOCK_WIDTH = 18;
+const STATUS_TAG_WIDTH = 84;
+const STATUS_TAG_MIN_ROW = 260;
 
 const styles = stylex.create({
-  radio: {
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorder,
-    borderRadius: '50%',
+  icon: {
+    color: cssVar.colorTextTertiary,
+    flexShrink: 0,
+    marginBlockStart: 5,
+  },
+  kind: {
+    marginInlineEnd: 4,
+  },
+  lock: {
+    marginInlineStart: 6,
+  },
+  row: {
+    alignItems: 'flex-start',
+    color: cssVar.colorTextSecondary,
+    display: 'flex',
+    fontSize: 12,
+    height: 24,
+    insetBlockEnd: '100%',
+    insetInlineStart: 0,
+    paddingBlockEnd: 2,
+    position: 'absolute',
+    transformOrigin: '0 100%',
+    whiteSpace: 'nowrap',
+  },
+  spacer: {
+    flexGrow: 1,
+  },
+  star: {
+    color: artboardTokens.accent,
+    flexShrink: 0,
+    marginBlockStart: 5,
+    marginInlineStart: 5,
+  },
+  state: {
+    flexShrink: 0,
+    marginBlockStart: 5,
+    marginInlineEnd: 4,
+  },
+  status: {
+    flexShrink: 0,
+    marginInlineStart: 6,
+  },
+  tag: {
+    borderColor: `color-mix(in srgb, ${artboardTokens.accent} 35%, transparent)`,
+    borderRadius: 4,
     borderStyle: 'solid',
     borderWidth: 1,
-    cursor: 'pointer',
-    flex: 'none',
-    height: 14,
-    pointerEvents: 'auto',
-    width: 14,
+    color: artboardTokens.accentStrong,
+    flexShrink: 0,
+    fontSize: 10,
+    lineHeight: '13px',
+    marginBlockStart: 4,
+    marginInlineStart: 6,
+    paddingInline: 4,
   },
-  radioChecked: {
-    borderColor: cssVar.colorPrimary,
-    borderWidth: 4,
-    cursor: 'default',
+  title: {
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    lineHeight: '16px',
+    minWidth: 0,
+    overflow: 'hidden',
+    paddingBlockStart: 3,
+    textOverflow: 'ellipsis',
   },
-  radioDisabled: {
-    cursor: 'not-allowed',
-    opacity: 0.6,
+  titleSelected: {
+    color: artboardTokens.selection,
+  },
+  version: {
+    color: cssVar.colorTextTertiary,
+    flexShrink: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 11,
+    lineHeight: '16px',
+    marginInlineStart: 6,
+    paddingBlockStart: 3,
   },
 });
-
-interface ScaledLabelProps {
-  children: ReactNode;
-  gap?: number;
-  k: number;
-  scale?: number;
-  width: number;
-}
-
-export const ScaledLabel = ({ children, gap = 8, k, scale = 1 / k, width }: ScaledLabelProps) => (
-  <div
-    {...sx(canvasStyles.scaledLabel, {
-      paddingBottom: gap,
-      transform: `scale(${scale})`,
-      width: width / scale,
-    })}
-  >
-    {children}
-  </div>
-);
-
-export interface BoardChoice {
-  checked: boolean;
-  disabled: boolean;
-  onPick: () => void;
-}
-
-const ChoiceRadio = ({ checked, disabled, onPick }: BoardChoice) => (
-  <span
-    aria-checked={checked}
-    aria-disabled={disabled}
-    role="radio"
-    {...stylex.props(
-      styles.radio,
-      checked && styles.radioChecked,
-      disabled && styles.radioDisabled,
-    )}
-    onClick={(event) => {
-      event.stopPropagation();
-      if (!disabled && !checked) onPick();
-    }}
-  />
-);
 
 interface BoardLabelProps {
   board: ArtboardBoardView;
@@ -86,67 +112,97 @@ interface BoardLabelProps {
   k: number;
   linked: boolean;
   recommended: boolean;
+  selected: boolean;
   state?: FlowNodeState;
   verify: boolean;
 }
 
-const BoardLabel = ({ board, choice, k, linked, recommended, state, verify }: BoardLabelProps) => {
+const BoardLabel = ({
+  board,
+  choice,
+  k,
+  linked,
+  recommended,
+  selected,
+  state,
+  verify,
+}: BoardLabelProps) => {
   const { t } = useTranslation('project');
   const { source } = board;
-  const width = board.rect.w;
-  const screenWidth = width * k;
-  if (screenWidth < 90) return null;
+  const flagged = verify && linked && isFlagged(state);
+  if (board.type === 'decision' && !flagged) return null;
 
-  if (screenWidth < 320)
-    return (
-      <ScaledLabel gap={4} k={k} width={width}>
-        <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
-          {verify && linked && isFlagged(state) && (
-            <Icon color={flowStateColor(state)} icon={stateIcon(state)} size={12} />
-          )}
-          {choice && <ChoiceRadio {...choice} />}
-          <Text ellipsis strong style={{ fontSize: 12 }}>
-            {board.title}
-          </Text>
-        </Flexbox>
-      </ScaledLabel>
-    );
+  const recommendedText = t('artboard.board.recommended');
+  const version = source?.kind === 'canvas' && source.version > 1 ? `v${source.version}` : null;
+  const image = source?.kind === 'image';
+  const locked = linked && !verify;
+  const rowScale = boardLabelScale(k, board.rect.w);
+  const statusTag = flagged && !!rowScale && (board.rect.w * k) / rowScale >= STATUS_TAG_MIN_ROW;
+  const layout = boardLabelLayout({
+    boardWidth: board.rect.w,
+    k,
+    lead: (choice ? RADIO_WIDTH : 0) + (flagged && !statusTag ? ICON_WIDTH : 0),
+    recommended,
+    tag: tagWidth(recommendedText),
+    title: textWidth(board.title, BOARD_LABEL_FONT) + (image ? ICON_WIDTH : 0),
+    trail:
+      (version ? textWidth(version, 11) + 6 : 0) +
+      (locked ? LOCK_WIDTH : 0) +
+      (statusTag ? STATUS_TAG_WIDTH : 0),
+  });
+  const badge = layout.badge && (
+    <RecommendBadge k={k} label={recommendedText} width={board.rect.w} />
+  );
+  const { label } = layout;
+  if (!label) return badge || null;
 
   return (
-    <ScaledLabel k={k} width={width}>
-      <Flexbox
-        horizontal
-        align="center"
-        gap={6}
-        style={{ minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}
+    <>
+      <div
+        {...sx(styles.row, {
+          transform: `scale(${label.scale / k})`,
+          width: label.width,
+        })}
       >
+        {flagged && !statusTag && (
+          <Icon
+            color={flowStateColor(state)}
+            icon={stateIcon(state)}
+            size={12}
+            {...stylex.props(styles.state)}
+          />
+        )}
         {choice && <ChoiceRadio {...choice} />}
-        <Text ellipsis strong style={{ fontSize: 13 }}>
+        {image && <ImageIcon size={12} {...stylex.props(styles.icon, styles.kind)} />}
+        <span title={board.title} {...stylex.props(styles.title, selected && styles.titleSelected)}>
           {board.title}
-        </Text>
-        {recommended && (
-          <Tag color="success" size={'small'}>
-            {t('artboard.board.recommended')}
-          </Tag>
+        </span>
+        {label.mark === 'tag' && <span {...stylex.props(styles.tag)}>{recommendedText}</span>}
+        {label.mark === 'star' && (
+          <span aria-label={recommendedText} role="img" title={recommendedText}>
+            <StarIcon
+              fill="currentColor"
+              size={12}
+              strokeWidth={1.5}
+              {...stylex.props(styles.star)}
+            />
+          </span>
         )}
-        {board.type === 'decision' && <Tag size={'small'}>{t('artboard.board.decision')}</Tag>}
-        {source?.kind === 'image' && (
-          <Tag icon={<Icon icon={ImageIcon} />} size={'small'}>
-            {t('artboard.board.image')}
-          </Tag>
+        <span {...stylex.props(styles.spacer)} />
+        {version && <span {...stylex.props(styles.version)}>{version}</span>}
+        {locked && (
+          <span title={t('artboard.board.locked')}>
+            <LockIcon size={12} {...stylex.props(styles.icon, styles.lock)} />
+          </span>
         )}
-        {source?.kind === 'canvas' && source.version > 1 && (
-          <Tag size={'small'}>v{source.version}</Tag>
+        {statusTag && (
+          <span {...stylex.props(styles.status)}>
+            <StatusTag state={state} />
+          </span>
         )}
-        <div style={{ flex: 1 }} />
-        {linked && !verify && (
-          <Tag icon={<Icon icon={LockIcon} />} size={'small'}>
-            {t('artboard.board.locked')}
-          </Tag>
-        )}
-        {verify && linked && isFlagged(state) && <StatusTag state={state} />}
-      </Flexbox>
-    </ScaledLabel>
+      </div>
+      {badge}
+    </>
   );
 };
 

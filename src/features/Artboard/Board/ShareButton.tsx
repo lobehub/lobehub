@@ -1,14 +1,36 @@
-import { ActionIcon, DropdownMenu } from '@lobehub/ui';
-import { Share2 } from 'lucide-react';
+import { ActionIcon, Button, DropdownMenu } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { GlobeIcon, LockIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { artboardService } from '@/services/artboard';
 
 import { useBoard } from '../BoardContext';
+import { floatStyles } from '../Viewport/floatStyles';
 import { useArtboardShareTrigger } from './useArtboardShare';
 
-const ShareButton = () => {
+const styles = stylex.create({
+  button: {
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: 8,
+    flex: 'none',
+    fontSize: 12,
+    gap: 6,
+    height: 30,
+    paddingInline: 10,
+  },
+  dot: {
+    backgroundColor: cssVar.colorWarning,
+    borderRadius: '50%',
+    flex: 'none',
+    height: 6,
+    width: 6,
+  },
+});
+
+const ShareButton = ({ compact }: { compact?: boolean }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
   const { id, revision } = board.artboard;
@@ -22,21 +44,42 @@ const ShareButton = () => {
 
   if (trigger.kind === 'none') return null;
 
-  if (trigger.kind === 'action')
-    return (
-      <ActionIcon
-        disabled={trigger.action.disabled}
-        icon={Share2}
-        size={'small'}
-        title={trigger.action.label}
-        onClick={trigger.action.onClick}
-      />
-    );
+  const published = trigger.kind === 'menu';
+  const icon = published ? GlobeIcon : LockIcon;
+  const label = trigger.kind === 'action' ? trigger.action.label : t('artboard.share.trigger');
+  const disabled = trigger.kind === 'action' && trigger.action.disabled;
+
+  const button = compact ? (
+    <ActionIcon
+      disabled={disabled}
+      icon={icon}
+      size={'small'}
+      title={label}
+      onClick={trigger.kind === 'action' ? trigger.action.onClick : undefined}
+    />
+  ) : (
+    <Button
+      disabled={disabled}
+      icon={icon}
+      {...stylex.props(styles.button)}
+      onClick={trigger.kind === 'action' ? trigger.action.onClick : undefined}
+    >
+      {label}
+      {data?.hasUpdates && <span {...stylex.props(styles.dot)} />}
+    </Button>
+  );
 
   return (
-    <DropdownMenu items={trigger.items} placement={'bottomRight'}>
-      <ActionIcon icon={Share2} size={'small'} title={t('artboard.share.trigger')} />
-    </DropdownMenu>
+    <>
+      <span {...stylex.props(floatStyles.divider)} />
+      {trigger.kind === 'action' ? (
+        button
+      ) : (
+        <DropdownMenu items={trigger.items} placement={'bottomRight'}>
+          {button}
+        </DropdownMenu>
+      )}
+    </>
   );
 };
 
