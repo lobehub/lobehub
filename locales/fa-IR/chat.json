@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "آنلاین",
   "heteroAgent.executionTarget.onlineConnections_one": "آنلاین · {{count}} اتصال",
   "heteroAgent.executionTarget.onlineConnections_other": "آنلاین · {{count}} اتصالات",
+  "heteroAgent.executionTarget.persistSwitch": "ماندگار",
+  "heteroAgent.executionTarget.persistSwitchTip": "روشن: نتایج و روند کار در فضای ذخیره‌سازی شما نگه داشته می‌شود. خاموش: سندباکس پس از استفاده حذف می‌شود؛ مناسب برنامه‌نویسی و پردازش یک‌بارهٔ داده.",
   "heteroAgent.executionTarget.personalGroup": "دستگاه‌های خصوصی",
   "heteroAgent.executionTarget.presenceChecking": "در حال بررسی وضعیت…",
   "heteroAgent.executionTarget.projectDevicesHint": "فقط دستگاه‌هایی که دارای دایرکتوری کاری این پروژه هستند فهرست شده‌اند. برای افزودن دایرکتوری برای دستگاه دیگر، به تنظیمات پروژه بروید.",

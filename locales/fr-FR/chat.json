@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "En ligne",
   "heteroAgent.executionTarget.onlineConnections_one": "En ligne · {{count}} connexion",
   "heteroAgent.executionTarget.onlineConnections_other": "En ligne · {{count}} connexions",
+  "heteroAgent.executionTarget.persistSwitch": "Persistant",
+  "heteroAgent.executionTarget.persistSwitchTip": "Activé : les résultats et le travail qui les a produits sont conservés sur votre espace de stockage. Désactivé : le bac à sable est supprimé après usage, idéal pour coder ou traiter des données ponctuellement.",
   "heteroAgent.executionTarget.personalGroup": "Appareils privés",
   "heteroAgent.executionTarget.presenceChecking": "Vérification du statut…",
   "heteroAgent.executionTarget.projectDevicesHint": "Seuls les appareils avec le répertoire de travail de ce projet sont listés. Ajoutez un répertoire pour un autre appareil dans les paramètres du projet.",

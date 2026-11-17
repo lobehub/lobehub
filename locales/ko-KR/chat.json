@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "온라인",
   "heteroAgent.executionTarget.onlineConnections_one": "온라인 · {{count}} 연결",
   "heteroAgent.executionTarget.onlineConnections_other": "온라인 · {{count}} 연결",
+  "heteroAgent.executionTarget.persistSwitch": "영구 보존",
+  "heteroAgent.executionTarget.persistSwitchTip": "켜면 결과물과 작업 과정이 드라이브에 저장됩니다. 끄면 사용 후 샌드박스가 삭제되며, 코딩이나 일회성 데이터 처리에 적합합니다.",
   "heteroAgent.executionTarget.personalGroup": "비공개 장치",
   "heteroAgent.executionTarget.presenceChecking": "상태 확인 중…",
   "heteroAgent.executionTarget.projectDevicesHint": "이 프로젝트의 작업 디렉토리가 있는 장치만 나열됩니다. 프로젝트 설정에서 다른 장치에 디렉토리를 추가하세요.",

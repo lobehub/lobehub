@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "Онлайн",
   "heteroAgent.executionTarget.onlineConnections_one": "Онлайн · {{count}} соединение",
   "heteroAgent.executionTarget.onlineConnections_other": "Онлайн · {{count}} соединений",
+  "heteroAgent.executionTarget.persistSwitch": "Постоянная",
+  "heteroAgent.executionTarget.persistSwitchTip": "Вкл.: результаты и ход работы сохраняются на вашем диске. Выкл.: песочница удаляется после использования — подходит для программирования и разовой обработки данных.",
   "heteroAgent.executionTarget.personalGroup": "Личные устройства",
   "heteroAgent.executionTarget.presenceChecking": "Проверка статуса…",
   "heteroAgent.executionTarget.projectDevicesHint": "Указаны только устройства с рабочей директорией этого проекта. Добавьте директорию для другого устройства в настройках проекта.",

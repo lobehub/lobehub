@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "Online",
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} verbinding",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} verbindingen",
+  "heteroAgent.executionTarget.persistSwitch": "Persistent",
+  "heteroAgent.executionTarget.persistSwitchTip": "Aan: resultaten en het werk erachter blijven op je schijf bewaard. Uit: de sandbox wordt na gebruik verwijderd, geschikt voor programmeren en eenmalige gegevensverwerking.",
   "heteroAgent.executionTarget.personalGroup": "Privéapparaten",
   "heteroAgent.executionTarget.presenceChecking": "Status controleren…",
   "heteroAgent.executionTarget.projectDevicesHint": "Alleen apparaten met de werkmap van dit project worden weergegeven. Voeg een map toe voor een ander apparaat in de projectinstellingen.",

@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "在線",
   "heteroAgent.executionTarget.onlineConnections_one": "在線 · {{count}} 個連接",
   "heteroAgent.executionTarget.onlineConnections_other": "在線 · {{count}} 個連接",
+  "heteroAgent.executionTarget.persistSwitch": "持久化",
+  "heteroAgent.executionTarget.persistSwitchTip": "開啟後，產物和過程會儲存到雲端硬碟；關閉則即用即銷毀，適合程式開發和臨時資料處理。",
   "heteroAgent.executionTarget.personalGroup": "私人裝置",
   "heteroAgent.executionTarget.presenceChecking": "正在檢查狀態…",
   "heteroAgent.executionTarget.projectDevicesHint": "僅列出具有此專案工作目錄的設備。請在專案設定中為其他設備新增目錄。",

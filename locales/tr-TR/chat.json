@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "Çevrimiçi",
   "heteroAgent.executionTarget.onlineConnections_one": "Çevrimiçi · {{count}} bağlantı",
   "heteroAgent.executionTarget.onlineConnections_other": "Çevrimiçi · {{count}} bağlantı",
+  "heteroAgent.executionTarget.persistSwitch": "Kalıcı",
+  "heteroAgent.executionTarget.persistSwitchTip": "Açık: sonuçlar ve arkasındaki çalışma sürücünüzde saklanır. Kapalı: sanal alan kullanımdan sonra silinir; kodlama ve tek seferlik veri işleme için uygundur.",
   "heteroAgent.executionTarget.personalGroup": "Özel Cihazlar",
   "heteroAgent.executionTarget.presenceChecking": "Durum kontrol ediliyor…",
   "heteroAgent.executionTarget.projectDevicesHint": "Sadece bu projenin çalışma dizinine sahip cihazlar listelenir. Proje ayarlarından başka bir cihaz için bir dizin ekleyin.",

@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "متصل",
   "heteroAgent.executionTarget.onlineConnections_one": "متصل · {{count}} اتصال",
   "heteroAgent.executionTarget.onlineConnections_other": "متصل · {{count}} اتصالات",
+  "heteroAgent.executionTarget.persistSwitch": "دائم",
+  "heteroAgent.executionTarget.persistSwitchTip": "عند التشغيل: تُحفظ النتائج والعمل الذي أدى إليها في مساحة التخزين لديك. عند الإيقاف: يُتخلَّص من بيئة الحماية بعد الاستخدام، وهذا مناسب للبرمجة ومعالجة البيانات لمرة واحدة.",
   "heteroAgent.executionTarget.personalGroup": "الأجهزة الخاصة",
   "heteroAgent.executionTarget.presenceChecking": "جارٍ التحقق من الحالة...",
   "heteroAgent.executionTarget.projectDevicesHint": "يتم إدراج الأجهزة التي تحتوي على دليل العمل لهذا المشروع فقط. أضف دليلاً لجهاز آخر في إعدادات المشروع.",

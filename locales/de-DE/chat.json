@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "Online",
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} Verbindung",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} Verbindungen",
+  "heteroAgent.executionTarget.persistSwitch": "Dauerhaft",
+  "heteroAgent.executionTarget.persistSwitchTip": "An: Ergebnisse und die Arbeit dahinter bleiben auf deinem Laufwerk. Aus: Die Sandbox wird nach der Nutzung verworfen – passend für Programmierung und einmalige Datenverarbeitung.",
   "heteroAgent.executionTarget.personalGroup": "Private Geräte",
   "heteroAgent.executionTarget.presenceChecking": "Status wird überprüft…",
   "heteroAgent.executionTarget.projectDevicesHint": "Es werden nur Geräte mit dem Arbeitsverzeichnis dieses Projekts aufgelistet. Fügen Sie ein Verzeichnis für ein anderes Gerät in den Projekteinstellungen hinzu.",

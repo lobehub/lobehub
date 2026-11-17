@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "オンライン",
   "heteroAgent.executionTarget.onlineConnections_one": "オンライン · {{count}} 接続",
   "heteroAgent.executionTarget.onlineConnections_other": "オンライン · {{count}} 接続",
+  "heteroAgent.executionTarget.persistSwitch": "永続化",
+  "heteroAgent.executionTarget.persistSwitchTip": "オン：成果物と作業の過程をドライブに保存します。オフ：使用後にサンドボックスを破棄します。コーディングや一時的なデータ処理に適しています。",
   "heteroAgent.executionTarget.personalGroup": "プライベートデバイス",
   "heteroAgent.executionTarget.presenceChecking": "ステータスを確認中…",
   "heteroAgent.executionTarget.projectDevicesHint": "このプロジェクトの作業ディレクトリを持つデバイスのみが表示されます。プロジェクト設定で別のデバイスのディレクトリを追加してください。",

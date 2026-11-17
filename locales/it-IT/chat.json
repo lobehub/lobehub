@@ -1542,6 +1542,8 @@
   "heteroAgent.executionTarget.online": "Online",
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} connessione",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} connessioni",
+  "heteroAgent.executionTarget.persistSwitch": "Persistente",
+  "heteroAgent.executionTarget.persistSwitchTip": "Attivo: i risultati e il lavoro che li ha prodotti restano sul tuo drive. Disattivo: la sandbox viene eliminata dopo l'uso, adatta alla programmazione e all'elaborazione di dati una tantum.",
   "heteroAgent.executionTarget.personalGroup": "Dispositivi privati",
   "heteroAgent.executionTarget.presenceChecking": "Verifica dello stato in corso…",
   "heteroAgent.executionTarget.projectDevicesHint": "Sono elencati solo i dispositivi con la directory di lavoro di questo progetto. Aggiungi una directory per un altro dispositivo nelle impostazioni del progetto.",

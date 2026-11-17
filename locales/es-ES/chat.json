@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "Conectado",
   "heteroAgent.executionTarget.onlineConnections_one": "En línea · {{count}} conexión",
   "heteroAgent.executionTarget.onlineConnections_other": "En línea · {{count}} conexiones",
+  "heteroAgent.executionTarget.persistSwitch": "Persistente",
+  "heteroAgent.executionTarget.persistSwitchTip": "Activado: los resultados y el trabajo que los produjo se guardan en tu unidad. Desactivado: el sandbox se descarta tras usarlo, ideal para programar y procesar datos puntuales.",
   "heteroAgent.executionTarget.personalGroup": "Dispositivos privados",
   "heteroAgent.executionTarget.presenceChecking": "Comprobando el estado…",
   "heteroAgent.executionTarget.projectDevicesHint": "Solo se enumeran los dispositivos con el directorio de trabajo de este proyecto. Agrega un directorio para otro dispositivo en la configuración del proyecto.",

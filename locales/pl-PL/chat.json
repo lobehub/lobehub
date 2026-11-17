@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "Online",
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} połączenie",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} połączenia",
+  "heteroAgent.executionTarget.persistSwitch": "Trwały",
+  "heteroAgent.executionTarget.persistSwitchTip": "Włączone: wyniki i praca, która do nich doprowadziła, są zapisywane na Twoim dysku. Wyłączone: piaskownica jest usuwana po użyciu — dobre do programowania i jednorazowego przetwarzania danych.",
   "heteroAgent.executionTarget.personalGroup": "Prywatne urządzenia",
   "heteroAgent.executionTarget.presenceChecking": "Sprawdzanie statusu…",
   "heteroAgent.executionTarget.projectDevicesHint": "Wyświetlane są tylko urządzenia z katalogiem roboczym tego projektu. Dodaj katalog dla innego urządzenia w ustawieniach projektu.",

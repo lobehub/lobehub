@@ -1540,6 +1540,8 @@
   "heteroAgent.executionTarget.online": "Trực tuyến",
   "heteroAgent.executionTarget.onlineConnections_one": "Trực tuyến · {{count}} kết nối",
   "heteroAgent.executionTarget.onlineConnections_other": "Trực tuyến · {{count}} kết nối",
+  "heteroAgent.executionTarget.persistSwitch": "Lưu trữ lâu dài",
+  "heteroAgent.executionTarget.persistSwitchTip": "Bật: kết quả và quá trình làm việc được lưu vào ổ đĩa của bạn. Tắt: sandbox bị hủy sau khi dùng, phù hợp cho lập trình và xử lý dữ liệu tạm thời.",
   "heteroAgent.executionTarget.personalGroup": "Thiết bị riêng tư",
   "heteroAgent.executionTarget.presenceChecking": "Đang kiểm tra trạng thái…",
   "heteroAgent.executionTarget.projectDevicesHint": "Chỉ các thiết bị có thư mục làm việc của dự án này được liệt kê. Thêm một thư mục cho thiết bị khác trong cài đặt dự án.",
