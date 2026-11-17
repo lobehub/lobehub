@@ -1533,6 +1533,13 @@
       "when": 1794852458535,
       "tag": "0218_channel_and_contacts_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 219,
+      "version": "7",
+      "when": 1794890771557,
+      "tag": "0219_contacts_external_contacts",
+      "breakpoints": true
     }
   ],
   "version": "6"
