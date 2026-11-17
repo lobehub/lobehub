@@ -180,6 +180,57 @@ describe('reopenClosedTab', () => {
     expect(result.current.closedTabBuckets).toEqual({});
   });
 
+  // Closing the last tab leaves a generated home tab so TabHost has something to render;
+  // undoing that close should not leave that placeholder behind as an extra tab.
+  it('replaces the untouched home tab that closing the last tab left behind', () => {
+    const result = seed([goal], 'goal');
+
+    act(() => {
+      result.current.removeTab('goal');
+    });
+    expect(urls(result.current.tabs)).toEqual(['/']);
+
+    act(() => {
+      result.current.reopenClosedTab();
+    });
+
+    const { activeTabId, tabs } = result.current;
+    expect(urls(tabs)).toEqual(['/agent/a1/goal/g1']);
+    expect(activeTabId).toBe(tabs[0].id);
+  });
+
+  it('keeps that home tab once the user navigated it', () => {
+    const result = seed([goal], 'goal');
+
+    act(() => {
+      result.current.removeTab('goal');
+    });
+    act(() => {
+      result.current.updateTab(result.current.tabs[0].id, '/page/p1');
+    });
+    act(() => {
+      result.current.reopenClosedTab();
+    });
+
+    expect(urls(result.current.tabs)).toEqual(['/agent/a1/goal/g1', '/page/p1']);
+  });
+
+  it('keeps that home tab once the user opened another tab beside it', () => {
+    const result = seed([goal], 'goal');
+
+    act(() => {
+      result.current.removeTab('goal');
+    });
+    act(() => {
+      result.current.addTab('/page/p1');
+    });
+    act(() => {
+      result.current.reopenClosedTab();
+    });
+
+    expect(urls(result.current.tabs)).toEqual(['/agent/a1/goal/g1', '/', '/page/p1']);
+  });
+
   it('keeps closed tabs per scope', () => {
     const result = seed([home, goal], 'goal');
 

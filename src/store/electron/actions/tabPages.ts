@@ -27,6 +27,11 @@ const CLOSED_TAB_GROUPS_LIMIT = 20;
 /** A tab as it was when closed, enough to put it back where it stood. */
 export interface ClosedTab {
   cached?: DynamicRouteMeta;
+  /**
+   * Set when this was the last tab: the generated home tab that replaced it. Reopening
+   * takes that placeholder's place while it is still the only, untouched tab.
+   */
+  fallbackHomeTabId?: string;
   index: number;
   pinned?: boolean;
   url: string;
@@ -272,7 +277,7 @@ export class TabPagesActionImpl {
       this.#set(
         {
           activeTabId: home.id,
-          closedTabBuckets: this.#rememberClosed(closed),
+          closedTabBuckets: this.#rememberClosed(closed, home.id),
           splitView: null,
           tabs: [home],
         },
@@ -346,7 +351,16 @@ export class TabPagesActionImpl {
     const group = groups.at(-1);
     if (!group) return null;
 
-    let nextTabs = tabs;
+    // Undoing a last-tab close drops the home tab generated for it, unless the user has
+    // since navigated it or opened another tab beside it.
+    const fallbackHomeTabId = group.find((closed) => closed.fallbackHomeTabId)?.fallbackHomeTabId;
+    const isUntouchedFallback =
+      !!fallbackHomeTabId &&
+      tabs.length === 1 &&
+      tabs[0].id === fallbackHomeTabId &&
+      isSameTabTarget(tabs[0], tabScopeHomeUrl(activeTabScope));
+
+    let nextTabs = isUntouchedFallback ? [] : tabs;
     let focusId = '';
     const hadActive = group.some((closed) => closed.wasActive);
     const now = Date.now();
@@ -537,7 +551,10 @@ export class TabPagesActionImpl {
 
   // Snapshot the tabs at `indices` (positions in the current list) as one closed group of
   // the active scope. The copy a self-split made only mirrors its source, so it is skipped.
-  #rememberClosed = (indices: number[]): Record<string, ClosedTab[][]> => {
+  #rememberClosed = (
+    indices: number[],
+    fallbackHomeTabId?: string,
+  ): Record<string, ClosedTab[][]> => {
     const { activeTabId, activeTabScope, closedTabBuckets, splitView, tabs } = this.#get();
     const group: ClosedTab[] = indices
       .filter((index) => tabs[index] && tabs[index].id !== splitView?.duplicatedTabId)
@@ -550,6 +567,7 @@ export class TabPagesActionImpl {
         };
         if (tab.cached) closed.cached = tab.cached;
         if (tab.pinned) closed.pinned = true;
+        if (fallbackHomeTabId) closed.fallbackHomeTabId = fallbackHomeTabId;
         return closed;
       });
     if (group.length === 0) return closedTabBuckets;

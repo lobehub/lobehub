@@ -7,6 +7,9 @@ import { WindowsMenu } from './windows';
 
 // Mock Electron modules
 vi.mock('electron', () => ({
+  BrowserWindow: class BrowserWindow {
+    static getFocusedWindow = vi.fn();
+  },
   Menu: {
     buildFromTemplate: vi.fn((template) => ({ template })),
     setApplicationMenu: vi.fn(),

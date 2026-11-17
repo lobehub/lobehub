@@ -144,11 +144,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           {
             accelerator: 'Shift+Command+T',
-            click: () => {
-              const mainWindow = this.app.browserManager.getMainWindow();
-              mainWindow.show();
-              mainWindow.broadcast('reopenClosedTab');
-            },
+            click: (_item, targetWindow) => this.reopenClosedTab(targetWindow),
             label: t('file.reopenClosedTab'),
           },
           { type: 'separator' },
