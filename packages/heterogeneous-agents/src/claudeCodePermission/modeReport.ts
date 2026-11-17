@@ -1,5 +1,9 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { HeteroPermissionMode, HeteroPermissionModeFallback } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  HeteroPermissionMode,
+  HeteroPermissionModeFallback,
+} from '@lobechat/types';
 import { isHeteroPermissionMode } from '@lobechat/types';
 
 /** `step_complete` phase carrying the mode Claude Code reports it is in. */
@@ -34,6 +38,19 @@ export const isPermissionModeReport = (data: unknown): data is PermissionModeRep
   data !== null &&
   (data as { phase?: unknown }).phase === PERMISSION_MODE_PHASE &&
   isHeteroPermissionMode((data as { permissionMode?: unknown }).permissionMode);
+
+/**
+ * The topic patch for a mode report, shared by the server (runs hosted by
+ * `lh hetero exec`) and the desktop renderer (local runs). A switch Claude Code
+ * made or confirmed becomes the topic's mode; a fallback only records why,
+ * keeping the pick, so the topic runs in it again wherever it can.
+ */
+export const permissionModeReportPatch = (
+  report: Pick<PermissionModeReportData, 'fallback' | 'permissionMode'>,
+): Pick<ChatTopicMetadata, 'heteroPermissionMode' | 'heteroPermissionModeFallback'> =>
+  report.fallback
+    ? { heteroPermissionModeFallback: report.fallback }
+    : { heteroPermissionMode: report.permissionMode, heteroPermissionModeFallback: null };
 
 /**
  * Turns Claude Code's mode reports into `step_complete` events, one per

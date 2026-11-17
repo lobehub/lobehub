@@ -34,12 +34,26 @@ describe('HeterogeneousPersistenceHandler — Claude Code permission mode', () =
     });
 
     expect(h.topicModel.updateMetadata.mock.calls).toEqual([
-      [TOPIC, { heteroPermissionMode: 'plan', heteroPermissionModeFallback: null }],
-      [TOPIC, { heteroPermissionMode: 'acceptEdits', heteroPermissionModeFallback: null }],
+      [
+        TOPIC,
+        {
+          heteroPermissionMode: 'plan',
+          heteroPermissionModeFallback: null,
+          heteroPermissionModeReportPending: null,
+        },
+      ],
+      [
+        TOPIC,
+        {
+          heteroPermissionMode: 'acceptEdits',
+          heteroPermissionModeFallback: null,
+          heteroPermissionModeReportPending: null,
+        },
+      ],
     ]);
   });
 
-  it('records why a root run is not in the picked mode', async () => {
+  it('records why a root run is not in the picked mode, keeping the pick', async () => {
     const h = createHarness({ assistantMessageId: 'asst-1', operationId: OP, topicId: TOPIC });
     await h.handler.ingest({
       events: [
@@ -53,8 +67,8 @@ describe('HeterogeneousPersistenceHandler — Claude Code permission mode', () =
       topicId: TOPIC,
     });
     expect(h.topicModel.updateMetadata).toHaveBeenCalledWith(TOPIC, {
-      heteroPermissionMode: 'acceptEdits',
       heteroPermissionModeFallback: 'root',
+      heteroPermissionModeReportPending: null,
     });
   });
 });

@@ -5,7 +5,10 @@ import type {
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
 import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
-import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
+import {
+  isPermissionModeReport,
+  permissionModeReportPatch,
+} from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { createNanoId } from '@lobechat/utils';
@@ -356,8 +359,8 @@ export class HeterogeneousPersistenceHandler {
     // the topic's next run starts in it, and the composer chip shows it.
     if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
       await this.deps.topicModel.updateMetadata(state.topicId, {
-        heteroPermissionMode: event.data.permissionMode,
-        heteroPermissionModeFallback: event.data.fallback,
+        ...permissionModeReportPatch(event.data),
+        heteroPermissionModeReportPending: null,
       });
       return;
     }

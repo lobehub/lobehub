@@ -7,6 +7,7 @@ export {
   isPermissionModeReport,
   PERMISSION_MODE_PHASE,
   type PermissionModeReportData,
+  permissionModeReportPatch,
 } from './modeReport';
 export {
   CLAUDE_CODE_PERMISSION_NOTE_KEY,

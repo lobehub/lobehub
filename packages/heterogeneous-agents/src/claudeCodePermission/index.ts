@@ -8,6 +8,7 @@ export {
   PERMISSION_MODE_PHASE,
   type PermissionModeReportData,
   PermissionModeReporter,
+  permissionModeReportPatch,
   readClaudeCodePermissionMode,
 } from './modeReport';
 export {

@@ -27,6 +27,7 @@ import { resolveInlineImages } from '@/server/services/file/inlineImages';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
+import { expectPermissionModeReport } from '@/server/services/heterogeneousAgent/permissionModeReport';
 import type { UnansweredUserTurn } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { collectUnansweredUserTurns } from '@/server/services/heterogeneousAgent/unansweredUserTurns';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox/session';
@@ -199,6 +200,12 @@ export const prepareHeteroRun = async (
   const permissionModePromise = resolveDispatchPermissionMode(deps.db, deps.userId, {
     heteroType,
     topicMetadata: topic?.metadata,
+  }).then(async (mode) => {
+    // An `lh` that never reports the mode back is flagged when the run ends.
+    await expectPermissionModeReport(deps.topicModel, { mode, operationId, topicId }).catch(
+      (error) => log('execAgent: permission mode report marker failed: %O', error),
+    );
+    return mode;
   });
 
   // The primary resumed attempt already has native history and must not get

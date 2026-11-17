@@ -229,6 +229,12 @@ export interface ChatTopicMetadata {
   heteroPermissionMode?: HeteroPermissionMode;
   /** Why the last run was not in the picked mode; cleared by a run that was. */
   heteroPermissionModeFallback?: HeteroPermissionModeFallback | null;
+  /**
+   * Operation dispatched to `lh hetero exec` with a mode that asks, whose run
+   * has not reported Claude Code's mode yet. Still set when it ends cleanly:
+   * that `lh` predates permission modes (`outdatedCli`). Server-written only.
+   */
+  heteroPermissionModeReportPending?: string | null;
   /** Latest Task run's dispatched settings; no args, credentials or system context. */
   heteroRuntimeConfig?: {
     /** Per-field configuration and provenance captured before dispatch. */
