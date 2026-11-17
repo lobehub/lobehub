@@ -8,22 +8,18 @@ const PULL_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+(?:[/?#]
 export const isPullRequestUrl = (value: string) => PULL_URL_RE.test(value.trim());
 
 /**
- * State of the Overview's "Link a pull request" field: a quiet row until
- * opened, then an input that links on Enter, explains a URL that is not a PR
- * without asking the server, and closes on Escape or when left empty.
+ * State of the "Link a pull request" dialog's field: links on submit, explains
+ * a URL that is not a PR without asking the server, and calls `onDone` once
+ * linked (the dialog closes then). A failed link keeps the field for a retry.
  */
-export const useLinkPullRequestField = (onLink: (url: string) => Promise<string | undefined>) => {
+export const useLinkPullRequestField = (
+  onLink: (url: string) => Promise<string | undefined>,
+  onDone: () => void,
+) => {
   const { t } = useTranslation('chat');
-  const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [linking, setLinking] = useState(false);
   const [invalid, setInvalid] = useState(false);
-
-  const close = useCallback(() => {
-    setEditing(false);
-    setValue('');
-    setInvalid(false);
-  }, []);
 
   const change = useCallback((next: string) => {
     setValue(next);
@@ -31,8 +27,8 @@ export const useLinkPullRequestField = (onLink: (url: string) => Promise<string 
   }, []);
 
   const submit = useCallback(async () => {
+    if (linking) return;
     const url = value.trim();
-    if (!url) return close();
     if (!isPullRequestUrl(url)) {
       setInvalid(true);
       return;
@@ -41,22 +37,13 @@ export const useLinkPullRequestField = (onLink: (url: string) => Promise<string 
     try {
       const identifier = await onLink(url);
       toast.success(t('workingPanel.overview.pr.linked', { name: identifier ?? url }));
-      close();
+      onDone();
     } catch {
       toast.error(t('workingPanel.overview.pr.linkFailed'));
     } finally {
       setLinking(false);
     }
-  }, [close, onLink, t, value]);
+  }, [linking, onDone, onLink, t, value]);
 
-  return {
-    change,
-    close,
-    editing,
-    invalid,
-    linking,
-    open: () => setEditing(true),
-    submit,
-    value,
-  };
+  return { change, invalid, linking, submit, value };
 };

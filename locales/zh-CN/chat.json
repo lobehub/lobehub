@@ -3715,6 +3715,7 @@
   "workingPanel.overview.pr.dismiss": "从话题中移除",
   "workingPanel.overview.pr.dismissed": "已将 {{name}} 从话题中移除",
   "workingPanel.overview.pr.link": "关联 PR",
+  "workingPanel.overview.pr.linkAction": "关联",
   "workingPanel.overview.pr.linkFailed": "关联 PR 失败",
   "workingPanel.overview.pr.linkInvalid": "请粘贴 GitHub PR 链接，例如 https://github.com/owner/repo/pull/123",
   "workingPanel.overview.pr.linkPlaceholder": "粘贴 GitHub PR 链接",

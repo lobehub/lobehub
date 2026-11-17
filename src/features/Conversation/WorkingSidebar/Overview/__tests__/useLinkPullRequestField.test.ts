@@ -33,13 +33,13 @@ describe('useLinkPullRequestField', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const setup = (onLink = vi.fn(async () => 'a/b#1')) => {
-    const hook = renderHook(() => useLinkPullRequestField(onLink));
-    act(() => hook.result.current.open());
-    return { hook, onLink };
+    const onDone = vi.fn();
+    const hook = renderHook(() => useLinkPullRequestField(onLink, onDone));
+    return { hook, onDone, onLink };
   };
 
-  it('links a pasted PR URL, confirms it, and closes', async () => {
-    const { hook, onLink } = setup();
+  it('links a pasted PR URL, confirms it, and closes the dialog', async () => {
+    const { hook, onDone, onLink } = setup();
 
     act(() => hook.result.current.change(' https://github.com/a/b/pull/1 '));
     await act(() => hook.result.current.submit());
@@ -48,24 +48,25 @@ describe('useLinkPullRequestField', () => {
     expect(toastMocks.success).toHaveBeenCalledWith(
       'workingPanel.overview.pr.linked:{"name":"a/b#1"}',
     );
-    expect(hook.result.current.editing).toBe(false);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it('explains a URL that is not a PR without asking the server', async () => {
-    const { hook, onLink } = setup();
+    const { hook, onDone, onLink } = setup();
 
     act(() => hook.result.current.change('https://github.com/a/b/issues/1'));
     await act(() => hook.result.current.submit());
 
     expect(hook.result.current.invalid).toBe(true);
     expect(onLink).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
     // Typing again clears the explanation.
     act(() => hook.result.current.change('https://github.com/a/b/pull/2'));
     expect(hook.result.current.invalid).toBe(false);
   });
 
-  it('reports a failed link and keeps the field open', async () => {
-    const { hook } = setup(
+  it('reports a failed link and keeps the dialog open', async () => {
+    const { hook, onDone } = setup(
       vi.fn(async () => {
         throw new Error('nope');
       }),
@@ -75,16 +76,7 @@ describe('useLinkPullRequestField', () => {
     await act(() => hook.result.current.submit());
 
     expect(toastMocks.error).toHaveBeenCalledWith('workingPanel.overview.pr.linkFailed');
-    expect(hook.result.current.editing).toBe(true);
+    expect(onDone).not.toHaveBeenCalled();
     expect(hook.result.current.linking).toBe(false);
-  });
-
-  it('closes when submitted empty', async () => {
-    const { hook, onLink } = setup();
-
-    await act(() => hook.result.current.submit());
-
-    expect(hook.result.current.editing).toBe(false);
-    expect(onLink).not.toHaveBeenCalled();
   });
 });

@@ -3901,6 +3901,7 @@ export default {
   'workingPanel.overview.pr.dismiss': 'Remove from this topic',
   'workingPanel.overview.pr.dismissed': 'Removed {{name}} from this topic',
   'workingPanel.overview.pr.link': 'Link a pull request',
+  'workingPanel.overview.pr.linkAction': 'Link',
   'workingPanel.overview.pr.linkFailed': "Couldn't link the pull request",
   'workingPanel.overview.pr.linkInvalid':
     'Paste a GitHub pull request link, like https://github.com/owner/repo/pull/123',
