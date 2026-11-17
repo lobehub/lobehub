@@ -94,10 +94,17 @@ export interface SubTopicDeps {
     request: Record<string, unknown>;
   }) => Promise<{ queued: boolean; reason?: string }>;
   archiveTopic: (topicId: string) => Promise<unknown>;
+  /**
+   * Throws unless the caller may run `agentId` in a conversation opened from
+   * `openerTopicId` — the same workspace checks `aiAgent.execAgent` applies.
+   */
+  assertCanOpen: (params: { agentId: string; openerTopicId: string }) => Promise<void>;
   detachTopics: (
     topicIds: string[],
   ) => Promise<{ agentId: null | string; id: string; trigger: null | string }[]>;
   execAgent: (params: Record<string, unknown>) => Promise<ExecAgentResult>;
+  /** Status of the topic's latest top-level operation; null before its first run. */
+  findLatestRunStatus: (topicId: string) => Promise<AgentOperationStatus | null>;
   findLiveRunIds: (topicId: string) => Promise<string[]>;
   findTopic: (topicId: string) => Promise<TopicRow | null | undefined>;
   interrupt: (operationId: string) => Promise<unknown>;
@@ -205,6 +212,7 @@ export class SubTopicService {
     if (!agentId) {
       throw new SubTopicError('BAD_REQUEST', 'Name the agent to open the sub-topic with.');
     }
+    await this.deps.assertCanOpen({ agentId, openerTopicId: opener.id });
 
     const workspace = input.workspace ?? 'inherit';
     const deviceId = input.deviceId ?? opener.metadata?.boundDeviceId;
@@ -264,6 +272,9 @@ export class SubTopicService {
       // device (or the one asked for) either way — a device-bound agent such as
       // Claude Code has nowhere else to run.
       ...(deviceId && { deviceId }),
+      // A device asked for by name must be the one it runs on: fail rather than
+      // fall back to the cloud when it is offline.
+      ...(input.deviceId && { requireDevice: true }),
       ...(!input.detach && { openedByTopicId: opener.id }),
       prompt: input.prompt,
       ...(input.sourceOperationId && { sourceOperationId: input.sourceOperationId }),
@@ -302,8 +313,14 @@ export class SubTopicService {
 
   async get(topicId: string) {
     const topic = await this.requireTopic(topicId);
-    const liveRuns = await this.deps.findLiveRunIds(topicId);
-    const state = liveRuns.length > 0 ? 'running' : toSubTopicState(topic.status);
+    const [liveRuns, latestRunStatus] = await Promise.all([
+      this.deps.findLiveRunIds(topicId),
+      this.deps.findLatestRunStatus(topicId),
+    ]);
+    // Same reading as the lists: the latest run says running / waiting / failed;
+    // a live run that has not written its status yet still counts as running.
+    const fromRun = toSubTopicState(topic.status, latestRunStatus);
+    const state = fromRun === 'idle' && liveRuns.length > 0 ? 'running' : fromRun;
 
     return {
       agentId: topic.agentId,

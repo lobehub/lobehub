@@ -9,6 +9,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
@@ -21,6 +22,7 @@ import {
 } from '@/server/services/subTopic';
 
 import { agentSteerQueueRouter } from './agentSteerQueue';
+import { assertCanUseAgentRunConversation } from './aiAgent/guards';
 import { deviceRouter } from './device';
 import { topicRouter } from './topic';
 import { readTopicTranscript } from './topic/transcript';
@@ -68,11 +70,23 @@ export const createSubTopicService = (ctx: CallerCtx) => {
         id: topicId,
         value: { completedAt: new Date(), status: 'completed' },
       }),
+    // The checks `aiAgent.execAgent` runs before a send: the target agent, and
+    // the conversation the new topic hangs off.
+    assertCanOpen: async ({ agentId, openerTopicId }) => {
+      await assertCanUseWorkspaceAgent({ agentId, db, userId: ctx.userId, workspaceId });
+      await assertCanUseAgentRunConversation({
+        db,
+        topicId: openerTopicId,
+        userId: ctx.userId,
+        workspaceId,
+      });
+    },
     detachTopics: (topicIds) => topicModel.detachOpenedTopics(topicIds),
     execAgent: (params) =>
       new AiAgentService(db, ctx.userId, { workspaceId }).execAgent(params as any),
     findLiveRunIds: (topicId) =>
       findOwnLiveRuns({ db, workspaceId }, { threadId: null, topicId, userId: ctx.userId }),
+    findLatestRunStatus: (topicId) => topicModel.getLatestRunStatus(topicId),
     findTopic: (topicId) => topicModel.findById(topicId) as any,
     interrupt: (operationId) =>
       new AiAgentService(db, ctx.userId, { workspaceId }).interruptTask({ operationId }),

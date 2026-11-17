@@ -32,6 +32,7 @@ const createDeps = () =>
     }),
     appendFollowUp: vi.fn().mockResolvedValue({ queued: false, reason: 'idle' }),
     archiveTopic: vi.fn().mockResolvedValue(undefined),
+    assertCanOpen: vi.fn().mockResolvedValue(undefined),
     detachTopics: vi.fn(async (ids: string[]) =>
       ids.map((id) => ({
         agentId: id === 'tpc_cross' ? 'agt_codex' : 'agt_lobe',
@@ -42,6 +43,7 @@ const createDeps = () =>
     execAgent: vi
       .fn()
       .mockResolvedValue({ operationId: 'op_child', success: true, topicId: 'tpc_new' }),
+    findLatestRunStatus: vi.fn().mockResolvedValue(null),
     findLiveRunIds: vi.fn().mockResolvedValue([]),
     findTopic: vi.fn(async (id: string) => {
       if (id === 'tpc_parent') return opener;
@@ -171,6 +173,39 @@ describe('SubTopicService.open', () => {
     expect(params.appContext).toBeUndefined();
     // A device-bound agent (Claude Code) has nowhere else to run.
     expect(params.deviceId).toBe('dev_mac');
+    // The opener's device is a default, not a demand.
+    expect(params.requireDevice).toBeUndefined();
+  });
+
+  it('requires the device it was explicitly asked to run on', async () => {
+    await new SubTopicService(deps).open({
+      deviceId: 'dev_linux',
+      openerTopicId: 'tpc_parent',
+      prompt: 'x',
+    });
+
+    expect(deps.execAgent.mock.calls[0][0]).toMatchObject({
+      deviceId: 'dev_linux',
+      requireDevice: true,
+    });
+  });
+
+  it('checks the caller may use the target agent from this conversation before starting it', async () => {
+    deps.assertCanOpen.mockRejectedValueOnce(new Error('FORBIDDEN'));
+
+    await expect(
+      new SubTopicService(deps).open({
+        agentId: 'agt_locked',
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+      }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanOpen).toHaveBeenCalledWith({
+      agentId: 'agt_locked',
+      openerTopicId: 'tpc_parent',
+    });
+    expect(deps.execAgent).not.toHaveBeenCalled();
+    expect(deps.addGitWorktree).not.toHaveBeenCalled();
   });
 });
 
@@ -240,6 +275,23 @@ describe('SubTopicService.stop / get', () => {
       state: 'running',
       topicId: 'tpc_cross',
     });
+  });
+
+  it('reads the latest run like the lists do: a run waiting for a person needs the user', async () => {
+    const deps = createDeps();
+    // The paused run still counts as live, but it is waiting, not running.
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+    deps.findLatestRunStatus.mockResolvedValue('waiting_for_human');
+
+    expect((await new SubTopicService(deps).get('tpc_cross')).state).toBe('waiting_for_user');
+    expect(deps.findLatestRunStatus).toHaveBeenCalledWith('tpc_cross');
+  });
+
+  it('reports a failed latest run as failed', async () => {
+    const deps = createDeps();
+    deps.findLatestRunStatus.mockResolvedValue('error');
+
+    expect((await new SubTopicService(deps).get('tpc_cross')).state).toBe('failed');
   });
 });
 

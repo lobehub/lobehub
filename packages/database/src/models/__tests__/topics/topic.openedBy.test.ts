@@ -110,6 +110,63 @@ describe('TopicModel - sub-topics (metadata.openedBy)', () => {
     ]);
   });
 
+  it('walks a deep chain to its end for a cascade, unlike a sidebar listing', async () => {
+    // parent → child-same → d1 → … → d6: seven generations below the parent.
+    const chain = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
+    let previous = 'child-same';
+    for (const id of chain) {
+      await serverDB.insert(topics).values({
+        agentId: 'agent-a',
+        id,
+        metadata: openedBy(previous),
+        trigger: 'sub_topic',
+        userId,
+      });
+      previous = id;
+    }
+
+    const listing = await topicModel.listOpenedTopics({
+      includeDescendants: true,
+      openerTopicIds: ['parent'],
+    });
+    expect(listing.map((row) => row.id)).not.toContain('d6');
+
+    const descendants = await topicModel.listOpenedDescendants('parent', {
+      excludeStatuses: ['completed', 'archived'],
+    });
+    expect(descendants.map((row) => row.id)).toEqual(expect.arrayContaining(chain));
+    expect(descendants.map((row) => row.id)).not.toContain('parent');
+  });
+
+  it("reads one topic's latest top-level run status, null before its first run", async () => {
+    expect(await topicModel.getLatestRunStatus('child-cross')).toBeNull();
+
+    await serverDB.insert(agentOperations).values([
+      {
+        agentId: 'agent-b',
+        createdAt: new Date('2026-11-17T00:00:00.000Z'),
+        id: 'op-old',
+        status: 'error',
+        topicId: 'child-cross',
+        userId,
+      },
+      {
+        agentId: 'agent-b',
+        createdAt: new Date('2026-11-17T01:00:00.000Z'),
+        id: 'op-new',
+        status: 'waiting_for_human',
+        topicId: 'child-cross',
+        userId,
+      },
+    ] as any);
+
+    expect(await topicModel.getLatestRunStatus('child-cross')).toBe('waiting_for_human');
+    // Another user's topic reads as having no run.
+    expect(
+      await new TopicModel(serverDB, otherUserId).getLatestRunStatus('child-cross'),
+    ).toBeNull();
+  });
+
   it('detaches sub-topics and turns a sub_topic trigger back into a normal topic', async () => {
     const changed = await topicModel.detachOpenedTopics(['child-cross', 'child-task']);
     expect(changed.map((row) => row.id).sort()).toEqual(['child-cross', 'child-task']);

@@ -155,6 +155,7 @@ export class TopicModel {
   listOpenedTopics = this.withContext(openedBy.listOpenedTopics);
   listOpenedDescendants = this.withContext(openedBy.listOpenedDescendants);
   detachOpenedTopics = this.withContext(openedBy.detachOpenedTopics);
+  getLatestRunStatus = this.withContext(openedBy.getLatestRunStatus);
 
   // **************** Agent Share (visitor-scoped) *************** //
 

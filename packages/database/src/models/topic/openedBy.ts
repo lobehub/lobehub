@@ -16,7 +16,7 @@ import type { TopicModelContext } from './context';
  */
 export const OPENED_BY_TRIGGERS = ['sub_topic', 'task', 'cli'] as const;
 
-/** How many generations below the openers are walked; deeper ones stay where they are. */
+/** How many generations below the openers a listing walks; deeper ones stay where they are. */
 const MAX_OPENED_BY_DEPTH = 4;
 
 /** Upper bound on rows one listing returns, so a runaway fan-out cannot flood a sidebar. */
@@ -47,15 +47,28 @@ export interface ListOpenedTopicsParams {
   openerTopicIds: string[];
 }
 
+interface WalkLimits {
+  maxDepth: number;
+  /** Rows per generation query and in all; `undefined` = no cap. */
+  maxRows?: number;
+}
+
 /**
  * The live (not detached, not trashed) topics opened by any of `openerTopicIds`,
  * newest activity first. With `includeDescendants`, their own sub-topics come
  * along too (bounded depth), so a list can attach a grandchild to the topmost
  * opener it shows.
  */
-export const listOpenedTopics = async (
+export const listOpenedTopics = (
+  ctx: TopicModelContext,
+  params: ListOpenedTopicsParams,
+): Promise<OpenedTopicItem[]> =>
+  walkOpenedTopics(ctx, params, { maxDepth: MAX_OPENED_BY_DEPTH, maxRows: MAX_OPENED_BY_ROWS });
+
+const walkOpenedTopics = async (
   ctx: TopicModelContext,
   { excludeStatuses, includeDescendants = false, openerTopicIds }: ListOpenedTopicsParams,
+  { maxDepth, maxRows }: WalkLimits,
 ): Promise<OpenedTopicItem[]> => {
   const openers = [...new Set(openerTopicIds.filter(Boolean))];
   if (openers.length === 0) return [];
@@ -83,8 +96,8 @@ export const listOpenedTopics = async (
   const walked = new Set<string>(openers);
   let frontier = openers;
 
-  for (let depth = 0; depth < MAX_OPENED_BY_DEPTH && frontier.length > 0; depth += 1) {
-    const rows = (await ctx.db
+  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth += 1) {
+    const query = ctx.db
       .select({
         agentId: topics.agentId,
         createdAt: topics.createdAt,
@@ -110,8 +123,10 @@ export const listOpenedTopics = async (
           statusCondition,
         ),
       )
-      .orderBy(desc(topics.updatedAt))
-      .limit(MAX_OPENED_BY_ROWS)) as OpenedTopicItem[];
+      .orderBy(desc(topics.updatedAt));
+    const rows = (await (maxRows === undefined
+      ? query
+      : query.limit(maxRows))) as unknown as OpenedTopicItem[];
 
     const next: string[] = [];
     for (const row of rows) {
@@ -123,27 +138,63 @@ export const listOpenedTopics = async (
       next.push(row.id);
     }
 
-    if (!includeDescendants || result.length >= MAX_OPENED_BY_ROWS) break;
+    if (!includeDescendants || (maxRows !== undefined && result.length >= maxRows)) break;
     frontier = next;
   }
 
-  return result.slice(0, MAX_OPENED_BY_ROWS);
+  return maxRows === undefined ? result : result.slice(0, maxRows);
 };
 
 /**
  * Every live descendant of `rootTopicId` (children, grandchildren, …), for
  * cascading archive / trash. Detached sub-topics are not descendants.
+ *
+ * Unlike a sidebar listing this walk is exhaustive — no depth or row cap — so
+ * "archive / delete all" never leaves a deep or wide branch running under a
+ * retired parent. Each topic is walked once (the `walked` set), so a cycle in
+ * `openedBy` cannot loop.
  */
 export const listOpenedDescendants = async (
   ctx: TopicModelContext,
   rootTopicId: string,
   options: { excludeStatuses?: ChatTopicStatus[] } = {},
-): Promise<OpenedTopicItem[]> =>
-  listOpenedTopics(ctx, {
-    excludeStatuses: options.excludeStatuses,
-    includeDescendants: true,
-    openerTopicIds: [rootTopicId],
-  });
+): Promise<OpenedTopicItem[]> => {
+  const rows = await walkOpenedTopics(
+    ctx,
+    {
+      excludeStatuses: options.excludeStatuses,
+      includeDescendants: true,
+      openerTopicIds: [rootTopicId],
+    },
+    { maxDepth: Number.POSITIVE_INFINITY },
+  );
+  // The root is never its own descendant, even if a hand-edited link loops back to it.
+  return rows.filter((row) => row.id !== rootTopicId);
+};
+
+/**
+ * Status of `topicId`'s latest top-level operation (null before its first
+ * run) — what the listings report as `latestRunStatus`, for one topic.
+ */
+export const getLatestRunStatus = async (
+  ctx: TopicModelContext,
+  topicId: string,
+): Promise<AgentOperationStatus | null> => {
+  const [row] = await ctx.db
+    .select({ status: agentOperations.status })
+    .from(agentOperations)
+    .innerJoin(topics, eq(topics.id, agentOperations.topicId))
+    .where(
+      and(
+        eq(agentOperations.topicId, topicId),
+        isNull(agentOperations.parentOperationId),
+        ctx.ownership(),
+      ),
+    )
+    .orderBy(desc(agentOperations.createdAt))
+    .limit(1);
+  return (row?.status as AgentOperationStatus | undefined) ?? null;
+};
 
 /**
  * Move sub-topics to the top level: stamp `openedBy.detachedAt`, and turn a
