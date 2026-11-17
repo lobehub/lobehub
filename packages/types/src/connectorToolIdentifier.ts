@@ -14,6 +14,11 @@
  *   suffix derived from the row id. It depends on the row alone, so it stays
  *   stable when a sibling row appears or goes, and a stored tool call still
  *   names the row it ran on.
+ *
+ * Identifiers are free-form, so a connector may literally be named like a
+ * suffixed prefix (`mail-12345678`). `reservedIdentifiers` are the identifiers
+ * of the rows the run can see: a suffix that would read as one of them takes
+ * the whole row id instead, so no two rows of a run ever share a prefix.
  */
 export const connectorToolIdentifier = (
   row: {
@@ -25,11 +30,32 @@ export const connectorToolIdentifier = (
   },
   /** The workspace the run is in; omitted or null for a personal run. */
   runWorkspaceId?: string | null,
+  /** Identifiers of the rows the run can see (see above). */
+  reservedIdentifiers?: ReadonlySet<string>,
 ): string => {
-  if (row.agentId) return row.identifier;
-  const ownRow = row.visibility === 'private' || (!!runWorkspaceId && row.workspaceId === null);
-  return ownRow ? `${row.identifier}-${connectorRowSuffix(row.id)}` : row.identifier;
+  if (!isOwnConnectorRow(row, runWorkspaceId)) return row.identifier;
+  const short = connectorShortToolIdentifier(row);
+  return reservedIdentifiers?.has(short)
+    ? `${row.identifier}-${row.id.replaceAll('-', '').toLowerCase()}`
+    : short;
 };
+
+/**
+ * Whether a row's tool set is named apart from its connector's identifier: a
+ * private row, or a personal row in a workspace run (an agent's own row never).
+ */
+export const isOwnConnectorRow = (
+  row: { agentId?: string | null; visibility?: string | null; workspaceId?: string | null },
+  runWorkspaceId?: string | null,
+): boolean =>
+  !row.agentId && (row.visibility === 'private' || (!!runWorkspaceId && row.workspaceId === null));
+
+/**
+ * The short prefix an own row takes unless a row the run can see is literally
+ * named so ({@link connectorToolIdentifier}).
+ */
+export const connectorShortToolIdentifier = (row: { id: string; identifier: string }): string =>
+  `${row.identifier}-${connectorRowSuffix(row.id)}`;
 
 /** Eight hex characters of the row id: `[\w-]`-safe, so tool names stay readable. */
 export const connectorRowSuffix = (id: string): string =>
@@ -43,7 +69,7 @@ export const connectorRowSuffix = (id: string): string =>
  * identifier that merely looks suffixed is never mistaken for another row.
  */
 export const connectorIdentifierCandidates = (toolIdentifier: string): string[] => {
-  const match = /^(.+)-([\da-f]{8})$/.exec(toolIdentifier);
+  const match = /^(.+)-([\da-f]{8}|[\da-f]{32})$/.exec(toolIdentifier);
   return match ? [toolIdentifier, match[1]] : [toolIdentifier];
 };
 

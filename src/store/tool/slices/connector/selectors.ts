@@ -148,17 +148,19 @@ export const pickRunToolSets = <
       .filter((c) => agentId && c.metadata?.mountedByAgentId === agentId)
       .map((c) => c.identifier),
   );
+  const reserved = new Set(connectors.map((c) => c.identifier));
+  const prefixOf = (c: T) => connectorToolIdentifier(c, undefined, reserved);
   const byPrefix = new Map<string, T & { toolIdentifier: string }>();
   for (const connector of [...eligible].sort((a, b) => (a.id < b.id ? -1 : 1))) {
     if (mounted.has(connector.identifier) && connector.metadata?.mountedByAgentId !== agentId)
       continue;
-    const toolIdentifier = connectorToolIdentifier(connector);
+    const toolIdentifier = prefixOf(connector);
     if (!byPrefix.has(toolIdentifier))
       byPrefix.set(toolIdentifier, { ...connector, toolIdentifier });
   }
   // Keep the list's order
   return eligible.flatMap((c) => {
-    const kept = byPrefix.get(connectorToolIdentifier(c));
+    const kept = byPrefix.get(prefixOf(c));
     return kept && kept.id === c.id ? [kept] : [];
   });
 };
@@ -336,9 +338,11 @@ const connectorByIdentifierForAgent =
 
     // A base connector another agent mounted serves only that agent, as the
     // server's scope rule has it (`ConnectorModel.scopePredicate`).
+    // Named as the server names them: no own row reads as a listed identifier
+    const reserved = new Set((s.connectors ?? []).map((c) => c.identifier));
     const baseRows = (s.connectors ?? []).filter(
       (c) =>
-        connectorToolIdentifier(c) === identifier &&
+        connectorToolIdentifier(c, undefined, reserved) === identifier &&
         !isMountedByAnotherAgent(c, agentId) &&
         (includePrivate || c.visibility !== 'private'),
     );

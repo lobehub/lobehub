@@ -152,7 +152,10 @@ export const resolveConnectorForRun = async (
     { agentId: params.agentId, topicId: params.topicId },
     connectorIdentifierCandidates(params.identifier),
   );
-  return rows.filter((row) => row.toolIdentifier === params.identifier);
+  const matches = rows.filter((row) => row.toolIdentifier === params.identifier);
+  // Prefixes are collision-free within a run (`connectorToolIdentifier`); an
+  // ambiguous one runs nothing rather than a guess at whose account
+  return matches.length === 1 ? matches : [];
 };
 
 /**

@@ -295,8 +295,10 @@ describe('connector visibility — agent configuration', () => {
     expect(await availableIdentifiers(ownerModel)).toEqual(['ws-shared-linear']);
   });
 
-  it('reports the row the agent’s own conversation ranks first, without credentials', async () => {
-    await insertConnector({ identifier: 'notion', userId: mate });
+  it('reports every tool set the agent loads, without credentials', async () => {
+    // The shared row and the owner's private one are tool sets of their own: a
+    // disabled private row no longer hides the shared one from validation
+    const sharedRow = await insertConnector({ identifier: 'notion', userId: mate });
     const privateRow = await insertConnector({ identifier: 'notion', visibility: 'private' });
     await serverDB
       .update(userConnectors)
@@ -306,6 +308,7 @@ describe('connector visibility — agent configuration', () => {
 
     expect(await model.queryAvailableForAgent(privateAgent)).toEqual([
       { id: privateRow.id, identifier: 'notion', isEnabled: false, status: 'connected' },
+      { id: sharedRow.id, identifier: 'notion', isEnabled: true, status: 'connected' },
     ]);
   });
 });
@@ -391,6 +394,25 @@ describe('connector visibility — tool sets of one identifier', () => {
     expect(await toolSets({ agentId: workspaceAgent, topicId: workspaceAgentTopic })).toEqual([
       ['gmail', shared.id],
     ]);
+  });
+
+  it("never lets a literal identifier share a private row's prefix", async () => {
+    const mine = await insertConnector({ identifier: 'gmail', visibility: 'private' });
+    // A shared connector literally named like the private row's short prefix
+    const literal = await insertConnector({ identifier: `gmail-${suffix(mine.id)}`, userId: mate });
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    const target = { agentId: privateAgent, topicId: privateTopic };
+
+    // Whichever identifiers a caller asks for, the private row takes its whole id
+    for (const identifiers of [['gmail'], ['gmail', literal.identifier], undefined]) {
+      const rows = await model.resolveToolSets(target, identifiers);
+      expect(rows.find((row) => row.id === mine.id)?.toolIdentifier).toBe(
+        `gmail-${mine.id.replaceAll('-', '')}`,
+      );
+    }
+    expect(
+      (await model.resolveToolSets(target, [literal.identifier])).map((row) => row.toolIdentifier),
+    ).toEqual([literal.identifier]);
   });
 
   it('lets a row bound to the agent stand alone for its identifier', async () => {

@@ -15,8 +15,10 @@ import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
  * `toolIdentifier`, else `connectorToolIdentifier`): a private row beside the
  * shared one of its connector is offered under its own name.
  */
-export const buildClientConnectorManifests = (connectors: ConnectorWithTools[]): ToolManifest[] =>
-  connectors
+export const buildClientConnectorManifests = (connectors: ConnectorWithTools[]): ToolManifest[] => {
+  // Named as the server names them: no own row reads as a listed identifier
+  const reserved = new Set(connectors.map((connector) => connector.identifier));
+  return connectors
     .map((connector) =>
       buildConnectorManifest(
         {
@@ -25,7 +27,8 @@ export const buildClientConnectorManifests = (connectors: ConnectorWithTools[]):
           isEnabled: connector.isEnabled,
           name: connector.name,
           links: connector.links,
-          toolIdentifier: connector.toolIdentifier ?? connectorToolIdentifier(connector),
+          toolIdentifier:
+            connector.toolIdentifier ?? connectorToolIdentifier(connector, undefined, reserved),
           tools: connector.tools ?? [],
         },
         !!getServerConfigStoreState() &&
@@ -34,3 +37,4 @@ export const buildClientConnectorManifests = (connectors: ConnectorWithTools[]):
     )
     .filter((manifest): manifest is NonNullable<typeof manifest> => !!manifest)
     .map((manifest) => manifest as ToolManifest);
+};

@@ -1,4 +1,14 @@
-import { connectorToolIdentifier } from '@lobechat/types';
+import { hasCallableMcpEndpoint } from '@lobechat/const';
+import {
+  connectorShortToolIdentifier,
+  connectorToolIdentifier,
+  isOwnConnectorRow,
+} from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
+import { and, asc, inArray } from 'drizzle-orm';
+
+import { userConnectors } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 /** The fields of a connector row a run ranks it by and names its tool set from. */
 interface RankedRow {
@@ -66,7 +76,12 @@ export const pickConnectorByPriority = <T extends RankedRow>(
  */
 export const pickConnectorToolSets = <T extends RankedRow>(
   rows: T[],
-  context: { agentId?: string; workspaceId?: string | null },
+  context: {
+    agentId?: string;
+    /** Identifiers of the run's rows a short own-row prefix could collide with. */
+    reservedIdentifiers?: ReadonlySet<string>;
+    workspaceId?: string | null;
+  },
 ): (T & { toolIdentifier: string })[] => {
   const groups = new Map<string, T[]>();
   for (const row of rows) groups.set(row.identifier, [...(groups.get(row.identifier) ?? []), row]);
@@ -78,9 +93,85 @@ export const pickConnectorToolSets = <T extends RankedRow>(
     const kept = ranked[0].binding > 0 ? [ranked[0]] : ranked;
     const byPrefix = new Map<string, T & { toolIdentifier: string }>();
     for (const { row } of kept) {
-      const toolIdentifier = connectorToolIdentifier(row, context.workspaceId);
+      const toolIdentifier = connectorToolIdentifier(
+        row,
+        context.workspaceId,
+        context.reservedIdentifiers,
+      );
       if (!byPrefix.has(toolIdentifier)) byPrefix.set(toolIdentifier, { ...row, toolIdentifier });
     }
     return [...byPrefix.values()];
   });
 };
+
+/**
+ * The identifiers, among the rows `scope` admits, that an own row's short
+ * prefix would read as (a connector literally named `mail-12345678`): such a
+ * row's tool set takes the whole row id instead. Looked up in the whole scope,
+ * not the rows a caller fetched, so every caller names a row alike.
+ */
+export const queryReservedToolIdentifiers = async (
+  db: LobeChatDatabase,
+  scope: SQL | undefined,
+  rows: RankedRow[],
+  workspaceId?: string | null,
+): Promise<Set<string>> => {
+  const shortPrefixes = rows
+    .filter((row) => isOwnConnectorRow(row, workspaceId))
+    .map(connectorShortToolIdentifier);
+  if (shortPrefixes.length === 0) return new Set();
+  const taken = await db
+    .select({ identifier: userConnectors.identifier })
+    .from(userConnectors)
+    .where(and(scope, inArray(userConnectors.identifier, shortPrefixes)));
+  return new Set(taken.map((row) => row.identifier));
+};
+
+/**
+ * The rows `scope` admits (optionally of `identifiers`) as a run's tool sets,
+ * in resolution order (identifier, then id), each named collision-free
+ * ({@link pickConnectorToolSets}, {@link queryReservedToolIdentifiers}).
+ */
+export const selectConnectorToolSets = async (
+  db: LobeChatDatabase,
+  {
+    agentId,
+    identifiers,
+    scope,
+    workspaceId,
+  }: {
+    agentId?: string;
+    identifiers?: string[];
+    scope: SQL | undefined;
+    workspaceId?: string | null;
+  },
+) => {
+  if (identifiers?.length === 0) return [];
+  const rows = await db
+    .select()
+    .from(userConnectors)
+    .where(and(scope, identifiers ? inArray(userConnectors.identifier, identifiers) : undefined))
+    .orderBy(asc(userConnectors.identifier), asc(userConnectors.id));
+  const reservedIdentifiers = await queryReservedToolIdentifiers(db, scope, rows, workspaceId);
+  return pickConnectorToolSets(rows, { agentId, reservedIdentifiers, workspaceId });
+};
+
+/**
+ * The rows an agent's configuration may name, as its runs use them: every MCP
+ * row its own tool set ({@link pickConnectorToolSets}), every other row (a
+ * Composio connection, whose tools another path serves) one per identifier
+ * ({@link pickConnectorByPriority}). A configuration naming the identifier is
+ * valid while any of them is usable.
+ */
+export const pickConfigurableConnectors = <
+  T extends RankedRow & { mcpConnectionType?: string | null; mcpServerUrl?: string | null },
+>(
+  rows: T[],
+  context: { agentId?: string; workspaceId?: string | null },
+): T[] => [
+  ...pickConnectorToolSets(rows.filter(hasCallableMcpEndpoint), context),
+  ...pickConnectorByPriority(
+    rows.filter((row) => !hasCallableMcpEndpoint(row)),
+    context,
+  ),
+];

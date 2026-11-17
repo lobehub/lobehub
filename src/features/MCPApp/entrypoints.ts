@@ -76,7 +76,13 @@ export const selectMcpAppEntrypoints = (
     ...state.installedPlugins.map((plugin) => plugin.identifier),
     // Each base row under its tool prefix: a private row is its own app beside
     // the shared one of its connector
-    ...state.connectors.map((connector) => connectorToolIdentifier(connector)),
+    ...state.connectors.map((connector) =>
+      connectorToolIdentifier(
+        connector,
+        undefined,
+        new Set(state.connectors.map((c) => c.identifier)),
+      ),
+    ),
     ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(
       (connector) => connector.identifier,
     ),

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
@@ -66,5 +67,28 @@ describe('resolvePluginIdentifier with a private connector', () => {
   it('keeps it unknown to a workspace agent and to a teammate', async () => {
     expect(await resolve(owner, workspaceAgent)).toMatchObject({ status: 'unknown' });
     expect(await resolve(mate, privateAgent)).toMatchObject({ status: 'unknown' });
+  });
+
+  it('accepts the identifier while the shared row is usable beside a disconnected private one', async () => {
+    // Regression: validation kept only the private row (it ranks first), which
+    // is disconnected, and refused the identifier as PluginNotConnected though
+    // the connected shared row runs as its own tool set.
+    await serverDB
+      .update(userConnectors)
+      .set({ status: 'disconnected' })
+      .where(eq(userConnectors.visibility, 'private'));
+    await serverDB.insert(userConnectors).values({
+      identifier: 'acme-notes',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://notes.example.com/shared',
+      name: 'Acme Notes',
+      sourceType: 'custom',
+      status: 'connected',
+      userId: mate,
+      visibility: 'public',
+      workspaceId,
+    });
+
+    expect(await resolve(owner, privateAgent)).toEqual({ source: 'connector', status: 'loadable' });
   });
 });

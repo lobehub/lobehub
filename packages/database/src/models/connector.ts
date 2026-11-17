@@ -30,7 +30,11 @@ import {
   connectorRunScope,
   type ConnectorRunTarget,
 } from './connectorScope';
-import { pickConnectorByPriority, pickConnectorToolSets } from './connectorToolSets';
+import {
+  pickConfigurableConnectors,
+  pickConnectorByPriority,
+  selectConnectorToolSets,
+} from './connectorToolSets';
 
 export { ConnectorIdentifierHeldError } from './connectorIdentifierClaim';
 export type { ConnectorRunTarget } from './connectorScope';
@@ -631,20 +635,11 @@ export class ConnectorModel {
     identifiers?: string[],
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<(DecryptedConnector & { toolIdentifier: string })[]> => {
-    if (identifiers?.length === 0) return [];
     const target = toRunTarget(runTarget);
-    const rows = await this.db
-      .select()
-      .from(userConnectors)
-      .where(
-        and(
-          this.scopePredicate(target),
-          identifiers ? inArray(userConnectors.identifier, identifiers) : undefined,
-        ),
-      )
-      .orderBy(...this.resolutionOrder());
-    const picked = pickConnectorToolSets(rows, {
+    const picked = await selectConnectorToolSets(this.db, {
       agentId: target.agentId,
+      identifiers,
+      scope: this.scopePredicate(target),
       workspaceId: normalizeWorkspaceId(this.workspaceId),
     });
     return pMap(
@@ -703,7 +698,10 @@ export class ConnectorModel {
       .where(this.agentNarrowing(base, agentId))
       .orderBy(...this.resolutionOrder());
 
-    return this.pickByPriority(rows, agentId).map(({ id, identifier, isEnabled, status }) => ({
+    return pickConfigurableConnectors(rows, {
+      agentId,
+      workspaceId: normalizeWorkspaceId(this.workspaceId),
+    }).map(({ id, identifier, isEnabled, status }) => ({
       id,
       identifier,
       isEnabled,

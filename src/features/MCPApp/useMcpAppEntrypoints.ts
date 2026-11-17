@@ -37,7 +37,9 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
     const state = getToolStoreState();
     for (const row of [...connectors, ...(agentId ? (agentConnectors[agentId] ?? []) : [])]) {
       const connector = connectorSelectors.connectorByIdentifierForAgent(
-        row.agentId ? row.identifier : connectorToolIdentifier(row),
+        row.agentId
+          ? row.identifier
+          : connectorToolIdentifier(row, undefined, new Set(connectors.map((c) => c.identifier))),
         agentId,
       )(state);
       if (connector?.id !== row.id || !connector.isEnabled) continue;
