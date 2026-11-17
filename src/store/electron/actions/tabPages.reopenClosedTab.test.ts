@@ -108,6 +108,26 @@ describe('reopenClosedTab', () => {
 
   // addNewTab deliberately allows two tabs on the same page, so one bulk close can take
   // both; a tab restored earlier in the same reopen must not count as "already open".
+  it('counts an open tab on that page once, restoring the other copy', () => {
+    const secondHome = tab('home-2', '/');
+    const result = seed([home, secondHome, goal], 'goal');
+
+    act(() => {
+      result.current.closeOtherTabs('goal');
+    });
+    act(() => {
+      result.current.addNewTab('/');
+    });
+    expect(urls(result.current.tabs)).toEqual(['/agent/a1/goal/g1', '/']);
+
+    act(() => {
+      result.current.reopenClosedTab();
+    });
+
+    expect(urls(result.current.tabs).filter((url) => url === '/')).toHaveLength(2);
+    expect(result.current.tabs).toHaveLength(3);
+  });
+
   it('brings back every tab of a bulk close, even two on the same page', () => {
     const secondHome = tab('home-2', '/');
     const result = seed([home, secondHome, goal], 'goal');
