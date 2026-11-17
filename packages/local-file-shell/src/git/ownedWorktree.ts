@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { lstat, mkdir, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -161,27 +161,13 @@ const prune = async (sourcePath: string) => {
 };
 
 /**
- * Remove the folder after `git worktree remove` gave up (a file lock, a huge
- * `node_modules` hitting the timeout). Moving it into the root's `.trash`
- * first is one rename, so the worktree is gone at once; the slow delete then
- * runs in the background. If even the rename fails the folder is deleted in
- * place, retrying the transient errors.
+ * Delete the folder after `git worktree remove` gave up (a file lock, a
+ * submodule, a huge `node_modules` hitting its timeout): a full delete in
+ * place, never a move to a trash folder. Node's `rm` retries the transient
+ * EBUSY / ENOTEMPTY / EPERM on its own.
  */
-const forceRemoveFolder = async (root: string, worktreePath: string) => {
-  const trashDir = path.join(root, '.trash');
-  const parked = path.join(trashDir, `${path.basename(worktreePath)}-${Date.now()}`);
-  try {
-    await mkdir(trashDir, { recursive: true });
-    await rename(worktreePath, parked);
-  } catch (error) {
-    warn('could not park %s, deleting in place: %O', worktreePath, error);
-    await rm(worktreePath, { force: true, recursive: true, ...RM_RETRY });
-    return;
-  }
-  void rm(parked, { force: true, recursive: true, ...RM_RETRY }).catch((error) =>
-    warn('background delete of %s failed: %O', parked, error),
-  );
-};
+const deleteFolder = (worktreePath: string) =>
+  rm(worktreePath, { force: true, recursive: true, ...RM_RETRY });
 
 const withTimeout = async <T>(work: Promise<T>, ms: number, onTimeout: () => T): Promise<T> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -200,14 +186,22 @@ const withTimeout = async <T>(work: Promise<T>, ms: number, onTimeout: () => T):
 export interface CleanupOwnedWorktreeParams {
   /** Delete even with uncommitted work: the user confirmed "Discard and delete". */
   discard?: boolean;
+  /** Stands in for `git worktree remove`; tests only. Device RPCs never pass it. */
+  gitRemove?: (sourcePath: string, worktreePath: string) => Promise<unknown>;
   /** The worktree root; tests only. Device RPCs never pass it. */
   rootDir?: string;
   sourcePath: string;
   worktreePath: string;
 }
 
+const gitWorktreeRemove = (sourcePath: string, worktreePath: string) =>
+  // `--force`: ignored files alone make a plain remove refuse. One `--force`
+  // never removes a locked worktree, which the caller rules out first.
+  git(sourcePath, ['worktree', 'remove', '--force', worktreePath], GIT_REMOVE_TIMEOUT_MS);
+
 const runCleanup = async ({
   discard,
+  gitRemove = gitWorktreeRemove,
   rootDir,
   sourcePath,
   worktreePath,
@@ -240,12 +234,10 @@ const runCleanup = async ({
     }
 
     try {
-      // `--force`: ignored files alone make a plain remove refuse. One `--force`
-      // never removes a locked worktree, which was ruled out above anyway.
-      await git(sourcePath, ['worktree', 'remove', '--force', listed.path], GIT_REMOVE_TIMEOUT_MS);
+      await gitRemove(sourcePath, listed.path);
     } catch (error) {
       warn('git worktree remove failed for %s, removing the folder: %O', worktreePath, error);
-      await forceRemoveFolder(root, worktreePath);
+      await deleteFolder(worktreePath);
     }
     await prune(sourcePath);
 

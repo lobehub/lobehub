@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -111,6 +111,30 @@ describe('cleanupOwnedWorktree — clean / dirty', () => {
 
     await expect(run({ discard: true })).resolves.toMatchObject({ outcome: 'removed' });
     expect(existsSync(worktree)).toBe(false);
+    expect(branches()).toContain(BRANCH);
+  });
+
+  it('fully deletes the folder in place when git refuses to remove it', async () => {
+    await mkdir(path.join(worktree, 'node_modules', 'pkg'), { recursive: true });
+    await writeFile(path.join(worktree, 'node_modules', 'pkg', 'index.js'), 'x');
+
+    await expect(
+      cleanupOwnedWorktree({
+        // A file lock or a timeout: git gives up.
+        gitRemove: async () => {
+          throw new Error('fatal: cannot remove worktree');
+        },
+        rootDir: root,
+        sourcePath: repo,
+        worktreePath: worktree,
+      }),
+    ).resolves.toEqual({ branch: BRANCH, outcome: 'removed' });
+
+    expect(existsSync(worktree)).toBe(false);
+    // A delete, not a move: nothing is parked anywhere under the root.
+    expect(existsSync(path.join(root, '.trash'))).toBe(false);
+    expect(await readdir(path.dirname(worktree))).toEqual([]);
+    expect(git(repo, 'worktree', 'list', '--porcelain')).not.toContain(worktree);
     expect(branches()).toContain(BRANCH);
   });
 
