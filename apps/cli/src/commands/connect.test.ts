@@ -105,8 +105,14 @@ const getGlobalConfig = vi.hoisted(() => vi.fn());
 const createPublicLambdaClientMock = vi.hoisted(() =>
   vi.fn(() => ({ config: { getGlobalConfig: { query: getGlobalConfig } } })),
 );
+// Worktree cleanups that waited for this device, drained on every connect.
+const drainWorktreeCleanups = vi.hoisted(() => vi.fn(async () => ({ scheduled: true })));
+const createLambdaClientMock = vi.hoisted(() =>
+  vi.fn(() => ({ device: { drainWorktreeCleanups: { mutate: drainWorktreeCleanups } } })),
+);
 vi.mock('../api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClientModule>()),
+  createLambdaClient: createLambdaClientMock,
   createPublicLambdaClient: createPublicLambdaClientMock,
 }));
 
@@ -264,6 +270,19 @@ describe('connect command', () => {
     expect(writeStatus).toHaveBeenLastCalledWith(
       expect.objectContaining({ connectionStatus: 'connected', deviceId: 'mock-device-id' }),
     );
+  });
+
+  it('asks the server to run the worktree cleanups waiting on this device on each connect', async () => {
+    drainWorktreeCleanups.mockClear();
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect']);
+    expect(drainWorktreeCleanups).not.toHaveBeenCalled();
+
+    clientEventHandlers.connected?.();
+    clientEventHandlers.connected?.();
+
+    expect(drainWorktreeCleanups).toHaveBeenCalledTimes(2);
+    expect(drainWorktreeCleanups).toHaveBeenLastCalledWith({ deviceId: 'mock-device-id' });
   });
 
   it('should persist deviceId in status for daemon child connections', async () => {

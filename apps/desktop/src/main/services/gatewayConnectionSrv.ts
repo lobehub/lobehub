@@ -117,6 +117,11 @@ interface GatewayAuthContext {
   token: string;
 }
 
+/** Runs each time the personal connection comes up, with the device id it registered. */
+interface ConnectedHandler {
+  (info: { deviceId: string }): Promise<void>;
+}
+
 interface DeviceRegistrar {
   (
     info: {
@@ -245,6 +250,9 @@ export default class GatewayConnectionService extends ServiceModule {
   private agentRunHandler: AgentRunHandler | null = null;
   private rpcHandler: RpcHandler | null = null;
   private deviceRegistrar: DeviceRegistrar | null = null;
+  private connectedHandler: ConnectedHandler | null = null;
+  /** The device id the current personal connection registered as. */
+  private connectedDeviceId: string | null = null;
   /** Samples CPU / memory / load for the personal device while the connection is on. */
   private metricsSampler: { deviceId: string; sampler: DeviceMetricsSampler } | null = null;
   private workspaceTokenProvider: WorkspaceTokenProvider | null = null;
@@ -354,6 +362,14 @@ export default class GatewayConnectionService extends ServiceModule {
    */
   setDeviceRegistrar(registrar: DeviceRegistrar) {
     this.deviceRegistrar = registrar;
+  }
+
+  /**
+   * Called each time the personal connection is (re)established — e.g. to run
+   * the work that waited for this device while it was offline.
+   */
+  setConnectedHandler(handler: ConnectedHandler) {
+    this.connectedHandler = handler;
   }
 
   /**
@@ -660,6 +676,7 @@ export default class GatewayConnectionService extends ServiceModule {
     if (userId) {
       const identity = await this.resolveDeviceIdentity(userId);
       if (this.isStale(generation)) return CANCELLED;
+      this.connectedDeviceId = identity.deviceId;
       await this.deviceRegistrar?.(
         {
           architecture: os.arch(),
@@ -1510,6 +1527,11 @@ export default class GatewayConnectionService extends ServiceModule {
       // A (re)connection reprobes the bundled CLI and warms the cache for the first request.
       this.agentRuntimes.invalidate();
       void this.agentRuntimes.get();
+      const deviceId = this.connectedDeviceId;
+      if (deviceId)
+        void this.connectedHandler?.({ deviceId }).catch((error) => {
+          logger.warn(`Connected handler failed (non-fatal): ${(error as Error).message}`);
+        });
     }
     this.syncPowerSaveBlocker();
     this.scheduleStatusBroadcast(status);

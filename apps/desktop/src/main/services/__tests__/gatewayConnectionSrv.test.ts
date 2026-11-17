@@ -130,6 +130,26 @@ describe('GatewayConnectionService system_info_request', () => {
     );
   });
 
+  /** @example Topics archived while this device was offline get their worktrees cleaned on reconnect. */
+  it('runs the connected handler with the registered device id on every (re)connect', async () => {
+    vi.spyOn(service as any, 'syncPowerSaveBlocker').mockImplementation(() => {});
+    vi.spyOn(service as any, 'scheduleStatusBroadcast').mockImplementation(() => {});
+    const handler = vi.fn(async () => {});
+    service.setConnectedHandler(handler);
+
+    // Not registered yet (signed out): nothing to name the device by.
+    service['setStatus']('connected');
+    expect(handler).not.toHaveBeenCalled();
+
+    service['connectedDeviceId'] = 'device-1';
+    service['setStatus']('reconnecting');
+    service['setStatus']('connected');
+    service['setStatus']('reconnecting');
+    service['setStatus']('connected');
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenLastCalledWith({ deviceId: 'device-1' });
+  });
+
   /** @example Updating or removing Codex changes the capability after reconnecting. */
   it('revokes native support when a reconnect probe fails', async () => {
     getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });

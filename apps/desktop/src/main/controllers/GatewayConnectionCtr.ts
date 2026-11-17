@@ -225,6 +225,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info, auth) => this.registerDevice(info, auth));
 
+    // Back online: the server runs the worktree cleanups that waited for this
+    // device (topics archived or trashed while it was offline).
+    srv.setConnectedHandler(({ deviceId }) => this.drainWorktreeCleanups(deviceId));
+
     // Wire up the workspace-share hooks: connect-token minting (startup restore
     // + token expiry) and the "row still registered?" probe that keeps a share
     // revoked while offline from resurrecting as a ghost device.
@@ -1257,6 +1261,33 @@ export default class GatewayConnectionCtr extends ControllerModule {
       headers,
       method: 'POST',
     });
+  }
+
+  /**
+   * Ask the server to run the worktree cleanups waiting on this device. It
+   * calls back over the gateway (`cleanupOwnedWorktree`) after answering, so
+   * this returns at once. Best-effort: anything missed waits for the next
+   * connect, or for the renderer's drain on startup.
+   */
+  private async drainWorktreeCleanups(deviceId: string): Promise<void> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) return;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Oidc-Auth': token,
+    };
+    setDesktopUserAgentHeader(headers);
+
+    const response = await fetch(`${serverUrl}/trpc/lambda/device.drainWorktreeCleanups`, {
+      body: JSON.stringify({ json: { deviceId } }),
+      headers,
+      method: 'POST',
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`Worktree cleanup drain failed: HTTP ${response.status}`);
   }
 
   /**
