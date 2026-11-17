@@ -479,7 +479,11 @@ const parsePushRefMappings = (content?: string): PushRefMapping[] => {
     if (local === '(none)' || local.startsWith('refs/tags/') || remote.startsWith('refs/tags/'))
       continue;
 
-    mappings.push({ local, remote: remote.replace(/^refs\/heads\//, '') });
+    const mapping = { local, remote: remote.replace(/^refs\/heads\//, '') };
+    // git writes the table to stderr; a result that carries both streams (or
+    // echoes them) states the same mapping twice — one ref, not an ambiguity.
+    if (!mappings.some((m) => m.local === mapping.local && m.remote === mapping.remote))
+      mappings.push(mapping);
   }
   return mappings;
 };

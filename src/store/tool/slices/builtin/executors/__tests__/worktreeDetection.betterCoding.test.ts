@@ -119,4 +119,18 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
         .number,
     ).toBe(456);
   });
+
+  it('links a push whose result repeats the ref table under Stdout and Stderr', async () => {
+    const table = ['To github.com:lobehub/lobehub.git', '   031bf96..f6b1c2a  feat/x -> feat/x'];
+    await recordGitCommandEffects({
+      command: 'git push',
+      resultContent: ['Stdout:', ...table, 'Stderr:', ...table].join('\n'),
+      toolCallId: 'call-push',
+      topicId: 't1',
+    });
+
+    expect(linkMocks.linkPushedPullRequests).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'feat/x', toolCallId: 'call-push' }),
+    );
+  });
 });
