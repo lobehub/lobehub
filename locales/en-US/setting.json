@@ -1626,7 +1626,7 @@
   "settingAgent.identity.saveFailed": "Could not save the identity, please try again",
   "settingAgent.identity.saved": "Saved",
   "settingAgent.identity.untitled": "Unnamed agent",
-  "settingAgent.instruction.desc": "Who it is and how it should behave. It reads this before every reply.",
+  "settingAgent.instruction.description": "Define the agent’s identity, responsibilities, working methods, and response style. These instructions apply in every conversation.",
   "settingAgent.instruction.title": "Instruction",
   "settingAgent.knowledgePage.addFile": "Add file",
   "settingAgent.knowledgePage.addLibrary": "Add library",
