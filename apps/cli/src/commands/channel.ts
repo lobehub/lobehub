@@ -23,7 +23,7 @@ export const registerChannelCommand = (program: Command) => {
   const channel = program
     .command('channel')
     .description(
-      'Read the current Agent run’s Channel conversation, and message Agents in other Channels',
+      'Read the current Agent run’s Channel conversation, message Agents in other Channels, and message people for your requester',
     );
   channel
     .command('history')
@@ -99,4 +99,34 @@ export const registerChannelCommand = (program: Command) => {
         );
       },
     );
+  channel
+    .command('people')
+    .description('List the people your requester can message one-on-one')
+    .option('--query <text>', 'Match part of a name or @handle')
+    .option('--limit <count>', 'People to return (1–20, default 10)', numberOption)
+    .option('--json', 'Print structured JSON')
+    .action(async (options: { limit?: number; query?: string }) => {
+      const client = await getTrpcClient();
+      outputJson(
+        await client.channel.listPeople.query({ limit: options.limit, query: options.query }),
+      );
+    });
+  channel
+    .command('dm <userId>')
+    .description(
+      'Message a person for your requester, in their one-on-one conversation; the person is notified and nobody answers you there',
+    )
+    .requiredOption('-c, --content <text>', 'The message, self-contained, written for that person')
+    .option('--request-key <key>', 'Reuse to retry without posting twice')
+    .option('--json', 'Print structured JSON')
+    .action(async (userId: string, options: { content: string; requestKey?: string }) => {
+      const client = await getTrpcClient();
+      outputJson(
+        await client.channel.messagePerson.mutate({
+          content: options.content,
+          requestKey: options.requestKey ?? randomUUID(),
+          userId,
+        }),
+      );
+    });
 };

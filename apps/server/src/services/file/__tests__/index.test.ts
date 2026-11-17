@@ -505,6 +505,7 @@ describe('FileService', () => {
         'files/test-user/abc/report.pdf',
         content,
         'application/pdf',
+        undefined,
       );
     });
 

@@ -97,7 +97,10 @@ const createDeps = () => {
   return { deps, topicModel };
 };
 
-const dispatch = (deps: HeteroDispatchDeps) =>
+const dispatch = (
+  deps: HeteroDispatchDeps,
+  heteroParams: Partial<PreparedHeteroRun['heteroParams']> = {},
+) =>
   dispatchToWakingCliDevice(deps, run, {
     agentConfig: { agencyConfig: {}, id: 'agent-1' } as unknown as ExecRunContext['agentConfig'],
     appContext: undefined,
@@ -105,7 +108,7 @@ const dispatch = (deps: HeteroDispatchDeps) =>
     heteroPlan: { deviceId: 'managed-a', kind: 'device-wakeable', target: 'device' },
     heteroType: 'claude-code',
     heterogeneousProvider: { type: 'claude-code' },
-    prepared: { heteroParams: {} } as unknown as PreparedHeteroRun,
+    prepared: { heteroParams } as unknown as PreparedHeteroRun,
   });
 
 const runScheduledWork = async () => {
@@ -202,6 +205,18 @@ describe('dispatchToWakingCliDevice', () => {
     expect(mocks.isRunningOnTopic).toHaveBeenCalledWith('op-1', 'topic-1');
     expect(mocks.dispatchAgentRun).not.toHaveBeenCalled();
     expect(mocks.finalizeHeteroDispatchError).not.toHaveBeenCalled();
+  });
+
+  it('never sends the resolved GitHub credential to the device', async () => {
+    const { deps } = createDeps();
+
+    await dispatch(deps, { githubToken: 'gh-org-token', jwt: 'operation-jwt' });
+    await runScheduledWork();
+
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
+    const params = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(params).toMatchObject({ jwt: 'operation-jwt' });
+    expect(params).not.toHaveProperty('githubToken');
   });
 
   it('settles the run when the background dispatch throws', async () => {

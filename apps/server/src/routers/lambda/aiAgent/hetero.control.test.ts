@@ -12,6 +12,7 @@ import { heteroRouter } from './hetero';
 const mocks = vi.hoisted(() => ({
   getRedisServiceClient: vi.fn(),
   operation: undefined as Record<string, unknown> | undefined,
+  readFollowUpMode: vi.fn(),
   renewHeteroSteers: vi.fn(),
   takeHeteroSteer: vi.fn(),
 }));
@@ -23,6 +24,9 @@ vi.mock('@/server/services/aiAgent/steerQueue/hetero', () => ({
   renewHeteroSteers: mocks.renewHeteroSteers,
   returnHeteroSteer: vi.fn(),
   takeHeteroSteer: mocks.takeHeteroSteer,
+}));
+vi.mock('@/server/services/aiAgent/steerQueue/followUpMode', () => ({
+  readFollowUpMode: mocks.readFollowUpMode,
 }));
 vi.mock('./procedures', async () => {
   const { trpc } = await import('@/libs/trpc/lambda/init');
@@ -60,6 +64,38 @@ beforeEach(() => {
   mocks.getRedisServiceClient.mockResolvedValue(createHeteroControlFakeRedis());
   mocks.operation = mainRun;
   mocks.takeHeteroSteer.mockResolvedValue(undefined);
+  mocks.readFollowUpMode.mockResolvedValue('legacy');
+});
+
+describe('waitHeteroSteer and the Follow-up behavior', () => {
+  it('takes no follow-up into the live session in Queue mode', async () => {
+    mocks.readFollowUpMode.mockResolvedValue('queue');
+    mocks.takeHeteroSteer.mockResolvedValue({ content: 'hi', messageId: 'msg-1' });
+
+    expect(await caller.waitHeteroSteer({ blockMs: 1, operationId: 'op-1' })).toEqual({
+      message: null,
+    });
+    expect(mocks.takeHeteroSteer).not.toHaveBeenCalled();
+  });
+
+  it('hands out no follow-up while the session waits for the user', async () => {
+    mocks.readFollowUpMode.mockResolvedValue('steer');
+
+    await caller.waitHeteroSteer({ blockMs: 1, holdSteer: true, operationId: 'op-1' });
+
+    expect(mocks.takeHeteroSteer).not.toHaveBeenCalled();
+  });
+
+  it('asks for a merged steer in Steer mode', async () => {
+    mocks.readFollowUpMode.mockResolvedValue('steer');
+
+    await caller.waitHeteroSteer({ blockMs: 1, operationId: 'op-1' });
+
+    expect(mocks.takeHeteroSteer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ mode: 'steer', operationId: 'op-1' }),
+    );
+  });
 });
 
 describe('waitHeteroSteer control messages', () => {

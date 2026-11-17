@@ -21,6 +21,7 @@ export * from './contact';
 export * from './conversation';
 export * from './creds';
 export * from './dashboard';
+export * from './dataExport';
 export * from './dbMigration';
 export * from './device';
 export * from './deviceFilePreviewFailure';

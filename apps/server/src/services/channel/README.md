@@ -253,6 +253,26 @@ chosen Agents (`ChannelMessagingService`).
   the `channel:message` capability that every Channel dispatch is minted alongside
   `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
 
+### Messaging people for the requester
+
+"Let Alice know when you are done" is a message to a person, not a request for an Agent.
+`lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
+the run's scope (`ContactModel.listPeople`): personal contacts, or in a workspace its other members
+and the external contacts paired with the requester. `lobe-channel.messagePerson` (`lh channel dm`)
+posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
+first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
+
+- **Who sends it.** The requester, with the writing Agent in `metadata.via`, like a relay: the
+  timeline shows "Relayed by". The conversation between two people decides who can be reached
+  (`requirePeerRelation`, checked on opening and on every send), so an Agent reaches exactly the
+  people its requester could message by hand. A conversation the requester trashed is refused.
+- **Notification.** It is an ordinary message there, so `notifyChannelDirectMessages` notifies the
+  person as of any message from the requester.
+- **Nothing comes back.** No Agent is in that conversation; the `via` has no `origin`, so no
+  receipt is delivered. Unlike `sendMessage` there is no hop rule: a person does not wake anyone.
+- **Retries.** The request key is `agent-dm:<operationId>:<toolCallId>` (or `cli:<requestKey>`).
+- Shared-Agent runs do not get it: the share gate allows only history reads.
+
 ### Why history reads stay on `lobe-channel`
 
 `lobe-message.readMessages` reads a bot platform by model-supplied `platform` / `channelId`

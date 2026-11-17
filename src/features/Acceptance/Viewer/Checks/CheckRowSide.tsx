@@ -127,6 +127,105 @@ export const CheckRowSide = memo<CheckRowSideProps>(
     const hasHistory = hasCheckHistory(check, historyReviews);
     const canDecide = reviewable && !activeReview;
 
+    // A row opened in the list: the evidence above already took the full
+    // width, so the judging closes it as one compact bar — the verdict and
+    // its folded reason on the first line, the decision on the last.
+    if (!detailMode) {
+      const traceId =
+        check.planItem?.verifierType === 'agent' ? check.result?.verifierOperationId : undefined;
+      const leading = (
+        <>
+          {hasHistory && (
+            <span {...stylex.props(styles.historyToggle)} onClick={onHistoryToggle}>
+              <Icon
+                icon={ChevronRight}
+                size={12}
+                style={{
+                  transform: historyOpen ? 'rotate(90deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}
+              />
+              {t('acceptance.checks.iterationHistory', { count: check.revisions })}
+            </span>
+          )}
+          {/* `onOpenTrace` gates the render, not just the click — see the
+          detail layout below for why. */}
+          {traceId && onOpenTrace && (
+            <Button
+              icon={<Icon icon={Route} />}
+              size={'small'}
+              type={'text'}
+              onClick={(event) => {
+                event.stopPropagation();
+                void onOpenTrace(traceId);
+              }}
+            >
+              {t('acceptance.checks.viewTrace')}
+            </Button>
+          )}
+        </>
+      );
+      const hasLeading = hasHistory || Boolean(traceId && onOpenTrace);
+
+      return (
+        <Flexbox gap={12} style={{ minWidth: 0 }}>
+          {check.prediction && canDecide && (
+            <ProposalCard
+              open={proposalOpen}
+              pending={reviewPending}
+              proposal={check.prediction}
+              onAdjudicate={handleAdjudicate}
+              onConfirm={() => openReject(check.prediction ?? undefined)}
+              onToggle={onProposalToggle}
+            />
+          )}
+          <div {...stylex.props(styles.verdictBar)}>
+            <div {...stylex.props(styles.verdictLine)}>
+              <span {...stylex.props(styles.verdictLabel)}>
+                <Icon color={headColor} icon={headIcon} size={16} style={{ flex: 'none' }} />
+                <Text weight={500}>{verdictLabel}</Text>
+              </span>
+              {check.result?.toulmin?.evidence && (
+                <div {...stylex.props(styles.verdictReason)}>
+                  <FoldedText secondary text={check.result.toulmin.evidence} />
+                </div>
+              )}
+            </div>
+            <VerifierRecord check={check} visualization={visualization} />
+            {dispute && <DisputeNote dispute={dispute} />}
+            {historyOpen && hasHistory && (
+              <IterationTimeline
+                check={check}
+                evidenceById={evidenceById}
+                historyReviews={historyReviews}
+                onRound={onRound}
+              />
+            )}
+            {activeReview && (
+              <StandingDecision
+                accepting={accepting}
+                evidenceById={evidenceById}
+                review={activeReview}
+                reviewPending={reviewPending}
+                onAccept={reviewable ? handleAccept : undefined}
+                onReject={reviewable ? () => openReject() : undefined}
+              />
+            )}
+            {(Boolean(onCommentEvidence) || canDecide || hasLeading) && (
+              <CheckRowSideActions
+                inline
+                leading={leading}
+                review={review}
+                reviewPending={reviewPending}
+                showDecision={canDecide}
+                onCommentEvidence={onCommentEvidence}
+              />
+            )}
+          </div>
+        </Flexbox>
+      );
+    }
+
     return (
       <Flexbox gap={12} {...stylex.props(styles.side)}>
         {/* The model's proposal leads the side column: it is a claim about
@@ -143,12 +242,6 @@ export const CheckRowSide = memo<CheckRowSideProps>(
             onConfirm={() => openReject(check.prediction ?? undefined)}
             onToggle={onProposalToggle}
           />
-        )}
-        {!detailMode && (
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Icon color={headColor} icon={headIcon} size={16} style={{ flex: 'none' }} />
-            <Text weight={500}>{verdictLabel}</Text>
-          </Flexbox>
         )}
         {/* The verifier's account of what it saw. Folded to one line that
         opens in place: shown in full, it and the reasoning below turned an
@@ -194,7 +287,7 @@ export const CheckRowSide = memo<CheckRowSideProps>(
         not a verdict. The rounds this check already went through then
         sit between that and the verdict buttons: context for the
         decision, never an appendix to one already made. */}
-        {detailMode && desktop && canDecide && canMarkEvidence(check, desktop) && (
+        {desktop && canDecide && canMarkEvidence(check, desktop) && (
           <Button
             outdent
             icon={<Icon icon={Images} />}
@@ -241,20 +334,17 @@ export const CheckRowSide = memo<CheckRowSideProps>(
             onReject={reviewable ? () => openReject() : undefined}
           />
         )}
-        {/* One row closes the check: looking harder on the left, deciding on
-        the right. Circling the evidence is another way of reading what
-        was delivered rather than a verdict, so it keeps its quiet text
-        styling and the left edge — but it sits ON the same line as the
-        buttons instead of stacking a half-empty row above them. */}
-        {!phoneBar && (Boolean(onCommentEvidence) || (canDecide && !detailMode)) && (
+        {/* The detail page decides in the stack below; this line only
+        carries the comment entry. */}
+        {!phoneBar && Boolean(onCommentEvidence) && (
           <CheckRowSideActions
             review={review}
             reviewPending={reviewPending}
-            showDecision={canDecide && !detailMode}
+            showDecision={false}
             onCommentEvidence={onCommentEvidence}
           />
         )}
-        {canDecide && detailMode && desktop && (
+        {canDecide && desktop && (
           <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
             <TextArea
               autoSize={{ maxRows: 8, minRows: 3 }}

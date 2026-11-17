@@ -42,6 +42,10 @@ export function vitePlatformResolve(platform?: Platform): Plugin {
 
       for (const suffix of suffixes) {
         const candidate = `${basePath}${suffix}${ext}`;
+        // An override may reuse its base module; do not redirect it to itself.
+        if (importer.split('?')[0].replaceAll('\\', '/') === candidate.replaceAll('\\', '/')) {
+          return null;
+        }
         try {
           await access(candidate);
           return candidate;

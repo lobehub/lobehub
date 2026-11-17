@@ -1,4 +1,4 @@
-import type { AgentSenderMetadata } from '@lobechat/types';
+import type { AgentSenderMetadata, FollowUpMode } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
@@ -17,9 +17,11 @@ import {
   ackFollowUps,
   checkFollowUpAccess,
   drainOwnFollowUps,
+  mergeQueuedFollowUps,
   type QueuedFollowUp,
   queuedUserMessageId,
   returnFollowUps,
+  takeSameSenderFollowUps,
 } from './index';
 
 const log = debug('lobe-server:steer-queue:hetero');
@@ -37,6 +39,8 @@ export interface HeteroSteerDelivery {
   drainId: string;
   editorData?: unknown;
   entryId: string;
+  /** Every follow-up merged into this delivery, when there were several (Steer mode). */
+  entryIds?: string[];
   groupId?: string;
   scope: SteerQueueScope;
   trigger?: string;
@@ -82,11 +86,20 @@ export const renewHeteroSteers = async (operationId: string) => {
   }
 };
 
+/** Whether a session that takes image input only if `acceptsImages` can take this follow-up now. */
+const fitsSession = (entry: QueuedFollowUp, acceptsImages: boolean | undefined) =>
+  acceptsImages || collectMarkdownImageUrls(entry.request.prompt).length === 0;
+
 /**
  * Take the next follow-up queued behind a heterogeneous run for delivery into
- * its live session. One message per delivery, in queue order: the first
- * follow-up that cannot join (an attachment, a tool selection…) stops the
- * take, and it and everything behind it wait for the run to end.
+ * its live session, in queue order: the first follow-up that cannot join (an
+ * attachment, a tool selection…) stops the take, and it and everything behind
+ * it wait for the run to end.
+ *
+ * In Steer mode (`mode: 'steer'`) every leading follow-up that can join, from
+ * one author, goes as one merged message; otherwise one goes per delivery.
+ * Either way the agent reads it when it is ready (Claude Code: at its next
+ * tool boundary), so a running tool is never cut short.
  *
  * Images pasted into the body go along as `imageList` when the session takes
  * image input (`acceptsImages`). Otherwise the follow-up waits for a turn of
@@ -100,48 +113,73 @@ export const takeHeteroSteer = async (
   params: {
     acceptsImages?: boolean;
     agentId: string | null;
+    mode?: FollowUpMode;
     operationId: string;
     scope: SteerQueueScope;
   },
 ): Promise<HeteroSteerMessage | undefined> => {
   const { acceptsImages, agentId, operationId, scope } = params;
+  const merging = params.mode === 'steer';
 
   const drained = await drainOwnFollowUps(ctx, scope, operationId);
   if (drained.entries.length === 0) return;
 
   const held = await redisService.steerQueue.listHeteroDeliveries<HeteroSteerDelivery>(operationId);
 
-  const [first, ...rest] = drained.entries;
-  if (!canSteerHeteroRun(first, agentId)) {
-    await returnFollowUps(scope, drained, drained.entries, 'needs a turn of its own');
+  // A delivery whose lease lapsed while the session still held it came back
+  // into the queue. It is the session's already: rebind it as it was, so a
+  // merge with newer follow-ups (a new message id) never types its entries twice.
+  const heldBy = new Map<string, string>();
+  for (const [messageId, delivery] of Object.entries(held))
+    for (const id of delivery.entryIds ?? [delivery.entryId]) heldBy.set(id, messageId);
+  const lapsedId = drained.entries.map((entry) => heldBy.get(entry.id)).find(Boolean);
+  if (lapsedId) {
+    const delivery = held[lapsedId];
+    const ids = new Set(delivery.entryIds ?? [delivery.entryId]);
+    const others = drained.entries.filter((entry) => !ids.has(entry.id));
+    await returnFollowUps(scope, drained, others, 'behind a delivery the session holds');
+    await redisService.steerQueue.putHeteroDelivery(operationId, lapsedId, {
+      ...delivery,
+      drainId: drained.drainId,
+    } satisfies HeteroSteerDelivery);
     return;
   }
 
   // A session that only takes text gets no image follow-up: decided from the
   // markdown alone, since the run asks again on every poll.
-  const hasImages = collectMarkdownImageUrls(first.request.prompt).length > 0;
-  if (hasImages && !acceptsImages) {
-    await returnFollowUps(scope, drained, drained.entries, 'its images need a turn of their own');
+  const canGo = (entry: QueuedFollowUp) =>
+    canSteerHeteroRun(entry, agentId) && fitsSession(entry, acceptsImages);
+  const firstHeld = drained.entries.findIndex((entry) => !canGo(entry));
+  const ready = firstHeld === -1 ? drained.entries : drained.entries.slice(0, firstHeld);
+  const joining = merging ? takeSameSenderFollowUps(ready).taken : ready.slice(0, 1);
+  if (joining.length === 0) {
+    await returnFollowUps(scope, drained, drained.entries, 'needs a turn of its own');
     return;
   }
 
+  const request = joining.length === 1 ? joining[0].request : mergeQueuedFollowUps(joining);
   let imageList: InlineImage[] = [];
-  if (hasImages) {
+  if (collectMarkdownImageUrls(request.prompt).length > 0) {
     try {
-      imageList = await resolveInlineImages(ctx, first.request.prompt);
+      imageList = await resolveInlineImages(ctx, request.prompt);
     } catch (error) {
       await returnFollowUps(scope, drained, drained.entries, error);
       return;
     }
   }
-  await returnFollowUps(scope, drained, rest, 'delivered one at a time');
+  const rest = drained.entries.filter((entry) => !joining.includes(entry));
+  await returnFollowUps(
+    scope,
+    drained,
+    rest,
+    merging ? 'waits for the next join' : 'delivered one at a time',
+  );
 
-  const request = first.request;
-  const messageId = queuedUserMessageId(ctx.userId, [first], request);
+  const messageId = queuedUserMessageId(ctx.userId, joining, request);
 
   try {
     if ((await checkFollowUpAccess(ctx, request, scope)) === 'denied') {
-      console.error('[takeHeteroSteer] dropped follow-up %s: access revoked', first.id);
+      console.error('[takeHeteroSteer] dropped %d follow-ups: access revoked', joining.length);
       await ackFollowUps(scope, drained);
       return;
     }
@@ -164,21 +202,22 @@ export const takeHeteroSteer = async (
     }
 
     await redisService.steerQueue.putHeteroDelivery(operationId, messageId, {
-      agentSender: first.agentSender,
+      agentSender: joining[0].agentSender,
       content: request.prompt,
       drainId: drained.drainId,
       editorData: request.userMessage?.editorData,
-      entryId: first.id,
+      entryId: joining[0].id,
+      ...(joining.length > 1 && { entryIds: joining.map((entry) => entry.id) }),
       groupId: request.appContext?.groupId ?? undefined,
       scope,
       trigger: request.trigger,
     } satisfies HeteroSteerDelivery);
   } catch (error) {
-    await returnFollowUps(scope, drained, [first], error);
+    await returnFollowUps(scope, drained, joining, error);
     return;
   }
 
-  log('[%s] Delivering follow-up %s as %s', operationId, first.id, messageId);
+  log('[%s] Delivering %d follow-ups as %s', operationId, joining.length, messageId);
   return {
     content: request.prompt,
     ...(imageList.length > 0 && { imageList }),
@@ -196,9 +235,15 @@ export const returnHeteroSteer = async (operationId: string, messageId: string) 
   const delivery = held[messageId];
   if (!delivery) return;
 
-  await returnFollowUps(delivery.scope, delivery, [{ id: delivery.entryId } as QueuedFollowUp], {
-    reason: 'the agent session no longer takes input',
-  });
+  const entryIds = delivery.entryIds ?? [delivery.entryId];
+  await returnFollowUps(
+    delivery.scope,
+    delivery,
+    entryIds.map((id) => ({ id }) as QueuedFollowUp),
+    {
+      reason: 'the agent session no longer takes input',
+    },
+  );
   await redisService.steerQueue.removeHeteroDelivery(operationId, messageId);
 };
 

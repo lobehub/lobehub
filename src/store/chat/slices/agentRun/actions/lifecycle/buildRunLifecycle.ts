@@ -5,6 +5,7 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
+import { workService } from '@/services/work';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
@@ -306,6 +307,11 @@ export const buildRunLifecycle = (
     afterRunComplete: async (event: RunCompleteEvent) => {
       if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
       if (adapter.runScope === 'sub_agent') return;
+
+      // The run's gh / push commands are linked by the completion Work scan,
+      // which finishes before the run reports its end. Only a mounted list
+      // (Better Coding Experience PR chip / sidebar) refetches.
+      void workService.refreshTopicPullRequests(topicId).catch(() => {});
 
       const serverOperationId = get().operations[event.operationId]?.metadata.serverOperationId;
       const disposition = resolveTerminalDisposition(event);

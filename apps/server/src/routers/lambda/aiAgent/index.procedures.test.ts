@@ -58,6 +58,7 @@ function expected(): Array<[name: string, type: 'mutation' | 'query']> {
     ['scheduleAgentRun', 'mutation'],
     ['setQueuedMessages', 'mutation'],
     ['startExecution', 'mutation'],
+    ['stopHeteroBackgroundTask', 'mutation'],
     ['stopPendingApproval', 'mutation'],
     ['submitHeteroIntervention', 'mutation'],
     ['updateClientTaskThreadStatus', 'mutation'],

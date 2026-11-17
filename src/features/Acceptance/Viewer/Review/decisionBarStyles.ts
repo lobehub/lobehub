@@ -30,20 +30,36 @@ export const decisionBarStyles = stylex.create({
     position: 'sticky',
     zIndex: 20,
     insetBlockEnd: 0,
+    flex: 'none',
+    width: '100%',
+    marginBlockEnd: '-20px',
+    paddingBlockStart: '16px',
+    paddingBlockEnd: { default: '16px', [phone]: 'max(16px, env(safe-area-inset-bottom))' },
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  // Spans the scroll frame edge to edge, so its rule mirrors the header
+  // band's under the tabs. It sits after the padded column, not inside it,
+  // so there is no column padding to cancel.
+  barDocked: {
+    marginBlockEnd: 0,
+  },
+  content: {
     display: 'flex',
     flexWrap: 'wrap',
     columnGap: '16px',
     rowGap: '12px',
     alignItems: 'center',
-    width: '100%',
-    marginBlockEnd: '-20px',
-    paddingBlockStart: '16px',
-    paddingBlockEnd: { default: '16px', [phone]: 'max(16px, env(safe-area-inset-bottom))' },
     paddingInline: { default: '16px', [phone]: 0 },
-    borderBlockStartWidth: '1px',
-    borderBlockStartStyle: 'solid',
-    borderBlockStartColor: cssVar.colorBorderSecondary,
-    backgroundColor: cssVar.colorBgContainer,
+  },
+  // The column's own inline padding (24 / 16) plus the bar's (16 / 0), so the
+  // content lands where it did inside the column.
+  contentDocked: {
+    width: '100%',
+    marginInline: 'auto',
+    paddingInline: { default: '40px', [phone]: '16px' },
   },
   strip: {
     position: 'absolute',
@@ -51,6 +67,12 @@ export const decisionBarStyles = stylex.create({
     insetBlockStart: '-2px',
     gap: 0,
     height: '2px',
+  },
+  // The bar's rule is the strip's track: an undecided check leaves it bare,
+  // so an unreviewed list reads as the same 1px rule as the one under the tabs
+  // instead of a heavier gray band.
+  stripPending: {
+    backgroundColor: 'transparent',
   },
   stripSegment: {
     borderRadius: 0,

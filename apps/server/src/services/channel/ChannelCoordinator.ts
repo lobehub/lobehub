@@ -21,6 +21,7 @@ import { extractTextFromMessage } from '@/server/services/agentRuntime/Completio
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
+import { resolveShareVisitorDeviceAccess } from '@/server/services/aiAgent/shareGate/deviceAccess';
 import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
@@ -85,6 +86,7 @@ export class ChannelCoordinator {
     if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
     return {
       agentId,
+      canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share.shareConfig, requesterId),
       shareConfig: share.shareConfig,
       shareId: share.shareId,
       visitorUserId: requesterId,

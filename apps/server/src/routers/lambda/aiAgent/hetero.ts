@@ -20,6 +20,7 @@ import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import {
   renewHeteroSteers,
   returnHeteroSteer,
@@ -30,6 +31,7 @@ import {
   reportHeteroControlResult,
   takeHeteroControl,
 } from '@/server/services/aiAgent/steerQueue/heteroControl';
+import { stopHeteroBackgroundTask } from '@/server/services/aiAgent/steerQueue/heteroStopTask';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
   HeteroOperationPrincipalError,
@@ -71,6 +73,7 @@ const AgentStreamEventSchema = z.object({
     'agent_intervention_response',
     'step_start',
     'step_complete',
+    'background_task',
     'notify_update',
     'error',
   ]),
@@ -156,7 +159,18 @@ const WaitHeteroSteerSchema = z.object({
    */
   acceptsImages: z.boolean().optional(),
   blockMs: z.number().int().positive().max(25_000).default(20_000),
+  /**
+   * The session waits for the user (a question or an approval): hand it no
+   * follow-up now, only control messages. Older producers omit it.
+   */
+  holdSteer: z.boolean().optional(),
   operationId: z.string().min(1),
+});
+
+/** Schema for `aiAgent.stopHeteroBackgroundTask` — stop one Claude Code background task. */
+const StopHeteroBackgroundTaskSchema = z.object({
+  operationId: z.string().min(1),
+  taskId: z.string().min(1).max(256),
 });
 
 /** Schema for `aiAgent.returnHeteroSteer` — the session could not take the message. */
@@ -587,7 +601,7 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
-      const { acceptsControl, acceptsImages, operationId, blockMs } = input;
+      const { acceptsControl, acceptsImages, holdSteer, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -635,6 +649,8 @@ export const heteroRouter = router({
         : undefined;
 
       if (scope) await renewHeteroSteers(operationId);
+      // Queue mode leaves the follow-ups to the run end; read once per poll.
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
 
       const deadline = Date.now() + blockMs;
       for (;;) {
@@ -649,10 +665,11 @@ export const heteroRouter = router({
           const control = await takeHeteroControl(operationId);
           if (control) return answer(null, control);
         }
-        if (scope) {
+        if (scope && followUpMode !== 'queue' && !holdSteer) {
           const message = await takeHeteroSteer(storeCtx, {
             acceptsImages,
             agentId: operation.agentId,
+            mode: followUpMode,
             operationId,
             scope,
           });
@@ -733,6 +750,35 @@ export const heteroRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       }),
     ),
+  /**
+   * Stop one Claude Code background task of a run hosted by `lh hetero exec`
+   * (a connected device, the desktop gateway, the cloud sandbox). The request
+   * rides the run's control channel; `accepted` means Claude Code took it, and
+   * the task's `stopped` snapshot then arrives through the run's own stream.
+   */
+  stopHeteroBackgroundTask: aiAgentWriteProcedure
+    .input(StopHeteroBackgroundTaskSchema)
+    .mutation(async ({ input, ctx }) => {
+      // Only the user who started the run controls its live process.
+      const [operation] = await ctx.serverDB
+        .select({ userId: agentOperations.userId })
+        .from(agentOperations)
+        .where(eq(agentOperations.id, input.operationId))
+        .limit(1);
+      if (operation?.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Operation not found or not owned by the caller',
+        });
+      }
+      await assertCanUseOperationAgent({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return stopHeteroBackgroundTask(input.operationId, input.taskId);
+    }),
   /** Token-only atomic resolution path used by Mobile review/deep links. */
   resolveHeteroIntervention: aiAgentWriteProcedure
     .input(ResolveHeteroInterventionReviewSchema)

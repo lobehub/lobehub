@@ -128,7 +128,10 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGoals: () => goalsEnabledMock.value },
+  labPreferSelectors: {
+    enableBetterCodingExperience: () => false,
+    enableGoals: () => goalsEnabledMock.value,
+  },
   userProfileSelectors: { userId: () => currentUserIdMock.value },
 }));
 vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));

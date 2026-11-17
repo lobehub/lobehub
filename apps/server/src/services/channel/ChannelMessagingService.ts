@@ -2,12 +2,19 @@ import type {
   ChannelAgentExchange,
   ChannelDirectoryPage,
   ChannelListChannelsParams,
+  ChannelListPeopleParams,
+  ChannelMessagePersonParams,
+  ChannelPeoplePage,
+  ChannelPerson,
   ChannelSendMessageParams,
   ChannelSentMessage,
+  ChannelSentPersonMessage,
+  ContactUserProfile,
 } from '@lobechat/types';
 import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
+import { ContactModel } from '@/database/models/contact';
 import { WorkspaceModel } from '@/database/models/workspace';
 import {
   ChannelError,
@@ -32,6 +39,12 @@ const mentionsName = (content: string, name: string) =>
   new RegExp(`@${escapeRegExp(name)}(?=$|[\\s\\p{P}\\p{S}])`, 'u').test(content);
 /** Asks one exchange between Agents may take before the asking Agent must report back. */
 const MAX_AGENT_ASKS = 3;
+
+const toPerson = (user: ContactUserProfile): ChannelPerson => ({
+  name: user.fullName?.trim() || user.username || 'Unnamed',
+  userId: user.id,
+  username: user.username,
+});
 
 type ChannelRun = Awaited<ReturnType<ChannelHistoryRepository['currentRun']>>;
 type DirectoryEntry = Awaited<ReturnType<ChannelRepository['directory']>>[number];
@@ -225,6 +238,86 @@ export class ChannelMessagingService {
       channelTitle: target.channel.title ?? '',
       messageId: message.id,
       url: await this.channelUrl(target.channel.id, target.channel.projectId),
+    };
+  };
+
+  /**
+   * People the requester can message one-on-one in the run's scope, to find who `messagePerson`
+   * can reach: personal contacts, or in a workspace its members and the external contacts paired
+   * with the requester.
+   */
+  listPeople = async (params: ChannelListPeopleParams = {}): Promise<ChannelPeoplePage> => {
+    await assertChannelEnabled(this.userId);
+    await this.history.relaySource(this.operationId, this.options);
+    const limit = params.limit ?? DEFAULT_LIMIT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIMIT)
+      throw new ChannelError('BAD_REQUEST', `Expected a limit between 1 and ${MAX_LIMIT}`);
+    const page = await new ContactModel(this.db, this.userId, this.workspaceId).listPeople({
+      limit,
+      query: params.query,
+    });
+    return { hasMore: page.hasMore, people: page.people.map(toPerson) };
+  };
+
+  /**
+   * Messages one person for the requester, in the requester's conversation with them, opened on
+   * first use. That conversation decides who can be reached (a mutual contact, or a fellow member
+   * or paired external contact in a workspace) and notifies the person of every message. The
+   * requester stays the sender; `metadata.via` names the Agent that wrote it. No Agent answers
+   * there, so nothing comes back to the run.
+   *
+   * `requestId` (the tool call id, or the CLI's request key) makes a retried call return the
+   * message it already posted.
+   */
+  messagePerson = async (
+    params: ChannelMessagePersonParams,
+    requestId: string,
+  ): Promise<ChannelSentPersonMessage> => {
+    await assertChannelEnabled(this.userId);
+    const run = await this.history.relaySource(this.operationId, this.options);
+    const content = params.content?.trim();
+    if (!content || content.length > CHANNEL_LIMITS.contentLength)
+      throw new ChannelError('BAD_REQUEST', 'A message requires bounded content');
+    const userId = params.userId?.trim();
+    if (!userId)
+      throw new ChannelError('BAD_REQUEST', 'Give the userId of a person from listPeople');
+    if (userId === this.userId)
+      throw new ChannelError(
+        'BAD_REQUEST',
+        'That is your requester; your final answer already reaches them',
+      );
+
+    const service = new ChannelService(this.db, this.userId, this.workspaceId);
+    const access = await service.openPeer(userId).catch((error: unknown) => {
+      if (
+        error instanceof ChannelError &&
+        (error.code === 'FORBIDDEN' || error.code === 'NOT_FOUND')
+      )
+        throw new ChannelError(
+          error.code,
+          `${error.message}: your requester cannot message this person; use listPeople`,
+        );
+      throw error;
+    });
+    if (access.channel.isDeleted)
+      throw new ChannelError(
+        'FORBIDDEN',
+        'The conversation with this person is in the trash; your requester can restore it',
+      );
+    const message = await service.send(access.channel.id, {
+      content,
+      metadata: {
+        via: { agentId: run.self.agentId, name: run.self.name, operationId: this.operationId },
+      },
+      requestKey: `agent-dm:${this.operationId}:${requestId}`,
+    });
+    const person = await new ContactModel(this.db, this.userId, this.workspaceId).findUser(userId);
+
+    return {
+      channelId: access.channel.id,
+      messageId: message.id,
+      person: person ? toPerson(person) : { name: 'Unnamed', userId, username: null },
+      url: await this.channelUrl(access.channel.id, access.channel.projectId),
     };
   };
 

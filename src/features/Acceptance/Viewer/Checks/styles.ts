@@ -159,6 +159,40 @@ export const styles = stylex.create({
   bodySingle: {
     gridTemplateColumns: 'minmax(0, 560px)',
   },
+  // A row opened in the list gives the evidence the full width — a side-by-side
+  // before/after shrank to half its size beside the 280px judging column — and
+  // the judging folds into one bar under it.
+  bodyStacked: {
+    gridTemplateColumns: 'minmax(0, 1fr)',
+  },
+  verdictBar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    minWidth: 0,
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  verdictLine: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-start',
+    minWidth: 0,
+  },
+  verdictLabel: {
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    height: '22px',
+  },
+  verdictReason: {
+    flex: '1',
+    minWidth: 0,
+    paddingBlockStart: '1px',
+  },
   bodyInList: {
     paddingBlockEnd: '16px',
     paddingInlineStart: { default: '16px', [wideRow]: '60px', [compact]: 0 },
@@ -183,6 +217,25 @@ export const styles = stylex.create({
     borderBlockStartWidth: { default: null, [wideRow]: '1px' },
     borderBlockStartStyle: { default: null, [wideRow]: 'solid' },
     borderBlockStartColor: { default: null, [wideRow]: cssVar.colorBorderSecondary },
+  },
+  // The verdict bar's closing line: looking harder on the left, deciding on
+  // the right, at every row width.
+  sideActionsInline: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingBlockStart: 0,
+    borderBlockStartWidth: 0,
+  },
+  sideActionsLeading: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '12px',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  decisionStackInline: {
+    flexDirection: 'row-reverse',
   },
   detailContainer: {
     flexGrow: '1',

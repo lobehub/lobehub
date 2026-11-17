@@ -30,6 +30,16 @@ export default {
   'builtins.lobe-channel.sendError':
     "The message wasn't sent. Check the Channel and its Agents, then try again.",
   'builtins.lobe-channel.sentTo': 'Sent to {{agents}} in #{{channel}}',
+  'builtins.lobe-channel.apiName.listPeople': 'List people',
+  'builtins.lobe-channel.apiName.messagePerson': 'Message a person',
+  'builtins.lobe-channel.listPeopleError':
+    "Couldn't list the people you can message. Try again in a moment.",
+  'builtins.lobe-channel.messagePersonError':
+    "The message wasn't sent. Check that you can message this person, then try again.",
+  'builtins.lobe-channel.noPeople': 'No one found to message.',
+  'builtins.lobe-channel.openConversation': 'Open conversation',
+  'builtins.lobe-channel.peopleCount': 'People: {{count}}',
+  'builtins.lobe-channel.sentToPerson': 'Sent to {{name}}',
   'builtins.lobe-mcp-events.title': 'Event subscriptions',
   'builtins.lobe-mcp-events.intervention.unsubscribeTitle': 'End this subscription?',
   'builtins.lobe-mcp-events.intervention.unsubscribeDesc':
