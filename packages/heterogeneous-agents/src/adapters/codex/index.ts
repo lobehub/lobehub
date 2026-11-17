@@ -32,6 +32,7 @@ import {
   isFileChangeItem,
   isImageOutputItem,
   isMcpToolCallItem,
+  isNonToolItemType,
   isTodoListItem,
   isWebSearchItem,
 } from './items';
@@ -904,7 +905,7 @@ export class CodexAdapter implements AgentEventAdapter {
   }
 
   private handleItemStarted(item: any): HeterogeneousAgentEvent[] {
-    if (!item?.id || !item?.type || item.type === 'agent_message') return [];
+    if (!item?.id || !item?.type || isNonToolItemType(item.type)) return [];
 
     this.hasToolActivitySinceAgentMessage = true;
 
@@ -1031,7 +1032,7 @@ export class CodexAdapter implements AgentEventAdapter {
       return this.handleAgentMessageContent(item.id, item.text);
     }
 
-    if (!item.id) return [];
+    if (isNonToolItemType(item.type) || !item.id) return [];
     this.streamedCommandOutput.delete(item.id);
 
     // Codex emits the same status-less todo completion before both a successful

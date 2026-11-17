@@ -2,6 +2,7 @@ import type { HeterogeneousToolResultImage } from '../../types';
 
 const CODEX_COLLAB_TOOL_CALL_API = 'collab_tool_call';
 export const CODEX_COMMAND_API = 'command_execution';
+const CODEX_ERROR_ITEM_TYPE = 'error';
 const CODEX_FILE_CHANGE_API = 'file_change';
 const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
@@ -84,6 +85,11 @@ export type CodexToolItem =
   | CodexMcpToolCallItem
   | CodexTodoListItem
   | CodexWebSearchItem;
+
+// exec --json reports non-fatal notices (config/deprecation warnings) as `error` items;
+// fatal failures arrive as top-level `error` / `turn.failed` events instead.
+export const isNonToolItemType = (type: string) =>
+  type === 'agent_message' || type === CODEX_ERROR_ITEM_TYPE;
 
 export const isImageOutputItem = (item: CodexToolItem): item is CodexImageOutputItem =>
   item.type === 'image_output';
