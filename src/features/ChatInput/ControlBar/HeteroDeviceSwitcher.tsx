@@ -383,6 +383,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     enabled: supportsSandbox && (open || executionTarget === 'sandbox'),
     topicId,
   });
+  const offersPersistentSandbox =
+    supportsSandbox &&
+    (sandboxMode.driveStatus === 'ready' || sandboxMode.driveStatus === 'upgrade');
   const selectSandbox = useCallback(
     (persistent: boolean) =>
       handleSelect('sandbox', undefined, undefined, async () => {
@@ -776,25 +779,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('local', undefined, true)}
         />
       ) : null}
-      <OptionRow
-        active={isActive('sandbox') && !sandboxMode.persistent}
-        disabled={!supportsSandbox}
-        icon={<ExecutionTargetIcon target={'sandbox'} />}
-        label={t('heteroAgent.executionTarget.sandbox')}
-        desc={t(
-          supportsSandbox
-            ? 'heteroAgent.executionTarget.sandboxDesc'
-            : 'heteroAgent.executionTarget.sandboxUnsupported',
-          { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
-        )}
-        onClick={() => void selectSandbox(false)}
-      />
-      {/* The same sandbox, keeping its files on the drive across conversations.
-          Picking it is picking the drive, so the working-directory chip then
-          goes straight to the drive's folders. A plan without a drive sees the
-          row in the same place, tagged, as the way to one. */}
-      {supportsSandbox &&
-      (sandboxMode.driveStatus === 'ready' || sandboxMode.driveStatus === 'upgrade') ? (
+      {/* Two sandboxes on one `sandbox` target, the persistent one first: it is
+          where everyday work belongs, keeping its results and the work behind
+          them on the drive. The temporary one is discarded after use, which
+          suits coding and one-off data processing — a repository's
+          dependencies and build output would only fill the drive. A plan
+          without a drive sees the persistent row in the same place, tagged,
+          as the way to one; with no drive at all only the temporary row is
+          left, described as it always was. */}
+      {offersPersistentSandbox ? (
         <OptionRow
           active={isActive('sandbox') && sandboxMode.persistent}
           desc={t('heteroAgent.executionTarget.persistentSandboxDesc')}
@@ -817,6 +810,21 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           }}
         />
       ) : null}
+      <OptionRow
+        active={isActive('sandbox') && !sandboxMode.persistent}
+        disabled={!supportsSandbox}
+        icon={<ExecutionTargetIcon target={'sandbox'} />}
+        label={t('heteroAgent.executionTarget.sandbox')}
+        desc={t(
+          !supportsSandbox
+            ? 'heteroAgent.executionTarget.sandboxUnsupported'
+            : offersPersistentSandbox
+              ? 'heteroAgent.executionTarget.temporarySandboxDesc'
+              : 'heteroAgent.executionTarget.sandboxDesc',
+          { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
+        )}
+        onClick={() => void selectSandbox(false)}
+      />
       {deviceRows.length > 0 ? (
         showDeviceGroups ? (
           <>

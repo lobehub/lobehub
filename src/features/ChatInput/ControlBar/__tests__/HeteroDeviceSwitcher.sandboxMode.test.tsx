@@ -121,6 +121,28 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
     expect(screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc')).toBeTruthy();
   });
 
+  // The persistent sandbox is where everyday work belongs, so it comes first;
+  // the temporary one is described as the place for coding and one-off work.
+  it('lists the persistent sandbox above the temporary one', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    const persistent = screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc');
+    const temporary = screen.getByText('heteroAgent.executionTarget.temporarySandboxDesc');
+
+    expect(
+      persistent.compareDocumentPosition(temporary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.executionTarget.sandboxDesc')).toBeNull();
+  });
+
+  it('describes the cloud sandbox as before where there is no drive at all', () => {
+    state.driveStatus = 'hidden';
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByText('heteroAgent.executionTarget.sandboxDesc')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.executionTarget.temporarySandboxDesc')).toBeNull();
+  });
+
   it('names the persistent sandbox on the chip when the conversation keeps its files', () => {
     state.persistent = true;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
@@ -142,7 +164,7 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
     state.persistent = true;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    fireEvent.click(screen.getByText('heteroAgent.executionTarget.sandboxDesc'));
+    fireEvent.click(screen.getByText('heteroAgent.executionTarget.temporarySandboxDesc'));
     await vi.waitFor(() => expect(state.toTemporary).toHaveBeenCalledTimes(1));
 
     expect(state.selectTarget.mock.calls[0][0]).toBe('sandbox');
