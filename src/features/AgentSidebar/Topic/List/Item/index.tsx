@@ -637,7 +637,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
-              {id && <SubTopicToggle topicId={id} />}
+              <SubTopicToggle topicId={id} />
               {/* Gated on the SAME boolean that draws the running ring: both say
                   "this row is visibly running", and a row that stopped spinning
                   must not keep counting. The server `runStartedAt` fallback only
@@ -684,7 +684,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
         ) : (
           navItem
         )}
-        {id && <SubTopicChildren openerAgentId={activeAgentId} topicId={id} />}
+        <SubTopicChildren openerAgentId={activeAgentId} topicId={id} />
         {isMobileSurface() && showThreadList && id && (
           <Suspense
             fallback={

@@ -1,26 +1,27 @@
+import type { OpenedSubTopic, SubTopicDetachResult, SubTopicRetireResult } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 type SubTopicRouter = typeof lambdaClient.subTopic;
 
-export type OpenedSubTopic = Awaited<ReturnType<SubTopicRouter['listOpened']['query']>>[number];
-export type SubTopicRetireResult = Awaited<ReturnType<SubTopicRouter['archive']['mutate']>>;
-export type SubTopicDetachResult = Awaited<ReturnType<SubTopicRouter['detach']['mutate']>>;
+export type { OpenedSubTopic, SubTopicDetachResult, SubTopicRetireResult };
 
 /**
  * Sub-topics (`metadata.openedBy`): the sidebar hierarchy, archive / trash /
  * move-to-top-level, and the `lobe-topic` tool's client executor.
  */
 class SubTopicService {
-  listOpened = (openerTopicIds: string[]) =>
+  listOpened = (openerTopicIds: string[]): Promise<OpenedSubTopic[]> =>
     lambdaClient.subTopic.listOpened.query({ openerTopicIds });
 
-  archive = (topicId: string, mode: 'all' | 'self') =>
+  archive = (topicId: string, mode: 'all' | 'self'): Promise<SubTopicRetireResult> =>
     lambdaClient.subTopic.archive.mutate({ mode, topicId });
 
-  trash = (topicId: string, mode: 'all' | 'self') =>
+  trash = (topicId: string, mode: 'all' | 'self'): Promise<SubTopicRetireResult> =>
     lambdaClient.subTopic.trash.mutate({ mode, topicId });
 
-  detach = (topicIds: string[]) => lambdaClient.subTopic.detach.mutate({ topicIds });
+  detach = (topicIds: string[]): Promise<SubTopicDetachResult> =>
+    lambdaClient.subTopic.detach.mutate({ topicIds });
 
   describe = (topicId: string) => lambdaClient.subTopic.describe.query({ topicId });
 

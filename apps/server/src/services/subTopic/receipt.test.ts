@@ -190,7 +190,48 @@ describe('deliverSubTopicReceipt', () => {
     expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('duplicate');
 
     expect(mocks.create).not.toHaveBeenCalled();
+    // Without the receipt queue a second wake would run twice.
     expect(queueWakeup).not.toHaveBeenCalled();
+  });
+
+  it('queues the wake again on a redelivery when the queue makes that a no-op, repairing a lost enqueue', async () => {
+    mocks.findMessage.mockResolvedValue({
+      id: 'subtopic-cb-op_child',
+      metadata: { agentSender: { hop: 2 } },
+    });
+
+    expect(await deliverSubTopicReceipt({ canQueue: () => true, queueWakeup }, params)).toBe(
+      'duplicate',
+    );
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).toHaveBeenCalledWith({
+      agentId: 'agt_lobe',
+      callbackMessageId: 'subtopic-cb-op_child',
+      originTopicId: 'tpc_parent',
+      receiptId: 'subtopic-cb-op_child',
+    });
+  });
+
+  it('keeps the hop bound on a redelivery, using the hop the receipt was written with', async () => {
+    mocks.findMessage.mockResolvedValue({
+      id: 'subtopic-cb-op_child',
+      metadata: { agentSender: { hop: 6 } },
+    });
+
+    await deliverSubTopicReceipt({ canQueue: () => true, queueWakeup }, params);
+
+    expect(queueWakeup).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed enqueue once when the queue makes a retry safe', async () => {
+    queueWakeup.mockRejectedValueOnce(new Error('redis down')).mockResolvedValueOnce(undefined);
+
+    expect(await deliverSubTopicReceipt({ canQueue: () => true, queueWakeup }, params)).toBe(
+      'delivered',
+    );
+
+    expect(queueWakeup).toHaveBeenCalledTimes(2);
   });
 });
 

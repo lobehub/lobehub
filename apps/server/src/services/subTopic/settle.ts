@@ -43,7 +43,13 @@ export const onSubTopicTurnSettled = async (
   const bridge = new ResultWakeChannel(db, userId, workspaceId, deps.execAgent);
 
   try {
-    await deliverSubTopicReceipt({ queueWakeup: (wake) => bridge.queueWakeup(wake) }, params);
+    await deliverSubTopicReceipt(
+      {
+        canQueue: () => ResultWakeChannel.canQueue(),
+        queueWakeup: (wake) => bridge.queueWakeup(wake),
+      },
+      params,
+    );
   } catch (error) {
     log('reporting sub-topic %s failed: %O', topicId, error);
   }

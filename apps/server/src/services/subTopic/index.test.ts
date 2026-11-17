@@ -65,6 +65,7 @@ const createDeps = () =>
     listOpened: vi.fn().mockResolvedValue([]),
     readLastReply: vi.fn().mockResolvedValue('Done.'),
     resolveInterventionConfig: vi.fn().mockResolvedValue({ approvalMode: 'auto-run' }),
+    rollbackWorktree: vi.fn().mockResolvedValue(undefined),
     startOnTopic: vi.fn().mockResolvedValue({ operationId: 'op_turn', success: true }),
     trashTopic: vi.fn().mockResolvedValue(undefined),
   }) satisfies SubTopicDeps;
@@ -149,6 +150,59 @@ describe('SubTopicService.open', () => {
         sessionPath: '/Users/me/.lobehub/worktrees/repo/brave-river',
       },
     });
+  });
+
+  it('takes the new worktree back when the run is refused before a topic exists', async () => {
+    deps.execAgent.mockRejectedValueOnce(new Error('Requested device ignored'));
+
+    await expect(
+      new SubTopicService(deps).open({
+        deviceId: 'dev_mac',
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toThrow('Requested device ignored');
+
+    expect(deps.rollbackWorktree).toHaveBeenCalledWith({
+      branch: expect.stringMatching(/^lobehub\//),
+      deviceId: 'dev_mac',
+      repoPath: '/Users/me/.lobehub/worktrees/repo/quiet-hill',
+      worktreePath: '/Users/me/.lobehub/worktrees/repo/brave-river',
+    });
+  });
+
+  it('also takes it back on a refusal that created no topic, but not once a topic owns it', async () => {
+    deps.execAgent.mockResolvedValueOnce({ error: 'quota', success: false });
+    await expect(
+      new SubTopicService(deps).open({
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toThrow('quota');
+    expect(deps.rollbackWorktree).toHaveBeenCalledTimes(1);
+
+    deps.execAgent.mockResolvedValueOnce({ error: 'boom', success: false, topicId: 'tpc_new' });
+    await expect(
+      new SubTopicService(deps).open({
+        openerTopicId: 'tpc_parent',
+        prompt: 'x',
+        workspace: 'new-worktree',
+      }),
+    ).rejects.toThrow('boom');
+    // The topic records the worktree; its archive / trash cleanup takes it.
+    expect(deps.rollbackWorktree).toHaveBeenCalledTimes(1);
+  });
+
+  it('never touches a directory it did not create', async () => {
+    deps.execAgent.mockRejectedValueOnce(new Error('nope'));
+
+    await expect(
+      new SubTopicService(deps).open({ openerTopicId: 'tpc_parent', prompt: 'x' }),
+    ).rejects.toThrow('nope');
+
+    expect(deps.rollbackWorktree).not.toHaveBeenCalled();
   });
 
   it('records no receipt the device did not confirm', async () => {

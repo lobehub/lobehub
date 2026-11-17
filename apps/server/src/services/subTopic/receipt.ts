@@ -62,7 +62,14 @@ export interface SubTopicReceiptParams {
 }
 
 export interface SubTopicReceiptDeps {
-  /** Shared wake-up channel; see `TaskResultBridgeService.queueWakeup`. */
+  /**
+   * Whether `queueWakeup` goes through the receipt queue, where a repeated
+   * receipt id is a no-op (a delivered one stays recorded for hours). Only
+   * then may a redelivered completion queue its wake again to repair a wake
+   * that failed to enqueue; without the queue a second call would wake twice.
+   */
+  canQueue?: () => boolean;
+  /** Shared wake-up channel; see `ResultWakeChannel.queueWakeup`. */
   queueWakeup: (params: {
     agentId: string;
     callbackMessageId: string;
@@ -139,7 +146,13 @@ export const deliverSubTopicReceipt = async (
   const written = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${opener.id}))`);
     const txMessages = new MessageModel(tx, userId, workspaceId);
-    if (await txMessages.findById(messageId)) return false;
+    const existing = await txMessages.findById(messageId);
+    if (existing) {
+      // The hop the receipt was written with, not the sub-topic's current one.
+      const writtenHop = (existing.metadata as { agentSender?: AgentSenderMetadata } | null)
+        ?.agentSender?.hop;
+      return { hop: writtenHop ?? hop, written: false };
+    }
     const parentId = await txMessages.getLastMainThreadSpineMessageId(opener.id);
     await txMessages.create(
       {
@@ -161,22 +174,43 @@ export const deliverSubTopicReceipt = async (
       },
       messageId,
     );
-    return true;
+    return { hop, written: true };
   });
-  // A redelivered completion: the first delivery already queued (or ran) the wake.
-  if (!written) return 'duplicate';
 
-  if (hop > MAX_AGENT_RELAY_HOPS) {
-    log('sub-topic %s reached the relay bound (hop %d); %s is not woken', topicId, hop, opener.id);
-    return 'hop_limit';
+  // A redelivered completion. The first delivery queued (or ran) the wake —
+  // unless enqueueing failed after the message committed. With the queue a
+  // repeated receipt id is a no-op, so queue it again: a missing wake is
+  // repaired, a delivered or pending one is left as it is.
+  const canRequeue = deps.canQueue?.() ?? false;
+  if (!written.written && !canRequeue) return 'duplicate';
+
+  if (written.hop > MAX_AGENT_RELAY_HOPS) {
+    log(
+      'sub-topic %s reached the relay bound (hop %d); %s is not woken',
+      topicId,
+      written.hop,
+      opener.id,
+    );
+    return written.written ? 'hop_limit' : 'duplicate';
   }
 
-  await deps.queueWakeup({
+  const wake = {
     agentId: opener.agentId,
     callbackMessageId: messageId,
     originTopicId: opener.id,
     receiptId: messageId,
-  });
+  };
+  try {
+    await deps.queueWakeup(wake);
+  } catch (error) {
+    // The message is on the parent's main line; only its wake is missing.
+    // Retry once when the queue makes a retry safe; otherwise the next
+    // redelivery (or the parent's next turn, which reads the main line) picks it up.
+    if (!canRequeue) throw error;
+    log('queueing the wake for %s failed once, retrying: %O', messageId, error);
+    await deps.queueWakeup(wake);
+  }
+  if (!written.written) return 'duplicate';
   log('reported sub-topic %s (%s) to %s', topicId, reason, opener.id);
   return 'delivered';
 };

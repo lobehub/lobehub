@@ -1,4 +1,6 @@
+import type { OpenedSubTopic, SubTopicDetachResult, SubTopicRetireResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -43,6 +45,9 @@ interface CallerCtx {
 }
 
 const LAST_REPLY_WINDOW = 20;
+
+/** Concurrent agent display-field reads behind one sidebar listing. */
+const AGENT_FIELDS_CONCURRENCY = 10;
 
 export const createSubTopicService = (ctx: CallerCtx) => {
   const db = ctx.serverDB;
@@ -111,6 +116,23 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       return content ? content.slice(0, 2000) : undefined;
     },
     resolveInterventionConfig: () => resolveForegroundInterventionConfig(db, ctx.userId),
+    rollbackWorktree: async ({ branch, deviceId, repoPath, worktreePath }) => {
+      try {
+        // A topic that already points at it owns it now: its cleanup decides.
+        if (
+          (await topicModel.countLiveTopicsUsingWorktree({ excludeIds: [], path: worktreePath })) >
+          0
+        )
+          return;
+        const device = deviceRouter.createCaller(callerCtx);
+        const removed = await device.removeGitWorktree({ deviceId, path: repoPath, worktreePath });
+        if (!removed.success) return;
+        // The branch was cut for this run and never used: drop it with the folder.
+        await device.deleteGitBranch({ branch, deviceId, path: repoPath });
+      } catch (error) {
+        console.error('[subTopic] rolling back worktree %s failed: %O', worktreePath, error);
+      }
+    },
     // What `aiAgent.execAgent` does for a non-superseding send; the steer-queue
     // append just before it already authorized this agent and conversation.
     startOnTopic: (params) =>
@@ -191,7 +213,7 @@ export const subTopicRouter = router({
     .use(withScopedPermission('topic:update'))
     .input(z.object({ mode: z.enum(['all', 'self']), topicId: z.string() }))
     .mutation(({ ctx, input }) =>
-      run(async () => {
+      run(async (): Promise<SubTopicRetireResult> => {
         const result = await createSubTopicService(ctx).retire({
           action: 'archive',
           mode: input.mode,
@@ -205,7 +227,7 @@ export const subTopicRouter = router({
     .use(withScopedPermission('topic:update'))
     .input(z.object({ topicIds: z.array(z.string()).min(1).max(100) }))
     .mutation(({ ctx, input }) =>
-      run(async () => {
+      run(async (): Promise<SubTopicDetachResult> => {
         const result = await createSubTopicService(ctx).detach(input.topicIds);
         return { detached: await withAgentTitles(ctx, result.detached) };
       }),
@@ -237,7 +259,7 @@ export const subTopicRouter = router({
    */
   listOpened: subTopicProcedure
     .input(z.object({ openerTopicIds: z.array(z.string()).max(200) }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<OpenedSubTopic[]> => {
       const workspaceId = ctx.workspaceId ?? undefined;
       const rows = await new TopicModel(ctx.serverDB, ctx.userId, workspaceId).listOpenedTopics({
         excludeStatuses: RETIRED_TOPIC_STATUSES,
@@ -246,9 +268,11 @@ export const subTopicRouter = router({
       });
       const agentModel = new AgentModel(ctx.serverDB, ctx.userId, workspaceId);
       const agentIds = [...new Set(rows.map((row) => row.agentId).filter(Boolean))] as string[];
+      // One display-field read per distinct agent, a bounded few at a time.
       const agents = Object.fromEntries(
-        await Promise.all(
-          agentIds.map(async (agentId) => {
+        await pMap(
+          agentIds,
+          async (agentId) => {
             const fields = await agentModel.getAgentDisplayFields(agentId).catch(() => undefined);
             return [
               agentId,
@@ -258,7 +282,8 @@ export const subTopicRouter = router({
                 title: fields?.title ?? fields?.name ?? null,
               },
             ] as const;
-          }),
+          },
+          { concurrency: AGENT_FIELDS_CONCURRENCY },
         ),
       );
 
@@ -328,7 +353,7 @@ export const subTopicRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ mode: z.enum(['all', 'self']), topicId: z.string() }))
     .mutation(({ ctx, input }) =>
-      run(async () => {
+      run(async (): Promise<SubTopicRetireResult> => {
         const result = await createSubTopicService(ctx).retire({
           action: 'trash',
           mode: input.mode,

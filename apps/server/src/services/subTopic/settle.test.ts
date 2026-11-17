@@ -49,7 +49,8 @@ describe('onSubTopicTurnSettled', () => {
     await onSubTopicTurnSettled(params, { execAgent: vi.fn() });
 
     expect(mocks.deliver).toHaveBeenCalledWith(
-      { queueWakeup: expect.any(Function) },
+      // `canQueue` lets a redelivered completion re-queue a wake that failed to enqueue.
+      { canQueue: expect.any(Function), queueWakeup: expect.any(Function) },
       expect.objectContaining({ operationId: 'op_1', topicId: 'tpc_a' }),
     );
     // Only sub-topic receipts pull the wake forward; task callbacks keep their timing.

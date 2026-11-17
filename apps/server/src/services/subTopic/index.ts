@@ -6,9 +6,11 @@ import type {
   ChatTopicMetadata,
   ChatTopicStatus,
   ExecAgentResult,
+  SubTopicState,
   UserInterventionConfig,
   WorkingDirConfig,
 } from '@lobechat/types';
+import pMap from 'p-map';
 
 import type { OpenedTopicItem } from '@/database/models/topic';
 import { pickSandboxPlacement } from '@/server/services/aiAgent/pipeline/sandboxPlacement';
@@ -27,10 +29,13 @@ export type SubTopicWorkspace = 'inherit' | 'new-worktree' | 'none';
 
 export const SUB_TOPIC_TRIGGER = 'sub_topic';
 
+/** Concurrent topic reads behind one "move to top level" request. */
+const FIND_TOPIC_CONCURRENCY = 5;
+
 /** Statuses that take a topic out of the sidebar (archive writes `completed`). */
 export const RETIRED_TOPIC_STATUSES: ChatTopicStatus[] = ['completed', 'archived'];
 
-export type SubTopicState = 'archived' | 'failed' | 'idle' | 'running' | 'waiting_for_user';
+export type { SubTopicState } from '@lobechat/types';
 
 /**
  * What a sub-topic is doing. The latest top-level operation wins while it is
@@ -122,6 +127,17 @@ export interface SubTopicDeps {
   listOpened: (openerTopicIds: string[]) => Promise<OpenedTopicItem[]>;
   readLastReply: (topicId: string) => Promise<string | undefined>;
   resolveInterventionConfig: () => Promise<UserInterventionConfig>;
+  /**
+   * Undo a worktree `open` created when the run it was for never started a
+   * topic: remove the folder and its fresh branch unless some topic already
+   * points at it. Best effort; never throws.
+   */
+  rollbackWorktree: (params: {
+    branch: string;
+    deviceId: string;
+    repoPath: string;
+    worktreePath: string;
+  }) => Promise<void>;
   /** Start a turn on an existing topic without taking it over from a live run. */
   startOnTopic: (params: Record<string, unknown>) => Promise<ExecAgentResult>;
   trashTopic: (topicId: string) => Promise<unknown>;
@@ -242,6 +258,8 @@ export class SubTopicService {
     const deviceId = input.deviceId ?? opener.metadata?.boundDeviceId;
     let initialTopicMetadata: Record<string, unknown> | undefined;
     let branch: string | undefined;
+    /** The worktree made for this sub-topic, until a topic records it. */
+    let createdWorktree: { repoPath: string; worktreePath: string } | undefined;
 
     if (workspace === 'inherit') {
       initialTopicMetadata = inheritWorkingDirectory(opener.metadata);
@@ -275,6 +293,7 @@ export class SubTopicService {
           `Could not create the worktree: ${created.error || 'unknown error'}`,
         );
       }
+      createdWorktree = { repoPath, worktreePath: created.worktreePath };
       // `autoCreated` is what claims the worktree for this topic, so it is
       // cleaned up when the topic is archived or trashed.
       initialTopicMetadata = {
@@ -302,24 +321,39 @@ export class SubTopicService {
       };
     }
 
-    const result = await this.deps.execAgent({
-      agentId,
-      ...(initialTopicMetadata && { appContext: { initialTopicMetadata } }),
-      // `workspace` only decides the directory: a sub-topic stays on the opener's
-      // device (or the one asked for) either way — a device-bound agent such as
-      // Claude Code has nowhere else to run.
-      ...(deviceId && { deviceId }),
-      // A device asked for by name must be the one it runs on: fail rather than
-      // fall back to the cloud when it is offline.
-      ...(input.deviceId && { requireDevice: true }),
-      ...(!input.detach && { openedByTopicId: opener.id }),
-      prompt: input.prompt,
-      ...(input.sourceOperationId && { sourceOperationId: input.sourceOperationId }),
-      ...(input.title && { title: input.title }),
-      ...(!input.detach && { trigger: SUB_TOPIC_TRIGGER }),
-      userInterventionConfig: await this.deps.resolveInterventionConfig(),
-    });
+    // A worktree made for this run is the run's only owner until a topic
+    // records it; if dispatch is refused before that, nothing would ever
+    // clean it up, so take it back here.
+    const rollback = async () => {
+      if (!createdWorktree || !branch || !deviceId) return;
+      await this.deps.rollbackWorktree({ branch, deviceId, ...createdWorktree });
+    };
+
+    let result: ExecAgentResult;
+    try {
+      result = await this.deps.execAgent({
+        agentId,
+        ...(initialTopicMetadata && { appContext: { initialTopicMetadata } }),
+        // `workspace` only decides the directory: a sub-topic stays on the opener's
+        // device (or the one asked for) either way — a device-bound agent such as
+        // Claude Code has nowhere else to run.
+        ...(deviceId && { deviceId }),
+        // A device asked for by name must be the one it runs on: fail rather than
+        // fall back to the cloud when it is offline.
+        ...(input.deviceId && { requireDevice: true }),
+        ...(!input.detach && { openedByTopicId: opener.id }),
+        prompt: input.prompt,
+        ...(input.sourceOperationId && { sourceOperationId: input.sourceOperationId }),
+        ...(input.title && { title: input.title }),
+        ...(!input.detach && { trigger: SUB_TOPIC_TRIGGER }),
+        userInterventionConfig: await this.deps.resolveInterventionConfig(),
+      });
+    } catch (error) {
+      await rollback();
+      throw error;
+    }
     if (!result.success || !result.topicId) {
+      if (!result.topicId) await rollback();
       throw new SubTopicError(
         'BAD_REQUEST',
         `Failed to start the sub-topic: ${result.error || 'unknown error'}`,
@@ -507,9 +541,9 @@ export class SubTopicService {
 
   /** Move sub-topics to the top level. */
   async detach(topicIds: string[]) {
-    const topics = (await Promise.all(topicIds.map((id) => this.deps.findTopic(id)))).filter(
-      (topic): topic is TopicRow => !!topic,
-    );
+    const topics = (
+      await pMap(topicIds, (id) => this.deps.findTopic(id), { concurrency: FIND_TOPIC_CONCURRENCY })
+    ).filter((topic): topic is TopicRow => !!topic);
     const runRows = topics.filter((topic) => topic.trigger === 'task');
     if (runRows.length > 0) {
       throw new SubTopicError(
