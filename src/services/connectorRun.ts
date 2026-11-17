@@ -1,4 +1,5 @@
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { getRunConnectors } from '@/services/runConnectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 /** What routing a call and judging its approval read of the row it runs on. */
@@ -14,6 +15,7 @@ export type RunConnector = Pick<
   | 'metadata'
   | 'sourceType'
   | 'status'
+  | 'toolIdentifier'
   | 'tools'
 >;
 
@@ -37,6 +39,7 @@ export type RunConnector = Pick<
  * Undefined when the server resolves no row.
  */
 export const resolveRunConnector = async (
+  /** The tool's identifier: its connector row's tool prefix. */
   identifier: string,
   { agentId, topicId }: { agentId?: string; topicId?: string } = {},
 ): Promise<RunConnector | undefined> => {
@@ -51,6 +54,12 @@ export const resolveRunConnector = async (
 
   const shared = pick(false);
   if (!agentId || !topicId) return shared;
+
+  // The conversation's server listing names the row of each prefix already
+  const listed = getRunConnectors({ agentId, topicId })?.find(
+    (connector) => connector.toolIdentifier === identifier,
+  );
+  if (listed) return listed;
 
   const own = pick(true);
   if (own?.id === shared?.id && !getActiveWorkspaceId()) return shared;

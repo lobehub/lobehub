@@ -172,24 +172,32 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
     expect(connectorSelectors.connectorByIdentifierForAgent('oauth-market')(s)).toBe(undefined);
   });
 
-  it('skips a private base row when the run may not use one, so the shared row wins', () => {
-    const privateRow = connector({ id: 'private-row', visibility: 'private' });
+  it("resolves each row by its own tool prefix: the shared one's and the private one's", () => {
+    const privateRow = connector({ id: '3f9a1c2e-private', visibility: 'private' });
     const sharedRow = connector({ id: 'shared-row', visibility: 'public' });
     // The shared row listed first: physical order is not a ranking
     const s = state([sharedRow, privateRow]);
 
-    // A public agent's run: the private row must not shadow the shared one
+    // The connector's identifier names the shared row's tool set, in any run
+    for (const includePrivate of [true, false]) {
+      expect(
+        connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a', {
+          includePrivate,
+        })(s)?.id,
+      ).toBe('shared-row');
+    }
+    // The private row is a tool set of its own, under its suffixed prefix
     expect(
-      connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a', {
-        includePrivate: false,
-      })(s)?.id,
-    ).toBe('shared-row');
-    // A private agent's own run resolves its owner's private row first
-    expect(
-      connectorSelectors.connectorByIdentifierForAgent('oauth-market', 'agt_a', {
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market-3f9a1c2e', 'agt_a', {
         includePrivate: true,
       })(s)?.id,
-    ).toBe('private-row');
+    ).toBe('3f9a1c2e-private');
+    // ... which a run that may not use it never resolves
+    expect(
+      connectorSelectors.connectorByIdentifierForAgent('oauth-market-3f9a1c2e', 'agt_a', {
+        includePrivate: false,
+      })(s),
+    ).toBe(undefined);
   });
 
   it('resolves a base connector that is free or mounted by this agent', () => {

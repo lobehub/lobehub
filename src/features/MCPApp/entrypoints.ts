@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { McpAppThreadEntry } from '@lobechat/const/mcpApp';
+import { connectorToolIdentifier } from '@lobechat/types';
 import {
   connectorMcpEndpoint,
   type McpEndpointShape,
@@ -14,6 +15,9 @@ import type { ToolStore } from '@/store/tool/store';
 export interface AppEntrypoint extends McpAppThreadEntry {
   /** Name of the account it opens as, on a connector holding several. */
   accountName?: string;
+  /** The connector it belongs to, as the agent's configuration names it. */
+  connectorIdentifier?: string;
+  /** Its tool's identifier: the connector row's tool prefix. */
   identifier: string;
   /**
    * The account it opens as, on a connector holding several: an entrypoint's
@@ -70,7 +74,9 @@ export const selectMcpAppEntrypoints = (
   if (!enabled) return [];
   const identifiers = new Set([
     ...state.installedPlugins.map((plugin) => plugin.identifier),
-    ...state.connectors.map((connector) => connector.identifier),
+    // Each base row under its tool prefix: a private row is its own app beside
+    // the shared one of its connector
+    ...state.connectors.map((connector) => connectorToolIdentifier(connector)),
     ...(agentId ? (state.agentConnectors[agentId] ?? []) : []).map(
       (connector) => connector.identifier,
     ),
@@ -108,10 +114,11 @@ export const selectMcpAppEntrypoints = (
           ? accounts.map((account) => ({
               ...entry,
               accountName: account.name,
+              connectorIdentifier: connector?.identifier ?? identifier,
               identifier,
               linkId: account.id,
             }))
-          : [{ ...entry, identifier }],
+          : [{ ...entry, connectorIdentifier: connector?.identifier ?? identifier, identifier }],
       );
   });
 };

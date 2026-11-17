@@ -58,28 +58,29 @@ describe('getAppToolCallPolicy — private and shared rows of one connector', ()
     ];
   });
 
-  it('asks when the conversation runs the shared row, though the private one would not', async () => {
+  it("judges the shared row's tool by the shared row, whatever the private one allows", async () => {
     // Regression: the policy ranked the private row first for any agent, so a
-    // public agent's view ran the shared tool with no approval while the server
-    // executed the shared row, which needs one.
-    resolveForRun.mockResolvedValue({ id: 'conn-shared' });
-
+    // public agent's view ran the shared tool with no approval. The two rows
+    // are now separate tool sets: the connector's identifier names the shared one.
     expect(
       await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_public', topicId: 'tpc_1' }),
     ).toBe('confirm');
-    expect(resolveForRun).toHaveBeenCalledWith({
-      agentId: 'agt_public',
-      identifier: 'mail',
-      topicId: 'tpc_1',
-    });
   });
 
-  it("follows the private row when the server runs it in the agent's own topic", async () => {
+  it("follows the private row's tool set when the server runs it in the agent's own topic", async () => {
     resolveForRun.mockResolvedValue({ id: 'conn-private' });
 
     expect(
-      await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_private', topicId: 'tpc_own' }),
+      await getAppToolCallPolicy('mail-connpriv', 'send', {
+        agentId: 'agt_private',
+        topicId: 'tpc_own',
+      }),
     ).toBe('allow');
+    expect(resolveForRun).toHaveBeenCalledWith({
+      agentId: 'agt_private',
+      identifier: 'mail-connpriv',
+      topicId: 'tpc_own',
+    });
   });
 
   it('judges the shared row without asking the server when the call names no topic', async () => {
@@ -92,7 +93,10 @@ describe('getAppToolCallPolicy — private and shared rows of one connector', ()
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     expect(
-      await getAppToolCallPolicy('mail', 'send', { agentId: 'agt_private', topicId: 'tpc_own' }),
+      await getAppToolCallPolicy('mail-connpriv', 'send', {
+        agentId: 'agt_private',
+        topicId: 'tpc_own',
+      }),
     ).toBe('confirm');
   });
 });

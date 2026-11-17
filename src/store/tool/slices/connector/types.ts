@@ -43,6 +43,11 @@ export interface ConnectorWithTools {
   name: string;
   sourceType: string;
   status: string;
+  /**
+   * The row's tool prefix, when the server resolved it for a run
+   * (`connector.listForRun`); otherwise derived with `connectorToolIdentifier`.
+   */
+  toolIdentifier?: string;
   tools: ConnectorTool[];
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;

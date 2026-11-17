@@ -21,6 +21,12 @@ afterEach(() => {
 
 // Mock the store and helper dependencies
 let mockConnectors: any[] = [];
+/** The connector rows the server listed for a conversation (`connector.listForRun`). */
+let mockRunConnectors: any[] | undefined;
+
+vi.mock('@/services/runConnectors', () => ({
+  getRunConnectors: () => mockRunConnectors,
+}));
 
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
@@ -900,7 +906,7 @@ describe('toolEngineering', () => {
           provider: 'openai',
           toolIds: ['ws-linear', 'my-notion'],
         })
-        .enabledToolIds.filter((id) => id === 'ws-linear' || id === 'my-notion')
+        .enabledToolIds.filter((id) => id.startsWith('ws-linear') || id.startsWith('my-notion'))
         .sort();
     };
 
@@ -913,7 +919,8 @@ describe('toolEngineering', () => {
     it("offers them in a private agent's own conversation", () => {
       mockCurrentAgentVisibility = 'private';
 
-      expect(enabledConnectorIds({ scope: 'main' })).toEqual(['my-notion', 'ws-linear']);
+      // A private row is a tool set of its own, under its row-suffixed prefix
+      expect(enabledConnectorIds({ scope: 'main' })).toEqual(['my-notion-mynotion', 'ws-linear']);
     });
 
     it.each([
@@ -952,19 +959,24 @@ describe('toolEngineering', () => {
           .tools?.map((tool) => tool.function.name);
       };
 
-      it("builds the private agent's manifest from the private row, in either list order", () => {
+      it('offers the private agent both rows, each under its own prefix, in either list order', () => {
         // Regression: both rows reached the identifier-keyed manifest map and
-        // the last one won, so the model could get the shared row's schema
-        // while the server ran the private connection.
+        // the last one won, so the model could get one row's schema while the
+        // server ran the other. Each row is now its own tool set.
         mockCurrentAgentVisibility = 'private';
 
         for (const rows of [
           [privateRow, sharedRow],
           [sharedRow, privateRow],
         ]) {
-          const names = toolNames(rows, { scope: 'main' });
-          expect(names?.some((name) => name.includes('search_mine'))).toBe(true);
-          expect(names?.some((name) => name.includes('search_team'))).toBe(false);
+          expect(
+            toolNames(rows, { scope: 'main' })?.filter((name) => name.includes('search')),
+          ).toEqual(
+            expect.arrayContaining([
+              'team-docs____search_team____mcp',
+              'team-docs-teamdocs____search_mine____mcp',
+            ]),
+          );
         }
       });
 
@@ -975,6 +987,67 @@ describe('toolEngineering', () => {
         expect(names?.some((name) => name.includes('search_team'))).toBe(true);
         expect(names?.some((name) => name.includes('search_mine'))).toBe(false);
       });
+    });
+  });
+
+  describe("the conversation's server-listed connector rows", () => {
+    const row = (id: string, toolIdentifier: string, toolName: string, extra = {}) => ({
+      credentials: null,
+      id,
+      identifier: 'github',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example/github',
+      metadata: null,
+      name: 'GitHub',
+      sourceType: 'custom',
+      status: 'connected',
+      toolIdentifier,
+      tools: [
+        {
+          id: `${id}-tool`,
+          inputSchema: { properties: {}, type: 'object' },
+          permission: 'auto',
+          toolName,
+          userConnectorId: id,
+        },
+      ],
+      ...extra,
+    });
+    const toolNames = () =>
+      createToolsEngine({ agentId: 'agt-private', topicId: 'tpc-own' })
+        .generateToolsDetailed({ model: 'gpt-4', provider: 'openai', toolIds: ['github'] })
+        .tools?.map((tool) => tool.function.name)
+        .filter((name) => name.startsWith('github'));
+
+    afterEach(() => {
+      mockRunConnectors = undefined;
+    });
+
+    it("offers a private agent its owner's personal connector, which no workspace list holds", () => {
+      // Regression: client-run chats built connector tools from the workspace
+      // list alone, so the owner's personal connector — which the server runs
+      // in the private agent's own topic — was never offered to the model.
+      mockConnectors = [row('c-shared', 'github', 'list_issues')];
+      mockRunConnectors = [
+        row('c-shared', 'github', 'list_issues'),
+        row('c-personal', 'github-cpersona', 'create_issue', { workspaceId: null }),
+      ];
+
+      expect(toolNames()).toEqual([
+        'github____list_issues____mcp',
+        'github-cpersona____create_issue____mcp',
+      ]);
+    });
+
+    it('offers only what the server listed: a link-shared topic keeps private rows out', () => {
+      mockConnectors = [
+        row('c-shared', 'github', 'list_issues'),
+        row('c-mine', 'github-cmine', 'create_issue', { visibility: 'private' }),
+      ];
+      mockRunConnectors = [row('c-shared', 'github', 'list_issues')];
+
+      expect(toolNames()).toEqual(['github____list_issues____mcp']);
     });
   });
 

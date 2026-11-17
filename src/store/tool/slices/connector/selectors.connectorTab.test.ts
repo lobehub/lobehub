@@ -7,6 +7,7 @@ import {
   isInConnectorTab,
   isIntegrationInConnectorTab,
   pickRunConnectors,
+  pickRunToolSets,
 } from './selectors';
 import type { ConnectorWithTools } from './types';
 
@@ -238,5 +239,38 @@ describe('pickRunConnectors', () => {
     expect(ids(pickRunConnectors([sharedRow, notion], { includePrivate: false }))).toEqual([
       'shared-row',
     ]);
+  });
+});
+
+describe('pickRunToolSets', () => {
+  const prefixes = (rows: { toolIdentifier: string }[]) => rows.map((c) => c.toolIdentifier);
+  const mine = connector({ id: '3f9a1c2e-mine', visibility: 'private' });
+
+  it('keeps the shared and the private row each as its own tool set', () => {
+    expect(prefixes(pickRunToolSets([mine, sharedRow], { includePrivate: true }))).toEqual([
+      'linear-3f9a1c2e',
+      'linear',
+    ]);
+    expect(prefixes(pickRunToolSets([mine, sharedRow], { includePrivate: false }))).toEqual([
+      'linear',
+    ]);
+  });
+
+  it("lets a row mounted on the run's agent stand alone, and leaves out other agents' mounts", () => {
+    const mountedHere = connector({ id: 'z-here', metadata: { mountedByAgentId: 'agt-me' } });
+    const mountedElsewhere = connector({ id: 'a-else', metadata: { mountedByAgentId: 'agt-x' } });
+
+    expect(
+      pickRunToolSets([mine, sharedRow, mountedHere, mountedElsewhere], {
+        agentId: 'agt-me',
+        includePrivate: true,
+      }).map((c) => c.id),
+    ).toEqual(['z-here']);
+    expect(
+      pickRunToolSets([sharedRow, mountedElsewhere], {
+        agentId: 'agt-me',
+        includePrivate: true,
+      }).map((c) => c.id),
+    ).toEqual(['shared-row']);
   });
 });

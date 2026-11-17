@@ -14,6 +14,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import { getUserStoreState } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -273,7 +274,11 @@ export const getAppToolCallPolicy = async (
     agentId &&
     getDisabledPluginIds(
       agentSelectors.getAgentConfigById(agentId)(getAgentStoreState())?.plugins,
-    ).includes(identifier)
+      // The agent disables a connector, not one row's tool prefix
+    ).includes(
+      connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(getToolStoreState())
+        ?.identifier ?? identifier,
+    )
   )
     return 'deny';
   if (fromEntrypoint) {

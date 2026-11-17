@@ -92,11 +92,12 @@ describe('mcpService.invokeMcpToolCall: the connector a conversation runs on', (
     vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(detail as never);
   });
 
-  it('runs the row the server resolves for the conversation, not the one ranked here', async () => {
+  it("runs the shared row's tool on the shared row, the private one beside it", async () => {
     // Regression: a private agent's private row was picked on the agent's
     // visibility alone, so in a conversation the server keeps private rows
     // out of (a group topic) the shared tool ran with the private account.
-    // The server names the row; the desktop runs that one.
+    // The private row is now a tool set of its own: the connector's
+    // identifier names the shared row, whose configuration the server reads.
     const { lambdaClient } = await import('@/libs/trpc/client');
     mockGetToolStoreState.mockReturnValue({
       connectors: [
@@ -125,7 +126,6 @@ describe('mcpService.invokeMcpToolCall: the connector a conversation runs on', (
       identifier: payload.identifier,
       topicId: 'tpc_group',
     };
-    expect(lambdaClient.connector.resolveForRun.query).toHaveBeenCalledWith(run);
     expect(lambdaClient.connector.getForRun.query).toHaveBeenCalledWith(run);
     expect(superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0])).toMatchObject({
       env: { TOKEN: 'shared-secret' },
@@ -195,7 +195,11 @@ describe('mcpService.invokeMcpToolCall: the connector a conversation runs on', (
     });
     mockElectronIpc.mcp.callTool.mockResolvedValue(superjson.serialize({ success: true }));
 
-    await mcpService.invokeMcpToolCall(payload, { agentId: 'agt_private', topicId: 'tpc_own' });
+    // The private row's tool set, under its row-suffixed prefix
+    await mcpService.invokeMcpToolCall(
+      { ...payload, identifier: 'local-connector-connecto' },
+      { agentId: 'agt_private', topicId: 'tpc_own' },
+    );
 
     expect(mockElectronIpc.mcp.callTool).toHaveBeenCalledTimes(1);
     expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();

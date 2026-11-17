@@ -1298,7 +1298,7 @@ describe('StreamingExecutor actions', () => {
         expect.any(Object),
         undefined,
         expect.objectContaining({ executionEnv: 'local' }),
-        { hasOversizedFiles: false },
+        expect.objectContaining({ hasOversizedFiles: false }),
       );
       const localSystem = state.operationToolSet?.manifestMap['lobe-local-system'];
       const readFile = localSystem?.api.find((api: LobeChatPluginApi) => api.name === 'readFile');
@@ -1740,7 +1740,7 @@ describe('StreamingExecutor actions', () => {
 
       createState('x'.repeat(FILE_PREVIEW_CHARS + 1));
 
-      expect(spy.mock.calls.at(-1)?.[3]).toEqual({ hasOversizedFiles: true });
+      expect(spy.mock.calls.at(-1)?.[3]).toMatchObject({ hasOversizedFiles: true });
     });
 
     it('does not enable readAttachment for short attachments', () => {
@@ -1748,7 +1748,7 @@ describe('StreamingExecutor actions', () => {
 
       createState('short note');
 
-      expect(spy.mock.calls.at(-1)?.[3]).toEqual({ hasOversizedFiles: false });
+      expect(spy.mock.calls.at(-1)?.[3]).toMatchObject({ hasOversizedFiles: false });
     });
   });
 

@@ -3,7 +3,7 @@ import {
   isMarketplaceInstallCompleted,
   isMarketplaceInstallRunnable,
 } from '@lobechat/const';
-import type { ConnectorVisibility } from '@lobechat/types';
+import { connectorToolIdentifier, type ConnectorVisibility } from '@lobechat/types';
 
 import type { ToolStoreState } from '../../initialState';
 import type { ToolStore } from '../../store';
@@ -122,6 +122,45 @@ export const pickRunConnectors = <
       byIdentifier.set(connector.identifier, connector);
   }
   return [...byIdentifier.values()];
+};
+
+/**
+ * The connectors a run turns into tool sets from the caller's list, each with
+ * its tool prefix: the client mirror of `ConnectorModel.resolveToolSets` for a
+ * run the server has not listed (`connector.listForRun`). A row mounted on the
+ * run's agent stands alone for its identifier; otherwise each row the run may
+ * use — the shared one and, with `includePrivate`, the caller's private one —
+ * is its own tool set. Rows mounted on another agent take no part.
+ */
+export const pickRunToolSets = <
+  T extends Pick<ConnectorWithTools, 'id' | 'identifier' | 'metadata' | 'visibility'>,
+>(
+  connectors: T[],
+  { agentId, includePrivate }: { agentId?: string; includePrivate: boolean },
+): (T & { toolIdentifier: string })[] => {
+  const eligible = connectors.filter((c) => {
+    if (!includePrivate && c.visibility === 'private') return false;
+    const mount = c.metadata?.mountedByAgentId;
+    return !(typeof mount === 'string' && mount && mount !== agentId);
+  });
+  const mounted = new Set(
+    eligible
+      .filter((c) => agentId && c.metadata?.mountedByAgentId === agentId)
+      .map((c) => c.identifier),
+  );
+  const byPrefix = new Map<string, T & { toolIdentifier: string }>();
+  for (const connector of [...eligible].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    if (mounted.has(connector.identifier) && connector.metadata?.mountedByAgentId !== agentId)
+      continue;
+    const toolIdentifier = connectorToolIdentifier(connector);
+    if (!byPrefix.has(toolIdentifier))
+      byPrefix.set(toolIdentifier, { ...connector, toolIdentifier });
+  }
+  // Keep the list's order
+  return eligible.flatMap((c) => {
+    const kept = byPrefix.get(connectorToolIdentifier(c));
+    return kept && kept.id === c.id ? [kept] : [];
+  });
 };
 
 const connectorByIdentifier =
@@ -260,12 +299,6 @@ const agentConnectors =
   (s: ToolStore): ConnectorWithTools[] =>
     s.agentConnectors?.[agentId] ?? [];
 
-/**
- * The connector a conversation of `agentId` resolves `identifier` to, mirroring
- * the server's agent-aware resolution: the agent's own row first (agent-owned
- * over mounted), else the base connector. Agent tools are only known once that
- * agent's list has loaded.
- */
 /** Mounted (locked) to an agent other than `agentId`; without one, to any agent. */
 const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string) => {
   const mountedBy = connector.metadata?.mountedByAgentId;
@@ -273,8 +306,17 @@ const isMountedByAnotherAgent = (connector: ConnectorWithTools, agentId?: string
   return typeof mountedBy === 'string' && mountedBy !== '' && mountedBy !== agentId;
 };
 
+/**
+ * The connector a conversation of `agentId` runs a tool of `identifier` on,
+ * mirroring the server's resolution: the agent's own row first (agent-owned
+ * over mounted), else the base row whose tool prefix is `identifier`
+ * (`connectorToolIdentifier`) — a private row is its own tool set beside the
+ * shared one of its connector, so the prefix names the row. Agent tools are
+ * only known once that agent's list has loaded.
+ */
 const connectorByIdentifierForAgent =
   (
+    /** A tool's identifier: its connector row's tool prefix. */
     identifier: string,
     agentId?: string,
     /**
@@ -296,20 +338,16 @@ const connectorByIdentifierForAgent =
     // server's scope rule has it (`ConnectorModel.scopePredicate`).
     const baseRows = (s.connectors ?? []).filter(
       (c) =>
-        c.identifier === identifier &&
+        connectorToolIdentifier(c) === identifier &&
         !isMountedByAnotherAgent(c, agentId) &&
         (includePrivate || c.visibility !== 'private'),
     );
 
+    // Duplicate shared rows of one identifier: the lowest id, as the server keeps
     return (
       agentRows.find((c) => c.agentId === agentId) ??
       agentRows[0] ??
-      // Rank base rows the way `ConnectorModel.pickByPriority` does: the owner's
-      // private row shadows the shared one. Row order is not a ranking — with a
-      // shared row first, desktop IPC would run that row's command and
-      // credentials while the server resolves the private account.
-      baseRows.find((c) => c.visibility === 'private') ??
-      baseRows[0]
+      baseRows.sort((a, b) => (a.id < b.id ? -1 : 1))[0]
     );
   };
 

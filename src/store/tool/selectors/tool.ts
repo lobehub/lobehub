@@ -11,6 +11,7 @@ import {
   isToolAvailableInCurrentEnv,
 } from '@/helpers/toolAvailability';
 import { buildClientConnectorManifests } from '@/helpers/toolEngineering/buildClientConnectorManifests';
+import { getAllRunConnectors } from '@/services/runConnectors';
 import { type MetaData } from '@/types/meta';
 import { type LobeToolMeta } from '@/types/tool/tool';
 
@@ -62,10 +63,21 @@ const getMetaById =
 
 /**
  * The MCP connectors chat can run, as the tools engine offers them: custom
- * ones and finished marketplace installs (every MCP install lands here now).
+ * ones and finished marketplace installs (every MCP install lands here now),
+ * one manifest per row under its tool prefix. Rows the server listed for a
+ * conversation (`connector.listForRun`, a private agent's owner's personal
+ * connectors among them) join the local ones, so a call naming any row's
+ * prefix resolves.
  */
-const executableConnectorManifests = (s: ToolStoreState): ToolManifest[] =>
-  buildClientConnectorManifests(connectorSelectors.executableMcpConnectors(s));
+const executableConnectorManifests = (s: ToolStoreState): ToolManifest[] => {
+  const local = connectorSelectors.executableMcpConnectors(s);
+  const known = new Set(local.map((c) => c.id));
+  const listed = connectorSelectors.executableMcpConnectors({
+    connectors: getAllRunConnectors().filter((c) => !known.has(c.id) && !!known.add(c.id)),
+    installedPlugins: s.installedPlugins,
+  });
+  return buildClientConnectorManifests([...local, ...listed]);
+};
 
 /**
  * A connector-only identifier is read from its connector; one that still has

@@ -1,4 +1,4 @@
-import { getDisabledPluginIds } from '@lobechat/types';
+import { connectorToolIdentifier, getDisabledPluginIds } from '@lobechat/types';
 import { useEffect } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -37,7 +37,7 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
     const state = getToolStoreState();
     for (const row of [...connectors, ...(agentId ? (agentConnectors[agentId] ?? []) : [])]) {
       const connector = connectorSelectors.connectorByIdentifierForAgent(
-        row.identifier,
+        row.agentId ? row.identifier : connectorToolIdentifier(row),
         agentId,
       )(state);
       if (connector?.id !== row.id || !connector.isEnabled) continue;
@@ -69,6 +69,8 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
     }
   }, [enabled, plugins, pluginsConfirmed, connectors, agentConnectors, agentId]);
   return selectMcpAppEntrypoints(getToolStoreState(), enabled, agentId).filter(
-    (entry) => !getDisabledPluginIds(agentPlugins).includes(entry.identifier),
+    // The agent disables a connector, not one row's tool prefix
+    (entry) =>
+      !getDisabledPluginIds(agentPlugins).includes(entry.connectorIdentifier ?? entry.identifier),
   );
 };

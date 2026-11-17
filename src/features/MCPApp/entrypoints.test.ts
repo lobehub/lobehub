@@ -41,7 +41,9 @@ describe('sidebar app entries', () => {
       },
     );
     expect(selectMcpAppEntrypoints(inaccessible as ToolStore, false)).toEqual([]);
-    expect(selectMcpAppEntrypoints(state, true)).toEqual([{ ...entry, identifier: 'notes' }]);
+    expect(selectMcpAppEntrypoints(state, true)).toEqual([
+      { ...entry, connectorIdentifier: 'notes', identifier: 'notes' },
+    ]);
   });
   it('uses the agent connector and hides disabled tools even if a plugin declares the entry', () => {
     const connector = {
@@ -89,11 +91,23 @@ describe('sidebar app entries', () => {
         true,
       ),
     ).toEqual([
-      { ...entry, accountName: 'Work', identifier: 'mail', linkId: 'lnk_a' },
-      { ...entry, accountName: 'Personal', identifier: 'mail', linkId: 'lnk_b' },
+      {
+        ...entry,
+        accountName: 'Work',
+        connectorIdentifier: 'mail',
+        identifier: 'mail',
+        linkId: 'lnk_a',
+      },
+      {
+        ...entry,
+        accountName: 'Personal',
+        connectorIdentifier: 'mail',
+        identifier: 'mail',
+        linkId: 'lnk_b',
+      },
     ]);
     expect(selectMcpAppEntrypoints(connector([{ id: 'lnk_a', name: 'Work' }]), true)).toEqual([
-      { ...entry, identifier: 'mail' },
+      { ...entry, connectorIdentifier: 'mail', identifier: 'mail' },
     ]);
   });
   it("keeps an entry's account in its tab", () => {

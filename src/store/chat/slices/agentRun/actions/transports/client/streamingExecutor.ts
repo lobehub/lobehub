@@ -41,6 +41,7 @@ import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
 import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
+import { refreshRunConnectors } from '@/services/runConnectors';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -274,7 +275,7 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      { hasOversizedFiles: hasPreviewableFiles(messages) },
+      { hasOversizedFiles: hasPreviewableFiles(messages), ...(topicId && { topicId }) },
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
@@ -603,6 +604,9 @@ export class StreamingExecutorActionImpl {
     // without rechecking capability. Wait (bounded) for the list so a fast first
     // send after reload never attaches tools to a model that can't use them.
     await getAiInfraStoreState().ensureAiProviderRuntimeStateReady();
+    // The connector rows this conversation may run, as the server resolves
+    // them (bounded; the local lists stand in on a timeout or failure)
+    await refreshRunConnectors({ agentId, topicId: topicId ?? undefined });
 
     // ===========================================
     // Step 1: Create Agent State (resolves config once)

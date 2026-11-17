@@ -20,6 +20,7 @@ import {
 
 import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import { getRunConnectors } from '@/services/runConnectors';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentChatConfigSelectors,
@@ -34,7 +35,11 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { connectorSelectors, pickRunConnectors } from '@/store/tool/slices/connector';
+import {
+  connectorSelectors,
+  pickRunConnectors,
+  pickRunToolSets,
+} from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -79,6 +84,11 @@ export interface ToolsEngineConfig {
    * (e.g. UI token estimation) — they get the full static manifests.
    */
   manifestContext?: BuiltinToolResolveContext;
+  /**
+   * The conversation's topic: with `agentId`, the connector rows the server
+   * listed for it (`connector.listForRun`) are the run's tool sets.
+   */
+  topicId?: string;
 }
 
 /**
@@ -89,6 +99,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     enableChecker,
     additionalManifests = [],
     agentId,
+    topicId,
     defaultToolIds,
     disabledPluginIds = [],
     includePrivateConnectors = false,
@@ -102,17 +113,26 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   const toolStoreState = getToolStoreState();
 
-  // The row each identifier runs on, as the server picks it: a private and a
-  // shared row of one identifier resolve to the private one in a private
-  // agent's own conversation, and only the shared one elsewhere. Manifests and
-  // permissions are keyed by identifier, so both come from that row, or the
-  // model would see one row's schema and approval policy while the server
-  // executes the other.
+  // The row each identifier runs on for tools another path executes (plugins,
+  // Composio, LobeHub skills), whose permissions are keyed by identifier.
   const runConnectors = pickRunConnectors(connectorSelectors.connectorList(toolStoreState), {
     agentId,
     includePrivate: includePrivateConnectors,
   });
-  const runConnectorIds = new Set(runConnectors.map((c) => c.id));
+
+  // The connector tool sets: one per row the run may use, each under its own
+  // tool prefix. The conversation's server listing decides which rows those
+  // are — only it can tell whether this conversation may run the caller's own
+  // connections, and only it holds their personal ones; without a listing the
+  // local list stands in, split per row the way the server splits it.
+  const executable = connectorSelectors.executableMcpConnectors(toolStoreState);
+  const listed = agentId ? getRunConnectors({ agentId, topicId }) : undefined;
+  const connectorToolSets = listed
+    ? connectorSelectors.executableMcpConnectors({
+        connectors: listed,
+        installedPlugins: toolStoreState.installedPlugins,
+      })
+    : pickRunToolSets(executable, { agentId, includePrivate: includePrivateConnectors });
 
   // Per-connector tool permissions, keyed by connector identifier: community-
   // MCP plugins execute outside the connector path, so the user's
@@ -133,11 +153,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
       composio: composioStoreSelectors
         .composioAsLobeTools(toolStoreState)
         .map((tool) => tool.manifest as LobeToolManifest),
-      connectors: buildClientConnectorManifests(
-        connectorSelectors
-          .executableMcpConnectors(toolStoreState)
-          .filter((connector) => runConnectorIds.has(connector.id)),
-      ) as LobeToolManifest[],
+      connectors: buildClientConnectorManifests(connectorToolSets) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,
       ) as LobeToolManifest[],
@@ -183,6 +199,8 @@ export const createAgentToolsEngine = (
      * `readAttachment` so the preview can be paged, as the server's tool discovery does.
      */
     hasOversizedFiles?: boolean;
+    /** The conversation's topic: its server-listed connector rows are the run's tool sets. */
+    topicId?: string;
   } = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
@@ -230,6 +248,7 @@ export const createAgentToolsEngine = (
 
   return createToolsEngine({
     agentId: activeAgentId || undefined,
+    topicId: options.topicId,
     defaultToolIds: resolved.defaultToolIds,
     disabledPluginIds: [...resolved.excludedIdentifiers],
     // A private agent's own conversation only: a group or sub-agent run writes
