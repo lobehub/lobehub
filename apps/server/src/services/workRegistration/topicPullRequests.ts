@@ -1,4 +1,5 @@
 import type {
+  ScmChangeRequestMetadata,
   ScmChangeRequestSnapshot,
   ScmCiStatus,
   ScmReviewDecision,
@@ -14,6 +15,7 @@ import { ScmChangeRequestModel } from '@/database/models/scm';
 import type { TopicModel } from '@/database/models/topic';
 import { parseGitPushResult, type WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
+import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 
 import {
   createShellPullRequestLinking,
@@ -33,11 +35,28 @@ type ScmChangeRequestState = Pick<
   'isDraft' | 'mergedAt' | 'number' | 'repoFullName' | 'state' | 'title'
 > & {
   ciStatus?: ScmCiStatus | null;
+  id: string;
+  metadata?: ScmChangeRequestMetadata | null;
   reviewDecision?: ScmReviewDecision | null;
+  topicId?: string | null;
   updatedAt: Date;
+  wakeCount: number;
 };
 
-const toScmState = (row: ScmChangeRequestState): TopicPullRequestScmState => ({
+type OwnerTopic = TopicPullRequestScmState['autoFix']['ownerTopic'];
+
+const toScmState = (
+  row: ScmChangeRequestState,
+  ownerTopic: OwnerTopic,
+): TopicPullRequestScmState => ({
+  autoFix: {
+    changeRequestId: row.id,
+    enabled: row.metadata?.autoFix !== false,
+    maxWakes: SCM_MAX_WAKES,
+    ownerTopic,
+    ownerTopicId: row.topicId ?? null,
+    wakeCount: row.wakeCount,
+  },
   ciStatus: row.ciStatus ?? null,
   isDraft: row.isDraft ?? false,
   mergedAt: row.mergedAt ?? null,
@@ -70,7 +89,9 @@ const toLinkItem = (link: TopicPullRequestLinkMeta): TopicPullRequestWork | null
  * from it — latest link first, each with the GitHub App's state when an
  * installation the scope can see tracks the repository. `scm: null` means "not
  * confirmed here": the client then asks the execution device, and only
- * confirmed, vouched data may enable merge / close.
+ * confirmed, vouched data may enable merge / close. A tracked PR also carries
+ * its Auto-fix state and the conversation that Auto-fix wakes — named when it
+ * is another conversation the viewer can open.
  */
 export const listTopicPullRequestsWithStatus = async (params: {
   db: LobeChatDatabase;
@@ -109,9 +130,23 @@ export const listTopicPullRequestsWithStatus = async (params: {
   );
   const byIdentity = new Map(rows.map((row) => [identityKey(row.repoFullName, row.number), row]));
 
+  // Scoped to the viewer: a conversation they cannot open stays unnamed.
+  const otherTopicIds = [
+    ...new Set(
+      rows.flatMap((row) => (row.topicId && row.topicId !== params.topicId ? [row.topicId] : [])),
+    ),
+  ];
+  const otherTopics = new Map(
+    (await params.topicModel.findByIds(otherTopicIds)).map((topic) => [
+      topic.id,
+      { agentId: topic.agentId ?? null, id: topic.id, title: topic.title ?? null },
+    ]),
+  );
+
   return items.map(({ item, vouched }) => {
     const row = byIdentity.get(identityKey(item.repoFullName, item.number));
-    return { ...item, scm: row ? toScmState(row) : null, vouched };
+    const ownerTopic = row?.topicId ? (otherTopics.get(row.topicId) ?? null) : null;
+    return { ...item, scm: row ? toScmState(row, ownerTopic) : null, vouched };
   });
 };
 

@@ -338,6 +338,8 @@ export class ScmChangeRequestModel {
           eq(scmChangeRequests.state, 'open'),
           eq(scmChangeRequests.isDraft, false),
           lt(scmChangeRequests.wakeCount, maxWakes),
+          // Auto-fix turned off for this pull request: nothing will wake it.
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') <> 'false'`,
           ownedByScope(scope),
         ),
       )
@@ -1026,6 +1028,44 @@ export class ScmChangeRequestModel {
         updatedAt: new Date(),
       })
       .where(eq(scmChangeRequests.id, id));
+  };
+
+  /**
+   * Turn Auto-fix on or off for one change request the scope owns — the
+   * tenant whose conversation it wakes. Atomic on the metadata bag, like
+   * every other writer here. Turning it off drops a wake the debounce window
+   * is still holding, so an opt-out is never followed by a run; turning it
+   * back on from off starts the wake count over, since the person asked the
+   * agent to keep fixing. Returns `null` when the scope does not own the row.
+   */
+  static setAutoFix = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    id: string,
+    enabled: boolean,
+  ): Promise<{ autoFix: boolean; wakeCount: number } | null> => {
+    const wasOff = sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') = 'false'`;
+    const flag = sql`${JSON.stringify({ autoFix: enabled })}::jsonb`;
+
+    const [updated] = await db
+      .update(scmChangeRequests)
+      .set(
+        enabled
+          ? {
+              metadata: sql`${scmChangeRequests.metadata} || ${flag}`,
+              updatedAt: new Date(),
+              wakeCount: sql`case when ${wasOff} then 0 else ${scmChangeRequests.wakeCount} end`,
+            }
+          : {
+              metadata: sql`(${scmChangeRequests.metadata} - 'pendingWake') || ${flag}`,
+              updatedAt: new Date(),
+            },
+      )
+      .where(and(eq(scmChangeRequests.id, id), ownedByScope(scope)))
+      .returning({ metadata: scmChangeRequests.metadata, wakeCount: scmChangeRequests.wakeCount });
+
+    if (!updated) return null;
+    return { autoFix: updated.metadata?.autoFix !== false, wakeCount: updated.wakeCount };
   };
 
   /** Hand a reserved wake back when the run never started. */

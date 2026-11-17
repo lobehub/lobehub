@@ -19,8 +19,13 @@ vi.mock('@/database/models/scm', () => ({
 }));
 
 const db = {} as any;
-const topicModelWith = (pullRequests?: unknown) =>
-  ({ findById: vi.fn(async () => ({ metadata: pullRequests ? { pullRequests } : {} })) }) as any;
+const topicModelWith = (pullRequests?: unknown, visibleTopics: Record<string, unknown>[] = []) =>
+  ({
+    findById: vi.fn(async () => ({ metadata: pullRequests ? { pullRequests } : {} })),
+    findByIds: vi.fn(async (ids: string[]) =>
+      visibleTopics.filter((topic) => ids.includes(topic.id as string)),
+    ),
+  }) as any;
 
 const workItem = (number: number, repoFullName = 'lobehub/lobehub') => ({
   identifier: `${repoFullName}#${number}`,
@@ -45,14 +50,18 @@ describe('listTopicPullRequestsWithStatus', () => {
     listByIdentities.mockResolvedValue([
       {
         ciStatus: 'failure',
+        id: 'scr-1',
         isDraft: false,
         mergedAt: null,
+        metadata: {},
         number: 1,
         repoFullName: 'LobeHub/LobeHub',
         reviewDecision: 'approved',
         state: 'open',
         title: 'From the App',
+        topicId: 't1',
         updatedAt,
+        wakeCount: 1,
       },
     ]);
 
@@ -70,6 +79,14 @@ describe('listTopicPullRequestsWithStatus', () => {
       { number: 2, repoFullName: 'lobehub/lobehub' },
     ]);
     expect(items[0].scm).toEqual({
+      autoFix: {
+        changeRequestId: 'scr-1',
+        enabled: true,
+        maxWakes: 3,
+        ownerTopic: null,
+        ownerTopicId: 't1',
+        wakeCount: 1,
+      },
       ciStatus: 'failure',
       isDraft: false,
       mergedAt: null,
@@ -80,6 +97,56 @@ describe('listTopicPullRequestsWithStatus', () => {
     });
     expect(items[1].scm).toBeNull();
     expect(items.every((item) => item.vouched)).toBe(true);
+  });
+
+  it('reports Auto-fix off and names the other conversation it wakes, when visible', async () => {
+    const workModel = {
+      listTopicPullRequests: vi.fn(async () => [workItem(1), workItem(2), workItem(3)]),
+    } as any;
+    const row = (number: number, extra: Record<string, unknown>) => ({
+      id: `scr-${number}`,
+      isDraft: false,
+      metadata: {},
+      number,
+      repoFullName: 'lobehub/lobehub',
+      state: 'open',
+      topicId: null,
+      updatedAt: new Date(),
+      wakeCount: 0,
+      ...extra,
+    });
+    listByIdentities.mockResolvedValue([
+      row(1, { metadata: { autoFix: false }, topicId: 'other' }),
+      row(2, { topicId: 'hidden' }),
+      row(3, {}),
+    ]);
+    const topicModel = topicModelWith(undefined, [
+      { agentId: 'agt-2', id: 'other', title: 'Other conversation' },
+    ]);
+
+    const items = await listTopicPullRequestsWithStatus({
+      db,
+      topicId: 't1',
+      topicModel,
+      userId: 'u1',
+      workModel,
+    });
+
+    expect(topicModel.findByIds).toHaveBeenCalledWith(['other', 'hidden']);
+    expect(items.map((item) => item.scm?.autoFix)).toEqual([
+      {
+        changeRequestId: 'scr-1',
+        enabled: false,
+        maxWakes: 3,
+        ownerTopic: { agentId: 'agt-2', id: 'other', title: 'Other conversation' },
+        ownerTopicId: 'other',
+        wakeCount: 0,
+      },
+      // Woken elsewhere, but not a conversation this viewer can open.
+      expect.objectContaining({ enabled: true, ownerTopic: null, ownerTopicId: 'hidden' }),
+      // Tracked, but no conversation to wake.
+      expect.objectContaining({ ownerTopic: null, ownerTopicId: null }),
+    ]);
   });
 
   it('adds the topic links, hides removed PRs, and keeps the latest link first', async () => {
