@@ -7,14 +7,13 @@ import { inboundWebhookService } from '@/services/inboundWebhook';
 export const AGENT_WEBHOOKS_SWR_KEY = 'agent-webhooks';
 
 /**
- * One agent's generic webhooks, newest first, plus the local edits the page makes. Changes patch
+ * One agent's custom webhooks (every agent's, without `agentId`), newest first, plus the local edits the page makes. Changes patch
  * the cached list in place, so the other webhooks do not jump while one is being handled.
  */
-export const useAgentWebhooks = (agentId: string) => {
+export const useAgentWebhooks = (agentId?: string) => {
   const { data, error, isLoading, mutate } = useClientDataSWR<InboundWebhookItem[]>(
-    [AGENT_WEBHOOKS_SWR_KEY, agentId],
-    async () =>
-      (await inboundWebhookService.list(agentId)).filter((item) => item.kind === 'generic'),
+    agentId ? [AGENT_WEBHOOKS_SWR_KEY, agentId] : [AGENT_WEBHOOKS_SWR_KEY],
+    () => inboundWebhookService.list('generic', agentId),
   );
 
   const addRow = (item: InboundWebhookItem) =>

@@ -40,6 +40,7 @@ export const linkPushedPullRequests = async (params: {
         ? [
             {
               headRefName,
+              ...(pr.headRepoFullName ? { headRepoFullName: pr.headRepoFullName } : {}),
               isDraft: pr.isDraft,
               number: pr.number,
               state: pr.state,

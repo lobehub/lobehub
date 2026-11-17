@@ -33,6 +33,7 @@ import {
   Trash2,
   Users,
   UsersRound,
+  WebhookIcon,
   ZapIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
@@ -272,6 +273,12 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: ZapIcon,
               key: WorkspaceSettingsTabs.Automations,
               label: t('tab.automations'),
+            },
+            // The workspace's agents' webhooks; made on each agent's page, managed here too.
+            enableWebhook && {
+              icon: WebhookIcon,
+              key: WorkspaceSettingsTabs.Webhooks,
+              label: t('tab.webhooks'),
             },
             {
               icon: KeyRound,

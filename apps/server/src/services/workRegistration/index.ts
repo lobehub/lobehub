@@ -34,6 +34,11 @@ export {
 export { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 export { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
 export {
+  linkTopicPullRequest,
+  parsePullRequestUrl,
+  setTopicPullRequestDismissed,
+} from './topicPullRequestLinks';
+export {
   type DeviceReportedPullRequest,
   linkPushedPullRequests,
   type LinkPushedPullRequestsResult,

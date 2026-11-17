@@ -58,6 +58,9 @@ describe('resolveAutomationStatus', () => {
       resolveAutomationStatus({ lastError: 'insufficient_budget', status: 'error' }).remedy,
     ).toBe('none');
     expect(resolveAutomationStatus({ lastError: 'wake_cap', status: 'error' }).remedy).toBe('none');
+    expect(
+      resolveAutomationStatus({ lastError: 'channel_unavailable', status: 'active' }),
+    ).toMatchObject({ reasonKey: 'automations.error.channel_unavailable', remedy: 'none' });
   });
 
   it('reads an error row without a recorded cause as unknown', () => {

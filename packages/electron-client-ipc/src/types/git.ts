@@ -23,6 +23,10 @@ export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknow
 
 export interface GitLinkedPullRequest {
   ciStatus?: GitPullRequestCiStatus;
+  /** The PR's head branch on GitHub */
+  headRefName?: string;
+  /** `owner/repo` of the PR's head branch — not the PR's own repo for a fork PR */
+  headRepoFullName?: string;
   isDraft?: boolean;
   mergeable?: string;
   mergedAt?: string | null;
@@ -41,6 +45,8 @@ export interface GitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
+  /** `owner/repo` of the GitHub remote the branch publishes to, when it is one */
+  remoteRepoFullName?: string;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
   status: GitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found */
@@ -344,8 +350,25 @@ export interface GitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** `cleanupOwnedWorktree`: an app-created worktree removed, kept dirty, or refused. */
+export interface GitOwnedWorktreeCleanupResult {
+  branch?: string;
+  dirtyFiles?: number;
+  error?: string;
+  outcome: 'dirty' | 'error' | 'locked' | 'refused' | 'removed';
+  unpushedSubmodules?: number;
+}
+
+/** `restoreOwnedWorktree`: an app-created worktree checked out again at its path. */
+export interface GitOwnedWorktreeRestoreResult {
+  error?: string;
+  outcome: 'branchMissing' | 'error' | 'refused' | 'restored';
+}
+
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
   /** Echo of the start point the worktree's branch was cut from, when one was requested. */
   startPoint?: string;
   success: boolean;

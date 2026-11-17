@@ -45,6 +45,8 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 @home         # Home 模块
 @community    # 社区模块
 @routes       # 核心路由
+@perf         # 渲染预算（React Profiler），见下方「渲染预算」
+@perf-local   # 仅本地的长列表渲染预算：默认套件和 CI 都不跑，`bun run test:perf:local` 单独串行跑，预算在 src/performance/budgets.ts
 ```
 
 ### 渲染预算（`@perf`）

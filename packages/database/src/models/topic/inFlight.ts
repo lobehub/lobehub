@@ -31,7 +31,10 @@ export const getTopicRunDirectories = (
  * Same test as the project-directory guards (`isTopicInFlight`): a running
  * status, a live run marker, or a turn start that holds the short reservation.
  */
-const isInFlight = (topic: { metadata: ChatTopicMetadata | null; status: string | null }) =>
+export const isInFlight = (topic: {
+  metadata: ChatTopicMetadata | null | undefined;
+  status: string | null;
+}) =>
   topic.status === 'running' ||
   !!topic.metadata?.runningOperation ||
   hasLiveTaskCallbackReservation(topic.metadata);

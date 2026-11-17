@@ -13,6 +13,11 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
 import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 
+import {
+  CHANNEL_DELIVERY_INSTRUCTION,
+  CHANNEL_DELIVERY_INTERVENTION,
+  createWebhookChannelReportHook,
+} from './channelDelivery';
 import { getInboundWebhookKind } from './kinds';
 import type { InboundWebhookKindHandler } from './kinds/types';
 import { removeInboundWebhook } from './lifecycle';
@@ -311,16 +316,24 @@ async function runClaim(
         await model.releaseWake(id, reserved);
         return { outcome: 'deferred' };
       }
+      // A webhook that delivers to a Channel posts the run's answer there once it completes.
+      const delivery = claim.row.config.delivery;
       const result = await execute({
         agentId: row.agentId,
         ...(run.topicId ? { appContext: { topicId: run.topicId } } : {}),
         autoStart: true,
         markTopicRunning: true,
         externalOrigin: run.externalOrigin,
+        ...(delivery && {
+          hooks: [createWebhookChannelReportHook(db, id)],
+          instructions: CHANNEL_DELIVERY_INSTRUCTION,
+        }),
         prompt: run.prompt,
         ...(run.title !== undefined ? { title: run.title } : {}),
         trigger: kind.trigger,
-        userInterventionConfig: run.userInterventionConfig,
+        userInterventionConfig: delivery
+          ? CHANNEL_DELIVERY_INTERVENTION
+          : run.userInterventionConfig,
         ...(run.webhookThread ? { webhookThread: run.webhookThread } : {}),
       });
       if (result.error) throw result.error;

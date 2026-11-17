@@ -28,6 +28,7 @@ import ServiceModelSkeleton from './ServiceModel';
 import SkillSkeleton from './Skill';
 import StatsSkeleton from './Stats';
 import StorageSkeleton from './Storage';
+import SubscriptionAccountsSkeleton from './SubscriptionAccounts';
 import SystemToolsSkeleton from './SystemTools';
 import ToolsSkeleton from './Tools';
 import TrashSkeleton from './Trash';
@@ -43,6 +44,8 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.APIKey]: APIKeySkeleton,
   [SettingsTabs.Appearance]: AppearanceSkeleton,
   [SettingsTabs.Automations]: AutomationsSkeleton,
+  // The same list surface.
+  [SettingsTabs.Webhooks]: AutomationsSkeleton,
   [SettingsTabs.Billing]: BillingSkeleton,
   [SettingsTabs.Connector]: ConnectorSkeleton,
   [SettingsTabs.Credits]: CreditsSkeleton,
@@ -66,6 +69,7 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.Skill]: SkillSkeleton,
   [SettingsTabs.Stats]: StatsSkeleton,
   [SettingsTabs.Storage]: StorageSkeleton,
+  [SettingsTabs.SubscriptionAccounts]: SubscriptionAccountsSkeleton,
   [SettingsTabs.SystemTools]: SystemToolsSkeleton,
   [SettingsTabs.Tools]: ToolsSkeleton,
   [SettingsTabs.Trash]: TrashSkeleton,

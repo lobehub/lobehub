@@ -1,4 +1,5 @@
 import { addClassNamesToElement } from '@lexical/utils';
+import { formatImageRef } from '@lobechat/const/imageRef';
 import { getKernelFromEditor } from '@lobehub/editor';
 import type { HeadlessRenderableNode, HeadlessRenderContext } from '@lobehub/editor/renderer';
 import {
@@ -21,8 +22,7 @@ export type SerializedImageRefTagNode = Spread<
   SerializedLexicalNode
 >;
 
-/** Text the model receives for an inline image reference, e.g. `[Image #2]`. */
-export const formatImageRef = (number: number) => `[Image #${number}]`;
+export { formatImageRef };
 
 /**
  * An inline reference to one of the draft's image uploads, rendered as a small

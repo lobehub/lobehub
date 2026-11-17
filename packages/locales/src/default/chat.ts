@@ -1009,10 +1009,6 @@ export default {
   'inactive': 'Inactive',
   'inbox.desc': 'Collaborate in one Workspace and move ideas into outcomes.',
   'inbox.title': 'Lobe AI',
-  'input.addAi': 'Add an AI message',
-  'input.addAiPrefillUnsupported':
-    'The current model doesn’t support ending the conversation with an assistant message. Follow it with a user message before sending.',
-  'input.addUser': 'Add a user message',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
   'input.agentRunFeeUnfunded.desc':
@@ -1072,7 +1068,12 @@ export default {
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
   'input.sendWithEnter': 'Press <key/> to send',
+  'input.running': 'Agent is running',
   'input.stop': 'Stop',
+  'input.uploadFailedNotSent_one':
+    '{{count}} attachment failed to upload and was not sent. It stays in the input to retry or remove.',
+  'input.uploadFailedNotSent_other':
+    '{{count}} attachments failed to upload and were not sent. They stay in the input to retry or remove.',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
@@ -3915,6 +3916,18 @@ export default {
   'workingPanel.overview.changes': 'Changes',
   'workingPanel.overview.changes.none': 'No changes',
   'workingPanel.overview.ci.failure': 'Failed',
+  'workingPanel.overview.pr.dismiss': 'Remove from this topic',
+  'workingPanel.overview.pr.dismissFailed': "Couldn't remove {{name}} from this topic",
+  'workingPanel.overview.pr.dismissed': 'Removed {{name}} from this topic',
+  'workingPanel.overview.pr.link': 'Link a pull request',
+  'workingPanel.overview.pr.linkAction': 'Link',
+  'workingPanel.overview.pr.linkFailed': "Couldn't link the pull request",
+  'workingPanel.overview.pr.linkInvalid':
+    'Paste a GitHub pull request link, like https://github.com/owner/repo/pull/123',
+  'workingPanel.overview.pr.linkPlaceholder': 'Paste a GitHub pull request link',
+  'workingPanel.overview.pr.linked': 'Linked {{name}} to this topic',
+  'workingPanel.overview.pr.unvouched':
+    "Can't confirm this PR comes from this topic's branch, so merging and closing are locked",
   'workingPanel.overview.ci.pending': 'Running',
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
@@ -3924,6 +3937,30 @@ export default {
   'workingPanel.overview.execution.device': 'Connected device',
   'workingPanel.overview.execution.local': 'This device',
   'workingPanel.overview.files': 'Files',
+  'workingPanel.overview.keptWorktree.details': 'Details',
+  'workingPanel.overview.keptWorktree.discard': 'Discard changes and delete',
+  'workingPanel.overview.keptWorktree.discardConfirm':
+    "This deletes the worktree and everything uncommitted in it, including ignored files. This can't be undone. Commits on its branch are kept.",
+  'workingPanel.overview.keptWorktree.discardConfirmTitle':
+    'Discard changes and delete the worktree?',
+  'workingPanel.overview.keptWorktree.discardFailed': 'Could not delete the worktree',
+  'workingPanel.overview.keptWorktree.discardPending':
+    "The device is offline. The worktree will be deleted when it's back online.",
+  'workingPanel.overview.keptWorktree.discarded': 'Worktree deleted. Its branch was kept.',
+  'workingPanel.overview.keptWorktree.discarding': 'Deleting the worktree…',
+  'workingPanel.overview.keptWorktree.failedTitle': "Worktree couldn't be cleaned up",
+  'workingPanel.overview.keptWorktree.hideDetails': 'Hide details',
+  'workingPanel.overview.keptWorktree.keep': 'Keep',
+  'workingPanel.overview.keptWorktree.keepFailed': 'Could not keep the worktree',
+  'workingPanel.overview.keptWorktree.keptToast':
+    "Worktree kept. It won't be cleaned up automatically.",
+  'workingPanel.overview.keptWorktree.removed': 'Worktree cleaned up · branch {{branch}} kept',
+  'workingPanel.overview.keptWorktree.removedHint':
+    'It was removed when this topic was archived or moved to the recycle bin. Sending a message checks the branch out again at the same path.',
+  'workingPanel.overview.keptWorktree.submoduleTitle':
+    'Worktree kept: a submodule has commits no remote holds',
+  'workingPanel.overview.keptWorktree.title_one': 'Worktree kept: {{count}} uncommitted file',
+  'workingPanel.overview.keptWorktree.title_other': 'Worktree kept: {{count}} uncommitted files',
   'workingPanel.overview.outputs': 'Outputs',
   'workingPanel.overview.ports.copied': 'Link copied',
   'workingPanel.overview.ports.copy': 'Copy link',
@@ -4483,6 +4520,13 @@ export default {
   'userFeedbackCard.count_one': '{{count}} comment',
   'userFeedbackCard.count_other': '{{count}} comments',
   'userFeedbackCard.title': 'User feedback',
+  'worktreeRestore.branchMissing': "Can't restore the worktree",
+  'worktreeRestore.branchMissingDesc':
+    'The branch {{branch}} no longer exists, so this conversation continues in the source repository.',
+  'worktreeRestore.failed': "Couldn't restore the worktree",
+  'worktreeRestore.stillCleaning':
+    'The worktree is still being cleaned up. Try sending again in a moment.',
+  'worktreeRestore.waiting': 'Waiting for the worktree cleanup to finish before restoring it…',
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',

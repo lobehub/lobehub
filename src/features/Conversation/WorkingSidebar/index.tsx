@@ -369,6 +369,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
+    dismissPullRequest,
+    linkPullRequest,
     pickPullRequest,
     probes: pullRequestProbes,
     pullRequest,
@@ -876,6 +878,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   sourcePath={sourceWorkingDirectory}
                   statusDeviceId={getStatusDeviceId(effectiveTarget, agencyConfig?.boundDeviceId)}
                   workingDirectory={environmentWorkingDirectory}
+                  onDismissPullRequest={dismissPullRequest}
+                  onLinkPullRequest={linkPullRequest}
                   onOpenTab={openTab}
                   onRefreshPullRequest={refreshPullRequest}
                   onOpenPullRequest={
