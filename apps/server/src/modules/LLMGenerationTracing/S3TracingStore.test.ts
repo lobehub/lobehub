@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { zstdCompress, zstdDecompress } from 'node:zlib';
 
@@ -18,6 +20,7 @@ vi.mock('@/server/modules/S3', () => ({
 }));
 
 const { S3TracingStore, buildTracingKey } = await import('./S3TracingStore');
+const { FileS3 } = await import('@/server/modules/S3');
 
 const samplePayload = (overrides: Partial<TracingPayload> = {}): TracingPayload => ({
   created_at: new Date('2026-05-22T11:22:33.444Z').getTime(),
@@ -51,6 +54,13 @@ describe('buildTracingKey', () => {
 });
 
 describe('S3TracingStore.save', () => {
+  it('forces private objects even when the deployment enables public-read ACLs', () => {
+    // Regression: tracing blobs carry full system prompts and input/output
+    // payloads, so they must never inherit the bucket's public ACL.
+    new S3TracingStore();
+    expect(vi.mocked(FileS3)).toHaveBeenCalledWith({ setAcl: false });
+  });
+
   it('uploads zstd-compressed JSON with the canonical key and content-type', async () => {
     const store = new S3TracingStore();
     const payload = samplePayload({ input: { messages: [{ role: 'user' }] } });
@@ -88,5 +98,29 @@ describe('S3TracingStore.get', () => {
     const store = new S3TracingStore();
     getFileByteArray.mockRejectedValueOnce(new Error('NoSuchKey'));
     expect(await store.get('missing')).toBeNull();
+  });
+});
+
+describe('bundled RustFS bucket policies', () => {
+  const tracingKey = buildTracingKey(samplePayload());
+
+  it.each(['deploy', 'dev', 'eval'])('keeps %s tracing objects off the public grant', (stack) => {
+    const { Statement } = JSON.parse(
+      readFileSync(
+        path.resolve(
+          import.meta.dirname,
+          `../../../../../docker-compose/${stack}/bucket.config.json`,
+        ),
+        'utf8',
+      ),
+    );
+
+    expect(Statement).toHaveLength(1);
+    expect(Statement[0].Effect).toBe('Allow');
+    // A blanket Deny also blocks the server's signed reads, and RustFS rejects
+    // the whole policy when it is scoped with `aws:PrincipalType`.
+    expect(Statement[0].Condition).toEqual({});
+    expect(Statement[0].Resource).toBeUndefined();
+    expect(Statement[0].NotResource).toEqual([`arn:aws:s3:::lobe/${tracingKey.split('/')[0]}/*`]);
   });
 });

@@ -9,8 +9,7 @@
       },
       "Action": ["s3:GetObject"],
       "NotAction": [],
-      "Resource": ["arn:aws:s3:::lobe/*"],
-      "NotResource": [],
+      "NotResource": ["arn:aws:s3:::lobe/llm-generation-tracing/*"],
       "Condition": {}
     }
   ],

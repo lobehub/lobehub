@@ -50,6 +50,10 @@ The best practice in this area is to use a file storage service (S3) to store im
 
   Whether to set the ACL to `public-read` when uploading files. This option is disabled by default; the ACL is only set when `S3_SET_ACL` is explicitly configured to `1`. If the service provider does not support setting individual ACLs for files (i.e., all files inherit the ACL of the storage bucket), enabling this option may cause request errors.
 
+  <Callout type={'warning'}>
+    LLM generation tracing is on by default for S3-backed deployments and stores system prompts plus generation inputs/outputs under the `llm-generation-tracing/` prefix in this bucket. If the bucket allows anonymous reads — e.g. providers where objects inherit the bucket's public ACL — those traces are publicly readable too, and per-object ACLs cannot fix that. Exclude the prefix from anonymous access where your provider supports it, or set `DISABLE_LLM_GENERATION_TRACING_S3=1` to disable collection.
+  </Callout>
+
   ### `S3_ENABLE_PATH_STYLE`
 
   Whether to enable the `path-style` access mode of S3. This option is disabled by default. If your S3 service provider uses `path-style`, set `S3_ENABLE_PATH_STYLE` to `1` to enable it.

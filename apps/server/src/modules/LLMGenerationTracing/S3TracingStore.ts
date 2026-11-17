@@ -61,7 +61,11 @@ export class S3TracingStore implements ITracingStore {
   private readonly s3: FileS3;
 
   constructor() {
-    this.s3 = new FileS3();
+    // Blobs carry full system prompts and input/output payloads. They must
+    // stay private even when the deployment serves user files via
+    // public-read ACLs (S3_SET_ACL=1) — tracing is now on by default, so a
+    // public bucket would silently expose every recorded generation.
+    this.s3 = new FileS3({ setAcl: false });
   }
 
   async save(record: TracingPayload): Promise<SaveResult> {
