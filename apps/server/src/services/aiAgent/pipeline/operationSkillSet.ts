@@ -32,6 +32,11 @@ export interface OperationSkillSetInput {
   activeDeviceId: ToolDiscoveryResult['activeDeviceId'];
   agentConfig: ExecRunContext['agentConfig'];
   agentPlugins: ToolDiscoveryResult['agentPlugins'];
+  /**
+   * Library skills the agent set to `auto`. A library skill is opt-in per
+   * agent, so one that is neither here nor pinned / selected is not listed.
+   */
+  autoSkillIds: string[];
   /** Tri-state disabled plugin identifiers — excluded from the skill pool. */
   disabledPluginIds: string[];
   executionPlan: ToolDiscoveryResult['executionPlan'];
@@ -92,6 +97,7 @@ export const buildOperationSkillSet = async (
     activeDeviceId,
     agentConfig,
     agentPlugins,
+    autoSkillIds,
     disabledPluginIds,
     executionPlan,
     prompt,
@@ -279,6 +285,11 @@ export const buildOperationSkillSet = async (
         project: projectMetas,
       },
       {
+        // A library skill is opt-in per agent: the ones this agent set to
+        // `auto` are listed, the ones it never turned on are not. A share's
+        // skill grant is the creator opting the visitor in by name, so a
+        // granted skill stays reachable without also being turned on.
+        autoSkillIds: [...autoSkillIds, ...(shareAllowedSkillIds ?? [])],
         canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
         disabledIds: disabledPluginIds,
         // Selected skills join the enabled set so the resolver auto-activates
