@@ -1,7 +1,5 @@
 import debug from 'debug';
 
-import { ArtboardService } from '@/server/services/artboard';
-
 import type { ProjectContextDeps } from './projectContext';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -14,6 +12,10 @@ export const buildArtboardCommentsPrompt = async (
   if (!projectId || !topicId) return;
 
   try {
+    // Lazy-loaded on purpose: ArtboardService depends on TaskService, which
+    // imports this agent pipeline (`task -> aiAgent -> pipeline -> here -> artboard`),
+    // so a static import would close that cycle.
+    const { ArtboardService } = await import('@/server/services/artboard');
     const notices = await new ArtboardService(
       deps.db,
       deps.userId,
