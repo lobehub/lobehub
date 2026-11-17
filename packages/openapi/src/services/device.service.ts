@@ -6,7 +6,10 @@ import { DeviceModel } from '@/database/models/device';
 import type { LobeChatDatabase } from '@/database/type';
 import { deviceRouter } from '@/server/routers/lambda/device';
 import { deviceMetricRouter } from '@/server/routers/lambda/deviceMetric';
-import { canOperateWorkspaceDevice } from '@/server/routers/lambda/deviceWorkspaceGuard';
+import {
+  assertWorkspaceRootApproved,
+  canOperateWorkspaceDevice,
+} from '@/server/routers/lambda/deviceWorkspaceGuard';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 
 import { BaseService } from '../common/base.service';
@@ -33,7 +36,7 @@ import type {
   WriteDeviceFileRequest,
 } from '../types/device.type';
 import type { DeviceAuditActor, DeviceAuditEntry } from './device-audit';
-import { recordDeviceAudit } from './device-audit';
+import { recordDeviceAudit, runAudited } from './device-audit';
 
 type DeviceCaller = ReturnType<typeof deviceRouter.createCaller>;
 type WorkspaceRole = Parameters<typeof canOperateWorkspaceDevice>[0];
@@ -93,13 +96,22 @@ const toDevice = (item: DeviceListItem): DeviceResponse => ({
   })),
 });
 
-/** Quote one argument for the device shell. Single quotes are literal in sh, zsh and PowerShell. */
-const quoteArgument = (value: string) => {
-  if (value.includes("'")) {
+/**
+ * Characters a path may hold to be put on a device command line. Letters and
+ * digits of any script, spaces and the path punctuation of POSIX and Windows —
+ * and nothing any of the device shells (sh, zsh, PowerShell, cmd.exe) treats
+ * as syntax: no quote of any kind (PowerShell also closes a string on the
+ * typographic ones), no `$`, `;`, `&`, `|`, `%`, backtick or brackets.
+ */
+const SHELL_SAFE_PATH = /^[\p{L}\p{N} _./\\:~@+,-]+$/u;
+
+/** One path argument for the device shell, single-quoted after the allow-list above. */
+const quotePath = (value: string) => {
+  if (!SHELL_SAFE_PATH.test(value)) {
     throw new ApiException(
       400,
       'validation_error',
-      'Paths containing a single quote are not supported',
+      'This path holds characters that cannot be passed to the device shell',
     );
   }
   return `'${value}'`;
@@ -179,6 +191,14 @@ export class DeviceRestService extends BaseService {
       { ...this.actor, userId: this.userId, workspaceId: this.workspaceId },
       { ...entry, resourceType: 'device' },
     );
+  }
+
+  private audited<T>(
+    entry: Omit<DeviceAuditEntry, 'resourceType'>,
+    work: () => Promise<T>,
+    outcome: (result: T) => Record<string, unknown>,
+  ) {
+    return runAudited((done) => this.audit(done), entry, work, outcome);
   }
 
   /** A device's live result, or a 503 that says the device could not answer. */
@@ -283,24 +303,25 @@ export class DeviceRestService extends BaseService {
 
   async writeFile(id: string, request: WriteDeviceFileRequest) {
     await this.assertOperable(id);
-    const result = await this.caller.writeProjectFile({
-      content: request.content,
-      deviceId: id,
-      path: request.path,
-      workingDirectory: request.workingDirectory,
-    });
-
-    await this.audit({
-      action: 'device.file_written',
-      metadata: {
-        bytes: Buffer.byteLength(request.content),
-        error: result.error ?? null,
-        path: request.path,
-        success: result.success,
-        workingDirectory: request.workingDirectory,
+    const result = await this.audited(
+      {
+        action: 'device.file_written',
+        metadata: {
+          bytes: Buffer.byteLength(request.content),
+          path: request.path,
+          workingDirectory: request.workingDirectory,
+        },
+        resourceId: id,
       },
-      resourceId: id,
-    });
+      () =>
+        this.caller.writeProjectFile({
+          content: request.content,
+          deviceId: id,
+          path: request.path,
+          workingDirectory: request.workingDirectory,
+        }),
+      (written) => ({ error: written.error ?? null, success: written.success }),
+    );
 
     if (!result.success) {
       throw new ApiException(
@@ -348,16 +369,19 @@ export class DeviceRestService extends BaseService {
   /**
    * The device has no log RPC, so the log is read with one fixed `git log`
    * the server builds itself — through the same gateway `runCommand` path —
-   * from validated arguments only: the path is quoted, the ref matches a
-   * strict pattern, and the caller contributes no shell text.
+   * from validated arguments only: the path must be one of the device's
+   * approved working directories and pass {@link SHELL_SAFE_PATH}, the ref
+   * matches a strict pattern, and the caller contributes no shell text.
    */
   async gitLog(id: string, query: DeviceGitLogQuery): Promise<DeviceGitLogResponse> {
     await this.requireDeviceRow(id);
+    // the same root rule the file routes apply: no reading an arbitrary repository
+    await assertWorkspaceRootApproved(this.deviceModel, id, query.path, this.workspaceId);
     const format = ['%H', '%h', '%an', '%ae', '%aI', '%s'].join('%x1f');
     const command = [
       'git',
       '-C',
-      quoteArgument(query.path),
+      quotePath(query.path),
       'log',
       `--max-count=${query.limit}`,
       `--format=${format}`,
@@ -430,9 +454,15 @@ export class DeviceRestService extends BaseService {
   ): Promise<DeviceGitOperationResponse> {
     await this.assertOperable(id);
 
-    const result =
+    // one shape for all three: checkout answers without `branch` / `noop`
+    const operate = async (): Promise<{
+      branch?: string;
+      error?: string;
+      noop?: boolean;
+      success: boolean;
+    }> =>
       request.action === 'checkout'
-        ? await this.caller.checkoutGitBranch({
+        ? this.caller.checkoutGitBranch({
             branch: request.branch,
             create: request.create,
             deviceId: id,
@@ -440,32 +470,22 @@ export class DeviceRestService extends BaseService {
             startPoint: request.startPoint,
           })
         : request.action === 'pull'
-          ? await this.caller.pullGitBranch({
-              branch: request.branch,
-              deviceId: id,
-              path: request.path,
-            })
-          : await this.caller.pushGitBranch({
-              branch: request.branch,
-              deviceId: id,
-              path: request.path,
-            });
+          ? this.caller.pullGitBranch({ branch: request.branch, deviceId: id, path: request.path })
+          : this.caller.pushGitBranch({ branch: request.branch, deviceId: id, path: request.path });
 
-    const response: DeviceGitOperationResponse = {
+    const result = await this.audited(
+      { action: 'device.git_operated', metadata: { ...request }, resourceId: id },
+      operate,
+      (done) => ({ error: done.error ?? null, success: done.success }),
+    );
+
+    return {
       action: request.action,
-      branch: request.branch ?? ('branch' in result ? (result.branch ?? null) : null),
+      branch: request.branch ?? result.branch ?? null,
       error: result.error ?? null,
-      noop: 'noop' in result ? !!result.noop : false,
+      noop: !!result.noop,
       success: result.success,
     };
-
-    await this.audit({
-      action: 'device.git_operated',
-      metadata: { ...request, error: response.error, success: response.success },
-      resourceId: id,
-    });
-
-    return response;
   }
 
   // ==================== Commands ====================
@@ -473,29 +493,25 @@ export class DeviceRestService extends BaseService {
   async runCommand(id: string, request: RunDeviceCommandRequest): Promise<DeviceCommandResponse> {
     await this.assertOperable(id);
 
-    let result: DeviceCommandResponse | undefined;
-    let failure: unknown;
-    try {
-      result = await this.runOnDevice(id, request.command, request.description, request.timeoutMs);
-    } catch (error) {
-      failure = error;
-    }
-
-    await this.audit({
-      action: 'device.command_executed',
-      metadata: {
-        command: request.command,
-        description: request.description ?? null,
-        error: failure instanceof Error ? failure.message : null,
-        exitCode: result?.exitCode ?? null,
-        running: result?.running ?? null,
-        success: result?.success ?? false,
-      },
+    const entry = {
+      action: 'device.command_executed' as const,
+      metadata: { command: request.command, description: request.description ?? null },
       resourceId: id,
-    });
+    };
+    // A command can outlive the request that started it, so the dispatch is on
+    // record before the device is asked; the outcome follows as a second entry.
+    await this.audit({ ...entry, metadata: { ...entry.metadata, phase: 'dispatched' } });
 
-    if (failure) throw failure;
-    return result!;
+    return this.audited(
+      { ...entry, metadata: { ...entry.metadata, phase: 'completed' } },
+      () => this.runOnDevice(id, request.command, request.description, request.timeoutMs),
+      (result) => ({
+        error: null,
+        exitCode: result.exitCode,
+        running: result.running,
+        success: result.success,
+      }),
+    );
   }
 
   /** Dispatch `runCommand` through the authorized device gateway path. */

@@ -23,7 +23,7 @@ import type {
   WriteSandboxFileRequest,
 } from '../types/sandbox.type';
 import type { DeviceAuditActor, DeviceAuditEntry } from './device-audit';
-import { recordDeviceAudit } from './device-audit';
+import { recordDeviceAudit, runAudited } from './device-audit';
 
 type SandboxCaller = ReturnType<typeof sandboxStorageRouter.createCaller>;
 type Instance = NonNullable<Awaited<ReturnType<SandboxCaller['getInstance']>>>;
@@ -91,6 +91,14 @@ export class SandboxRestService extends BaseService {
     );
   }
 
+  private audited<T>(
+    entry: Omit<DeviceAuditEntry, 'resourceType'>,
+    work: () => Promise<T>,
+    outcome: (result: T) => Record<string, unknown>,
+  ) {
+    return runAudited((done) => this.audit(done), entry, work, outcome);
+  }
+
   /** A sandbox the caller may reach, or a 404 — never a hint that someone else's exists. */
   private async requireInstance(id: string): Promise<Instance> {
     const instance = await this.caller.getInstance({ id });
@@ -127,32 +135,39 @@ export class SandboxRestService extends BaseService {
   }
 
   async createSandbox(request: CreateSandboxRequest): Promise<SandboxResponse> {
-    const created = request.workingDirectory
-      ? await this.caller.createInstance({
+    const created = await this.audited(
+      {
+        action: 'sandbox.created',
+        metadata: {
           environmentId: request.environmentId,
-          name: request.name ?? request.workingDirectory,
-          workingDirectory: request.workingDirectory,
-        })
-      : await this.caller.createInstanceForEnvironment({ environmentId: request.environmentId });
+          workingDirectory: request.workingDirectory ?? null,
+        },
+        // the id is only known once the row exists; until then the environment names it
+        resourceId: request.environmentId,
+      },
+      () =>
+        request.workingDirectory
+          ? this.caller.createInstance({
+              environmentId: request.environmentId,
+              name: request.name ?? request.workingDirectory,
+              workingDirectory: request.workingDirectory,
+            })
+          : this.caller.createInstanceForEnvironment({ environmentId: request.environmentId }),
+      (instance) => ({
+        sandboxId: instance.id,
+        success: true,
+        workingDirectory: instance.workingDirectory,
+      }),
+    );
 
     // What the app's dialog fires next: start the build of an instance that
-    // has something to clone or install. Returns once the build has started.
-    let buildError: string | null = null;
+    // has something to clone or install. Returns once the build has started; a
+    // failure to start leaves the sandbox `pending`, which `GET` reports.
     if (created.status === 'pending') {
       await this.caller.startInstanceBuild({ id: created.id }).catch((error: unknown) => {
-        buildError = error instanceof Error ? error.message : String(error);
+        console.warn('[openapi] sandbox build did not start', created.id, error);
       });
     }
-
-    await this.audit({
-      action: 'sandbox.created',
-      metadata: {
-        buildStartError: buildError,
-        environmentId: request.environmentId,
-        workingDirectory: created.workingDirectory,
-      },
-      resourceId: created.id,
-    });
 
     return this.getSandbox(created.id);
   }
@@ -193,34 +208,25 @@ export class SandboxRestService extends BaseService {
 
   async writeFile(id: string, request: WriteSandboxFileRequest) {
     const instance = await this.requireInstance(id);
-    const path = this.drivePath(instance, request.path);
 
-    let failure: unknown;
-    try {
+    await this.audited(
+      {
+        action: 'sandbox.file_written',
+        metadata: { bytes: Buffer.byteLength(request.content), path: request.path },
+        resourceId: id,
+      },
       // by its path on the drive, not `instanceId`: the sandbox directory is an
       // ordinary folder to write in, and naming the instance is the legacy
       // route into its build state, which the procedure refuses
-      await this.caller.writeFile({
-        content: request.content,
-        drive: instance.drive ?? undefined,
-        path,
-      });
-    } catch (error) {
-      failure = error;
-    }
+      () =>
+        this.caller.writeFile({
+          content: request.content,
+          drive: instance.drive ?? undefined,
+          path: this.drivePath(instance, request.path),
+        }),
+      () => ({ success: true }),
+    );
 
-    await this.audit({
-      action: 'sandbox.file_written',
-      metadata: {
-        bytes: Buffer.byteLength(request.content),
-        error: failure instanceof Error ? failure.message : null,
-        path: request.path,
-        success: !failure,
-      },
-      resourceId: id,
-    });
-
-    if (failure) throw failure;
     return { path: request.path, written: true as const };
   }
 
@@ -266,38 +272,32 @@ export class SandboxRestService extends BaseService {
       userId: this.userId,
     });
 
-    let result: SandboxCommandResponse | undefined;
-    let failure: unknown;
-    try {
-      const raw = await sandbox.callTool('runCommand', {
-        command: request.command,
-        description: 'Run a command from the LobeHub API',
-        timeout: request.timeoutMs,
-      });
-      const normalized = normalizeSandboxCommandResult(raw);
-      result = {
-        exitCode: normalized.exitCode,
-        output: normalized.output,
-        stderr: normalized.stderr ?? null,
-        success: normalized.success,
-      };
-    } catch (error) {
-      failure = error;
-    }
-
-    await this.audit({
-      action: 'sandbox.command_executed',
-      metadata: {
-        command: request.command,
-        error: failure instanceof Error ? failure.message : null,
-        exitCode: result?.exitCode ?? null,
-        success: result?.success ?? false,
-        workingDirectory: instance.workingDirectory,
-      },
+    const entry = {
+      action: 'sandbox.command_executed' as const,
+      metadata: { command: request.command, workingDirectory: instance.workingDirectory },
       resourceId: id,
-    });
+    };
+    // the dispatch is on record before the sandbox runs it; the outcome follows
+    await this.audit({ ...entry, metadata: { ...entry.metadata, phase: 'dispatched' } });
 
-    if (failure) throw failure;
-    return result!;
+    return this.audited(
+      { ...entry, metadata: { ...entry.metadata, phase: 'completed' } },
+      async () => {
+        const normalized = normalizeSandboxCommandResult(
+          await sandbox.callTool('runCommand', {
+            command: request.command,
+            description: 'Run a command from the LobeHub API',
+            timeout: request.timeoutMs,
+          }),
+        );
+        return {
+          exitCode: normalized.exitCode,
+          output: normalized.output,
+          stderr: normalized.stderr ?? null,
+          success: normalized.success,
+        };
+      },
+      (result) => ({ exitCode: result.exitCode, success: result.success }),
+    );
   }
 }

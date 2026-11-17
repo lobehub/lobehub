@@ -77,9 +77,14 @@ const API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
 
 /**
  * Scopes a key only holds when they are listed on it by name. Full access
- * (`NULL` or `['*']`) does not imply them, so no key issued before one was
- * added gains it, and the creator has to tick it on purpose. A full-access key
- * that also holds one is stored as `['*', '<scope>']`.
+ * (`NULL` or `['*']`) does not imply them on the public REST API, so no key
+ * issued before one was added gains it, and the creator has to tick it on
+ * purpose. A full-access key that also holds one is stored as `['*', '<scope>']`.
+ *
+ * Boundary: the app's own tRPC surface is unchanged — `device` and
+ * `sandboxStorage` stay blocked for restricted keys and reachable for
+ * full-access ones, which is how `lh` signed in with a key drives devices.
+ * Requiring the explicit scope there too is a separate decision.
  */
 export const API_KEY_EXPLICIT_SCOPES = ['device:operate'] as const satisfies readonly ApiKeyScope[];
 

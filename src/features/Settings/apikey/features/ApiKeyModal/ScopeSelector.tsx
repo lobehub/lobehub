@@ -301,10 +301,14 @@ export const fromStoredScopes = (scopes: string[] | null | undefined) => {
   const fullAccess = isFullAccessApiKey(scopes);
   const stored = (scopes ?? []).filter(isValidApiKeyScope);
 
-  return {
-    fullAccess,
-    selected: fullAccess ? stored.filter((scope) => isExplicitApiKeyScope(scope)) : stored,
-  };
+  // with full access only the explicit grants are stored; bring back what they need
+  const selected = fullAccess
+    ? stored
+        .filter((scope) => isExplicitApiKeyScope(scope))
+        .reduce<ApiKeyScope[]>((next, scope) => toggleScopeSelection(next, scope, true), [])
+    : stored;
+
+  return { fullAccess, selected };
 };
 
 interface DeviceOperateRowProps {

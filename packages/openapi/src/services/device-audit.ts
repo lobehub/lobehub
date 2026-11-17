@@ -1,5 +1,6 @@
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { LobeChatDatabase } from '@/database/type';
+import { redactSandboxParams } from '@/server/services/sandbox/providers/market';
 
 /** The write actions on devices and sandboxes the REST API records. */
 export type DeviceAuditAction =
@@ -47,6 +48,10 @@ export const recordDeviceAudit = async (
 ) => {
   const metadata = {
     ...entry.metadata,
+    // a command line can carry a token; the sandbox layer's redaction blanks the known ones
+    ...(typeof entry.metadata.command === 'string' && {
+      command: redactSandboxParams({ command: entry.metadata.command }).command,
+    }),
     apiKeyId: actor.apiKeyId ?? null,
     authType: actor.authType ?? null,
     via: 'openapi',
@@ -79,5 +84,32 @@ export const recordDeviceAudit = async (
     });
   } catch (error) {
     console.error('[openapi:audit] failed to store the audit entry', entry.action, error);
+  }
+};
+
+/**
+ * Run one write and record it whatever happens: a refusal or an error thrown
+ * on the way is an attempt the audit log must still show, with its reason.
+ */
+export const runAudited = async <T>(
+  audit: (entry: Omit<DeviceAuditEntry, 'resourceType'>) => Promise<void>,
+  entry: Omit<DeviceAuditEntry, 'resourceType'>,
+  work: () => Promise<T>,
+  outcome: (result: T) => Record<string, unknown>,
+): Promise<T> => {
+  try {
+    const result = await work();
+    await audit({ ...entry, metadata: { ...entry.metadata, ...outcome(result) } });
+    return result;
+  } catch (error) {
+    await audit({
+      ...entry,
+      metadata: {
+        ...entry.metadata,
+        error: error instanceof Error ? error.message : String(error),
+        success: false,
+      },
+    });
+    throw error;
   }
 };

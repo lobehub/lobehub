@@ -23,6 +23,7 @@ const { apiKeys, devices, users, workspaceAuditLogs, workspaceMembers, workspace
   await import('@/database/schemas');
 const { hashApiKey } = await import('@lobechat/utils/server');
 const { HTTPException } = await import('hono/http-exception');
+const { eq } = await import('drizzle-orm');
 const { deviceGateway } = await import('@/server/services/deviceGateway');
 const { errorInitFromException, renderApiError } = await import('../common/errors');
 const { userAuthMiddleware } = await import('../middleware/auth');
@@ -441,6 +442,23 @@ describe('files', () => {
     expect(gateway.getLocalFilePreview).not.toHaveBeenCalled();
   });
 
+  it('records a refused write too', async () => {
+    const res = await call(`/devices/${DEVICE.ownerPersonal}/files/content`, {
+      body: { content: 'x', path: '/etc/hosts', workingDirectory: '/etc' },
+      key: KEYS.operate,
+      method: 'PUT',
+    });
+
+    expect(res.status).toBe(403);
+    expect(gateway.writeProjectFile).not.toHaveBeenCalled();
+    expect(auditLines()).toEqual([
+      expect.objectContaining({
+        action: 'device.file_written',
+        metadata: expect.objectContaining({ path: '/etc/hosts', success: false }),
+      }),
+    ]);
+  });
+
   it('writes a file with device:operate and records it', async () => {
     gateway.writeProjectFile.mockResolvedValue({ success: true });
 
@@ -592,6 +610,33 @@ describe('git', () => {
     );
   });
 
+  it('reads the log only of an approved working directory, with a shell-safe path', async () => {
+    const unsafe = [
+      '/Users/owner/repo’; Remove-Item -Recurse ~; ’',
+      "/Users/owner/repo'; rm -rf ~; '",
+      '/Users/owner/repo & calc.exe',
+      '/Users/owner/repo/$(id)',
+    ];
+    await serverDB
+      .update(devices)
+      .set({ workingDirs: unsafe.map((path) => ({ path })) })
+      .where(eq(devices.deviceId, DEVICE.ownerPersonal));
+
+    for (const path of unsafe) {
+      const res = await call(
+        `/devices/${DEVICE.ownerPersonal}/git/log?path=${encodeURIComponent(path)}`,
+        { key: KEYS.read },
+      );
+      expect(res.status, path).toBe(400);
+    }
+
+    const elsewhere = await call(`/devices/${DEVICE.ownerPersonal}/git/log?path=/etc`, {
+      key: KEYS.read,
+    });
+    expect(elsewhere.status).toBe(403);
+    expect(gateway.executeToolCall).not.toHaveBeenCalled();
+  });
+
   it('answers 503 when the device is offline', async () => {
     gateway.gitWorkingTreeStatus.mockResolvedValue(undefined);
 
@@ -664,7 +709,12 @@ describe('commands', () => {
     expect(JSON.parse(toolCall.arguments)).toMatchObject({ command: 'echo hello', timeout: 5000 });
     expect(timeout).toBe(20_000);
 
-    const [entry] = auditLines();
+    // the dispatch is recorded before the device runs it, the outcome after
+    const [dispatched, entry] = auditLines();
+    expect(dispatched).toMatchObject({
+      action: 'device.command_executed',
+      metadata: { command: 'echo hello', phase: 'dispatched' },
+    });
     expect(entry).toMatchObject({
       action: 'device.command_executed',
       metadata: {
@@ -672,6 +722,7 @@ describe('commands', () => {
         authType: 'apikey',
         command: 'echo hello',
         exitCode: 0,
+        phase: 'completed',
         success: true,
         via: 'openapi',
       },
@@ -706,10 +757,26 @@ describe('commands', () => {
       method: 'POST',
     });
     expect(res.status).toBe(503);
-    expect(auditLines()[0]).toMatchObject({
+    expect(auditLines()[1]).toMatchObject({
       action: 'device.command_executed',
-      metadata: { error: 'Device is offline', success: false },
+      metadata: { error: 'Device is offline', phase: 'completed', success: false },
     });
+  });
+
+  it('blanks known secrets in the recorded command', async () => {
+    gateway.executeToolCall.mockResolvedValue(commandState('ok'));
+
+    await call(`/devices/${DEVICE.ownerPersonal}/commands`, {
+      body: { command: 'GITHUB_TOKEN=ghp_secret123 git push' },
+      key: KEYS.operate,
+      method: 'POST',
+    });
+
+    const recorded = auditLines().map((line) => line.metadata.command);
+    expect(recorded).toEqual([
+      'GITHUB_TOKEN=[redacted] git push',
+      'GITHUB_TOKEN=[redacted] git push',
+    ]);
   });
 
   it('validates the body', async () => {
@@ -748,14 +815,17 @@ describe('workspace devices', () => {
     });
 
     const rows = await serverDB.select().from(workspaceAuditLogs);
-    expect(rows).toEqual([
-      expect.objectContaining({
-        action: 'device.command_executed',
-        resourceId: DEVICE.wsPublic,
-        resourceType: 'device',
-        userId: OWNER,
-        workspaceId: WORKSPACE,
-      }),
+    const row = expect.objectContaining({
+      action: 'device.command_executed',
+      resourceId: DEVICE.wsPublic,
+      resourceType: 'device',
+      userId: OWNER,
+      workspaceId: WORKSPACE,
+    });
+    expect(rows).toEqual([row, row]);
+    expect(rows.map((entry) => (entry.metadata as { phase: string }).phase).sort()).toEqual([
+      'completed',
+      'dispatched',
     ]);
     expect(rows[0].metadata).toMatchObject({ command: 'make build', via: 'openapi' });
   });

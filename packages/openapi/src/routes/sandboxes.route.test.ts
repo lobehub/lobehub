@@ -189,7 +189,8 @@ describe('sandboxes', () => {
     expect(auditLines()).toEqual([
       expect.objectContaining({
         action: 'sandbox.created',
-        resourceId: sandbox.id,
+        metadata: expect.objectContaining({ sandboxId: sandbox.id, success: true }),
+        resourceId: ENV_OWNER,
         resourceType: 'sandbox',
         userId: OWNER,
       }),
@@ -347,7 +348,17 @@ describe('commands', () => {
     expect(auditLines()).toEqual([
       expect.objectContaining({
         action: 'sandbox.command_executed',
-        metadata: expect.objectContaining({ command: 'pwd', exitCode: 0, success: true }),
+        metadata: expect.objectContaining({ command: 'pwd', phase: 'dispatched' }),
+        resourceId: sandbox.id,
+      }),
+      expect.objectContaining({
+        action: 'sandbox.command_executed',
+        metadata: expect.objectContaining({
+          command: 'pwd',
+          exitCode: 0,
+          phase: 'completed',
+          success: true,
+        }),
         resourceId: sandbox.id,
         resourceType: 'sandbox',
       }),

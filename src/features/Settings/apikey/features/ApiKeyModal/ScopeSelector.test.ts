@@ -54,10 +54,11 @@ describe('device:operate', () => {
 
   it('reads a stored list back into the editor state', () => {
     expect(fromStoredScopes(null)).toEqual({ fullAccess: true, selected: [] });
-    expect(fromStoredScopes(['*', 'device:operate'])).toEqual({
-      fullAccess: true,
-      selected: ['device:operate'],
-    });
+    // device:read comes back with it, so turning full access off keeps a usable key
+    const { fullAccess, selected } = fromStoredScopes(['*', 'device:operate']);
+    expect(fullAccess).toBe(true);
+    expect(sorted(selected)).toEqual(['device:operate', 'device:read']);
+    expect(sorted(toStoredScopes(false, selected))).toEqual(['device:operate', 'device:read']);
     expect(fromStoredScopes(['device:read', 'chat:read'])).toEqual({
       fullAccess: false,
       selected: ['device:read', 'chat:read'],

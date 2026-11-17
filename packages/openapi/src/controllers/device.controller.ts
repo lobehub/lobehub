@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 
+import { getRequestClientIP } from '@/utils/requestClientIP';
+
 import { BaseController } from '../common/base.controller';
 import { DeviceRestService } from '../services/device.service';
 import { SandboxRestService } from '../services/sandbox.service';
@@ -13,12 +15,11 @@ type Params = { id: string };
  */
 const actorOf = (c: Context) => {
   const authData = c.get('authData') as { apiKeyId?: string } | undefined;
-  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
 
   return {
     apiKeyId: c.get('authType') === 'apikey' ? authData?.apiKeyId : undefined,
     authType: (c.get('authType') as string | null | undefined) ?? undefined,
-    ipAddress: forwarded || c.req.header('x-real-ip') || undefined,
+    ipAddress: getRequestClientIP(c.req.raw.headers),
     workspaceRole: c.get('workspaceRole'),
   };
 };
