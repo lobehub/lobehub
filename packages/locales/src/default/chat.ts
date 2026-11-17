@@ -3200,6 +3200,11 @@ export default {
   'goalPage.metrics.delivered': 'Needs you',
   'goalPage.metrics.pursuing': 'Others',
   'goalPage.metrics.total': 'Total goals',
+  'goalPage.searchEmptyDescription': 'Try another keyword or switch tabs.',
+  'goalPage.searchEmptyTitle': 'No goals match “{{keyword}}”',
+  'goalPage.searchPartial':
+    'Only the newest {{loaded}} of {{total}} goals were searched here. Use global search to find older ones.',
+  'goalPage.searchPlaceholder': 'Search goals',
   'goalPage.title': 'Overview',
   'goalPage.view.card': 'Cards',
   'goalPage.view.list': 'List',

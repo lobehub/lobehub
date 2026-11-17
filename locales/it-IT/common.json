@@ -147,6 +147,8 @@
   "cmdk.search.files": "File",
   "cmdk.search.folder": "Cartella",
   "cmdk.search.folders": "Cartelle",
+  "cmdk.search.goal": "Obiettivo",
+  "cmdk.search.goals": "Obiettivi",
   "cmdk.search.knowledgeBase": "Libreria",
   "cmdk.search.knowledgeBases": "Librerie",
   "cmdk.search.loading": "Ricerca in corso...",

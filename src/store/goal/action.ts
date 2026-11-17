@@ -844,6 +844,10 @@ export class GoalActionImpl {
     this.#set({ goalListFilter: filter, goalListVisibleLimit: 10 }, false, 'setGoalListFilter');
   };
 
+  setGoalListKeyword = (keyword: string): void => {
+    this.#set({ goalListKeyword: keyword, goalListVisibleLimit: 10 }, false, 'setGoalListKeyword');
+  };
+
   setGoalViewMode = (mode: GoalViewMode): void => {
     this.#set({ goalViewMode: mode }, false, 'setGoalViewMode');
   };

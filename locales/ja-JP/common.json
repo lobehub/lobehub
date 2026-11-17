@@ -147,6 +147,8 @@
   "cmdk.search.files": "ファイル",
   "cmdk.search.folder": "フォルダー",
   "cmdk.search.folders": "フォルダー一覧",
+  "cmdk.search.goal": "目標",
+  "cmdk.search.goals": "目標",
   "cmdk.search.knowledgeBase": "ライブラリ",
   "cmdk.search.knowledgeBases": "ライブラリ",
   "cmdk.search.loading": "検索中…",
