@@ -22,7 +22,6 @@ import {
   preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
-  AgentPromptInput,
   AgentStreamEvent,
   UploadHeterogeneousImage,
 } from '@lobechat/heterogeneous-agents/spawn';

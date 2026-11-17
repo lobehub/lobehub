@@ -1,5 +1,7 @@
 import { mergeIslandDismissals } from '@lobechat/const/goal';
 import type {
+  HeteroPermissionMode,
+  HeteroPermissionModeDir,
   NotificationSettings,
   SSOProvider,
   SystemAgentItem,
@@ -9,8 +11,6 @@ import type {
   UserPreference,
   UserSettings,
   WidgetDryRunGrant,
-  HeteroPermissionMode,
-  HeteroPermissionModeDir,
 } from '@lobechat/types';
 import { applyHeteroPermissionModeDir, applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';

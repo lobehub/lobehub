@@ -65,6 +65,7 @@ import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
 import {
   applyPermissionModeReport,
+  registerLocalPermissionModeSwitcher,
   resolveRunPermissionMode,
 } from '@/store/chat/heteroPermissionMode';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -2393,9 +2394,17 @@ export const executeHeterogeneousAgent = async (
     });
     // Claude Code keeps its input (SDK stream or CLI stdin) open in every Follow-up mode.
     if (adapterType === 'claude-code') {
-      unregisterTaskStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
+      const unregisterStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
         heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
       );
+      // The mode chip switches this run's permission mode mid-run.
+      const unregisterSwitcher = registerLocalPermissionModeSwitcher(context.topicId, (mode) =>
+        heterogeneousAgentService.setPermissionMode(sidForCancel, mode),
+      );
+      unregisterTaskStopper = () => {
+        unregisterStopper();
+        unregisterSwitcher();
+      };
     }
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({

@@ -670,6 +670,28 @@ export default {
   'groupWizard.searchTemplates': 'Search templates...',
   'groupWizard.title': 'Create Group',
   'groupWizard.useTemplate': 'Use Template',
+  'heteroAgent.permissionMode.label': 'Permission mode',
+  'heteroAgent.permissionMode.tooltip':
+    'How Claude Code asks before acting. Applies to this topic; a new topic in this directory starts with your last pick.',
+  'heteroAgent.permissionMode.default.title': 'Ask every time',
+  'heteroAgent.permissionMode.default.desc': 'Asks before every edit and command',
+  'heteroAgent.permissionMode.acceptEdits.title': 'Accept edits',
+  'heteroAgent.permissionMode.acceptEdits.desc': 'Edits go ahead; commands still ask',
+  'heteroAgent.permissionMode.auto.title': 'Auto',
+  'heteroAgent.permissionMode.auto.desc': 'Claude Code decides what needs asking',
+  'heteroAgent.permissionMode.plan.title': 'Plan',
+  'heteroAgent.permissionMode.plan.desc': 'Reads and plans only; acts once you approve the plan',
+  'heteroAgent.permissionMode.bypassPermissions.title': 'Allow everything',
+  'heteroAgent.permissionMode.bypassPermissions.desc': 'Never asks; runs every action',
+  'heteroAgent.permissionMode.fallback.root':
+    'Running as root can’t allow everything, so this run accepts edits and asks before other commands.',
+  'heteroAgent.permissionMode.fallback.outdatedCli':
+    'The last run allowed every action: lh on this device is too old for permission modes. Update lh to apply “{{mode}}”.',
+  'heteroAgent.permissionMode.switchFailed':
+    'Couldn’t switch the running session. The new mode applies from the next message.',
+  'heteroAgent.permissionMode.switchUnsupported':
+    'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
+  'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',
   'heteroAgent.fullAccess.label': 'Full access',
   'heteroAgent.fullAccess.tooltip':
     'The local coding agent runs with full read/write access to the working directory. Switching permission modes is not available yet.',

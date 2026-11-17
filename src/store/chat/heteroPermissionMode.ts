@@ -126,3 +126,29 @@ export const effectivePermissionMode = (
     : fallback === 'root' && mode === 'bypassPermissions'
       ? 'acceptEdits'
       : mode;
+
+/** Switches the permission mode of a run hosted in this window (desktop IPC). */
+export type LocalPermissionModeSwitcher = (mode: HeteroPermissionMode) => Promise<void>;
+
+const localSwitchers = new Map<string, LocalPermissionModeSwitcher>();
+
+/**
+ * Register how to switch the mode of a topic's local run, for as long as its
+ * session lives (the chip switches mid-run through it).
+ *
+ * @returns Unregister; a no-op once a newer run of the topic registered.
+ */
+export const registerLocalPermissionModeSwitcher = (
+  topicId: string | null | undefined,
+  switcher: LocalPermissionModeSwitcher,
+): (() => void) => {
+  if (!topicId) return () => {};
+  localSwitchers.set(topicId, switcher);
+  return () => {
+    if (localSwitchers.get(topicId) === switcher) localSwitchers.delete(topicId);
+  };
+};
+
+export const getLocalPermissionModeSwitcher = (
+  topicId: string,
+): LocalPermissionModeSwitcher | undefined => localSwitchers.get(topicId);
