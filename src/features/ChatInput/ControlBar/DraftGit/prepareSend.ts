@@ -272,6 +272,15 @@ export const snapshotDraftGit = (
   };
 };
 
+/**
+ * Whether the snapshot asks the send to run git (switch to a picked branch, or
+ * fork a worktree). A deferred send ("Send later") cannot: the scheduled run
+ * creates its topic server-side, long after the composer, from the agent's
+ * defaults — so the composer refuses to schedule instead of dropping the choice.
+ */
+export const needsSendTimeGit = (snapshot: DraftGitSnapshot | undefined): boolean =>
+  !!snapshot && (!!snapshot.picked || snapshot.worktreeMode);
+
 export const prepareDraftGitSend = async (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
   {

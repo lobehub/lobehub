@@ -196,6 +196,8 @@ export default {
   'workingDirectory.pullCheckedOutElsewhere':
     '{{branch}} is checked out in worktree {{name}}. Pull it there.',
   'workingDirectory.pullNoUpstream': '{{branch}} has no upstream branch to pull from',
+  'workingDirectory.scheduleGitUnsupported':
+    "Send later can't switch branches or create a worktree. Send now, or pick the current branch and turn off New worktree.",
   'workingDirectory.switchFailed': 'Could not switch to {{branch}}',
   'workingDirectory.switchRiskConfirm': 'Switch and send',
   'workingDirectory.switchRiskRunning_one':

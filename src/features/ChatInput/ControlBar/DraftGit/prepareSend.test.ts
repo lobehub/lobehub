@@ -15,7 +15,12 @@ import {
   setDraftBranch,
   useDraftGitStore,
 } from './draftGitStore';
-import { type DraftGitSendPrompts, prepareDraftGitSend, snapshotDraftGit } from './prepareSend';
+import {
+  type DraftGitSendPrompts,
+  needsSendTimeGit,
+  prepareDraftGitSend,
+  snapshotDraftGit,
+} from './prepareSend';
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => null,
@@ -181,6 +186,18 @@ describe('prepareDraftGitSend — snapshot taken at send time', () => {
     expect(gitService.checkoutGitBranch).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feat', path: '/code/lobehub' }),
     );
+  });
+});
+
+describe('needsSendTimeGit', () => {
+  it('is set only by a branch pick or the worktree switch', () => {
+    expect(needsSendTimeGit(snapshotDraftGit(context))).toBe(false);
+    pick('feat');
+    expect(needsSendTimeGit(snapshotDraftGit(context))).toBe(true);
+    setDraftBranch(draftBranchKey(target), undefined);
+    setWorktreeMode(true);
+    expect(needsSendTimeGit(snapshotDraftGit(context))).toBe(true);
+    expect(needsSendTimeGit(undefined)).toBe(false);
   });
 });
 

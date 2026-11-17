@@ -7,6 +7,7 @@ import {
   type ChatInputProps as EditorChatInputProps,
 } from '@lobehub/editor/react';
 import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
+import i18next from 'i18next';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -16,7 +17,11 @@ import {
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
-import { prepareComposerGitSend, snapshotDraftGit } from '@/features/ChatInput/ControlBar/DraftGit';
+import {
+  needsSendTimeGit,
+  prepareComposerGitSend,
+  snapshotDraftGit,
+} from '@/features/ChatInput/ControlBar/DraftGit';
 import { resolveComposerHandoff } from '@/features/ChatInput/ControlBar/DraftGit/composerHandoff';
 import {
   type SendButtonHandler,
@@ -394,6 +399,12 @@ const ChatInput = memo<ChatInputProps>(
         // the request failed) leaves no message row to recover the text from, so
         // an up-front clear would simply lose it.
         if (storeApi.getState().scheduledSendAt) {
+          // The scheduled run is created server-side later and cannot switch
+          // the picked branch or fork a worktree: refuse rather than drop them.
+          if (needsSendTimeGit(snapshotDraftGit(sendContext, editorData))) {
+            toast.error(i18next.t('workingDirectory.scheduleGitUnsupported', { ns: 'device' }));
+            return;
+          }
           const scheduled = await storeApi.getState().commitScheduledSend(message, currentFileList);
           if (scheduled) clearComposer();
           return;

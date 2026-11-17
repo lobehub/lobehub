@@ -19,7 +19,7 @@ const inFlight = new Set<string>();
  * from the same composer while its git step runs is refused, rather than
  * racing it.
  */
-export { snapshotDraftGit } from './prepareSend';
+export { needsSendTimeGit, snapshotDraftGit } from './prepareSend';
 
 export const prepareComposerGitSend = async (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,

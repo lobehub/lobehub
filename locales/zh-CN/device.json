@@ -152,6 +152,7 @@
   "workingDirectory.renameBranchTitle": "重命名分支",
   "workingDirectory.renameFailed": "重命名失败",
   "workingDirectory.rollBranchName": "换一个分支名",
+  "workingDirectory.scheduleGitUnsupported": "「稍后发送」无法切换分支或创建工作树。请立即发送，或选回当前分支并关闭「新建工作树」。",
   "workingDirectory.searchPlaceholder": "搜索工作目录",
   "workingDirectory.selectFolder": "选择文件夹",
   "workingDirectory.setDefault": "设为默认",
