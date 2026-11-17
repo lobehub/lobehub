@@ -194,6 +194,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async steerSession(...args: Parameters<Implementation['steerSession']>) {
+    return (await this.getImplementation()).steerSession(...args);
+  }
+
+  @IpcMethod()
   async cancelSession(...args: Parameters<Implementation['cancelSession']>) {
     return (await this.getImplementation()).cancelSession(...args);
   }

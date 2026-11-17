@@ -92,6 +92,7 @@ import { markUnfinishedToolsCancelled } from './cancelledTools';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
 import { claimLocalRunFee, type LocalRunFeeClaim, settleLocalRunFee } from './localRunFee';
+import { type LocalSteer, startLocalSteer } from './localSteer';
 import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
@@ -659,6 +660,7 @@ export const executeHeterogeneousAgent = async (
    * + live UI. Reassigned (commit-on-success) by `reduceAndApplyMain`.
    */
   let mainState: MainAgentRunState = createMainAgentRunState(assistantMessageId);
+  let localSteer: LocalSteer | undefined;
   /**
    * Per-thread UI handles the reducer doesn't model: the thread-scoped store
    * dispatcher + its sub-operation id. Created on the `createThread` intent,
@@ -2004,13 +2006,13 @@ export const executeHeterogeneousAgent = async (
         get().updateOperationMetadata?.(operationId, { streamRetry: undefined });
       }
 
-      // Requests, ACKs and tool/runtime completion share one state machine so
-      // a missing bridge response cannot leave a completed question pending.
+      // Requests, ACKs and tool/runtime completion share one state machine so a missing
+      // bridge response cannot leave a completed question pending. A settled one frees steers.
       if (
         event.type === 'agent_intervention_request' ||
         event.type === 'agent_intervention_response'
       ) {
-        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event)).then(localSteer?.pump);
         return;
       }
 
@@ -2045,6 +2047,11 @@ export const executeHeterogeneousAgent = async (
       // usage tray derives its total from these per-message usages directly
       // (OpStatusTray → calculateOperationUsageMetrics), so there is no separate
       // accumulation here. Not forwarded (bookkeeping).
+      // A message steered into the run was read: it joins the spine (Follow-up behavior: Steer).
+      if (event.type === 'step_complete' && event.data?.phase === 'user_message') {
+        persistQueue = persistQueue.then(async () => void (await localSteer?.confirm(event.data)));
+        return;
+      }
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
@@ -2477,6 +2484,21 @@ export const executeHeterogeneousAgent = async (
         )
       : undefined;
 
+    localSteer = startLocalSteer({
+      agentType: adapterType,
+      codexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
+      context,
+      contextKey: messageMapKey(context),
+      get,
+      ipcSessionId: ipcRunSessionId,
+      isWaitingForUser: () =>
+        [...mainState.interventionsByCallId.values()].some((i) => i.transition === 'pending'),
+      operationId,
+      spine: {
+        get: () => mainState.lastSpineMessageId,
+        set: (id) => void (mainState = { ...mainState, lastSpineMessageId: id }),
+      },
+    });
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
@@ -2492,6 +2514,7 @@ export const executeHeterogeneousAgent = async (
         ? { replayTranscript: true, replayTranscriptConfigDir, replayTranscriptStartedAt }
         : {}),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
+      ...(localSteer && { liveSteer: true }),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
@@ -2543,14 +2566,13 @@ export const executeHeterogeneousAgent = async (
     const drainableTerminal =
       terminalEvent?.type !== 'error' &&
       isCompletedRuntimeEnd((terminalEvent?.data as { reason?: string } | undefined)?.reason);
+    localSteer?.settle();
     if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
       const turn = drainQueuedTurn(get, contextKey);
       if (turn.messages.length > 0) {
-        // Force-complete this op + mark unread BEFORE the next sendMessage,
-        // otherwise its queue check (covering all AI_RUNTIME_OPERATION_TYPES)
-        // would still see this op as "running" and re-queue the merged content
-        // into a now-orphaned operation.
+        // Complete this op + mark unread BEFORE the next sendMessage: its queue check would
+        // still see this op as running and re-queue the content into an orphaned operation.
         get().completeOperation(operationId);
         const completedOp = get().operations?.[operationId];
         if (completedOp?.context.agentId) {
@@ -2602,6 +2624,7 @@ export const executeHeterogeneousAgent = async (
         .catch((err) => console.error('[HeterogeneousAgent] cancelled tool cleanup failed:', err));
     }
     unsubscribe?.();
+    localSteer?.settle();
     // The desktop IPC session only owns this run's config and process handles.
     // Multi-turn resume uses the native agentSessionId persisted above, so the
     // IPC session must be released after every run instead of accumulating in

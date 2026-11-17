@@ -961,11 +961,14 @@ export class OperationActionsImpl {
     if (!queue || queue.length === 0) return [];
     if (!queue.every(isClientHeldQueuedMessage)) return [];
 
-    const messages = options?.limit ? queue.slice(0, options.limit) : [...queue];
+    // A steer that may already be with the agent is never sent on its own.
+    const sendable = queue.filter((message) => message.localSteer !== 'unknown');
+    const messages = options?.limit ? sendable.slice(0, options.limit) : sendable;
+    if (messages.length === 0) return [];
 
     this.#set(
       produce((state: ChatStore) => {
-        state.queuedMessages[contextKey] = queue.slice(messages.length);
+        state.queuedMessages[contextKey] = queue.filter((message) => !messages.includes(message));
       }),
       false,
       n(`drainQueuedMessages/${contextKey}`),

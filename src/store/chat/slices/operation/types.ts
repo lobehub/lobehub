@@ -183,7 +183,6 @@ export interface OperationMetadata {
    * scheduling/execution index.
    */
   llmCalls?: number;
-
   // Progress information
   progress?: {
     current: number;
@@ -203,6 +202,13 @@ export interface OperationMetadata {
 
   // Performance information
   startTime: number;
+
+  /**
+   * Follow-up behavior is Steer, but this run cannot take a message mid-run
+   * (an agent with no native steer): its queue waits for the run end, and the
+   * tray says so.
+   */
+  steerUnsupported?: boolean;
 
   /**
    * Upstream stream retry state surfaced by heterogeneous agents while no
@@ -343,6 +349,13 @@ export interface QueuedMessage {
   heldBehindOperationId?: string;
   id: string;
   interruptMode: 'soft' | 'hard';
+  /**
+   * A merged steer being written into a local agent session (Follow-up
+   * behavior: Steer): `delivering` until the agent reads it, `unknown` when
+   * the write failed and it may or may not have arrived. An `unknown` one is
+   * never sent on its own; the user sends it again or deletes it.
+   */
+  localSteer?: 'delivering' | 'unknown';
   metadata?: MessageMetadata;
   /**
    * A run already took this follow-up from the server queue and is handing it
