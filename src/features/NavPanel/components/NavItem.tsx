@@ -95,7 +95,8 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   active?: boolean;
   /**
    * Denser single-line row for long lists of shortcuts (e.g. Favorites): 28px
-   * tall with 13px text and a 24px icon column, instead of 36px / 14px / 28px.
+   * tall with 13px text and a 16px icon, instead of 36px / 14px / 18px. The
+   * icon column keeps its width, so titles still line up with the other rows.
    */
   compact?: boolean;
   contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
@@ -186,7 +187,6 @@ const NavItem = memo<NavItemProps>(
           }
         : undefined;
 
-    const iconColumnWidth = compact ? 24 : 28;
     const titleFontSize = compact ? 13 : undefined;
 
     const iconNode = icon && (
@@ -195,9 +195,9 @@ const NavItem = memo<NavItemProps>(
         // With a description the row is two lines tall; align the leading icon
         // to the title's first line (match its line-height) instead of letting
         // it center across both lines, which drops it into the gap.
-        height={description ? 22 : iconColumnWidth}
+        height={description ? 22 : 28}
         style={description ? { alignSelf: 'flex-start' } : undefined}
-        width={iconColumnWidth}
+        width={28}
       >
         {loading ? (
           <Spin size={iconSize} variant="network" />
@@ -213,7 +213,7 @@ const NavItem = memo<NavItemProps>(
         align={'center'}
         className={cx(styles.container, className)}
         clickable={!disabled}
-        gap={compact ? 6 : 8}
+        gap={8}
         height={description ? undefined : compact ? 28 : 36}
         paddingBlock={description ? 8 : undefined}
         paddingInline={4}
@@ -241,7 +241,7 @@ const NavItem = memo<NavItemProps>(
             style={description ? { alignSelf: 'flex-start' } : undefined}
             // Keep the icon column width so the title does not shift; a wider
             // label overflows evenly into the gaps around it.
-            width={iconColumnWidth}
+            width={28}
           >
             {iconNode}
             {iconBelow}
