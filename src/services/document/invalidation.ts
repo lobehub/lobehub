@@ -1,4 +1,5 @@
 import { revalidateReplica } from '@/libs/replica';
+import { getAgentStoreState } from '@/store/agent';
 import {
   agentDocumentListResource,
   agentDocumentReaderKey,
@@ -68,6 +69,9 @@ export const invalidateDocumentMutation = async (
   }
 
   if (agentId) {
+    // The browser runtime's context documents are a separate cache; drop it so
+    // the next model call sees new documents and load-mode changes.
+    getAgentStoreState().invalidateAgentDocuments(agentId);
     // The agent's document list is a replica keyed by agent: one entry feeds the
     // working sidebar, the document page header, entity links and tool cards.
     revalidations.push(revalidateReplica(agentDocumentListResource, agentId));

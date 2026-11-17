@@ -164,6 +164,8 @@ export class AgentSliceActionImpl {
   readonly #get: () => AgentStore;
   readonly #set: Setter;
   readonly #pendingAgentDocuments = new Map<string, Promise<AgentContextDocument[] | undefined>>();
+  /** Bumped by invalidateAgentDocuments; a fetch started under an older value is stale. */
+  readonly #agentDocumentsGeneration = new Map<string, number>();
   readonly #updateAgentConfigControllers = new Map<string, AbortController>();
   readonly #updateAgentMetaControllers = new Map<string, AbortController>();
   readonly #config;
@@ -831,21 +833,49 @@ export class AgentSliceActionImpl {
     const pendingRequest = this.#pendingAgentDocuments.get(agentId);
     if (pendingRequest) return pendingRequest;
 
+    const generation = this.#agentDocumentsGeneration.get(agentId) ?? 0;
     const request = resolveAgentDocumentsContext({ agentId })
       .then((documents) => {
-        if (documents) {
+        // A mutation since this fetch started makes its list stale; don't cache it.
+        if (documents && (this.#agentDocumentsGeneration.get(agentId) ?? 0) === generation) {
           this.#syncAgentDocuments(agentId, documents);
         }
 
         return documents;
       })
       .finally(() => {
-        this.#pendingAgentDocuments.delete(agentId);
+        if (this.#pendingAgentDocuments.get(agentId) === request) {
+          this.#pendingAgentDocuments.delete(agentId);
+        }
       });
 
     this.#pendingAgentDocuments.set(agentId, request);
 
     return request;
+  };
+
+  /**
+   * Drop an agent's cached context documents so the next context build fetches
+   * them again. Without this the browser runtime kept the list it loaded first:
+   * documents created or switched to "always" stayed out of the model context
+   * until a page reload.
+   */
+  invalidateAgentDocuments = (agentId: string): void => {
+    this.#agentDocumentsGeneration.set(
+      agentId,
+      (this.#agentDocumentsGeneration.get(agentId) ?? 0) + 1,
+    );
+    this.#pendingAgentDocuments.delete(agentId);
+    if (this.#get().agentDocumentsMap[agentId] === undefined) return;
+
+    this.#set(
+      (state) => {
+        const { [agentId]: _dropped, ...agentDocumentsMap } = state.agentDocumentsMap;
+        return { agentDocumentsMap };
+      },
+      false,
+      'invalidateAgentDocuments',
+    );
   };
 
   /**
