@@ -477,6 +477,11 @@ export interface ListChannelsParams {
 
 export interface ListChannelsState {
   channels?: { id: string; name: string; type?: string }[];
+  /**
+   * The platform returned only the channels this bot can see (Discord hides channels the bot's
+   * role lacks View Channel on), so a missing channel may exist but be hidden from the bot.
+   */
+  visibleToBotOnly?: boolean;
 }
 
 // --- Member Information ---

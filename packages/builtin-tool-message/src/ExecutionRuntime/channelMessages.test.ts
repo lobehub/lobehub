@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MessageExecutionRuntime } from './index';
+import { MessageExecutionRuntime, MessagePlatformError } from './index';
 import type { MessageRuntimeService } from './types';
 
 const runtimeWith = (service: Partial<MessageRuntimeService>) =>
@@ -74,6 +74,41 @@ describe('ChannelMessageRuntime', () => {
     )[method](params);
 
     expect(output).toEqual({ content: `${method} error: rate limited`, success: false });
+  });
+
+  it('carries a platform-explained refusal as a structured error', async () => {
+    const data = {
+      code: 'DISCORD_MISSING_ACCESS',
+      hint: 'Ask a server admin to grant View Channel.',
+      kind: 'stop' as const,
+      message: 'Missing Access (Discord 50001): this bot cannot see channel c1.',
+      platformCode: 50_001,
+      status: 403,
+    };
+    const runtime = runtimeWith({
+      readMessages: vi.fn().mockRejectedValue(new MessagePlatformError(data)),
+      sendMessage: vi.fn().mockRejectedValue(new MessagePlatformError(data)),
+    });
+
+    expect(await runtime.readMessages(base)).toEqual({
+      content:
+        'readMessages error: Missing Access (Discord 50001): this bot cannot see channel c1. Ask a server admin to grant View Channel.',
+      error: data,
+      success: false,
+    });
+    expect((await runtime.sendMessage({ ...base, content: 'hi' })).error).toEqual(data);
+  });
+
+  it('says when the listed channels are only those the bot can see', async () => {
+    const runtime = runtimeWith({
+      listChannels: vi
+        .fn()
+        .mockResolvedValue({ channels: [{ id: 'c1', name: 'dev' }], visibleToBotOnly: true }),
+    });
+
+    expect((await runtime.listChannels({ platform: 'discord' })).content).toMatch(
+      /^1 channels found on discord \(only the channels this bot can see: a channel missing here is hidden from the bot/,
+    );
   });
 
   it('lists channels and threads', async () => {

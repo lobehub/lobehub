@@ -46,6 +46,7 @@ import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDe
 import type { DiscordApi } from './api';
 import { MAX_DISCORD_HISTORY_LIMIT } from './const';
 import { normalizeDiscordEmbeds } from './embeds';
+import { explainDiscordErrors } from './errors';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 /**
@@ -66,7 +67,12 @@ const toMessageItem = (msg: any): MessageItem => ({
 });
 
 export class DiscordMessageService implements MessageRuntimeService {
-  constructor(private api: DiscordApi) {}
+  private api: DiscordApi;
+
+  constructor(api: DiscordApi) {
+    // Every Discord call made for the message tool explains its refusals ("Missing Access").
+    this.api = explainDiscordErrors(api);
+  }
 
   /**
    * Shared outbound path used by `sendMessage`, `sendDirectMessage`, and
@@ -277,6 +283,8 @@ export class DiscordMessageService implements MessageRuntimeService {
         name: c.name ?? '',
         type: String(c.type),
       })),
+      // Discord returns only the channels the bot's role can view.
+      visibleToBotOnly: true,
     };
   };
 

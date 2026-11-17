@@ -8,8 +8,10 @@
  */
 import type {
   BotProviderQuery,
+  MessagePlatformErrorData,
   MessageRuntimeService,
 } from '@lobechat/builtin-tool-message/executionRuntime';
+import { MessagePlatformError } from '@lobechat/builtin-tool-message/executionRuntime';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -261,7 +263,38 @@ const buildTrpcInput = async (params: any): Promise<any> => {
   return { ...rest, botId };
 };
 
-export const trpcMessageService: MessageRuntimeService = {
+/**
+ * The server sends a platform-explained refusal (`MessagePlatformError`, e.g. Discord "Missing
+ * Access") as the tRPC error's `errorData`. Rebuild it so the runtime reports the same reason and
+ * hint here as when the tool runs on the server.
+ */
+const restorePlatformError = (error: unknown): unknown => {
+  const data = (error as { data?: { errorData?: Partial<MessagePlatformErrorData> } } | undefined)
+    ?.data?.errorData;
+  const isPlatformError =
+    typeof data?.code === 'string' &&
+    typeof data.hint === 'string' &&
+    typeof data.message === 'string' &&
+    (data.kind === 'replan' || data.kind === 'stop');
+
+  return isPlatformError ? new MessagePlatformError(data as MessagePlatformErrorData) : error;
+};
+
+const withPlatformErrors = (service: MessageRuntimeService): MessageRuntimeService =>
+  Object.fromEntries(
+    Object.entries(service).map(([name, call]) => [
+      name,
+      async (params: unknown) => {
+        try {
+          return await (call as (params: unknown) => Promise<unknown>)(params);
+        } catch (error) {
+          throw restorePlatformError(error);
+        }
+      },
+    ]),
+  ) as unknown as MessageRuntimeService;
+
+export const trpcMessageService: MessageRuntimeService = withPlatformErrors({
   sendMessage: async (params) => {
     return lambdaClient.botMessage.sendMessage.mutate(await buildTrpcInput(params)) as any;
   },
@@ -337,4 +370,4 @@ export const trpcMessageService: MessageRuntimeService = {
   createPoll: async (params) => {
     return lambdaClient.botMessage.createPoll.mutate(await buildTrpcInput(params)) as any;
   },
-};
+});

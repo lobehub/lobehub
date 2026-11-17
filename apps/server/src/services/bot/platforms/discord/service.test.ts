@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DiscordAPIError } from '@discordjs/rest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DiscordMessageService } from './service';
@@ -319,5 +320,47 @@ describe('DiscordMessageService.replyToThread', () => {
     expect(api.createMessage).toHaveBeenCalledWith('thread-id-1', 'card reply', undefined, [
       expect.objectContaining({ description: 'body' }),
     ]);
+  });
+});
+
+describe('DiscordMessageService channel access', () => {
+  const missingAccess = (channelId: string) =>
+    new DiscordAPIError(
+      { code: 50_001, message: 'Missing Access' },
+      50_001,
+      403,
+      'GET',
+      `https://discord.com/api/v10/channels/${channelId}/messages?limit=50`,
+      {},
+    );
+
+  it('explains why a hidden channel cannot be read instead of a bare "Missing Access"', async () => {
+    const api = { getMessages: vi.fn().mockRejectedValue(missingAccess('1478668801703678056')) };
+    const service = new DiscordMessageService(api as any);
+
+    const error = await service
+      .readMessages({ channelId: '1478668801703678056', platform: 'discord' })
+      .catch((e: unknown) => e);
+
+    expect((error as Error).message).toBe(
+      "Missing Access (Discord 50001): this bot cannot see channel 1478668801703678056. Either the bot is not a member of its server, or the bot's role lacks View Channel there.",
+    );
+    expect(error).toMatchObject({ data: { code: 'DISCORD_MISSING_ACCESS', status: 403 } });
+  });
+
+  it('marks listed channels as only the ones the bot can see', async () => {
+    const api = {
+      getGuildChannels: vi
+        .fn()
+        .mockResolvedValue([{ id: '1233998293818671126', name: 'dev', type: 0 }]),
+    };
+    const service = new DiscordMessageService(api as any);
+
+    await expect(
+      service.listChannels({ platform: 'discord', serverId: '1127171173982154893' }),
+    ).resolves.toEqual({
+      channels: [{ id: '1233998293818671126', name: 'dev', type: '0' }],
+      visibleToBotOnly: true,
+    });
   });
 });

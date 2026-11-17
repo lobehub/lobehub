@@ -30,6 +30,7 @@ import {
   formatMessageLines,
 } from './messageImages';
 import { describeDiscordPagination } from './pagination';
+import { toFailureOutput } from './platformError';
 import type { MessageExecutionRuntimeOptions, MessageRuntimeService } from './types';
 
 /**
@@ -73,10 +74,7 @@ export class ChannelMessageRuntime {
       );
       return { content: outcome.content, state: result, success: outcome.success };
     } catch (e) {
-      return {
-        content: `sendMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('sendMessage', e);
     }
   }
 
@@ -117,10 +115,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `readMessages error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('readMessages', e);
     }
   }
 
@@ -157,10 +152,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `readDocument error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('readDocument', e);
     }
   }
 
@@ -173,10 +165,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `editMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('editMessage', e);
     }
   }
 
@@ -189,10 +178,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `deleteMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('deleteMessage', e);
     }
   }
 
@@ -209,10 +195,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `searchMessages error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('searchMessages', e);
     }
   }
 
@@ -227,10 +210,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `reactToMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('reactToMessage', e);
     }
   }
 
@@ -245,10 +225,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `getReactions error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('getReactions', e);
     }
   }
 
@@ -263,10 +240,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `pinMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('pinMessage', e);
     }
   }
 
@@ -279,10 +253,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `unpinMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('unpinMessage', e);
     }
   }
 
@@ -297,10 +268,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `listPins error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('listPins', e);
     }
   }
 
@@ -315,10 +283,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `getChannelInfo error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('getChannelInfo', e);
     }
   }
 
@@ -327,17 +292,17 @@ export class ChannelMessageRuntime {
       const result = await this.service.listChannels(params);
       const count = result.channels?.length ?? 0;
       const formatted = result.channels?.map((c) => `#${c.name} (${c.id})`).join('\n');
+      const scope = result.visibleToBotOnly
+        ? ' (only the channels this bot can see: a channel missing here is hidden from the bot, which lacks View Channel there, or is in another server)'
+        : '';
 
       return {
-        content: `${count} channels found on ${params.platform}\n\n${formatted ?? '(none)'}`,
+        content: `${count} channels found on ${params.platform}${scope}\n\n${formatted ?? '(none)'}`,
         state: result,
         success: true,
       };
     } catch (e) {
-      return {
-        content: `listChannels error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('listChannels', e);
     }
   }
 
@@ -352,10 +317,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `getMemberInfo error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('getMemberInfo', e);
     }
   }
 
@@ -370,10 +332,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `createThread error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('createThread', e);
     }
   }
 
@@ -389,10 +348,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `listThreads error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('listThreads', e);
     }
   }
 
@@ -406,10 +362,7 @@ export class ChannelMessageRuntime {
       );
       return { content: outcome.content, state: result, success: outcome.success };
     } catch (e) {
-      return {
-        content: `replyToThread error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('replyToThread', e);
     }
   }
 
@@ -424,10 +377,7 @@ export class ChannelMessageRuntime {
         success: true,
       };
     } catch (e) {
-      return {
-        content: `createPoll error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('createPoll', e);
     }
   }
 
@@ -449,10 +399,7 @@ export class ChannelMessageRuntime {
       );
       return { content: outcome.content, state: result, success: outcome.success };
     } catch (e) {
-      return {
-        content: `sendDirectMessage error: ${(e as Error).message}`,
-        success: false,
-      };
+      return toFailureOutput('sendDirectMessage', e);
     }
   }
 }

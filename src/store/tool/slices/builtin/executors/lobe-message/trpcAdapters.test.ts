@@ -1,10 +1,14 @@
+import { MessagePlatformError } from '@lobechat/builtin-tool-message/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockListPlatforms, mockListProviders, mockSendMessage } = vi.hoisted(() => ({
-  mockListPlatforms: vi.fn(),
-  mockListProviders: vi.fn(),
-  mockSendMessage: vi.fn(),
-}));
+const { mockListPlatforms, mockListProviders, mockReadMessages, mockSendMessage } = vi.hoisted(
+  () => ({
+    mockListPlatforms: vi.fn(),
+    mockListProviders: vi.fn(),
+    mockReadMessages: vi.fn(),
+    mockSendMessage: vi.fn(),
+  }),
+);
 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -12,7 +16,10 @@ vi.mock('@/libs/trpc/client', () => ({
       list: { query: mockListProviders },
       listPlatforms: { query: mockListPlatforms },
     },
-    botMessage: { sendMessage: { mutate: mockSendMessage } },
+    botMessage: {
+      readMessages: { query: mockReadMessages },
+      sendMessage: { mutate: mockSendMessage },
+    },
   },
 }));
 
@@ -75,5 +82,40 @@ describe('trpcMessageService routing', () => {
       channelId: 'wx-user@im.wechat',
       content: 'hi',
     });
+  });
+});
+
+describe('trpcMessageService platform errors', () => {
+  const errorData = {
+    code: 'DISCORD_MISSING_ACCESS',
+    hint: "Ask a server admin to give the bot's role View Channel.",
+    kind: 'stop',
+    message: 'Missing Access (Discord 50001): this bot cannot see channel c1.',
+    platformCode: 50_001,
+    status: 403,
+  };
+
+  it('rebuilds the reason the server sent as errorData', async () => {
+    mockReadMessages.mockRejectedValue(
+      Object.assign(new Error(errorData.message), {
+        data: { code: 'INTERNAL_SERVER_ERROR', errorData },
+      }),
+    );
+
+    const error = await trpcMessageService
+      .readMessages({ botId: 'bot-1', channelId: 'c1', platform: 'discord' })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(MessagePlatformError);
+    expect((error as MessagePlatformError).data).toEqual(errorData);
+  });
+
+  it('passes other errors through', async () => {
+    const plain = Object.assign(new Error('UNAUTHORIZED'), { data: { code: 'UNAUTHORIZED' } });
+    mockReadMessages.mockRejectedValue(plain);
+
+    await expect(
+      trpcMessageService.readMessages({ botId: 'bot-1', channelId: 'c1', platform: 'discord' }),
+    ).rejects.toBe(plain);
   });
 });

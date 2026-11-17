@@ -89,6 +89,8 @@ export type {
   MessageImageResolver,
   MessageToolImage,
 } from './messageImages';
+export type { MessagePlatformErrorData } from './platformError';
+export { MessagePlatformError } from './platformError';
 export type {
   BotProviderQuery,
   MessageExecutionRuntimeOptions,

@@ -233,6 +233,7 @@ Layout rules:
 - **Channel types:** Discord has text channels (type 0), voice channels (type 2), categories (type 4), forum channels (type 15), and threads (types 10/11/12). Threads are child channels — they have their own unique ID.
 - **channelId works for both channels and threads.** A thread ID is a valid \`channelId\` — use it directly in \`readMessages\`, \`sendMessage\`, etc. No special handling needed.
 - To discover channels: use \`listChannels\` (returns guild-level channels). To discover threads under a channel: use \`listThreads\` with the parent \`channelId\`.
+- \`listChannels\` returns only the channels this bot can see. A channel the user names that is missing from it is hidden from the bot (or in another server), and calls on it fail with \`DISCORD_MISSING_ACCESS\`. Do not retry or try other channels: tell the user which channel is blocked and that a server admin must give the bot's role View Channel there. \`DISCORD_MISSING_PERMISSIONS\` means the bot sees the channel but lacks the permission for that action.
 - Thread creation can be from a message or standalone
 
 **Telegram:**
