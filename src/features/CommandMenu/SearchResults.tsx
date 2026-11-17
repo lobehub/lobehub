@@ -39,6 +39,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import type { CommandMenuResultClick } from './analytics';
 import { CommandItem } from './components';
 import { styles } from './styles';
+import { goalResultStatusKey } from './utils/goalResults';
 import { shouldShowMarketplaceFallback } from './utils/marketplaceFallback';
 import { type ValidSearchType } from './utils/queryParser';
 import { createVisibleResultPositionMap } from './utils/visibleResultPosition';
@@ -346,9 +347,8 @@ const SearchResults = memo<SearchResultsProps>(
 
       // Goal results: lifecycle first, then the requirement the query may have matched.
       if (result.type === 'goal') {
-        const status = tChat(`goalList.status.${result.status}` as any, {
-          defaultValue: result.status,
-        });
+        const statusKey = goalResultStatusKey(result.status);
+        const status = statusKey ? tChat(statusKey) : result.status;
         return [status, description].filter(Boolean).join(' · ');
       }
 
