@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
 import type { FirstSendWorktree } from '../../topic';
+import type { WorkingDirConfig } from '../../workingDir';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
 import type {
@@ -163,6 +164,8 @@ export interface SendMessageParams {
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
+  /** A checkout already prepared for this new topic by the Desktop client. */
+  newTopicWorkingDirectory?: WorkingDirConfig;
   onlyAddUserMessage?: boolean;
   /**
    * Called once the send lifecycle owns the turn, either by persisting the user message or by

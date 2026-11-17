@@ -8,7 +8,7 @@ import type { WorktreeTurnJob } from './submitWorktreeTurn';
 
 /** Create the checkout selected by a persisted first send, on the selected device. */
 export const createFirstSendWorktree = async (
-  worktree: WorktreeTurnJob['worktree'],
+  worktree: WorktreeTurnJob['worktree'] & { branch: string },
   principal: { userId: string; workspaceId?: string },
 ): Promise<WorkingDirConfig> => {
   const { baseBranch, branch, deviceId, ownerNonce, ownerToken, path, repoType, sourcePath } =

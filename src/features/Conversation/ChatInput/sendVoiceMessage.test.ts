@@ -183,6 +183,21 @@ describe('sendVoiceMessage', () => {
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ firstSendWorktree }));
   });
 
+  it('passes a prepared Desktop checkout to the first voice send', async () => {
+    const checkout = { path: '/repo', sessionPath: '/checkout' };
+    const sendMessage = vi.fn(async (params: SendMessageParams) => {
+      params.onMessageAccepted?.();
+    });
+
+    await sendVoiceMessage(sendMessage, voiceFile, {
+      prepare: async () => ({ newTopicWorkingDirectory: checkout, ok: true }),
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ newTopicWorkingDirectory: checkout }),
+    );
+  });
+
   it('sends nothing, and keeps the recording retryable, when the git step stops', async () => {
     const sendMessage = vi.fn();
 

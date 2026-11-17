@@ -27,9 +27,9 @@ import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupM
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
 import { createAgentConfigResolver } from '@/server/services/aiAgent/pipeline/precreatedTopic';
+import { wakeWorktreeTurn } from '@/server/services/aiAgent/pipeline/scheduledTopicDispatch';
 import { submitWorktreeTurn } from '@/server/services/aiAgent/pipeline/submitWorktreeTurn';
 import { RequestedDeviceIgnoredError } from '@/server/services/aiAgent/pipeline/turnSetup';
-import { wakeWorktreeTurn } from '@/server/services/aiAgent/pipeline/wakeWorktreeTurn';
 import { AgentRelayHopLimitError } from '@/server/services/aiAgent/sourceAttribution';
 import {
   ForeignLiveRunError,

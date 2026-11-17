@@ -468,6 +468,7 @@ const ChatInput = memo<ChatInputProps>(
           files: currentFileList,
           message,
           ...(gitPrep.firstSendWorktree ? { firstSendWorktree: gitPrep.firstSendWorktree } : {}),
+          newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory,
           ...(handoff.sendToOrigin ? { conversationContext: sendContext } : {}),
           onMessagePersisted: gitPrep.onMessagePersisted,
           onPreflightFailure: () => {

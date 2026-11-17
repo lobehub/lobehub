@@ -1,4 +1,3 @@
-import { generateWorktreeBranchName } from '@lobechat/const';
 import type {
   ComposerUserMessage,
   FirstSendWorktree,
@@ -50,7 +49,7 @@ export type WorktreeTurnJob = Pick<
   checkout?: WorkingDirConfig;
   deviceWorkspaceId?: string;
   userMessageId: string;
-  worktree: FirstSendWorktree & { branch: string; ownerNonce?: string; ownerToken?: string };
+  worktree: FirstSendWorktree & { branch?: string; ownerNonce?: string; ownerToken?: string };
 };
 
 /** Persist the conversation, first message and dispatch reservation together. */
@@ -122,7 +121,6 @@ export const submitWorktreeTurn = async (
     userMessageId,
     worktree: {
       ...worktree,
-      branch: generateWorktreeBranchName({ now }),
       ownerNonce: receipt?.nonce,
       ownerToken: receipt?.token,
     },

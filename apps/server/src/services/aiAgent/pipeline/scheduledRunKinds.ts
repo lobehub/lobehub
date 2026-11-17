@@ -5,14 +5,13 @@ import { RequestTrigger } from '@lobechat/types';
 
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
-import type { TopicItem } from '@/database/schemas/topic';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 export interface ScheduledRunContext {
   /** The dispatcher's claim lease id — fences post-dispatch writes against stale attempts. */
   claimId: string;
   db: LobeChatDatabase;
-  topic: TopicItem;
+  topic: { agentId: string | null; id: string; userId: string };
   workspaceId?: string;
 }
 

@@ -93,7 +93,7 @@ export const retryWorktreeStart = async (ctx: TopicModelContext, id: string) =>
     await tx
       .update(topics)
       .set({ metadata: { ...row.metadata, scheduledRun }, status: 'scheduled' })
-      .where(eq(topics.id, id));
+      .where(and(eq(topics.id, id), ctx.ownership()));
     return scheduledRun;
   });
 

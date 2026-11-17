@@ -177,6 +177,7 @@ export const resolveSendRunCwd = async ({
   agencyConfig,
   chatConfig,
   currentDeviceId,
+  draftWorkingDirectory,
   existingTopic,
   heterogeneousProvider,
   inheritedTopic,
@@ -188,6 +189,7 @@ export const resolveSendRunCwd = async ({
   agencyConfig: LobeAgentAgencyConfig | undefined;
   chatConfig: LobeAgentChatConfig | undefined;
   currentDeviceId: string | undefined;
+  draftWorkingDirectory?: WorkingDirConfig;
   existingTopic: Pick<ChatTopic, 'metadata'> | undefined;
   heterogeneousProvider: HeterogeneousProviderConfig | undefined;
   inheritedTopic: SourceTopicDirectory | undefined;
@@ -248,6 +250,7 @@ export const resolveSendRunCwd = async ({
         legacyAgentWorkingDirectory,
         // A project's staged directory, not the agent default, is the new topic's cwd.
         topicWorkingDirectory: stagedDirectoryPath,
+        topicWorkingDirectoryConfig: existingTopic ? undefined : draftWorkingDirectory,
         workspaceScoped,
       }
     : undefined;
@@ -272,7 +275,8 @@ export const resolveSendRunCwd = async ({
     agentWorkingDirectory,
     agentWorkingDirectoryConfig,
     existingTopic,
-    inheritedTopic: !stagedDirectoryPath && resolvesRunCwd ? inheritedTopic : undefined,
+    inheritedTopic:
+      !draftWorkingDirectory && !stagedDirectoryPath && resolvesRunCwd ? inheritedTopic : undefined,
     resolvePath: resolveWorkingDirPath,
     runMachine: { deviceId: runCwdDeviceId, target: runEffectiveTarget },
   });

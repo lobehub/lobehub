@@ -2,8 +2,6 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { WorktreeStartRun } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { TopicItem } from '@/database/schemas/topic';
-
 import { dispatchWorktreeTurn } from './dispatchWorktreeTurn';
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createCheckout: vi.fn(),
   devices: vi.fn(),
   execAgent: vi.fn(),
+  listBranches: vi.fn(),
   message: vi.fn(),
   mergeMetadata: vi.fn(),
   operation: vi.fn(),
@@ -49,6 +48,9 @@ vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
 vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
   getScopedOnlineDevices: mocks.devices,
 }));
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: { listGitBranches: mocks.listBranches },
+}));
 vi.mock('./createFirstSendWorktree', () => ({ createFirstSendWorktree: mocks.createCheckout }));
 
 const now = '2026-11-17T18:00:00.000Z';
@@ -67,7 +69,7 @@ const topic = {
   metadata: { scheduledRun: run },
   status: 'scheduled',
   userId: 'usr_1',
-} as TopicItem;
+};
 const request = {
   baseBranch: 'release',
   branch: 'lobehub/new',
@@ -76,6 +78,7 @@ const request = {
   repoType: 'git',
   sourcePath: '/repo',
 };
+const { branch: _branch, ...unassignedWorktree } = request;
 const checkout = {
   git: { activeWorktree: '/checkout/new', branch: 'lobehub/new', isWorktree: true },
   path: '/repo',
@@ -110,11 +113,60 @@ beforeEach(() => {
   });
   mocks.devices.mockResolvedValue([{ deviceId: request.deviceId, online: true }]);
   mocks.topic.mockResolvedValue(topic);
+  mocks.mergeMetadata.mockResolvedValue(true);
+  mocks.listBranches.mockResolvedValue([{ name: 'lobehub' }]);
   mocks.createCheckout.mockResolvedValue(checkout);
   mocks.execAgent.mockResolvedValue({ success: true });
 });
 
 describe('dispatchWorktreeTurn', () => {
+  it('saves a non-conflicting branch before checkout and reuses it on retry', async () => {
+    const job = { ...operation.metadata.firstSendWorktree, worktree: unassignedWorktree };
+    mocks.operation.mockResolvedValue({
+      ...operation,
+      metadata: { firstSendWorktree: job },
+    });
+    mocks.createCheckout.mockRejectedValueOnce(new Error('Device disconnected'));
+
+    await expect(dispatch()).resolves.toMatchObject({ retryable: true, success: false });
+    expect(mocks.listBranches).toHaveBeenCalledWith({
+      deviceId: request.deviceId,
+      path: request.path,
+      userId: topic.userId,
+      workspaceId: undefined,
+    });
+    expect(mocks.mergeMetadata).toHaveBeenCalledBefore(mocks.createCheckout);
+    const persisted = mocks.mergeMetadata.mock.calls[0][1];
+    const selected = persisted.firstSendWorktree.worktree;
+    expect(selected.branch).toMatch(/^lobehub-/);
+    expect(mocks.createCheckout).toHaveBeenCalledWith(selected, expect.any(Object));
+
+    mocks.operation.mockResolvedValue({ ...operation, metadata: persisted });
+    mocks.listBranches.mockResolvedValue([{ name: 'lobehub' }, { name: selected.branch }]);
+    await expect(dispatch()).resolves.toEqual({ success: true });
+    expect(mocks.listBranches).toHaveBeenCalledTimes(1);
+    expect(mocks.createCheckout).toHaveBeenLastCalledWith(selected, expect.any(Object));
+  });
+
+  it('does not mutate Git when it cannot read the refs or save the branch choice', async () => {
+    mocks.operation.mockResolvedValue({
+      ...operation,
+      metadata: {
+        firstSendWorktree: {
+          ...operation.metadata.firstSendWorktree,
+          worktree: unassignedWorktree,
+        },
+      },
+    });
+    mocks.listBranches.mockResolvedValueOnce(undefined);
+    await expect(dispatch()).resolves.toMatchObject({ retryable: true, success: false });
+    expect(mocks.mergeMetadata).not.toHaveBeenCalled();
+
+    mocks.mergeMetadata.mockResolvedValueOnce(false);
+    await expect(dispatch()).resolves.toMatchObject({ retryable: true, success: false });
+    expect(mocks.createCheckout).not.toHaveBeenCalled();
+  });
+
   it('uses the saved message and binds the checkout before dispatching to the selected device', async () => {
     await expect(dispatch()).resolves.toEqual({ success: true });
     expect(mocks.createCheckout).toHaveBeenCalledWith(request, {

@@ -268,6 +268,7 @@ export class ConversationLifecycleActionImpl {
     inputEditor,
     messages: inputMessages,
     firstSendWorktree,
+    newTopicWorkingDirectory,
     optimisticUserMessageId,
     parentId: inputParentId,
     pageSelections,
@@ -439,7 +440,7 @@ export class ConversationLifecycleActionImpl {
       agencyConfig,
       boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
       context,
-      directMentionRoute: !!directMentionRoute,
+      directMentionRoute: !!directMentionRoute && !(agentId === ownerAgentId && firstSendWorktree),
       isGatewayMode,
       ownerAgentId,
       pendingDirectory,
@@ -1065,6 +1066,8 @@ export class ConversationLifecycleActionImpl {
         agencyConfig,
         chatConfig: agentConfig?.chatConfig,
         currentDeviceId,
+        draftWorkingDirectory:
+          willCreateNewTopic && agentId === ownerAgentId ? newTopicWorkingDirectory : undefined,
         existingTopic,
         heterogeneousProvider,
         inheritedTopic,
@@ -1216,12 +1219,7 @@ export class ConversationLifecycleActionImpl {
       optimisticTopicActive = true;
     }
 
-    if (
-      firstSendWorktree &&
-      willCreateNewTopic &&
-      !directMentionRoute &&
-      ownerAgentId === agentId
-    ) {
+    if (firstSendWorktree && willCreateNewTopic && ownerAgentId === agentId) {
       try {
         const { topic } = await aiAgentService.submitWorktreeTurn(
           {

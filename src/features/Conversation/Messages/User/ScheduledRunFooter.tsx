@@ -6,6 +6,7 @@ import { BanIcon, ClockIcon, LoaderCircleIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { aiAgentService } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -62,7 +63,31 @@ const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
   };
 
   if (run?.kind === 'worktree_start') {
-    const failed = run.error !== undefined;
+    if (run.error !== undefined) {
+      return (
+        <Flexbox horizontal justify={'flex-end'}>
+          <AsyncError
+            align={'start'}
+            description={''}
+            details={run.error}
+            variant={'inline'}
+            action={
+              run.retryable && (
+                <Button loading={retrying} size={'small'} type={'text'} onClick={retryWorktree}>
+                  {tCommon('retry')}
+                </Button>
+              )
+            }
+            title={
+              <Text as={'span'} type={'danger'}>
+                {tDevice('workingDirectory.worktreeCreateFailed')}
+              </Text>
+            }
+          />
+        </Flexbox>
+      );
+    }
+
     return (
       <Flexbox
         horizontal
@@ -72,20 +97,12 @@ const ScheduledRunFooter = memo<ScheduledRunFooterProps>(({ id }) => {
         paddingBlock={4}
         role="status"
       >
-        {!failed && <Icon spin icon={LoaderCircleIcon} size={14} />}
-        <Text style={{ fontSize: 12 }} type={failed ? 'danger' : 'secondary'}>
-          {failed
-            ? tDevice('workingDirectory.worktreeCreateFailed')
-            : run.waitingForDevice
-              ? tDevice('workingDirectory.worktreeWaitingForDevice')
-              : tDevice('workingDirectory.preparingWorktree')}
-          {run.error ? ` ${run.error}` : null}
+        <Icon spin icon={LoaderCircleIcon} size={14} />
+        <Text style={{ fontSize: 12 }} type={'secondary'}>
+          {run.waitingForDevice
+            ? tDevice('workingDirectory.worktreeWaitingForDevice')
+            : tDevice('workingDirectory.preparingWorktree')}
         </Text>
-        {failed && run.retryable && (
-          <Button loading={retrying} size="small" type="text" onClick={retryWorktree}>
-            {tCommon('retry')}
-          </Button>
-        )}
       </Flexbox>
     );
   }

@@ -42,6 +42,20 @@ const existingTopic = {
 };
 
 describe('resolveSendRunCwd with a pinned worktree', () => {
+  it('starts a Desktop API-bound session in its newly created checkout', async () => {
+    const result = await resolveSendRunCwd({
+      ...base,
+      agencyConfig: { executionTarget: 'local' },
+      draftWorkingDirectory: worktree,
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+      inheritedTopic: { metadata: { workingDirectoryConfig: { path: '/code/old' } } },
+      stagedDirectoryPath: worktree.path,
+    });
+
+    expect(result.workingDirectoryConfig).toEqual(worktree);
+    expect(result.workingDirectory).toBe(worktree.sessionPath);
+  });
+
   it('keeps a device-bound topic in its saved worktree', async () => {
     const result = await resolveSendRunCwd({ ...base, existingTopic });
 

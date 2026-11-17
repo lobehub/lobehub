@@ -1,9 +1,11 @@
+import type * as LobechatConstModule from '@lobechat/const';
 import { getWorktreeModeKey } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceService } from '@/services/device';
 import { DeviceGitOutdatedError, gitService } from '@/services/git';
+import { useAgentStore } from '@/store/agent';
 import { useGitStatusStore } from '@/store/device/gitStatus/store';
 import { useUserStore } from '@/store/user';
 
@@ -21,6 +23,15 @@ import {
   prepareDraftGitSend,
   snapshotDraftGit,
 } from './prepareSend';
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobechatConstModule>()),
+  isDesktop: true,
+}));
+
+vi.mock('@/services/ownedWorktree', () => ({
+  issueWorktreeReceipt: async () => undefined,
+}));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => null,
@@ -86,6 +97,7 @@ const pick = (branch: string) => setDraftBranch(draftBranchKey(target), branch);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAgentStore.setState({ agentMap: {} });
   useDraftGitStore.setState({ selections: {}, targets: {} });
   useGitStatusStore.setState({ gitAheadBehindMap: {} });
   registerDraftGitTarget(target);
@@ -392,5 +404,40 @@ describe('prepareDraftGitSend — new worktree', () => {
       title: 'workingDirectory.worktreeCreateFailed',
     });
     expect(gitService.addGitWorktree).not.toHaveBeenCalled();
+  });
+
+  it('creates a Desktop API-bound agent checkout in-process without a gateway registration', async () => {
+    useAgentStore.setState({
+      agentMap: {
+        [target.agentId]: {
+          agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'claude-code' } },
+        },
+      },
+    });
+    const localTarget = { ...target, deviceId: undefined, keyDeviceId: undefined };
+    const checkoutPath = '/local/checkout';
+    vi.mocked(gitService.addGitWorktree).mockResolvedValue({
+      success: true,
+      worktreePath: checkoutPath,
+    });
+    const result = await prepareDraftGitSend(context, {
+      prompts: prompts(),
+      snapshot: { picked: 'feat', target: localTarget, worktreeMode: true },
+      t,
+    });
+
+    expect(gitService.addGitWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ path: target.path, startPoint: 'feat' }),
+    );
+    expect(vi.mocked(gitService.addGitWorktree).mock.calls[0][0].deviceId).toBeUndefined();
+    expect(result).not.toHaveProperty('firstSendWorktree');
+    expect(result).toMatchObject({
+      newTopicWorkingDirectory: {
+        git: { activeWorktree: checkoutPath, autoCreated: true },
+        path: target.sourcePath,
+        sessionPath: checkoutPath,
+      },
+      ok: true,
+    });
   });
 });

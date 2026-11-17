@@ -1,3 +1,4 @@
+import { generateWorktreeBranchName } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { WorktreeStartRun } from '@lobechat/types';
 import { getWorkingDirEffectivePath, RequestTrigger, toComposerUserMessage } from '@lobechat/types';
@@ -5,9 +6,9 @@ import { getWorkingDirEffectivePath, RequestTrigger, toComposerUserMessage } fro
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
-import type { TopicItem } from '@/database/schemas/topic';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
@@ -17,7 +18,15 @@ import type { WorktreeTurnJob } from './submitWorktreeTurn';
 /** Execute the saved first turn against its checkout, even when no client is connected. */
 export const dispatchWorktreeTurn = async (
   run: WorktreeStartRun,
-  { db, topic, workspaceId }: { db: LobeChatDatabase; topic: TopicItem; workspaceId?: string },
+  {
+    db,
+    topic,
+    workspaceId,
+  }: {
+    db: LobeChatDatabase;
+    topic: { agentId: string | null; id: string; userId: string };
+    workspaceId?: string;
+  },
 ): Promise<{ error?: string; retryAt?: string; retryable?: boolean; success: boolean }> => {
   const { agentId, userId } = topic;
   const topics = new TopicModel(db, userId, workspaceId);
@@ -44,7 +53,7 @@ export const dispatchWorktreeTurn = async (
     const succeeded = operation.status === 'running' || operation.status === 'done';
     return { error: succeeded ? undefined : operation.error?.message, success: succeeded };
   }
-  const job = operation.metadata?.firstSendWorktree as WorktreeTurnJob | undefined;
+  let job = operation.metadata?.firstSendWorktree as WorktreeTurnJob | undefined;
   if (!job || job.userMessageId !== message.id)
     return { error: 'The worktree request no longer exists.', success: false };
 
@@ -65,11 +74,29 @@ export const dispatchWorktreeTurn = async (
   if (!devices.some((device) => device.deviceId === deviceId && device.online))
     return { retryAt: new Date(Date.now() + 30_000).toISOString(), success: false };
 
-  let workingDirectory;
+  let workingDirectory = job.checkout;
   try {
-    workingDirectory =
-      job.checkout ??
-      (await createFirstSendWorktree(job.worktree, { userId, workspaceId: deviceWorkspaceId }));
+    if (!workingDirectory) {
+      const principal = { userId, workspaceId: deviceWorkspaceId };
+      let branch = job.worktree.branch;
+      if (!branch) {
+        const refs = await deviceGateway.listGitBranches({
+          ...principal,
+          deviceId,
+          path: job.worktree.path,
+        });
+        if (!refs) throw new Error('The device could not list the repository’s branches.');
+        branch = generateWorktreeBranchName({
+          exclude: refs.map(({ name }) => name),
+          now: new Date(run.createdAt),
+        });
+        job = { ...job, worktree: { ...job.worktree, branch } };
+        // Retrying a write with an ambiguous result must target the same checkout.
+        const saved = await operations.mergeMetadata(operation.id, { firstSendWorktree: job });
+        if (!saved) throw new Error('Could not save the branch for the queued worktree.');
+      }
+      workingDirectory = await createFirstSendWorktree({ ...job.worktree, branch }, principal);
+    }
   } catch (error) {
     console.error('[dispatchWorktreeTurn] could not create worktree', error);
     return {
