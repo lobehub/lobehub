@@ -4,6 +4,7 @@ import type {
   ChannelMemberConfig,
   ChannelMemberRole,
   ChannelReplyJob,
+  ChannelThreadMention,
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
@@ -57,6 +58,7 @@ import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
+import { channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView } from './view';
@@ -557,6 +559,7 @@ export class ChannelRepository {
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sharedAgentHandle: string | null;
+        threadMentions: ChannelThreadMention[];
         unreadCount: number;
       }
     >
@@ -649,6 +652,12 @@ export class ChannelRepository {
       : [];
     const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
 
+    // Thread mentions outlive the read position, which opening the main conversation moves.
+    const threadMentionsOf = await channelThreadMentions(
+      this.db,
+      rows.map(({ memberId }) => memberId),
+    );
+
     // A group Channel's list avatar pictures its first members; a direct one, its Agent or the
     // other person, which also pictures a shared Agent the caller has no sidebar row for.
     const avatarsOf = await channelAvatarMembers(this.db, previewIds, this.userId);
@@ -694,6 +703,7 @@ export class ChannelRepository {
           peerUserId: peerOf(channel, this.userId),
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
+          threadMentions: threadMentionsOf.get(channel.id) ?? [],
           unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
         };
       },
@@ -715,6 +725,7 @@ export class ChannelRepository {
         peerUserId: peerOf(channel, this.userId),
         pinnedAt: null,
         replyJobs: [],
+        threadMentions: [],
         unreadCount: 0,
       })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
