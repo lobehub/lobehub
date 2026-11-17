@@ -14,6 +14,10 @@ describe('getSettingsContainerMaxWidth', () => {
     expect(SETTINGS_PLANS_MAX_WIDTH).toBeGreaterThan(SETTINGS_CONTAINER_MAX_WIDTH);
   });
 
+  it('lets the subscription account list span the pane, as on the workspace page', () => {
+    expect(getSettingsContainerMaxWidth(SettingsTabs.SubscriptionAccounts)).toBe('100%');
+  });
+
   it('keeps every other tab on the shared column', () => {
     expect(getSettingsContainerMaxWidth(SettingsTabs.Billing)).toBe(SETTINGS_CONTAINER_MAX_WIDTH);
     expect(getSettingsContainerMaxWidth(SettingsTabs.Appearance)).toBe(

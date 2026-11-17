@@ -61,6 +61,9 @@ export const componentMap = {
   [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
     loading: loading('Settings > Environments'),
   }),
+  [SettingsTabs.SubscriptionAccounts]: dynamic(() => import('../subscription-accounts'), {
+    loading: loading('Settings > Subscription Accounts'),
+  }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
   }),
