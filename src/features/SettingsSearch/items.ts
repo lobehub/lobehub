@@ -643,6 +643,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Hotkey,
   },
   {
+    anchor: 'hotkey-send-key',
+    descKey: 'hotkey.sendKey.desc',
+    keywords: ['send', 'enter', 'cmd', 'ctrl', 'newline'],
+    labelKey: 'hotkey.sendKey.title',
+    tab: SettingsTabs.Hotkey,
+  },
+  {
     anchor: 'hotkey-desktop',
     keywords: ['shortcut', 'keyboard', 'global'],
     labelKey: 'hotkey.group.desktop',
