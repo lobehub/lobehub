@@ -76,6 +76,13 @@ interface RunOptions {
   agentId?: string;
   /** Override the connector's transport (`http` by default). */
   connection?: { mcpConnectionType: string; mcpServerUrl: string | null };
+  /**
+   * Continuation of a turn whose prompt was never persisted. Distinct from
+   * `ephemeralUserMessage`, which is only present on the original start.
+   */
+  ephemeralTurn?: boolean;
+  /** Supervisor instruction injected for an in-group member and not persisted. */
+  ephemeralUserMessage?: string;
   /** Topic history. A resume (no `userMessageMetadata`) reads mentions from here. */
   history?: HistoryMessage[];
   installed?: boolean;
@@ -146,6 +153,8 @@ const run = (options: RunOptions = {}) => {
     } as never,
     {
       disabledPluginIds: [],
+      ephemeralTurn: options.ephemeralTurn,
+      ephemeralUserMessage: options.ephemeralUserMessage,
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
@@ -338,6 +347,25 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
         name.startsWith(`${YINGMI}____BatchGetFundNavHistory`),
       ),
     ).toBe(true);
+  });
+
+  it('does not enable the supervisor @-mention on an in-group member turn', async () => {
+    const history = [
+      { metadata: { selectedToolIds: [YINGMI] }, role: 'user' },
+      { role: 'assistant' },
+    ];
+    // The member starts from a supervisor instruction that is not persisted.
+    const started = await run({
+      ephemeralUserMessage: '<speaker name="Supervisor" />\ncheck the fund',
+      history,
+    });
+    // Approval or askUserQuestion resumes that member without repeating the
+    // prompt. The shared topic still holds the supervisor turn's mention.
+    const resumed = await run({ ephemeralTurn: true, history });
+
+    expect(started.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(resumed.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(offeredToolNames(resumed).some((name) => name.startsWith(`${YINGMI}____`))).toBe(false);
   });
 
   it('keeps the @-mentioned connector enabled when the same turn resumes', async () => {

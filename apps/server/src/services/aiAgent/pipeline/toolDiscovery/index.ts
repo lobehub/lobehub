@@ -108,6 +108,7 @@ export const discoverTools = async (
     disableTools,
     disabledPluginIds: requestedDisabledPluginIds,
     discordContext,
+    ephemeralTurn,
     ephemeralUserMessage,
     evalConnectorSnapshots,
     exclusivePluginIds,
@@ -181,7 +182,7 @@ export const discoverTools = async (
   // custom MCP connector) is then both queried for manifests and enabled by
   // the tools engine. The next user turn does not inherit them.
   const turnSelectedToolIds = await resolveTurnSelectedToolIds({
-    ephemeralTurn: !!ephemeralUserMessage,
+    ephemeralTurn: !!ephemeralUserMessage || !!ephemeralTurn,
     loadHistoryMessages,
     selectedToolIds,
     userMessageMetadata: ctx.userMessageMetadata,

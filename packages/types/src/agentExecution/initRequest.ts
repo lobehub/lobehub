@@ -56,6 +56,11 @@ export interface AgentRunInitRequest {
   disableLocalSystem?: boolean;
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
+  /**
+   * Continuation of a turn whose prompt was never persisted. The prompt is not
+   * repeated. Tool discovery must not inherit @-mentions from earlier user rows.
+   */
+  ephemeralTurn?: boolean;
   /** A user turn that is prompted but never persisted (self-iteration runs). */
   ephemeralUserMessage?: string;
   /** The exact tool surface exposed to an isolated evaluation attempt. */

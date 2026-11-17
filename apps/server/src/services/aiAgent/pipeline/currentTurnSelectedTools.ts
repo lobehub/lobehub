@@ -64,8 +64,9 @@ export const collectCurrentTurnSelectedToolIds = (
 
 export interface ResolveTurnSelectedToolIdsParams {
   /**
-   * A prompted turn that was never persisted (`ephemeralUserMessage`). It
-   * opens its own turn, so the previous user row's mentions do not apply.
+   * A prompted turn that was never persisted. Set from `ephemeralUserMessage`
+   * on the original start, and on an in-group member resume that does not
+   * repeat that prompt. The previous user row's mentions do not apply.
    */
   ephemeralTurn?: boolean;
   loadHistoryMessages: () => Promise<readonly CurrentTurnMessage[]>;

@@ -169,6 +169,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
   /**
+   * This call continues a turn whose prompt was never persisted. The prompt is
+   * not repeated, but earlier user rows in shared history are still not this
+   * turn's @-mentions. Set for an in-group member resume; see
+   * `resolveGroupMemberApprovalContinuation`.
+   */
+  ephemeralTurn?: boolean;
+  /**
    * Inject a user-role message into the LLM context for this turn WITHOUT
    * persisting it (no DB row, no Agent Signal). Used for ephemeral orchestration
    * instructions — e.g. a group supervisor's `<speaker>` instruction to a member —
