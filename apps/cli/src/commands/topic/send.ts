@@ -165,7 +165,11 @@ export const sendToNewConversation = async (
     agentId?: string;
     content: string;
     device?: string;
+    /** Opener topic; defaults to `LOBEHUB_TOPIC_ID`. */
+    openedByTopicId?: string;
     title?: string;
+    /** Topic trigger; `lh session start` passes `sub_session`. */
+    trigger?: string;
   },
 ): Promise<ConversationSendResult> => {
   const agentId = params.agentId ?? process.env.LOBEHUB_AGENT_ID;
@@ -178,7 +182,7 @@ export const sendToNewConversation = async (
   const request: Record<string, any> = {
     agentId,
     prompt: params.content,
-    trigger: 'cli',
+    trigger: params.trigger ?? 'cli',
     // Nobody is at the new conversation's composer to approve tool calls.
     userInterventionConfig: { approvalMode: 'headless' },
   };
@@ -191,6 +195,10 @@ export const sendToNewConversation = async (
   if (params.title) request.title = params.title;
   const sourceOperationId = process.env.LOBEHUB_OPERATION_ID;
   if (sourceOperationId) request.sourceOperationId = sourceOperationId;
+  // Run from inside a conversation: the new one is its sub-session, listed
+  // under it and reporting back to it.
+  const openerTopicId = params.openedByTopicId ?? process.env.LOBEHUB_TOPIC_ID;
+  if (openerTopicId) request.openedByTopicId = openerTopicId;
 
   const started = (await client.aiAgent.execAgent.mutate(request as any)) as {
     error?: string;

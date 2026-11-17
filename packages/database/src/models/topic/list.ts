@@ -28,6 +28,7 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
 import { topicHasGoal } from '../topicGoal';
 import type { TopicModelContext } from './context';
+import { orphanSubSessionCondition } from './openedBy';
 import type { QueryTopicParams, TopicListItem } from './types';
 
 /**
@@ -155,7 +156,12 @@ export const query = async (
   const excludeTriggerCondition = includeTriggerCondition
     ? undefined
     : excludeTriggers && excludeTriggers.length > 0
-      ? or(isNull(topics.trigger), not(inArray(topics.trigger, excludeTriggers)))
+      ? or(
+          isNull(topics.trigger),
+          not(inArray(topics.trigger, excludeTriggers)),
+          // A hidden sub-session whose opener is gone falls back to the top level.
+          excludeTriggers.includes('sub_session') ? orphanSubSessionCondition(ctx) : undefined,
+        )
       : undefined;
   const triggerCondition =
     triggers && triggers.length > 0 ? inArray(topics.trigger, triggers) : undefined;

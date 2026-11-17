@@ -341,6 +341,12 @@ export const ExecAgentFieldsSchema = z.object({
    */
   sourceOperationId: z.string().optional(),
   /**
+   * The conversation this new topic is opened from (`lh topic send --new`
+   * passes its own `LOBEHUB_TOPIC_ID`): the topic records it as
+   * `metadata.openedBy` and lists under it as a sub-session.
+   */
+  openedByTopicId: z.string().optional(),
+  /**
    * User intervention configuration for tool approvals.
    * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
    * so tool calls auto-execute without waiting for human approval.

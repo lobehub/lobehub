@@ -1,0 +1,156 @@
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { getTestDB } from '../../../core/getTestDB';
+import { agents, topics, users } from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
+import { TopicModel } from '../../topic';
+
+const userId = 'topic-opened-by-user';
+const otherUserId = 'topic-opened-by-other';
+const serverDB: LobeChatDatabase = await getTestDB();
+const topicModel = new TopicModel(serverDB, userId);
+
+const openedBy = (topicId: string, extra: Record<string, unknown> = {}) => ({
+  openedBy: { agentId: 'agent-a', at: '2026-11-17T00:00:00.000Z', topicId, ...extra },
+});
+
+describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
+  beforeEach(async () => {
+    await serverDB.delete(users);
+    await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+    await serverDB.insert(agents).values([
+      { id: 'agent-a', userId },
+      { id: 'agent-b', userId },
+      { id: 'agent-other', userId: otherUserId },
+    ]);
+    await serverDB.insert(topics).values([
+      { agentId: 'agent-a', id: 'parent', title: 'Parent', userId },
+      {
+        agentId: 'agent-a',
+        id: 'child-same',
+        metadata: openedBy('parent'),
+        trigger: 'sub_session',
+        userId,
+      },
+      {
+        agentId: 'agent-b',
+        id: 'child-cross',
+        metadata: openedBy('parent'),
+        trigger: 'sub_session',
+        userId,
+      },
+      {
+        agentId: 'agent-b',
+        id: 'child-task',
+        metadata: openedBy('parent'),
+        trigger: 'task',
+        userId,
+      },
+      {
+        agentId: 'agent-b',
+        id: 'grandchild',
+        metadata: openedBy('child-cross', { agentId: 'agent-b' }),
+        trigger: 'sub_session',
+        userId,
+      },
+      {
+        agentId: 'agent-a',
+        id: 'detached',
+        metadata: openedBy('parent', { detachedAt: '2026-11-17T01:00:00.000Z' }),
+        trigger: 'cli',
+        userId,
+      },
+      {
+        agentId: 'agent-a',
+        id: 'archived-child',
+        metadata: openedBy('parent'),
+        status: 'completed',
+        trigger: 'sub_session',
+        userId,
+      },
+      // Same jsonb shape but an unrelated trigger: never a sub-session.
+      { agentId: 'agent-a', id: 'chat-row', metadata: openedBy('parent'), userId },
+      {
+        agentId: 'agent-other',
+        id: 'foreign',
+        metadata: openedBy('parent'),
+        trigger: 'sub_session',
+        userId: otherUserId,
+      },
+    ]);
+  });
+
+  afterEach(async () => {
+    await serverDB.delete(users);
+  });
+
+  it('lists the direct, live sub-sessions of an opener, whatever their agent', async () => {
+    const rows = await topicModel.listOpenedTopics({
+      excludeStatuses: ['completed', 'archived'],
+      openerTopicIds: ['parent'],
+    });
+
+    expect(rows.map((row) => row.id).sort()).toEqual(['child-cross', 'child-same', 'child-task']);
+    const cross = rows.find((row) => row.id === 'child-cross')!;
+    expect(cross.agentId).toBe('agent-b');
+    expect(cross.openedBy.topicId).toBe('parent');
+  });
+
+  it('walks descendants when asked', async () => {
+    const rows = await topicModel.listOpenedDescendants('parent', {
+      excludeStatuses: ['completed', 'archived'],
+    });
+
+    expect(rows.map((row) => row.id).sort()).toEqual([
+      'child-cross',
+      'child-same',
+      'child-task',
+      'grandchild',
+    ]);
+  });
+
+  it('detaches sub-sessions and turns a sub_session trigger back into a normal topic', async () => {
+    const changed = await topicModel.detachOpenedTopics(['child-cross', 'child-task']);
+    expect(changed.map((row) => row.id).sort()).toEqual(['child-cross', 'child-task']);
+
+    const [cross] = await serverDB.select().from(topics).where(eq(topics.id, 'child-cross'));
+    expect(cross.trigger).toBeNull();
+    expect((cross.metadata as any).openedBy.detachedAt).toEqual(expect.any(String));
+    expect((cross.metadata as any).openedBy.topicId).toBe('parent');
+
+    const [task] = await serverDB.select().from(topics).where(eq(topics.id, 'child-task'));
+    expect(task.trigger).toBe('task');
+
+    const rows = await topicModel.listOpenedTopics({ openerTopicIds: ['parent'] });
+    expect(rows.map((row) => row.id).sort()).toEqual(['archived-child', 'child-same']);
+  });
+
+  it('hides sub-sessions from the target agent list but falls back to the top level once the opener is gone', async () => {
+    const excludeTriggers = ['task', 'sub_session'];
+
+    const before = await topicModel.query({ agentId: 'agent-b', excludeTriggers });
+    expect(before.items.map((row: any) => row.id)).toEqual([]);
+
+    await serverDB.delete(topics).where(eq(topics.id, 'parent'));
+
+    const after = await topicModel.query({ agentId: 'agent-b', excludeTriggers });
+    // The cross-agent child lost its opener; the grandchild's opener still exists.
+    expect(after.items.map((row: any) => row.id)).toEqual(['child-cross']);
+  });
+
+  it('treats an opener in the recycle bin as gone', async () => {
+    await topicModel.softDelete(['parent'], { deletedAt: new Date() });
+
+    const result = await topicModel.query({
+      agentId: 'agent-a',
+      excludeTriggers: ['sub_session'],
+    });
+    expect(result.items.map((row: any) => row.id).sort()).toEqual([
+      'archived-child',
+      'chat-row',
+      'child-same',
+      'detached',
+    ]);
+  });
+});

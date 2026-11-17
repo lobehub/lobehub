@@ -76,6 +76,8 @@ describe('sending into a new conversation', () => {
 
     expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith({
       agentId: 'agt-self',
+      // Run from inside a conversation: the new one is its sub-session.
+      openedByTopicId: 'tpc-here',
       prompt: 'Draft the release notes',
       sourceOperationId: 'op-sender',
       trigger: 'cli',

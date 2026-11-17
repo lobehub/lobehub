@@ -139,6 +139,24 @@ export interface OnboardingSessionSnapshot {
   version: number;
 }
 
+/**
+ * Provenance of a sub-session: the topic (and its agent) that opened it.
+ *
+ * Presentation and receipts only — the sub-session keeps its own agent, working
+ * directory and lifecycle. The sidebar nests a topic under its opener while
+ * `detachedAt` is unset and the opener is visible; a detached one stays a
+ * top-level row but keeps the link as its origin.
+ */
+export interface TopicOpenedBy {
+  /** The opener topic's agent, so a reader never has to load the opener. */
+  agentId?: string;
+  /** ISO time the link was written. */
+  at: string;
+  /** ISO time the sub-session was moved to the top level; no longer nested or reported back. */
+  detachedAt?: string;
+  topicId: string;
+}
+
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
@@ -303,6 +321,13 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /**
+   * The topic that opened this one — a sub-session. Server-owned (absent from
+   * the client-writable metadata schema), written once when the topic is
+   * created by `runTask`, `lh topic send --new` or `lobe-session.startSession`.
+   * See {@link TopicOpenedBy}.
+   */
+  openedBy?: TopicOpenedBy;
   /**
    * Worktrees the app created for this topic, and where their automatic
    * cleanup stands. Server-owned: claimed whenever metadata is written with
