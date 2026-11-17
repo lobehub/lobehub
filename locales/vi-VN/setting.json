@@ -1312,8 +1312,6 @@
   "serviceModel.desc": "Các mô hình LobeHub dùng cho tác vụ chạy nền. Theo mặc định, chúng tuân theo đề xuất của hệ thống và tự động nâng cấp khi có mô hình mới.",
   "serviceModel.off": "Tắt",
   "serviceModel.systemRecommended": "Hệ thống đề xuất",
-  "serviceModel.tier.embedding.desc": "Truy xuất bộ nhớ",
-  "serviceModel.tier.embedding.title": "Mô hình Embedding",
   "serviceModel.tier.flash.desc": "Các tác vụ thường xuyên như đặt tên, dịch, nén và ghi nhớ",
   "serviceModel.tier.flash.title": "Mô hình Flash",
   "serviceModel.tier.main.desc": "Các tác vụ cần chất lượng cao như viết và suy luận",

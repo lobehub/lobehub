@@ -1312,8 +1312,6 @@
   "serviceModel.desc": "Модели, которые LobeHub использует для фоновых задач. По умолчанию они следуют системной рекомендации и автоматически обновляются при появлении новых моделей.",
   "serviceModel.off": "Выкл.",
   "serviceModel.systemRecommended": "Рекомендовано системой",
-  "serviceModel.tier.embedding.desc": "Поиск по памяти",
-  "serviceModel.tier.embedding.title": "Модель эмбеддингов",
   "serviceModel.tier.flash.desc": "Частые задачи, такие как присвоение имен, перевод, сжатие и память",
   "serviceModel.tier.flash.title": "Быстрая модель",
   "serviceModel.tier.main.desc": "Задачи, чувствительные к качеству, такие как написание текстов и рассуждения",
