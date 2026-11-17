@@ -30,6 +30,7 @@ import ServiceModel from '../service-model';
 import Skill from '../skill';
 import Stats from '../stats';
 import Storage from '../storage';
+import SubscriptionAccounts from '../subscription-accounts';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
 import Trash from '../trash';
@@ -53,6 +54,7 @@ export const componentMap = {
   [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
   [SettingsTabs.Environments]: Environments,
+  [SettingsTabs.SubscriptionAccounts]: SubscriptionAccounts,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,

@@ -27,8 +27,16 @@ export const SETTINGS_CONTAINER_MAX_WIDTH = 1024;
 export const SETTINGS_PLANS_MAX_WIDTH = 1280;
 
 /**
- * Content column width for a tab. Every tab shares
- * `SETTINGS_CONTAINER_MAX_WIDTH` except the Plans tab.
+ * Tabs whose content spans the full pane, as on the workspace settings page:
+ * the subscription account list, whose usage columns need the room.
  */
-export const getSettingsContainerMaxWidth = (tab: string) =>
-  tab === SettingsTabs.Plans ? SETTINGS_PLANS_MAX_WIDTH : SETTINGS_CONTAINER_MAX_WIDTH;
+const FULL_WIDTH_SETTINGS_TABS = new Set<string>([SettingsTabs.SubscriptionAccounts]);
+
+/**
+ * Content column width for a tab. Every tab shares
+ * `SETTINGS_CONTAINER_MAX_WIDTH` except the Plans tab and the full-width tabs.
+ */
+export const getSettingsContainerMaxWidth = (tab: string): number | string => {
+  if (FULL_WIDTH_SETTINGS_TABS.has(tab)) return '100%';
+  return tab === SettingsTabs.Plans ? SETTINGS_PLANS_MAX_WIDTH : SETTINGS_CONTAINER_MAX_WIDTH;
+};
