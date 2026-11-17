@@ -86,24 +86,33 @@ export const isIntegrationInConnectorTab = (
 
 /**
  * The connectors a run loads from the caller's list, one per identifier, ranked
- * as the server's `ConnectorModel.pickByPriority` ranks base rows: the owner's
- * private row shadows the shared one, and equal ranks keep the lowest id (the
- * server's `resolutionOrder`), never the list order. Without `includePrivate`
- * (any run but a private agent's own conversation) private rows take no part.
+ * as the server's `ConnectorModel.pickByPriority` ranks base rows: a row
+ * mounted on the run's agent outranks a free one, the owner's private row
+ * shadows the shared one, and equal ranks keep the lowest id (the server's
+ * `resolutionOrder`), never the list order. A row mounted on another agent
+ * takes no part (the server's `agentNarrowing`), nor does any mounted row
+ * without an agent. Without `includePrivate` (any run but a private agent's
+ * own conversation) private rows take no part.
  *
  * Whatever is built per identifier (a tool manifest, its permissions, a menu
  * row) must come from this row: the server executes it.
  */
 export const pickRunConnectors = <
-  T extends Pick<ConnectorWithTools, 'id' | 'identifier' | 'visibility'>,
+  T extends Pick<ConnectorWithTools, 'id' | 'identifier' | 'metadata' | 'visibility'>,
 >(
   connectors: T[],
-  { includePrivate }: { includePrivate: boolean },
+  { agentId, includePrivate }: { agentId?: string; includePrivate: boolean },
 ): T[] => {
-  const rank = (c: T) => (c.visibility === 'private' ? 1 : 0);
+  const mountedBy = (c: T) => {
+    const value = c.metadata?.mountedByAgentId;
+    return typeof value === 'string' && value ? value : undefined;
+  };
+  const rank = (c: T) => (mountedBy(c) ? 3 : 0) + (c.visibility === 'private' ? 1 : 0);
   const byIdentifier = new Map<string, T>();
   for (const connector of connectors) {
     if (!includePrivate && connector.visibility === 'private') continue;
+    const mount = mountedBy(connector);
+    if (mount && mount !== agentId) continue;
     const current = byIdentifier.get(connector.identifier);
     if (
       !current ||

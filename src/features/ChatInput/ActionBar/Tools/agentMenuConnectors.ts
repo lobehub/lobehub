@@ -25,11 +25,15 @@ import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
  */
 export const agentMenuConnectors = (
   connectors: ConnectorWithTools[],
-  { inWorkspace, privateAgent }: { inWorkspace: boolean; privateAgent: boolean },
+  {
+    agentId,
+    inWorkspace,
+    privateAgent,
+  }: { agentId?: string; inWorkspace: boolean; privateAgent: boolean },
 ): ConnectorWithTools[] => {
   if (!inWorkspace) return connectors;
 
-  return pickRunConnectors(connectors, { includePrivate: privateAgent });
+  return pickRunConnectors(connectors, { agentId, includePrivate: privateAgent });
 };
 
 /** {@link agentMenuConnectors} for `agentId`, from the user's MCP connectors. */
@@ -42,8 +46,8 @@ export const useAgentMenuConnectors = (agentId?: string): ConnectorWithTools[] =
 
   // A stable list: the menu rebuilds its connector rows when this changes
   return useMemo(
-    () => agentMenuConnectors(connectors, { inWorkspace, privateAgent }),
-    [connectors, inWorkspace, privateAgent],
+    () => agentMenuConnectors(connectors, { agentId, inWorkspace, privateAgent }),
+    [agentId, connectors, inWorkspace, privateAgent],
   );
 };
 
@@ -55,7 +59,7 @@ export const useAgentMenuConnectors = (agentId?: string): ConnectorWithTools[] =
 export const agentStillLoadsIdentifier = (
   connectors: ConnectorWithTools[],
   deleted: Pick<ConnectorWithTools, 'id' | 'identifier'>,
-  context: { inWorkspace: boolean; privateAgent: boolean },
+  context: { agentId?: string; inWorkspace: boolean; privateAgent: boolean },
 ): boolean =>
   agentMenuConnectors(
     connectors.filter((c) => c.id !== deleted.id),
@@ -74,6 +78,7 @@ export const useUnpinDeletedConnector = (agentId?: string) => {
   return useCallback(
     async (deleted: ConnectorWithTools) => {
       const context = {
+        agentId,
         inWorkspace: !!getActiveWorkspaceId(),
         privateAgent:
           !!agentId && useAgentStore.getState().agentMap[agentId]?.visibility === 'private',

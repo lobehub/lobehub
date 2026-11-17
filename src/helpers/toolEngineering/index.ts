@@ -47,6 +47,12 @@ import { buildClientConnectorManifests } from './buildClientConnectorManifests';
 export interface ToolsEngineConfig {
   /** Additional manifests to include beyond the standard ones */
   additionalManifests?: ToolManifest[];
+  /**
+   * The agent the run belongs to: a connector mounted on it outranks a free one
+   * of the same identifier, and one mounted on another agent is left out, as
+   * the server resolves them.
+   */
+  agentId?: string;
   /** Default tool IDs that will always be added to the end of the tools list */
   defaultToolIds?: string[];
   /**
@@ -81,6 +87,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   const {
     enableChecker,
     additionalManifests = [],
+    agentId,
     defaultToolIds,
     disabledPluginIds = [],
     includePrivateConnectors = false,
@@ -101,6 +108,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   // model would see one row's schema and approval policy while the server
   // executes the other.
   const runConnectors = pickRunConnectors(connectorSelectors.connectorList(toolStoreState), {
+    agentId,
     includePrivate: includePrivateConnectors,
   });
   const runConnectorIds = new Set(runConnectors.map((c) => c.id));
@@ -217,6 +225,7 @@ export const createAgentToolsEngine = (
   });
 
   return createToolsEngine({
+    agentId: activeAgentId || undefined,
     defaultToolIds: resolved.defaultToolIds,
     disabledPluginIds: [...resolved.excludedIdentifiers],
     // A private agent's own conversation only: a group or sub-agent run writes

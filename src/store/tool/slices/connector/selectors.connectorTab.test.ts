@@ -191,6 +191,43 @@ describe('pickRunConnectors', () => {
     expect(ids(pickRunConnectors([a, b], { includePrivate: true }))).toEqual(['a-row']);
   });
 
+  it('leaves out a row mounted on another agent, so the shared row still serves', () => {
+    // Regression: a private row mounted on another agent shadowed the shared
+    // row here, then dropped out as disabled, leaving the agent without tools.
+    const mountedElsewhere = connector({
+      id: 'a-private',
+      metadata: { mountedByAgentId: 'agt-other' },
+      visibility: 'private',
+    });
+
+    expect(
+      ids(
+        pickRunConnectors([mountedElsewhere, sharedRow], {
+          agentId: 'agt-me',
+          includePrivate: true,
+        }),
+      ),
+    ).toEqual(['shared-row']);
+    // Without an agent no mounted row runs
+    expect(ids(pickRunConnectors([mountedElsewhere, sharedRow], { includePrivate: true }))).toEqual(
+      ['shared-row'],
+    );
+  });
+
+  it('runs the row mounted on the agent over a free one, as the server ranks them', () => {
+    const mountedHere = connector({
+      id: 'z-mounted',
+      metadata: { mountedByAgentId: 'agt-me' },
+      visibility: 'public',
+    });
+
+    expect(
+      ids(
+        pickRunConnectors([privateRow, mountedHere], { agentId: 'agt-me', includePrivate: true }),
+      ),
+    ).toEqual(['z-mounted']);
+  });
+
   it('keeps one row per identifier in list order', () => {
     const notion = connector({ id: 'notion-row', identifier: 'notion', visibility: 'private' });
 
