@@ -1,4 +1,5 @@
 import type { AgentDocumentPolicyLoad } from '@lobechat/types';
+import { isWithinTokenLimit, sliceByTokens } from 'tokenx';
 
 import type {
   AgentDocumentLoadRule,
@@ -456,11 +457,14 @@ export function combineDocuments(
   return parts.join('\n\n');
 }
 
+/**
+ * Cut content to about `maxTokens` estimated tokens. Counting whitespace-separated
+ * words instead let CJK text, which has no spaces, through uncapped.
+ */
 function approximateTokenTruncate(content: string, maxTokens: number): string {
   if (!Number.isFinite(maxTokens) || maxTokens <= 0) return content;
-  const parts = content.split(/\s+/);
-  if (parts.length <= maxTokens) return content;
-  return `${parts.slice(0, maxTokens).join(' ')}\n...[truncated]`;
+  if (isWithinTokenLimit(content, maxTokens)) return content;
+  return `${sliceByTokens(content, 0, maxTokens)}\n...[truncated]`;
 }
 
 function escapeAttribute(value: string): string {
