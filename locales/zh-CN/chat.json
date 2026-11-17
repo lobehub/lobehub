@@ -3710,6 +3710,7 @@
   "workingPanel.overview.keptWorktree.discardPending": "设备当前离线，重新上线后会删除这个 worktree。",
   "workingPanel.overview.keptWorktree.discarded": "worktree 已删除，分支已保留",
   "workingPanel.overview.keptWorktree.discarding": "正在删除 worktree…",
+  "workingPanel.overview.keptWorktree.failedTitle": "worktree 未能清理",
   "workingPanel.overview.keptWorktree.keep": "保留",
   "workingPanel.overview.keptWorktree.keepFailed": "无法保留 worktree",
   "workingPanel.overview.keptWorktree.keptToast": "worktree 已保留，之后不会再自动清理",

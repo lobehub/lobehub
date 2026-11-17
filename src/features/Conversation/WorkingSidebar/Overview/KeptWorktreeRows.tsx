@@ -11,7 +11,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { discardOwnedWorktree, keepOwnedWorktree } from '@/services/ownedWorktree';
 import { topicService } from '@/services/topic';
 
-import { findRemovedWorktree } from './overviewData';
+import { findRemovedWorktree, findWorktreesAwaitingChoice } from './overviewData';
 import { OverviewRow } from './OverviewRow';
 
 /** States in flight on the server: refresh until they settle. */
@@ -77,7 +77,7 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
   const mutate = onChange;
   const [busy, setBusy] = useState<string>();
 
-  const kept = entries.filter((entry) => entry.cleanup?.state === 'keptDirty');
+  const kept = findWorktreesAwaitingChoice(entries);
 
   const handleDiscard = useCallback(
     (entry: OwnedWorktree) => {
@@ -149,10 +149,18 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
             icon={TriangleAlertIcon}
             iconColor={cssVar.colorWarning}
             iconSize={14}
-            title={entry.path}
-            value={t('workingPanel.overview.keptWorktree.title', {
-              count: entry.cleanup?.dirtyFiles ?? 0,
-            })}
+            title={
+              entry.cleanup?.state === 'failed' && entry.cleanup.reason
+                ? `${entry.path}\n${entry.cleanup.reason}`
+                : entry.path
+            }
+            value={
+              entry.cleanup?.state === 'failed'
+                ? t('workingPanel.overview.keptWorktree.failedTitle')
+                : t('workingPanel.overview.keptWorktree.title', {
+                    count: entry.cleanup?.dirtyFiles ?? 0,
+                  })
+            }
           />
           <Flexbox horizontal gap={4} justify={'flex-end'} paddingInline={8}>
             <Button

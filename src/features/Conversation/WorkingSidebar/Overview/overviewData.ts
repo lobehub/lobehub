@@ -103,3 +103,13 @@ export const findRemovedWorktree = (
     (entry) => entry.cleanup?.state === 'removed' && normalizeDisplayPath(entry.path) === target,
   );
 };
+
+/**
+ * The app-created worktrees the Overview offers a choice for: kept for their
+ * uncommitted work, or left in place because the cleanup failed (the device
+ * refused or git errored). Either way the folder is still there.
+ */
+export const findWorktreesAwaitingChoice = (entries: OwnedWorktree[]): OwnedWorktree[] =>
+  entries.filter(
+    (entry) => entry.cleanup?.state === 'keptDirty' || entry.cleanup?.state === 'failed',
+  );

@@ -3934,6 +3934,7 @@ export default {
     "The device is offline. The worktree will be deleted when it's back online.",
   'workingPanel.overview.keptWorktree.discarded': 'Worktree deleted. Its branch was kept.',
   'workingPanel.overview.keptWorktree.discarding': 'Deleting the worktree…',
+  'workingPanel.overview.keptWorktree.failedTitle': "Worktree couldn't be cleaned up",
   'workingPanel.overview.keptWorktree.keep': 'Keep',
   'workingPanel.overview.keptWorktree.keepFailed': 'Could not keep the worktree',
   'workingPanel.overview.keptWorktree.keptToast':

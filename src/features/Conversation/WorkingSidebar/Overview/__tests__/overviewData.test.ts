@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectChangeStats,
   findRemovedWorktree,
+  findWorktreesAwaitingChoice,
   getStatusDeviceId,
   isLinkedWorktreeCheckout,
   shouldShowCiLabel,
@@ -128,5 +129,27 @@ describe('findRemovedWorktree', () => {
     expect(findRemovedWorktree([entry('keptDirty'), entry()], WT)).toBeUndefined();
     expect(findRemovedWorktree([entry('removed')], '/code/repo')).toBeUndefined();
     expect(findRemovedWorktree([entry('removed')], undefined)).toBeUndefined();
+  });
+});
+
+describe('findWorktreesAwaitingChoice', () => {
+  const at = (state?: 'failed' | 'kept' | 'keptDirty' | 'pending' | 'removed') => ({
+    ...(state && { cleanup: { at: 'x', state } }),
+    createdAt: 'y',
+    path: `/wt/${state ?? 'live'}`,
+    sourcePath: '/code/repo',
+  });
+
+  it('offers a choice for kept-dirty and failed worktrees only', () => {
+    expect(
+      findWorktreesAwaitingChoice([
+        at(),
+        at('pending'),
+        at('removed'),
+        at('kept'),
+        at('keptDirty'),
+        at('failed'),
+      ]).map((entry) => entry.path),
+    ).toEqual(['/wt/keptDirty', '/wt/failed']);
   });
 });
