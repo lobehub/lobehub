@@ -626,27 +626,36 @@ export class ScmChangeRequestModel {
       return row ?? null;
     });
 
-  /** Fill in links that are still null. Never overwrites a link already set. */
+  /**
+   * Fill in links that are still null. Never overwrites a link already set.
+   *
+   * The null check lives in the UPDATE itself (`COALESCE`), not in a read
+   * first: a concurrent `pull_request` ingest filling a link between a
+   * read-modify-write's two statements would otherwise be overwritten.
+   * `guard` narrows the same statement further (e.g. a scope fence); a row
+   * that fails it is untouched. Returns the row after the update, `null`
+   * when it does not exist or the guard refused it.
+   */
   static attachLinks = async (
     db: LobeChatDatabase,
     id: string,
     links: ScmChangeRequestLinks,
+    guard?: SQL,
   ): Promise<ScmChangeRequestItem | null> => {
-    const existing = await ScmChangeRequestModel.findById(db, id);
-    if (!existing) return null;
-
-    const set: Partial<ScmChangeRequestLinks> = {};
+    const set: Record<string, SQL> = {};
     for (const key of ['acceptanceId', 'installationId', 'taskId', 'topicId', 'workId'] as const) {
-      if (!existing[key] && links[key]) set[key] = links[key];
+      if (links[key]) {
+        set[key] = sql`coalesce(${scmChangeRequests[key]}, ${links[key]})`;
+      }
     }
-    if (Object.keys(set).length === 0) return existing;
+    if (Object.keys(set).length === 0) return ScmChangeRequestModel.findById(db, id);
 
     const [row] = await db
       .update(scmChangeRequests)
       .set({ ...set, updatedAt: new Date() })
-      .where(eq(scmChangeRequests.id, id))
+      .where(and(eq(scmChangeRequests.id, id), guard))
       .returning();
-    return row;
+    return row ?? null;
   };
 
   /**
@@ -678,16 +687,23 @@ export class ScmChangeRequestModel {
 
     // A row routed to another scope learns nothing: its `topicId` is looked
     // up under the row's owner when a wake fires, so a foreign conversation
-    // would occupy a fill-only slot the right link can never take.
-    const sameScope =
-      row.userId === params.scope.userId &&
-      (row.workspaceId ?? null) === (params.scope.workspaceId ?? null);
-    if (!sameScope) return;
-
-    await ScmChangeRequestModel.attachLinks(db, row.id, {
-      topicId: params.topicId,
-      workId: params.workId,
-    });
+    // would occupy a fill-only slot the right link can never take. The check
+    // rides inside the UPDATE — a row re-routed between our read and write
+    // is refused, not written.
+    await ScmChangeRequestModel.attachLinks(
+      db,
+      row.id,
+      {
+        topicId: params.topicId,
+        workId: params.workId,
+      },
+      and(
+        eq(scmChangeRequests.userId, params.scope.userId),
+        params.scope.workspaceId == null
+          ? isNull(scmChangeRequests.workspaceId)
+          : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
+      ),
+    );
   };
 
   /**
