@@ -1,5 +1,6 @@
 import { and, count, desc, eq, ilike, inArray, isNull, notInArray } from 'drizzle-orm';
 
+import { TopicModel } from '@/database/models/topic';
 import { agentsToSessions, messages, topics, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
@@ -243,14 +244,24 @@ export class TopicService extends BaseService {
       const permissionWhere = this.buildPermissionWhere(topics, permissionResult.condition);
       if (permissionWhere) whereConditions.push(permissionWhere);
 
+      const { model, provider, ...fields } = payload;
       const [updatedTopic] = await this.db
         .update(topics)
-        .set(payload)
+        .set({ ...fields, updatedAt: new Date() })
         .where(and(...whereConditions))
         .returning();
 
       if (!updatedTopic) {
         throw this.createNotFoundError('话题不存在');
+      }
+
+      // The model pin carries a model-scoped effort pin in the metadata, so it
+      // goes through the model's row-locked switch rather than a plain write.
+      if (model && provider) {
+        await new TopicModel(this.db, this.userId, this.workspaceId).updateModelPin(topicId, {
+          model,
+          provider,
+        });
       }
 
       return this.getTopicById(updatedTopic.id);

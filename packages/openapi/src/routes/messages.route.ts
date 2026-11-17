@@ -15,6 +15,7 @@ import { requireAuth } from '../middleware';
 import { requireAnyPermission, requireApiKeyScope } from '../middleware/permission-check';
 import { DeletedResourceSchema, DeletedResourcesSchema } from '../types/common.type';
 import {
+  MessageAddFilesRequestSchema,
   MessageCountSchema,
   MessageIdParamSchema,
   MessageListSchema,
@@ -23,7 +24,12 @@ import {
   MessagesCreateRequestSchema,
   MessagesCreateWithReplyRequestSchema,
   MessagesDeleteBatchRequestSchema,
+  MessageSearchResultSchema,
   MessagesListQuerySchema,
+  MessagesSearchQuerySchema,
+  MessageStatsQuerySchema,
+  MessageUpdateRequestSchema,
+  TopicMessageStatsSchema,
 } from '../types/message.type';
 
 // Messages-related routes
@@ -64,6 +70,47 @@ MessageRoutes.get(
     const controller = new MessageController();
     return controller.handleGetMessages(c);
   },
+);
+
+// GET /api/v1/messages/search - Keyword search across messages, or within one topic
+MessageRoutes.get(
+  '/search',
+  routeDoc({
+    operationId: 'messages.search',
+    data: MessageSearchResultSchema,
+    description:
+      "Without `topicId`, a full-text search over the caller's conversations, newest first; prompts written by automations are left out. With `topicId`, a literal, case-insensitive find over that topic's main conversation, oldest first (tool results and thread messages are skipped). Each hit carries a snippet around the match.",
+    errors: [404],
+    summary: 'Search messages',
+    tags: ['messages'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('MESSAGE_READ'),
+    'You do not have permission to read messages',
+  ),
+  zValidator('query', MessagesSearchQuerySchema),
+  (c) => new MessageController().handleSearchMessages(c),
+);
+
+// GET /api/v1/messages/stats - Distribution of message counts per topic
+MessageRoutes.get(
+  '/stats',
+  routeDoc({
+    operationId: 'messages.topicStats',
+    data: TopicMessageStatsSchema,
+    description:
+      'How many messages topics hold: count, mean, median, p90/p99, one-shot ratio and a histogram, over the topics that have at least one matching message.',
+    summary: 'Get message statistics per topic',
+    tags: ['messages'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('MESSAGE_READ'),
+    'You do not have permission to read message statistics',
+  ),
+  zValidator('query', MessageStatsQuerySchema),
+  (c) => new MessageController().handleTopicStats(c),
 );
 
 // GET /api/v1/messages/:id - Get message details by message ID (requires message read permission)
@@ -128,6 +175,49 @@ MessageRoutes.post(
     const controller = new MessageController();
     return controller.handleCreateMessageWithAIReply(c);
   },
+);
+
+// PATCH /api/v1/messages/:id - Edit a message (content, metadata, tool state and arguments)
+MessageRoutes.patch(
+  '/:id',
+  routeDoc({
+    data: MessageSchema,
+    description:
+      'Applies every field given: `content` replaces the text, `metadata` is merged in (server-owned keys are ignored), `pluginState` / `pluginError` update a `tool` message, and `toolArguments` rewrites one tool call this message made or answers.',
+    errors: [404],
+    summary: 'Update a message',
+    tags: ['messages'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('MESSAGE_UPDATE'),
+    'You do not have permission to update messages',
+  ),
+  zValidator('param', MessageIdParamSchema),
+  zValidator('json', MessageUpdateRequestSchema),
+  (c) => new MessageController().handleUpdateMessage(c),
+);
+
+// POST /api/v1/messages/:id/files - Attach uploaded files to a message
+MessageRoutes.post(
+  '/:id/files',
+  routeDoc({
+    operationId: 'messages.addFiles',
+    data: MessageSchema,
+    description:
+      'Links files already uploaded through `/files` to the message; it answers the message with its full file list.',
+    errors: [404],
+    summary: 'Attach files to a message',
+    tags: ['messages'],
+  }),
+  requireAuth,
+  requireAnyPermission(
+    getAllScopePermissions('MESSAGE_UPDATE'),
+    'You do not have permission to update messages',
+  ),
+  zValidator('param', MessageIdParamSchema),
+  zValidator('json', MessageAddFilesRequestSchema),
+  (c) => new MessageController().handleAddFiles(c),
 );
 
 // DELETE /api/v1/messages/:id - Delete a single message (requires message delete permission)

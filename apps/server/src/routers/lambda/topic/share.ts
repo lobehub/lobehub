@@ -16,7 +16,7 @@ import { assertCanUseTopicTargets } from '../_helpers/conversationResourceGuard'
 import { resolveAgentIdFromSession } from '../_helpers/resolveContext';
 import { guardCtx, topicProcedure } from './procedures';
 
-interface TopicShareCtx {
+export interface TopicShareCtx {
   agentModel: AgentModel;
   chatGroupModel: ChatGroupModel;
   serverDB: LobeChatDatabase;
@@ -82,7 +82,7 @@ const resolveTopicShareAgent = async (
  * load its state. Pass `targetVisibility: 'link'` when the operation would
  * publish.
  */
-const assertCanManageTopicShare = async (
+export const assertCanManageTopicShare = async (
   ctx: TopicShareCtx,
   topicId: string,
   targetVisibility?: 'link' | 'private',
@@ -138,7 +138,7 @@ const assertCanManageTopicShare = async (
  * audited. A share record with 'private' visibility is an unshared
  * placeholder, so only transitions in/out of 'link' are recorded.
  */
-const recordTopicShareAudit = async (
+export const recordTopicShareAudit = async (
   ctx: TopicShareCtx,
   params: { currentVisibility: string; previousVisibility: string; topicId: string },
 ) => {

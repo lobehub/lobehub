@@ -13,5 +13,6 @@ export * from './permission.controller';
 export * from './provider.controller';
 export * from './role.controller';
 export * from './topic.controller';
+export * from './topic-branch.controller';
 export * from './usage.controller';
 export * from './user.controller';
