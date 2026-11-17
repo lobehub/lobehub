@@ -209,6 +209,11 @@ const linkOptions = {
     const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
     Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
 
+    // Mutation responses carry message lists too; without this they would drop
+    // the Work types this client renders and wipe their cards from the store.
+    const { workTypeOptInHeaders } = await import('@/services/workTypeOptIn');
+    Object.assign(headers as Record<string, string>, workTypeOptInHeaders());
+
     log('Headers: %O', headers);
     return headers;
   },

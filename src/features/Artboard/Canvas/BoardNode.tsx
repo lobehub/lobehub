@@ -1,19 +1,22 @@
 import type { ArtboardBoardView } from '@lobechat/types';
-import { toast } from '@lobehub/ui';
 
-import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/FlowNode';
+import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/flowStateColor';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
-import { chooseOption } from '../data/actions';
 import type { BoardModel } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
 import { isFlagged, nodeScreenshot, nodeState } from '../Verify/flow';
-import { useJourneyView } from '../Verify/useJourneyView';
+import { useBoardCapabilities } from '../Viewport/capabilities';
 import BoardBody from './BoardBody';
 import BoardLabel from './BoardLabel';
 import CompareBody from './CompareBody';
 import { canvasStyles } from './styles';
+
+const SELECTION_STROKE = 1.5;
+const PICKED_STROKE = 3;
+const STATE_STROKE = 2;
+const FRAME_RADIUS = 2;
 
 const isRelated = (board: BoardModel, selected: string | null, id: string) =>
   !!selected &&
@@ -32,7 +35,7 @@ interface BoardNodeProps {
 
 const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
   const board = useBoard();
-  const journey = useJourneyView();
+  const { journey, onPick } = useBoardCapabilities();
   const s = useArtboardStore((st) => ({
     compare: st.compare,
     flash: st.flash.includes(item.id),
@@ -52,6 +55,8 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
   const round = item.groupId ? board.roundByGroupId[item.groupId] : undefined;
   const option = !s.verify && round && round.id === item.roundId ? round : undefined;
   const picked = option?.chosenBoardId === item.id;
+  const framed = picked || !!border;
+  const outlined = s.selected || s.related;
 
   return (
     <div
@@ -73,37 +78,45 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
         k={k}
         linked={board.finalized && inJourney}
         recommended={board.recommendedIds.has(item.id)}
+        selected={s.selected}
         state={state}
         verify={s.verify}
         choice={
           option && {
             checked: picked,
-            disabled: option.status !== 'open' || board.finalized,
-            onPick: () =>
-              void chooseOption(board.artboard.id, option.id, item.id).catch((error) =>
-                toast.error((error as Error).message),
-              ),
+            disabled: option.status !== 'open' || board.finalized || !onPick,
+            onPick: () => onPick?.(option.id, item.id),
           }
         }
       />
       <div
         {...sx(
           canvasStyles.boardCard,
-          picked && canvasStyles.boardPicked,
+          item.type === 'decision' && canvasStyles.boardBare,
           s.selected && canvasStyles.boardSelected,
           !s.selected && s.related && canvasStyles.boardRelated,
           s.flash && canvasStyles.flash,
-          border ? { borderColor: border, borderWidth: 3 } : undefined,
+          outlined ? { outlineWidth: SELECTION_STROKE / k } : undefined,
         )}
       >
         {compare === 'split' && screenshotUrl ? (
-          <CompareBody board={item} imageUrl={imageUrl} screenshotUrl={screenshotUrl} />
+          <CompareBody board={item} imageUrl={imageUrl} k={k} screenshotUrl={screenshotUrl} />
         ) : (
           <BoardBody
             board={item}
             imageUrl={imageUrl}
+            k={k}
             live={live}
             screenshotUrl={compare === 'design' ? undefined : screenshotUrl}
+          />
+        )}
+        {framed && (
+          <div
+            {...sx(canvasStyles.boardFrame, {
+              borderColor: border,
+              borderRadius: FRAME_RADIUS / k,
+              borderWidth: (border ? STATE_STROKE : PICKED_STROKE) / k,
+            })}
           />
         )}
       </div>

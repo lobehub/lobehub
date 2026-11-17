@@ -80,7 +80,10 @@ export const edgeArrow = (points: Point[], size: number) => {
   return `M${at(a)} L${at(tip)} L${at(b)}`;
 };
 
-export const arrowSize = (k: number) => Math.max(10, 8 / k);
+const CHEVRON_PER_STROKE = 3.75;
+export const ARROW_STROKE_RATIO = 0.7;
+
+export const arrowSize = (strokeWidth: number) => strokeWidth * CHEVRON_PER_STROKE;
 
 export const strokeWidthOf = (k: number, strong: boolean) =>
-  Math.max(1.5, 1.5 / k) * (strong ? 1.5 : 1);
+  Math.max(4, 1.5 / k) * (strong ? 1.5 : 1);

@@ -14,6 +14,7 @@ import {
   threadId,
   topicId,
   userId,
+  userId2,
 } from './_fixtures';
 
 const projectId = 'prj_artboard_work';
@@ -122,5 +123,78 @@ describe('WorkModel · artboard', () => {
     await new ArtboardModel(serverDB, userId).delete(artboardId);
 
     expect((await model.listByWorkspace({ includeArtboardWorks: true })).items).toEqual([]);
+  });
+});
+
+describe('WorkModel · artboard publish', () => {
+  const publish = {
+    deploymentId: 'dep_1',
+    publishedRevision: 4,
+    publisherUserId: userId,
+    snapshotHash: 'hash_1',
+    url: 'https://board.lobe.page',
+  };
+
+  it('records the share on the Work and finds it again', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerArtboard(params());
+
+    await model.recordArtboardPublish(artboardId, publish);
+    const work = await model.findArtboardWork(artboardId);
+
+    expect(work?.url).toBe('https://board.lobe.page');
+    expect(work?.metadata?.artboardPublish).toEqual({
+      deploymentId: 'dep_1',
+      publishedRevision: 4,
+      publisherUserId: userId,
+      snapshotHash: 'hash_1',
+    });
+  });
+
+  it('keeps the share link when the board registers a new version', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerArtboard(params());
+    await model.recordArtboardPublish(artboardId, publish);
+
+    await model.registerArtboard(
+      params({ changeType: 'updated', rootOperationId: null, toolCallId: 'call-artboard-2' }),
+    );
+    const work = await model.findArtboardWork(artboardId);
+
+    expect(work?.url).toBe('https://board.lobe.page');
+    expect(work?.metadata?.artboardPublish?.deploymentId).toBe('dep_1');
+  });
+
+  it('clears the share and nothing else', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerArtboard(params());
+    await model.recordArtboardPublish(artboardId, publish);
+
+    await model.clearArtboardPublish(artboardId);
+    const work = await model.findArtboardWork(artboardId);
+
+    expect(work?.url).toBeNull();
+    expect(work?.metadata?.artboardPublish).toBeUndefined();
+    expect(work?.title).toBe('新用户首次进入项目');
+  });
+
+  it('does not let another user record a share on the Work', async () => {
+    await new WorkModel(serverDB, userId).registerArtboard(params());
+
+    const row = await new WorkModel(serverDB, userId2).recordArtboardPublish(artboardId, publish);
+
+    expect(row).toBeNull();
+    expect((await new WorkModel(serverDB, userId).findArtboardWork(artboardId))?.url).toBeNull();
+  });
+
+  it('maps deployments back to their boards', async () => {
+    const model = new WorkModel(serverDB, userId);
+    await model.registerArtboard(params());
+    await model.recordArtboardPublish(artboardId, publish);
+
+    expect(await model.findArtboardIdsByDeploymentIds(['dep_1', 'dep_missing'])).toEqual({
+      dep_1: artboardId,
+    });
+    expect(await model.findArtboardIdsByDeploymentIds([])).toEqual({});
   });
 });

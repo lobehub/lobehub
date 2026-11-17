@@ -3,7 +3,10 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -11,6 +14,7 @@ import {
   ArtboardServiceError,
   type ArtboardServiceErrorCode,
 } from '@/server/services/artboard';
+import { ArtboardPublishService } from '@/server/services/artboard/publish';
 
 const TRPC_CODES: Record<ArtboardServiceErrorCode, TRPCError['code']> = {
   conflict: 'CONFLICT',
@@ -43,12 +47,21 @@ const artboardProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   const { ctx } = opts;
   return opts.next({
     ctx: {
+      artboardPublishService: new ArtboardPublishService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
       artboardService: new ArtboardService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
     },
   });
 });
 
 const artboardProcedureWrite = artboardProcedure.use(withScopedPermission('agent:update'));
+
+const artboardPublishProcedure = artboardProcedureWrite.use(
+  requireWorkspaceRoleWhenScoped('member'),
+);
 
 const idInput = z.object({ id: z.string().min(1) });
 const revisionInput = idInput.extend({ revision: z.number().int().positive() });
@@ -90,6 +103,12 @@ export const artboardRouter = router({
       ),
     ),
 
+  deliverComments: artboardProcedureWrite
+    .input(idInput)
+    .mutation(({ ctx, input }) =>
+      run('deliverComments', () => ctx.artboardService.takeUndeliveredComments(input.id)),
+    ),
+
   countUndeliveredComments: artboardProcedure
     .input(idInput)
     .query(({ ctx, input }) =>
@@ -125,6 +144,12 @@ export const artboardRouter = router({
     .input(z.object({ taskId: z.string().min(1) }))
     .query(({ ctx, input }) => run('getByTask', () => ctx.artboardService.getByTask(input.taskId))),
 
+  getPublish: artboardProcedure
+    .input(idInput)
+    .query(({ ctx, input }) =>
+      run('getPublish', () => ctx.artboardPublishService.getPublish(input.id)),
+    ),
+
   getRevision: artboardProcedure
     .input(idInput)
     .query(({ ctx, input }) => run('getRevision', () => ctx.artboardService.getRevision(input.id))),
@@ -143,6 +168,12 @@ export const artboardRouter = router({
     .input(z.object({ projectId: z.string().min(1) }))
     .query(({ ctx, input }) =>
       run('listByProject', () => ctx.artboardService.listByProject(input.projectId)),
+    ),
+
+  publish: artboardPublishProcedure
+    .input(idInput)
+    .mutation(({ ctx, input }) =>
+      run('publish', () => ctx.artboardPublishService.publish(input.id)),
     ),
 
   read: artboardProcedure
@@ -182,6 +213,12 @@ export const artboardRouter = router({
     .input(idInput.extend({ roundIds: z.array(z.string().min(1)).max(200).optional() }))
     .mutation(({ ctx, input }) =>
       run('submitRounds', () => ctx.artboardService.submitOpenRounds(input.id, input.roundIds)),
+    ),
+
+  unpublish: artboardPublishProcedure
+    .input(idInput)
+    .mutation(({ ctx, input }) =>
+      run('unpublish', () => ctx.artboardPublishService.unpublish(input.id)),
     ),
 
   update: artboardProcedureWrite

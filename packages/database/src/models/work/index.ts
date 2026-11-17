@@ -1,4 +1,5 @@
 import {
+  type ArtboardWorkPublishMetadata,
   type CanvasWorkPublishMetadata,
   type DeleteDocumentWorkParams,
   type DeleteTaskWorkParams,
@@ -19,7 +20,14 @@ import {
 } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '../../type';
-import { registerArtboardWork } from './artboard';
+import {
+  clearArtboardPublish,
+  findArtboardIdsByDeploymentIds,
+  findArtboardWork,
+  findArtboardWorkByWorkId,
+  recordArtboardPublish,
+  registerArtboardWork,
+} from './artboard';
 import { registerShellArtboardResult } from './artboardShellResult';
 import {
   findCanvasIdByWorkId,
@@ -102,6 +110,21 @@ export class WorkModel {
 
   registerArtboard = (params: RegisterArtboardWorkParams): Promise<WorkItem> =>
     registerArtboardWork(this.ctx, params);
+
+  findArtboardWork = (artboardId: string) => findArtboardWork(this.ctx, artboardId);
+
+  findArtboardWorkByWorkId = (workId: string) => findArtboardWorkByWorkId(this.ctx, workId);
+
+  recordArtboardPublish = (
+    artboardId: string,
+    params: ArtboardWorkPublishMetadata & { url: string },
+  ): Promise<WorkItem | null> => recordArtboardPublish(this.ctx, artboardId, params);
+
+  clearArtboardPublish = (artboardId: string): Promise<WorkItem | null> =>
+    clearArtboardPublish(this.ctx, artboardId);
+
+  findArtboardIdsByDeploymentIds = (deploymentIds: string[]) =>
+    findArtboardIdsByDeploymentIds(this.ctx, deploymentIds);
 
   registerCanvas = (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
     registerCanvasWork(this.ctx, params);

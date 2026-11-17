@@ -7,9 +7,15 @@ import { useBoard } from '../BoardContext';
 import type { BoardEdge } from '../model';
 import { useArtboardStore } from '../store';
 import { type FlowNodeState, nodeState } from '../Verify/flow';
-import { useJourneyView } from '../Verify/useJourneyView';
-import { arrowSize, edgeArrow, edgeCurve, strokeWidthOf } from './curve';
-import { EDGE_LABEL_FONT, EDGE_LABEL_MAX_WIDTH, edgeLabelMode, edgeLabelText } from './edgeLabel';
+import { useBoardCapabilities } from '../Viewport/capabilities';
+import { ARROW_STROKE_RATIO, arrowSize, edgeArrow, edgeCurve, strokeWidthOf } from './curve';
+import {
+  EDGE_LABEL_MAX_WIDTH,
+  EDGE_LABEL_PAD,
+  edgeLabelFont,
+  edgeLabelMode,
+  edgeLabelText,
+} from './edgeLabel';
 import { canvasStyles } from './styles';
 
 interface EdgeTone {
@@ -28,12 +34,12 @@ const toneOf = (
     return { color: cssVar.colorError, strong: true };
   if (hot && (edge.from === hot || edge.to === hot))
     return { color: cssVar.colorPrimary, strong: true };
-  return { color: cssVar.colorTextTertiary, strong: false };
+  return { color: cssVar.colorTextSecondary, strong: false };
 };
 
 const Edges = ({ k }: { k: number }) => {
   const board = useBoard();
-  const journey = useJourneyView();
+  const { journey } = useBoardCapabilities();
   const { hot, verify } = useArtboardStore((s) => ({
     hot: s.mode === 'discuss' ? s.selected : null,
     verify: s.mode === 'verify',
@@ -55,6 +61,7 @@ const Edges = ({ k }: { k: number }) => {
         room: edge.room,
         text,
       }),
+      branch: board.boardById[edge.from]?.type === 'decision',
       text,
       tone: toneOf(edge, verify, states, hot),
     };
@@ -75,6 +82,7 @@ const Edges = ({ k }: { k: number }) => {
       >
         {shown.map(({ edge, tone }) => {
           const width = strokeWidthOf(k, tone.strong);
+          const head = arrowSize(width);
           const line = {
             fill: 'none',
             stroke: tone.color,
@@ -86,13 +94,17 @@ const Edges = ({ k }: { k: number }) => {
             <g key={edge.id}>
               <path
                 {...line}
-                d={edgeCurve(edge.points, arrowSize(k))}
+                d={edgeCurve(edge.points, head)}
                 strokeDasharray={tone.dash
                   ?.split(' ')
                   .map((v) => Number(v) * width)
                   .join(' ')}
               />
-              <path {...line} d={edgeArrow(edge.points, arrowSize(k))} />
+              <path
+                {...line}
+                d={edgeArrow(edge.points, head)}
+                strokeWidth={width * ARROW_STROKE_RATIO}
+              />
               <path
                 d={edgeCurve(edge.points)}
                 fill="none"
@@ -106,32 +118,31 @@ const Edges = ({ k }: { k: number }) => {
           );
         })}
       </svg>
-      {shown.map(({ edge, mode, text, tone }) => {
+      {shown.map(({ branch, edge, mode, text, tone }) => {
         if (mode === 'none') return null;
-        if (mode === 'inline')
-          return (
-            <div
-              key={edge.id}
-              {...sx(canvasStyles.edgeText, {
-                fontSize: EDGE_LABEL_FONT,
-                left: edge.lx,
-                maxWidth: Math.min(edge.room, EDGE_LABEL_MAX_WIDTH),
-                top: edge.ly,
-              })}
-            >
-              {text}
-            </div>
-          );
+        const full = mode === 'full';
         return (
           <div
             key={edge.id}
-            {...sx(canvasStyles.edgeLabel, {
-              borderColor: tone.strong ? tone.color : undefined,
-              color: tone.strong ? tone.color : undefined,
-              left: edge.lx,
-              top: edge.ly,
-              transform: `translate(-50%, -50%) scale(${1 / k})`,
-            })}
+            title={text}
+            {...sx(
+              canvasStyles.edgeLabel,
+              branch && canvasStyles.edgeBranch,
+              full && canvasStyles.edgeLabelFull,
+              {
+                boxShadow: branch
+                  ? `0 0 0 ${Math.max(2, 1 / k)}px ${cssVar.colorBorder}`
+                  : undefined,
+                color: tone.strong ? tone.color : undefined,
+                fontSize: edgeLabelFont(k, branch),
+                left: edge.lx,
+                maxWidth: full
+                  ? undefined
+                  : Math.min(edge.room, EDGE_LABEL_MAX_WIDTH) - EDGE_LABEL_PAD / k,
+                paddingInline: EDGE_LABEL_PAD,
+                top: edge.ly,
+              },
+            )}
           >
             {text}
           </div>

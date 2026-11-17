@@ -1,11 +1,23 @@
-import type { RegisterArtboardWorkParams, WorkItem } from '@lobechat/types';
+import type {
+  ArtboardWorkPublishMetadata,
+  RegisterArtboardWorkParams,
+  WorkItem,
+  WorkMetadata,
+} from '@lobechat/types';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { projectWorks } from '../../schemas/projectWork';
-import type { WorkContext } from './context';
+import { works } from '../../schemas/work';
+import { type WorkContext, workOwnership } from './context';
 import { createDisplayWorkAdapter } from './displayWork';
 import { registerWorkVersion } from './writes';
 
 export const artboardWorkAdapter = createDisplayWorkAdapter({ type: 'artboard' });
+
+const artboardResource = (ctx: WorkContext, artboardId: string) =>
+  and(workOwnership(ctx), eq(works.resourceType, 'artboard'), eq(works.resourceId, artboardId));
+
+export type ArtboardWork = WorkItem & { metadata: WorkMetadata | null };
 
 export const registerArtboardWork = async (
   ctx: WorkContext,
@@ -33,14 +45,23 @@ export const registerArtboardWork = async (
       toolName: params.toolName,
       topicId: params.topicId,
     },
-    () => ({
-      display: {
-        description: params.description ?? null,
-        identifier: params.artboardId,
-        title: params.title,
-        url: null,
-      },
-    }),
+    async (txCtx) => {
+      // The share link written by `recordArtboardPublish` lives on the Work, and
+      // each registration replaces every display column, so carry it over.
+      const [published] = await txCtx.db
+        .select({ url: works.url })
+        .from(works)
+        .where(artboardResource(txCtx, params.artboardId))
+        .limit(1);
+      return {
+        display: {
+          description: params.description ?? null,
+          identifier: params.artboardId,
+          title: params.title,
+          url: published?.url ?? null,
+        },
+      };
+    },
   );
 
   if (params.projectId)
@@ -55,4 +76,84 @@ export const registerArtboardWork = async (
       .onConflictDoNothing({ target: [projectWorks.projectId, projectWorks.workId] });
 
   return work;
+};
+
+export const findArtboardWork = async (
+  ctx: WorkContext,
+  artboardId: string,
+): Promise<ArtboardWork | null> => {
+  const [row] = await ctx.db.select().from(works).where(artboardResource(ctx, artboardId)).limit(1);
+  return (row as ArtboardWork | undefined) ?? null;
+};
+
+export const findArtboardWorkByWorkId = async (
+  ctx: WorkContext,
+  workId: string,
+): Promise<ArtboardWork | null> => {
+  const [row] = await ctx.db
+    .select()
+    .from(works)
+    .where(and(workOwnership(ctx), eq(works.id, workId), eq(works.resourceType, 'artboard')))
+    .limit(1);
+  return (row as ArtboardWork | undefined) ?? null;
+};
+
+export const recordArtboardPublish = async (
+  ctx: WorkContext,
+  artboardId: string,
+  params: ArtboardWorkPublishMetadata & { url: string },
+): Promise<WorkItem | null> => {
+  const publish: ArtboardWorkPublishMetadata = {
+    deploymentId: params.deploymentId,
+    publishedRevision: params.publishedRevision,
+    publisherUserId: params.publisherUserId,
+    snapshotHash: params.snapshotHash,
+  };
+  const [row] = await ctx.db
+    .update(works)
+    .set({
+      metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || jsonb_build_object('artboardPublish', ${JSON.stringify(publish)}::jsonb)`,
+      url: params.url,
+    })
+    .where(artboardResource(ctx, artboardId))
+    .returning();
+  return (row as WorkItem | undefined) ?? null;
+};
+
+export const clearArtboardPublish = async (
+  ctx: WorkContext,
+  artboardId: string,
+): Promise<WorkItem | null> => {
+  const [row] = await ctx.db
+    .update(works)
+    .set({
+      metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) - 'artboardPublish'`,
+      url: null,
+    })
+    .where(artboardResource(ctx, artboardId))
+    .returning();
+  return (row as WorkItem | undefined) ?? null;
+};
+
+export const findArtboardIdsByDeploymentIds = async (
+  ctx: WorkContext,
+  deploymentIds: string[],
+): Promise<Record<string, string>> => {
+  if (deploymentIds.length === 0) return {};
+
+  const deploymentId = sql<string>`${works.metadata}->'artboardPublish'->>'deploymentId'`;
+  const rows = await ctx.db
+    .select({ artboardId: works.resourceId, deploymentId })
+    .from(works)
+    .where(
+      and(
+        workOwnership(ctx),
+        eq(works.resourceType, 'artboard'),
+        inArray(deploymentId, deploymentIds),
+      ),
+    );
+
+  return Object.fromEntries(
+    rows.flatMap((row) => (row.artboardId ? [[row.deploymentId, row.artboardId] as const] : [])),
+  );
 };

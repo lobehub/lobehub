@@ -61,10 +61,15 @@ describe('edgeArrow', () => {
 });
 
 describe('sizes', () => {
-  it('keeps the stroke and arrow readable when zoomed out', () => {
+  it('draws a 4px line that never gets thinner than 1.5px on screen', () => {
     expect(strokeWidthOf(0.25, false)).toBe(6);
-    expect(strokeWidthOf(2, false)).toBe(1.5);
-    expect(arrowSize(0.25)).toBe(32);
-    expect(arrowSize(2)).toBe(10);
+    expect(strokeWidthOf(1, false)).toBe(4);
+    expect(strokeWidthOf(2, false)).toBe(4);
+    expect(strokeWidthOf(1, true)).toBe(6);
+  });
+
+  it('sizes the chevron from the stroke it ends', () => {
+    expect(arrowSize(4)).toBeCloseTo(15);
+    expect(arrowSize(6)).toBeCloseTo(22.5);
   });
 });

@@ -1,82 +1,94 @@
-import { Button, Flexbox, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { SendIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Fragment, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
-import { floatStyles } from '../Canvas/Overlays';
-import { sendToBoardConversation } from '../data/boardConversation';
-import { submitBoardRounds, summarizeRounds } from '../data/submitRounds';
-import { mutateArtboard } from '../data/useArtboard';
+import { pendingThreads, summarizeRounds } from '../data/submitBatch';
+import { useArtboardComments } from '../data/useArtboardComments';
 import { artboardActions } from '../store';
+import { artboardTokens } from '../tokens.stylex';
+import { useSubmitBatch } from './useSubmitBatch';
 
 const styles = stylex.create({
   bar: {
+    alignItems: 'center',
+    backgroundColor: cssVar.colorBgElevated,
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: 999,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: artboardTokens.overlayShadow,
+    display: 'flex',
+    fontSize: 13,
+    gap: 12,
+    height: 44,
     insetBlockEnd: 'calc(12px + env(safe-area-inset-bottom, 0px))',
     insetInlineStart: '50%',
-    maxWidth: 'calc(100% - 320px)',
-    paddingBlock: 6,
+    lineHeight: 1,
+    maxWidth: 'calc(100% - 248px)',
     paddingInlineEnd: 6,
-    paddingInlineStart: 16,
+    paddingInlineStart: 20,
+    position: 'absolute',
     transform: 'translateX(-50%)',
     whiteSpace: 'nowrap',
+    zIndex: 10,
   },
   raised: {
-    insetBlockEnd: 'calc(60px + env(safe-area-inset-bottom, 0px))',
+    insetBlockEnd: 'calc(64px + env(safe-area-inset-bottom, 0px))',
     maxWidth: 'calc(100% - 24px)',
   },
-  status: {
-    fontSize: 12,
+  title: {
+    color: cssVar.colorText,
+    flexShrink: 0,
+    fontWeight: 500,
+    maxWidth: 220,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  muted: {
+    color: cssVar.colorTextSecondary,
     minWidth: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  title: {
-    flex: 'none',
-  },
   undecided: {
+    color: {
+      ':hover': cssVar.colorWarningTextHover,
+      'default': cssVar.colorWarningText,
+    },
     cursor: 'pointer',
     textDecorationLine: 'underline',
+    textUnderlineOffset: 3,
+  },
+  rule: {
+    backgroundColor: cssVar.colorBorderSecondary,
+    flex: 'none',
+    height: 16,
+    width: 1,
+  },
+  primary: {
+    fontWeight: 500,
+    height: 32,
+    paddingInline: 14,
   },
 });
 
 const SubmitBar = ({ narrow }: { narrow: boolean }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
+  const submitBatch = useSubmitBatch();
+  const { data: threads } = useArtboardComments(board.artboard.id);
   const [submitting, setSubmitting] = useState(false);
   const summary = useMemo(() => summarizeRounds(board.openRounds), [board.openRounds]);
-  if (!summary.total || board.finalized) return null;
-
-  const { artboard } = board;
-  const resend = (message: string) =>
-    sendToBoardConversation(artboard.topicId, message)
-      .then((status) => status === 'messageFailed' && notifyFailed(message))
-      .catch(() => notifyFailed(message));
-  const notifyFailed = (message: string) =>
-    toast.error({
-      actions: [{ label: t('artboard.submit.resend'), onClick: () => void resend(message) }],
-      title: t('artboard.submit.messageFailed'),
-    });
+  const comments = useMemo(() => pendingThreads(board, threads ?? []).length, [board, threads]);
+  if (!summary.total && !comments) return null;
 
   const submit = async () => {
     setSubmitting(true);
     try {
-      const roundIds = board.openRounds.map((round) => round.id);
-      const { message, status } = await submitBoardRounds(artboard, roundIds, (count) =>
-        [
-          t('artboard.submit.message', { count }),
-          `> artboard ${artboard.id} · ${artboard.title}`,
-        ].join('\n\n'),
-      );
-      if (status === 'noConversation') toast.info(t('artboard.submit.noConversation'));
-      if (status === 'messageFailed') notifyFailed(message);
-    } catch (error) {
-      void mutateArtboard(artboard.id);
-      toast.error({
-        description: (error as Error).message,
-        title: t('artboard.submit.failed'),
-      });
+      await submitBatch(board.openRounds.map((round) => round.id));
     } finally {
       setSubmitting(false);
     }
@@ -91,36 +103,58 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
       artboardActions.goTo({ id: groupId, kind: 'group', pageId: round.pageId });
   };
 
-  return (
-    <Flexbox
-      horizontal
-      align="center"
-      gap={12}
-      {...stylex.props(floatStyles.float, styles.bar, narrow && styles.raised)}
-    >
-      <Text strong {...stylex.props(styles.title)}>
-        {t('artboard.submit.title', { count: summary.total })}
-      </Text>
-      {summary.undecided > 0 ? (
-        <Text type="warning" {...stylex.props(styles.undecided)} onClick={showUndecided}>
+  const parts: { key: string; node: ReactNode }[] = [];
+  if (summary.total && summary.undecided > 0)
+    parts.push({
+      key: 'undecided',
+      node: (
+        <span
+          role={'button'}
+          tabIndex={0}
+          {...stylex.props(styles.undecided)}
+          onClick={showUndecided}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') showUndecided();
+          }}
+        >
           {t('artboard.submit.undecided', { count: summary.undecided })}
-        </Text>
-      ) : (
-        <Text type="secondary" {...stylex.props(styles.status)}>
-          {summary.byRecommendation
-            ? t('artboard.submit.status', {
-                picked: summary.picked,
-                rest: summary.byRecommendation,
-              })
-            : t('artboard.submit.allPicked', { picked: summary.picked })}
-        </Text>
+        </span>
+      ),
+    });
+  else if (summary.total)
+    parts.push({
+      key: 'picked',
+      node: summary.byRecommendation
+        ? t('artboard.submit.status', { picked: summary.picked, rest: summary.byRecommendation })
+        : t('artboard.submit.allPicked', { picked: summary.picked }),
+    });
+  if (summary.total && comments > 0)
+    parts.push({ key: 'comments', node: t('artboard.submit.comments', { count: comments }) });
+
+  return (
+    <Flexbox horizontal {...stylex.props(styles.bar, narrow && styles.raised)}>
+      <span {...stylex.props(styles.title)}>
+        {summary.total
+          ? t('artboard.submit.title', { count: summary.total })
+          : t('artboard.submit.commentsTitle', { count: comments })}
+      </span>
+      {parts.length > 0 && (
+        <span {...stylex.props(styles.muted)}>
+          {parts.map((part, index) => (
+            <Fragment key={part.key}>
+              {index > 0 && ' · '}
+              {part.node}
+            </Fragment>
+          ))}
+        </span>
       )}
+      <span {...stylex.props(styles.rule)} />
       <Button
         disabled={summary.undecided > 0}
-        icon={SendIcon}
         loading={submitting}
-        size={'small'}
+        shape={'round'}
         type={'primary'}
+        {...stylex.props(styles.primary)}
         onClick={submit}
       >
         {t('artboard.submit.action')}
