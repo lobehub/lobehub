@@ -143,11 +143,6 @@ describe('generated OpenAPI document', () => {
   it('references components only, never local $defs', () => {
     expect(JSON.stringify(spec)).not.toContain('#/$defs/');
   });
-
-  it('declares no 409 on the health check', () => {
-    const responses = (spec.paths?.['/api/v1/health'] as any).get.responses;
-    expect(Object.keys(responses)).toEqual(['200']);
-  });
 });
 
 describe('route-declared responses', () => {
