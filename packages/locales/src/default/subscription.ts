@@ -544,7 +544,6 @@ export default {
   'plans.compare.concurrentAgentRuns': 'Concurrent agent tasks',
   'plans.compare.documentCharacters': 'Characters per document',
   'plans.compare.earlyAccess': 'Early access to new features',
-  'plans.compare.hostedModels': 'LobeHub-hosted models',
   'plans.compare.included': 'Included',
   'plans.compare.noLimit': 'No limit',
   'plans.compare.none': 'None',
@@ -589,6 +588,10 @@ export default {
   'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
+  'plans.limits.agentRunCredit': '{{value}} monthly agent task credit',
+  'plans.limits.agentRunCredit.runs': 'About {{runs}} agent tasks a month',
+  'plans.limits.agentRunCredit.tooltip':
+    'Pays only the per-task fee of agent tasks. Models on your own API key cost nothing more; LobeHub-hosted models draw on your free allowance and top-ups.',
   'plans.limits.agentRunFee': '{{value}} per agent task',
   'plans.limits.agentRunFee.tooltip':
     'Charged from your balance when an agent task you start finishes, on top of its model usage. Tasks that fail, or that you stop within 30 seconds, are free.',
@@ -600,10 +603,6 @@ export default {
   'plans.limits.documentCharacters.unlimited': 'No document length limit',
   'plans.limits.earlyAccess.unavailable': 'Early access to new features',
   'plans.limits.earlyAccess.unlimited': 'Early access to new features',
-  'plans.limits.hostedModels.tooltip':
-    'Without hosted models, agents run only on model providers you set up with your own API key.',
-  'plans.limits.hostedModels.unavailable': 'LobeHub-hosted models (bring your own API key)',
-  'plans.limits.hostedModels.unlimited': 'LobeHub-hosted models',
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
