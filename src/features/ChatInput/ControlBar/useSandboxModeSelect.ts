@@ -9,6 +9,7 @@ import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
 import {
   getRememberedSandboxDirectory,
   getRememberedSandboxRepository,
+  rememberSandboxSelection,
 } from './rememberedSandboxDirectory';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
 import {
@@ -60,8 +61,13 @@ export const useSandboxModeSelect = (
     // Leaving the drive, the conversation starts from the repository the
     // agent's last temporary sandbox used, or none.
     if (onDrive) {
-      const remembered = getRememberedSandboxRepository({ userId, workspaceId }, agentId);
-      await setSelection(remembered ?? temporarySelection(selection));
+      const next =
+        getRememberedSandboxRepository({ userId, workspaceId }, agentId) ??
+        temporarySelection(selection);
+      await setSelection(next);
+      // What the conversation now runs on is what the next temporary sandbox
+      // starts from, as a pick in the chip would be.
+      rememberSandboxSelection({ userId, workspaceId }, agentId, next);
     }
     setPrefersTemporarySandbox({ userId, workspaceId }, agentId, true);
   }, [agentId, driveStatus, onDrive, selection, setSelection, userId, workspaceId]);
@@ -76,8 +82,10 @@ export const useSandboxModeSelect = (
       );
       // A conversation not started yet gets the default as a default, not as a
       // pick: a project conversation is then still given its repository checkout.
-      if (scopeTopicId) await setSelection(next);
-      else seedPendingSandboxSelection(agentId, next);
+      if (scopeTopicId) {
+        await setSelection(next);
+        rememberSandboxSelection({ userId, workspaceId }, agentId, next);
+      } else seedPendingSandboxSelection(agentId, next);
     }
     // After the move, as above: a failed write keeps the old preference too.
     setPrefersTemporarySandbox({ userId, workspaceId }, agentId, false);

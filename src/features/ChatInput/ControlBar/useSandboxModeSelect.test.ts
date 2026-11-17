@@ -1,7 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { rememberSandboxSelection } from './rememberedSandboxDirectory';
+import {
+  getRememberedSandboxRepository,
+  rememberSandboxSelection,
+} from './rememberedSandboxDirectory';
 import {
   prefersTemporarySandbox,
   TEMPORARY_SANDBOX_PREFERENCE_KEY,
@@ -149,6 +152,20 @@ describe('useSandboxModeSelect', () => {
     await act(() => result.current.toTemporary());
 
     expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env_repo' });
+  });
+
+  it('remembers the repository a conversation leaves the drive with', async () => {
+    state.topicId = 'topic-1';
+    state.selection = {
+      environmentId: 'env_old',
+      workingDirectory: 'notes',
+    } satisfies SandboxSelection;
+
+    const { result } = renderMode();
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env_old' });
+    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_old' });
   });
 
   it('remembers nothing without a drive service', async () => {

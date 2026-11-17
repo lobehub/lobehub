@@ -6,6 +6,7 @@ import {
   isSeededSandboxSelection,
   seedPendingSandboxSelection,
   setSandboxDefaultSelection,
+  setSandboxTemporaryDefaultSelection,
 } from '@/store/chat/pendingSandboxSelection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -83,13 +84,27 @@ export const useSeedDefaultSelection = (
  */
 export const useSeedTemporaryRepository = (
   agentId: string,
-  { enabled, hasTopic }: { enabled: boolean; hasTopic: boolean },
+  { eligible, hasTopic, temporary }: { eligible: boolean; hasTopic: boolean; temporary: boolean },
 ) => {
   const workspaceId = useActiveWorkspaceId();
   const userId = useUserStore(userProfileSelectors.userId);
 
+  // Registered as soon as the run is known to use the sandbox — before the
+  // entitlement — so a first send that turns out to have no drive still
+  // starts from the remembered repository. Cleared on unmount, like the drive
+  // default.
   useEffect(() => {
-    if (!enabled || hasTopic) return;
+    if (!eligible) return;
+    const environmentId = getRememberedSandboxRepository(
+      { userId, workspaceId },
+      agentId,
+    )?.environmentId;
+    setSandboxTemporaryDefaultSelection(agentId, environmentId ? { environmentId } : undefined);
+    return () => setSandboxTemporaryDefaultSelection(agentId);
+  }, [agentId, eligible, hasTopic, userId, workspaceId]);
+
+  useEffect(() => {
+    if (!temporary || hasTopic) return;
     const pending = getPendingSandboxSelection(agentId);
     if (pending && !isSeededSandboxSelection(pending)) return;
 
@@ -98,5 +113,5 @@ export const useSeedTemporaryRepository = (
       agentId,
     )?.environmentId;
     if (environmentId) seedPendingSandboxSelection(agentId, { environmentId });
-  }, [agentId, enabled, hasTopic, userId, workspaceId]);
+  }, [agentId, hasTopic, temporary, userId, workspaceId]);
 };

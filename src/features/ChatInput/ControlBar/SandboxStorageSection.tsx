@@ -85,8 +85,9 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   // environment menu, or the only one a plan without a drive has — they start
   // from the repository the last one used.
   useSeedTemporaryRepository(agentId, {
-    enabled: eligible && (temporary || status === 'upgrade'),
+    eligible,
     hasTopic: !!topicId,
+    temporary: eligible && (temporary || status === 'upgrade'),
   });
 
   if (status === 'hidden') return null;
