@@ -3,6 +3,7 @@ import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
@@ -109,6 +110,22 @@ export const deliverSubTopicReceipt = async (
   const openedBy = liveOpenedBy(topic?.metadata);
   // A task run reports through its task (`TaskResultBridgeService.deliver`).
   if (!topic?.agentId || !openedBy || topic.trigger === 'task') return 'not_reportable';
+
+  // Only a real top-level run of this sub-topic, started by this caller, may
+  // report: a settle signal naming a made-up or foreign operation (a forged
+  // `heteroFinish`) must not write into the parent or wake it.
+  const operation = await new AgentOperationModel(db, userId, workspaceId)
+    .findById(operationId)
+    .catch(() => undefined);
+  if (
+    !operation ||
+    operation.topicId !== topicId ||
+    operation.parentOperationId ||
+    operation.userId !== userId
+  ) {
+    log('no run %s of sub-topic %s by this caller; nothing reported', operationId, topicId);
+    return 'not_reportable';
+  }
 
   const opener = await topicModel.findById(openedBy.topicId);
   if (!opener?.agentId || (opener.status && RETIRED_STATUSES.has(opener.status))) {

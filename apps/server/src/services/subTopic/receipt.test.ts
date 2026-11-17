@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   findLatestUserTurnHop: vi.fn(),
   findMessage: vi.fn(),
+  findOperation: vi.fn(),
   findTopic: vi.fn(),
   getDisplay: vi.fn(),
   getLeaf: vi.fn(),
@@ -25,6 +26,11 @@ vi.mock('@/database/models/message', () => ({
       findLatestUserTurnHop: mocks.findLatestUserTurnHop,
       getLastMainThreadSpineMessageId: mocks.getLeaf,
     };
+  }),
+}));
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn(function () {
+    return { findById: mocks.findOperation };
   }),
 }));
 vi.mock('@/database/models/agent', () => ({
@@ -58,6 +64,13 @@ describe('deliverSubTopicReceipt', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The settled run: a top-level operation of the sub-topic, by this caller.
+    mocks.findOperation.mockResolvedValue({
+      id: 'op_child',
+      parentOperationId: null,
+      topicId: 'tpc_child',
+      userId: 'user-1',
+    });
     mocks.findTopic.mockImplementation(async (id: string) =>
       id === 'tpc_child' ? child : id === 'tpc_parent' ? parent : undefined,
     );
@@ -174,6 +187,20 @@ describe('deliverSubTopicReceipt', () => {
     });
     expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('not_reportable');
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a made-up operation', undefined],
+    ['a run of another topic', { parentOperationId: null, topicId: 'tpc_other', userId: 'user-1' }],
+    ['a nested sub-run', { parentOperationId: 'op_root', topicId: 'tpc_child', userId: 'user-1' }],
+    ["another member's run", { parentOperationId: null, topicId: 'tpc_child', userId: 'user-2' }],
+  ])('reports nothing for %s (a forged settle signal)', async (_label, operation) => {
+    mocks.findTopic.mockImplementation(async (id: string) => (id === 'tpc_child' ? child : parent));
+    mocks.findOperation.mockResolvedValue(operation);
+
+    expect(await deliverSubTopicReceipt({ queueWakeup }, params)).toBe('not_reportable');
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(queueWakeup).not.toHaveBeenCalled();
   });
 
   it('does not report to an archived or missing opener', async () => {
