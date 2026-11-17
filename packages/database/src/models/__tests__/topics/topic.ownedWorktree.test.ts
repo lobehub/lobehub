@@ -212,7 +212,8 @@ describe('cleanup lookups', () => {
     await insert('live-active', {
       workingDirectoryConfig: { git: { activeWorktree: WT }, path: '/code/repo' },
     });
-    expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(1);
+    // The same folder however its path ends.
+    expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(2);
     expect(
       await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: `${WT}/` }),
     ).toBe(2);
@@ -239,6 +240,13 @@ describe('cleanup lookups', () => {
     await insert('picked-config', { workingDirectoryConfig: { path: WT } });
     await insert('picked-legacy', { workingDirectory: WT });
     expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(2);
+  });
+
+  it('counts a topic working in a folder below the worktree, not in a look-alike sibling', async () => {
+    await insert('below', { workingDirectoryConfig: { path: `${WT}/packages/foo` } });
+    await insert('sibling', { workingDirectoryConfig: { path: `${WT}-other/packages/foo` } });
+    await insert('underscore', { workingDirectory: `${WT.slice(0, -1)}_/x` });
+    expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(1);
   });
 
   it('finds the owners of a worktree path, trashed ones included', async () => {

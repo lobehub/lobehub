@@ -8,6 +8,8 @@ import {
   isLinkedWorktreeCheckout,
   shouldShowCiLabel,
   shouldShowGitSkeleton,
+  WORKTREE_DISCOVERY_MS,
+  worktreeRefreshInterval,
 } from '../overviewData';
 
 describe('collectChangeStats', () => {
@@ -151,5 +153,40 @@ describe('findWorktreesAwaitingChoice', () => {
         at('failed'),
       ]).map((entry) => entry.path),
     ).toEqual(['/wt/keptDirty', '/wt/failed']);
+  });
+});
+
+describe('worktreeRefreshInterval', () => {
+  const entry = (state?: 'kept' | 'keptDirty' | 'pending' | 'removed' | 'running') => ({
+    ...(state && { cleanup: { at: 'x', state } }),
+    createdAt: 'y',
+    path: '/wt',
+    sourcePath: '/code/repo',
+  });
+  const live = { retired: false, sinceFirstReadMs: 0 };
+
+  it('polls while a cleanup is in flight', () => {
+    expect(worktreeRefreshInterval([entry('running')], live)).toBeGreaterThan(0);
+    expect(worktreeRefreshInterval([entry('pending')], live)).toBeGreaterThan(0);
+  });
+
+  it('keeps polling an archived topic until its cleanup has started', () => {
+    expect(
+      worktreeRefreshInterval([entry()], { retired: true, sinceFirstReadMs: 1000 }),
+    ).toBeGreaterThan(0);
+    expect(
+      worktreeRefreshInterval([entry('removed')], { retired: true, sinceFirstReadMs: 1000 }),
+    ).toBe(0);
+  });
+
+  it('stops for a worktree held on purpose, and for a live topic', () => {
+    expect(
+      worktreeRefreshInterval([entry()], {
+        retired: true,
+        sinceFirstReadMs: WORKTREE_DISCOVERY_MS,
+      }),
+    ).toBe(0);
+    expect(worktreeRefreshInterval([entry()], live)).toBe(0);
+    expect(worktreeRefreshInterval(undefined, live)).toBe(0);
   });
 });

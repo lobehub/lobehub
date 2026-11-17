@@ -225,8 +225,6 @@ export interface OwnedWorktreeRestoreResult {
   outcome:
     'branchMissing' | 'busy' | 'error' | 'needsLocal' | 'refused' | 'restored' | 'unreachable';
   outdated?: boolean;
-  /** With `needsLocal`: the creation receipt to write back into the re-added worktree. */
-  ownerToken?: string;
 }
 
 /** The device client predates the owned-worktree RPCs. */

@@ -1,21 +1,29 @@
 'use client';
 
 import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
-import { resolveOwnedWorktrees } from '@lobechat/types';
-import { Button, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
+import { isRetiredTopicStatus, resolveOwnedWorktrees } from '@lobechat/types';
+import { Button, confirmModal, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { GitBranchIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useSingleton } from '@/hooks/useSingleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { discardOwnedWorktree, keepOwnedWorktree } from '@/services/ownedWorktree';
 import { topicService } from '@/services/topic';
 
-import { findRemovedWorktree, findWorktreesAwaitingChoice } from './overviewData';
+import {
+  findRemovedWorktree,
+  findWorktreesAwaitingChoice,
+  worktreeRefreshInterval,
+} from './overviewData';
 import { OverviewRow } from './OverviewRow';
 
-/** States in flight on the server: refresh until they settle. */
-const SETTLING = new Set(['pending', 'running']);
+const styles = stylex.create({
+  // Lines up with the row's text, past its icon.
+  reason: { paddingInlineStart: '36px', paddingInlineEnd: '8px', wordBreak: 'break-word' },
+});
 
 /**
  * The topic's owned worktrees as the server has them now. The topic list row
@@ -26,15 +34,27 @@ export const useOwnedWorktrees = (
   topicId: string | undefined,
   status?: string | null,
   enabled = true,
-) =>
-  useClientDataSWR(
-    topicId && enabled ? ['topic-owned-worktrees', topicId, status ?? ''] : null,
-    async () => resolveOwnedWorktrees((await topicService.getTopicDetail(topicId!))?.metadata),
+) => {
+  const key = topicId && enabled ? ['topic-owned-worktrees', topicId, status ?? ''] : null;
+  const keyId = key?.join('\u0000') ?? '';
+  // When each key was first read: a new key (an archive) opens a new
+  // discovery window for the cleanup to start in.
+  const firstReadAt = useSingleton(() => new Map<string, number>());
+  return useClientDataSWR(
+    key,
+    async () => {
+      if (!firstReadAt.has(keyId)) firstReadAt.set(keyId, Date.now());
+      return resolveOwnedWorktrees((await topicService.getTopicDetail(topicId!))?.metadata);
+    },
     {
       refreshInterval: (data?: OwnedWorktree[]) =>
-        data?.some((entry) => entry.cleanup && SETTLING.has(entry.cleanup.state)) ? 3000 : 0,
+        worktreeRefreshInterval(data, {
+          retired: isRetiredTopicStatus(status),
+          sinceFirstReadMs: Date.now() - (firstReadAt.get(keyId) ?? Date.now()),
+        }),
     },
   );
+};
 
 /**
  * What the Overview shows for the topic's app-created worktrees: the ones it
@@ -76,6 +96,8 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
   const { t: tCommon } = useTranslation('common');
   const mutate = onChange;
   const [busy, setBusy] = useState<string>();
+  /** The failed row whose reason is unfolded. */
+  const [detailsOpen, setDetailsOpen] = useState<string>();
 
   const kept = findWorktreesAwaitingChoice(entries);
 
@@ -149,11 +171,7 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
             icon={TriangleAlertIcon}
             iconColor={cssVar.colorWarning}
             iconSize={14}
-            title={
-              entry.cleanup?.state === 'failed' && entry.cleanup.reason
-                ? `${entry.path}\n${entry.cleanup.reason}`
-                : entry.path
-            }
+            title={entry.path}
             value={
               entry.cleanup?.state === 'failed'
                 ? t('workingPanel.overview.keptWorktree.failedTitle')
@@ -162,7 +180,29 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
                   })
             }
           />
+          {entry.cleanup?.state === 'failed' &&
+            entry.cleanup.reason &&
+            detailsOpen === entry.path && (
+              <Text code fontSize={12} type={'secondary'} {...stylex.props(styles.reason)}>
+                {entry.cleanup.reason}
+              </Text>
+            )}
           <Flexbox horizontal gap={4} justify={'flex-end'} paddingInline={8}>
+            {entry.cleanup?.state === 'failed' && entry.cleanup.reason && (
+              <Button
+                size={'small'}
+                type={'text'}
+                onClick={() =>
+                  setDetailsOpen((open) => (open === entry.path ? undefined : entry.path))
+                }
+              >
+                {t(
+                  detailsOpen === entry.path
+                    ? 'workingPanel.overview.keptWorktree.hideDetails'
+                    : 'workingPanel.overview.keptWorktree.details',
+                )}
+              </Button>
+            )}
             <Button
               disabled={busy === entry.path}
               size={'small'}

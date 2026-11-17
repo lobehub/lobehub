@@ -165,7 +165,7 @@ export const restoreOwnedWorktree = async (
   try {
     result = await electronGitService.restoreOwnedWorktree({
       branch: answer.branch ?? entry.branch ?? '',
-      ownerToken: answer.ownerToken ?? entry.ownerToken,
+      ownerToken: entry.ownerToken,
       sourcePath: entry.sourcePath,
       worktreePath: entry.path,
     });

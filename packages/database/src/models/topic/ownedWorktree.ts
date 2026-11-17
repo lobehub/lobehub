@@ -1,6 +1,6 @@
 import type { ChatTopicMetadata, OwnedWorktree, OwnedWorktreeTopicRow } from '@lobechat/types';
 import { claimAutoCreatedWorktree, resolveOwnedWorktrees } from '@lobechat/types';
-import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, or, type SQL, sql } from 'drizzle-orm';
 
 import { topics } from '../../schemas';
 import type { TopicModelContext } from './context';
@@ -143,7 +143,17 @@ export const countLiveTopicsUsingWorktree = async (
   ctx: TopicModelContext,
   { excludeIds, path }: { excludeIds: string[]; path: string },
 ): Promise<number> => {
-  const variants = [...new Set([path, path.replace(/[/\\]+$/, '')])];
+  const base = path.replace(/[/\\]+$/, '');
+  const variants = [...new Set([path, base])];
+  // Below the folder too (a topic working in `<worktree>/packages/foo`), cut at
+  // a separator so `<worktree>-other` never matches. LIKE wildcards escaped.
+  const escaped = base.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+  const descendants = [`${escaped}/%`, `${escaped}\\\\%`];
+  const pointsInto = (expr: SQL<string>) =>
+    or(
+      inArray(expr, variants),
+      ...descendants.map((pattern) => sql`${expr} LIKE ${pattern} ESCAPE '\\'`),
+    );
   const rows = await ctx.db
     .select({ isDeleted: topics.isDeleted, metadata: topics.metadata, status: topics.status })
     .from(topics)
@@ -155,16 +165,12 @@ export const countLiveTopicsUsingWorktree = async (
         // Every way a topic can point at the folder: its current worktree, its
         // CLI start folder, or the folder itself picked as its directory.
         or(
-          inArray(
+          pointsInto(
             sql<string>`${topics.metadata} -> 'workingDirectoryConfig' -> 'git' ->> 'activeWorktree'`,
-            variants,
           ),
-          inArray(
-            sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'sessionPath'`,
-            variants,
-          ),
-          inArray(sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'path'`, variants),
-          inArray(sql<string>`${topics.metadata} ->> 'workingDirectory'`, variants),
+          pointsInto(sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'sessionPath'`),
+          pointsInto(sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'path'`),
+          pointsInto(sql<string>`${topics.metadata} ->> 'workingDirectory'`),
         ),
       ),
     );

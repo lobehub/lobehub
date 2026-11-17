@@ -480,8 +480,9 @@ export class WorktreeCleanupService {
           entry.cleanup?.state === 'failed'
             ? { outcome: 'restored' }
             : { outcome: 'branchMissing' };
-      else if (local)
-        return { branch: entry.branch, outcome: 'needsLocal', ownerToken: entry.ownerToken };
+      // The desktop holds the receipt in its own copy of the topic; it never
+      // travels back in an answer.
+      else if (local) return { branch: entry.branch, outcome: 'needsLocal' };
       else if (!entry.deviceId)
         return { error: 'Restore it from the desktop app', outcome: 'unreachable' };
       else
@@ -577,7 +578,9 @@ export const restoreOwnedWorktreeBeforeServerRun = async (params: {
   const { db, metadata, topicId, userId, workspaceId } = params;
   const paths = getTopicWorktreePaths(metadata);
   const entry = resolveOwnedWorktrees(metadata).find((item) => paths.includes(item.path));
-  if (!entry) return;
+  // The server read this metadata just now: a worktree no cleanup has touched
+  // (or one the user keeps) is simply there, with nothing to ask anyone.
+  if (!entry?.cleanup || entry.cleanup.state === 'kept') return;
 
   const service = new WorktreeCleanupService(db, userId, workspaceId);
   const deadline = Date.now() + RESTORE_BUSY_WAIT_MS;
@@ -586,7 +589,7 @@ export const restoreOwnedWorktreeBeforeServerRun = async (params: {
     await new Promise((resolve) => setTimeout(resolve, RESTORE_BUSY_POLL_MS));
     result = await service.restore(topicId, entry.path);
   }
-  log('server-run restore of %s → %o', entry.path, result);
+  log('server-run restore of %s → %s', entry.path, result.outcome);
   if (result.outcome !== 'branchMissing') return;
   // The topic now continues in its source repository.
   const [row] = await new TopicModel(db, userId, workspaceId).findOwnedWorktreeTopics([topicId]);

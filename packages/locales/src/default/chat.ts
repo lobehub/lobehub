@@ -3924,6 +3924,7 @@ export default {
   'workingPanel.overview.execution.device': 'Connected device',
   'workingPanel.overview.execution.local': 'This device',
   'workingPanel.overview.files': 'Files',
+  'workingPanel.overview.keptWorktree.details': 'Details',
   'workingPanel.overview.keptWorktree.discard': 'Discard changes and delete',
   'workingPanel.overview.keptWorktree.discardConfirm':
     "This deletes the worktree and everything uncommitted in it, including ignored files. This can't be undone. Commits on its branch are kept.",
@@ -3935,6 +3936,7 @@ export default {
   'workingPanel.overview.keptWorktree.discarded': 'Worktree deleted. Its branch was kept.',
   'workingPanel.overview.keptWorktree.discarding': 'Deleting the worktree…',
   'workingPanel.overview.keptWorktree.failedTitle': "Worktree couldn't be cleaned up",
+  'workingPanel.overview.keptWorktree.hideDetails': 'Hide details',
   'workingPanel.overview.keptWorktree.keep': 'Keep',
   'workingPanel.overview.keptWorktree.keepFailed': 'Could not keep the worktree',
   'workingPanel.overview.keptWorktree.keptToast':

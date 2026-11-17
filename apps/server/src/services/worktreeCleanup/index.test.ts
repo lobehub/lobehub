@@ -587,6 +587,7 @@ describe('review follow-ups', () => {
       }),
       { status: 'active' },
     );
+    // The receipt never travels back in the answer.
     await expect(service().restore('t-local', WT, { local: true })).resolves.toEqual({
       branch: 'lobehub/renamed',
       outcome: 'needsLocal',
