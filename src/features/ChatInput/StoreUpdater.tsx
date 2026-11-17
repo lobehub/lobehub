@@ -30,7 +30,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     onSend,
     onVoiceMessageSend,
     onMarkdownContentChange,
-    sendMenu,
     mentionItems,
     allowExpand,
     slashPlacement,
@@ -80,12 +79,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('onSend', onSend);
     useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
-
-    useEffect(() => {
-      // `createStoreUpdater` skips undefined values, but follow-up mode needs to
-      // actively clear any previously injected send menu from the store.
-      storeApi.setState({ sendMenu });
-    }, [sendMenu, storeApi]);
 
     useImperativeHandle(chatInputEditorRef, () => editor);
 

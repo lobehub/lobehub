@@ -298,7 +298,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'followUp',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });
@@ -316,7 +315,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: false,
       showSendWhileGenerating: true,
       showStopButton: true,
     });
@@ -343,7 +341,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: true,
       showSendWhileGenerating: false,
       showStopButton: false,
     });
@@ -358,7 +355,6 @@ describe('getConversationChatInputUiState', () => {
       }),
     ).toEqual({
       placeholderVariant: 'default',
-      showSendMenu: false,
       showSendWhileGenerating: false,
       showStopButton: true,
     });

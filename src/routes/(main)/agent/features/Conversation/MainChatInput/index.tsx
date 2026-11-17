@@ -9,11 +9,9 @@ import { useModelSupportImageOutput } from '@/hooks/useModelSupportImageOutput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import AgentConfigError from './AgentConfigError';
-import { useSendMenuItems } from './useSendMenuItems';
+import { useAddUserMessageShortcut } from './useAddUserMessageShortcut';
 
 const contextWindowRightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
 const promptTransformRightActions: ActionKeys[] = [
@@ -32,8 +30,7 @@ const promptTransformRightActions: ActionKeys[] = [
  * Only adds MessageFromUrl for desktop mode.
  */
 const MainChatInput = memo(() => {
-  const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const sendMenuItems = useSendMenuItems();
+  useAddUserMessageShortcut();
 
   const agentId = useConversationStore(contextSelectors.agentId);
   const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
@@ -56,11 +53,7 @@ const MainChatInput = memo(() => {
         isConfigLoading={isAgentConfigLoading}
         leftActions={leftActions}
         rightActions={rightActions}
-        {...(isDevMode
-          ? { sendMenu: { items: sendMenuItems } }
-          : {
-              sendButtonProps: { shape: 'round' },
-            })}
+        sendButtonProps={{ shape: 'round' }}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features
           useChatStore.setState({ mainInputEditor: instance });

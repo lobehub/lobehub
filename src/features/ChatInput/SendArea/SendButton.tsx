@@ -8,11 +8,10 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { selectors, useChatInputStore } from '../store';
-import StopButton from './StopButton';
+import { PendingSendButton, StopButton } from './StateButton';
 
 const SendButton = memo(() => {
   const { t } = useTranslation('setting');
-  const sendMenu = useChatInputStore((s) => s.sendMenu);
   const shape = useChatInputStore((s) => s.sendButtonProps?.shape);
   const size = useChatInputStore((s) => s.sendButtonProps?.size);
   const {
@@ -39,35 +38,31 @@ const SendButton = memo(() => {
   const viewOnly = !canUseResource;
   const canSend = canCreate && !viewOnly;
 
-  // Only a queued send spins (on Send). A running turn shows a static Stop; the
-  // run itself is indicated once, by RunningIndicator beside the model selector.
+  // Only a pending send spins, inside Send itself. A running turn shows a static
+  // Stop; the run is indicated once, by RunningIndicator beside the model selector.
   // Send sits beside Stop for the follow-up the user typed (Enter sends too).
+  const renderSend = (pending: boolean) =>
+    pending ? (
+      <PendingSendButton shape={shape} size={size} />
+    ) : (
+      <Send
+        disabled={disabled || !canSend}
+        shape={shape}
+        size={size}
+        onClick={canSend ? () => send() : undefined}
+      />
+    );
   const stop = <StopButton shape={shape} size={size} onStop={() => handleStop()} />;
   const button =
     generating && showSendWhileGenerating ? (
       <Flexbox horizontal align={'center'} gap={8}>
         {stop}
-        <Send
-          disabled={disabled || !canSend}
-          loading={queued}
-          shape={shape}
-          size={size}
-          onClick={canSend ? () => send() : undefined}
-        />
+        {renderSend(queued)}
       </Flexbox>
     ) : generating ? (
       stop
     ) : (
-      <Send
-        disabled={disabled || !canSend}
-        loading={queued || dispatching}
-        menu={canSend ? (sendMenu as any) : undefined}
-        placement={'topRight'}
-        shape={shape}
-        size={size}
-        trigger={['hover']}
-        onClick={canSend ? () => send() : undefined}
-      />
+      renderSend(queued || !!dispatching)
     );
 
   if (!canCreate) return <Tooltip title={reason}>{button}</Tooltip>;
