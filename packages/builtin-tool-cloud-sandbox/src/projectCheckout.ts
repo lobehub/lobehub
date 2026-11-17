@@ -22,16 +22,3 @@ const toSegment = (value: string) => value.replaceAll(/[^\w-]/g, '_');
  */
 export const projectCheckoutDirectory = (projectId: string, environmentId: string) =>
   `${PROJECT_DRIVE_ROOT}/${toSegment(projectId)}/${toSegment(environmentId)}`;
-
-/** Where a conversation outside any project keeps its repository checkouts on the drive. */
-export const REPOSITORY_DRIVE_ROOT = 'repositories';
-
-/**
- * The drive's own checkout of one repository, for conversations on the
- * persistent sandbox that are not in a project: one folder per environment,
- * shared by every such conversation on that drive, so the work in one is there
- * for the next. Derived from the id alone, for the same reasons as
- * {@link projectCheckoutDirectory}.
- */
-export const repositoryCheckoutDirectory = (environmentId: string) =>
-  `${REPOSITORY_DRIVE_ROOT}/${toSegment(environmentId)}`;

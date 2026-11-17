@@ -1,7 +1,4 @@
-import {
-  projectCheckoutDirectory,
-  repositoryCheckoutDirectory,
-} from '@lobechat/builtin-tool-cloud-sandbox';
+import { projectCheckoutDirectory } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { EnvironmentConfiguration } from '@lobechat/types';
 
 import type { SandboxSelection } from './useSandboxPlacement';
@@ -67,28 +64,23 @@ export const environmentChipState = ({
 /**
  * Where a conversation works once a repository is picked. A repository is only
  * cloned into an empty folder, so it never inherits the folder the
- * conversation was on: on the temporary sandbox it starts in a fresh temporary
- * folder; on the persistent sandbox — and always in a project — it gets a
- * checkout of its own on the drive, which every conversation there shares (the
+ * conversation was on: it starts in a temporary sandbox — or, in a project, in
+ * the project's own checkout of it, which every conversation there shares (the
  * run makes the folder when it first needs it). A private checkout stays on the
  * member's own drive; the public one is every member's.
  */
 export const repositorySelection = (
   environment: { id: string; name: string },
   {
-    persistent = false,
     projectId,
     published,
     workspace,
-  }: { persistent?: boolean; projectId?: string; published: boolean; workspace: boolean },
-): SandboxSelection => {
-  if (!projectId && !persistent) return { environmentId: environment.id };
-
-  return {
-    ...(workspace && { drive: published ? 'public' : 'personal' }),
-    environmentId: environment.id,
-    workingDirectory: projectId
-      ? projectCheckoutDirectory(projectId, environment.id)
-      : repositoryCheckoutDirectory(environment.id),
-  };
-};
+  }: { projectId?: string; published: boolean; workspace: boolean },
+): SandboxSelection =>
+  projectId
+    ? {
+        ...(workspace && { drive: published ? 'public' : 'personal' }),
+        environmentId: environment.id,
+        workingDirectory: projectCheckoutDirectory(projectId, environment.id),
+      }
+    : { environmentId: environment.id };

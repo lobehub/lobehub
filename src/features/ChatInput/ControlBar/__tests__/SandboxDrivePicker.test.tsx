@@ -70,22 +70,23 @@ const renderPicker = (
 // T-14161: the sandbox kind is picked in the execution-environment menu, so
 // this menu only asks what is left for that kind.
 describe('SandboxDrivePicker', () => {
-  it('lists the drive folders directly on the persistent sandbox, a repository beneath', () => {
+  // A repository belongs to the temporary sandbox; the persistent one only
+  // asks which folder of the drive to keep — in a project too.
+  it('lists only the drive folders on the persistent sandbox', () => {
     renderPicker({ workingDirectory: 'notes' });
 
     expect(screen.getByTestId('drive-folders').textContent).toBe('notes');
     expect(screen.queryByText('sandboxStorage.ephemeral', { selector: 'div *' })).toBeNull();
     expect(screen.queryByTestId('sandbox-drive-row')).toBeNull();
-    // A repository is checked out in a folder of its own on the drive.
-    expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
+    expect(screen.queryByTestId('sandbox-repository-row')).toBeNull();
     expect(screen.queryByTestId('repository-menu')).toBeNull();
   });
 
-  it('keeps the repository entry in a project, whose checkout persists', () => {
+  it('offers no repository on the persistent sandbox in a project either', () => {
     renderPicker({ workingDirectory: 'notes' }, { projectId: 'project-1' });
 
     expect(screen.getByTestId('drive-folders')).toBeInTheDocument();
-    expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
+    expect(screen.queryByTestId('sandbox-repository-row')).toBeNull();
   });
 
   // The temporary sandbox's folder is always a fresh empty one: nothing to

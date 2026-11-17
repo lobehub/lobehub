@@ -100,30 +100,4 @@ describe('repositorySelection', () => {
       repositorySelection(repo, { projectId: 'proj_1', published: true, workspace: true }),
     ).toMatchObject({ drive: 'public' });
   });
-
-  it('gives a repository on the persistent sandbox its own checkout on the drive', () => {
-    expect(
-      repositorySelection(repo, { persistent: true, published: false, workspace: false }),
-    ).toEqual({ environmentId: 'env-repo', workingDirectory: 'repositories/env-repo' });
-  });
-
-  it("keeps a private checkout on the member's own drive, a published one on the public drive", () => {
-    expect(
-      repositorySelection(repo, { persistent: true, published: false, workspace: true }),
-    ).toMatchObject({ drive: 'personal', workingDirectory: 'repositories/env-repo' });
-    expect(
-      repositorySelection(repo, { persistent: true, published: true, workspace: true }),
-    ).toMatchObject({ drive: 'public' });
-  });
-
-  it('keeps a project conversation on the project checkout on the persistent sandbox too', () => {
-    expect(
-      repositorySelection(repo, {
-        persistent: true,
-        projectId: 'proj_1',
-        published: false,
-        workspace: false,
-      }),
-    ).toMatchObject({ workingDirectory: 'projects/proj_1/env-repo' });
-  });
 });

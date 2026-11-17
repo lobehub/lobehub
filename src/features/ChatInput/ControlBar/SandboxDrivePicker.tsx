@@ -108,10 +108,10 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * Where a cloud-sandbox run works, offered the way the device picker offers
  * folders: the chip names the place. Which sandbox it is — temporary, or
  * persistent on the drive — is picked in the execution-environment menu, so
- * the menu here is the drive's folders (and a repository, checked out in a
- * folder of its own on the drive) on the persistent sandbox, and only the
+ * the menu here is the drive's folders on the persistent sandbox, and only the
  * repository to clone, or none, on the temporary one — whose folder is always
- * a fresh empty one, nothing to pick.
+ * a fresh empty one, nothing to pick. A repository belongs to the temporary
+ * sandbox alone: the persistent one is for keeping a folder of the drive.
  *
  * Nothing picked is the temporary sandbox; picking a folder on the drive is
  * the choice to keep files. A pick that can no longer be honoured — the
@@ -215,7 +215,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       try {
         await onChange(
           repositorySelection(environment, {
-            persistent: onDrive,
             projectId,
             published:
               environments.find((item) => item.id === environment.id)?.visibility === 'public',
@@ -367,13 +366,12 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
 
     // The execution-environment menu already said which sandbox this is, so the
     // menu here only asks the question left: on the persistent sandbox, which
-    // folder of the drive — or a repository, checked out in a folder of its own
-    // there; on the temporary one, whether to clone a repository at all.
+    // folder of the drive; on the temporary one, whether to clone a repository
+    // at all.
     const content = onDrive ? (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
         {notice}
         {driveMenu}
-        {repositoryRow}
       </Flexbox>
     ) : repositoryOnly ? (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
