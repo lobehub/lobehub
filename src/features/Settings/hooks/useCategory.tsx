@@ -30,6 +30,7 @@ import {
   TagIcon,
   TerminalSquare,
   Trash2,
+  WebhookIcon,
   Wrench,
   ZapIcon,
 } from 'lucide-react';
@@ -226,6 +227,12 @@ export const useCategory = () => {
         icon: ZapIcon,
         key: SettingsTabs.Automations,
         label: t('tab.automations'),
+      },
+      // URLs outside systems call to wake an agent; made on each agent's page, managed here too.
+      enableWebhook && {
+        icon: WebhookIcon,
+        key: SettingsTabs.Webhooks,
+        label: t('tab.webhooks'),
       },
       {
         icon: KeyRound,

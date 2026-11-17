@@ -43,6 +43,8 @@ export const SETTINGS_TAB_SKELETONS: Partial<Record<SettingsTabs, SettingsTabSke
   [SettingsTabs.APIKey]: APIKeySkeleton,
   [SettingsTabs.Appearance]: AppearanceSkeleton,
   [SettingsTabs.Automations]: AutomationsSkeleton,
+  // The same list surface.
+  [SettingsTabs.Webhooks]: AutomationsSkeleton,
   [SettingsTabs.Billing]: BillingSkeleton,
   [SettingsTabs.Connector]: ConnectorSkeleton,
   [SettingsTabs.Credits]: CreditsSkeleton,

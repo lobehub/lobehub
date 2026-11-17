@@ -1,4 +1,4 @@
-import type { GenericWebhookTopicMode } from '@lobechat/types';
+import type { GenericWebhookTopicMode, InboundWebhookKind } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -19,15 +19,21 @@ export interface GenericWebhookSettings {
  * TRPC client already sends.
  */
 class InboundWebhookService {
-  /** Everything in the active scope, or one agent's automations. */
-  list = async (agentId?: string) =>
-    lambdaClient.inboundWebhook.list.query(agentId ? { agentId } : undefined);
+  /**
+   * One kind in the active scope — custom webhooks (`generic`) or automations (`mcp_events`),
+   * which are shown apart — optionally narrowed to one agent.
+   */
+  list = async (kind: InboundWebhookKind, agentId?: string) =>
+    lambdaClient.inboundWebhook.list.query({ kind, ...(agentId && { agentId }) });
 
   /**
    * Asks the source server whether the subscription still delivers, resuming
    * paused delivery as a side effect. Returns the refreshed row; a problem the
    * check found comes back as the row's status, not as a thrown error.
    */
+  /** One automation, as the list shows it. */
+  get = async (id: string) => lambdaClient.inboundWebhook.get.query({ id });
+
   check = async (id: string) => lambdaClient.inboundWebhook.check.mutate({ id });
 
   delete = async (id: string) => lambdaClient.inboundWebhook.delete.mutate({ id });

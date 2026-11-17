@@ -15,7 +15,8 @@ export const AUTOMATIONS_SWR_KEY = 'inbound-webhooks';
 export const useAutomationList = (agentId?: string) => {
   const { data, error, isLoading, mutate } = useClientDataSWR<InboundWebhookItem[]>(
     agentId ? [AUTOMATIONS_SWR_KEY, agentId] : [AUTOMATIONS_SWR_KEY],
-    () => inboundWebhookService.list(agentId),
+    // Automations are the MCP Events subscriptions; custom webhooks have their own pages.
+    () => inboundWebhookService.list('mcp_events', agentId),
   );
 
   const replaceRow = (next: InboundWebhookItem) =>

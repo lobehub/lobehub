@@ -56,6 +56,7 @@ import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
+import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
@@ -457,6 +458,16 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: McpEventsManifest.identifier,
     manifest: McpEventsManifest,
+    type: 'builtin',
+  },
+  {
+    // On demand: hidden from the Tools popover and absent from the defaults, but discoverable, so
+    // the activator enables it when the user asks about this agent's webhooks. The `webhook`
+    // flag removes it from the pool (`featureGates.ts`); share visitors never reach it (not in
+    // AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS: it creates entry points that run as the creator).
+    hidden: true,
+    identifier: WebhookManifest.identifier,
+    manifest: WebhookManifest,
     type: 'builtin',
   },
   {
