@@ -310,13 +310,15 @@ export const sendMessage = async (
   });
   await attachFiles(tx, { fileIds, messageId: message.id });
   // Like any chat app, sending reads the conversation up to the sender's own message, so it
-  // never counts as unread (or notifies) on the sender's other devices.
-  await tx
-    .update(channelMembers)
-    .set({
-      lastReadSequence: sql`greatest(coalesce(${channelMembers.lastReadSequence}, 0), ${message.sequence})`,
-    })
-    .where(eq(channelMembers.id, member.id));
+  // never counts as unread (or notifies) on the sender's other devices. An Agent's request is
+  // not the person reading, so it leaves their unseen messages unread.
+  if (!author)
+    await tx
+      .update(channelMembers)
+      .set({
+        lastReadSequence: sql`greatest(coalesce(${channelMembers.lastReadSequence}, 0), ${message.sequence})`,
+      })
+      .where(eq(channelMembers.id, member.id));
   const delivered = await deliver(tx, message, recipients, member.id);
   if (delivered.length) {
     await tx

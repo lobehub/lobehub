@@ -82,6 +82,17 @@ const setup = async () => {
 };
 
 describe('A conversation between Agents', () => {
+  // An Agent's request is not the person reading: their unseen answers stay unread.
+  it('leaves the person’s unread count alone when an Agent asks', async () => {
+    const { answer, ask, pair, repository } = await setup();
+    const first = await ask('First?');
+    await answer(first.id, 'First answer');
+    await ask('Second?');
+
+    const listed = (await repository.list()).find((item) => item.id === pair.channel.id);
+    expect(listed?.unreadCount).toBe(3);
+  });
+
   it('is one per pair, whichever Agent opens it', async () => {
     const { answerer, asker, open, pair } = await setup();
 
