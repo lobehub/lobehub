@@ -93,14 +93,24 @@ const setSwarm = async (
     });
   });
 
-/** Stops the runs a lane Task has on record, reporting what it found and what refused. */
+/**
+ * Stops the runs a lane Task has on record, reporting what it found and what
+ * refused. A read that fails is reported instead of read as "no runs": the
+ * caller must not take an unknown for an empty answer.
+ */
 const stopRecordedRuns = async (
   ctx: GoalServiceContext,
   taskId: string,
-): Promise<{ live: number; stuck: string[] }> => {
+): Promise<{ live: number; stuck: string[]; unreadable: boolean }> => {
   const stuck: string[] = [];
   let live = 0;
-  const runs = await ctx.taskTopicModel.findByTaskId(taskId).catch(() => []);
+  let runs: Awaited<ReturnType<GoalServiceContext['taskTopicModel']['findByTaskId']>>;
+  try {
+    runs = await ctx.taskTopicModel.findByTaskId(taskId);
+  } catch (error) {
+    console.error('[GoalService.swarm] failed to read a lane Task runs:', error);
+    return { live: 0, stuck, unreadable: true };
+  }
   for (const run of runs) {
     if (run.status !== 'running' || !run.topicId) continue;
     live += 1;
@@ -113,7 +123,7 @@ const stopRecordedRuns = async (
     );
     if (!stopped) stuck.push(run.topicId);
   }
-  return { live, stuck };
+  return { live, stuck, unreadable: false };
 };
 
 /**
@@ -146,6 +156,12 @@ export const stopLaneRuns = async (
     if (!node.taskId) continue;
     const recorded = await stopRecordedRuns(ctx, node.taskId);
     stuck.push(...recorded.stuck);
+    if (recorded.unreadable) {
+      // The runs are unknown, not absent: the lane may still be going, so resolve
+      // nothing and retry the wrap-up.
+      stuck.push(node.taskId);
+      continue;
+    }
     if (recorded.live) continue;
     let withdrawn: unknown;
     try {
@@ -161,8 +177,13 @@ export const stopLaneRuns = async (
     }
     if (!withdrawn) continue;
     // The start may have recorded its run between that read and the withdrawal:
-    // stop it too, since the Task is no longer running to do it for us.
-    stuck.push(...(await stopRecordedRuns(ctx, node.taskId)).stuck);
+    // stop it too, since the Task is no longer running to do it for us. A read
+    // that fails here is reported as stuck for the same reason as above — the run
+    // may be there and `runTask`'s late guard no longer covers a Task that is
+    // already back in `backlog`.
+    const afterWithdrawal = await stopRecordedRuns(ctx, node.taskId);
+    stuck.push(...afterWithdrawal.stuck);
+    if (afterWithdrawal.unreadable) stuck.push(node.taskId);
   }
   return stuck;
 };

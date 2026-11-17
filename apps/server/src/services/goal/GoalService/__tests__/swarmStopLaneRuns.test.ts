@@ -106,6 +106,28 @@ describe('stopLaneRuns', () => {
     await expect(stopLaneRuns(fake.ctx, laneNodes(['task_a']))).resolves.toEqual(['task_a']);
   });
 
+  it('reports a lane whose runs cannot be read so the wrap-up is retried', async () => {
+    const fake = fakeCtx({ runs: [[]] });
+    fake.findByTaskId.mockReset();
+    fake.findByTaskId.mockRejectedValueOnce(new Error('connection reset by peer'));
+
+    // A failed read is not an empty answer: the lane may still be running.
+    await expect(stopLaneRuns(fake.ctx, laneNodes(['task_a']))).resolves.toEqual(['task_a']);
+    expect(fake.withdraw).not.toHaveBeenCalled();
+  });
+
+  it('reports a late read that fails after the claim was withdrawn', async () => {
+    const fake = fakeCtx({ runs: [[]] });
+    fake.findByTaskId.mockReset();
+    fake.findByTaskId.mockResolvedValueOnce([]);
+    fake.findByTaskId.mockRejectedValueOnce(new Error('statement timeout'));
+
+    // The Task is back in `backlog`, so nothing cancels the run it may have recorded.
+    await expect(stopLaneRuns(fake.ctx, laneNodes(['task_a']))).resolves.toEqual(['task_a']);
+    expect(fake.withdraw).toHaveBeenCalledWith('task_a', 'running', 'backlog', { error: null });
+    expect(fake.cancelTopic).not.toHaveBeenCalled();
+  });
+
   it('leaves a Task that is no longer running alone', async () => {
     const fake = fakeCtx({ runs: [[]], withdraw: async () => null });
 
