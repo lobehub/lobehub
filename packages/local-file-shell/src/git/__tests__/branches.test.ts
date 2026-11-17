@@ -59,6 +59,17 @@ describe('branch read operations', () => {
     expect(branches.map((b) => b.name).sort()).toEqual(['feature', 'main']);
   });
 
+  it('can check out a listed branch that shares a name with a tag', async () => {
+    git(repo, 'branch', 'release');
+    git(repo, 'tag', 'release');
+
+    const branches = await listGitBranches(repo);
+    const branch = branches.find(({ current }) => !current)?.name ?? '';
+    expect(await checkoutGitBranch({ branch, path: repo })).toEqual({ success: true });
+    expect(await getGitBranch(repo)).toEqual({ branch: 'release' });
+    expect(branch).toBe('release');
+  });
+
   it('listGitRemoteBranches returns [] when there is no origin', async () => {
     expect(await listGitRemoteBranches(repo)).toEqual([]);
   });
