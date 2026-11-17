@@ -133,6 +133,9 @@ const materializePromote = async (
     kind: 'task',
     title: `Promote lane ${laneKey} (score ${wrapUp.championScore})`,
   });
+  // The graph model answers `undefined` when the goal is gone or the node is
+  // rejected; leave the wrap-up claimed so the next tick retries the promotion.
+  if (!promote) return undefined;
   await ctx.coordinatorGraph.createEdge(graph.goal.id, problem.id, promote.id, 'decomposes');
   await setSwarm(ctx, graph.goal.id, (current) => ({
     ...current,
