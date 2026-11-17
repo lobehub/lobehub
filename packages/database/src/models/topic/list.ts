@@ -64,6 +64,36 @@ export const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortB
     ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topicActivityAt)]
     : [desc(topics.favorite), desc(topicActivityAt)];
 
+/** The condition a topic's child rows match (see `QueryTopicParams.openedByTopicId`). */
+const childOfCondition = (openedByTopicId: string) =>
+  and(
+    sql`${topics.metadata} -> 'openedBy' ->> 'topicId' = ${openedByTopicId}`,
+    // Never a jsonb null test in a qual — see the note on `TopicModel`.
+    sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
+  );
+
+/**
+ * The distinct agents a topic's child topics run, so a caller can decide which
+ * it may show before paging through them.
+ */
+export const listChildTopicAgentIds = async (
+  ctx: TopicModelContext,
+  openedByTopicId: string,
+): Promise<string[]> => {
+  const rows = await ctx.db
+    .selectDistinct({ agentId: topics.agentId })
+    .from(topics)
+    .where(
+      and(
+        ctx.ownership(),
+        ctx.notShareVisitor(),
+        notChannelTopic(),
+        childOfCondition(openedByTopicId),
+      ),
+    );
+  return rows.map((row) => row.agentId).filter(Boolean) as string[];
+};
+
 export const query = async (
   ctx: TopicModelContext,
   {
@@ -80,6 +110,7 @@ export const query = async (
     isInbox,
     legacySessionId,
     onlyMine,
+    openedByAgentIds,
     openedByTopicId,
     sortBy,
     timing,
@@ -184,9 +215,14 @@ export const query = async (
       ctx.ownership(),
       ctx.notShareVisitor(),
       notChannelTopic(),
-      sql`${topics.metadata} -> 'openedBy' ->> 'topicId' = ${openedByTopicId}`,
-      sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'detachedAt', '') = ''`,
+      childOfCondition(openedByTopicId),
       agentId ? eq(topics.agentId, agentId) : undefined,
+      openedByAgentIds
+        ? or(
+            isNull(topics.agentId),
+            openedByAgentIds.length > 0 ? inArray(topics.agentId, openedByAgentIds) : undefined,
+          )
+        : undefined,
       includeTriggerCondition,
       excludeTriggerCondition,
       triggerCondition,
