@@ -37,8 +37,18 @@ const build = (overrides: Partial<PullRequestMenuParams> = {}) =>
     ...overrides,
   });
 
+const flatten = (items: ReturnType<typeof build>): any[] =>
+  items.flatMap((item: any) => (item?.type === 'group' ? [item, ...item.children] : [item]));
+
 const byKey = (items: ReturnType<typeof build>, key: string) =>
-  items.find((item) => item && 'key' in item && item.key === key) as any;
+  flatten(items).find((item) => item && 'key' in item && item.key === key);
+
+const keysOf = (items: ReturnType<typeof build>) =>
+  items.map((item: any) =>
+    item?.type === 'group'
+      ? item.children.map((child: any) => child.key)
+      : (item?.key ?? item?.type),
+  );
 
 describe('resolveAutoFixAvailability', () => {
   it('is switchable only from the conversation it wakes', () => {
@@ -112,15 +122,30 @@ describe('describeAutoFix', () => {
 describe('buildPullRequestMenuItems', () => {
   it('lists open, copy, Auto-fix and remove, with dividers between the groups', () => {
     const items = build();
-    expect(items.map((item) => (item && 'key' in item ? item.key : item?.type))).toEqual([
+    expect(keysOf(items)).toEqual([
       'openOnGithub',
       'copyLink',
       'divider',
-      'autoFix',
+      ['autoFix'],
       'divider',
       'dismiss',
     ]);
     expect(byKey(items, 'dismiss')).toMatchObject({ danger: true });
+  });
+
+  it('puts the Auto-fix mark in the leading slot: alone in its group, with no icon beside it', () => {
+    // lobe-ui moves a checkbox's mark to the right edge when its list also
+    // holds items with icons; the Auto-fix group must hold only checkboxes.
+    const ownerTopic = { agentId: 'agt-2', id: 'tpc-other', title: 'Other' };
+    for (const availability of [
+      resolveAutoFixAvailability(autoFix(), 'tpc-here'),
+      resolveAutoFixAvailability(autoFix({ ownerTopic, ownerTopicId: 'tpc-other' }), 'tpc-here'),
+    ]) {
+      const group = build({ availability }).find((item: any) => item?.type === 'group') as any;
+      expect(group.children).toHaveLength(1);
+      expect(group.children[0]).toMatchObject({ key: 'autoFix', type: 'checkbox' });
+      expect(group.children.some((child: any) => child.icon)).toBe(false);
+    }
   });
 
   it('runs each handler from its item', () => {
@@ -179,8 +204,8 @@ describe('buildPullRequestMenuItems', () => {
       desc: 'workingPanel.overview.pr.autoFix.otherTopic {"title":"Other"}',
       disabled: true,
     });
-    const keys = items.map((item) => (item && 'key' in item ? item.key : item?.type));
-    expect(keys.indexOf('openOwnerTopic')).toBe(keys.indexOf('autoFix') + 1);
+    const keys = keysOf(items);
+    expect(keys[keys.findIndex((key) => Array.isArray(key)) + 1]).toBe('openOwnerTopic');
     byKey(items, 'openOwnerTopic').onClick();
     expect(h.onOpenOwnerTopic).toHaveBeenCalledWith(ownerTopic);
   });
@@ -194,6 +219,6 @@ describe('buildPullRequestMenuItems', () => {
   it('leaves remove out where the row cannot be removed', () => {
     const items = build({ onDismiss: undefined });
     expect(byKey(items, 'dismiss')).toBeUndefined();
-    expect(items.at(-1)).toMatchObject({ key: 'autoFix' });
+    expect(items.at(-1)).toMatchObject({ key: 'autoFixGroup', type: 'group' });
   });
 });

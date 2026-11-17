@@ -142,15 +142,24 @@ export const buildPullRequestMenuItems = ({
     },
     { type: 'divider' },
     {
-      checked: own ? (autoFixChecked ?? availability.enabled) : false,
-      // Stay open so the count under it visibly starts over.
-      closeOnClick: false,
-      desc: describeAutoFix(availability, t),
-      disabled: !own,
-      key: 'autoFix',
-      label: t('workingPanel.overview.pr.autoFix'),
-      onCheckedChange: onToggleAutoFix,
-      type: 'checkbox',
+      // A group of its own: in a list that also has icons, the menu moves a
+      // checkbox's mark to the right edge; alone here it takes the leading
+      // icon slot, where the other items show their icons.
+      children: [
+        {
+          checked: own ? (autoFixChecked ?? availability.enabled) : false,
+          // Stay open so the count under it visibly starts over.
+          closeOnClick: false,
+          desc: describeAutoFix(availability, t),
+          disabled: !own,
+          key: 'autoFix',
+          label: t('workingPanel.overview.pr.autoFix'),
+          onCheckedChange: onToggleAutoFix,
+          type: 'checkbox',
+        },
+      ],
+      key: 'autoFixGroup',
+      type: 'group',
     },
     ...(ownerTopic
       ? [
