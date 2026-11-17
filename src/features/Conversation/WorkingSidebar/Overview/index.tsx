@@ -58,6 +58,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
+import { BackgroundTasksSection } from './BackgroundTasks';
 import DeviceStatusSection from './DeviceStatusSection';
 import {
   collectChangeStats,
@@ -520,6 +521,9 @@ const Overview = memo<OverviewProps>(
             title={t('workingPanel.overview.emptyTitle')}
           />
         )}
+
+        {/* Claude Code background tasks; async subagents stay in the thread list below. */}
+        <BackgroundTasksSection deviceId={deviceId} outputReadable={environmentAvailable} />
 
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
