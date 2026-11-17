@@ -2,7 +2,6 @@ import {
   chatTopicCreateMetadataSchema,
   chatTopicMetadataUpdateSchema,
   chatTopicStatusSchema,
-  isRetiredTopicStatus,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -11,7 +10,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
 import { GoalTopicHandoffService } from '@/server/services/goal/topicHandoff';
-import { scheduleWorktreeCleanup } from '@/server/services/worktreeCleanup';
+import { TopicArchiveService } from '@/server/services/topicArchive';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import {
@@ -53,28 +52,15 @@ export const updateRouter = router({
       // view-only members are read-only.
       await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
       await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
-      // "Archive" in the UI writes `completed`: the worktree the app created
-      // for the topic is cleaned up after the write. The status before it says
-      // whether a run was still live, which holds the cleanup.
-      const archiving = isRetiredTopicStatus(input.value.status);
-      const previous = archiving ? await ctx.topicModel.findById(input.id) : undefined;
-      const scheduleCleanup = () => {
-        if (!archiving || !previous || isRetiredTopicStatus(previous.status)) return;
-        scheduleWorktreeCleanup({
-          db: ctx.serverDB,
-          previousStatus: { [input.id]: previous.status },
-          topicIds: [input.id],
-          trigger: 'archived',
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        });
-      };
+      // Every archive goes through `TopicArchiveService`, which sets off what
+      // archiving a topic does (cleanup of the worktree the app created).
+      const archive = new TopicArchiveService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
       const { agentId, sessionId, ...restValue } = input.value;
-      if (!agentId && !sessionId) {
-        const updated = await ctx.topicModel.update(input.id, restValue);
-        scheduleCleanup();
-        return updated;
-      }
+      if (!agentId && !sessionId) return archive.updateTopic(input.id, restValue);
       const resolved = await resolveContext(
         { agentId, sessionId },
         ctx.serverDB,
@@ -82,13 +68,11 @@ export const updateRouter = router({
         ctx.workspaceId ?? undefined,
       );
       await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
-      const updated = await ctx.topicModel.update(input.id, {
+      return archive.updateTopic(input.id, {
         ...restValue,
         agentId: resolved.agentId,
         sessionId: resolved.sessionId,
       });
-      scheduleCleanup();
-      return updated;
     }),
   /**
    * Clear the unread mark only while the topic is still unread — see
