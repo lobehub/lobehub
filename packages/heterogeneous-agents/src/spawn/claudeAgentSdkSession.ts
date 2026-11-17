@@ -244,6 +244,8 @@ export class ClaudeAgentSdkSession {
   private queryHandle: ClaudeAgentSdkQuery | undefined;
   private sawErrorEvent = false;
   private taskNotificationPending = false;
+  /** A turn is under way: its own `result` will decide about the input. */
+  private turnOpen = true;
 
   constructor(private readonly options: ClaudeAgentSdkSessionOptions) {
     this.pipeline = new AgentStreamPipeline({
@@ -383,8 +385,31 @@ export class ClaudeAgentSdkSession {
     await this.options.onEvents(events);
 
     if (this.pipeline.sessionId) this.options.onSessionId(this.pipeline.sessionId);
+    this.trackTurn(message);
     this.maybeCloseInputAfterResult(message);
+    this.maybeCloseInputAfterStop(message);
     this.emitStatus(this.resolveRuntimeState());
+  }
+
+  private trackTurn(message: SDKMessage): void {
+    if (message.type === 'result') this.turnOpen = false;
+    else if (
+      message.type === 'assistant' ||
+      (message.type === 'system' && message.subtype === 'init')
+    ) {
+      this.turnOpen = true;
+    }
+  }
+
+  /**
+   * Claude Code wakes the model for a task that ended on its own, not for one
+   * that was stopped: no `result` follows a `stopped` notification. Between
+   * turns, the last task being stopped is therefore what ends the session.
+   */
+  private maybeCloseInputAfterStop(message: SDKMessage): void {
+    if (message.type !== 'system' || message.subtype !== 'task_notification') return;
+    if (message.status !== 'stopped' || this.turnOpen) return;
+    if (this.activeTasks.size === 0 && !this.taskNotificationPending) this.closeInput = true;
   }
 
   private async flushPipeline(): Promise<void> {
@@ -434,7 +459,8 @@ export class ClaudeAgentSdkSession {
     }
 
     if (message.subtype === 'task_notification') {
-      this.taskNotificationPending = true;
+      // A stopped task wakes no follow-up turn (see `maybeCloseInputAfterStop`).
+      if (message.status !== 'stopped') this.taskNotificationPending = true;
       this.activeTasks.delete(message.task_id);
     }
   }

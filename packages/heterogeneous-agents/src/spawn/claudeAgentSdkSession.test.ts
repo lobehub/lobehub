@@ -421,4 +421,39 @@ describe('ClaudeAgentSdkSession input lifetime', () => {
     await session.run();
     expect(seen).toEqual([false, true]);
   });
+
+  // Recorded from claude 2.1.308: `task_updated(killed)` then
+  // `task_notification(stopped)`, and no `result` after it.
+  it('ends the session when the last task is stopped between turns', async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield taskStarted('b1');
+      yield result();
+      await settle();
+      seen.push(ended());
+      yield { ...taskNotification('b1'), status: 'stopped' };
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+
+  it("leaves a task stopped mid-turn to that turn's own result", async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield { model: 'claude-haiku', session_id: 'cc-session', subtype: 'init', type: 'system' };
+      yield taskStarted('b1');
+      yield { ...taskNotification('b1'), status: 'stopped' };
+      await settle();
+      seen.push(ended());
+      yield result();
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
 });
