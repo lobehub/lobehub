@@ -5,7 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import {
-  OVERVIEW_PANEL_WIDTH,
+  OVERVIEW_CARD,
   resolveWorkingPanelPlaceholder,
 } from '@/features/Conversation/WorkingSidebar/layout';
 import { useGlobalStore } from '@/store/global';
@@ -16,7 +16,6 @@ import ConversationLayoutSkeleton from './Layout';
 
 const styles = stylex.create({
   overviewCard: {
-    margin: '16px',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
@@ -57,8 +56,15 @@ const AgentConversationLayoutSkeleton = () => {
       <ConversationLayoutSkeleton
         aside={
           overview && (
-            <Flexbox flex={'none'} width={OVERVIEW_PANEL_WIDTH + 32}>
-              <Flexbox className={stylex.props(styles.overviewCard).className}>
+            <Flexbox flex={'none'} width={OVERVIEW_CARD.width + OVERVIEW_CARD.gutter}>
+              <Flexbox
+                className={stylex.props(styles.overviewCard).className}
+                style={{
+                  marginBlock: OVERVIEW_CARD.margin,
+                  marginInlineEnd: OVERVIEW_CARD.margin + OVERVIEW_CARD.scrollbarLane,
+                  marginInlineStart: OVERVIEW_CARD.margin,
+                }}
+              >
                 <PanelRows rows={5} />
               </Flexbox>
             </Flexbox>

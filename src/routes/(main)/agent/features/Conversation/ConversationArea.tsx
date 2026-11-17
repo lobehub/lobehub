@@ -152,8 +152,15 @@ const Conversation = memo(() => {
           flex={1}
           width={'100%'}
           style={{
-            overflowX: 'hidden',
-            overflowY: 'auto',
+            // ChatList fills this box and scrolls itself. Its scroller extends
+            // past the inline end, under the floating Overview card, to put the
+            // scrollbar on the window edge, so this box must not clip sideways.
+            // `clip` does not make a scroll container, so without `minHeight: 0`
+            // a welcome page taller than the area would stretch this box past
+            // the input instead of scrolling inside it.
+            minHeight: 0,
+            overflowX: 'visible',
+            overflowY: 'clip',
             position: 'relative',
           }}
         >

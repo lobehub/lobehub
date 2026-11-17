@@ -1,6 +1,16 @@
 'use client';
 
-import { createContext, memo, type ReactNode, use, useMemo, useState } from 'react';
+import {
+  createContext,
+  type CSSProperties,
+  memo,
+  type ReactNode,
+  type RefCallback,
+  use,
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 interface OverviewSlotContextValue {
@@ -21,9 +31,36 @@ const Provider = memo<{ children: ReactNode }>(({ children }) => {
 
 Provider.displayName = 'OverviewSlotProvider';
 
-const Outlet = () => {
+// The conversation's scroller runs underneath the slot, so the slot paints
+// above it and lets pointer input through everywhere except the card itself.
+const outletStyle: CSSProperties = {
+  display: 'flex',
+  flexShrink: 0,
+  pointerEvents: 'none',
+  position: 'relative',
+  zIndex: 1,
+};
+
+interface OutletProps {
+  /** Also attached to the slot element, e.g. to observe its animated width. */
+  slotRef?: RefCallback<HTMLDivElement>;
+}
+
+const Outlet = ({ slotRef }: OutletProps) => {
   const { setEl } = use(OverviewSlotContext);
-  return <div ref={setEl} style={{ display: 'contents' }} />;
+  const ref = useCallback(
+    (node: HTMLDivElement | null) => {
+      setEl(node);
+      const detachSlotRef = slotRef?.(node);
+      return () => {
+        if (typeof detachSlotRef === 'function') detachSlotRef();
+        setEl(null);
+      };
+    },
+    [setEl, slotRef],
+  );
+
+  return <div ref={ref} style={outletStyle} />;
 };
 
 const OverviewSlot = memo<{ children: ReactNode }>(({ children }) => {
