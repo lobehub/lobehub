@@ -5,8 +5,7 @@ import { GitForkIcon, ImageOffIcon, LayoutTemplateIcon, type LucideIcon } from '
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import CanvasFrame from '@/features/Conversation/WorkingSidebar/Canvas/CanvasFrame';
-
+import { useBoardCapabilities } from '../Viewport/capabilities';
 import { canvasStyles } from './styles';
 
 const styles = stylex.create({
@@ -43,6 +42,7 @@ interface BoardBodyProps {
 
 const BoardBody = memo<BoardBodyProps>(({ board, imageUrl, live, screenshotUrl }) => {
   const { t } = useTranslation('project');
+  const { renderCanvas } = useBoardCapabilities();
   if (screenshotUrl)
     return (
       <img
@@ -63,11 +63,7 @@ const BoardBody = memo<BoardBodyProps>(({ board, imageUrl, live, screenshotUrl }
     );
 
   if (!live) return <Placeholder icon={LayoutTemplateIcon} text={board.title} />;
-  return (
-    <div {...stylex.props(styles.canvas, canvasStyles.inert)}>
-      <CanvasFrame canvasId={source.canvasId} path={source.path} version={source.version} />
-    </div>
-  );
+  return <div {...stylex.props(styles.canvas, canvasStyles.inert)}>{renderCanvas(board)}</div>;
 });
 
 BoardBody.displayName = 'ArtboardBoardBody';

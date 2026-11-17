@@ -11,8 +11,8 @@ import { useBoard } from '../BoardContext';
 import { isQuestion, pagePins } from '../data/commentModel';
 import { useArtboardComments } from '../data/useArtboardComments';
 import { artboardActions, useArtboardStore } from '../store';
+import { floatStyles } from '../Viewport/floatStyles';
 import { ownsEscape } from './escapeScope';
-import { floatStyles } from './Overlays';
 import type { ViewState } from './useViewport';
 
 const PIN = 28;

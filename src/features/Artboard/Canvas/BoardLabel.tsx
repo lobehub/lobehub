@@ -6,7 +6,7 @@ import { ImageIcon, LockIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/FlowNode';
+import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/flowStateColor';
 import { sx } from '@/styles/sx';
 
 import StatusTag, { stateIcon } from '../StatusTag';

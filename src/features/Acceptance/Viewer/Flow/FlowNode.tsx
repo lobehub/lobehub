@@ -17,6 +17,10 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { flowStateColor } from './flowStateColor';
+
+export { flowStateColor } from './flowStateColor';
+
 export interface FlowNodeData extends Record<string, unknown> {
   attempts: number;
   evidence: number;
@@ -42,23 +46,6 @@ export const flowStateBackground = (state?: string) => {
     }
     default: {
       return cssVar.colorWarningBg;
-    }
-  }
-};
-
-export const flowStateColor = (state?: string) => {
-  switch (state) {
-    case undefined: {
-      return cssVar.colorTextQuaternary;
-    }
-    case 'passed': {
-      return cssVar.colorSuccess;
-    }
-    case 'failed': {
-      return cssVar.colorError;
-    }
-    default: {
-      return cssVar.colorWarning;
     }
   }
 };

@@ -1,15 +1,13 @@
 import type { ArtboardBoardView } from '@lobechat/types';
-import { toast } from '@lobehub/ui';
 
-import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/FlowNode';
+import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/flowStateColor';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
-import { chooseOption } from '../data/actions';
 import type { BoardModel } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
 import { isFlagged, nodeScreenshot, nodeState } from '../Verify/flow';
-import { useJourneyView } from '../Verify/useJourneyView';
+import { useBoardCapabilities } from '../Viewport/capabilities';
 import BoardBody from './BoardBody';
 import BoardLabel from './BoardLabel';
 import CompareBody from './CompareBody';
@@ -32,7 +30,7 @@ interface BoardNodeProps {
 
 const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
   const board = useBoard();
-  const journey = useJourneyView();
+  const { journey, onPick } = useBoardCapabilities();
   const s = useArtboardStore((st) => ({
     compare: st.compare,
     flash: st.flash.includes(item.id),
@@ -78,11 +76,8 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
         choice={
           option && {
             checked: picked,
-            disabled: option.status !== 'open' || board.finalized,
-            onPick: () =>
-              void chooseOption(board.artboard.id, option.id, item.id).catch((error) =>
-                toast.error((error as Error).message),
-              ),
+            disabled: option.status !== 'open' || board.finalized || !onPick,
+            onPick: () => onPick?.(option.id, item.id),
           }
         }
       />

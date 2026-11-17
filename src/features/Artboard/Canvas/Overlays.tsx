@@ -1,13 +1,6 @@
-import { ActionIcon, Flexbox, Segmented, Text, toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { ActionIcon, Flexbox, Segmented, toast } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import {
-  Maximize2Icon,
-  MessageSquareQuoteIcon,
-  ScanIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
-} from 'lucide-react';
+import { Maximize2Icon, MessageSquareQuoteIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { openCanvasModal } from '@/features/CanvasModal/loader';
@@ -20,32 +13,8 @@ import { artboardActions, useArtboardStore } from '../store';
 import type { CompareView } from '../types';
 import { nodeScreenshot } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
+import { floatStyles } from '../Viewport/floatStyles';
 import type { ViewState } from './useViewport';
-
-export const floatStyles = stylex.create({
-  float: {
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadiusLG,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    boxShadow: cssVar.boxShadowTertiary,
-    padding: 4,
-    position: 'absolute',
-    zIndex: 5,
-  },
-  topCenter: {
-    insetBlockStart: 12,
-    insetInlineStart: '50%',
-    position: 'absolute',
-    transform: 'translateX(-50%)',
-    zIndex: 5,
-  },
-  selectionBar: {
-    transform: 'translate(-100%, calc(-100% - 36px))',
-    zIndex: 6,
-  },
-});
 
 const SELECTION_BAR_MIN_LEFT = 80;
 const SELECTION_BAR_MIN_TOP = 80;
@@ -125,46 +94,5 @@ export const CompareBar = () => {
         onChange={(value) => artboardActions.setCompare(value as CompareView)}
       />
     </div>
-  );
-};
-
-interface ZoomBarProps {
-  k: number;
-  onFit: () => void;
-  onZoom: (factor: number) => void;
-}
-
-export const ZoomBar = ({ k, onFit, onZoom }: ZoomBarProps) => {
-  const { t } = useTranslation('project');
-  return (
-    <Flexbox
-      horizontal
-      align="center"
-      gap={2}
-
-      {...sx(floatStyles.float, {
-        insetBlockEnd: 'calc(12px + env(safe-area-inset-bottom, 0px))',
-        insetInlineStart: 12,
-      })}
-    >
-      <ActionIcon
-        icon={ZoomOutIcon}
-        size={'small'}
-        title={t('artboard.zoom.out')}
-        onClick={() => onZoom(1 / 1.25)}
-      />
-      <Text
-        style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', textAlign: 'center', width: 44 }}
-      >
-        {Math.round(k * 100)}%
-      </Text>
-      <ActionIcon
-        icon={ZoomInIcon}
-        size={'small'}
-        title={t('artboard.zoom.in')}
-        onClick={() => onZoom(1.25)}
-      />
-      <ActionIcon icon={ScanIcon} size={'small'} title={t('artboard.zoom.fit')} onClick={onFit} />
-    </Flexbox>
   );
 };

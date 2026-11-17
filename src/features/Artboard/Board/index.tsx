@@ -8,6 +8,7 @@ import { type ReactNode, useEffect, useRef } from 'react';
 
 import { BoardProvider, useBoard } from '../BoardContext';
 import Canvas from '../Canvas';
+import AppBoardCapabilities from '../Canvas/AppCapabilities';
 import { useArtboard } from '../data/useArtboard';
 import { useArtboardRevisionWatch } from '../data/useArtboardRevisionWatch';
 import { artboardActions, artboardSelectors, useArtboardStore } from '../store';
@@ -150,7 +151,9 @@ const BoardView = ({ artboardId, onExitFullscreen }: BoardViewProps) => {
 
   return (
     <BoardProvider artboard={data.artboard} imageUrls={data.imageUrls}>
-      <BoardLayout onExitFullscreen={onExitFullscreen} />
+      <AppBoardCapabilities>
+        <BoardLayout onExitFullscreen={onExitFullscreen} />
+      </AppBoardCapabilities>
     </BoardProvider>
   );
 };

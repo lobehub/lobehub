@@ -4,8 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
-import { floatStyles } from '../Canvas/Overlays';
 import { artboardActions, useArtboardStore } from '../store';
+import { floatStyles } from '../Viewport/floatStyles';
 
 const styles = stylex.create({
   divider: {

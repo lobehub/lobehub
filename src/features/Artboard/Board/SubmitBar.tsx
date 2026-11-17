@@ -5,11 +5,11 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
-import { floatStyles } from '../Canvas/Overlays';
 import { sendToBoardConversation } from '../data/boardConversation';
 import { submitBoardRounds, summarizeRounds } from '../data/submitRounds';
 import { mutateArtboard } from '../data/useArtboard';
 import { artboardActions } from '../store';
+import { floatStyles } from '../Viewport/floatStyles';
 
 const styles = stylex.create({
   bar: {

@@ -7,7 +7,7 @@ import { useBoard } from '../BoardContext';
 import type { BoardEdge } from '../model';
 import { useArtboardStore } from '../store';
 import { type FlowNodeState, nodeState } from '../Verify/flow';
-import { useJourneyView } from '../Verify/useJourneyView';
+import { useBoardCapabilities } from '../Viewport/capabilities';
 import { arrowSize, edgeArrow, edgeCurve, strokeWidthOf } from './curve';
 import { EDGE_LABEL_FONT, EDGE_LABEL_MAX_WIDTH, edgeLabelMode, edgeLabelText } from './edgeLabel';
 import { canvasStyles } from './styles';
@@ -33,7 +33,7 @@ const toneOf = (
 
 const Edges = ({ k }: { k: number }) => {
   const board = useBoard();
-  const journey = useJourneyView();
+  const { journey } = useBoardCapabilities();
   const { hot, verify } = useArtboardStore((s) => ({
     hot: s.mode === 'discuss' ? s.selected : null,
     verify: s.mode === 'verify',
