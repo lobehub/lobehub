@@ -64,6 +64,13 @@ const ImageItem = memo<ImageItemProps>(
         : width && width > 0 && height && height > 0
           ? width / height
           : undefined;
+    /**
+     * A message bubble is as wide as its content, and an image that has not loaded yet has no
+     * width, so the box would show as a small grey strip and then jump to the image's size.
+     * The known intrinsic width sizes it up front (the grid still caps it), and the ratio on the
+     * `<img>` itself gives it that box while loading. Editable thumbnails keep their fixed square.
+     */
+    const placeholderWidth = !editable && aspectRatio && width && width > 0 ? width : undefined;
 
     return (
       <Image
@@ -74,6 +81,7 @@ const ImageItem = memo<ImageItemProps>(
         preview={preview}
         size={IMAGE_SIZE}
         src={url}
+        styles={placeholderWidth ? { image: { aspectRatio } } : undefined}
         actions={
           editable && (
             <ActionIcon
@@ -97,7 +105,9 @@ const ImageItem = memo<ImageItemProps>(
           // the grid's min-height and row stretch would push wide images past their ratio, leaving a blank strip
           alignSelf: aspectRatio ? 'start' : undefined,
           minHeight: aspectRatio ? 'auto' : undefined,
-          width: '100%',
+          ...(placeholderWidth
+            ? { maxWidth: '100%', width: `${placeholderWidth}px` }
+            : { width: '100%' }),
           ...style,
         }}
       />

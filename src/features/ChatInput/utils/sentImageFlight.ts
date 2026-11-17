@@ -16,6 +16,8 @@ const FLIGHT_MS = 420;
 const FLIGHT_STAGGER_MS = 30;
 const FLIGHT_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const FADE_MS = 160;
+/** How long a landed copy covers a message image that is still downloading. */
+const LOAD_TIMEOUT_MS = 5000;
 
 /** Key the composer card is rendered under: the preview URL outlives the id change on upload. */
 export const getChatInputImageKey = (item: Pick<UploadFileItem, 'id' | 'previewUrl'>) =>
@@ -70,9 +72,21 @@ const fly = (flight: Flight, target: HTMLImageElement, to: DOMRect, delay: numbe
   const previousVisibility = target.style.visibility;
   target.style.visibility = 'hidden';
 
-  const finish = () => {
+  const reveal = () => {
     target.style.visibility = previousVisibility;
     ghost.remove();
+  };
+  // The message shows the uploaded file's URL, which may still be downloading when the copy
+  // lands; the copy stays on top until it has loaded, so no empty grey box shows in between.
+  let landedAt = 0;
+  const finish = () => {
+    landedAt ||= performance.now();
+    // `complete` is also true for a failed load, which then shows its own fallback; a target
+    // re-rendered away leaves nothing to cover.
+    const settled =
+      target.complete || !target.isConnected || performance.now() - landedAt > LOAD_TIMEOUT_MS;
+    if (settled) reveal();
+    else requestAnimationFrame(finish);
   };
   // Left/top/width/height rather than a transform: the thumbnail is a square crop and the
   // message image keeps its aspect ratio, so scaling would stretch it; `object-fit: cover`

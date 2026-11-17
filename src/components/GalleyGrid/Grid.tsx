@@ -13,7 +13,8 @@ const fallback = createStaticStyles(({ css }) => ({
   container: css`
     display: grid;
     grid-gap: var(--galley-grid-gap, 6px);
-    grid-template-columns: repeat(var(--galley-grid-col, 3), 1fr);
+    /* minmax(0, …): an image sized to its intrinsic width must not widen its column */
+    grid-template-columns: repeat(var(--galley-grid-col, 3), minmax(0, 1fr));
 
     width: 100%;
     max-width: var(--galley-grid-max, 200px);

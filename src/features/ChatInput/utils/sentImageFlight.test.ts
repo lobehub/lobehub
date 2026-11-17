@@ -67,6 +67,29 @@ describe('flySentImages', () => {
     expect(target.style.visibility).toBe('');
   });
 
+  it('keeps the landed copy on top until the message image has downloaded', () => {
+    mountThumbnail('blob:a');
+    flySentImages([image()]);
+
+    let complete = false;
+    const target = document.createElement('img');
+    target.src = 'https://cdn/image.png';
+    Object.defineProperty(target, 'complete', { get: () => complete });
+    target.getBoundingClientRect = () => rect(300, 100, 200);
+    document.body.append(target);
+    vi.advanceTimersByTime(100);
+
+    animations[0].finish();
+    vi.advanceTimersByTime(100);
+    expect(ghosts()).toHaveLength(1);
+    expect(target.style.visibility).toBe('hidden');
+
+    complete = true;
+    vi.advanceTimersByTime(20);
+    expect(ghosts()).toHaveLength(0);
+    expect(target.style.visibility).toBe('');
+  });
+
   it('fades the copy out when the message never renders the image', () => {
     mountThumbnail('blob:a');
     flySentImages([image()]);
