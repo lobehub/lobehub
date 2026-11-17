@@ -58,6 +58,35 @@ describe('createQueueSendNowGate', () => {
   });
 });
 
+describe('getQueuedHintKey by Follow-up behavior', () => {
+  it('says Queue sends one message per turn once the run ends', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'queue', waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedRunEndHint',
+    );
+    expect(getQueuedHintKey({ count: 2, mode: 'queue', waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedOneByOneHint',
+    );
+  });
+
+  it('says Steer joins the current run, merged', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'steer', waitsForRunEnd: false })).toBe(
+      'inputQueue.steerHint',
+    );
+    expect(getQueuedHintKey({ count: 3, mode: 'steer', waitsForRunEnd: false })).toBe(
+      'inputQueue.steerMergeHint',
+    );
+  });
+
+  it('says a run that cannot take a steer queues it until the end', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'steer', waitsForRunEnd: true })).toBe(
+      'inputQueue.steerUnsupportedHint',
+    );
+    expect(getQueuedHintKey({ count: 2, mode: 'steer', waitsForRunEnd: true })).toBe(
+      'inputQueue.steerUnsupportedMergeHint',
+    );
+  });
+});
+
 describe('getQueuedHintKey', () => {
   it('promises the next step boundary for the built-in runtime', () => {
     expect(getQueuedHintKey({ count: 1, waitsForRunEnd: false })).toBe('inputQueue.queuedHint');

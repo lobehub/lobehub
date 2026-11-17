@@ -1,9 +1,10 @@
 // @vitest-environment node
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { ContactModel } from '../../../models/contact';
-import { agents, userContacts } from '../../../schemas';
+import { agents, userContacts, users, workspaceMembers } from '../../../schemas';
 import { ChannelRepository } from '..';
 import { createChannelFixture, jobsOf } from './testUtils';
 
@@ -96,11 +97,106 @@ describe('a conversation between two contacts', () => {
     // History stays readable.
     expect((await asAlice.list()).map((c) => c.id)).toEqual([channel.id]);
   });
+});
 
-  it('is never opened in a workspace', async () => {
+describe('a conversation between two workspace members', () => {
+  const inTeam = (userId: string) => new ChannelRepository(db, userId, fixture.workspaceId);
+  const join = (...userIds: string[]) =>
+    db
+      .insert(workspaceMembers)
+      .values(
+        userIds.map((userId) => ({ role: 'member', userId, workspaceId: fixture.workspaceId })),
+      )
+      .onConflictDoNothing();
+
+  it('needs both people to be members, not contacts', async () => {
+    await join(alice);
+    await expect(inTeam(alice).openPeer(bob, 'Mia')).rejects.toThrow('Workspace member not found');
+
+    await join(bob);
+    const { channel } = await inTeam(alice).openPeer(bob, 'Mia');
+    expect(channel).toMatchObject({ peerUserId: bob, workspaceId: fixture.workspaceId });
+    expect(await inTeam(bob).list()).toMatchObject([{ id: channel.id, peerUserId: alice }]);
+  });
+
+  it('is its own conversation, apart from the personal one', async () => {
     await befriend();
+    await join(alice, bob);
+    const personal = await asAlice.openPeer(bob, 'Mia');
+    const inWorkspace = await inTeam(bob).openPeer(alice, 'Olivia');
+    expect(inWorkspace.channel.id).not.toBe(personal.channel.id);
+    expect((await inTeam(alice).openPeer(bob, 'Mia')).channel.id).toBe(inWorkspace.channel.id);
+
+    expect((await asAlice.list()).map((c) => c.id)).toEqual([personal.channel.id]);
+    expect((await inTeam(alice).list()).map((c) => c.id)).toEqual([inWorkspace.channel.id]);
+  });
+
+  it('goes silent once either person leaves the workspace', async () => {
+    await join(alice, bob);
+    const { channel } = await inTeam(alice).openPeer(bob, 'Mia');
+    await db
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, fixture.workspaceId),
+          eq(workspaceMembers.userId, bob),
+        ),
+      );
     await expect(
-      new ChannelRepository(db, alice, fixture.workspaceId).openPeer(bob, 'Mia'),
-    ).rejects.toThrow('A conversation between people is personal');
+      inTeam(alice).send(channel.id, {
+        content: 'Still here?',
+        requestKey: 'x',
+        routing: 'fallback',
+      }),
+    ).rejects.toThrow('Workspace member not found');
+  });
+});
+
+describe('a conversation with an external contact of a workspace', () => {
+  const carol = 'channel-peer-carol';
+  const inTeam = (userId: string) => new ChannelRepository(db, userId, fixture.workspaceId);
+  const contactsInTeam = (userId: string) => new ContactModel(db, userId, fixture.workspaceId);
+
+  /** Alice and Carol are members; Alice invites Bob, who stays outside the workspace. */
+  const inviteBob = async () => {
+    await db.insert(users).values({ id: carol }).onConflictDoNothing();
+    await db.insert(workspaceMembers).values(
+      [alice, carol].map((userId) => ({
+        role: 'member',
+        userId,
+        workspaceId: fixture.workspaceId,
+      })),
+    );
+    const { requestId } = await contactsInTeam(alice).sendRequest(bob);
+    await new ContactModel(db, bob).acceptRequest(requestId);
+  };
+
+  afterEach(async () => {
+    await db.delete(users).where(eq(users.id, carol));
+  });
+
+  it('is open between the external contact and the members paired with them', async () => {
+    await inviteBob();
+    const { channel } = await inTeam(bob).openPeer(alice, 'Olivia');
+    expect(channel).toMatchObject({ peerUserId: alice, workspaceId: fixture.workspaceId });
+    expect((await inTeam(alice).openPeer(bob, 'Mia')).channel.id).toBe(channel.id);
+
+    // Carol has not opened herself to Bob, so neither of them can start one.
+    await expect(inTeam(bob).openPeer(carol, 'Carol')).rejects.toThrow(
+      'Workspace member not found',
+    );
+    await expect(inTeam(carol).openPeer(bob, 'Mia')).rejects.toThrow('Workspace member not found');
+    await contactsInTeam(carol).openTo(bob);
+    expect(await inTeam(carol).openPeer(bob, 'Mia')).toBeDefined();
+  });
+
+  it('goes silent once the member closes themselves to them', async () => {
+    await inviteBob();
+    const { channel } = await inTeam(alice).openPeer(bob, 'Mia');
+    await contactsInTeam(alice).removeUser(bob);
+    await expect(
+      inTeam(bob).send(channel.id, { content: 'Hello?', requestKey: 'x', routing: 'fallback' }),
+    ).rejects.toThrow('Workspace member not found');
   });
 });

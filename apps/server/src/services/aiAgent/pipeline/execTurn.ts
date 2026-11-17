@@ -260,6 +260,7 @@ export const execAgentTurn = async (
     agentConfig,
     agentSlug,
     assistantAgentId,
+    autoSkillIds,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
@@ -506,6 +507,7 @@ export const execAgentTurn = async (
           }
         : appContext,
     assistantMessageId: turn.assistantMessageId,
+    autoSkillIds,
     botContext,
     botPlatformContext,
     canUseDevice,
@@ -802,6 +804,7 @@ export const execAgentTurn = async (
         approvalClaim,
         approvalSourceOperationId,
         approvalSourceToolMessageIds,
+        autoSkillIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
         markTopicRunning: params.markTopicRunning,

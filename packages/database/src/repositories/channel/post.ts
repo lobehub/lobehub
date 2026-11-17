@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import type { ChannelMessageItem } from '../../schemas';
 import { channelMembers, channelMessages } from '../../schemas';
 import type { Transaction } from '../../type';
-import { appendMessage } from './delivery';
+import { appendMessage, findThread } from './delivery';
 import { ChannelError } from './error';
 import { audit } from './transaction';
 
@@ -15,11 +15,13 @@ export interface ChannelAgentPostInput {
   metadata?: ChannelMessageMetadata;
   /** Identity of what produced the post (e.g. the run). Posting it again returns the stored one. */
   requestKey: string;
+  /** The Thread to post in; one that is gone or closed falls back to the main timeline. */
+  threadId?: string | null;
 }
 
 /**
  * Posts a message an Agent wrote outside any Channel job — what it found after something
- * outside the Channel woke it — at the end of the main timeline. Stored like a published reply
+ * outside the Channel woke it — at the end of the main timeline or the given Thread. Stored like a published reply
  * that answers no request, so it reads as the Agent's and wakes no one.
  *
  * Expects the caller to hold the Channel lock.
@@ -57,6 +59,7 @@ export const postAgentMessage = async (
   if (member.config?.muted)
     throw new ChannelError('CONFLICT', 'The Agent is muted in this Channel');
 
+  const thread = await findThread(tx, channelId, input.threadId);
   const message = await appendMessage(tx, {
     agentId: input.agentId,
     channelId,
@@ -64,6 +67,7 @@ export const postAgentMessage = async (
     metadata: input.metadata ?? {},
     requestKey: input.requestKey,
     routingStatus: 'reply',
+    threadId: thread?.status === 'archived' ? null : (thread?.id ?? null),
   });
   await audit(tx, channelId, 'agent_posted', member.id, { messageId: message.id });
 

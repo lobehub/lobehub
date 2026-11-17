@@ -147,6 +147,8 @@
   "cmdk.search.files": "Dosyalar",
   "cmdk.search.folder": "Klasör",
   "cmdk.search.folders": "Klasörler",
+  "cmdk.search.goal": "Hedef",
+  "cmdk.search.goals": "Hedefler",
   "cmdk.search.knowledgeBase": "Kütüphane",
   "cmdk.search.knowledgeBases": "Kütüphaneler",
   "cmdk.search.loading": "Aranıyor...",

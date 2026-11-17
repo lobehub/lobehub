@@ -8,7 +8,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createFileParseRunner } from '../apps/server/src/services/fileParse/runner';
-import { buildFileParseWorker } from './buildFileParseWorker.mjs';
+import { buildFileParseWorker } from './buildFileParseWorker.mts';
 
 const loaders = (relative: string) =>
   path.resolve(__dirname, '../packages/file-loaders/src/loaders', relative);

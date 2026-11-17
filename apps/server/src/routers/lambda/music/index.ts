@@ -25,6 +25,10 @@ import {
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createAsyncCaller } from '@/server/routers/async/caller';
+import {
+  isAsyncCallRejectedBeforeRun,
+  keepAliveForAsyncRejection,
+} from '@/server/routers/async/rejection';
 import { FileService } from '@/server/services/file';
 import { resolveMusicModelCard } from '@/server/services/generation/musicModel';
 import {
@@ -221,35 +225,11 @@ export const musicRouter = router({
 
       log('Created batch %s with %d generations', batch.id, tasks.length);
 
-      try {
-        const asyncCaller = await createAsyncCaller({ userId });
-
-        // Fire-and-forget: the async router owns task status and billing from here on. A failed
-        // HTTP response (e.g. a proxy timing out a long generation) does not mean the task
-        // failed, so only log it.
-        asyncCaller.music
-          .createMusic({
-            asyncTaskCreatedAt: tasks[0].asyncTaskCreatedAt,
-            generationBatchId: batch.id,
-            generationTopicId,
-            model,
-            params: generationParams,
-            prechargeResult: prechargeResult ?? undefined,
-            provider,
-            spendOrigin: ctx.spendOrigin,
-            tasks: tasks.map(({ asyncTaskId, generation }) => ({
-              asyncTaskId,
-              generationId: generation.id,
-            })),
-            webhookToken,
-            workspaceId: wsId,
-          })
-          .catch((error: unknown) => {
-            console.error('[music] Async music request for batch %s failed: %O', batch.id, error);
-          });
-      } catch (error) {
-        console.error('[music] Failed to start the async music task:', error);
-
+      /**
+       * Marks every task as failed and refunds the pre-charge: the async router
+       * never ran, so its own failure handling cannot fire for this batch.
+       */
+      const failUnstartedBatch = async (error: unknown) => {
         // Best effort: one failed status write must not stop the others or the refund below
         await pMap(
           tasks,
@@ -266,27 +246,58 @@ export const musicRouter = router({
           { concurrency: 5 },
         );
 
-        // The async router never ran, so refund the pre-charge here
-        if (prechargeResult) {
-          try {
-            await chargeAfterGenerate({
-              isError: true,
-              metadata: {
-                asyncTaskId: tasks[0].asyncTaskId,
-                generationBatchId: batch.id,
-                modelId: resolvedModelId,
-                topicId: generationTopicId,
-              },
-              model: resolvedModelId,
-              prechargeResult,
-              provider,
-              userId,
-              workspaceId: wsId,
-            });
-          } catch (chargeError) {
-            console.error('[music] chargeAfterGenerate failed:', chargeError);
-          }
+        if (!prechargeResult) return;
+        try {
+          await chargeAfterGenerate({
+            isError: true,
+            metadata: {
+              asyncTaskId: tasks[0].asyncTaskId,
+              generationBatchId: batch.id,
+              modelId: resolvedModelId,
+              topicId: generationTopicId,
+            },
+            model: resolvedModelId,
+            prechargeResult,
+            provider,
+            userId,
+            workspaceId: wsId,
+          });
+        } catch (chargeError) {
+          console.error('[music] chargeAfterGenerate failed:', chargeError);
         }
+      };
+
+      try {
+        const asyncCaller = await createAsyncCaller({ userId });
+
+        // Fire-and-forget: the async router owns task status and billing from here on. A failed
+        // HTTP response (e.g. a proxy timing out a long generation) does not mean the task
+        // failed, so only log it. A call its auth middleware refused never ran, so fail the
+        // batch now instead of leaving it pending until the status poll times it out.
+        const call = asyncCaller.music.createMusic({
+          asyncTaskCreatedAt: tasks[0].asyncTaskCreatedAt,
+          generationBatchId: batch.id,
+          generationTopicId,
+          model,
+          params: generationParams,
+          prechargeResult: prechargeResult ?? undefined,
+          provider,
+          spendOrigin: ctx.spendOrigin,
+          tasks: tasks.map(({ asyncTaskId, generation }) => ({
+            asyncTaskId,
+            generationId: generation.id,
+          })),
+          webhookToken,
+          workspaceId: wsId,
+        });
+        const handled = call.catch(async (error: unknown) => {
+          console.error('[music] Async music request for batch %s failed: %O', batch.id, error);
+          if (isAsyncCallRejectedBeforeRun(error)) await failUnstartedBatch(error);
+        });
+        keepAliveForAsyncRejection(call, handled);
+      } catch (error) {
+        console.error('[music] Failed to start the async music task:', error);
+        await failUnstartedBatch(error);
       }
 
       return {

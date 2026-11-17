@@ -45,6 +45,8 @@ export interface StartOperationInput {
   approvalClaim: ApprovalClaimState;
   approvalSourceOperationId?: string;
   approvalSourceToolMessageIds: string[];
+  /** Library skills the agent set to `auto`, kept on the world slot for the skill pool. */
+  autoSkillIds?: string[];
   autoStart: boolean;
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
@@ -127,6 +129,7 @@ export const startOperation = async (
     approvalClaim,
     approvalSourceOperationId,
     approvalSourceToolMessageIds,
+    autoSkillIds,
     autoStart,
     botContext,
     botPlatformContext,
@@ -280,6 +283,7 @@ export const startOperation = async (
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,
+      autoSkillIds,
       disabledPluginIds,
       userTimezone,
       appContext: {

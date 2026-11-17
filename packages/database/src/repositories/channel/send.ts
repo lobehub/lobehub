@@ -18,12 +18,17 @@ import {
   pairedAgent,
 } from './delivery';
 import { ChannelError } from './error';
-import { peerOf, requireMutualContacts } from './peer';
+import { peerOf, requirePeerRelation } from './peer';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
 
 export interface ChannelSendInput {
+  /**
+   * Server only: the Agent member that writes this request in a conversation between Agents
+   * (`channels.agentPairKey`). The caller stays the requester and execution identity.
+   */
+  authorAgentMemberId?: string;
   content: string;
   fileIds?: string[];
   /** Member ids. A human quote dispatches only its mentioned Agents. */
@@ -83,6 +88,9 @@ export const sendMessage = async (
   input: ChannelSendInput,
 ): Promise<ChannelMessageItem> => {
   const { fileIds, mentions } = validateSendInput(input);
+  const author = await requestAuthor(tx, channel, input.authorAgentMemberId);
+  if (author && (mentions.includes(author.id) || fileIds.length))
+    throw new ChannelError('BAD_REQUEST', 'An Agent asks the other Agent, without attachments');
   const [replyTo] = input.replyToId
     ? await tx
         .select()
@@ -146,8 +154,8 @@ export const sendMessage = async (
   if (existing) {
     const existingFileIds = (await fileIdsByMessage(tx, [existing.id])).get(existing.id) ?? [];
     if (
-      existing.userId !== member.userId ||
-      existing.agentId !== null ||
+      existing.userId !== (author ? null : member.userId) ||
+      existing.agentId !== (author?.agentId ?? null) ||
       existing.content !== input.content ||
       existing.replyToId !== (input.replyToId ?? null) ||
       existing.threadId !== threadId ||
@@ -158,9 +166,15 @@ export const sendMessage = async (
     return existing;
   }
 
-  // Removing a contact silences the conversation for both people; its history stays.
+  // Removing a contact, or either person leaving the workspace, silences the conversation for
+  // both people; its history stays.
   if (channel.peerUserId && member.userId)
-    await requireMutualContacts(tx, member.userId, peerOf(channel, member.userId)!);
+    await requirePeerRelation(
+      tx,
+      channel.workspaceId,
+      member.userId,
+      peerOf(channel, member.userId)!,
+    );
 
   if (fileIds.length && channel.agentId) {
     // Another person's shared Agent runs as its owner, who cannot read the sender's files.
@@ -281,7 +295,7 @@ export const sendMessage = async (
             : [];
 
   const message = await appendMessage(tx, {
-    userId: member.userId,
+    ...(author ? { agentId: author.agentId } : { userId: member.userId }),
     channelId: channel.id,
     content: input.content,
     mentions,
@@ -311,4 +325,25 @@ export const sendMessage = async (
   });
 
   return message;
+};
+
+/**
+ * The Agent member writing a request, which only a conversation between Agents accepts. Without
+ * one, the caller writes it.
+ */
+const requestAuthor = async (
+  tx: Transaction,
+  channel: ChannelAccess['channel'],
+  memberId: string | undefined,
+) => {
+  if (!memberId) return;
+  if (!channel.agentPairKey)
+    throw new ChannelError(
+      'BAD_REQUEST',
+      'Only a conversation between Agents takes Agent requests',
+    );
+  const [author] = await activeMembers(tx, channel.id, [memberId]);
+  if (author?.actorType !== 'agent' || !author.agentId)
+    throw new ChannelError('BAD_REQUEST', 'The asking Agent is not in this conversation');
+  return author;
 };

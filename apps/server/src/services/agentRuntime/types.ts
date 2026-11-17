@@ -520,6 +520,8 @@ export interface OperationCreationParams {
      */
     userAgent?: string;
   };
+  /** Library skills the agent set to `auto`, kept on `state.world` for the skill pool. */
+  autoSkillIds?: string[];
   autoStart?: boolean;
   /**
    * Sender/owner identity for bot-originated runs. Forwarded into

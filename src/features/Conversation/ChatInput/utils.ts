@@ -1,5 +1,10 @@
 import { getSlicedMessages } from '@lobechat/context-engine';
-import type { ConversationContext, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
+import type {
+  ConversationContext,
+  FollowUpMode,
+  OpenAIChatMessage,
+  UIChatMessage,
+} from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import type { ContextWindow, SendButtonProps } from '@/features/ChatInput/store/initialState';
@@ -79,12 +84,25 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
  */
 export const getQueuedHintKey = ({
   count,
+  mode = 'legacy',
   waitsForRunEnd,
 }: {
   count: number;
+  /** The Follow-up behavior in effect (`legacy` while its lab is off). */
+  mode?: FollowUpMode;
   waitsForRunEnd: boolean;
 }) => {
   const merged = count > 1;
+
+  // Queue: every follow-up waits for the run end, then goes one per turn.
+  if (mode === 'queue')
+    return merged ? 'inputQueue.queuedOneByOneHint' : 'inputQueue.queuedRunEndHint';
+  // Steer: joins the running turn, unless this run cannot take one mid-run.
+  if (mode === 'steer') {
+    if (waitsForRunEnd)
+      return merged ? 'inputQueue.steerUnsupportedMergeHint' : 'inputQueue.steerUnsupportedHint';
+    return merged ? 'inputQueue.steerMergeHint' : 'inputQueue.steerHint';
+  }
 
   if (waitsForRunEnd)
     return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';

@@ -13,6 +13,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   type ChatMessageError,
+  getAutoPluginIds,
   getDisabledPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -229,6 +230,7 @@ class ChatService {
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
+      autoSkillIds: getAutoPluginIds(agentConfig.plugins),
       disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
       // The stored mode passes through: a model without function calling is
       // not demoted to chat mode here, matching the server runtime.

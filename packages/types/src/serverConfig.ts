@@ -98,6 +98,13 @@ export type IFeatureFlagsState = {
    * only; `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET` (`0` / `1`) overrides it.
    */
   enableStripOperationToolset: boolean | undefined;
+  /**
+   * Leave copies of the operation tool set (and the deprecated top-level
+   * `expertise` mirror) out of the persisted agent state blob and restore them
+   * on load (`agent_runtime_slim_state`). Server only;
+   * `AGENT_RUNTIME_SLIM_STATE` (`0` / `1`) overrides it.
+   */
+  enableSlimAgentState: boolean | undefined;
   /** Hover previews of a topic's final answer (`topic_preview`). */
   enableTopicPreview: boolean | undefined;
   /**

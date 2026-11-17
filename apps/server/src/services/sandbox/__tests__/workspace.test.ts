@@ -110,16 +110,19 @@ describe('formatSandboxStoragePromptVariables', () => {
     );
   });
 
-  // Persistence is not enabled yet: until an entitlement claim is issued every
-  // run renders this branch, so it has to reproduce the pre-placeholder prompt
-  // exactly — including the lines surrounding the two spliced sections.
-  it('renders the original ephemeral wording, byte for byte', () => {
+  // Every run without an entitlement renders this branch: the original lines,
+  // then what the temporary sandbox is for — spliced cleanly between the lines
+  // around the placeholder.
+  it('renders the ephemeral wording, with what the temporary sandbox suits', () => {
     const vars = formatSandboxStoragePromptVariables();
     const rendered = render(vars);
 
     for (const key of placeholders) expect(rendered).not.toContain(key);
     expect(rendered).toContain(
-      '- Files created here are temporary and session-specific\n- Each conversation topic has its own isolated session\n- Sessions may expire after inactivity; files will be recreated if needed\n- The sandbox has its own isolated file system starting at the root directory\n- Commands will time out',
+      '- Files created here are temporary and session-specific\n- Each conversation topic has its own isolated session\n- Sessions may expire after inactivity; files will be recreated if needed\n- The sandbox has its own isolated file system starting at the root directory\n- This is a temporary sandbox, discarded after use',
+    );
+    expect(rendered).toContain(
+      'export finished files with `exportFile`.\n- Commands will time out',
     );
     expect(rendered).toContain(
       '- If a session expires, it will be automatically recreated\n- Files from previous sessions may not persist\n- The sessionExpiredAndRecreated flag',

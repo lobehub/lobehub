@@ -87,8 +87,29 @@ describe('activatorRuntime', () => {
       expect(result.success).toBe(false);
     }, 20_000);
 
-    it('still activates the skill when it is not disabled', async () => {
+    it('refuses to activate a library skill the agent never turned on', async () => {
       mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill' ? userSkillRow() : undefined,
+      );
+
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateSkill({ name: 'user-skill' });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('still activates the skill when the agent turned it on', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'auto' }],
+      });
       mocks.findByName.mockImplementation(async (name: string) =>
         name === 'user-skill' ? userSkillRow() : undefined,
       );

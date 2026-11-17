@@ -81,24 +81,28 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.sendMessage,
       description:
-        "Post a message into another Channel on your requester's behalf, @mentioning one or more of its Agents so they answer there. The message appears as your requester's, marked as relayed by you; the addressed Agent decides what to do with it and answers in that Channel, and its reply is brought back to you here as a new request. Get channelId and agentIds from listChannels. Not for the current Channel: your final answer is posted there. Returns a link to the Channel; include it in your final answer.",
+        "Ask or tell another Agent something. Address one Agent by agentIds: it is asked in the conversation between you two, never in the person's conversation or a group; its answer wakes you there, and what you then write is posted back where you asked. To address several Agents together, also give channelId, a group they are all in: the message appears as your requester's, marked as relayed by you, they answer in that group, and the reply is brought back to you here as a new request. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['channelId', 'agentIds', 'content'],
+        required: ['agentIds', 'content'],
         properties: {
-          channelId: { type: 'string', description: 'Target Channel id from listChannels.' },
           agentIds: {
             type: 'array',
             items: { type: 'string' },
             minItems: 1,
             maxItems: 5,
-            description: 'Agents to address; each must be a member of the target Channel.',
+            description: 'Agents to address. One Agent is asked directly; several need channelId.',
+          },
+          channelId: {
+            type: 'string',
+            description:
+              'A group Channel from listChannels that every addressed Agent is in. Only for several Agents.',
           },
           content: {
             type: 'string',
             description:
-              'The message, self-contained: the addressed Agent sees only that Channel, not this conversation.',
+              'The message, self-contained: the addressed Agent does not see this conversation.',
           },
         },
       },

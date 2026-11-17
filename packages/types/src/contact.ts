@@ -34,6 +34,11 @@ export interface ContactAgentProfile {
 
 export interface ContactUserItem {
   createdAt: Date;
+  /**
+   * Set in a workspace's address book as a member sees it: the person is an external contact
+   * of the workspace. `openedToMe` says whether the caller is paired with them and can talk.
+   */
+  external?: { openedToMe: boolean };
   type: 'user';
   user: ContactUserProfile;
 }
@@ -59,10 +64,22 @@ export interface ContactRequestItem {
   message: string | null;
   /** The other person. */
   user: ContactUserProfile;
+  /** Set when a member invited the addressee to be an external contact of this workspace. */
+  workspace?: ContactRequestWorkspace | null;
 }
 
-/** Relation of a search result or profile to the current user. */
-export type ContactRelation = 'self' | 'contact' | 'request_sent' | 'request_received' | 'none';
+export interface ContactRequestWorkspace {
+  avatar: string | null;
+  id: string;
+  name: string;
+}
+
+/**
+ * Relation of a search result or profile to the current user, in the active scope. `member`:
+ * a fellow member of the active workspace, reachable without being a contact.
+ */
+export type ContactRelation =
+  'self' | 'contact' | 'member' | 'request_sent' | 'request_received' | 'none';
 
 export type ContactSearchResult =
   | { relation: ContactRelation; type: 'user'; user: ContactUserProfile }

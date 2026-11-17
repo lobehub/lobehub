@@ -201,6 +201,10 @@ export default {
 
   'cmdk.search.folders': 'Folders',
 
+  'cmdk.search.goal': 'Goal',
+
+  'cmdk.search.goals': 'Goals',
+
   'cmdk.search.knowledgeBase': 'Library',
 
   'cmdk.search.knowledgeBases': 'Libraries',

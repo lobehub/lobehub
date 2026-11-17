@@ -8,6 +8,7 @@ import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protoco
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   ClaudeAgentSdkSession,
+  ClaudeCodeLiveInput,
   CodexThreadSession,
   DshAcpSessionHandle,
 } from '@lobechat/heterogeneous-agents/spawn';
@@ -66,6 +67,11 @@ export interface SendPromptParams {
    * Required: producer-side conversion is the V3 contract — by the time events
    * reach the renderer they must already carry the operation they belong to.
    */
+  /**
+   * Keep the session able to take messages while it runs (Follow-up behavior:
+   * Steer): Claude Code keeps its input open and replays each message it reads.
+   */
+  liveSteer?: boolean;
   operationId: string;
   prompt: string;
   /**
@@ -142,6 +148,8 @@ export interface AgentSession {
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
+  /** Open input of a live Claude Code CLI run (Follow-up behavior: Steer). */
+  liveInput?: ClaudeCodeLiveInput;
   model?: string;
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;

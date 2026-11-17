@@ -804,8 +804,8 @@ export interface ListProjectSkillsResult {
 }
 
 export interface InitWorkspaceParams {
-  /** Working directory used to resolve the project root. */
-  scope: string;
+  /** Working directory; omitted to discover only device-level skills. */
+  scope?: string;
 }
 
 /**
@@ -828,6 +828,7 @@ export interface WorkspaceInstructionsItem {
  */
 export interface InitWorkspaceResult {
   instructions: WorkspaceInstructionsItem[];
-  root: string;
+  /** Absent for a device-only scan; no working directory is selected implicitly. */
+  root?: string;
   skills: ProjectSkillItem[];
 }
