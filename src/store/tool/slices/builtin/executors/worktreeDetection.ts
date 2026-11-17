@@ -551,6 +551,10 @@ const parseGitPush = (
   return { branch: remoteBranch, remote: push.remote ?? 'origin' };
 };
 
+/** The command runs a fallback when an earlier step fails (`a || b`). */
+const hasFailureRecovery = (command: string | string[]): boolean =>
+  (Array.isArray(command) ? command.join(' ') : command).includes('||');
+
 /** Collapse `.`/`..` segments in a POSIX path without touching the filesystem. */
 const normalizePosix = (p: string): string => {
   const isAbs = p.startsWith('/');
@@ -993,12 +997,18 @@ export const recordGitCommandEffects = async (params: {
 
   // A branch the agent created is the conversation's own: its PR may be looked up.
   // The creation shows in git's output, or — with `-q`, which prints nothing —
-  // in the creation flag that named it.
+  // in the creation flag that named it. A chain that recovers from a failure
+  // (`git switch -c x || git switch x`) succeeds whether or not the creation
+  // did, so only git's own output can say so there.
   if (betterCoding) {
+    const commandSaysCreated = !hasFailureRecovery(command);
     const created =
       parseCreatedBranch(resultContent) ??
-      (branchSwitch && 'created' in branchSwitch ? branchSwitch.branch : undefined) ??
+      (commandSaysCreated && branchSwitch && 'created' in branchSwitch
+        ? branchSwitch.branch
+        : undefined) ??
       (() => {
+        if (!commandSaysCreated) return undefined;
         const worktreeAdd = parseWorktreeAddInfo(command, source);
         return worktreeAdd?.createdBranch ? worktreeAdd.branch : undefined;
       })();

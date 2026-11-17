@@ -106,8 +106,9 @@ export const useSidebarPullRequests = (params: {
     confirmError: undefined,
     // Mutations need a confirmed read AND a PR the app can vouch for.
     confirmed: !!selected?.confirmed && !!selected?.vouched,
-    dismissPullRequest,
-    linkPullRequest,
+    // A new conversation has no topic to keep a link on until its first send.
+    dismissPullRequest: topicId ? dismissPullRequest : undefined,
+    linkPullRequest: topicId ? linkPullRequest : undefined,
     onRetryConfirm: () => void refresh(),
     /** Open a listed PR: in the PR tab when the pane can read it, else on GitHub. */
     pickPullRequest: (view: TopicPullRequestView) => {

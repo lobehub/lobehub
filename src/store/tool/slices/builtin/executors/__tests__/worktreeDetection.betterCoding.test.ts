@@ -203,4 +203,16 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
       chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git.ownBranch,
     ).toBe('feat/new');
   });
+
+  it('does not own a branch whose creation a fallback may have rescued', async () => {
+    await recordGitCommandEffects({
+      command: 'git switch -q -c feat/x || git switch -q feat/x',
+      resultContent: '',
+      toolCallId: 'c',
+      topicId: 't1',
+    });
+
+    const git = chatMocks.updateTopicMetadata.mock.calls[0]?.[1].workingDirectoryConfig.git;
+    expect(git?.ownBranch).toBeUndefined();
+  });
 });

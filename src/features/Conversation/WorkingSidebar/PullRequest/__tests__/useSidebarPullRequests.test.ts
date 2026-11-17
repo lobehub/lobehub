@@ -167,4 +167,13 @@ describe('useSidebarPullRequests', () => {
     await expect(result.current.dismissPullRequest?.(views[0] as any)).rejects.toThrow();
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
+
+  it('offers no link or removal before the conversation has a topic', () => {
+    const views = [view(3)];
+    mocks.linked = { enabled: true, primary: views[0], probes: [], views };
+    const { result } = renderHook(() => useSidebarPullRequests({ ...PARAMS, topicId: null }));
+
+    expect(result.current.linkPullRequest).toBeUndefined();
+    expect(result.current.dismissPullRequest).toBeUndefined();
+  });
 });
