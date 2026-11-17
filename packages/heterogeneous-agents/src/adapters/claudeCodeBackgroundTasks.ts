@@ -16,6 +16,13 @@ const NOTIFICATION_STATUSES: Record<string, HeteroBackgroundTaskStatus> = {
   stopped: 'stopped',
 };
 
+/** `task_updated` statuses that end a task; CC's `killed` is the `stopped` notification's. */
+const TERMINAL_PATCH_STATUSES: Record<string, HeteroBackgroundTaskStatus> = {
+  completed: 'completed',
+  failed: 'failed',
+  killed: 'stopped',
+};
+
 /**
  * `run_in_background` Bash answers at once with the path it writes to:
  * "Command running in background with ID: <id>. Output is being written to:
@@ -50,9 +57,12 @@ export interface ClaudeCodeTaskEventContext {
  * changes a visible task yields a full {@link BackgroundTaskEventData}, so
  * every consumer simply replaces the stored snapshot.
  *
- * A task only reaches `stopped` / `completed` / `failed` through its
- * `task_notification`: the `killed` patch that precedes a stop is not proof
- * of it. A task still running when the stream ends is `interrupted`.
+ * A task ends only when Claude Code says it did: a terminal `task_updated`
+ * status (`killed` → `stopped`) or its `task_notification`, never because a
+ * stop was requested. CC patches the status the moment the process ends, but
+ * may hold the notification until its next turn boundary, so the patch is what
+ * keeps a stopped row from reading "running" for half a minute. A task still
+ * running when the stream ends is `interrupted`.
  */
 export class ClaudeCodeBackgroundTasks {
   private tasks = new Map<string, TrackedTask>();
@@ -128,7 +138,7 @@ export class ClaudeCodeBackgroundTasks {
   flush(now = Date.now()): HeterogeneousAgentEvent[] {
     const out: HeterogeneousAgentEvent[] = [];
     for (const tracked of this.tasks.values()) {
-      if (!tracked.visible) continue;
+      if (!tracked.visible || tracked.task.status !== 'running') continue;
       tracked.task = { ...tracked.task, endedAt: now, status: 'interrupted' };
       out.push(...this.snapshot(tracked));
     }
@@ -173,6 +183,11 @@ export class ClaudeCodeBackgroundTasks {
     if (typeof patch.error === 'string' && patch.error) next.error = patch.error;
     if (typeof patch.end_time === 'number') next.endedAt = patch.end_time;
     if (patch.is_backgrounded === true) tracked.visible = true;
+    const ended = TERMINAL_PATCH_STATUSES[patch.status as string];
+    if (ended && next.status === 'running') {
+      next.status = ended;
+      next.endedAt ??= Date.now();
+    }
     tracked.task = next;
     return this.snapshot(tracked);
   }

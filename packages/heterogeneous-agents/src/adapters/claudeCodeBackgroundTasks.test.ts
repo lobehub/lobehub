@@ -90,10 +90,12 @@ describe('Claude Code background tasks', () => {
     expect(snapshots(adapter.flush())).toEqual([]);
   });
 
-  it('only calls a task stopped once its notification says so', () => {
+  it('calls a task stopped once Claude Code reports it killed', () => {
     const adapter = new ClaudeCodeAdapter();
     startBackgroundBash(adapter);
 
+    // CC patches the status as soon as the process ends; the notification
+    // carrying the output may only come at its next turn boundary.
     const [patched] = snapshots(
       adapter.adapt({
         patch: { end_time: 1_794_866_273_908, status: 'killed' },
@@ -102,10 +104,41 @@ describe('Claude Code background tasks', () => {
         type: 'system',
       }),
     );
-    expect(patched.task).toMatchObject({ endedAt: 1_794_866_273_908, status: 'running' });
+    expect(patched.task).toMatchObject({ endedAt: 1_794_866_273_908, status: 'stopped' });
+    // An ended task is not interrupted by the stream ending before its notification.
+    expect(snapshots(adapter.flush())).toEqual([]);
+  });
+
+  it('keeps the stopped status and adds the output when the notification lands', () => {
+    const adapter = new ClaudeCodeAdapter();
+    startBackgroundBash(adapter);
+    adapter.adapt({
+      patch: { end_time: 1_794_866_273_908, status: 'killed' },
+      subtype: 'task_updated',
+      task_id: 'bys1w0wxo',
+      type: 'system',
+    });
 
     const [stopped] = snapshots(adapter.adapt(notification({ status: 'stopped' })));
-    expect(stopped.task).toMatchObject({ endedAt: 1_794_866_273_908, status: 'stopped' });
+    expect(stopped.task).toMatchObject({
+      endedAt: 1_794_866_273_908,
+      outputFile: OUTPUT,
+      status: 'stopped',
+    });
+  });
+
+  it('does not end a task on a non-terminal patch', () => {
+    const adapter = new ClaudeCodeAdapter();
+    startBackgroundBash(adapter);
+    const [patched] = snapshots(
+      adapter.adapt({
+        patch: { status: 'paused' },
+        subtype: 'task_updated',
+        task_id: 'bys1w0wxo',
+        type: 'system',
+      }),
+    );
+    expect(patched.task.status).toBe('running');
   });
 
   it('keeps a failed task failed with its error', () => {
