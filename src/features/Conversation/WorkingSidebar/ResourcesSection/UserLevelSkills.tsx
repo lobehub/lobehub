@@ -1,3 +1,4 @@
+import { getLibrarySkillMode } from '@lobechat/types';
 import { confirmModal, createModal, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
@@ -17,6 +18,8 @@ import {
   SkillsList,
 } from '@/features/SkillsList';
 import { usePermission } from '@/hooks/usePermission';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 
@@ -47,9 +50,9 @@ const openSkillDetailModal = (skillId: string) =>
 
 /**
  * Reads user-installed skills (entries in the `agent_skill` table — market
- * imports plus user-created customs) into the `SkillsList` row shape. Builtin
- * tools and LobeHub MCP servers are intentionally excluded — those belong in
- * the Tools popover, not in the per-user skill inventory.
+ * imports plus user-created customs) enabled for the current agent into the
+ * `SkillsList` row shape. Builtin tools and LobeHub MCP servers are intentionally
+ * excluded — those belong in the Tools popover, not in the per-user skill inventory.
  *
  * Also triggers the underlying SWR fetch so the working sidebar surfaces the
  * data even when the Tools popover hasn't been opened in this session. The key
@@ -58,24 +61,27 @@ const openSkillDetailModal = (skillId: string) =>
 export const useUserSkills = (enabled = true): SkillListItem[] => {
   useToolStore((s) => s.useFetchAgentSkills)(enabled);
   const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
+  const plugins = useAgentStore((s) => agentSelectors.currentAgentConfig(s)?.plugins);
 
   return useMemo(
     () =>
       !enabled
         ? EMPTY_ITEMS
-        : agentSkills.map((skill) => ({
-            description: skill.description ?? undefined,
-            icon:
-              skill.source === 'market' ? (
-                <MarketSkillIcon identifier={skill.identifier} name={skill.name} />
-              ) : undefined,
-            // `identifier` is what the runtime resolves through the skill registry,
-            // and is unique per skill — reuse it as both the React key and the
-            // drag payload's `type`.
-            id: skill.identifier,
-            name: skill.name,
-          })),
-    [agentSkills, enabled],
+        : agentSkills
+            .filter((skill) => getLibrarySkillMode(plugins, skill.identifier) !== 'disabled')
+            .map((skill) => ({
+              description: skill.description ?? undefined,
+              icon:
+                skill.source === 'market' ? (
+                  <MarketSkillIcon identifier={skill.identifier} name={skill.name} />
+                ) : undefined,
+              // `identifier` is what the runtime resolves through the skill registry,
+              // and is unique per skill — reuse it as both the React key and the
+              // drag payload's `type`.
+              id: skill.identifier,
+              name: skill.name,
+            })),
+    [agentSkills, enabled, plugins],
   );
 };
 
