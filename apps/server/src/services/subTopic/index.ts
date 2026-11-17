@@ -379,9 +379,10 @@ export class SubTopicService {
     return {
       descendants: descendants.length,
       direct: descendants.filter((item) => item.openedBy?.topicId === topicId).length,
-      running: descendants.filter(
-        (item) => item.status === 'running' || item.status === 'waitingForHuman',
-      ).length,
+      running: descendants.filter((item) => {
+        const state = toSubTopicState(item.status, item.latestRunStatus);
+        return state === 'running' || state === 'waiting_for_user';
+      }).length,
       topicId,
     };
   }
@@ -408,11 +409,11 @@ export class SubTopicService {
 
     if (params.mode === 'all') {
       const descendants = retirableDescendants(root.id, await this.deps.listDescendants(root.id));
+      // Ask each one for its live runs rather than trusting a status field: a
+      // server-run turn never writes `topics.status`.
       for (const item of descendants) {
-        if (item.status === 'running' || item.status === 'waitingForHuman') {
-          for (const operationId of await this.deps.findLiveRunIds(item.id)) {
-            await this.deps.interrupt(operationId);
-          }
+        for (const operationId of await this.deps.findLiveRunIds(item.id)) {
+          await this.deps.interrupt(operationId);
         }
       }
       // Deepest first, so a failure part-way never leaves a child under a retired parent.

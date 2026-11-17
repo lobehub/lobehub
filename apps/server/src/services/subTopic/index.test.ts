@@ -233,7 +233,13 @@ describe('SubTopicService.retire', () => {
   it('stops running descendants, then archives each one before the topic itself', async () => {
     const deps = createDeps();
     deps.listDescendants.mockResolvedValue([
-      { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, status: 'running' },
+      // A server run leaves topics.status alone: only its operation says it is running.
+      {
+        id: 'tpc_same',
+        latestRunStatus: 'running',
+        openedBy: { topicId: 'tpc_parent' },
+        status: 'active',
+      },
       { id: 'tpc_cross', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
       // A task run belongs to its task: it is neither stopped nor archived,
       // and neither is what it opened.
@@ -308,7 +314,12 @@ describe('SubTopicService.describe', () => {
   it('counts what retiring the topic would touch', async () => {
     const deps = createDeps();
     deps.listDescendants.mockResolvedValue([
-      { id: 'a', openedBy: { topicId: 'tpc_parent' }, status: 'running' },
+      {
+        id: 'a',
+        latestRunStatus: 'running',
+        openedBy: { topicId: 'tpc_parent' },
+        status: 'active',
+      },
       { id: 'b', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
       { id: 'c', openedBy: { topicId: 'a' }, status: 'waitingForHuman' },
       { id: 'run', openedBy: { topicId: 'tpc_parent' }, status: 'running', trigger: 'task' },
