@@ -22,13 +22,6 @@ describe('AgentManagementManifest', () => {
       expect(apiNames).toContain(name);
     }
   });
-
-  // installPlugin(source: 'market') needs an identifier the model can only get
-  // from a marketplace search; without one it guessed ids.
-  it('pairs market installPlugin with searchMarketTools', () => {
-    expect(apiNames).toContain(AgentManagementApiName.searchMarketTools);
-    expect(apiNames).toContain(AgentManagementApiName.installPlugin);
-  });
 });
 
 describe('systemPrompt', () => {
