@@ -71,3 +71,19 @@ Turn on **Auto-approve tool calls** to let a webhook's runs use tools without wa
 ## Pause or delete
 
 Use the switch on a webhook to pause it: calls are refused with `409` until you resume it. **Delete** removes it, its URL and its key for good. Webhooks also appear in **Settings → Automations** next to connector event subscriptions.
+
+## Post results to a Channel
+
+A webhook can post each run's answer to a Channel, or to one thread in it, as the agent's message, instead of leaving it in a topic you have to open. The run still works in its own topic; only its final answer reaches the Channel. If there is nothing worth saying, the agent posts nothing.
+
+Set this up from the [`lh` CLI](#manage-from-the-cli-or-in-chat) (`--channel <channel id>`, plus `--thread <thread id>` for a thread) or by asking the agent in that Channel or thread. Both you and the agent must be members of the Channel. Nobody can approve a tool call in a Channel, so these runs never wait for approval, and posting to a Channel requires **Auto-approve tool calls**; tools marked to always ask for confirmation are skipped.
+
+On the web, such a webhook shows where it posts and can be deleted, but is changed only from the CLI or in chat. If a post is refused, for example because the agent left the Channel, the webhook shows why.
+
+Event subscriptions work the same way: ask the agent to subscribe from a message in a Channel or thread, and each event's result is posted back there (in a thread, you can ask for the Channel's main timeline instead).
+
+## Manage from the CLI or in chat
+
+Everything the webhook page does is also available from the `lh` CLI: `lh webhook list`, `view`, `create`, `edit`, `pause`, `resume`, `rotate-key`, `test`, `calls`, `check` (event subscriptions) and `delete`. `create` and `rotate-key` print the key once, so a script can wire the webhook into another system.
+
+In a conversation, the agent can list, create, change, test and delete its own webhooks, and check or delete its event subscriptions. Changes follow your approval settings. The agent never sees a key: a webhook it creates shows a **Generate key** button in the conversation, which shows the key to you once.
