@@ -14,6 +14,8 @@ export type { Client, Config } from './generated/client';
 export { LobeHub } from './generated/sdk.gen';
 export type * from './generated/types.gen';
 export type { PageItem, PageOf, PaginateOptions } from './pagination';
+export type { RunEventsRequestOptions, RunStreamOptions, RunWaitOptions } from './runs';
+export { RunsResource, RunStream } from './runs';
 export type { ServerSentEvent } from './streaming';
 export { parseServerSentEvents, ResponseStream } from './streaming';
 export { DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, IDEMPOTENCY_KEY_HEADER } from './transport';

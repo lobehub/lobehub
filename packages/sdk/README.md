@@ -39,7 +39,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 
 ## Resources
 
-29 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
+30 resources, one per top-level path segment of the API. Method names come from each operation's `operationId` (`<resource>.<method>`) in the spec: `list` / `get` / `create` / `update` / `delete` plus PascalCase sub-segments (`files.listChunks`, `roles.updatePermissions`), and a few verbs declared by the route itself (`files.uploadBatch`, `tasks.run`, `notifications.markRead`). Each method's JSDoc names the API key scopes it needs.
 
 | Resource              | Methods                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -67,6 +67,7 @@ Raw spec types are exported from `@lobehub/sdk` and `@lobehub/sdk/types`.
 | `pushTokens`          | `register`, `unregister`                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `responses`           | `create`                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `roles`               | `create`, `delete`, `deletePermissions`, `get`, `list`, `listPermissions`, `update`, `updatePermissions`                                                                                                                                                                                                                                                                                                                                                                              |
+| `runs`                | `cancel`, `create`, `events`, `get`, `listInterventions`, `listQueuedMessages`, `queueMessage`, `removeQueuedMessage`, `resolveIntervention`, `submitToolResults`                                                                                                                                                                                                                                                                                                                     |
 | `signals`             | `emit`, `listReceipts`, `trigger`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `tasks`               | `create`, `delete`, `get`, `list`, `listRuns`, `run`, `update`, `updateStatus`                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `topics`              | `create`, `delete`, `get`, `list`, `listThreads`, `update`                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -163,6 +164,37 @@ for await (const event of stream) {
 const response = await lobehub.responses.stream({ input, model }).finalResponse();
 console.log(response.output_text);
 ```
+
+## Agent runs
+
+`runs.create` starts an agent run in the background (`202`, with the run id); `runs.get` reads its status, usage and result. The id is the same `operationId` that `im.send` and `tasks.run` return. Three helpers sit on top:
+
+- `runs.stream(id)` yields typed run events (`RunEvent`: `message.delta`, `tool_call.started`, `intervention.requested`, `run.completed`, …). It replays the run from its first event (or `after`), reconnects with `Last-Event-ID` when the server closes the connection early, and ends at `run.completed`, `run.failed`, `run.cancelled` or `run.waiting`. `finalEvent()` drains it.
+- `runs.createAndStream(body)` starts a run and returns its stream (with the created run as `stream.run`).
+- `runs.wait(id)` polls until the run finishes or waits on you, following `continuedByRunId` into the run that continues after an intervention.
+
+```ts
+const stream = await lobehub.runs.createAndStream({
+  agentId: 'agt_...',
+  approvalMode: 'manual',
+  input: 'Clean up the stale branches',
+});
+for await (const event of stream) {
+  if (event.type === 'message.delta') process.stdout.write(event.data.delta);
+  if (event.type === 'intervention.requested') {
+    for (const intervention of event.data.interventions) {
+      // Approve the tool call; the agent carries on as a new run.
+      const { data } = await lobehub.runs.resolveIntervention({
+        body: { action: 'approve' },
+        path: { id: stream.runId, interventionId: intervention.id },
+      });
+      console.log(await lobehub.runs.wait(data.data.continuedByRunId));
+    }
+  }
+}
+```
+
+Runs need the `run:read` / `run:write` scopes; starting or resuming one also needs `model:invoke`.
 
 ## Uploads
 

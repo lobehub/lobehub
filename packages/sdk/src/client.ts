@@ -2,8 +2,7 @@ import { DEFAULT_BASE_URL } from './constants';
 import { toLobeHubError } from './errors';
 import type { Client, Config, RequestResult } from './generated/client';
 import { createClient, createConfig } from './generated/client';
-import type { Options } from './generated/sdk.gen';
-import { Files, LobeHub, Responses } from './generated/sdk.gen';
+import { Files, LobeHub, type Options, Responses, type Runs } from './generated/sdk.gen';
 import type {
   PostApiV1FilesErrors,
   PostApiV1FilesResponses,
@@ -11,6 +10,7 @@ import type {
 } from './generated/types.gen';
 import type { PageItem, PageOf, PaginateOptions } from './pagination';
 import { paginate } from './pagination';
+import { RunsResource } from './runs';
 import { ResponseStream } from './streaming';
 import {
   createTransport,
@@ -157,12 +157,13 @@ const anySignal = (signals: AbortSignal[]) => {
 /**
  * The resource-style client returned by `createLobeHub`: every generated
  * resource (`lobehub.agents`, `lobehub.topics`, …) plus `paginate`,
- * `responses.stream` and `files.upload`.
+ * `responses.stream`, `runs.stream` / `runs.wait` and `files.upload`.
  */
 export class LobeHubClient extends LobeHub {
   readonly #client: Client;
   #files?: FilesResource;
   #responses?: ResponsesResource;
+  #runs?: RunsResource;
 
   constructor(args: { client: Client; key?: string }) {
     super(args);
@@ -175,6 +176,10 @@ export class LobeHubClient extends LobeHub {
 
   override get responses(): ResponsesResource {
     return (this.#responses ??= new ResponsesResource({ client: this.#client }));
+  }
+
+  override get runs(): RunsResource {
+    return (this.#runs ??= new RunsResource({ client: this.#client }));
   }
 
   /**
@@ -213,14 +218,16 @@ export type ThrowingLobeHubClient = {
     ? LobeHubClient[K]
     : K extends 'responses'
       ? ThrowingResource<ResponsesResource> & Pick<ResponsesResource, 'stream'>
-      : K extends 'files'
-        ? ThrowingResource<Files> & {
-            upload: (
-              source: Uploadable,
-              options?: UploadOptions & UploadRequestOptions<true>,
-            ) => RequestResult<PostApiV1FilesResponses, PostApiV1FilesErrors, true>;
-          }
-        : ThrowingResource<LobeHubClient[K]>;
+      : K extends 'runs'
+        ? ThrowingResource<Runs> & Pick<RunsResource, 'createAndStream' | 'stream' | 'wait'>
+        : K extends 'files'
+          ? ThrowingResource<Files> & {
+              upload: (
+                source: Uploadable,
+                options?: UploadOptions & UploadRequestOptions<true>,
+              ) => RequestResult<PostApiV1FilesResponses, PostApiV1FilesErrors, true>;
+            }
+          : ThrowingResource<LobeHubClient[K]>;
 };
 
 /**
