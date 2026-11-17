@@ -3,15 +3,20 @@ import { useEffect } from 'react';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
   getPendingSandboxSelection,
+  isSeededSandboxSelection,
   seedPendingSandboxSelection,
   setSandboxDefaultSelection,
 } from '@/store/chat/pendingSandboxSelection';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
+import { getRememberedSandboxDirectory } from './rememberedSandboxDirectory';
 
 /**
  * Give a conversation that does not exist yet the plan's default place to
- * work: an account with a drive keeps its files unless it says otherwise. Only
+ * work: an account with a drive keeps its files unless it says otherwise, in the
+ * folder the agent's last conversation was put in when there is one. Only
  * fills an empty slot — a pick, including the temporary sandbox, stays — and
  * only before the topic exists, so a conversation already running never moves.
  * Sending consumes the slot, and the next new conversation is seeded again.
@@ -27,19 +32,39 @@ export const useSeedDefaultSelection = (
   { eligible, entitled, hasTopic }: { eligible: boolean; entitled: boolean; hasTopic: boolean },
 ) => {
   const workspaceId = useActiveWorkspaceId();
+  const userId = useUserStore(userProfileSelectors.userId);
 
   // Cleared on unmount as well: once the run moves off the sandbox, nothing
-  // should hand a sandbox folder to a conversation on a machine.
+  // should hand a sandbox folder to a conversation on a machine. Registered
+  // again whenever a new conversation opens, so it carries the folder picked
+  // in the conversation before.
   useEffect(() => {
     if (!eligible) return;
 
-    setSandboxDefaultSelection(agentId, resolveDefaultSandboxSelection(workspaceId));
+    setSandboxDefaultSelection(
+      agentId,
+      resolveDefaultSandboxSelection(
+        workspaceId,
+        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
+      ),
+    );
     return () => setSandboxDefaultSelection(agentId);
-  }, [agentId, eligible, workspaceId]);
+  }, [agentId, eligible, hasTopic, userId, workspaceId]);
 
   useEffect(() => {
-    if (!entitled || hasTopic || getPendingSandboxSelection(agentId)) return;
+    if (!entitled || hasTopic) return;
+    // A pick stays; a default filled in earlier is provisional and is filled in
+    // again — the user id can arrive after the entitlement on a cold boot, and
+    // the remembered folder only becomes readable then.
+    const pending = getPendingSandboxSelection(agentId);
+    if (pending && !isSeededSandboxSelection(pending)) return;
 
-    seedPendingSandboxSelection(agentId, resolveDefaultSandboxSelection(workspaceId));
-  }, [agentId, entitled, hasTopic, workspaceId]);
+    seedPendingSandboxSelection(
+      agentId,
+      resolveDefaultSandboxSelection(
+        workspaceId,
+        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
+      ),
+    );
+  }, [agentId, entitled, hasTopic, userId, workspaceId]);
 };

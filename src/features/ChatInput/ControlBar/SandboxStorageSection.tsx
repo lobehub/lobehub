@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SafeBoundary from '@/components/ErrorBoundary';
@@ -10,10 +10,11 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useTopicId } from '../hooks/useTopicId';
+import { rememberSandboxSelection } from './rememberedSandboxDirectory';
 import SandboxDrivePicker from './SandboxDrivePicker';
 import { usePrefersTemporarySandbox } from './temporarySandboxPreference';
 import { useFollowSandboxModePreference } from './useFollowSandboxModePreference';
-import { useSandboxPlacement } from './useSandboxPlacement';
+import { type SandboxSelection, useSandboxPlacement } from './useSandboxPlacement';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
 import { useSeedDefaultSelection } from './useSeedDefaultSelection';
 
@@ -29,8 +30,9 @@ interface SandboxStorageSectionProps {
  *
  * Nothing chosen means a temporary sandbox, cleaned up with the session; a
  * folder on the drive keeps its files, and a repository starts from a checkout.
- * A plan with a drive starts each new conversation on its default folder rather
- * than nothing — unless the execution-environment menu moved the agent to the
+ * A plan with a drive starts each new conversation in the folder the agent's
+ * last conversation was put in, or on its default folder rather than nothing —
+ * unless the execution-environment menu moved the agent to the
  * temporary cloud sandbox, which new conversations then keep.
  *
  * A plan without a drive still gets the chip: the temporary sandbox is
@@ -63,6 +65,15 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     scopeKey: `${userId ?? ''}:${workspaceId ?? ''}:${agentId}`,
     temporary: prefersTemporary,
   });
+  // Every pick that lands is remembered for the next conversation, which would
+  // otherwise start back at the drive's root. A failed save is not.
+  const pick = useCallback(
+    async (next: SandboxSelection) => {
+      await setSelection(next);
+      rememberSandboxSelection({ userId, workspaceId }, agentId, next);
+    },
+    [agentId, setSelection, userId, workspaceId],
+  );
   useSeedDefaultSelection(agentId, {
     eligible: eligible && !temporary,
     entitled: status === 'ready' && !temporary,
@@ -77,7 +88,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
       modeInEnvironmentMenu={modeInEnvironmentMenu}
       topicId={topicId}
       value={selection}
-      onChange={setSelection}
+      onChange={pick}
     />
   );
 });
