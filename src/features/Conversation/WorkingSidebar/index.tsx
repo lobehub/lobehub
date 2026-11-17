@@ -48,6 +48,7 @@ import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
+import TopicPullRequestProbes from '@/features/TopicPullRequests/TopicPullRequestProbes';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -67,6 +68,7 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import DeferredSkeleton from './DeferredSkeleton';
@@ -89,7 +91,7 @@ import Overview from './Overview';
 import { getStatusDeviceId } from './Overview/overviewData';
 import OverviewSlot from './OverviewSlot';
 import PullRequestSidebarTab from './PullRequest/SidebarTab';
-import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
+import { useSidebarPullRequests } from './PullRequest/useSidebarPullRequests';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import { TopicSearchPane } from './Search';
@@ -408,15 +410,20 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
+    pickPullRequest,
+    probes: pullRequestProbes,
     pullRequest,
+    pullRequests,
     refresh: refreshPullRequest,
     ...pullRequestLink // confirmed, confirmError, onRetryConfirm
-  } = useLinkedPullRequest({
+  } = useSidebarPullRequests({
     available: filesystemEnvironmentAvailable && !!workingDirectory,
     deviceId: remoteDeviceId,
     gitPath,
     isGithub,
     snapshot: snapshotConfig?.git,
+    topicId,
+    workingDirectory,
   });
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
@@ -905,12 +912,18 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   deviceId={remoteDeviceId}
                   environmentAvailable={filesystemEnvironmentAvailable}
                   pullRequest={pullRequest}
+                  pullRequests={pullRequests}
                   repoType={environmentRepoType}
                   sourcePath={sourceWorkingDirectory}
                   statusDeviceId={getStatusDeviceId(effectiveTarget, agencyConfig?.boundDeviceId)}
                   workingDirectory={environmentWorkingDirectory}
                   onOpenTab={openTab}
                   onRefreshPullRequest={refreshPullRequest}
+                  onOpenPullRequest={
+                    pickPullRequest &&
+                    ((view) =>
+                      pickPullRequest(view) ? openTab('pr') : openTrustedExternalUrl(view.url))
+                  }
                 />
               </Flexbox>
             </m.div>
@@ -923,6 +936,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   return (
     <>
       {overviewPanel}
+      <TopicPullRequestProbes
+        deviceId={remoteDeviceId}
+        path={environmentWorkingDirectory}
+        probes={pullRequestProbes}
+      />
       <RightPanel
         collapseThreshold={320}
         defaultWidth={renderWidth}

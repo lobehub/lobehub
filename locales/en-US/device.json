@@ -170,6 +170,7 @@
   "workingDirectory.topicDescription": "Override Agent default for this conversation only",
   "workingDirectory.topicLevel": "Conversation override",
   "workingDirectory.topicOverride": "Override for this conversation",
+  "workingDirectory.topicPullRequestsTooltip": "{{title}} (+{{count}} more linked to this topic — click to see all)",
   "workingDirectory.uncommittedChanges_one": "Uncommitted changes: {{count}} file",
   "workingDirectory.uncommittedChanges_other": "Uncommitted changes: {{count}} files",
   "workingDirectory.undo": "Undo",
