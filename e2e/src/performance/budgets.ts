@@ -22,8 +22,9 @@
  * 0-2.2%), so their ceilings only catch a list that got far slower than any
  * baseline.
  *
- * This is a local tool (`bun run test:perf`), not a CI gate: the functional
- * suite skips `@perf`, so it costs no GitHub Actions time.
+ * This is a local tool (`bun run test:perf:local`), not a CI gate: the
+ * scenario is tagged `@perf-local`, which neither the functional suite nor the
+ * CI `Render Budget` job runs, so it costs no GitHub Actions time.
  */
 export interface LongListTimingBudget {
   firstReadableMs: number;

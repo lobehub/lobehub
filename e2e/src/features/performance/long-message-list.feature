@@ -1,4 +1,4 @@
-@perf @agent @conversation
+@perf-local @agent @conversation
 Feature: 长对话消息列表的渲染速度预算
   作为用户，打开一个有几百上千条消息的对话时，我希望：
   - 最新一条消息很快出现在屏幕上，可以直接阅读

@@ -4,7 +4,7 @@
  * Seeds a topic of 500 / 1000 messages, opens it, then wheels to the oldest
  * message and back while sampling animation frames and row mounts in the page.
  * Every measurement is written to `reports/perf/`, so a run leaves a receipt
- * even when the budget passes. Run it locally with `bun run test:perf`.
+ * even when the budget passes. Run it locally with `bun run test:perf:local`.
  */
 import * as fs from 'node:fs';
 import path from 'node:path';
