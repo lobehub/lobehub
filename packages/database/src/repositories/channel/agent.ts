@@ -20,6 +20,27 @@ import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
 
+/**
+ * Whether a direct conversation is with an Agent reached through its share: someone else's Agent
+ * this scope does not hold. A workspace colleague's public Agent is the workspace's own.
+ */
+export const isSharedAgentChannel = (
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  agent: {
+    agentOwnerId: string | null;
+    agentVisibility: string | null;
+    agentWorkspaceId: string | null;
+  },
+  viewerId: string,
+): boolean =>
+  !!channel.agentId &&
+  agent.agentOwnerId !== viewerId &&
+  !(
+    channel.workspaceId &&
+    agent.agentWorkspaceId === channel.workspaceId &&
+    agent.agentVisibility !== 'private'
+  );
+
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
 export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelMemberConfig =>
   cleanObject({

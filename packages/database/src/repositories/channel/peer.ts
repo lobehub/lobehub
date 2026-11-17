@@ -1,10 +1,11 @@
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 
 import type { ChannelItem } from '../../schemas';
-import { userContacts } from '../../schemas';
+import { channelMembers, channels, userContacts } from '../../schemas';
 import type { Transaction } from '../../type';
 import { ChannelError } from './error';
 import { requireWorkspaceMember } from './people';
+import type { ChannelAccess } from './types';
 
 /**
  * A personal conversation between two people exists only between contacts. Opening one and
@@ -63,4 +64,31 @@ export const lockPeerPair = async (
   const [a, b] = [userId, peerUserId].sort();
   const key = `channel-peer:${workspaceId ?? 'personal'}:${a}:${b}`;
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`);
+};
+
+/** The pair's conversation in one scope, with the caller's membership; one exists per scope. */
+export const findPeer = async (
+  tx: Transaction,
+  workspaceId: string | null,
+  userId: string,
+  peerUserId: string,
+) => {
+  const [row] = await tx
+    .select({ channel: channels, member: channelMembers })
+    .from(channels)
+    .innerJoin(
+      channelMembers,
+      and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, userId)),
+    )
+    .where(
+      and(
+        or(
+          and(eq(channels.userId, userId), eq(channels.peerUserId, peerUserId)),
+          and(eq(channels.userId, peerUserId), eq(channels.peerUserId, userId)),
+        ),
+        workspaceId ? eq(channels.workspaceId, workspaceId) : isNull(channels.workspaceId),
+      ),
+    )
+    .limit(1);
+  return row as ChannelAccess | undefined;
 };

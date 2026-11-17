@@ -27,6 +27,7 @@ import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
+  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
@@ -36,7 +37,7 @@ import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { setMemberMuted } from './mute';
-import { lockPeerPair, peerOf, requirePeerRelation } from './peer';
+import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import {
   addChannelUser,
   channelUserCandidates,
@@ -741,16 +742,7 @@ export class ChannelRepository {
     }
 
     return rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
-      // Reached through its share: someone else's Agent this scope does not hold. A workspace
-      // colleague's public Agent is the workspace's own.
-      const sharedAgent =
-        !!channel.agentId &&
-        agent.agentOwnerId !== this.userId &&
-        !(
-          channel.workspaceId &&
-          agent.agentWorkspaceId === channel.workspaceId &&
-          agent.agentVisibility !== 'private'
-        );
+      const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
       return {
         ...channel,
         agentIds: agentIdsOf.get(channel.id) ?? [],
@@ -781,7 +773,7 @@ export class ChannelRepository {
       // No unique index keeps one conversation per pair: serialize opening it, so two people
       // opening it at once (or one twice) find the first one instead of creating a second.
       await lockPeerPair(tx, this.workspaceId, this.userId, peerUserId);
-      const existing = await this.findPeer(tx, peerUserId);
+      const existing = await findPeer(tx, this.workspaceId, this.userId, peerUserId);
       if (existing) return existing;
 
       const [channel] = await tx
@@ -804,30 +796,6 @@ export class ChannelRepository {
       });
       return { channel, member };
     });
-
-  private findPeer = async (tx: Transaction, peerUserId: string) => {
-    const [row] = await tx
-      .select({ channel: channels, member: channelMembers })
-      .from(channels)
-      .innerJoin(
-        channelMembers,
-        and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, this.userId)),
-      )
-      .where(
-        and(
-          or(
-            and(eq(channels.userId, this.userId), eq(channels.peerUserId, peerUserId)),
-            and(eq(channels.userId, peerUserId), eq(channels.peerUserId, this.userId)),
-          ),
-          // One conversation per pair in each scope.
-          this.workspaceId
-            ? eq(channels.workspaceId, this.workspaceId)
-            : isNull(channels.workspaceId),
-        ),
-      )
-      .limit(1);
-    return row as ChannelAccess | undefined;
-  };
 
   /**
    * The caller's active Channels with their active Agent members, newest first: where the caller
