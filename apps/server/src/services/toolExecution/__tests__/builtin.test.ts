@@ -164,6 +164,19 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(result.content).toMatch(/Missing content/);
   });
 
+  it('dispatches a string value written with raw newlines and tabs with its content intact', async () => {
+    mockApiHandler.mockResolvedValueOnce({ content: 'ok', success: true });
+    const content = '<!doctype html>\n<html>\n\t<body>Report</body>\n</html>';
+
+    const result = await executor.execute(
+      buildPayload(`{"title": "Report", "content": "${content}"}`),
+      context,
+    );
+
+    expect(mockApiHandler).toHaveBeenCalledWith({ content, title: 'Report' }, context);
+    expect(result.success).toBe(true);
+  });
+
   it('returns INVALID_JSON_ARGUMENTS for balanced-but-invalid JSON (not truncated)', async () => {
     // Balanced brackets but invalid syntax (unquoted key). Not a truncation,
     // but still unparseable — reject with a non-truncation error rather than

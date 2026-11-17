@@ -175,12 +175,52 @@ describe('ToolArgumentsRepairer', () => {
       expect(result).toEqual({ foo: 'bar' });
     });
 
-    it('should handle invalid JSON gracefully', () => {
+    it('returns undefined for complete but invalid JSON so the caller can report it', () => {
       const repairer = new ToolArgumentsRepairer();
 
       const result = repairer.parse('test', 'invalid json');
 
-      expect(result).toEqual({});
+      expect(result).toBeUndefined();
+    });
+
+    it('returns an empty object for empty arguments', () => {
+      const repairer = new ToolArgumentsRepairer();
+
+      expect(repairer.parse('listCanvases', '')).toEqual({});
+    });
+  });
+
+  describe('parse - string values the model wrote with raw control characters', () => {
+    const html = '<!doctype html>\n<html>\n\t<body><lobe-alert>Hi</lobe-alert></body>\n</html>';
+
+    it('keeps a createCanvas file content written with literal newlines', () => {
+      const repairer = new ToolArgumentsRepairer();
+      const args = `{"title":"Report","files":[{"path":"index.html","content":"${html}"}]}`;
+
+      const result = repairer.parse('createCanvas', args);
+
+      // partial-json used to drop `content` here, so the Canvas tool answered
+      // "index.html": provide content or fileRef.
+      expect(result).toEqual({ files: [{ content: html, path: 'index.html' }], title: 'Report' });
+    });
+
+    it('keeps the streamed part of a multi-line value while the call is still streaming', () => {
+      const repairer = new ToolArgumentsRepairer();
+      const streaming = `{"title":"Report","files":[{"path":"index.html","content":"${html.slice(0, 30)}`;
+
+      const result = repairer.parse('createCanvas', streaming);
+
+      expect(result).toEqual({
+        files: [{ content: html.slice(0, 30), path: 'index.html' }],
+        title: 'Report',
+      });
+    });
+
+    it('returns undefined for an invalid escape instead of dropping the field', () => {
+      const repairer = new ToolArgumentsRepairer();
+      const args = String.raw`{"title":"Report","files":[{"path":"index.html","content":"<p>it\'s</p>"}]}`;
+
+      expect(repairer.parse('createCanvas', args)).toBeUndefined();
     });
   });
 

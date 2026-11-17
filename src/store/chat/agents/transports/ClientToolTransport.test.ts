@@ -99,6 +99,75 @@ describe('ClientToolTransport', () => {
     },
   );
 
+  it('reports arguments that are not JSON instead of running the tool', async () => {
+    const failOperation = vi.fn();
+    let operationIndex = 0;
+    const invoke = vi.fn();
+    const store = {
+      completeOperation: vi.fn(),
+      dbMessagesMap: {
+        'message-key': [{ id: 'assistant-message', parentId: 'user-message', role: 'assistant' }],
+      },
+      failOperation,
+      internal_invokeDifferentTypePlugin: invoke,
+      onOperationCancel: vi.fn(),
+      operations: {
+        'root-operation': {
+          context: { agentId: 'agent-1', messageId: 'assistant-message' },
+        },
+      },
+      startOperation: vi.fn(() => ({ operationId: `child-operation-${++operationIndex}` })),
+      updateOperationMetadata: vi.fn(),
+    } as unknown as ChatStore;
+    const messages = {
+      createToolMessageForOperation: vi.fn().mockResolvedValue({ id: 'tool-message' }),
+    } as unknown as ClientMessageTransport;
+    const transport = new ClientToolTransport(
+      () => store,
+      'message-key',
+      'root-operation',
+      messages,
+    );
+    // An invalid escape: partial-json used to turn this into {path} and the Canvas tool ran
+    // without the content the model sent.
+    const invalidArguments = String.raw`{"title":"Report","files":[{"path":"index.html","content":"<p>it\'s</p>"}]}`;
+    const call: ChatToolPayload = {
+      apiName: 'createCanvas',
+      arguments: invalidArguments,
+      id: 'tool-call',
+      identifier: 'lobe-canvas',
+      type: 'builtin',
+    };
+    const context = {
+      callIndex: 1,
+      effectiveManifestMap: {},
+      mode: 'single',
+      operationId: 'root-operation',
+      parentMessageId: 'assistant-message',
+      parsedArgs: {},
+      state: {},
+      stepIndex: 0,
+      toolName: 'lobe-canvas/createCanvas',
+    } as ToolRunContext;
+
+    const execution = await transport.run(call, context);
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(execution.result).toMatchObject({
+      error: { code: 'INVALID_JSON_ARGUMENTS' },
+      success: false,
+    });
+    expect(execution.result.content).toMatch(/not valid JSON/);
+    expect(execution.result.content).toContain(invalidArguments);
+    // The runtime persists the result into the tool message created for this call.
+    expect(execution.resultPersisted).toBe(false);
+    expect(execution.toolMessageId).toBe('tool-message');
+    expect(failOperation).toHaveBeenCalledWith('child-operation-1', {
+      message: expect.stringMatching(/not valid JSON/),
+      type: 'ToolExecutionError',
+    });
+  });
+
   it('always drains the stashed Work intent even when the tool invoke throws', async () => {
     const failOperation = vi.fn();
     let operationIndex = 0;

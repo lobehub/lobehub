@@ -113,7 +113,9 @@ export class PluginInternalsActionImpl {
 
       return {
         ...payload,
-        arguments: JSON.stringify(repairedArgs),
+        // Arguments that are still not JSON stay as the model sent them: the tool transport
+        // reports them back instead of running the tool on an object missing fields.
+        arguments: repairedArgs === undefined ? payload.arguments : JSON.stringify(repairedArgs),
         source: sourceMap[payload.identifier],
       };
     });

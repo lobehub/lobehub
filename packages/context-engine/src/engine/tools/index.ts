@@ -5,6 +5,12 @@ export { ToolsEngine } from './ToolsEngine';
 export { getToolNameMaxLength, setToolNameMaxLength, ToolNameResolver } from './ToolNameResolver';
 
 // Tool Arguments Repairer
+export {
+  describeUnparseableToolArguments,
+  escapeJsonStringControlChars,
+  parseToolArgumentsLossless,
+  type UnparseableToolArguments,
+} from './toolArguments';
 export { ToolArgumentsRepairer, type ToolParameterSchema } from './ToolArgumentsRepairer';
 
 // Enable Checker Factory

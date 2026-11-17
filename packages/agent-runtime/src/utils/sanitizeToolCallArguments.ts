@@ -1,3 +1,5 @@
+import { escapeJsonStringControlChars } from '@lobechat/context-engine';
+
 import { safeParseJSON, safeParsePartialJSON } from './safeParseJSON';
 
 /**
@@ -11,6 +13,9 @@ import { safeParseJSON, safeParsePartialJSON } from './safeParseJSON';
  *
  * Behavior:
  *   - Valid JSON → returned as-is (preserves prompt-cache keys).
+ *   - Valid once raw control characters inside strings are escaped → the
+ *     escaped string, so a multi-line value written with literal newlines
+ *     keeps its content (partial-json drops that whole field).
  *   - Recoverable via partial-json → re-stringified.
  *   - Unrecoverable → "{}" so the tool_call structure survives and the
  *     model can replan on the next turn.
@@ -20,7 +25,10 @@ export const sanitizeToolCallArguments = (argsStr: string | undefined): string =
 
   if (safeParseJSON(argsStr) !== undefined) return argsStr;
 
-  const recovered = safeParsePartialJSON(argsStr);
+  const escaped = escapeJsonStringControlChars(argsStr);
+  if (escaped !== argsStr && safeParseJSON(escaped) !== undefined) return escaped;
+
+  const recovered = safeParsePartialJSON(escaped);
   if (recovered !== undefined && typeof recovered === 'object' && recovered !== null) {
     return JSON.stringify(recovered);
   }

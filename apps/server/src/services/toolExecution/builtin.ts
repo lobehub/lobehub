@@ -1,12 +1,16 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
+import {
+  describeUnparseableToolArguments,
+  parseToolArgumentsLossless,
+} from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type ChatToolPayload,
   isWorkSkillProvider,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
-import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
+import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
@@ -144,39 +148,22 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       }
     }
 
-    const parsed = safeParseJSON(argsStr);
+    // Raw newlines and tabs inside string values are repaired losslessly: some models write
+    // multi-line HTML or code that way, and rejecting it left those calls unable to succeed.
+    const parsed = parseToolArgumentsLossless(argsStr);
 
-    // When JSON.parse fails, return a dedicated error rather than silently
+    // When parsing still fails, return a dedicated error rather than silently
     // falling back to `{}`. Passing `{}` to the tool produced generic
     // "required field missing" errors, which led the model to retry with the
-    // same broken payload. Distinguish a truncated payload from plain
-    // malformed JSON, and echo the raw arguments string so the model can
+    // same broken payload. The message tells a truncated payload from plain
+    // malformed JSON and echoes the raw arguments string so the model can
     // verify it is exactly what it produced.
-    //
-    // The truncation cause is unknown at this point: an exhausted output
-    // budget and an upstream that closed the stream early look identical.
-    // Naming max_tokens made models tell users the platform caps output and
-    // that they should raise a setting, which was wrong for interrupted streams
-    // so the message lists both causes and asks the model not to
-    // assert either one.
     if (parsed === undefined && argsStr?.trim()) {
-      const truncationReason = detectTruncatedJSON(argsStr);
-      const explanation = truncationReason
-        ? `The tool call arguments JSON appears to be truncated (${truncationReason}), ` +
-          `so the tool was not invoked. The output was cut off before the call was complete, ` +
-          `either because the output length limit was reached or because the response stream ` +
-          `was interrupted; the cause cannot be determined here, so do not tell the user it ` +
-          `was a specific limit or setting. ` +
-          `If the arguments carry large content, split it into smaller pieces across several calls. ` +
-          `Do not resend the same truncated arguments.`
-        : `The tool call arguments string is not valid JSON and could not be parsed, ` +
-          `so the tool was not invoked. Fix the JSON syntax and try again.`;
-      const content = `${explanation}\n\nThe received arguments string was:\n${argsStr}`;
-      const code = truncationReason ? 'TRUNCATED_ARGUMENTS' : 'INVALID_JSON_ARGUMENTS';
+      const { code, content, message } = describeUnparseableToolArguments(argsStr);
       log('Rejected invalid arguments for %s:%s (%s): %s', identifier, apiName, code, argsStr);
       return {
         content,
-        error: { code, message: explanation },
+        error: { code, message },
         success: false,
       };
     }
