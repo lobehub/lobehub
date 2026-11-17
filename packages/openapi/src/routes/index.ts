@@ -8,8 +8,10 @@ import ChatGroupsRoutes from './chat-groups.route';
 import DocumentsRoutes from './documents.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
+import GenerationsRoutes from './generations.route';
 import GoalsRoutes from './goals.route';
 import ImRoutes from './im.route';
+import ImagesRoutes from './images.route';
 import KnowledgeBasesRoutes from './knowledge-bases.route';
 import McpServersRoutes from './mcp-servers.route';
 import MemoriesRoutes from './memories.route';
@@ -29,6 +31,7 @@ import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
 import UsageRoutes from './usage.route';
 import UsersRoutes from './users.route';
+import VideosRoutes from './videos.route';
 
 export default {
   'agent-groups': AgentGroupsRoutes,
@@ -62,4 +65,7 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'generations': GenerationsRoutes,
+  'images': ImagesRoutes,
+  'videos': VideosRoutes,
 };

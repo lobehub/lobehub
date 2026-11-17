@@ -74,6 +74,7 @@ export default {
   'apikey.scopes.groups.agent': 'Agents',
   'apikey.scopes.groups.chat': 'Chat',
   'apikey.scopes.groups.file': 'Files',
+  'apikey.scopes.groups.generation': 'Generation',
   'apikey.scopes.groups.knowledge': 'Knowledge',
   'apikey.scopes.groups.mcp': 'MCP servers',
   'apikey.scopes.groups.model': 'Models',

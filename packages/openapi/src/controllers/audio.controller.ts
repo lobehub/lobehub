@@ -1,6 +1,8 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 
+import { hasApiKeyScope, isFullAccessApiKey } from '@/const/apiKeyScope';
+import { asrRouter } from '@/server/routers/lambda/asr';
 import {
   INLINE_TTS_AUDIO_FORMATS,
   resolveTTSModelRef,
@@ -10,8 +12,18 @@ import {
 } from '@/server/services/tts';
 
 import { BaseController, TRPC_CODE_TO_STATUS } from '../common/base.controller';
+import { ApiException, detailsFromZodIssues } from '../common/errors';
 import type { SpeechRequest } from '../types/audio.type';
 import { SpeechRequestSchema } from '../types/audio.type';
+import {
+  MAX_TRANSCRIPTION_UPLOAD_BYTES,
+  TranscriptionFieldsSchema,
+} from '../types/generation.type';
+
+const validationError = (message: string, path: string) =>
+  new ApiException(400, 'validation_error', `Invalid request: ${path} ${message}`, [
+    { message, path },
+  ]);
 
 type OpenAIErrorType =
   | 'authentication_error'
@@ -113,6 +125,82 @@ export class AudioController extends BaseController {
       return new Response(result.audio, { headers, status: 200 });
     } catch (error) {
       return this.handleSpeechError(c, error);
+    }
+  }
+
+  /**
+   * POST /api/v1/audio/transcriptions
+   * multipart/form-data: `file` (or `fileId`), `model`, optional `provider`,
+   * `language`, `prompt`, `response_format`. Answers `{ text }`.
+   */
+  async handleTranscription(c: Context): Promise<Response> {
+    try {
+      const form = await c.req.parseBody().catch(() => {
+        throw validationError('must be multipart/form-data', 'body');
+      });
+      const { file, ...rest } = form;
+      const fields = TranscriptionFieldsSchema.safeParse(
+        Object.fromEntries(
+          Object.entries(rest).filter(([, value]) => typeof value === 'string' && value !== ''),
+        ),
+      );
+      if (!fields.success) {
+        const details = detailsFromZodIssues('body', fields.error.issues);
+        throw new ApiException(
+          400,
+          'validation_error',
+          `Invalid request: ${details[0]?.path} ${details[0]?.message}`,
+          details,
+        );
+      }
+
+      const upload = file instanceof File ? file : undefined;
+      if (Boolean(upload) === Boolean(fields.data.fileId)) {
+        throw validationError('provide exactly one of `file` or `fileId`', 'body.file');
+      }
+      if (upload && upload.size === 0) throw validationError('is empty', 'body.file');
+      if (upload && upload.size > MAX_TRANSCRIPTION_UPLOAD_BYTES) {
+        throw new ApiException(
+          413,
+          'payload_too_large',
+          `Audio uploads are limited to ${MAX_TRANSCRIPTION_UPLOAD_BYTES / 1024 / 1024} MB; upload the file to /files and pass fileId instead`,
+        );
+      }
+
+      // Transcribing a stored file reads it: a restricted key needs `file:read` too.
+      const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+      if (
+        fields.data.fileId &&
+        c.get('authType') === 'apikey' &&
+        !isFullAccessApiKey(scopes) &&
+        !hasApiKeyScope(scopes, 'file:read')
+      ) {
+        throw new HTTPException(403, {
+          message: "insufficient_scope: this API key is missing required scope 'file:read'",
+        });
+      }
+
+      const { fileId, language, model, prompt, provider, response_format } = fields.data;
+      const result = await asrRouter
+        .createCaller({ userId: this.getUserId(c)!, workspaceId: this.getWorkspaceId(c) })
+        .transcribe({
+          ...(upload
+            ? {
+                audioBase64: Buffer.from(await upload.arrayBuffer()).toString('base64'),
+                fileName: upload.name || 'audio',
+                mimeType: upload.type || undefined,
+              }
+            : { fileId }),
+          language,
+          model,
+          prompt,
+          ...(provider ? { provider } : {}),
+          responseFormat: response_format,
+        });
+
+      return c.json({ text: result.text });
+    } catch (error) {
+      return this.handleError(c, error);
     }
   }
 

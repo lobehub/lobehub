@@ -13,6 +13,14 @@ export { LobeHubAPIError, LobeHubConnectionError, LobeHubTimeoutError } from './
 export type { Client, Config } from './generated/client';
 export { LobeHub } from './generated/sdk.gen';
 export type * from './generated/types.gen';
+export type { GenerationWaitOptions } from './generations';
+export {
+  DEFAULT_GENERATION_POLL_INTERVAL,
+  DEFAULT_GENERATION_WAIT_TIMEOUT,
+  GenerationsResource,
+  GenerationWaitTimeoutError,
+  TERMINAL_GENERATION_STATUSES,
+} from './generations';
 export type { PageItem, PageOf, PaginateOptions } from './pagination';
 export type { ServerSentEvent } from './streaming';
 export { parseServerSentEvents, ResponseStream } from './streaming';

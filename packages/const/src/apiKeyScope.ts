@@ -49,6 +49,15 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Image / video generation, text-to-speech and transcription on the public
+   * REST API (`/api/v1/images`, `/api/v1/videos`, `/api/v1/generations`,
+   * `/api/v1/audio`). `generation:write` starts paid generations and deletes
+   * generated assets; `generation:read` reads their status and results. The
+   * tRPC generation namespaces keep requiring `model:invoke`.
+   */
+  'generation:read',
+  'generation:write',
   'mcp:read',
   'mcp:write',
   'usage:read',
