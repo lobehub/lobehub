@@ -22,6 +22,9 @@ vi.mock('@/store/tool/store', () => ({ getToolStoreState: () => state.toolStore 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: { connector: { resolveForRun: { query: resolveForRun } } },
 }));
+// The conversation's send-time listing, holding the personal row as it was
+const listed = vi.hoisted(() => ({ rows: [] as unknown[] }));
+vi.mock('@/services/runConnectors', () => ({ getRunConnectors: () => listed.rows }));
 
 const sharedHttp = {
   agentId: null,
@@ -97,5 +100,20 @@ describe('resolveRunConnector', () => {
       sharedHttp,
     );
     expect(resolveForRun).not.toHaveBeenCalled();
+  });
+
+  it("reads the row's current permissions, not the send-time listing's", async () => {
+    // Regression: a listed row was returned as listed, so a tool changed to
+    // needs_approval after the send still ran from an open view unapproved.
+    listed.rows = [{ ...personalStdio, toolIdentifier: 'files-connpers' }];
+    resolveForRun.mockResolvedValue({
+      ...personalStdio,
+      tools: [{ permission: 'needs_approval', toolName: 'read_file' }],
+    });
+
+    const resolved = await resolveRunConnector('files-connpers', run);
+
+    expect(resolveForRun).toHaveBeenCalledWith({ ...run, identifier: 'files-connpers' });
+    expect(resolved?.tools).toEqual([{ permission: 'needs_approval', toolName: 'read_file' }]);
   });
 });

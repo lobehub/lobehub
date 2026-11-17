@@ -1,5 +1,4 @@
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { getRunConnectors } from '@/services/runConnectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 /** What routing a call and judging its approval read of the row it runs on. */
@@ -36,6 +35,11 @@ export type RunConnector = Pick<
  * over, so agreeing picks are the server's answer. Without both an agent and a
  * topic the server never resolves the caller's own rows, so neither does this.
  *
+ * Never answered from the conversation's send-time listing
+ * (`connector.listForRun`): a view's call is approved against the row's tool
+ * permissions, which may have changed since, and the server only refuses a
+ * disabled tool, so a stale `auto` would skip an approval now required.
+ *
  * Undefined when the server resolves no row.
  */
 export const resolveRunConnector = async (
@@ -54,12 +58,6 @@ export const resolveRunConnector = async (
 
   const shared = pick(false);
   if (!agentId || !topicId) return shared;
-
-  // The conversation's server listing names the row of each prefix already
-  const listed = getRunConnectors({ agentId, topicId })?.find(
-    (connector) => connector.toolIdentifier === identifier,
-  );
-  if (listed) return listed;
 
   const own = pick(true);
   if (own?.id === shared?.id && !getActiveWorkspaceId()) return shared;
