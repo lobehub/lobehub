@@ -4394,6 +4394,25 @@ table scm_change_requests {
   }
 }
 
+table scm_credential_grants {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  workspace_id text [not null]
+  requester_user_id text [not null]
+  operation_id text [not null]
+  device_id text
+  repo varchar(255)
+  path text [not null]
+  result text [not null]
+  token_expires_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (workspace_id, created_at) [name: 'scm_credential_grants_workspace_created_idx']
+    (requester_user_id, created_at) [name: 'scm_credential_grants_requester_created_idx']
+    operation_id [name: 'scm_credential_grants_operation_idx']
+  }
+}
+
 table scm_identities {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]

@@ -85,6 +85,15 @@ export const getWorkspaceApiKeyMemberCreation = (
     : 'all_members';
 };
 
+export const getWorkspaceScmRequesterCredential = (settings: unknown): boolean => {
+  if (!settings || typeof settings !== 'object') return false;
+
+  const scm = (settings as { scm?: unknown }).scm;
+  if (!scm || typeof scm !== 'object') return false;
+
+  return (scm as { requesterCredential?: unknown }).requesterCredential === true;
+};
+
 export const getWorkspaceConnectorMemberManage = (
   settings: unknown,
 ): WorkspaceConnectorMemberManage => {
@@ -209,6 +218,10 @@ export class WorkspaceModel {
     return getWorkspaceConnectorMemberManage(await this.getSettings(id));
   };
 
+  getScmRequesterCredential = async (id: string): Promise<boolean> => {
+    return getWorkspaceScmRequesterCredential(await this.getSettings(id));
+  };
+
   /**
    * Count every workspace this user belongs to — owned + joined. Reads the
    * membership table directly because owners are always inserted as members on
@@ -259,6 +272,19 @@ export class WorkspaceModel {
         settings: sql`coalesce(${workspaces.settings}, '{}'::jsonb) || jsonb_build_object(
           'apiKey',
           coalesce(${workspaces.settings}->'apiKey', '{}'::jsonb) || jsonb_build_object('memberCreation', ${memberCreation}::text)
+        )`,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaces.id, id));
+  };
+
+  updateScmRequesterCredential = async (id: string, enabled: boolean) => {
+    return this.db
+      .update(workspaces)
+      .set({
+        settings: sql`coalesce(${workspaces.settings}, '{}'::jsonb) || jsonb_build_object(
+          'scm',
+          coalesce(${workspaces.settings}->'scm', '{}'::jsonb) || jsonb_build_object('requesterCredential', ${enabled}::boolean)
         )`,
         updatedAt: new Date(),
       })

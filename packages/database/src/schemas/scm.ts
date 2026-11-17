@@ -4,6 +4,8 @@ import type {
   ScmChangeRequestState,
   ScmCheck,
   ScmCiStatus,
+  ScmCredentialGrantPath,
+  ScmCredentialGrantResult,
   ScmIdentityMetadata,
   ScmInstallationAccountType,
   ScmInstallationMetadata,
@@ -153,6 +155,38 @@ export const scmIdentities = pgTable(
 
 export type NewScmIdentity = typeof scmIdentities.$inferInsert;
 export type ScmIdentityItem = typeof scmIdentities.$inferSelect;
+
+// Audit trail only: a grant row must never hold the token it records.
+export const scmCredentialGrants = pgTable(
+  'scm_credential_grants',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    requesterUserId: text('requester_user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    operationId: text('operation_id').notNull(),
+    deviceId: text('device_id'),
+    repo: varchar255('repo'),
+    path: text('path').$type<ScmCredentialGrantPath>().notNull(),
+    result: text('result').$type<ScmCredentialGrantResult>().notNull(),
+    tokenExpiresAt: timestamptz('token_expires_at'),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('scm_credential_grants_workspace_created_idx').on(t.workspaceId, t.createdAt),
+    index('scm_credential_grants_requester_created_idx').on(t.requesterUserId, t.createdAt),
+    index('scm_credential_grants_operation_idx').on(t.operationId),
+  ],
+);
+
+export type NewScmCredentialGrant = typeof scmCredentialGrants.$inferInsert;
+export type ScmCredentialGrantItem = typeof scmCredentialGrants.$inferSelect;
 
 /**
  * The hub row for one change request (GitHub pull request, GitLab merge
