@@ -109,6 +109,12 @@ const queueEvent = (
 
 const loadDelivery = async (id: string) =>
   (await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)))[0];
+/** Fast-forward a scheduled retry to now, as if its delay had passed. */
+const makeDue = (id: string) =>
+  db
+    .update(webhookDeliveries)
+    .set({ nextAttemptAt: new Date() })
+    .where(eq(webhookDeliveries.id, id));
 const loadEndpoint = async (id: string) =>
   (await db.select().from(webhookEndpoints).where(eq(webhookEndpoints.id, id)))[0];
 
@@ -172,6 +178,7 @@ describe('attemptWebhookDelivery', () => {
       const row = await loadDelivery(delivery.id);
       expect(row).toMatchObject({ attempts: attempt, responseStatus: 500, status: 'retrying' });
       expect(row.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now());
+      await makeDue(delivery.id);
     }
     // 30s, 2m, 8m, 32m, ~2h
     expect(delays).toEqual([30, 120, 480, 1920, 7680]);
@@ -282,6 +289,21 @@ describe('attemptWebhookDelivery', () => {
     expect(results).toContainEqual({ outcome: 'skipped', reason: 'already_claimed' });
     expect(received).toHaveLength(1);
     expect(await loadDelivery(delivery.id)).toMatchObject({ attempts: 1, status: 'succeeded' });
+  });
+
+  it('ignores a late duplicate that arrives before the retry is due', async () => {
+    respond = () => ({ status: 500 });
+    const endpoint = await createEndpoint('/early');
+    const delivery = await queueEvent(endpoint.id);
+    expect((await attemptWebhookDelivery(db, delivery.id)).outcome).toBe('retry');
+
+    // The first attempt's queue message, delivered again: the retry is 30 s away.
+    expect(await attemptWebhookDelivery(db, delivery.id)).toEqual({
+      outcome: 'skipped',
+      reason: 'not_due',
+    });
+    expect(received).toHaveLength(1);
+    expect(await loadDelivery(delivery.id)).toMatchObject({ attempts: 1, status: 'retrying' });
   });
 
   it('never signs with a secret it cannot decrypt', async () => {

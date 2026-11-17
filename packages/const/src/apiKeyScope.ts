@@ -260,7 +260,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   device: 'blocked',
   deviceMetric: 'blocked',
   // the settings page for developer webhooks: same scopes as `/api/v1/webhooks`
-  developerWebhook: rw('webhook:read', 'webhook:write'),
+  // the settings page's webhook management; API keys use `/api/v1/webhooks`, which
+  // also checks the read scope of every subscribed event's data
+  developerWebhook: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),

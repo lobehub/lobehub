@@ -19,13 +19,16 @@ import { signWebhookPayload } from './signature';
 
 const log = debug('lobe-server:developer-webhook:deliver');
 
+/** A scheduled retry may arrive this much before its `nextAttemptAt` (queue clock skew). */
+const RETRY_EARLY_SLACK_MS = 5000;
+
 export type WebhookDeliveryOutcome =
   | { delivery: WebhookDeliveryRow; outcome: 'succeeded' }
   | { delaySeconds: number; delivery: WebhookDeliveryRow; outcome: 'retry' }
   | { delivery: WebhookDeliveryRow; endpointDisabled: boolean; outcome: 'failed' }
   | {
       outcome: 'skipped';
-      reason: 'already_claimed' | 'already_settled' | 'endpoint_disabled' | 'not_found';
+      reason: 'already_claimed' | 'already_settled' | 'endpoint_disabled' | 'not_due' | 'not_found';
     };
 
 interface SendResult extends WebhookAttemptResult {
@@ -137,6 +140,15 @@ export const attemptWebhookDelivery = async (
     return { outcome: 'skipped', reason: 'already_settled' };
 
   const isTest = delivery.eventType === WEBHOOK_TEST_EVENT_TYPE;
+
+  // A retry is only due at `nextAttemptAt`; a late duplicate of the previous attempt's
+  // queue message must not send it early (the scheduled one will).
+  if (
+    delivery.status === 'retrying' &&
+    delivery.nextAttemptAt &&
+    delivery.nextAttemptAt.getTime() - Date.now() > RETRY_EARLY_SLACK_MS
+  )
+    return { outcome: 'skipped', reason: 'not_due' };
 
   if (!endpoint.enabled && !isTest) {
     await worker.recordAttempt(deliveryId, {
