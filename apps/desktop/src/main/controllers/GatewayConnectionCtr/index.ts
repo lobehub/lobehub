@@ -36,15 +36,21 @@ import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
-import BrowserControlCtr from './BrowserControlCtr';
-import { executeGatewayAgentRun, type PlatformTaskEntry } from './gatewayAgentRun';
-import { createDesktopDeviceControlDeps } from './gatewayDeviceControlDeps';
-import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
-import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
-import LocalFileCtr from './LocalFileCtr';
-import McpCtr from './McpCtr';
-import RemoteServerConfigCtr from './RemoteServerConfigCtr';
-import ShellCommandCtr from './ShellCommandCtr';
+import BrowserControlCtr from '../BrowserControlCtr';
+import { executeGatewayAgentRun, type PlatformTaskEntry } from '../gatewayAgentRun';
+import { createDesktopDeviceControlDeps } from '../gatewayDeviceControlDeps';
+import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
+import { ControllerModule, createProtocolHandler, IpcMethod } from '../index';
+import LocalFileCtr from '../LocalFileCtr';
+import McpCtr from '../McpCtr';
+import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
+import ShellCommandCtr from '../ShellCommandCtr';
+import {
+  type AgentNotifyParams,
+  postAgentNotify,
+  postDeviceRegistration,
+  requestWorktreeCleanupDrain,
+} from './deviceServerCalls';
 
 /**
  * How long an orphaned `hetero exec` group may take to exit after cancellation.
@@ -223,7 +229,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
 
     // Wire up device registrar (persists this device to the server registry)
-    srv.setDeviceRegistrar((info, auth) => this.registerDevice(info, auth));
+    srv.setDeviceRegistrar((info, auth) => postDeviceRegistration(info, auth));
 
     // Back online: the server runs the worktree cleanups that waited for this
     // device (topics archived or trashed while it was offline).
@@ -1191,103 +1197,32 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /**
    * Send a notify message to the server so the frontend receives agent output or
-   * a completion signal. Uses the tRPC agentNotify.notify endpoint directly —
-   * this is the desktop counterpart to `lh notify` used by the CLI path.
+   * a completion signal — the desktop counterpart to `lh notify` used by the CLI path.
    */
-  private async sendNotify(params: {
-    agentId?: string;
-    cancelled?: boolean;
-    content: string;
-    done?: boolean;
-    error?: { message: string; type?: string };
-    operationId?: string;
-    role: string;
-    topicId: string;
-    /**
-     * Workspace scope for the notify. When set, attaches `X-Workspace-Id` so
-     * agentNotify resolves the workspace-owned topic instead of falling back
-     * to personal mode (which would 404 the lookup).
-     */
-    workspaceId?: string;
-  }): Promise<void> {
+  private async sendNotify(params: AgentNotifyParams): Promise<void> {
     try {
       const [serverUrl, token] = await Promise.all([
         this.remoteServerConfigCtr.getRemoteServerUrl(),
         this.remoteServerConfigCtr.getAccessToken(),
       ]);
       if (!serverUrl || !token) return;
-
-      const { workspaceId, ...body } = params;
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Oidc-Auth': token,
-      };
-      if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
-      setDesktopUserAgentHeader(headers);
-
-      await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
-        body: JSON.stringify({ json: body }),
-        headers,
-        method: 'POST',
-      });
+      await postAgentNotify(params, { serverUrl, token });
     } catch {
       // Fire-and-forget: openclaw's own `lh notify` calls are the primary channel.
     }
   }
 
   /**
-   * Persist this device to the server registry via `device.register`.
-   * Fire-and-forget from the connect path: a failure must not block the WS
-   * connection, the device just won't appear in the offline list until the
-   * next successful connect.
-   */
-  private async registerDevice(
-    info: {
-      deviceId: string;
-      hostname: string;
-      identitySource: string;
-      platform: string;
-    },
-    { serverUrl, token }: { serverUrl: string; token: string },
-  ): Promise<void> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Oidc-Auth': token,
-    };
-    setDesktopUserAgentHeader(headers);
-
-    await fetch(`${serverUrl}/trpc/lambda/device.register`, {
-      body: JSON.stringify({ json: info }),
-      headers,
-      method: 'POST',
-    });
-  }
-
-  /**
-   * Ask the server to run the worktree cleanups waiting on this device. It
-   * calls back over the gateway (`cleanupOwnedWorktree`) after answering, so
-   * this returns at once. Best-effort: anything missed waits for the next
-   * connect, or for the renderer's drain on startup.
+   * Ask the server to run the worktree cleanups waiting on this device (topics
+   * archived or trashed while it was offline). Best-effort: anything missed
+   * waits for the next connect, or for the renderer's drain on startup.
    */
   private async drainWorktreeCleanups(deviceId: string): Promise<void> {
     const [serverUrl, token] = await Promise.all([
       this.remoteServerConfigCtr.getRemoteServerUrl(),
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
-    if (!serverUrl || !token) return;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Oidc-Auth': token,
-    };
-    setDesktopUserAgentHeader(headers);
-
-    const response = await fetch(`${serverUrl}/trpc/lambda/device.drainWorktreeCleanups`, {
-      body: JSON.stringify({ json: { deviceId } }),
-      headers,
-      method: 'POST',
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) throw new Error(`Worktree cleanup drain failed: HTTP ${response.status}`);
+    if (serverUrl && token) await requestWorktreeCleanupDrain(deviceId, { serverUrl, token });
   }
 
   /**

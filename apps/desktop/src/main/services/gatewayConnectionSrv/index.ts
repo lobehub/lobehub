@@ -12,7 +12,6 @@ import type { DeviceMetricsSampler } from '@lobechat/device-control/metrics';
 import type {
   AgentRunRequestMessage,
   GatewayClient,
-  GatewayMcpParams,
   MessageApiRequestMessage,
   RpcRequestMessage,
   SystemInfoRequestMessage,
@@ -43,10 +42,23 @@ import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
 import { safeGetPath } from '@/utils/user-path';
 
-import { discoverDeviceGateway } from './gatewayDiscovery';
-import { collectBundledCliAgentRuntimes, collectGatewaySystemInfo } from './gatewaySystemInfo';
-import { prepareToolCallReply, serializeWireError, toWireResult } from './gatewayToolCallReply';
-import { ServiceModule } from './index';
+import { discoverDeviceGateway } from '../gatewayDiscovery';
+import { collectBundledCliAgentRuntimes, collectGatewaySystemInfo } from '../gatewaySystemInfo';
+import { prepareToolCallReply, serializeWireError, toWireResult } from '../gatewayToolCallReply';
+import { ServiceModule } from '../index';
+import type {
+  AgentRunHandler,
+  ConnectedHandler,
+  DeviceRegistrar,
+  McpCallHandler,
+  MessageApiHandler,
+  RpcHandler,
+  ToolCallHandler,
+  WorkspaceDeviceChecker,
+  WorkspaceTokenProvider,
+} from './handlers';
+
+export type { WorkspaceDeviceRegistration } from './handlers';
 
 const logger = createLogger('services:GatewayConnectionSrv');
 
@@ -56,118 +68,6 @@ const logger = createLogger('services:GatewayConnectionSrv');
  * window is not surfaced to the UI, so the device indicator doesn't flicker.
  */
 const RECONNECT_UI_GRACE_MS = 5000;
-
-/**
- * Result envelope a tool-call handler must return. Mirrors
- * `BuiltinServerRuntimeOutput` so the renderer-side and remote-device paths
- * stay symmetric: `content` is the LLM-facing prompt text; `state` carries the
- * structured payload that downstream persists into `pluginState`.
- */
-interface ToolCallResult {
-  content: string;
-  error?: unknown;
-  state?: unknown;
-  success: boolean;
-}
-
-interface MessageApiHandler {
-  (platform: string, apiName: string, payload: Record<string, unknown>): Promise<unknown>;
-}
-
-interface ToolCallHandler {
-  (identifier: string | undefined, apiName: string, args: unknown): Promise<ToolCallResult>;
-}
-
-/**
- * Handler for tunneled stdio MCP calls. Unlike {@link ToolCallHandler} (which
- * keys on `apiName` for builtin local-system tools), this carries the MCP
- * server identity + connection params so the device can spawn the local stdio
- * server and invoke the tool on it.
- */
-interface McpCallHandler {
-  (mcpCall: {
-    apiName: string;
-    arguments: string;
-    identifier: string;
-    params: GatewayMcpParams;
-  }): Promise<ToolCallResult>;
-}
-
-/**
- * Coerce a runtime error (which may be an Error, string, or `{ message }`
- * object) into the string shape the wire protocol expects. Returns undefined
- * when there's no error to transmit.
- */
-interface AgentRunHandler {
-  (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
-}
-
-/**
- * Handler for generic server-internal device RPCs (e.g. workspace-init scans).
- * Dispatches by `method` name and returns the JSON-serializable result. Distinct
- * from {@link ToolCallHandler} — RPCs are never exposed to the agent.
- */
-interface RpcHandler {
-  (method: string, params: unknown): Promise<unknown>;
-}
-
-/** The server + credential one connection attempt was resolved against. */
-interface GatewayAuthContext {
-  serverUrl: string;
-  token: string;
-}
-
-/** Runs each time the personal connection comes up, with the device id it registered. */
-interface ConnectedHandler {
-  (info: { deviceId: string }): Promise<void>;
-}
-
-interface DeviceRegistrar {
-  (
-    info: {
-      architecture: string;
-      deviceId: string;
-      hostname: string;
-      identitySource: IdentitySource;
-      metadata: Record<string, string>;
-      platform: string;
-    },
-    auth: GatewayAuthContext,
-  ): Promise<void>;
-}
-
-/**
- * Mint a fresh workspace-device connect token for a share connection. Injected
- * by the controller (which owns the authed server calls) — used when restoring
- * persisted enrollments on startup and when a workspace connection's token
- * expires. `serverUrl` is the server the personal connection belongs to: the
- * provider returns null instead of minting on another server (signed out or
- * switched meanwhile).
- */
-interface WorkspaceTokenProvider {
-  (workspaceId: string, serverUrl: string): Promise<string | null>;
-}
-
-/** What the server says about this machine's row in a workspace. */
-export interface WorkspaceDeviceRegistration {
-  /** The member who enrolled the row, when the server reports one. */
-  enrollerUserId?: string;
-  registered: boolean;
-}
-
-/**
- * Check whether the workspace-scoped deviceId still has a registered row on
- * `serverUrl`. `registered: false` is a definitive "row gone" answer (share
- * revoked while offline); `undefined` means the check could not be performed —
- * callers must NOT clear local state on `undefined`.
- */
-interface WorkspaceDeviceChecker {
-  (
-    workspaceId: string,
-    deviceId: string,
-    serverUrl: string,
-  ): Promise<WorkspaceDeviceRegistration | undefined>;
-}
 
 /**
  * The context a personal connection was opened in. Workspace share connections
