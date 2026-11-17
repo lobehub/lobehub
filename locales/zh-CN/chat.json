@@ -1569,6 +1569,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "启用",
   "heteroAgent.executionTarget.localSandboxUnavailable": "此设备上不可用：{{reason}}",
   "heteroAgent.executionTarget.manage": "管理",
+  "heteroAgent.executionTarget.myDevicesGroup": "我的设备",
   "heteroAgent.executionTarget.noDevices": "暂无其他设备。在另一台电脑上执行 `lh connect` 即可接入。",
   "heteroAgent.executionTarget.noWorkspaceDevices": "暂无工作区设备。在一台机器上执行 `{{cmd}}` 即可注册,供所有成员使用。",
   "heteroAgent.executionTarget.none": "无设备",

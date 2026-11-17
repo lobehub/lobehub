@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "راه‌اندازی",
   "heteroAgent.executionTarget.localSandboxUnavailable": "در این دستگاه در دسترس نیست: {{reason}}",
   "heteroAgent.executionTarget.manage": "مدیریت",
+  "heteroAgent.executionTarget.myDevicesGroup": "دستگاه‌های من",
   "heteroAgent.executionTarget.noWorkspaceDevices": "هنوز هیچ دستگاهی در فضای کاری وجود ندارد. دستور `{{cmd}}` را روی یک دستگاه اجرا کنید تا برای همه اعضا ثبت شود.",
   "heteroAgent.executionTarget.none": "بدون دستگاه",
   "heteroAgent.executionTarget.noneDesc": "هیچ دستگاهی فعال نشده است",

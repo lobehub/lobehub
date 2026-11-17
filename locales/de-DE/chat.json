@@ -1528,6 +1528,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Einrichten",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Auf diesem Gerät nicht verfügbar: {{reason}}",
   "heteroAgent.executionTarget.manage": "Verwalten",
+  "heteroAgent.executionTarget.myDevicesGroup": "Meine Geräte",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Noch keine Arbeitsbereichsgeräte. Führen Sie `{{cmd}}` auf einem Gerät aus, um es für jedes Mitglied zu registrieren.",
   "heteroAgent.executionTarget.none": "Kein Gerät",
   "heteroAgent.executionTarget.noneDesc": "Kein Gerät aktiviert",

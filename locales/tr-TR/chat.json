@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Kurulum yap",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Bu cihazda mevcut değil: {{reason}}",
   "heteroAgent.executionTarget.manage": "Yönet",
+  "heteroAgent.executionTarget.myDevicesGroup": "Cihazlarım",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Henüz çalışma alanı cihazı yok. Her üye için bir cihazı kaydetmek için bir makinede `{{cmd}}` komutunu çalıştırın.",
   "heteroAgent.executionTarget.none": "Cihaz yok",
   "heteroAgent.executionTarget.noneDesc": "Etkinleştirilmiş cihaz yok",

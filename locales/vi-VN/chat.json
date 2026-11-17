@@ -1528,6 +1528,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Thiết lập",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Không khả dụng trên thiết bị này: {{reason}}",
   "heteroAgent.executionTarget.manage": "Quản lý",
+  "heteroAgent.executionTarget.myDevicesGroup": "Thiết bị của tôi",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Chưa có thiết bị không gian làm việc. Chạy `{{cmd}}` trên một máy để đăng ký cho mọi thành viên.",
   "heteroAgent.executionTarget.none": "Không có thiết bị",
   "heteroAgent.executionTarget.noneDesc": "Không có thiết bị được kích hoạt",

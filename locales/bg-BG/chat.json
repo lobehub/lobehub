@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Настройване",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Не е налично на това устройство: {{reason}}",
   "heteroAgent.executionTarget.manage": "Управление",
+  "heteroAgent.executionTarget.myDevicesGroup": "Моите устройства",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Все още няма устройства в работното пространство. Изпълнете `{{cmd}}` на машина, за да я регистрирате за всеки член.",
   "heteroAgent.executionTarget.none": "Няма устройство",
   "heteroAgent.executionTarget.noneDesc": "Няма активирано устройство",

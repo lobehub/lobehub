@@ -1528,6 +1528,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Configurar",
   "heteroAgent.executionTarget.localSandboxUnavailable": "No disponible en este dispositivo: {{reason}}",
   "heteroAgent.executionTarget.manage": "Gestionar",
+  "heteroAgent.executionTarget.myDevicesGroup": "Mis dispositivos",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Aún no hay dispositivos en el espacio de trabajo. Ejecuta `{{cmd}}` en una máquina para inscribirla para cada miembro.",
   "heteroAgent.executionTarget.none": "Sin dispositivo",
   "heteroAgent.executionTarget.noneDesc": "No hay dispositivos habilitados",

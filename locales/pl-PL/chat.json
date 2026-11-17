@@ -1528,6 +1528,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Skonfiguruj",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Niedostępne na tym urządzeniu: {{reason}}",
   "heteroAgent.executionTarget.manage": "Zarządzaj",
+  "heteroAgent.executionTarget.myDevicesGroup": "Moje urządzenia",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Brak urządzeń w przestrzeni roboczej. Uruchom `{{cmd}}` na maszynie, aby zarejestrować ją dla każdego członka.",
   "heteroAgent.executionTarget.none": "Brak urządzenia",
   "heteroAgent.executionTarget.noneDesc": "Brak włączonego urządzenia",

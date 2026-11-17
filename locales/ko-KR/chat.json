@@ -1528,6 +1528,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "설정",
   "heteroAgent.executionTarget.localSandboxUnavailable": "이 장치에서 사용할 수 없음: {{reason}}",
   "heteroAgent.executionTarget.manage": "관리",
+  "heteroAgent.executionTarget.myDevicesGroup": "내 기기",
   "heteroAgent.executionTarget.noWorkspaceDevices": "아직 워크스페이스 장치가 없습니다. 모든 구성원을 위해 기기를 등록하려면 `{{cmd}}`를 실행하세요.",
   "heteroAgent.executionTarget.none": "장치 없음",
   "heteroAgent.executionTarget.noneDesc": "활성화된 장치가 없습니다",

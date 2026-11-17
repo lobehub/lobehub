@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Configura",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Non disponibile su questo dispositivo: {{reason}}",
   "heteroAgent.executionTarget.manage": "Gestisci",
+  "heteroAgent.executionTarget.myDevicesGroup": "I miei dispositivi",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Nessun dispositivo di workspace al momento. Esegui `{{cmd}}` su una macchina per registrarla per ogni membro.",
   "heteroAgent.executionTarget.none": "Nessun dispositivo",
   "heteroAgent.executionTarget.noneDesc": "Nessun dispositivo abilitato",

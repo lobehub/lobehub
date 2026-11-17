@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "Configurer",
   "heteroAgent.executionTarget.localSandboxUnavailable": "Non disponible sur cet appareil : {{reason}}",
   "heteroAgent.executionTarget.manage": "Gérer",
+  "heteroAgent.executionTarget.myDevicesGroup": "Mes appareils",
   "heteroAgent.executionTarget.noWorkspaceDevices": "Aucun appareil de l'espace de travail pour le moment. Exécutez `{{cmd}}` sur une machine pour l'inscrire pour chaque membre.",
   "heteroAgent.executionTarget.none": "Aucun appareil",
   "heteroAgent.executionTarget.noneDesc": "Aucun appareil activé",

@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "設置",
   "heteroAgent.executionTarget.localSandboxUnavailable": "此設備上不可用：{{reason}}",
   "heteroAgent.executionTarget.manage": "管理",
+  "heteroAgent.executionTarget.myDevicesGroup": "我的裝置",
   "heteroAgent.executionTarget.noWorkspaceDevices": "尚無工作區設備。在機器上執行 `{{cmd}}`，以便為每位成員註冊。",
   "heteroAgent.executionTarget.none": "無設備",
   "heteroAgent.executionTarget.noneDesc": "未啟用任何設備",

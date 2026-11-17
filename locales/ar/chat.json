@@ -1528,6 +1528,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "إعداد",
   "heteroAgent.executionTarget.localSandboxUnavailable": "غير متوفر على هذا الجهاز: {{reason}}",
   "heteroAgent.executionTarget.manage": "إدارة",
+  "heteroAgent.executionTarget.myDevicesGroup": "أجهزتي",
   "heteroAgent.executionTarget.noWorkspaceDevices": "لا توجد أجهزة مساحة عمل حتى الآن. قم بتشغيل `{{cmd}}` على جهاز لتسجيله لكل عضو.",
   "heteroAgent.executionTarget.none": "لا يوجد جهاز",
   "heteroAgent.executionTarget.noneDesc": "لم يتم تمكين أي جهاز",

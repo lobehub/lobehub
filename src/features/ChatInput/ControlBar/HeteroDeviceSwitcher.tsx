@@ -627,6 +627,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const showLocalRow = isDesktop && (!ownWorkspaceDevice || isActive('local'));
   const activeDeviceId = executionTarget === 'device' ? boundDeviceId : undefined;
+  const hasDeviceSection =
+    privateDevices.length + workspaceDevices.length + personalOnlyDevices.length > 0;
   const renderDeviceRow = (d: DeviceListItem, { thisComputer = false } = {}) => (
     <DeviceOptionRow
       active={isActive('device', d.deviceId)}
@@ -700,7 +702,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           `local` is still the pick) it keeps its machine name, so two rows
           never both read "This computer". */}
       {thisComputerDevices.map((d) => renderDeviceRow(d, { thisComputer: !showLocalRow }))}
-      {isDesktop ? (
+      {/* Desktop always splits This computer from Built-in. On web Built-in is
+          labelled once a Devices section follows: with Persistent and Cloud
+          Sandbox side by side, the device directories below would otherwise
+          read as a third sandbox. */}
+      {isDesktop || hasDeviceSection ? (
         <div {...stylex.props(styles.groupLabel)}>
           {t('heteroAgent.executionTarget.builtinGroup')}
         </div>
@@ -823,9 +829,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       />
       {/* Devices sit one level down, a row per group: the list keeps growing,
           and the built-in environments above should not scroll away with it.
-          On desktop the section gets its own label, as Built-in has, so the
-          group rows don't read as more built-in environments. */}
-      {isDesktop && otherDevices.length > 0 ? (
+          The section gets its own label, as Built-in has, so the group rows
+          don't read as more built-in environments. */}
+      {hasDeviceSection ? (
         <div {...stylex.props(styles.groupLabel)}>
           {t('heteroAgent.executionTarget.devicesGroup')}
         </div>
@@ -857,7 +863,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           label={t(
             isDesktop
               ? 'heteroAgent.executionTarget.otherDevicesGroup'
-              : 'heteroAgent.executionTarget.devicesGroup',
+              : 'heteroAgent.executionTarget.myDevicesGroup',
           )}
         />
       ) : null}

@@ -1530,6 +1530,7 @@
   "heteroAgent.executionTarget.localSandboxSetUp": "セットアップ",
   "heteroAgent.executionTarget.localSandboxUnavailable": "このデバイスでは利用できません: {{reason}}",
   "heteroAgent.executionTarget.manage": "管理",
+  "heteroAgent.executionTarget.myDevicesGroup": "マイデバイス",
   "heteroAgent.executionTarget.noWorkspaceDevices": "まだワークスペースデバイスがありません。マシンで `{{cmd}}` を実行して、すべてのメンバーのために登録してください。",
   "heteroAgent.executionTarget.none": "デバイスなし",
   "heteroAgent.executionTarget.noneDesc": "有効なデバイスがありません",
