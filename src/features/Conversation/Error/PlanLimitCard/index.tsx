@@ -15,6 +15,7 @@ import {
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
+  [Plans.Basic]: 'plans.plan.basic.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
   [Plans.Max]: 'plans.plan.max.title',
   [Plans.Plus]: 'plans.plan.plus.title',
