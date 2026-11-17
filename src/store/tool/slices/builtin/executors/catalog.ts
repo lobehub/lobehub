@@ -13,6 +13,7 @@ import { imageGenerationExecutor } from '@lobechat/builtin-tool-image-generation
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/client/executor';
 import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
+import { sessionExecutor } from '@lobechat/builtin-tool-session/client/executor';
 import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
 import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation/executor';
 
@@ -89,6 +90,7 @@ export const builtinToolExecutors = [
   skillStoreExecutor,
   withPageEditHooks(skillsExecutor),
   taskExecutor,
+  sessionExecutor,
   dashboardExecutor,
   videoGenerationExecutor,
   activatorExecutor,

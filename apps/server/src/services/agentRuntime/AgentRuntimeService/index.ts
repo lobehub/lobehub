@@ -195,11 +195,13 @@ export class AgentRuntimeService {
     });
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId, {
       includeShareVisitor,
-      onTopicRunSettled: ({ operationId, topicId }) =>
-        this.delegate.deliverBackgroundSubAgentResults?.({
-          settledOperationId: operationId,
-          topicId,
-        }) ?? Promise.resolve(),
+      onTopicRunSettled: async (settled) => {
+        await this.delegate.deliverBackgroundSubAgentResults?.({
+          settledOperationId: settled.operationId,
+          topicId: settled.topicId,
+        });
+        await this.delegate.onSubSessionTurnSettled?.(settled);
+      },
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 

@@ -47,6 +47,7 @@ import { notebookRuntime } from './notebook';
 import { pageAgentRuntime } from './pageAgent';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
+import { sessionRuntime } from './session';
 import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
@@ -96,6 +97,7 @@ registerRuntimes([
   browserRuntime,
   remoteDeviceRuntime,
   briefRuntime,
+  sessionRuntime,
   taskRuntime,
   userInteractionRuntime,
   credsRuntime,

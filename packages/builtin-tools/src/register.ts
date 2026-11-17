@@ -145,6 +145,11 @@ import {
   selfFeedbackIntentManifest,
 } from '@lobechat/builtin-tool-self-iteration/client';
 import {
+  SessionInspectors,
+  SessionManifest,
+  SessionRenders,
+} from '@lobechat/builtin-tool-session/client';
+import {
   SkillStoreInspectors,
   SkillStoreManifest,
   SkillStoreRenders,
@@ -320,6 +325,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
     [LegacyDashboardIdentifier]: DashboardRenders as Record<string, BuiltinRender>,
     [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
+    [SessionManifest.identifier]: SessionRenders as Record<string, BuiltinRender>,
     [UserInteractionIdentifier]: UserInteractionRenders as Record<string, BuiltinRender>,
     [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
     [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
@@ -411,6 +417,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     // Dashboard tool calls persisted before the rename to `builtin-dashboard`.
     [LegacyDashboardIdentifier]: DashboardInspectors as Record<string, BuiltinInspector>,
     [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
+    [SessionManifest.identifier]: SessionInspectors as Record<string, BuiltinInspector>,
     [UserInteractionIdentifier]: UserInteractionInspectors as Record<string, BuiltinInspector>,
     [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
     [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,

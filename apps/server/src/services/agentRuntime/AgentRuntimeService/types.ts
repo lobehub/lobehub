@@ -21,7 +21,7 @@ import type { QueueService } from '@/server/services/queue';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import type { ToolExecutionService } from '@/server/services/toolExecution';
 
-import type { CompletionLifecycle } from '../CompletionLifecycle';
+import type { CompletionLifecycle, TopicRunSettledHandler } from '../CompletionLifecycle';
 import type { HumanInterventionHandler } from '../HumanInterventionHandler';
 import type { OperationTraceRecorder } from '../OperationTraceRecorder';
 import { type ExecGroupMemberParams, type ExecGroupMemberResult } from '../types';
@@ -180,6 +180,12 @@ export interface AgentRuntimeDelegate {
     scope: SteerQueueScope;
     state: AgentState;
   }) => Promise<{ messageId: string } | undefined>;
+  /**
+   * A topic's own run settled: report it to the topic that opened it (a
+   * sub-session's receipt) and wake the topic for results that arrived while
+   * it ran. See `onSubSessionTurnSettled`. Never throws.
+   */
+  onSubSessionTurnSettled?: TopicRunSettledHandler;
   /** Run the init an operation was created without (see `DeferredInitRunner`). */
   runDeferredInit?: DeferredInitRunner;
   /**

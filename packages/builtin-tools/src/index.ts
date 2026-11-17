@@ -43,6 +43,7 @@ import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
+import { SessionManifest } from '@lobechat/builtin-tool-session';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import {
@@ -78,6 +79,8 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
+  // Only while Labs → Better Coding Experience is on (see `LAB_GATED_TOOLS`).
+  SessionManifest.identifier,
   LobeAgentManifest.identifier,
   CanvasManifest.identifier,
 ];
@@ -587,6 +590,11 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: SessionManifest.identifier,
+    manifest: SessionManifest,
     type: 'builtin',
   },
   {

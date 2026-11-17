@@ -111,6 +111,7 @@ import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
 import { shareRouter } from './share';
 import { shareChatRouter } from './shareChat';
+import { subSessionRouter } from './subSession';
 import { taskRouter } from './task';
 import { taskLabelRouter } from './taskLabel';
 import { threadRouter } from './thread';
@@ -224,6 +225,7 @@ export const lambdaRouter = router({
   sessionGroup: sessionGroupRouter,
   share: shareRouter,
   shareChat: shareChatRouter,
+  subSession: subSessionRouter,
   task: taskRouter,
   taskLabel: taskLabelRouter,
   thread: threadRouter,

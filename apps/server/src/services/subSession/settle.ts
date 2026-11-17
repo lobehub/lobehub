@@ -2,7 +2,10 @@ import debug from 'debug';
 
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
-import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
+import {
+  ResultWakeChannel,
+  type WakeChannelExecAgent,
+} from '@/server/services/taskResultBridge/wakeChannel';
 
 import { readSubSessionsEnabled } from './labGate';
 import { deliverSubSessionReceipt } from './receipt';
@@ -32,9 +35,12 @@ export interface SubSessionTurnSettledParams {
  * Runs for native and heterogeneous turns alike (both settle through
  * `CompletionLifecycle.dispatchHooks`). Never throws.
  */
-export const onSubSessionTurnSettled = async (params: SubSessionTurnSettledParams) => {
+export const onSubSessionTurnSettled = async (
+  params: SubSessionTurnSettledParams,
+  deps: { execAgent: WakeChannelExecAgent },
+) => {
   const { db, topicId, userId, workspaceId } = params;
-  const bridge = new TaskResultBridgeService(db, userId, workspaceId);
+  const bridge = new ResultWakeChannel(db, userId, workspaceId, deps.execAgent);
 
   try {
     await deliverSubSessionReceipt({ queueWakeup: (wake) => bridge.queueWakeup(wake) }, params);
@@ -43,7 +49,7 @@ export const onSubSessionTurnSettled = async (params: SubSessionTurnSettledParam
   }
 
   try {
-    if (!TaskResultBridgeService.canQueue() || !(await readSubSessionsEnabled(db, userId))) return;
+    if (!ResultWakeChannel.canQueue() || !(await readSubSessionsEnabled(db, userId))) return;
     const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
     if (topic?.agentId) await bridge.drain(topic.agentId, topicId);
   } catch (error) {

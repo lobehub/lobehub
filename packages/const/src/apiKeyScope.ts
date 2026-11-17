@@ -333,6 +333,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   shareChat: 'blocked',
   spend: 'blocked',
   storageOverage: 'blocked',
+  // Sub-sessions start and steer agent runs, like `aiAgent`.
+  subSession: rw('agent:read', 'agent:write'),
   subscription: 'blocked',
   task: rw('agent:read', 'agent:write'),
   taskLabel: rw('agent:read', 'agent:write'),

@@ -24,7 +24,10 @@ import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { shouldRecordGatewayError } from '@/server/modules/AgentRuntime/gatewayErrorRecord';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
-import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import {
+  CompletionLifecycle,
+  type TopicRunSettledHandler,
+} from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
@@ -176,6 +179,12 @@ const buildIngestRejectionError = (
 export interface HeterogeneousAgentServiceOptions {
   /** Inject a pre-built operation model (used by tests). */
   agentOperationModel?: AgentOperationModel;
+  /**
+   * A finished run settled its topic (never on a cancel): report it to the
+   * topic that opened it, when it is a sub-session. Supplied by the caller for
+   * the same reason as `startQueuedFollowUp`.
+   */
+  onTopicRunSettled?: TopicRunSettledHandler;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
@@ -219,6 +228,7 @@ export class HeterogeneousAgentService {
   private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly queuedFollowUpStarter?: HeterogeneousAgentServiceOptions['startQueuedFollowUp'];
+  private readonly topicRunSettled?: TopicRunSettledHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
   private readonly traceRecorder: HeteroTraceRecorder;
@@ -235,6 +245,7 @@ export class HeterogeneousAgentService {
     const workspaceId = options.workspaceId;
     this.workspaceId = workspaceId;
     this.queuedFollowUpStarter = options.startQueuedFollowUp;
+    this.topicRunSettled = options.onTopicRunSettled;
     this.agentOperationModel =
       options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
     this.messageModel = new MessageModel(db, userId, workspaceId);
@@ -723,7 +734,9 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
+      onTopicRunSettled: this.topicRunSettled,
+    }).completeOperation(
       {
         agentId,
         assistantMessageId,

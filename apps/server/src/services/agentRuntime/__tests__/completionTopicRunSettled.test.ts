@@ -4,12 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CompletionLifecycle, type TopicRunSettledHandler } from '../CompletionLifecycle';
 import { hookDispatcher } from '../hooks';
 
-const { after, onSubSessionTurnSettled } = vi.hoisted(() => ({
-  after: vi.fn(),
-  onSubSessionTurnSettled: vi.fn(async () => {}),
-}));
-
-vi.mock('@/server/services/subSession/settle', () => ({ onSubSessionTurnSettled }));
+const { after } = vi.hoisted(() => ({ after: vi.fn() }));
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after }));
 vi.mock('@/business/server/agent-run/notifyAgentRunCompleted', () => ({
@@ -49,7 +44,6 @@ describe('CompletionLifecycle — topic run settled', () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     after.mockReset();
-    onSubSessionTurnSettled.mockClear();
     onTopicRunSettled = vi.fn<TopicRunSettledHandler>().mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
@@ -62,7 +56,9 @@ describe('CompletionLifecycle — topic run settled', () => {
 
       expect(onTopicRunSettled).not.toHaveBeenCalled();
       await flushAfter();
-      expect(onTopicRunSettled).toHaveBeenCalledWith({ operationId: 'op-1', topicId: 'topic-1' });
+      expect(onTopicRunSettled).toHaveBeenCalledWith(
+        expect.objectContaining({ operationId: 'op-1', reason, topicId: 'topic-1' }),
+      );
     },
   );
 
@@ -95,37 +91,29 @@ describe('CompletionLifecycle — topic run settled', () => {
     expect(onTopicRunSettled).not.toHaveBeenCalled();
   });
 
-  describe('sub-session turns', () => {
-    it('reports a settled turn even when the lifecycle was built without a settle handler (heterogeneous runs)', async () => {
-      const lifecycle = new CompletionLifecycle({} as any, 'user-1', 'ws-1');
-      vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
-      vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
-      vi.spyOn(lifecycle as any, 'notifyPendingAgentIntervention').mockResolvedValue(undefined);
-      vi.spyOn(lifecycle as any, 'registerFileWorks').mockResolvedValue(undefined);
-
-      await lifecycle.dispatchHooks(
-        'op-1',
-        { host: { hooks: [] }, origin: { agentId: 'a', topicId: 'topic-1' }, status: 'done' },
-        'done',
-      );
-      await flushAfter();
-
-      expect(onSubSessionTurnSettled).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operationId: 'op-1',
-          reason: 'done',
-          topicId: 'topic-1',
-          userId: 'user-1',
-          workspaceId: 'ws-1',
-        }),
-      );
+  it('hands the handler what a sub-session receipt needs', async () => {
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1', undefined, {
+      onTopicRunSettled,
     });
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'notifyPendingAgentIntervention').mockResolvedValue(undefined);
+    vi.spyOn(lifecycle as any, 'registerFileWorks').mockResolvedValue(undefined);
 
-    it('never reports a stopped turn', async () => {
-      await run({ agentId: 'a', topicId: 'topic-1' }, 'interrupted');
-      await flushAfter();
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        host: { hooks: [] },
+        messages: [{ content: 'All green.', role: 'assistant' }],
+        origin: { agentId: 'a', topicId: 'topic-1' },
+        status: 'done',
+      },
+      'done',
+    );
+    await flushAfter();
 
-      expect(onSubSessionTurnSettled).not.toHaveBeenCalled();
-    });
+    expect(onTopicRunSettled).toHaveBeenCalledWith(
+      expect.objectContaining({ lastAssistantContent: 'All green.', reason: 'done' }),
+    );
   });
 });

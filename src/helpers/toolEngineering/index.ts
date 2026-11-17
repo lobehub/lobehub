@@ -2,7 +2,10 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
+import {
+  getFeatureDisabledToolIds,
+  getLabDisabledToolIds,
+} from '@lobechat/builtin-tools/featureGates';
 import {
   createEnableChecker,
   type LobeToolManifest,
@@ -173,6 +176,8 @@ export const createAgentToolsEngine = (
     disabledPluginIds: [
       ...agentSelectors.currentAgentDisabledPlugins(agentState),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
+      // Lab-gated tools (e.g. lobe-session) leave the pool while their Labs switch is off.
+      ...getLabDisabledToolIds(useUserStore.getState().preference?.lab),
     ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
     hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),

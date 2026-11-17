@@ -147,7 +147,10 @@ export const detachOpenedTopics = async (
     .where(
       and(
         inArray(topics.id, topicIds),
-        ctx.ownership(),
+        // Only the caller's own topics: in a workspace `ownership()` also
+        // matches teammates' rows, and moving those is not this caller's call.
+        ctx.mine(),
+        ctx.notShareVisitor(),
         sql`COALESCE(${topics.metadata} -> 'openedBy' ->> 'topicId', '') <> ''`,
       ),
     )
