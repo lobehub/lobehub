@@ -291,6 +291,41 @@ describe('createLocalSteer', () => {
     expect(h.getQueue().map((m) => m.id)).toEqual(['q1']);
   });
 
+  it('marks a steer still being written when the run ends as uncertain, never resent', async () => {
+    let answer!: (value: { status: 'accepted' | 'rejected' }) => void;
+    vi.mocked(heterogeneousAgentService.steerSession).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const h = createHarness([queued('q1', 'first')]);
+    await vi.waitFor(() => expect(h.getQueue()[0]?.localSteer).toBe('delivering'));
+
+    h.steer.settle();
+    expect(h.getQueue()[0]?.localSteer).toBe('unknown');
+
+    answer({ status: 'accepted' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.getQueue().map((m) => m.localSteer)).toEqual(['unknown']);
+  });
+
+  it('gives back a steer refused after the run ended', async () => {
+    let answer!: (value: { status: 'accepted' | 'rejected' }) => void;
+    vi.mocked(heterogeneousAgentService.steerSession).mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const h = createHarness([queued('q1', 'first')]);
+    await vi.waitFor(() => expect(h.getQueue()[0]?.localSteer).toBe('delivering'));
+
+    h.steer.settle();
+    answer({ status: 'rejected' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(h.getQueue().map((m) => [m.id, m.localSteer])).toEqual([['q1', undefined]]);
+  });
+
   it('steers nothing while the run waits for the user', async () => {
     createHarness([queued('q1', 'first')], true);
     await new Promise((resolve) => setTimeout(resolve, 0));

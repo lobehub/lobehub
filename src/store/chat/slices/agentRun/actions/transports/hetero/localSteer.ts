@@ -71,6 +71,8 @@ interface PendingSteer {
    */
   deliveredText?: string;
   messageId: string;
+  /** The run ended while the write was still unanswered: its row was marked uncertain. */
+  settledInFlight?: boolean;
   /**
    * `delivering` until the IPC answers; `written` once accepted, until the
    * agent reads it; `unknown` when the write failed and it may still arrive.
@@ -182,6 +184,8 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
           sessionId: ipcSessionId,
         }));
     } catch (error) {
+      // The run ended first: the row is already marked uncertain and stays so.
+      if (steer.settledInFlight) return false;
       // Read already (`confirm` ran first): it landed.
       if (pending !== steer) return true;
       // It may or may not be in the session: never sent again on its own, but
@@ -193,6 +197,11 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
       return false;
     }
 
+    if (steer.settledInFlight) {
+      // A definite refusal wrote nothing: the messages run as the next turn.
+      if (status !== 'accepted') giveBack(steer);
+      return false;
+    }
     // The agent can report reading it before the write is answered (Codex).
     if (pending !== steer) return true;
     if (status === 'accepted') {
@@ -274,6 +283,12 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
     const steer = pending;
     pending = undefined;
     if (steer?.state === 'written') giveBack(steer);
+    // Still being written: it may have reached the agent, so it is never sent
+    // again on its own unless the write comes back refused.
+    if (steer?.state === 'delivering') {
+      steer.settledInFlight = true;
+      get().updateQueuedMessage(contextKey, steer.messageId, { localSteer: 'unknown' });
+    }
   };
 
   schedule();
