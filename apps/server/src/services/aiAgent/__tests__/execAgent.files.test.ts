@@ -9,12 +9,14 @@ const {
   mockIngestAttachment,
   mockParseFile,
   mockFindByIds,
+  mockTopicCreate,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockFindByIds: vi.fn(),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
   mockParseFile: vi.fn(),
+  mockTopicCreate: vi.fn(),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -91,7 +93,7 @@ vi.mock('@/database/models/topic', () => ({
     return {
       releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
       tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      create: mockTopicCreate,
       findById: vi.fn().mockResolvedValue(null),
     };
   }),
@@ -197,6 +199,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockTopicCreate.mockResolvedValue({ id: 'topic-1' });
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -674,6 +677,56 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       const lastMessage = createOpArgs.initialMessages.at(-1);
       expect(lastMessage.imageList).toHaveLength(1);
+    });
+
+    it('refuses an attachment-only turn whose attachments never uploaded, before writing any row', async () => {
+      // Desktop 2.2.15: the upload failed, the chip kept its placeholder id,
+      // and Send went out with no text. Before the fix this ran the agent on an
+      // empty user message and the attachment disappeared without a trace.
+      mockFindByIds.mockResolvedValue([]);
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          fileIds: ['report.docx', 'report.docx'],
+          prompt: '',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('did not finish uploading'),
+      });
+
+      expect(mockFindByIds).toHaveBeenCalledWith(['report.docx'], { type: 'ordinary' });
+      expect(mockTopicCreate).not.toHaveBeenCalled();
+      expect(mockMessageCreate).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+    });
+
+    it('still runs a turn with text when none of its attachments resolve', async () => {
+      mockFindByIds.mockResolvedValue([]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-missing'],
+        prompt: 'Anonymize this document',
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].content).toBe('Anonymize this document');
+      expect(userMessageCall![0].files).toBeUndefined();
+      expect(mockCreateOperation).toHaveBeenCalled();
+    });
+
+    it('runs an attachment-only turn when its attachment resolves', async () => {
+      mockFindByIds.mockResolvedValue([
+        { id: 'file-pdf-1', fileType: 'application/pdf', name: 'a.pdf', size: 1, url: 'a.pdf' },
+      ]);
+
+      await service.execAgent({ agentId: 'agent-1', fileIds: ['file-pdf-1'], prompt: '' });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].files).toEqual(['file-pdf-1']);
+      expect(mockCreateOperation).toHaveBeenCalled();
     });
 
     it('no-ops cleanly when fileIds is an empty array', async () => {

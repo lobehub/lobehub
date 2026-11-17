@@ -3,7 +3,11 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { agentShareFileAccessScope } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveAttachmentMetadata, resolveAttachmentsByFileIds } from './resolveAttachments';
+import {
+  findUnresolvedAttachmentIds,
+  resolveAttachmentMetadata,
+  resolveAttachmentsByFileIds,
+} from './resolveAttachments';
 
 const mocks = vi.hoisted(() => ({
   findByIds: vi.fn(),
@@ -154,5 +158,51 @@ describe('resolveAttachmentMetadata', () => {
     expect(result.fileList).toEqual([
       expect.objectContaining({ content: 'head', id: 'file-big', originalCharCount: 9_000_000 }),
     ]);
+  });
+});
+
+describe('missing attachments', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reports every id as missing when none of them resolve', async () => {
+    // A client that sends only placeholder ids (its upload failed) used to get
+    // back an empty result with no warning, so nothing recorded the loss.
+    mocks.findByIds.mockResolvedValue([]);
+
+    const result = await resolveAttachmentsByFileIds({
+      db: {} as LobeChatDatabase,
+      fileIds: ['report.docx', 'scan.png'],
+      userId: 'user-1',
+    });
+
+    expect(result.orderedFileIds).toEqual([]);
+    expect(result.warnings).toEqual([
+      'Attachment "report.docx" was not found and skipped.',
+      'Attachment "scan.png" was not found and skipped.',
+    ]);
+  });
+
+  it('lists the ids that match no readable file, once each, in caller order', async () => {
+    mocks.findByIds.mockResolvedValue([{ id: 'file-ok' }]);
+
+    await expect(
+      findUnresolvedAttachmentIds({
+        db: {} as LobeChatDatabase,
+        fileIds: ['pending-1', 'file-ok', 'pending-1', 'pending-2'],
+        userId: 'user-1',
+      }),
+    ).resolves.toEqual(['pending-1', 'pending-2']);
+    expect(mocks.findByIds).toHaveBeenCalledWith(['pending-1', 'file-ok', 'pending-2'], {
+      type: 'ordinary',
+    });
+  });
+
+  it('skips the lookup when there are no ids', async () => {
+    await expect(
+      findUnresolvedAttachmentIds({ db: {} as LobeChatDatabase, fileIds: [], userId: 'user-1' }),
+    ).resolves.toEqual([]);
+    expect(mocks.findByIds).not.toHaveBeenCalled();
   });
 });

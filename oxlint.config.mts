@@ -643,9 +643,10 @@ export default defineConfig(
           // `hooks/useAgentModelSelection` reaches the store only through the
           // editor-free `store/apiContext`; Home model switches share its path.
           // `draftStorage` is localStorage-only; a refused Home send hands its
-          // message to the conversation composer through it.
+          // message to the conversation composer through it. `utils/failedUploads`
+          // imports only a toast and i18next; Home sends share its upload guard.
           regex:
-            '^@/features/ChatInput(?:$|/(?!(?:draftStorage|hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
+            '^@/features/ChatInput(?:$|/(?!(?:draftStorage|hooks/useAgentModelSelection|store/initialState|utils/contextSelections|utils/failedUploads)$).+)',
         },
       ],
     }),

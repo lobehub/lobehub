@@ -624,6 +624,30 @@ describe('Home InputArea useSend', () => {
     expect(routerMock.push).toHaveBeenCalledWith('/agent/agt_custom');
   });
 
+  it('keeps the draft instead of sending a chat message whose attachment failed to upload', async () => {
+    // A failed chip holds its file name as a placeholder id. Sending it gave the
+    // agent an empty message with no attachment.
+    fileState.chatUploadFileList = [
+      { file: new File(['x'], 'report.docx'), id: 'report.docx', status: 'error' },
+    ] as any;
+    const { result } = renderHook(() => useSend('chat'));
+
+    await act(async () => {
+      await result.current.send({
+        clearContent: vi.fn(),
+        editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+        getEditorData: () => undefined,
+        getMarkdownContent: () => '',
+      });
+    });
+
+    expect(messageErrorMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
+    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+    expect(clearContentMock).not.toHaveBeenCalled();
+  });
+
   it('captures the active workspace slug in default homepage sends', async () => {
     activeWorkspaceSlugMock.value = 'team';
     const { result } = renderHook(() => useSend());

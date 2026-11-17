@@ -9,6 +9,7 @@ import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { getDraft, saveDraft } from '@/features/ChatInput/draftStorage';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
+import { refuseSendWithFailedUploads } from '@/features/ChatInput/utils/failedUploads';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useHomeDailyBrief } from '@/hooks/useHomeDailyBrief';
 import { usePermission } from '@/hooks/usePermission';
@@ -295,6 +296,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
           default: {
             if (!selectedAgentId) return;
+            if (refuseSendWithFailedUploads(fileList)) return;
 
             await ensureAgentConfigLoaded(selectedAgentId);
 
