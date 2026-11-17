@@ -144,10 +144,7 @@ export const channels = pgTable(
 export const channelSections = pgTable(
   'channel_sections',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => idGenerator('channelSections'))
-      .notNull(),
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -185,7 +182,7 @@ export const channelMembers = pgTable(
     /** Highest sequence this person has read in the main channel. */
     lastReadSequence: integer('last_read_sequence'),
     /** This person's sidebar section; NULL falls back to the built-in section. */
-    sectionId: text('section_id').references(() => channelSections.id, { onDelete: 'set null' }),
+    sectionId: uuid('section_id').references(() => channelSections.id, { onDelete: 'set null' }),
     /** Pinned to the top of this person's sidebar. */
     pinned: boolean('pinned').notNull().default(false),
     /** Hidden from this person's sidebar until new activity reaches them. */

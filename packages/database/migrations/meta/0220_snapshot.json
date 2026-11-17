@@ -1,5 +1,5 @@
 {
-  "id": "134633c1-aa12-4698-bd83-ed502fab25bd",
+  "id": "77cad3c6-892d-4bc9-a657-a554d6ebb0a6",
   "prevId": "f353e57e-aad8-4a85-81e3-07fad5564c60",
   "version": "7",
   "dialect": "postgresql",
@@ -15212,7 +15212,7 @@
         },
         "section_id": {
           "name": "section_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -15872,9 +15872,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "user_id": {
           "name": "user_id",

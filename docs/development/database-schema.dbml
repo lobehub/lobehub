@@ -1644,7 +1644,7 @@ table channel_members {
   user_id text
   role text
   last_read_sequence integer
-  section_id text
+  section_id uuid
   pinned boolean [not null, default: false]
   hidden boolean [not null, default: false]
   pinned_at "timestamp with time zone"
@@ -1719,7 +1719,7 @@ table channel_messages {
 }
 
 table channel_sections {
-  id text [pk, not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
   name text [not null]
