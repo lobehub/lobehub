@@ -47,8 +47,9 @@ export const useRemoveMember = () => {
 };
 
 /**
- * Confirms, then leaves a group Channel. Outside a project the Channel is gone for the caller,
- * so its page returns home; an open project Channel stays readable through its project.
+ * Confirms, then leaves a group Channel. A Channel the caller can no longer read (outside a
+ * project, archived, or in a project they cannot see) returns its page home; an active open
+ * project Channel stays readable through its project.
  */
 export const useLeaveChannel = () => {
   const { t } = useTranslation('channel');
@@ -56,25 +57,29 @@ export const useLeaveChannel = () => {
   const navigate = useWorkspaceAwareNavigate();
   const latest = useLatest({ location, navigate });
 
-  return (channel: Pick<ChannelListItem, 'id' | 'projectId' | 'title'>) => {
+  return (channel: Pick<ChannelListItem, 'id' | 'projectId' | 'status' | 'title'>) => {
     const scope = cacheScope.get();
     return confirmModal({
       cancelText: t('cancel'),
-      content: t(channel.projectId ? 'leaveConfirmProject' : 'leaveConfirm'),
+      // An archived project Channel takes no newcomers, so leaving it is final too.
+      content: t(
+        channel.projectId && channel.status === 'active' ? 'leaveConfirmProject' : 'leaveConfirm',
+      ),
       okButtonProps: { danger: true },
       okText: t('leave'),
       title: t('leaveConfirmTitle', { title: channel.title }),
       onOk: async () => {
+        let readable: boolean;
         try {
           if (cacheScope.get() !== scope) throw new Error('Channel scope changed');
-          await channelActions.leave(channel);
+          readable = await channelActions.leave(channel);
         } catch (error) {
           console.error('Failed to leave Channel', error);
           toast.error(t('leaveFailed'));
           throw error;
         }
         if (cacheScope.get() !== scope) return;
-        if (!channel.projectId && matchChannel(latest.current.location.pathname) === channel.id)
+        if (!readable && matchChannel(latest.current.location.pathname) === channel.id)
           latest.current.navigate('/', { replace: true });
         toast.success(t('leaveSuccess'));
       },

@@ -110,7 +110,7 @@ describe('removing Channel members', () => {
 describe('leaving a Channel', () => {
   it('lets a member leave and keeps the owner', async () => {
     const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
-    await asMember.leave(channel.id);
+    expect(await asMember.leave(channel.id)).toEqual({ readable: false });
 
     expect(await statusOf(member.id)).toBe('left');
     expect(await asMember.list()).toEqual([]);
@@ -133,7 +133,7 @@ describe('leaving a Channel', () => {
     const { channel } = await owner.create({ projectId: project.id, title: 'General' });
 
     const joined = await teammate.join(channel.id);
-    await teammate.leave(channel.id);
+    expect(await teammate.leave(channel.id)).toEqual({ readable: true });
     expect(await teammate.list()).toEqual([
       expect.objectContaining({ id: channel.id, joined: false, memberRole: null }),
     ]);
@@ -142,6 +142,20 @@ describe('leaving a Channel', () => {
 
     await owner.removeMember(channel.id, joined.member.id);
     await expect(teammate.join(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('reports an archived project Channel as no longer readable once left', async () => {
+    const [project] = await db
+      .insert(projects)
+      .values({ name: 'Apollo', userId: fixture.ownerId, workspaceId: fixture.workspaceId })
+      .returning();
+    const owner = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const teammate = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const { channel } = await owner.create({ projectId: project.id, title: 'General' });
+    await teammate.join(channel.id);
+    await owner.archive(channel.id);
+
+    expect(await teammate.leave(channel.id)).toEqual({ readable: false });
   });
 });
 

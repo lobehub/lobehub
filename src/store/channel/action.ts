@@ -138,20 +138,22 @@ class ChannelActionImpl {
     this.#private.entity.remove(channelId, { scope });
   };
   /**
-   * Leaves a group Channel. An open project Channel stays readable through its project, so it
-   * only refreshes; any other Channel is gone for the caller, like a removed one.
+   * Leaves a group Channel. An active open project Channel stays readable through its project, so
+   * it only refreshes; any other Channel is gone for the caller, like a removed one. Resolves to
+   * whether the caller can still read it.
    */
-  leave = async (channel: Pick<ChannelListItem, 'id' | 'projectId'>) => {
+  leave = async (channel: Pick<ChannelListItem, 'id'>) => {
     const scope = cacheScope.get();
-    await channelService.leave(channel.id);
-    if (channel.projectId) {
+    const { readable } = await channelService.leave(channel.id);
+    if (readable) {
       await this.#refreshAfterWrite(() =>
         Promise.all([this.refreshList(), this.refreshDetail({ channelId: channel.id })]),
       );
-      return;
+      return true;
     }
     await this.#refreshAfterWrite(this.refreshList);
     this.#private.entity.remove(channel.id, { scope });
+    return false;
   };
   /** Removes a person or an Agent; an Agent's unfinished replies stop. */
   removeMember = async (channelId: string, memberId: string) => {

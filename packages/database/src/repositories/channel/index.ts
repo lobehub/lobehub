@@ -446,9 +446,20 @@ export class ChannelRepository {
       minRole: 'admin',
     });
 
-  /** The caller leaves a group Channel. See {@link leaveChannel}. */
-  leave = async (channelId: string): Promise<void> =>
-    this.write(channelId, (tx, access) => leaveChannel(tx, access), { allowArchived: true });
+  /**
+   * The caller leaves a group Channel. See {@link leaveChannel}. `readable` says whether they can
+   * still open it: only an active open project Channel stays readable without a seat.
+   */
+  leave = async (channelId: string): Promise<{ readable: boolean }> =>
+    this.write(
+      channelId,
+      async (tx, access) => {
+        await leaveChannel(tx, access);
+        const open = await findOpenChannel(tx, this.userId, this.workspaceId, channelId);
+        return { readable: !!open };
+      },
+      { allowArchived: true },
+    );
 
   /** People a new Channel in this workspace can start with. */
   newChannelUserCandidates = async (search?: string) => {

@@ -269,8 +269,8 @@ export const channelRouter = router({
   }),
   /** The caller leaves a group Channel; its owner cannot. */
   leave: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
-    await ctx.channelService.leave(input.channelId);
-    return { success: true };
+    const { readable } = await ctx.channelService.leave(input.channelId);
+    return { readable, success: true };
   }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),

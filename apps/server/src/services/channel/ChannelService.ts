@@ -409,8 +409,9 @@ export class ChannelService {
   };
 
   leave = async (channelId: string) => {
-    await this.repository.leave(channelId);
+    const result = await this.repository.leave(channelId);
     await this.changed(channelId);
+    return result;
   };
 
   /**
