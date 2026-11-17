@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { ChatTopic } from '@/types/topic';
 
 import { useCollapsedIndicators } from '../TopicListContent/ByProjectMode/CollapsedIndicators';
+import { toRollupStatus } from './buildSubSessionTree';
 import { useSubSessionTree } from './context';
 
 const styles = stylex.create({
@@ -44,7 +45,10 @@ const SubSessionToggle = memo<{ topicId: string }>(({ topicId }) => {
   const nodes = tree?.childrenOf(topicId);
   const expanded = tree?.isExpanded(topicId) ?? false;
   const asTopics = useMemo(
-    () => (nodes ?? []).map((node) => ({ id: node.id, status: node.status }) as ChatTopic),
+    () =>
+      (nodes ?? []).map(
+        (node) => ({ id: node.id, status: toRollupStatus(node.state) }) as ChatTopic,
+      ),
     [nodes],
   );
   const { indicators } = useCollapsedIndicators(asTopics, expanded);

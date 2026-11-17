@@ -90,3 +90,17 @@ export const summarizeSubSessions = (nodes: SubSessionNode[]) => ({
   running: nodes.filter((node) => node.state === 'running').length,
   waiting: nodes.filter((node) => node.state === 'waiting_for_user').length,
 });
+
+/** A sub-session that is running or waiting for the user — what the sidebar keeps polling for. */
+export const isInFlight = (node: { state?: string }) =>
+  node.state === 'running' || node.state === 'waiting_for_user';
+
+/** The topic status the collapsed roll-up counts a sub-session under. */
+export const toRollupStatus = (state: SubSessionNode['state']) =>
+  state === 'running'
+    ? 'running'
+    : state === 'waiting_for_user'
+      ? 'waitingForHuman'
+      : state === 'failed'
+        ? 'failed'
+        : 'active';

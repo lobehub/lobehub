@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { generateWorktreeBranchName } from '@lobechat/const';
 import type {
+  AgentOperationStatus,
   ChatTopicMetadata,
   ChatTopicStatus,
   ExecAgentResult,
@@ -30,7 +31,30 @@ export const RETIRED_TOPIC_STATUSES: ChatTopicStatus[] = ['completed', 'archived
 
 export type SubSessionState = 'archived' | 'failed' | 'idle' | 'running' | 'waiting_for_user';
 
-export const toSubSessionState = (status: ChatTopicStatus | null | undefined): SubSessionState => {
+/**
+ * What a sub-session is doing. The latest top-level operation wins while it is
+ * in flight or failed — a server-run turn never writes `topics.status` — and
+ * the topic's own status (archive, a client run) decides otherwise.
+ */
+export const toSubSessionState = (
+  status: ChatTopicStatus | null | undefined,
+  latestRunStatus?: AgentOperationStatus | null,
+): SubSessionState => {
+  if (status === 'completed' || status === 'archived') return 'archived';
+  switch (latestRunStatus) {
+    case 'waiting_for_human': {
+      return 'waiting_for_user';
+    }
+    case 'idle':
+    case 'running':
+    case 'waiting_for_async_tool':
+    case 'waiting_for_client': {
+      return 'running';
+    }
+    case 'error': {
+      return 'failed';
+    }
+  }
   switch (status) {
     case 'running': {
       return 'running';
@@ -40,10 +64,6 @@ export const toSubSessionState = (status: ChatTopicStatus | null | undefined): S
     }
     case 'failed': {
       return 'failed';
-    }
-    case 'completed':
-    case 'archived': {
-      return 'archived';
     }
     default: {
       return 'idle';
@@ -267,7 +287,7 @@ export class SubSessionService {
     const rows = await this.deps.listOpened([openerTopicId]);
     return rows.map((row) => ({
       agentId: row.agentId,
-      state: toSubSessionState(row.status),
+      state: toSubSessionState(row.status, row.latestRunStatus),
       title: row.title,
       topicId: row.id,
       trigger: row.trigger,

@@ -1,8 +1,8 @@
-import type { ChatTopicStatus, TopicOpenedBy } from '@lobechat/types';
+import type { AgentOperationStatus, ChatTopicStatus, TopicOpenedBy } from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, not, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { topics } from '../../schemas';
+import { agentOperations, topics } from '../../schemas';
 import { notTrashed } from '../../utils/softDelete';
 import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import type { TopicModelContext } from './context';
@@ -27,6 +27,8 @@ export interface OpenedTopicItem {
   createdAt: Date;
   favorite: boolean | null;
   id: string;
+  /** Status of the topic's latest top-level operation; null before its first run. */
+  latestRunStatus: AgentOperationStatus | null;
   openedBy: TopicOpenedBy;
   runStartedAt: Date | null;
   status: ChatTopicStatus | null;
@@ -65,8 +67,20 @@ export const listOpenedTopics = async (
       : undefined;
   const runStartedAt = topicRunStartedAtColumn(ctx.db);
 
+  // The latest top-level run decides what a sub-session is doing: server runs
+  // keep `topics.status` as it was and only write the operation row.
+  const latestRunStatus = ctx.db
+    .select({ value: agentOperations.status })
+    .from(agentOperations)
+    .where(and(eq(agentOperations.topicId, topics.id), isNull(agentOperations.parentOperationId)))
+    .orderBy(desc(agentOperations.createdAt))
+    .limit(1);
+
   const result: OpenedTopicItem[] = [];
-  const seen = new Set<string>(openers);
+  // A row that is an opener itself (a list row) can still be another opener's
+  // sub-session: it is reported, it just is not walked twice.
+  const included = new Set<string>();
+  const walked = new Set<string>(openers);
   let frontier = openers;
 
   for (let depth = 0; depth < MAX_OPENED_BY_DEPTH && frontier.length > 0; depth += 1) {
@@ -76,6 +90,7 @@ export const listOpenedTopics = async (
         createdAt: topics.createdAt,
         favorite: topics.favorite,
         id: topics.id,
+        latestRunStatus: sql<AgentOperationStatus | null>`(${latestRunStatus})`,
         openedBy: sql<TopicOpenedBy>`${topics.metadata} -> 'openedBy'`,
         runStartedAt,
         status: topics.status,
@@ -100,9 +115,11 @@ export const listOpenedTopics = async (
 
     const next: string[] = [];
     for (const row of rows) {
-      if (seen.has(row.id)) continue;
-      seen.add(row.id);
+      if (included.has(row.id)) continue;
+      included.add(row.id);
       result.push(row);
+      if (walked.has(row.id)) continue;
+      walked.add(row.id);
       next.push(row.id);
     }
 

@@ -11,6 +11,7 @@ import { setNamespace } from '@/utils/storeDebug';
 import { subSessionTreeKey, subSessionTreeResource } from './projection';
 
 const MAX_REFRESHED_VIEWS = 4;
+const SUB_SESSION_POLL_INTERVAL = 10_000;
 
 const n = setNamespace('subSession');
 
@@ -39,7 +40,12 @@ export class ChatSubSessionActionImpl {
    * The sub-sessions under the sidebar's visible openers. Read the result
    * with `subSessionSelectors.treeOf(openerTopicIds)`.
    */
-  useFetchSubSessions = (enabled: boolean, openerTopicIds: string[]): ReplicaSyncResult => {
+  useFetchSubSessions = (
+    enabled: boolean,
+    openerTopicIds: string[],
+    /** Poll while a sub-session is in flight: its runs happen on the server, out of this client's sight. */
+    watch = false,
+  ): ReplicaSyncResult => {
     if (enabled && openerTopicIds.length > 0) {
       const key = subSessionTreeKey(openerTopicIds);
       this.#mounted.delete(key);
@@ -51,6 +57,7 @@ export class ChatSubSessionActionImpl {
     }
     return this.#tree.useSync(openerTopicIds, {
       enabled: enabled && openerTopicIds.length > 0,
+      refreshInterval: watch ? SUB_SESSION_POLL_INTERVAL : 0,
     });
   };
 

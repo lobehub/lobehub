@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, topics, users } from '../../../schemas';
+import { agentOperations, agents, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 
@@ -162,5 +162,33 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
       excludeTriggers: ['task', 'sub_session'],
     });
     expect(result.items.map((row: any) => row.id)).toEqual(['child-cross']);
+  });
+
+  it('reports a sub-session that is itself one of the openers asked about', async () => {
+    // The open conversation is pinned into the sidebar page, so it is both a list row
+    // (an opener) and a sub-session of another row.
+    const rows = await topicModel.listOpenedTopics({
+      includeDescendants: true,
+      openerTopicIds: ['parent', 'child-cross'],
+    });
+
+    expect(rows.map((row) => row.id)).toContain('child-cross');
+    expect(rows.map((row) => row.id)).toContain('grandchild');
+    expect(rows.filter((row) => row.id === 'child-cross')).toHaveLength(1);
+  });
+
+  it("reports the latest top-level run's status, which server runs keep off topics.status", async () => {
+    await serverDB.insert(agentOperations).values({
+      agentId: 'agent-b',
+      id: 'op-child-cross',
+      status: 'running',
+      topicId: 'child-cross',
+      userId,
+    } as any);
+
+    const rows = await topicModel.listOpenedTopics({ openerTopicIds: ['parent'] });
+
+    expect(rows.find((row) => row.id === 'child-cross')?.latestRunStatus).toBe('running');
+    expect(rows.find((row) => row.id === 'child-same')?.latestRunStatus).toBeNull();
   });
 });

@@ -245,7 +245,7 @@ export const subSessionRouter = router({
         id: row.id,
         openedBy: row.openedBy,
         runStartedAt: row.runStartedAt,
-        state: toSubSessionState(row.status),
+        state: toSubSessionState(row.status, row.latestRunStatus),
         status: row.status,
         taskId: row.taskId,
         title: row.title,

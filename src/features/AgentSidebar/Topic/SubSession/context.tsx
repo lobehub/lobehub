@@ -13,6 +13,7 @@ import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors'
 import { useTopicListScope } from '../TopicListScope';
 import {
   buildSubSessionTree,
+  isInFlight,
   type SubSessionNode,
   type SubSessionTree,
 } from './buildSubSessionTree';
@@ -51,8 +52,8 @@ export const SubSessionTreeProvider = ({ children }: { children: ReactNode }) =>
   const openerIds = useMemo(() => (rows ?? []).map((row) => row.id), [rows]);
 
   const useFetchSubSessions = useChatStore((s) => s.useFetchSubSessions);
-  useFetchSubSessions(enabled, openerIds);
   const fetched = useChatStore(subSessionSelectors.treeOf(openerIds), isEqual);
+  useFetchSubSessions(enabled, openerIds, fetched.some(isInFlight));
 
   const tree = useMemo(
     () =>

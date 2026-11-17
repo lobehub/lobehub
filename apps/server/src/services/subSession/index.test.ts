@@ -342,3 +342,16 @@ describe('SubSessionService.isOpenedBy', () => {
     expect(await service.isOpenedBy('tpc_other', 'tpc_parent')).toBe(false);
   });
 });
+
+describe('toSubSessionState', () => {
+  it("takes the latest run's state, since server runs leave topics.status alone", async () => {
+    const { toSubSessionState } = await import('./index');
+
+    expect(toSubSessionState('active', 'running')).toBe('running');
+    expect(toSubSessionState(null, 'waiting_for_human')).toBe('waiting_for_user');
+    expect(toSubSessionState('active', 'error')).toBe('failed');
+    expect(toSubSessionState('active', 'done')).toBe('idle');
+    expect(toSubSessionState('completed', 'running')).toBe('archived');
+    expect(toSubSessionState('failed', null)).toBe('failed');
+  });
+});

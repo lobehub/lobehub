@@ -5,7 +5,10 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { SubSessionNode } from '@/features/AgentSidebar/Topic/SubSession/buildSubSessionTree';
+import {
+  isInFlight,
+  type SubSessionNode,
+} from '@/features/AgentSidebar/Topic/SubSession/buildSubSessionTree';
 import SubSessionItem from '@/features/AgentSidebar/Topic/SubSession/SubSessionItem';
 import { useChatStore } from '@/store/chat';
 import { subSessionSelectors } from '@/store/chat/selectors';
@@ -23,8 +26,8 @@ const SubSessionSection = memo<{ agentId?: string; topicId: string }>(({ agentId
   const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
   const openers = useMemo(() => [topicId], [topicId]);
   const useFetchSubSessions = useChatStore((s) => s.useFetchSubSessions);
-  useFetchSubSessions(enabled, openers);
   const nodes = useChatStore(subSessionSelectors.treeOf(openers), isEqual) as SubSessionNode[];
+  useFetchSubSessions(enabled, openers, nodes.some(isInFlight));
 
   if (!enabled || nodes.length === 0) return null;
 

@@ -91,3 +91,17 @@ describe('summarizeSubSessions', () => {
     ).toEqual({ failed: 0, running: 2, waiting: 1 });
   });
 });
+
+describe('sub-session state helpers', () => {
+  it('keeps polling only while one is running or waiting, and maps the roll-up', async () => {
+    const { isInFlight, toRollupStatus } = await import('./buildSubSessionTree');
+
+    expect(isInFlight({ state: 'running' })).toBe(true);
+    expect(isInFlight({ state: 'waiting_for_user' })).toBe(true);
+    expect(isInFlight({ state: 'idle' })).toBe(false);
+    expect(toRollupStatus('running')).toBe('running');
+    expect(toRollupStatus('waiting_for_user')).toBe('waitingForHuman');
+    expect(toRollupStatus('failed')).toBe('failed');
+    expect(toRollupStatus('idle')).toBe('active');
+  });
+});
