@@ -116,6 +116,29 @@ describe('background runs in the active topic', () => {
     },
   );
 
+  it('keeps watching for runs a sub-session receipt starts from the server', async () => {
+    vi.useFakeTimers();
+    vi.mocked(scmService.hasWakeTarget).mockResolvedValue(false);
+    useChatStore.setState({
+      subSessionTreeMap: {
+        [context.topicId]: [{ id: 'topic-child', openedBy: { topicId: context.topicId } } as any],
+      },
+    });
+    try {
+      renderHook(useConversation, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const reads = vi.mocked(topicService.getTopicDetail).mock.calls.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(vi.mocked(topicService.getTopicDetail).mock.calls.length).toBeGreaterThan(reads);
+    } finally {
+      useChatStore.setState({ subSessionTreeMap: {} });
+    }
+  });
+
   it.each(['topic edit', 'detail edit', 'list hydration'])(
     'applies a fresh live marker after %s overtakes the detail read',
     async (change) => {
