@@ -650,6 +650,47 @@ export class ScmChangeRequestModel {
   };
 
   /**
+   * Backfill the row for a pull request a Work registration just tied to a
+   * conversation — but only when the row lives in the Work's own scope.
+   * Provider events re-resolve links on every `pull_request` delivery, so
+   * this covers the gap between the last delivery and the next: a review or
+   * a failing check in between would otherwise find no conversation to
+   * wake. Fill-only like the event path; a link already set is never
+   * replaced.
+   */
+  static attachPullRequestWork = async (
+    db: LobeChatDatabase,
+    params: {
+      number: number;
+      repoFullName: string;
+      scope: { userId: string; workspaceId?: string | null };
+      topicId?: string | null;
+      workId: string;
+    },
+  ): Promise<void> => {
+    const row = await ScmChangeRequestModel.findByIdentityIgnoringCase(
+      db,
+      'github',
+      params.repoFullName,
+      params.number,
+    );
+    if (!row) return;
+
+    // A row routed to another scope learns nothing: its `topicId` is looked
+    // up under the row's owner when a wake fires, so a foreign conversation
+    // would occupy a fill-only slot the right link can never take.
+    const sameScope =
+      row.userId === params.scope.userId &&
+      (row.workspaceId ?? null) === (params.scope.workspaceId ?? null);
+    if (!sameScope) return;
+
+    await ScmChangeRequestModel.attachLinks(db, row.id, {
+      topicId: params.topicId,
+      workId: params.workId,
+    });
+  };
+
+  /**
    * Point the row at `acceptanceId` unless it already names another one,
    * decided in the UPDATE itself so two acceptances claiming the same row at
    * once cannot overwrite each other. Only the acceptance link moves, so

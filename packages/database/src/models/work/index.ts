@@ -16,8 +16,10 @@ import {
   type WorkSkillProvider,
   type WorkVisibility,
 } from '@lobechat/types';
+import debug from 'debug';
 
 import type { LobeChatDatabase } from '../../type';
+import { ScmChangeRequestModel } from '../scm';
 import {
   findCanvasIdByWorkId,
   findCanvasIdsByDeploymentIds,
@@ -29,7 +31,7 @@ import {
   recordCanvasPublish,
   registerCanvasWork,
 } from './canvas';
-import type { WorkContext } from './context';
+import { resolveWorkAccessScope, type WorkContext } from './context';
 import { registerDocumentWork } from './document';
 import { registerExternalWork } from './external';
 import { findFileWorkVersionByToolCall, registerFileWork } from './file';
@@ -64,6 +66,8 @@ const SKILL_TOOL_RESULT_NORMALIZERS = {
   (input: SkillToolResultWorkInput) => ExternalToolWorkOperation | null
 >;
 
+const log = debug('lobe-database:work-model');
+
 /**
  * Facade over the per-type Work modules. Holds the `WorkContext` (db + owner
  * scope) and delegates each public method to a free function in the matching
@@ -97,8 +101,21 @@ export class WorkModel {
   registerDocument = (params: RegisterDocumentWorkParams): Promise<WorkItem | null> =>
     registerDocumentWork(this.ctx, params);
 
-  registerExternal = (params: RegisterExternalWorkParams): Promise<WorkItem | null> =>
-    registerExternalWork(this.ctx, params);
+  registerExternal = async (params: RegisterExternalWorkParams): Promise<WorkItem | null> => {
+    const work = await registerExternalWork(this.ctx, params);
+
+    // A pull-request Work is also a link the provider row resolves from.
+    // `pull_request` deliveries only re-resolve when the next one arrives, so
+    // a Work registered after the last one leaves the row linkless — and a
+    // review or a failing check in between finds no conversation to wake.
+    if (work && params.resourceType === 'github_pull_request') {
+      await this.backfillChangeRequest(work, params.topicId).catch((error) =>
+        log('change-request backfill for %s failed: %O', work.resourceId, error),
+      );
+    }
+
+    return work;
+  };
 
   registerFile = (params: RegisterFileWorkParams): Promise<WorkItem> =>
     registerFileWork(this.ctx, params);
@@ -180,6 +197,31 @@ export class WorkModel {
     if (!operation) return null;
 
     return this.registerExternal({ ...operation.params, toolIdentifier });
+  };
+
+  /**
+   * Hand a just-registered `github_pull_request` Work to the provider row,
+   * when one exists in the Work's own scope. Share-visitor registrations stay
+   * out: their Works are fenced off from the creator's surfaces and must not
+   * steer the owner's automation.
+   */
+  private backfillChangeRequest = async (
+    work: WorkItem,
+    topicId?: string | null,
+  ): Promise<void> => {
+    if (resolveWorkAccessScope(this.ctx).type === 'agentShare' || !work.resourceId) return;
+
+    const separator = work.resourceId.lastIndexOf('#');
+    const number = Number(work.resourceId.slice(separator + 1));
+    if (separator <= 0 || !Number.isInteger(number)) return;
+
+    await ScmChangeRequestModel.attachPullRequestWork(this.ctx.db, {
+      number,
+      repoFullName: work.resourceId.slice(0, separator),
+      scope: { userId: this.ctx.userId, workspaceId: this.ctx.workspaceId ?? null },
+      topicId: work.originTopicId ?? topicId,
+      workId: work.id,
+    });
   };
 
   deleteDocumentWork = (params: DeleteDocumentWorkParams): Promise<void> =>
