@@ -24,6 +24,7 @@ import dayjs from 'dayjs';
 import {
   ArrowDownUpIcon,
   FolderClosedIcon,
+  GitBranchIcon,
   ListIcon,
   type LucideIcon,
   MoreHorizontalIcon,
@@ -333,7 +334,9 @@ const ProjectListPage = memo(() => {
         onClick: () => openCreateProjectFromGithubModal(),
       },
       {
-        icon: PlusIcon,
+        // TFS is an enterprise Git server and carries no brand mark upstream, so it reuses
+        // the same branch glyph as the TFS integration instead of the generic plus.
+        icon: GitBranchIcon,
         key: 'tfs',
         label: t('create.fromTfs'),
         onClick: () => openCreateProjectFromGithubModal('tfs'),
