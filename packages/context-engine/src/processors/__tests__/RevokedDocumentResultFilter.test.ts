@@ -247,6 +247,35 @@ describe('collectDocumentReads', () => {
     expect(reads).toHaveLength(4);
   });
 
+  it('walks agent-council members, plain and assistant-group shaped', () => {
+    const readTool = (id: string) => ({
+      apiName: 'readKnowledge',
+      arguments: JSON.stringify({ fileIds: [id] }),
+      id: `call-${id}`,
+      identifier: 'lobe-knowledge-base',
+      result: { content: RULE, id: `res-${id}` },
+    });
+    const reads = collectDocumentReads([
+      {
+        id: 'council',
+        members: [
+          { agentId: 'agt_m1', role: 'assistant', tools: [readTool('docs_m1')] },
+          {
+            agentId: 'agt_m2',
+            children: [{ tools: [readTool('docs_m2')] }],
+            role: 'assistantGroup',
+          },
+        ],
+        role: 'agentCouncil',
+      },
+    ]);
+
+    expect(reads).toEqual([
+      { agentId: 'agt_m1', documentId: 'docs_m1' },
+      { agentId: 'agt_m2', documentId: 'docs_m2' },
+    ]);
+  });
+
   it('collects ids from flat tool rows and nested assistant-group tools', () => {
     const ids = collectDocumentReads([
       readKnowledgeMessage(['docs_a']),

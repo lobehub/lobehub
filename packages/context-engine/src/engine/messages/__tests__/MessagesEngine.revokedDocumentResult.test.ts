@@ -144,4 +144,47 @@ describe('MessagesEngine — revoked document reads', () => {
       expect(payloadText(result.messages)).toContain(RULE_BODY);
     });
   });
+
+  it('withholds a council member read of a deleted document', async () => {
+    const councilHistory = [
+      { content: 'ask the council', createdAt: now, id: 'u1', role: 'user', updatedAt: now },
+      {
+        content: '',
+        createdAt: now,
+        id: 'council',
+        members: [
+          {
+            agentId: 'agt_m1',
+            content: '',
+            id: 'm1',
+            role: 'assistant',
+            tools: [
+              {
+                apiName: 'readKnowledge',
+                arguments: JSON.stringify({ fileIds: [DOC_ID] }),
+                id: 'call_m1',
+                identifier: 'lobe-knowledge-base',
+                result: { content: RULE_BODY, id: 'res_m1' },
+                type: 'builtin',
+              },
+            ],
+          },
+        ],
+        role: 'agentCouncil',
+        updatedAt: now,
+      },
+      { content: 'translate: hello', createdAt: now, id: 'u2', role: 'user', updatedAt: now },
+    ] as unknown as UIChatMessage[];
+
+    const live = await new MessagesEngine(createParams({ messages: councilHistory })).process();
+    expect(payloadText(live.messages)).toContain(RULE_BODY);
+
+    const revoked = await new MessagesEngine(
+      createParams({
+        messages: councilHistory,
+        revokedDocumentReads: [{ documentIds: [] }, { agentId: 'agt_m1', documentIds: [DOC_ID] }],
+      }),
+    ).process();
+    expect(payloadText(revoked.messages)).not.toContain(RULE_BODY);
+  });
 });

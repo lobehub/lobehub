@@ -83,6 +83,16 @@ const toolOfMessage = (message: Record<string, any>): ToolLike | undefined => {
   };
 };
 
+/**
+ * Messages nested inside a grouped row that the flatten processors hoist:
+ * assistant-group `children`, agent-council `members`, `tasks`.
+ */
+const nestedMessagesOf = (message: Record<string, any>): Record<string, any>[] => [
+  ...(Array.isArray(message.children) ? message.children : []),
+  ...(Array.isArray(message.members) ? message.members : []),
+  ...(Array.isArray(message.tasks) ? message.tasks : []),
+];
+
 /** Tool-call id → agent that issued it, from assistant rows (`tools[]` or `tool_calls[]`). */
 const callerAgentsOf = (messages: readonly unknown[]) => {
   const callers = new Map<string, string>();
@@ -97,8 +107,7 @@ const callerAgentsOf = (messages: readonly unknown[]) => {
         if (nonEmptyString(call?.id)) callers.set(call.id, agentId);
       }
     }
-    if (Array.isArray(message.children))
-      for (const child of message.children) visit(child, agentId);
+    for (const nested of nestedMessagesOf(message)) visit(nested, agentId);
   };
   for (const message of messages) visit(message as Record<string, any>);
   return callers;
@@ -119,7 +128,7 @@ export interface DocumentRead {
  * Collect every document that a historical `readKnowledge` / `readDocument`
  * call referenced, with the agent that made the call when the history records
  * one. Walks both the flat `role: 'tool'` rows and the nested assistant-group
- * shape (`children[].tools[]` with `result.state`), so a host can resolve the
+ * shape (`children[].tools[]` / council `members[]`, with `result.state`), so a host can resolve the
  * reads before the engine flattens the conversation.
  */
 export const collectDocumentReads = (messages: readonly unknown[]): DocumentRead[] => {
@@ -150,8 +159,7 @@ export const collectDocumentReads = (messages: readonly unknown[]): DocumentRead
         );
       }
     }
-    if (Array.isArray(message.children))
-      for (const child of message.children) visit(child, agentId);
+    for (const nested of nestedMessagesOf(message)) visit(nested, agentId);
   };
 
   for (const message of messages) visit(message as Record<string, any>);
