@@ -356,22 +356,23 @@ export class ToolExecutionService {
         // The marker rides in a manifest, and a plugin row can carry any
         // manifest. Only the connector this call's identifier resolves to for
         // the run (the one the permission gate checked) may lend its accounts,
-        // and only to a tool it serves and has not disabled.
-        const [connector] = await connectorModel.resolveByIdentifiers(
-          [identifier],
-          context.agentId,
-        );
+        // and only to a tool it serves and has not disabled. It resolves in the
+        // run's conversation, as discovery did: a private agent's own topic
+        // admits its owner's private and personal rows.
+        const [connector] = await connectorModel.resolveByIdentifiers([identifier], {
+          agentId: context.agentId,
+          topicId: context.topicId,
+        });
         if (!connector || connector.id !== marker.connectorId || !connector.isEnabled)
           throw new Error(
             'Connector is no longer available. Ask the user to connect an account in Settings > Connectors.',
           );
-        const tool = (
-          await new ConnectorToolModel(
-            context.serverDB,
-            context.userId,
-            workspaceId,
-          ).queryByConnector(connector.id)
-        ).find((item) => item.toolName === apiName);
+        const tool = // A run model reads the tools of the owner's personal row too
+          (
+            await new ConnectorToolModel(context.serverDB, context.userId, workspaceId, {
+              agentRun: true,
+            }).queryByConnector(connector.id)
+          ).find((item) => item.toolName === apiName);
         if (!tool) throw new Error(`Connector '${identifier}' has no tool named '${apiName}'.`);
         if (tool.permission === ConnectorToolPermission.disabled)
           return buildBlockedToolResponse(apiName);

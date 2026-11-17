@@ -6,7 +6,14 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { ToolExecutionService } from './index';
 
-const mocks = vi.hoisted(() => ({ find: vi.fn(), links: vi.fn(), call: vi.fn(), tools: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  call: vi.fn(),
+  find: vi.fn(),
+  links: vi.fn(),
+  resolveTarget: vi.fn(),
+  toolModelOptions: vi.fn(),
+  tools: vi.fn(),
+}));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
     return {
@@ -14,7 +21,8 @@ vi.mock('@/database/models/connector', () => ({
       // Any row by id: the marker alone must never pick the connector
       findById: mocks.find,
       // The connector the call's identifier resolves to for the run
-      resolveByIdentifiers: async () => {
+      resolveByIdentifiers: async (_identifiers: string[], target: unknown) => {
+        mocks.resolveTarget(target);
         const row = await mocks.find();
         return row ? [row] : [];
       },
@@ -23,7 +31,8 @@ vi.mock('@/database/models/connector', () => ({
   }),
 }));
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn(function () {
+  ConnectorToolModel: vi.fn(function (_db, _userId, _workspaceId, options) {
+    mocks.toolModelOptions(options);
     return { queryByConnector: mocks.tools };
   }),
 }));
@@ -96,6 +105,22 @@ beforeEach(() => {
   });
 });
 describe('live connector account resolution at dispatch', () => {
+  it("resolves the connector in the run's conversation, reading a personal row's tools", async () => {
+    // Regression: discovery advertised a private agent's own private connector
+    // (resolved with the topic), but dispatch re-resolved without it, found no
+    // row or a shared sibling, and failed every call with a connector mismatch.
+    const result = await service.executeTool(
+      payload,
+      context('https://mcp.example', { agentId: 'agt-private', topicId: 'tpc-own' }),
+    );
+
+    expect(result.success).toBe(true);
+    // Every resolution (the permission gate's and the dispatch's) names the topic
+    expect(mocks.resolveTarget.mock.calls.length).toBeGreaterThan(0);
+    for (const [target] of mocks.resolveTarget.mock.calls)
+      expect(target).toEqual({ agentId: 'agt-private', topicId: 'tpc-own' });
+    expect(mocks.toolModelOptions).toHaveBeenCalledWith({ agentRun: true });
+  });
   it('resolves the selected token and strips the selector before HTTP execution', async () => {
     const result = await service.executeTool(payload, context('https://mcp.example'));
     expect(result.success).toBe(true);
