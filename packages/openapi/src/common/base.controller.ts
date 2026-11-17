@@ -40,7 +40,7 @@ export const TRPC_CODE_TO_STATUS: Record<string, number> = {
 };
 
 /** Domain error classes the services throw, by `name`, and the status each answers with. */
-const ERROR_NAME_TO_STATUS: Record<string, number> = {
+export const ERROR_NAME_TO_STATUS: Record<string, number> = {
   AuthenticationError: 401,
   AuthorizationError: 403,
   BusinessError: 400,

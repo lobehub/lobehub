@@ -1,16 +1,20 @@
 // @vitest-environment node
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { Hono } from 'hono';
 import OpenAI from 'openai';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * `/api/v1/mcp` driven by the official MCP SDK client: the real `McpRoutes`
- * behind the same auth + workspace middlewares `app.ts` mounts, the real tool
+ * `/api/v1/mcp` driven by the official MCP SDK client over a real HTTP port:
+ * the real `McpRoutes` behind the same auth + workspace middlewares `app.ts` mounts, the real tool
  * registry, the openapi services it calls and the real agent runtime, on a
  * PGlite database. API keys are real `api_keys` rows, so scope filtering and
  * workspace binding run exactly as in production. Only the database handle,
- * object storage and the LLM are stand-ins.
+ * object storage and the LLM are stand-ins. `MCP_TEST_LOG=1` prints every
+ * JSON-RPC exchange.
  */
 Object.assign(process.env, { NODE_ENV: process.env.NODE_ENV ?? 'test' });
 process.env.KEY_VAULTS_SECRET ??= Buffer.alloc(32, 7).toString('base64');
@@ -92,7 +96,43 @@ const OWNER = 'e1-mcp-owner';
 const STRANGER = 'e1-mcp-stranger';
 const WORKSPACE = 'e1-mcp-ws';
 const FINAL_ANSWER = 'The release notes are ready.';
-const MCP_URL = 'http://localhost/api/v1/mcp';
+let MCP_URL: string;
+
+/** Serve the app on a real port, the way the Next.js route hands it requests. */
+const httpServer = http.createServer(async (req, res) => {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(req.headers))
+    if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+  const response = await app.fetch(
+    new Request(`http://${req.headers.host}${req.url}`, {
+      body: chunks.length > 0 ? Buffer.concat(chunks) : undefined,
+      headers,
+      method: req.method,
+    }),
+  );
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  res.end(Buffer.from(await response.arrayBuffer()));
+});
+
+beforeAll(async () => {
+  await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+  MCP_URL = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}/api/v1/mcp`;
+});
+afterAll(() => new Promise<void>((resolve) => httpServer.close(() => resolve())));
+
+/** `fetch`, printing each JSON-RPC request and response when `MCP_TEST_LOG=1`. */
+const loggingFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init);
+  if (process.env.MCP_TEST_LOG !== '1') return response;
+  const auth = new Headers(init?.headers).get('authorization')?.slice(0, 18);
+  const body = await response.clone().text();
+  console.info(
+    `--> ${init?.method ?? 'GET'} ${String(input)} (Authorization: ${auth}…)\n${String(init?.body ?? '')}\n<-- ${response.status}\n${body}\n`,
+  );
+  return response;
+};
 
 /** `sk-lh-` + 16 lowercase alphanumerics — the format the auth middleware checks. */
 const KEYS = {
@@ -119,11 +159,11 @@ const ALL_TOOLS = [
 
 const clients: Client[] = [];
 
-/** An MCP SDK client speaking Streamable HTTP to the in-process app. */
+/** An MCP SDK client speaking Streamable HTTP to the served app. */
 const connect = async (key: string, headers: Record<string, string> = {}) => {
   const client = new Client({ name: 'e1-test-client', version: '1.0.0' });
   const transport = new StreamableHTTPClientTransport(new URL(MCP_URL), {
-    fetch: (url, init) => app.request(String(url), init as RequestInit),
+    fetch: loggingFetch,
     requestInit: { headers: { authorization: `Bearer ${key}`, ...headers } },
   });
   await client.connect(transport);
@@ -243,7 +283,7 @@ afterEach(async () => {
 
 describe('/api/v1/mcp transport and auth', () => {
   it('refuses a request without credentials', async () => {
-    const res = await app.request(MCP_URL, {
+    const res = await fetch(MCP_URL, {
       body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'tools/list' }),
       headers: {
         'accept': 'application/json, text/event-stream',
@@ -259,7 +299,7 @@ describe('/api/v1/mcp transport and auth', () => {
   });
 
   it('answers GET with 405: the endpoint is stateless', async () => {
-    const res = await app.request(MCP_URL, {
+    const res = await fetch(MCP_URL, {
       headers: { authorization: `Bearer ${KEYS.full}` },
       method: 'GET',
     });
@@ -271,6 +311,8 @@ describe('/api/v1/mcp transport and auth', () => {
     const client = await connect(KEYS.full);
     expect(client.getServerVersion()).toMatchObject({ name: 'lobehub' });
     expect(client.getInstructions()).toContain('run_agent');
+    expect(client.getServerCapabilities()).toMatchObject({ prompts: {}, resources: {}, tools: {} });
+    expect(client.getNegotiatedProtocolVersion()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name).sort()).toEqual(ALL_TOOLS);
@@ -315,6 +357,25 @@ describe('/api/v1/mcp transport and auth', () => {
     await expect(connect(KEYS.full, { 'x-workspace-id': WORKSPACE })).rejects.toThrow(
       /workspace_mismatch/,
     );
+  });
+});
+
+describe('tool scopes', () => {
+  it('derive from the REST permission codes, except the run tier', async () => {
+    const { MCP_TOOLS, toolScopes } = await import('../mcp/tools');
+    expect(Object.fromEntries(MCP_TOOLS.map((tool) => [tool.name, toolScopes(tool)]))).toEqual({
+      get_agent: ['agent:read'],
+      get_run: ['run:read'],
+      get_topic: ['chat:read'],
+      list_agents: ['agent:read'],
+      list_files: ['file:read'],
+      list_knowledge_bases: ['knowledge:read'],
+      read_file: ['file:read'],
+      run_agent: ['run:write', 'model:invoke'],
+      search_messages: ['chat:read'],
+      search_topics: ['chat:read'],
+      upload_file: ['file:write'],
+    });
   });
 });
 
@@ -397,6 +458,26 @@ describe('/api/v1/mcp tools', () => {
 
     const stranger = await callJson(await connect(KEYS.stranger), 'read_file', { fileId });
     expect(stranger.isError).toBe(true);
+  });
+
+  it('refuses base64 that does not decode, and data without a mimeType', async () => {
+    const client = await connect(KEYS.full);
+    const corrupt = await callJson(client, 'upload_file', {
+      data: 'not*base64!',
+      mimeType: 'application/pdf',
+      name: 'a.pdf',
+    });
+    expect(errorText(corrupt)).toBe('400: `data` is not valid base64');
+    const untyped = await callJson(client, 'upload_file', { data: 'aGk=', name: 'a.bin' });
+    expect(errorText(untyped)).toBe('400: `mimeType` is required with `data`');
+
+    const binary = await callJson(client, 'upload_file', {
+      data: Buffer.from('%PDF-1.7').toString('base64'),
+      mimeType: 'application/pdf',
+      name: 'spec.pdf',
+    });
+    expect(binary.isError).toBeFalsy();
+    expect(binary.data.file).toMatchObject({ fileType: 'application/pdf', name: 'spec.pdf' });
   });
 
   it('refuses an upload with both text and data', async () => {
@@ -510,6 +591,32 @@ describe('/api/v1/mcp run_agent', () => {
     expect(ran.isError).toBeFalsy();
     expect(ran.data.id).toBeTruthy();
     expect(['queued', 'running', 'completed']).toContain(ran.data.status);
+  });
+
+  it('stops waiting once the caller has gone', async () => {
+    // A run that never finishes on its own: the model call hangs.
+    vi.spyOn(OpenAI.Responses.prototype, 'create').mockImplementation(
+      () => new Promise(() => {}) as any,
+    );
+    const { MCP_TOOLS } = await import('../mcp/tools');
+    const runAgent = MCP_TOOLS.find((tool) => tool.name === 'run_agent')!;
+    const controller = new AbortController();
+    const started = Date.now();
+    const pending = runAgent.run(
+      {
+        apiKeyScopes: null,
+        authType: 'apikey',
+        db: serverDB,
+        signal: controller.signal,
+        userId: OWNER,
+      },
+      { agentId, input: 'Hang', waitSeconds: 120 },
+    );
+    setTimeout(() => controller.abort(), 300);
+    const run = (await pending) as { id: string; status: string };
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(run.id).toBeTruthy();
+    expect(['queued', 'running']).toContain(run.status);
   });
 
   it("refuses to run another user's agent", async () => {

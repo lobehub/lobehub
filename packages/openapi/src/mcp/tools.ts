@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { ApiKeyScope } from '@/const/apiKeyScope';
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
+import { documentedScopes } from '../middleware/permission-check';
 import { AgentService } from '../services/agent.service';
 import { FileUploadService } from '../services/file.service';
 import { KnowledgeBaseService } from '../services/knowledge-base.service';
@@ -29,8 +30,11 @@ export interface McpToolDefinition<Input extends z.ZodObject = z.ZodObject> {
   /** RBAC permission groups; each needs one granted code (the REST route's gate). */
   permissions: readonly (readonly string[])[];
   run: (ctx: McpCallContext, input: z.infer<Input>) => Promise<unknown>;
-  /** API key scopes the tool needs, all of them. Keys without them never see the tool. */
-  scopes: readonly ApiKeyScope[];
+  /**
+   * API key scopes the tool needs when they are not the ones its `permissions`
+   * map to — the `run:*` tier, as on the `/runs` routes. See `toolScopes`.
+   */
+  scopes?: readonly ApiKeyScope[];
   title: string;
 }
 
@@ -56,13 +60,25 @@ const limit = (max: number, fallback: number) =>
 
 const keyword = z.string().trim().max(100).optional();
 
-const AGENT_READ = getScopePermissions('AGENT_READ', ['ALL', 'OWNER']);
-const TOPIC_READ = getAllScopePermissions('TOPIC_READ');
-const MESSAGE_READ = getAllScopePermissions('MESSAGE_READ');
+const BASE64 = /^(?:[\d+/A-Za-z]{4})*(?:[\d+/A-Za-z]{2}==|[\d+/A-Za-z]{3}=)?$/;
+
+export const AGENT_READ = getScopePermissions('AGENT_READ', ['ALL', 'OWNER']);
+export const TOPIC_READ = getAllScopePermissions('TOPIC_READ');
+export const MESSAGE_READ = getAllScopePermissions('MESSAGE_READ');
 const MESSAGE_CREATE = getAllScopePermissions('MESSAGE_CREATE');
 const FILE_READ = getAllScopePermissions('FILE_READ');
 const FILE_UPLOAD = getAllScopePermissions('FILE_UPLOAD');
 const KNOWLEDGE_BASE_READ = getAllScopePermissions('KNOWLEDGE_BASE_READ');
+
+/**
+ * API key scopes a tool needs, all of them: its explicit `scopes`, else what
+ * each permission group maps to — the same projection the REST permission
+ * gates document as `x-required-scopes`. Keys without them never see the tool.
+ */
+export const toolScopes = (tool: McpToolDefinition): string[] =>
+  tool.scopes
+    ? [...tool.scopes]
+    : [...new Set(tool.permissions.flatMap((codes) => documentedScopes([...codes], 'OR').scopes))];
 
 const AGENT_SUMMARY_FIELDS = [
   'id',
@@ -88,7 +104,15 @@ const MESSAGE_FIELDS = [
 /** Statuses a run can stop at for now: finished, or waiting on a person / tool results. */
 const isSettled = (run: Run) => run.status !== 'queued' && run.status !== 'running';
 
-const RUN_POLL_INTERVAL_MS = 500;
+/** `run_agent` polls the run from this interval, doubling up to the max. */
+const RUN_POLL_MIN_MS = 500;
+const RUN_POLL_MAX_MS = 2000;
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true });
+  });
 
 const summarizeRun = (run: Run) => ({
   completedAt: run.completedAt,
@@ -129,6 +153,27 @@ export const readTopic = async (ctx: McpCallContext, topicId: string, messageLim
   };
 };
 
+export const getAgent = async (ctx: McpCallContext, agentId: string) => {
+  const agent = await new AgentService(ctx.db, ctx.userId, ctx.workspaceId).getAgentById(agentId);
+  if (!agent) throw namedError('NotFoundError', `Agent ${agentId} not found`);
+  return agent;
+};
+
+export const searchTopics = async (
+  ctx: McpCallContext,
+  query: { agentId?: string; keyword?: string; limit: number },
+) => {
+  const { topics, total } = await new TopicService(ctx.db, ctx.userId, ctx.workspaceId).getTopics(
+    query,
+  );
+  return {
+    topics: topics.map((topic) =>
+      pick(topic, ['id', 'title', 'agentId', 'groupId', 'messageCount', 'updatedAt']),
+    ),
+    total,
+  };
+};
+
 export const listAgents = async (
   ctx: McpCallContext,
   query: { keyword?: string; limit: number },
@@ -148,7 +193,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'list_agents',
     permissions: [AGENT_READ],
     run: (ctx, input) => listAgents(ctx, input),
-    scopes: ['agent:read'],
     title: 'List agents',
   }),
   defineTool({
@@ -158,14 +202,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: z.object({ agentId: z.string().min(1) }),
     name: 'get_agent',
     permissions: [AGENT_READ],
-    run: async (ctx, { agentId }) => {
-      const agent = await new AgentService(ctx.db, ctx.userId, ctx.workspaceId).getAgentById(
-        agentId,
-      );
-      if (!agent) throw namedError('NotFoundError', `Agent ${agentId} not found`);
-      return agent;
-    },
-    scopes: ['agent:read'],
+    run: (ctx, { agentId }) => getAgent(ctx, agentId),
     title: 'Get an agent',
   }),
   defineTool({
@@ -196,10 +233,15 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       const started = await service.createRun({ agentId, fileIds, input, topicId });
       const runId = started.id!;
 
+      // Stop waiting once the caller is gone: the run itself carries on.
       const deadline = Date.now() + waitSeconds * 1000;
+      let interval = RUN_POLL_MIN_MS;
       let run = await service.getRun(runId);
-      while (!isSettled(run) && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, RUN_POLL_INTERVAL_MS));
+      while (!isSettled(run) && !ctx.signal?.aborted) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+        await sleep(Math.min(interval, remaining), ctx.signal);
+        interval = Math.min(interval * 2, RUN_POLL_MAX_MS);
         run = await service.getRun(runId);
       }
       return summarizeRun(run);
@@ -229,20 +271,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     }),
     name: 'search_topics',
     permissions: [TOPIC_READ],
-    run: async (ctx, { agentId, keyword, limit }) => {
-      const { topics, total } = await new TopicService(
-        ctx.db,
-        ctx.userId,
-        ctx.workspaceId,
-      ).getTopics({ agentId, keyword, limit });
-      return {
-        topics: topics.map((topic) =>
-          pick(topic, ['id', 'title', 'agentId', 'groupId', 'messageCount', 'updatedAt']),
-        ),
-        total,
-      };
-    },
-    scopes: ['chat:read'],
+    run: (ctx, input) => searchTopics(ctx, input),
     title: 'Search topics',
   }),
   defineTool({
@@ -253,13 +282,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     name: 'get_topic',
     permissions: [TOPIC_READ, MESSAGE_READ],
     run: (ctx, { messageLimit, topicId }) => readTopic(ctx, topicId, messageLimit),
-    scopes: ['chat:read'],
     title: 'Read a topic',
   }),
   defineTool({
     annotations: READ_ONLY,
     description:
-      'Search message text across every conversation you can read. Each hit names its `topicId`; read the whole conversation with `get_topic`.',
+      'Search message text across every conversation you can read — in a workspace, that includes other members’ conversations. Each hit names its `topicId`; read the whole conversation with `get_topic`.',
     inputSchema: z.object({
       keyword: z.string().trim().min(1).max(100),
       limit: limit(100, 20),
@@ -274,7 +302,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       ).searchMessagesByKeyword({ keyword, limit });
       return { messages: messages.map((message) => pick(message, MESSAGE_FIELDS)) };
     },
-    scopes: ['chat:read'],
     title: 'Search messages',
   }),
   defineTool({
@@ -299,7 +326,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         total,
       };
     },
-    scopes: ['file:read'],
     title: 'List files',
   }),
   defineTool({
@@ -326,7 +352,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         truncated: !!content && content.length > maxChars,
       };
     },
-    scopes: ['file:read'],
     title: 'Read a file',
   }),
   defineTool({
@@ -336,7 +361,14 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     inputSchema: z.object({
       data: z.string().min(1).optional().describe('File content, base64-encoded.'),
       knowledgeBaseId: z.string().min(1).optional(),
-      mimeType: z.string().min(1).max(255).default('text/plain'),
+      mimeType: z
+        .string()
+        .min(1)
+        .max(255)
+        .optional()
+        .describe(
+          'MIME type, e.g. `application/pdf`. Required with `data`; `text` defaults to `text/plain`.',
+        ),
       name: z.string().trim().min(1).max(255).describe('File name, with its extension.'),
       text: z.string().min(1).optional().describe('File content as UTF-8 text.'),
     }),
@@ -346,14 +378,20 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       if ((text === undefined) === (data === undefined)) {
         throw namedError('ValidationError', 'Pass exactly one of `text` or `data`');
       }
+      if (data !== undefined && !mimeType) {
+        throw namedError('ValidationError', '`mimeType` is required with `data`');
+      }
+      // `Buffer.from(…, 'base64')` silently drops invalid characters.
+      if (data !== undefined && !BASE64.test(data.replaceAll(/\s/g, ''))) {
+        throw namedError('ValidationError', '`data` is not valid base64');
+      }
       const body = text === undefined ? Buffer.from(data!, 'base64') : Buffer.from(text, 'utf8');
       const { file } = await new FileUploadService(ctx.db, ctx.userId, ctx.workspaceId).uploadFile(
-        new File([body], name, { type: mimeType }),
+        new File([body], name, { type: mimeType ?? 'text/plain' }),
         { knowledgeBaseId },
       );
       return { file: pick(file, ['id', 'name', 'fileType', 'size', 'url', 'createdAt']) };
     },
-    scopes: ['file:write'],
     title: 'Upload a file',
   }),
   defineTool({
@@ -375,7 +413,6 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         total,
       };
     },
-    scopes: ['knowledge:read'],
     title: 'List knowledge bases',
   }),
 ];

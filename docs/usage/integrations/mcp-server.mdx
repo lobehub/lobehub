@@ -80,10 +80,10 @@ The server is stateless: every request is a POST that answers with JSON, so no s
 | `get_run`              | Status and reply of a run started with `run_agent`                                           | `run:read`                  |
 | `search_topics`        | Find conversations by a title keyword                                                        | `chat:read`                 |
 | `get_topic`            | Read a conversation and its latest messages                                                  | `chat:read`                 |
-| `search_messages`      | Search message text across your conversations                                                | `chat:read`                 |
+| `search_messages`      | Search message text across the conversations you can read (in a Workspace, every member's)   | `chat:read`                 |
 | `list_files`           | List your files                                                                              | `file:read`                 |
 | `read_file`            | Read a file's details, download URL and parsed text                                          | `file:read`                 |
-| `upload_file`          | Upload a file as text or base64, optionally into a Knowledge Base                            | `file:write`                |
+| `upload_file`          | Upload a file as text, or as base64 with its `mimeType`, optionally into a Knowledge Base    | `file:write`                |
 | `list_knowledge_bases` | List your Knowledge Bases                                                                    | `knowledge:read`            |
 
 A `write` scope includes its `read` scope. Your own role still applies on top: a key never reaches more than the person who created it.

@@ -1,20 +1,27 @@
 import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/server';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
+import debug from 'debug';
 import { z } from 'zod';
-
-import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
 import type { McpCallContext } from './context';
 import { allowsScopes, assertPermissions, describeToolError } from './context';
-import { listAgents, MCP_TOOLS, readTopic } from './tools';
+import {
+  AGENT_READ,
+  getAgent,
+  listAgents,
+  MCP_TOOLS,
+  MESSAGE_READ,
+  readTopic,
+  searchTopics,
+  toolScopes,
+  TOPIC_READ,
+} from './tools';
+
+const log = debug('lobe-hono:mcp');
 
 export const LOBEHUB_MCP_SERVER_NAME = 'lobehub';
 
 const INSTRUCTIONS = `LobeHub is a workspace of AI agents. Use these tools to find an agent (list_agents) and run it (run_agent), to look through past conversations (search_topics, search_messages, get_topic), and to work with files and knowledge bases. A run that is still going when run_agent returns can be polled with get_run.`;
-
-const AGENT_READ = getScopePermissions('AGENT_READ', ['ALL', 'OWNER']);
-const TOPIC_READ = getAllScopePermissions('TOPIC_READ');
-const MESSAGE_READ = getAllScopePermissions('MESSAGE_READ');
 
 const RESOURCE_LIST_LIMIT = 50;
 const TOPIC_RESOURCE_MESSAGES = 100;
@@ -39,7 +46,7 @@ export const createLobeHubMcpServer = (ctx: McpCallContext, version: string): Mc
   );
 
   for (const tool of MCP_TOOLS) {
-    if (!allowsScopes(ctx, tool.scopes)) continue;
+    if (!allowsScopes(ctx, toolScopes(tool))) continue;
 
     server.registerTool(
       tool.name,
@@ -58,7 +65,12 @@ export const createLobeHubMcpServer = (ctx: McpCallContext, version: string): Mc
             structuredContent: result as Record<string, unknown>,
           };
         } catch (error) {
-          return { content: [{ text: describeToolError(error), type: 'text' }], isError: true };
+          const { message, status } = describeToolError(error);
+          const where = `tool ${tool.name} user ${ctx.userId} workspace ${ctx.workspaceId ?? '-'}`;
+          // A refusal is the caller's to read; anything else is ours to look at.
+          if (status >= 500) console.error(`MCP ${where} failed:`, error);
+          else log('%s refused (%d): %s', where, status, message);
+          return { content: [{ text: `${status}: ${message}`, type: 'text' }], isError: true };
         }
       },
     );
@@ -102,8 +114,7 @@ export const createLobeHubMcpServer = (ctx: McpCallContext, version: string): Mc
       },
       async (uri, { agentId }) => {
         await assertPermissions(ctx, [AGENT_READ]);
-        const tool = MCP_TOOLS.find(({ name }) => name === 'get_agent')!;
-        return jsonResource(uri, await tool.run(ctx, { agentId: String(agentId) }));
+        return jsonResource(uri, await getAgent(ctx, String(agentId)));
       },
     );
   }
@@ -114,10 +125,7 @@ export const createLobeHubMcpServer = (ctx: McpCallContext, version: string): Mc
       new ResourceTemplate('lobehub://topics/{topicId}', {
         list: async () => {
           await assertPermissions(ctx, [TOPIC_READ]);
-          const searchTopics = MCP_TOOLS.find(({ name }) => name === 'search_topics')!;
-          const { topics } = (await searchTopics.run(ctx, { limit: RESOURCE_LIST_LIMIT })) as {
-            topics: { id: string; title?: string | null }[];
-          };
+          const { topics } = await searchTopics(ctx, { limit: RESOURCE_LIST_LIMIT });
           return {
             resources: topics.map((topic) => ({
               mimeType: 'application/json',

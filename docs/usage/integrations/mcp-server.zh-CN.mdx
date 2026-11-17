@@ -71,19 +71,19 @@ bearer_token_env_var = "LOBEHUB_API_KEY"
 
 ## 工具
 
-| 工具                     | 作用                            | 需要的 scope                  |
-| ---------------------- | ----------------------------- | -------------------------- |
-| `list_agents`          | 列出你可以运行的助理，可按标题关键词筛选          | `agent:read`               |
-| `get_agent`            | 读取一个助理的配置                     | `agent:read`               |
-| `run_agent`            | 给助理发送消息并运行它；返回回复，仍在运行时返回运行 ID | `run:write`、`model:invoke` |
-| `get_run`              | 查询 `run_agent` 启动的运行的状态和回复    | `run:read`                 |
-| `search_topics`        | 按标题关键词查找对话                    | `chat:read`                |
-| `get_topic`            | 读取一个对话及其最近的消息                 | `chat:read`                |
-| `search_messages`      | 在你的所有对话中搜索消息内容                | `chat:read`                |
-| `list_files`           | 列出你的文件                        | `file:read`                |
-| `read_file`            | 读取文件详情、下载链接和解析后的文本            | `file:read`                |
-| `upload_file`          | 以文本或 base64 上传文件，可选放入知识库      | `file:write`               |
-| `list_knowledge_bases` | 列出你的知识库                       | `knowledge:read`           |
+| 工具                     | 作用                                        | 需要的 scope                  |
+| ---------------------- | ----------------------------------------- | -------------------------- |
+| `list_agents`          | 列出你可以运行的助理，可按标题关键词筛选                      | `agent:read`               |
+| `get_agent`            | 读取一个助理的配置                                 | `agent:read`               |
+| `run_agent`            | 给助理发送消息并运行它；返回回复，仍在运行时返回运行 ID             | `run:write`、`model:invoke` |
+| `get_run`              | 查询 `run_agent` 启动的运行的状态和回复                | `run:read`                 |
+| `search_topics`        | 按标题关键词查找对话                                | `chat:read`                |
+| `get_topic`            | 读取一个对话及其最近的消息                             | `chat:read`                |
+| `search_messages`      | 在你可读的对话中搜索消息内容（工作区内包括所有成员的对话）             | `chat:read`                |
+| `list_files`           | 列出你的文件                                    | `file:read`                |
+| `read_file`            | 读取文件详情、下载链接和解析后的文本                        | `file:read`                |
+| `upload_file`          | 以文本上传文件，或以 base64 加 `mimeType` 上传，可选放入知识库 | `file:write`               |
+| `list_knowledge_bases` | 列出你的知识库                                   | `knowledge:read`           |
 
 `write` scope 包含对应的 `read` scope。你自己的角色权限仍然生效：Key 的权限永远不会超过创建它的人。
 

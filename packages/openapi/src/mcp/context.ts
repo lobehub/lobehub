@@ -6,7 +6,7 @@ import { hasApiKeyScope } from '@/const/apiKeyScope';
 import { RbacModel } from '@/database/models/rbac';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { TRPC_CODE_TO_STATUS } from '../common/base.controller';
+import { ERROR_NAME_TO_STATUS, TRPC_CODE_TO_STATUS } from '../common/base.controller';
 
 /**
  * Who is calling the MCP endpoint, resolved by the same `userAuthMiddleware` and
@@ -17,6 +17,8 @@ export interface McpCallContext {
   apiKeyScopes: string[] | null | undefined;
   authType: string | null;
   db: LobeChatDatabase;
+  /** Aborts when the client disconnects. */
+  signal?: AbortSignal;
   userId: string;
   workspaceId?: string;
 }
@@ -25,6 +27,7 @@ export const mcpContextFromHono = (c: Context, db: LobeChatDatabase): McpCallCon
   apiKeyScopes: c.get('apiKeyScopes'),
   authType: c.get('authType') ?? null,
   db,
+  signal: c.req.raw.signal,
   userId: c.get('userId'),
   workspaceId: c.get('workspaceId') || undefined,
 });
@@ -34,8 +37,9 @@ export const mcpContextFromHono = (c: Context, db: LobeChatDatabase): McpCallCon
  * OIDC tokens and full-access keys are not narrowed — the same rule as the
  * REST scope gates in `middleware/permission-check.ts`.
  */
-export const allowsScopes = (ctx: McpCallContext, scopes: readonly ApiKeyScope[]): boolean =>
-  ctx.authType !== 'apikey' || scopes.every((scope) => hasApiKeyScope(ctx.apiKeyScopes, scope));
+export const allowsScopes = (ctx: McpCallContext, scopes: readonly string[]): boolean =>
+  ctx.authType !== 'apikey' ||
+  scopes.every((scope) => hasApiKeyScope(ctx.apiKeyScopes, scope as ApiKeyScope));
 
 /**
  * The caller's own RBAC, checked with the permission codes the matching REST
@@ -59,32 +63,22 @@ export const assertPermissions = async (
   }
 };
 
-/** HTTP status a service error stands for, as `BaseController.handleError` maps it. */
-const ERROR_NAME_TO_STATUS: Record<string, number> = {
-  AuthenticationError: 401,
-  AuthorizationError: 403,
-  BusinessError: 400,
-  ConflictError: 409,
-  NotFoundError: 404,
-  ValidationError: 400,
-};
-
 /**
  * One line a calling model can act on: the HTTP-equivalent status the REST
  * route would answer with, then the service's message.
  */
-export const describeToolError = (error: unknown): string => {
-  if (error instanceof HTTPException) return `${error.status}: ${error.message}`;
+export const describeToolError = (error: unknown): { message: string; status: number } => {
+  if (error instanceof HTTPException) return { message: error.message, status: error.status };
   if (error instanceof Error) {
     const status =
       error.name === 'TRPCError'
         ? TRPC_CODE_TO_STATUS[(error as Error & { code?: string }).code ?? '']
         : ERROR_NAME_TO_STATUS[error.name];
-    return status ? `${status}: ${error.message}` : `500: ${error.message}`;
+    return { message: error.message, status: status ?? 500 };
   }
-  return '500: Internal Server Error';
+  return { message: 'Internal Server Error', status: 500 };
 };
 
 /** An error `describeToolError` maps like the services' own (`NotFoundError` → 404). */
-export const namedError = (name: keyof typeof ERROR_NAME_TO_STATUS, message: string): Error =>
+export const namedError = (name: string, message: string): Error =>
   Object.assign(new Error(message), { name });
