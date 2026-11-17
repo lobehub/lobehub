@@ -97,11 +97,16 @@ never take one. The claim freezes `executionConfig.share` (owner, share and the 
 
 ## Conversations between contacts
 
-`channels.peerUserId` marks a personal conversation between two people who are mutual contacts
-(`openPeer`). One exists per pair, whoever opened it: no unique index backs this, so `openPeer` takes an advisory lock on the pair before looking for it. Both people are owner members. It takes no
-Agents and no third person, so messages never route. Sending rechecks the contact relation in
-both directions: removing a contact silences the conversation and keeps its history. The list
-reports `peerUserId` relative to the viewer. Either account's deletion removes it.
+`channels.peerUserId` marks a one-on-one conversation between two people (`openPeer`). One
+exists per pair and scope, whoever opened it: no unique index backs this, so `openPeer` takes an
+advisory lock on the pair and scope before looking for it. Both people are owner members. It takes
+no Agents and no third person, so messages never route. The list reports `peerUserId` relative to
+the viewer. Either account's deletion removes it.
+
+Who may talk (`requirePeerRelation`, rechecked on every send so a lapsed relation silences the
+conversation and keeps its history): in the personal space, mutual contacts; in a workspace, two
+members, or a member and an external contact of the workspace paired with them in
+`user_contacts`. Two external contacts never talk to each other there.
 
 ## Delivery-key retirement rollout
 

@@ -1896,6 +1896,7 @@ table user_contact_requests {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   requester_id text [not null]
   addressee_id text [not null]
+  workspace_id text
   message text
   status text [not null, default: 'pending']
   responded_at "timestamp with time zone"
@@ -1905,8 +1906,10 @@ table user_contact_requests {
 
   indexes {
     (requester_id, addressee_id) [name: 'user_contact_requests_pending_unique', unique]
+    (workspace_id, requester_id, addressee_id) [name: 'user_contact_requests_workspace_pending_unique', unique]
     (addressee_id, status) [name: 'user_contact_requests_addressee_status_idx']
     (requester_id, status) [name: 'user_contact_requests_requester_status_idx']
+    workspace_id [name: 'user_contact_requests_workspace_id_idx']
     
   }
 }
@@ -1959,10 +1962,12 @@ table user_contacts {
 
   indexes {
     (user_id, contact_user_id) [name: 'user_contacts_user_unique', unique]
+    (workspace_id, user_id, contact_user_id) [name: 'user_contacts_workspace_user_unique', unique]
     (user_id, agent_id) [name: 'user_contacts_agent_unique', unique]
     (workspace_id, agent_id) [name: 'user_contacts_workspace_agent_unique', unique]
     contact_user_id [name: 'user_contacts_contact_user_id_idx']
     agent_id [name: 'user_contacts_agent_id_idx']
+    workspace_id [name: 'user_contacts_workspace_id_idx']
   }
 }
 

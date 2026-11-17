@@ -14,9 +14,9 @@ import { notifyContactRequestAfterResponse } from '@/server/services/contact/not
 
 /**
  * The address book belongs to the Channel experience: contacts are who you can message there.
- * People are personal and listed only in the personal space; a workspace's colleagues are its
- * members. Shared Agents belong to the active scope: the caller's own in the personal space, the
- * workspace's — seen by every member — in a workspace.
+ * Everything in it belongs to the active scope. People: personal contacts in the personal space;
+ * in a workspace, its external contacts (colleagues are its members). Shared Agents: the caller's
+ * own in the personal space, the workspace's — seen by every member — in a workspace.
  */
 const contactProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   if (!(await isChannelEnabled(ctx.userId)))
@@ -45,7 +45,9 @@ export const contactRouter = router({
 
   listRequests: contactProcedure.query(async ({ ctx }) => ctx.contactModel.listRequests()),
 
+  // In a workspace this invites someone outside it to be an external contact: a member's act.
   sendRequest: contactProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(
       z.object({
         message: z.string().max(CONTACT_REQUEST_MESSAGE_MAX_LENGTH).optional(),
@@ -95,6 +97,24 @@ export const contactRouter = router({
     await ctx.contactModel.removeUser(input.userId);
     return { success: true };
   }),
+
+  /** A member opens themselves to one of the workspace's external contacts. */
+  openToExternal: contactProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
+    .input(z.object({ userId }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.contactModel.openTo(input.userId);
+      return { success: true };
+    }),
+
+  /** An owner or admin removes an external contact from the workspace. */
+  removeExternal: contactProcedure
+    .use(requireWorkspaceRoleWhenScoped('admin'))
+    .input(z.object({ userId }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.contactModel.removeExternal(input.userId);
+      return { success: true };
+    }),
 
   /** A person's profile, their relation to me and the Agents they share by link. */
   userProfile: contactProcedure.input(z.object({ userId })).query(async ({ ctx, input }) => {
