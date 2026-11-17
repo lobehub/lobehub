@@ -150,7 +150,12 @@ export function inspectSnapshot(snapshot: ExecutionSnapshot, opts: InspectOption
   }
 
   if (opts.json) {
-    return stepIndex === undefined ? json(snapshot) : json(findStep(snapshot, stepIndex));
+    if (stepIndex === undefined) return json(snapshot);
+    // A step is read on its own, so give it the resolved CE rather than the
+    // stored refs / omitted fields that only make sense against other steps.
+    const step = findStep(snapshot, stepIndex);
+    if (step.contextEngine === undefined) return json(step);
+    return json({ ...step, contextEngine: resolveCeSnapshot(step, snapshot.steps) });
   }
 
   if (stepIndex === undefined) return renderSnapshot(snapshot);

@@ -6,6 +6,7 @@ import {
   mockFindEnabledByPlatform,
   mockGatewayClient,
   mockGatewayEnv,
+  mockGetBotRuntimeStatus,
   mockIsBotFeatureAccessAllowed,
   mockResolveConnectionMode,
   mockUpdateBotRuntimeStatus,
@@ -39,6 +40,22 @@ vi.mock('@/server/services/messenger/platforms', () =>
 );
 vi.mock('../bot/platforms', () => import('./testUtils').then((m) => m.botPlatformsModule()));
 
+const createGatewayProvider = () => ({
+  applicationId: 'app-1',
+  credentials: { token: 'x' },
+  id: 'prov-1',
+  settings: {},
+  userId: 'u1',
+});
+
+const createWechatProvider = (userId: string) => ({
+  applicationId: 'wechat-app',
+  credentials: { botToken: 'token' },
+  id: 'wechat-provider',
+  settings: {},
+  userId,
+});
+
 describe('GatewayService', () => {
   let service: GatewayService;
 
@@ -59,15 +76,7 @@ describe('GatewayService', () => {
     });
 
     it('skips webhook-mode providers', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { token: 'x' },
-          id: 'prov-1',
-          settings: {},
-          userId: 'u1',
-        },
-      ]);
+      mockFindEnabledByPlatform.mockResolvedValue([createGatewayProvider()]);
       mockResolveConnectionMode.mockReturnValue('webhook');
 
       await service.ensureRunning();
@@ -75,20 +84,41 @@ describe('GatewayService', () => {
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
     });
 
+    it('never pushes a platform the gateway cannot host', async () => {
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'dingtalk'
+          ? [
+              {
+                applicationId: 'ding-app',
+                credentials: { clientSecret: 'x' },
+                id: 'prov-ding',
+                settings: {},
+                userId: 'u1',
+              },
+            ]
+          : [],
+      );
+      mockResolveConnectionMode.mockReturnValue('websocket');
+
+      await service.ensureRunning();
+
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'ding-app',
+          errorCode: 'webhook_mode_required',
+          platform: 'dingtalk',
+          status: 'failed',
+        }),
+      );
+    });
+
     it('ensure-wakes a registered-only desired provider without probing status', async () => {
       // Registered-only (pruned from stats) used to be skipped outright, but a
       // stranded DO (alarm chain lost) looks exactly like this and sleeps
       // forever unless woken. The wake is an `ensure` connect, never a status
       // probe: parked connections answer 409 and keep their park.
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { token: 'x' },
-          id: 'prov-1',
-          settings: {},
-          userId: 'u1',
-        },
-      ]);
+      mockFindEnabledByPlatform.mockResolvedValue([createGatewayProvider()]);
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['prov-1'] });
       mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
@@ -104,17 +134,7 @@ describe('GatewayService', () => {
 
     it('connects disconnected providers', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
-        platform === 'discord'
-          ? [
-              {
-                applicationId: 'app-1',
-                credentials: { token: 'x' },
-                id: 'prov-1',
-                settings: {},
-                userId: 'u1',
-              },
-            ]
-          : [],
+        platform === 'discord' ? [createGatewayProvider()] : [],
       );
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
@@ -139,17 +159,7 @@ describe('GatewayService', () => {
       // `dormant`; it must be mapped through the shared helper so it is not
       // collapsed to `starting` (the DO sends no correcting callback).
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
-        platform === 'discord'
-          ? [
-              {
-                applicationId: 'app-1',
-                credentials: { token: 'x' },
-                id: 'prov-1',
-                settings: {},
-                userId: 'u1',
-              },
-            ]
-          : [],
+        platform === 'discord' ? [createGatewayProvider()] : [],
       );
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.connect.mockResolvedValue({ status: 'dormant' });
@@ -166,17 +176,7 @@ describe('GatewayService', () => {
 
     it('disconnects paid-only WeChat providers when the owner is on a free plan', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
-        platform === 'wechat'
-          ? [
-              {
-                applicationId: 'wechat-app',
-                credentials: { botToken: 'token' },
-                id: 'wechat-provider',
-                settings: {},
-                userId: 'free-user',
-              },
-            ]
-          : [],
+        platform === 'wechat' ? [createWechatProvider('free-user')] : [],
       );
       mockResolveConnectionMode.mockReturnValue('polling');
       mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
@@ -209,17 +209,7 @@ describe('GatewayService', () => {
       'disconnects a paid-gated provider when the registry snapshot is $snapshot',
       async ({ statsUnavailable }) => {
         mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
-          platform === 'wechat'
-            ? [
-                {
-                  applicationId: 'wechat-app',
-                  credentials: { botToken: 'token' },
-                  id: 'wechat-provider',
-                  settings: {},
-                  userId: 'free-user',
-                },
-              ]
-            : [],
+          platform === 'wechat' ? [createWechatProvider('free-user')] : [],
         );
         mockResolveConnectionMode.mockReturnValue('polling');
         mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
@@ -239,15 +229,7 @@ describe('GatewayService', () => {
     );
 
     it('sets connected status for sync connect result', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { token: 'x' },
-          id: 'prov-1',
-          settings: {},
-          userId: 'u1',
-        },
-      ]);
+      mockFindEnabledByPlatform.mockResolvedValue([createGatewayProvider()]);
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.connect.mockResolvedValue({ status: 'connected' });
 
@@ -259,15 +241,7 @@ describe('GatewayService', () => {
     });
 
     it('defers desired providers when the gateway snapshot is unavailable', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { token: 'x' },
-          id: 'prov-1',
-          settings: {},
-          userId: 'u1',
-        },
-      ]);
+      mockFindEnabledByPlatform.mockResolvedValue([createGatewayProvider()]);
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.getStats.mockRejectedValue(new Error('stats unavailable'));
       mockGatewayClient.getRegisteredIds.mockRejectedValue(new Error('registered-ids unavailable'));
@@ -279,15 +253,9 @@ describe('GatewayService', () => {
     });
 
     it('handles connect failure gracefully', async () => {
-      mockFindEnabledByPlatform.mockResolvedValue([
-        {
-          applicationId: 'app-1',
-          credentials: { token: 'x' },
-          id: 'prov-1',
-          settings: {},
-          userId: 'u1',
-        },
-      ]);
+      mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
+        platform === 'discord' ? [createGatewayProvider()] : [],
+      );
       mockResolveConnectionMode.mockReturnValue('websocket');
       mockGatewayClient.connect.mockRejectedValue(new Error('timeout'));
 
@@ -298,17 +266,7 @@ describe('GatewayService', () => {
 
     it('keeps the connection when the feature gate check itself throws', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) =>
-        platform === 'wechat'
-          ? [
-              {
-                applicationId: 'wechat-app',
-                credentials: { botToken: 'token' },
-                id: 'wechat-provider',
-                settings: {},
-                userId: 'u1',
-              },
-            ]
-          : [],
+        platform === 'wechat' ? [createWechatProvider('u1')] : [],
       );
       mockResolveConnectionMode.mockReturnValue('polling');
       mockIsBotFeatureAccessAllowed.mockRejectedValue(new Error('subscription service down'));
@@ -327,17 +285,7 @@ describe('GatewayService', () => {
 
     it('does not repeatedly disconnect a gated provider absent from the gateway snapshot', async () => {
       mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
-        platform === 'wechat'
-          ? [
-              {
-                applicationId: 'wechat-app',
-                credentials: { botToken: 'token' },
-                id: 'wechat-provider',
-                settings: {},
-                userId: 'free-user',
-              },
-            ]
-          : [],
+        platform === 'wechat' ? [createWechatProvider('free-user')] : [],
       );
       mockResolveConnectionMode.mockReturnValue('polling');
       mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
@@ -351,6 +299,100 @@ describe('GatewayService', () => {
           status: 'failed',
         }),
       );
+    });
+
+    describe('paid-gate checks across a fleet', () => {
+      const wechatFleet = (count: number, userId = (i: number) => `user-${i}`) =>
+        Array.from({ length: count }, (_, i) => ({
+          applicationId: `wechat-app-${i}`,
+          credentials: { botToken: 'token' },
+          id: `wechat-provider-${i}`,
+          settings: {},
+          userId: userId(i),
+        }));
+
+      beforeEach(() => {
+        mockResolveConnectionMode.mockReturnValue('polling');
+      });
+
+      it('checks gates concurrently, but never more than a bounded number at once', async () => {
+        mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+          platform === 'wechat' ? wechatFleet(40) : [],
+        );
+        let inFlight = 0;
+        let maxInFlight = 0;
+        mockIsBotFeatureAccessAllowed.mockImplementation(async () => {
+          inFlight++;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          inFlight--;
+          return false;
+        });
+
+        await service.ensureRunning();
+
+        expect(mockIsBotFeatureAccessAllowed).toHaveBeenCalledTimes(40);
+        expect(maxInFlight).toBeGreaterThan(1);
+        expect(maxInFlight).toBeLessThanOrEqual(16);
+      });
+
+      it('does not rewrite a gated status that already says the same thing', async () => {
+        mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+          platform === 'wechat' ? [createWechatProvider('free-user')] : [],
+        );
+        mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
+        mockGetBotRuntimeStatus.mockResolvedValue({
+          errorMessage: 'This bot channel requires a paid plan.',
+          status: 'failed',
+        });
+        mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider'] });
+
+        await service.ensureRunning();
+
+        expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'failed' }),
+        );
+        // The verdict itself is unchanged: still excluded and disconnected.
+        expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider');
+        expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      });
+
+      it('rewrites a gated status that changed since the last sync', async () => {
+        mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+          platform === 'wechat' ? [createWechatProvider('free-user')] : [],
+        );
+        mockIsBotFeatureAccessAllowed.mockResolvedValue(false);
+        mockGetBotRuntimeStatus.mockResolvedValue({ status: 'connected' });
+
+        await service.ensureRunning();
+
+        expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
+          expect.objectContaining({
+            applicationId: 'wechat-app',
+            errorMessage: 'This bot channel requires a paid plan.',
+            status: 'failed',
+          }),
+        );
+      });
+
+      it('still connects allowed bots when recording a gated status fails', async () => {
+        mockFindEnabledByPlatform.mockImplementation(async (_db, platform) =>
+          platform === 'wechat' ? wechatFleet(2, (i) => (i === 0 ? 'free-user' : 'paid-user')) : [],
+        );
+        mockIsBotFeatureAccessAllowed.mockImplementation(
+          async ({ userId }: { userId: string }) => userId === 'paid-user',
+        );
+        mockUpdateBotRuntimeStatus.mockRejectedValue(new Error('redis down'));
+        mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: ['wechat-provider-0'] });
+
+        await service.ensureRunning();
+
+        expect(mockGatewayClient.disconnect).toHaveBeenCalledWith('wechat-provider-0');
+        expect(mockGatewayClient.connect).toHaveBeenCalledWith(
+          expect.objectContaining({ connectionId: 'wechat-provider-1' }),
+          expect.anything(),
+        );
+      });
     });
   });
 });

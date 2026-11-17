@@ -28,10 +28,12 @@ export const isHeterogeneousAgentStatusGuideError = (
   const { agentType, code } = value as Partial<HeterogeneousAgentSessionError>;
 
   return (
-    (agentType === 'amp' ||
+    (agentType === 'antigravity' ||
+      agentType === 'amp' ||
       agentType === 'claude-code' ||
       agentType === 'codebuddy' ||
       agentType === 'codex' ||
+      agentType === 'copilot' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||

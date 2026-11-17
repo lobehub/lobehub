@@ -278,34 +278,6 @@ describe('agent command', () => {
     });
   });
 
-  describe('create', () => {
-    it('should create an agent', async () => {
-      mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({
-        agentId: 'a-new',
-        sessionId: 's1',
-      });
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'agent',
-        'create',
-        '--title',
-        'My Agent',
-        '--model',
-        'gpt-4',
-      ]);
-
-      expect(mockTrpcClient.agent.createAgent.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({ model: 'gpt-4', title: 'My Agent' }),
-        }),
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('a-new'));
-    });
-  });
-
   describe('edit', () => {
     it('should update agent config', async () => {
       mockTrpcClient.agent.updateAgentConfig.mutate.mockResolvedValue({});

@@ -11,6 +11,22 @@ import { MessageModel } from '../../message';
 import { MessageScope } from '../../message/scope';
 import { codeEmbedding } from '../fixtures/embedding';
 
+const oldStatsMessage = (createdAt: Date): typeof messages.$inferInsert => ({
+  id: '1',
+  userId,
+  role: 'user',
+  content: 'old message',
+  createdAt,
+});
+
+const newStatsMessage = (createdAt: Date): typeof messages.$inferInsert => ({
+  id: '2',
+  userId,
+  role: 'user',
+  content: 'new message',
+  createdAt,
+});
+
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'message-stats-test';
@@ -268,13 +284,7 @@ describe('MessageModel Statistics Tests', () => {
     it('should count words within date range', async () => {
       // Create test data
       await serverDB.insert(messages).values([
-        {
-          id: '1',
-          userId,
-          role: 'user',
-          content: 'old message',
-          createdAt: new Date('2023-01-01'),
-        },
+        oldStatsMessage(new Date('2023-01-01')),
         {
           id: '2',
           userId,
@@ -308,22 +318,9 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should count words with startDate filter', async () => {
-      await serverDB.insert(messages).values([
-        {
-          id: '1',
-          userId,
-          role: 'user',
-          content: 'old message',
-          createdAt: new Date('2023-01-01'),
-        },
-        {
-          id: '2',
-          userId,
-          role: 'user',
-          content: 'new message',
-          createdAt: new Date('2023-03-01'),
-        },
-      ]);
+      await serverDB
+        .insert(messages)
+        .values([oldStatsMessage(new Date('2023-01-01')), newStatsMessage(new Date('2023-03-01'))]);
 
       const result = await messageModel.countWords({ startDate: '2023-02-01' });
 
@@ -332,22 +329,9 @@ describe('MessageModel Statistics Tests', () => {
     });
 
     it('should count words with endDate filter', async () => {
-      await serverDB.insert(messages).values([
-        {
-          id: '1',
-          userId,
-          role: 'user',
-          content: 'old message',
-          createdAt: new Date('2023-01-01'),
-        },
-        {
-          id: '2',
-          userId,
-          role: 'user',
-          content: 'new message',
-          createdAt: new Date('2023-03-01'),
-        },
-      ]);
+      await serverDB
+        .insert(messages)
+        .values([oldStatsMessage(new Date('2023-01-01')), newStatsMessage(new Date('2023-03-01'))]);
 
       const result = await messageModel.countWords({ endDate: '2023-02-01' });
 

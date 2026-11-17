@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "کپی لینک",
+  "popover.copyLinkSuccess": "لینک کپی شد",
+  "popover.linkHint": "هر کسی که لینک را داشته باشد می‌تواند این فایل را ببیند و دانلود کند",
+  "popover.permissionLink": "هر کسی که لینک را دارد",
+  "popover.permissionPrivate": "خصوصی",
+  "popover.privateHint": "فقط شما می‌توانید این فایل را باز کنید",
+  "popover.sectionViews_one": "{{count}} بازدید",
+  "popover.sectionViews_other": "{{count}} بازدید",
+  "popover.title": "اشتراک‌گذاری فایل",
+  "popover.updateError": "به‌روزرسانی تنظیمات اشتراک‌گذاری ناموفق بود",
+  "popover.visibility": "قابلیت مشاهده",
+  "popover.visibilityUpdated": "قابلیت مشاهده به‌روزرسانی شد",
+  "shareButton.label": "اشتراک‌گذاری"
+}

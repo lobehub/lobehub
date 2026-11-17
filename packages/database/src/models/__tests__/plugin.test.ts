@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewInstalledPlugin } from '../../schemas';
-import { userInstalledPlugins, users } from '../../schemas';
+import { userInstalledPlugins, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { PluginModel } from '../plugin';
 
@@ -24,6 +24,53 @@ afterEach(async () => {
 });
 
 describe('PluginModel', () => {
+  it('excludes quarantined evaluation installations from normal discovery and execution lookup', async () => {
+    await pluginModel.create({
+      identifier: 'eval-only',
+      type: 'customPlugin',
+      source: 'agent-eval',
+    });
+    await pluginModel.create({ identifier: 'ordinary', type: 'customPlugin' });
+    expect((await pluginModel.query()).map((p) => p.identifier)).toEqual(['ordinary']);
+    expect(await pluginModel.findById('eval-only')).toBeUndefined();
+    expect(await pluginModel.findById('ordinary')).toBeDefined();
+  });
+
+  it('installing a real plugin coexists with a legacy eval installation in another workspace and preserves its connection', async () => {
+    await serverDB.insert(workspaces).values({
+      id: 'legacy-eval-workspace',
+      name: 'Eval',
+      slug: 'legacy-eval',
+      primaryOwnerId: userId,
+    });
+    const evaluationModel = new PluginModel(serverDB, userId, 'legacy-eval-workspace');
+    await evaluationModel.create({
+      identifier: 'notion',
+      type: 'customPlugin',
+      source: 'agent-eval',
+      customParams: { mcp: { type: 'http', url: 'https://mock.invalid/mcp' } },
+      settings: { token: 'old-private-token' },
+      manifest: { identifier: 'notion' } as any,
+    });
+    await pluginModel.create({
+      identifier: 'notion',
+      type: 'plugin',
+      manifest: { identifier: 'notion', meta: { title: 'Notion' } } as any,
+    });
+    const saved = await pluginModel.findById('notion');
+    expect(saved?.source).toBeNull();
+    expect(saved?.customParams).toBeNull();
+    expect(saved?.settings).toBeNull();
+    expect((await pluginModel.query()).map((p) => p.identifier)).toEqual(['notion']);
+    const stored = await serverDB.select().from(userInstalledPlugins);
+    expect(stored).toHaveLength(2);
+    const evaluation = stored.find((p) => p.source === 'agent-eval');
+    expect(evaluation?.identifier).toMatch(/^agent-eval:/);
+    expect(evaluation?.manifest?.identifier).toBe('notion');
+    expect(evaluation?.customParams?.mcp?.url).toBe('https://mock.invalid/mcp');
+    expect(evaluation?.settings).toEqual({ token: 'old-private-token' });
+  });
+
   describe('create', () => {
     it('should create a new installed plugin', async () => {
       const params = {
@@ -145,6 +192,63 @@ describe('PluginModel', () => {
 
       expect(result?.userId).toBe(userId);
       expect(result?.identifier).toBe('test-plugin-1');
+    });
+  });
+
+  describe('Composio projection in a workspace', () => {
+    const workspaceId = 'plugin-composio-ws';
+    const composio = (connectedAccountId: string) => ({
+      composio: { appSlug: 'GMAIL', authConfigId: 'cfg', connectedAccountId, status: 'ACTIVE' },
+    });
+
+    beforeEach(async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: workspaceId });
+      // One projection row per member for the same app, plus a non-Composio plugin.
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        customParams: composio('acc-legacy'),
+        identifier: 'gmail',
+        type: 'plugin',
+      });
+      await new PluginModel(serverDB, '456', workspaceId).create({
+        customParams: composio('acc-private'),
+        identifier: 'gmail',
+        type: 'plugin',
+      });
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        identifier: 'search',
+        type: 'plugin',
+      });
+    });
+
+    it('lists every member’s Composio rows with who wrote them', async () => {
+      const rows = await new PluginModel(serverDB, '456', workspaceId).queryComposioMirrors([
+        'gmail',
+        'search',
+      ]);
+
+      expect(
+        rows.map((row) => [row.userId, row.customParams?.composio?.connectedAccountId]).sort(),
+      ).toEqual([
+        ['456', 'acc-private'],
+        [userId, 'acc-legacy'],
+      ]);
+      expect(await new PluginModel(serverDB, '456', workspaceId).queryComposioMirrors([])).toEqual(
+        [],
+      );
+    });
+
+    it('removes only the rows mirroring one account', async () => {
+      await new PluginModel(serverDB, '456', workspaceId).deleteComposioMirrors(
+        'gmail',
+        'acc-private',
+      );
+
+      const rows = await new PluginModel(serverDB, userId, workspaceId).queryComposioMirrors();
+      expect(rows.map((row) => row.customParams?.composio?.connectedAccountId)).toEqual([
+        'acc-legacy',
+      ]);
     });
   });
 

@@ -12,6 +12,7 @@ import {
   Icon,
   Tooltip,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon, RotateCcw, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,7 @@ import {
   renderConnectorRowDescription,
 } from './ConnectorRowFeedback';
 import { isSettledByConnection, useConnectorManageGate } from './connectorRowState';
+import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -240,7 +242,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const renderStatus = () => {
       if (!server) {
         return (
-          <span className={styles.disconnected}>
+          <span {...stylex.props(styles.disconnected)}>
             {t('tools.composio.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -248,17 +250,17 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
 
       switch (server.status) {
         case ComposioServerStatus.ACTIVE: {
-          return <span className={styles.connected}>{t('tools.composio.connected')}</span>;
+          return <span {...stylex.props(styles.connected)}>{t('tools.composio.connected')}</span>;
         }
         case ComposioServerStatus.PENDING_AUTH: {
-          return <span className={styles.pending}>{t('tools.composio.authRequired')}</span>;
+          return <span {...stylex.props(styles.pending)}>{t('tools.composio.authRequired')}</span>;
         }
         case ComposioServerStatus.ERROR: {
-          return <span className={styles.error}>{t('tools.composio.error')}</span>;
+          return <span {...stylex.props(styles.error)}>{t('tools.composio.error')}</span>;
         }
         default: {
           return (
-            <span className={styles.disconnected}>
+            <span {...stylex.props(styles.disconnected)}>
               {t('tools.composio.disconnected', { defaultValue: 'Disconnected' })}
             </span>
           );
@@ -381,7 +383,40 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     // ChatInput skills dropdown UX: connected → green check; pending/errored →
     // Re-authorize; not connected → Connect. All open the OAuth flow inline so
     // users can tell what is connected instead of hitting a blank detail panel.
+    // Page row: `+` connects in place and a connected row gets the manage menu.
+    // A restricted or stale (pending / errored) connection keeps its explicit
+    // control, since a bare `+` would not say why the first try did not stick.
+    const renderPageExtra = () => {
+      if (isConnected)
+        return (
+          <RowMoreMenu
+            items={[
+              {
+                danger: true,
+                disabled: !canEdit || !canManage,
+                icon: <Icon icon={Unplug} />,
+                key: 'disconnect',
+                label: t('tools.composio.disconnect', { defaultValue: 'Disconnect' }),
+                onClick: handleDisconnect,
+              },
+            ]}
+            onOpenDetail={onSelect}
+          />
+        );
+      return (
+        <RowAddAction
+          disabled={!canCreate || !canEdit || !canManage}
+          disabledReason={!canCreate ? createReason : editReason}
+          label={t('connectorMarket.action.connect')}
+          loading={isConnecting || isWaitingAuth}
+          onClick={handleConnect}
+        />
+      );
+    };
+
     const renderNavExtra = () => {
+      if (isPage && (isConnected || (!isRestricted && !isPending && !isError)))
+        return renderPageExtra();
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }
@@ -452,7 +487,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -468,10 +503,10 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
             gap={8}
             style={{ cursor: onSelect ? undefined : 'pointer' }}
           >
-            <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isConnected && styles.disconnectedIcon)}>
               {renderIcon()}
             </div>
-            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isConnected && styles.disconnectedTitle)}>
               {serverType.label}
             </span>
           </Flexbox>

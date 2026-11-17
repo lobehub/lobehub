@@ -1,3 +1,5 @@
+import type { ChannelMemberActorType } from '@lobechat/types';
+import type { UnknownRecord } from '@lobechat/utils/object';
 import { isRecord } from '@lobechat/utils/object';
 import { $getSelection, $isRangeSelection, $isTextNode } from 'lexical';
 
@@ -17,10 +19,18 @@ export function $insertChannelMentionBoundary(event: KeyboardEvent): boolean {
   return true;
 }
 
-/** Only editor-created member chips select recipients; plain text and code never do. */
-export function channelMentionIds(document: unknown, memberIds: string[]): string[] {
-  const allowed = new Set(memberIds);
-  const result = new Set<string>();
+/** Chip metadata for someone outside the Channel; choosing them invites them in. */
+export interface ChannelMentionInvite {
+  actorType: ChannelMemberActorType;
+  /** The user id of a person, or the Agent id. */
+  id: string;
+  /** Shown when they cannot be added. */
+  name: string;
+  type: 'channel-invite';
+}
+
+/** Visits the metadata of every editor-created mention chip outside code. */
+const visitMentionMetadata = (document: unknown, onMention: (metadata: UnknownRecord) => void) => {
   const visit = (value: unknown) => {
     if (Array.isArray(value)) {
       value.forEach(visit);
@@ -29,17 +39,44 @@ export function channelMentionIds(document: unknown, memberIds: string[]): strin
     if (!isRecord(value)) return;
     const node = value;
     if (typeof node.type === 'string' && /code/i.test(node.type)) return;
-    const metadata = isRecord(node.metadata) ? node.metadata : undefined;
-    if (
-      node.type === 'mention' &&
-      metadata?.type === 'channel-member' &&
-      typeof metadata.id === 'string' &&
-      allowed.has(metadata.id)
-    )
-      result.add(metadata.id);
+    if (node.type === 'mention' && isRecord(node.metadata)) onMention(node.metadata);
     if (node.root) visit(node.root);
     if (node.children) visit(node.children);
   };
   visit(document);
+};
+
+/** Only editor-created member chips select recipients; plain text and code never do. */
+export function channelMentionIds(document: unknown, memberIds: string[]): string[] {
+  const allowed = new Set(memberIds);
+  const result = new Set<string>();
+  visitMentionMetadata(document, (metadata) => {
+    if (
+      metadata.type === 'channel-member' &&
+      typeof metadata.id === 'string' &&
+      allowed.has(metadata.id)
+    )
+      result.add(metadata.id);
+  });
   return [...result];
+}
+
+/** People and Agents mentioned from outside the Channel, once each. */
+export function channelMentionInvites(document: unknown): ChannelMentionInvite[] {
+  const result = new Map<string, ChannelMentionInvite>();
+  visitMentionMetadata(document, (metadata) => {
+    if (
+      metadata.type === 'channel-invite' &&
+      (metadata.actorType === 'agent' || metadata.actorType === 'user') &&
+      typeof metadata.id === 'string' &&
+      metadata.id
+    )
+      result.set(`${metadata.actorType}:${metadata.id}`, {
+        actorType: metadata.actorType,
+        id: metadata.id,
+        name: typeof metadata.name === 'string' ? metadata.name : '',
+        type: 'channel-invite',
+      });
+  });
+  return [...result.values()];
 }

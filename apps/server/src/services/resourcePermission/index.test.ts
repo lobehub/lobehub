@@ -673,21 +673,21 @@ describe('canPerformResourceAction', () => {
           : { hasAllScope: true, hasOwnerScope: false },
       );
 
+    const memberKnowledgeBaseView = (): Parameters<typeof canPerformResourceAction>[0] => ({
+      action: 'view',
+      db,
+      meta: kbMeta,
+      resourceId: 'kb-1',
+      resourceType: 'knowledgeBase',
+      userId: 'member',
+      workspaceId: 'ws-1',
+    });
+
     it('lets a member browse a KB at the default edit level', async () => {
       permissionMatchesMock.mockImplementation(memberMatches as any);
       effectiveAccessMock.mockResolvedValue('edit');
 
-      await expect(
-        canPerformResourceAction({
-          action: 'view',
-          db,
-          meta: kbMeta,
-          resourceId: 'kb-1',
-          resourceType: 'knowledgeBase',
-          userId: 'member',
-          workspaceId: 'ws-1',
-        }),
-      ).resolves.toBe(true);
+      await expect(canPerformResourceAction(memberKnowledgeBaseView())).resolves.toBe(true);
     });
 
     it('lets a member edit a KB at the default edit level', async () => {
@@ -728,17 +728,7 @@ describe('canPerformResourceAction', () => {
       permissionMatchesMock.mockImplementation(memberMatches as any);
       effectiveAccessMock.mockResolvedValue('use');
 
-      await expect(
-        canPerformResourceAction({
-          action: 'view',
-          db,
-          meta: kbMeta,
-          resourceId: 'kb-1',
-          resourceType: 'knowledgeBase',
-          userId: 'member',
-          workspaceId: 'ws-1',
-        }),
-      ).resolves.toBe(false);
+      await expect(canPerformResourceAction(memberKnowledgeBaseView())).resolves.toBe(false);
 
       await expect(
         canPerformResourceAction({
@@ -794,17 +784,7 @@ describe('canPerformResourceAction', () => {
       permissionMatchesMock.mockImplementation(memberMatches as any);
       effectiveAccessMock.mockResolvedValue('edit');
 
-      await expect(
-        canPerformResourceAction({
-          action: 'view',
-          db,
-          meta: kbMeta,
-          resourceId: 'kb-1',
-          resourceType: 'knowledgeBase',
-          userId: 'member',
-          workspaceId: 'ws-1',
-        }),
-      ).resolves.toBe(true);
+      await expect(canPerformResourceAction(memberKnowledgeBaseView())).resolves.toBe(true);
       expect(grantedLevelMock).not.toHaveBeenCalled();
     });
 

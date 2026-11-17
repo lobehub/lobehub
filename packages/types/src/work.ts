@@ -114,6 +114,8 @@ export interface CanvasStorageItem {
 
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
+  /** `external` GitHub PR Work — the branch the pull request merges into. */
+  baseBranch?: string;
   canvas?: CanvasWorkVersionMetadata;
   /**
    * `file` Work — the edited file's identity in the file store, when the entity
@@ -131,6 +133,12 @@ export interface WorkVersionMetadata {
   goalReport?: GoalReportMetadata;
   /** `goal_report` Work — the report as an HTML page: a `custom/html` document id. */
   goalReportPageId?: string;
+  /**
+   * `external` GitHub PR Work — the pull request's source branch as the tool
+   * named it: REST `head.ref` is the bare branch, while `gh --head` may carry
+   * `owner:branch` for a fork.
+   */
+  headBranch?: string;
   /** `file` Work — lines added by this version's edit (0 when the source tool reports none). */
   linesAdded?: number;
   /** `file` Work — lines deleted by this version's edit (0 when the source tool reports none). */
@@ -481,6 +489,12 @@ export interface RegisterExternalWorkParams {
   description?: string | null;
   identifier?: string | null;
   messageId?: string | null;
+  /**
+   * Provider facts outside the display columns (a PR's branches). With
+   * `patchFields`, keys merge over the current version's metadata, so an edit
+   * that names no branch keeps the one captured at create.
+   */
+  metadata?: WorkVersionMetadata | null;
   patchFields?: WorkDisplayField[];
   /**
    * Canonical resource identity (`owner/repo#number`, a linear id, …). Required:
@@ -641,3 +655,44 @@ export type WorkRegistrationIntent =
       };
       type: 'canvas';
     };
+
+/**
+ * One GitHub pull request linked to a topic through its Work rows (Better
+ * Coding Experience): any `work_versions` row of a `github_pull_request` Work
+ * with that `topicId` links it, so a topic can carry several. The Work is the
+ * only source — nothing here is guessed from the working directory's branch.
+ */
+export interface TopicPullRequestWork {
+  baseBranch?: string;
+  headBranch?: string;
+  /** `owner/repo#number`. */
+  identifier: string;
+  /** Newest version of this Work registered in the topic. */
+  linkedAt: Date;
+  number: number;
+  repoFullName: string;
+  /** Status the agent's own commands left it in (`open`, `draft`, `merged`). */
+  status: string | null;
+  title: string | null;
+  url: string | null;
+  workId: string;
+}
+
+/**
+ * What the GitHub App last reported about a linked pull request. Present only
+ * when an installation the viewer can see tracks the repository — that is the
+ * confirmed source; without it the client probes the execution device.
+ */
+export interface TopicPullRequestScmState {
+  ciStatus: 'failure' | 'pending' | 'success' | 'unknown' | null;
+  isDraft: boolean;
+  mergedAt: Date | null;
+  reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
+  state: 'closed' | 'merged' | 'open';
+  title: string | null;
+  updatedAt: Date;
+}
+
+export interface TopicPullRequestItem extends TopicPullRequestWork {
+  scm: TopicPullRequestScmState | null;
+}

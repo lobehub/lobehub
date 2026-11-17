@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
 import type { WorkRegistrationIntent } from '../../work';
+import type { MessageContextAccounting } from './contextAccounting';
+import { MessageContextAccountingSchema } from './contextAccounting';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
@@ -240,6 +242,10 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+export const MessageMcpAppSourceSchema = z.object({
+  identifier: z.string(),
+});
+
 export const MessageSubAgentCallbackSchema = z.object({
   agentId: z.string().optional(),
   name: z.string(),
@@ -272,6 +278,50 @@ export interface AgentDispatchMetadata {
   kind: 'callAgent';
   visibility: 'internal';
 }
+
+/**
+ * A multi-member group-management call (`executeAgentTasks`, `broadcast`) parks
+ * the supervisor on one group tool message and writes one `role: 'tool'` anchor
+ * per member under it. The server backfills an anchor when its member finishes,
+ * and the supervisor resumes once every anchor is filled. An isolated member's
+ * thread uses its anchor as `sourceMessageId`.
+ *
+ * Anchors are bookkeeping, not tool calls of their own: no assistant lists them
+ * in `tools[]`, so the reader must hide them instead of rendering orphan tool
+ * calls.
+ */
+export interface GroupMemberAnchorMetadata {
+  /** The member's agent id. */
+  agentId: string;
+  /** Position of the member in the call's `tasks` / `agentIds`. */
+  index: number;
+}
+
+/** Legacy anchors (written before the marker) only carry this tool_call_id suffix. */
+const LEGACY_GROUP_MEMBER_ANCHOR_CALL_ID = /::m(\d+)$/;
+
+interface GroupMemberAnchorCandidate {
+  metadata?: { groupMemberAnchor?: GroupMemberAnchorMetadata } | null;
+  role: string;
+  tool_call_id?: string | null;
+}
+
+/**
+ * Member index of a group-member anchor row, or `undefined` when the row is not
+ * one. Rows written before the `groupMemberAnchor` marker are recognized by
+ * their `::m<index>` tool_call_id suffix under a `role: 'tool'` parent.
+ */
+export const getGroupMemberAnchorIndex = (
+  message: GroupMemberAnchorCandidate,
+  parentRole?: string,
+): number | undefined => {
+  if (message.role !== 'tool') return;
+  const marker = message.metadata?.groupMemberAnchor;
+  if (marker) return marker.index;
+  if (parentRole !== 'tool') return;
+  const legacy = message.tool_call_id?.match(LEGACY_GROUP_MEMBER_ANCHOR_CALL_ID);
+  return legacy ? Number(legacy[1]) : undefined;
+};
 
 /**
  * The agent that authored a user turn on another agent's behalf (agent → agent
@@ -404,6 +454,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   agentDispatch: AgentDispatchMetadataSchema.optional(),
   agentSender: AgentSenderMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
+  // Server-computed estimate of the request behind an assistant message. Listed
+  // so client-runtime writes through UpdateMessageParamsSchema keep it.
+  contextAccounting: MessageContextAccountingSchema.optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
@@ -419,6 +472,8 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  // User message an MCP App view posted; its bubble names that view.
+  mcpAppSource: MessageMcpAppSourceSchema.optional(),
   // Creation provenance (agent operation that produced this message). Listed
   // here so zod does NOT strip the runtime's stamp from writes going through
   // CreateMessageParamsSchema / UpdateMessageParamsSchema.
@@ -542,6 +597,13 @@ export interface MessageMetadata {
   collapsed?: boolean;
   compare?: boolean;
   /**
+   * Estimated token accounting of the request that produced this assistant
+   * message (system messages, `tools` array and every message part), written
+   * by the agent runtime. The chat input's context breakdown reads the latest
+   * one; see {@link MessageContextAccounting}.
+   */
+  contextAccounting?: MessageContextAccounting;
+  /**
    * Generic context selections attached to user messages.
    * Page selections remain mirrored in `pageSelections` for compatibility.
    */
@@ -571,6 +633,11 @@ export interface MessageMetadata {
    */
   externalOrigin?: ExternalOriginMetadata;
   finishType?: string;
+  /**
+   * Marks a `role: 'tool'` row as one member's completion anchor under a
+   * multi-member group-management tool call. See {@link GroupMemberAnchorMetadata}.
+   */
+  groupMemberAnchor?: GroupMemberAnchorMetadata;
   /** Operation owning the durable heterogeneous tool-state watermark. */
   heterogeneousToolStateOperationId?: string;
   /** Last persisted replace-snapshot sequence for this tool message. */
@@ -631,6 +698,11 @@ export interface MessageMetadata {
    */
   instruction?: string;
   /**
+   * The run was stopped while generating this assistant turn. Set by the server
+   * runtime, including on a placeholder stopped before its first output.
+   */
+  interruptedMidStream?: boolean;
+  /**
    * Flag indicating if message content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;
@@ -646,6 +718,12 @@ export interface MessageMetadata {
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
+  /**
+   * Present on a user message an MCP App view posted into the conversation
+   * (`ui/message`). The bubble names the view, so the message reads as a
+   * follow-up from it rather than something the user typed.
+   */
+  mcpAppSource?: MessageMcpAppSource;
   /**
    * Orchestration role of the message author within a group conversation.
    * `'supervisor'` = the group's coordinating agent, `'member'` = a delegated
@@ -801,6 +879,12 @@ export interface MessageWorkMetadata {
 }
 
 /** Who sent a background sub-agent's answer — see `MessageMetadata.subAgentCallback`. */
+/** The MCP App view a user message came from — see `MessageMetadata.mcpAppSource`. */
+export interface MessageMcpAppSource {
+  /** The MCP server (plugin or connector identifier) whose view posted the message. */
+  identifier: string;
+}
+
 export interface MessageSubAgentCallback {
   /**
    * The agent that answered: a `callAgent` target, or the parent agent itself

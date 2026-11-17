@@ -3,7 +3,7 @@ import type { ModifyOperation } from './types';
 type Token =
   | { kind: 'close'; raw: string; tag: string }
   | { kind: 'open' | 'self'; raw: string; tag: string }
-  | { kind: 'text'; raw: string; verbatim: boolean };
+  | { cdata?: boolean; kind: 'text'; raw: string; verbatim: boolean };
 
 export interface LiteXMLBlock {
   /** {@link LiteXMLBlock.xml} without the ids on its tags; ids in its text stay. */
@@ -28,6 +28,8 @@ const TAG = /<(\/?)([a-z][\w-]*)(?:\s+[\w:-]+(?:="[^"]*")?)*\s*(\/?)>/iy;
 const ID_ATTRIBUTE = /\bid="([^"]+)"/;
 // The LiteXML exporter writes text inside these elements without escaping `<`.
 const VERBATIM_TAGS = new Set(['code', 'span']);
+const CDATA_OPEN = '<![CDATA[';
+const CDATA_CLOSE = ']]>';
 
 const tokenize = (litexml: string): Token[] => {
   const tokens: Token[] = [];
@@ -44,6 +46,16 @@ const tokenize = (litexml: string): Token[] => {
       text += litexml[i];
       i += 1;
       continue;
+    }
+    if (litexml.startsWith(CDATA_OPEN, i)) {
+      const end = litexml.indexOf(CDATA_CLOSE, i + CDATA_OPEN.length);
+      if (end !== -1) {
+        flushText();
+        const raw = litexml.slice(i, end + CDATA_CLOSE.length);
+        tokens.push({ cdata: true, kind: 'text', raw, verbatim: true });
+        i += raw.length;
+        continue;
+      }
     }
     if (litexml.startsWith('<?', i) || litexml.startsWith('<!--', i)) {
       const close = litexml.startsWith('<?', i) ? '?>' : '-->';
@@ -116,6 +128,9 @@ const toPayload = (tokens: Token[], { stripIds = false } = {}) =>
     .filter((token) => !isLayoutWhitespace(token))
     .map((token) => {
       if (token.kind === 'text') {
+        // DOMParser reads a CDATA body as-is; escaping it turns the markers into
+        // literal text that the node (e.g. a chart's JSON spec) can no longer parse.
+        if (token.cdata) return token.raw;
         const text = escapeText(token.raw);
         return /^\s+$/.test(token.raw) ? `<text>${text}</text>` : text;
       }
@@ -127,7 +142,9 @@ const toPayload = (tokens: Token[], { stripIds = false } = {}) =>
 const blockText = (tokens: Token[]) =>
   tokens
     .filter((token) => token.kind === 'text')
-    .map((token) => token.raw)
+    .map((token) =>
+      token.cdata ? token.raw.slice(CDATA_OPEN.length, -CDATA_CLOSE.length) : token.raw,
+    )
     .join('')
     .replaceAll(/\s+/g, ' ')
     .trim();

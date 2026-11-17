@@ -99,13 +99,11 @@ export class McpServerService extends BaseService {
 
   async createServer(request: CreateMcpServerRequest): Promise<McpServerResponse> {
     const model = await this.getCredentialConnectorModel();
-    const existing = (await this.connectorModel.queryPublic()).find(
-      (connector) => connector.identifier === request.identifier,
-    );
-    if (existing) throw this.createConflictError('MCP server identifier already exists');
-
-    const created = await model.create({
-      agentId: null,
+    // The lookup and the insert are one claim under the identifier lock every
+    // base-row writer takes (an Agent Builder install among them): a lookup
+    // before an unlocked insert would let a concurrent writer add the same
+    // identifier in between, leaving two rows for runtime resolution to choose from.
+    const claim = await model.createUnlessIdentifierHeld({
       credentials: request.credentials ? JSON.stringify(request.credentials) : null,
       identifier: request.identifier,
       isEnabled: request.isEnabled ?? true,
@@ -118,8 +116,9 @@ export class McpServerService extends BaseService {
       status: ConnectorStatus.disconnected,
       tokenExpiresAt: null,
     });
+    if ('holder' in claim) throw this.createConflictError('MCP server identifier already exists');
 
-    const publicRecord = await this.connectorModel.findPublicById(created.id);
+    const publicRecord = await this.connectorModel.findPublicById(claim.created.id);
     if (!publicRecord) throw this.createCommonError('Failed to read the created MCP server');
     return this.projectServer(publicRecord);
   }
@@ -167,6 +166,9 @@ export class McpServerService extends BaseService {
     const { toolCount } = await syncConnectorToolsById(id, {
       connectorModel: model,
       connectorToolModel: this.connectorToolModel,
+      // A connector set to connect through the device lists on the user's device
+      serverDB: this.db,
+      userId: this.userId,
     });
     return { id, status: ConnectorStatus.connected, toolCount };
   }

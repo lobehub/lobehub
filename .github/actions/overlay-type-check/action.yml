@@ -1,0 +1,47 @@
+name: Overlay Type Check
+description: >-
+  Type-check this checkout together with the private business overlay, from the overlay root. Bundling does not type-check, so an overlay that still reads an API this checkout removed would otherwise build, ship and fail at runtime.
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+  overlay-repository:
+    description: Overlay repository (owner/name)
+    required: true
+  overlay-ref:
+    description: Overlay commit to check against (defaults to the overlay's default branch)
+    required: false
+    default: ''
+  log-name:
+    description: File name under the runner temp directory that receives the type check output
+    required: false
+    default: overlay-type-check.log
+  overlay-token:
+    description: GitHub token with permission to read the overlay repository
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup environment
+      uses: ./.github/actions/setup-env
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Overlay business repository
+      uses: ./.github/actions/business-overlay
+      with:
+        overlay-repository: ${{ inputs.overlay-repository }}
+        overlay-ref: ${{ inputs.overlay-ref }}
+        overlay-token: ${{ inputs.overlay-token }}
+
+    - name: Install dependencies
+      shell: bash
+      run: cd .. && pnpm install --node-linker=hoisted
+
+    - name: Type check overlaid sources
+      shell: bash
+      env:
+        LOG_NAME: ${{ inputs.log-name }}
+      run: cd .. && bun run type-check 2>&1 | tee "$RUNNER_TEMP/$LOG_NAME"

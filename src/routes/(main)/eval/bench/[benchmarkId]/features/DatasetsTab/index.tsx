@@ -22,7 +22,7 @@ import { createDatasetCreateModal } from '../../../../features/DatasetCreateModa
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
 import { createDatasetImportModal } from '../../../../features/DatasetImportModal';
 import { createTestCaseCreateModal } from '../../../../features/TestCaseCreateModal';
-import { createRunCreateModal } from '../RunCreateModal';
+import { useCreateRun } from '../RunCreateModal/useCreateRun';
 import DatasetCard from './DatasetCard';
 import EmptyState from './EmptyState';
 
@@ -143,15 +143,10 @@ const DatasetsTab = memo<DatasetsTabProps>(
       [handleRefreshTestCases],
     );
 
+    const { createRun } = useCreateRun(benchmarkId);
     const handleRunDataset = useCallback(
-      (ds: any) => {
-        createRunCreateModal({
-          benchmarkId,
-          datasetId: ds.id,
-          datasetName: ds.name,
-        });
-      },
-      [benchmarkId],
+      (ds: any) => createRun({ id: ds.id, name: ds.name }),
+      [createRun],
     );
 
     const handleDeleteCase = useCallback(

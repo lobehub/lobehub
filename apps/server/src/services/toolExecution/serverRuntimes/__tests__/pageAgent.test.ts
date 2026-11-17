@@ -8,6 +8,7 @@ import { pageAgentRuntime } from '../pageAgent';
 
 const room = vi.hoisted(() => ({ bootstrapped: false, doc: null as any, pushes: [] as any[] }));
 const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true }));
+const meta = vi.hoisted(() => ({ workspaceId: 'ws_1' as string | null }));
 const store = vi.hoisted(() => ({
   row: null as any,
   updates: [] as { id: string; params: any }[],
@@ -37,7 +38,7 @@ vi.mock('@/server/services/pageCollab/roomClient', async (importOriginal) => {
 
 vi.mock('@/server/services/resourcePermission', () => ({
   canPerformResourceAction: async () => true,
-  getResourceMeta: async () => ({ userId: 'owner', workspaceId: 'ws_1' }),
+  getResourceMeta: async () => ({ userId: 'u1', workspaceId: meta.workspaceId }),
 }));
 
 vi.mock('@/server/services/document', () => ({
@@ -69,12 +70,14 @@ beforeEach(() => {
   room.doc = new Y.Doc();
   room.pushes = [];
   room.bootstrapped = false;
+  meta.workspaceId = 'ws_1';
   store.updates = [];
   store.row = {
     content: 'para one\n',
     editorData: null,
     title: 'Page',
     updatedAt: new Date('2026-01-01T00:00:00Z'),
+    workspaceId: 'ws_1',
   };
 });
 
@@ -91,21 +94,36 @@ describe('pageAgentRuntime initPage with collaboration', () => {
     expect(room.pushes[0]).toMatchObject({ bootstrap: true });
     expect(room.pushes[1]).toMatchObject({ actor: 'agent:u1' });
 
-    const projected = await projectPageState(Y.encodeStateAsUpdate(room.doc));
-    expect(projected.markdown).toContain('new body');
-    expect(projected.markdown).not.toContain('para one');
-    expect(projected.title).toBe('Fresh');
-  });
-
-  it('persists the edit right away as one AI version of the agent run', async () => {
-    await createRuntime().initPage({ markdown: '# Fresh\n\nnew body' }, ctx);
-
     expect(store.updates).toHaveLength(1);
     expect(store.updates[0].params).toMatchObject({
       history: { agentId: 'agt_1', editorIds: ['u1'], operationId: 'op_root' },
       origin: 'room-projection',
       saveSource: 'llm_call',
     });
+    expect(store.updates[0].params.content).toContain('new body');
+
+    const projected = await projectPageState(Y.encodeStateAsUpdate(room.doc));
+    expect(projected.markdown).toContain('new body');
+    expect(projected.markdown).not.toContain('para one');
+    expect(projected.title).toBe('Fresh');
+  });
+
+  it('writes a personal page on its stored row without opening a room', async () => {
+    meta.workspaceId = null;
+    store.row = { ...store.row, workspaceId: null };
+
+    const result = await createRuntime().initPage({ markdown: '# Fresh\n\nnew body' }, ctx);
+
+    expect(result.success).toBe(true);
+    expect(room.pushes).toHaveLength(0);
+    expect(store.updates).toHaveLength(1);
+    expect(store.updates[0].params).toMatchObject({
+      expectedUpdatedAt: store.row.updatedAt,
+      history: { agentId: 'agt_1', editorIds: ['u1'], operationId: 'op_root' },
+      saveSource: 'llm_call',
+      title: 'Fresh',
+    });
+    expect(store.updates[0].params.origin).toBeUndefined();
     expect(store.updates[0].params.content).toContain('new body');
   });
 });

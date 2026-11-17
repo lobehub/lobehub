@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -29,7 +30,6 @@ export default defineConfig({
       '@/server/services': resolve(__dirname, '../../apps/server/src/services'),
       '@/server/modules': resolve(__dirname, '../../apps/server/src/modules'),
       '@': resolve(__dirname, '../../src'),
-
     },
     coverage: {
       exclude: [
@@ -64,6 +64,8 @@ export default defineConfig({
         inline: ['vitest-canvas-mock'],
       },
     },
+    // Migrates PGlite once per run so each DB test file restores a snapshot.
+    globalSetup: './tests/pgliteSnapshot.globalSetup.ts',
     setupFiles: './tests/setup-db.ts',
   },
 });

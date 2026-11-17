@@ -302,7 +302,7 @@ jobs:
           exit $status
 
       - name: Comment ASAR size report on PR
-        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -16,4 +16,24 @@ describe('stand-ins shown on a review screenshot', () => {
     expect(standInsFor('a.tsx|unpaired:head:A#1', undefined, plans)).toEqual({ head: ['Select'] });
     expect(standInsFor('a.tsx|unpaired:base:A#1', undefined, plans)).toEqual({});
   });
+
+  it('marks the rendered counterpart of a one-sided element as the same stand-in', () => {
+    const plans = [
+      {
+        file: 'a.tsx',
+        standIns: { 'head:A#1': ['Icon'] },
+        unpaired: [
+          {
+            counterpart: { ancestors: [], literalProps: {}, tag: 'Icon', variables: [] },
+            elementId: 'A#1',
+            side: 'head' as const,
+          },
+        ],
+      },
+    ];
+    expect(standInsFor('a.tsx|unpaired:head:A#1', undefined, plans)).toEqual({
+      base: ['Icon'],
+      head: ['Icon'],
+    });
+  });
 });

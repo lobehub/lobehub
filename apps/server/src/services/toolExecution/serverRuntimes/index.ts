@@ -13,6 +13,7 @@ import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
 import type { ToolExecutionContext } from '../types';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
+import { agentAccountRuntime } from './agentAccount';
 import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
@@ -39,6 +40,7 @@ import { imageGenerationRuntime } from './imageGeneration';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
+import { mcpEventsRuntime } from './mcpEvents';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
@@ -72,9 +74,11 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  mcpEventsRuntime,
   channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,
+  agentAccountRuntime,
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,

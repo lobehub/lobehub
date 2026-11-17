@@ -1,6 +1,8 @@
 import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { CalendarClock, HeartPulse, UserRound } from 'lucide-react';
+import { CalendarClock, FolderXIcon, HeartPulse, TagIcon, UserRound } from 'lucide-react';
 import { memo } from 'react';
+
+import TaskLabelDot from '@/features/TaskLabels/TaskLabelDot';
 
 import AssigneeAvatar from '../features/AssigneeAvatar';
 import AssigneeUserAvatar from '../features/AssigneeUserAvatar';
@@ -9,10 +11,12 @@ import PriorityLowIcon from '../features/icons/PriorityLowIcon';
 import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
 import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
 import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
+import TaskProjectChip from '../features/TaskProjectChip';
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import type { TaskGroupMeta } from './listViewOptions';
+import { isTaskLabelGroupBy } from './listViewOptions';
 
 const PRIORITY_ICON_MAP = {
   0: PriorityNoneIcon,
@@ -33,6 +37,11 @@ const AssigneeUserLabel = memo<{ userId: string }>(({ userId }) => {
 });
 
 const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
+  if (isTaskLabelGroupBy(group.groupBy)) {
+    if (group.labelId) return <TaskLabelDot color={group.labelColor} size={10} />;
+    return <Icon color={cssVar.colorTextDescription} icon={TagIcon} size={14} />;
+  }
+
   if (group.groupBy === 'assignee') {
     if (group.assigneeId) return <AssigneeAvatar agentId={group.assigneeId} size={18} />;
     return <Icon icon={UserRound} size={14} />;
@@ -41,6 +50,12 @@ const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
   if (group.groupBy === 'member') {
     if (group.assigneeUserId) return <AssigneeUserAvatar size={18} userId={group.assigneeUserId} />;
     return <Icon icon={UserRound} size={14} />;
+  }
+
+  // A named project's header is its badge alone — see `TaskGroupLabel`.
+  if (group.groupBy === 'project') {
+    if (group.projectId) return null;
+    return <Icon color={cssVar.colorTextDescription} icon={FolderXIcon} size={14} />;
   }
 
   if (group.groupBy === 'priority') {
@@ -79,15 +94,19 @@ interface TaskGroupLabelProps {
 const TaskGroupLabel = memo<TaskGroupLabelProps>(({ group }) => (
   <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
     <TaskGroupPrefix group={group} />
-    <Text ellipsis weight={500}>
-      {group.groupBy === 'assignee' && group.assigneeId ? (
-        <AssigneeLabel agentId={group.assigneeId} />
-      ) : group.groupBy === 'member' && group.assigneeUserId ? (
-        <AssigneeUserLabel userId={group.assigneeUserId} />
-      ) : (
-        group.label
-      )}
-    </Text>
+    {group.groupBy === 'project' && group.projectId ? (
+      <TaskProjectChip projectId={group.projectId} />
+    ) : (
+      <Text ellipsis weight={500}>
+        {group.groupBy === 'assignee' && group.assigneeId ? (
+          <AssigneeLabel agentId={group.assigneeId} />
+        ) : group.groupBy === 'member' && group.assigneeUserId ? (
+          <AssigneeUserLabel userId={group.assigneeUserId} />
+        ) : (
+          group.label
+        )}
+      </Text>
+    )}
   </Flexbox>
 ));
 

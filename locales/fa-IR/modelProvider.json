@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "پشتیبانی از شناسایی ویدیو",
   "providerModels.item.modelConfig.vision.extra": "این پیکربندی فقط قابلیت آپلود تصویر را در برنامه فعال می‌کند. پشتیبانی از شناسایی به خود مدل بستگی دارد. لطفاً قابلیت بینایی مدل را بررسی کنید.",
   "providerModels.item.modelConfig.vision.title": "پشتیبانی از بینایی",
+  "providerModels.item.pricing.audioOutputTokens": "خروجی صوتی ${{amount}}/میلیون",
   "providerModels.item.pricing.image": "${{amount}}/تصویر",
   "providerModels.item.pricing.inputCharts": "${{amount}}/میلیون نویسه",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/دقیقه",

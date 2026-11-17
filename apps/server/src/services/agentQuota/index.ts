@@ -160,12 +160,17 @@ export class AgentQuotaService {
     identity: QuotaAccountIdentity;
     provider: string;
     readings: QuotaLimitReading[];
-  }): Promise<SafeAccount> => {
+  }): Promise<SafeAccount | undefined> => {
     const account = await this.accounts.upsertByIdentity(
       params.provider,
       params.identity as AccountIdentityInput,
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
     );
+    // Another member's private account: the reading is dropped rather than
+    // written into an account this member cannot see.
+    if (!account) return undefined;
+    // A sample read on a device proves the account is signed in there.
+    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     // The wallet is not a limit reading, so it can't ride the snapshots table —
     // keep the latest sample on the account row or the persisted view loses the
     // Extra Usage section between live samples.
@@ -174,8 +179,6 @@ export class AgentQuotaService {
         metadata: { ...account.metadata, extraUsage: params.extraUsage },
       });
     }
-    // A sample read on a device proves the account is signed in there.
-    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     await this.ingestReadings(account.id, params.readings, params.deviceId);
     // Ingestion is the only moment new evidence arrives, so it is also the only
     // sensible calibration trigger. Cheap and self-guarding: without enough clean
@@ -445,47 +448,51 @@ export class AgentQuotaService {
     const accounts = await this.accounts.list();
     const byId = new Map(accounts.map((a) => [a.id, a]));
 
+    // An id the caller cannot see (another member's private account) gets no
+    // load view: its readings inherit the account's visibility.
     return Promise.all(
-      accountIds.map(async (accountId) => {
-        const account = byId.get(accountId);
-        const buckets = await this.listLatestReadings(accountId);
-        const scopedWeeklyUtil: Record<string, number> = {};
-        let sessionUtil = 0;
-        let weeklyUtil = 0;
-        let rateLimitedUntil: number | null = null;
+      accountIds
+        .filter((accountId) => byId.has(accountId))
+        .map(async (accountId) => {
+          const account = byId.get(accountId);
+          const buckets = await this.listLatestReadings(accountId);
+          const scopedWeeklyUtil: Record<string, number> = {};
+          let sessionUtil = 0;
+          let weeklyUtil = 0;
+          let rateLimitedUntil: number | null = null;
 
-        for (const b of buckets) {
-          // A reading whose window has rolled over describes spend that has
-          // since refilled; counting it would keep an account benched long
-          // after its quota came back.
-          const utilization = currentUtilization(b, now);
+          for (const b of buckets) {
+            // A reading whose window has rolled over describes spend that has
+            // since refilled; counting it would keep an account benched long
+            // after its quota came back.
+            const utilization = currentUtilization(b, now);
 
-          if (isSessionLimit(b)) {
-            sessionUtil = utilization;
-            // `utilization` is already 0 once the window rolled over, so a
-            // stale 100% cannot bench the account past its own reset.
-            if (utilization >= 100 && b.resetsAt) rateLimitedUntil = b.resetsAt;
-          } else if (isScopedWeeklyLimit(b)) {
-            scopedWeeklyUtil[b.scopeKey] = utilization;
-          } else if (isWeeklyAllLimit(b)) {
-            weeklyUtil = Math.max(weeklyUtil, utilization);
+            if (isSessionLimit(b)) {
+              sessionUtil = utilization;
+              // `utilization` is already 0 once the window rolled over, so a
+              // stale 100% cannot bench the account past its own reset.
+              if (utilization >= 100 && b.resetsAt) rateLimitedUntil = b.resetsAt;
+            } else if (isScopedWeeklyLimit(b)) {
+              scopedWeeklyUtil[b.scopeKey] = utilization;
+            } else if (isWeeklyAllLimit(b)) {
+              weeklyUtil = Math.max(weeklyUtil, utilization);
+            }
           }
-        }
 
-        const calibration = await this.calibrations.latest(accountId, 'weekly_all');
+          const calibration = await this.calibrations.latest(accountId, 'weekly_all');
 
-        return {
-          accountId,
-          capacityUsd: calibration ? Number(calibration.capacityUsd) : undefined,
-          enabled: account?.enabled ?? true,
-          label: account?.label ?? null,
-          priority: 0,
-          rateLimitedUntil,
-          scopedWeeklyUtil,
-          sessionUtil,
-          weeklyUtil,
-        } satisfies AccountLoadView;
-      }),
+          return {
+            accountId,
+            capacityUsd: calibration ? Number(calibration.capacityUsd) : undefined,
+            enabled: account?.enabled ?? true,
+            label: account?.label ?? null,
+            priority: 0,
+            rateLimitedUntil,
+            scopedWeeklyUtil,
+            sessionUtil,
+            weeklyUtil,
+          } satisfies AccountLoadView;
+        }),
     );
   };
 

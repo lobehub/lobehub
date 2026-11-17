@@ -194,11 +194,17 @@ export interface ReviewView {
         before: string[];
         differs: boolean;
         label: string;
+        movedTo?: string[];
         oneSided: boolean;
       }>;
       slot: string;
       standIn?: string;
     }>;
+    counterpart?: 'base' | 'head';
+    moved: Record<
+      string,
+      Array<{ selectors: string[]; slot: string; tags: string[]; text: string }>
+    >;
     source: Partial<Record<'base' | 'head', Record<string, string>>>;
     usage: Partial<Record<'base' | 'head', string[]>>;
   };
@@ -221,6 +227,18 @@ export const fetchReview = async (): Promise<ReviewPayload> => {
   const response = await fetch('/api/review');
   if (!response.ok) throw new Error(`/api/review ${response.status}`);
   return remember(await response.json());
+};
+
+export interface CaseReview {
+  conditions: string[];
+  item: ReviewView;
+  queued: boolean;
+}
+
+export const fetchCaseReview = async (key: string): Promise<CaseReview> => {
+  const response = await fetch(`/api/case/${encodeURIComponent(key)}/review`);
+  if (!response.ok) throw new Error(`/api/case review ${response.status}`);
+  return response.json();
 };
 
 export const postReview = async (body: {

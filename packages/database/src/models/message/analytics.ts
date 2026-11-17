@@ -15,12 +15,11 @@ import type { MessageAnalyticsFilters, TopicMessageCountItem, TopicMessageStats 
 
 /**
  * Linear-interpolation percentile over an ascending-sorted array, matching
- * PostgreSQL's `percentile_cont`. Returns 0 for an empty input.
+ * PostgreSQL's `percentile_cont`. Expects a non-empty input: the only caller
+ * returns early when there are no counts.
  */
 const percentileCont = (sorted: number[], q: number): number => {
   const n = sorted.length;
-  /* v8 ignore next -- unreachable: the only caller returns early when there are no counts */
-  if (n === 0) return 0;
   if (n === 1) return sorted[0];
   const rank = q * (n - 1);
   const lo = Math.floor(rank);

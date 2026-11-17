@@ -133,8 +133,7 @@ function latestDump(): string | null {
 async function cmdInstall(flags: Flags): Promise<void> {
   const body = await bundle('probe-events.ts');
   const installMsg = JSON.stringify(
-    'events probe installed: WebSocket+fetch interception. ' +
-      'WS captures operationId= sockets (gateway), fetch captures /api/agent/stream (direct).',
+    'events probe installed: WebSocket interception. Captures operationId= sockets (gateway).',
   );
   const script = wrapIife(body, installMsg);
   const out = await runAgentBrowserEval(flags, script);

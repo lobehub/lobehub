@@ -35,6 +35,12 @@ export type TopicQuerySortBy = 'updatedAt' | 'status';
 
 export interface GroupedTopic {
   children: ChatTopic[];
+  /**
+   * Set on a folder group only when another folder group shows the same path
+   * on a different machine, so the renderer can name the device that tells
+   * them apart.
+   */
+  deviceId?: string;
   id: string;
   title?: string;
 }
@@ -46,6 +52,16 @@ export interface TopicUserMemoryExtractRunState {
   messageCount?: number;
   processedMemoryCount?: number;
   traceId?: string;
+}
+
+/**
+ * The generic webhook thread a Topic was started for. Deliveries of the same
+ * webhook and thread key continue this Topic; `threadKey` is empty for a
+ * webhook that puts every call in one Topic.
+ */
+export interface ChatTopicWebhookContext {
+  threadKey: string;
+  webhookId: string;
 }
 
 export interface ChatTopicBotContext {
@@ -124,9 +140,17 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
+    /**
+     * Set when the summary model rejected the request for a reason only the user
+     * can fix (invalid key, no balance, missing model). The watermark still moves,
+     * so the topic is retried only after a new message.
+     */
+    failedAt?: string;
+    failureReason?: string;
     lastMessageId: string;
     lastMessageUpdatedAt: string;
-    summarizedAt: string;
+    /** Absent until a summary has been written for this topic. */
+    summarizedAt?: string;
     version: number;
   };
 
@@ -174,6 +198,8 @@ export interface ChatTopicMetadata {
   editingGroupId?: string;
   /** Restored-history tail used as the source message for eval attempt threads. */
   evalHistoryTailMessageId?: string;
+  /** Immutable initial Memory hashes keyed by run/topic/thread attempt ID, including empty fixtures. */
+  evalMemoryFixtures?: Record<string, string>;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -413,6 +439,20 @@ export interface ChatTopicMetadata {
    */
   sandboxInstanceId?: string;
   /**
+   * Creation-time only, never stored: the placement this topic is created with
+   * is the plan's default, filled in by the composer rather than chosen. A
+   * project conversation is given the project's repository checkout in its
+   * place. The server reads it and drops it.
+   */
+  sandboxSeeded?: boolean;
+  /**
+   * Creation-time only, never stored: the composer explicitly chose a
+   * temporary sandbox before the topic existed. Without it that choice looks
+   * the same as no choice at all, and the server would apply a project's
+   * repository checkout over it. The server reads it and drops it.
+   */
+  sandboxTemporary?: boolean;
+  /**
    * The folder on the user's drive this topic's cloud sandbox works in,
    * relative to the drive's root; `'.'` is the root itself. Choosing a folder
    * IS the choice to persist: with neither this nor `sandboxInstanceId` the
@@ -440,6 +480,8 @@ export interface ChatTopicMetadata {
   } | null;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
+  /** The generic webhook thread this Topic was started for (see `ChatTopicWebhookContext`). */
+  webhook?: ChatTopicWebhookContext;
   /**
    * Topic-level working directory.
    * On desktop: local filesystem path for the CC session cwd.
@@ -622,7 +664,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
-  heteroSpeed: z.enum(['default', 'fast']).optional(),
+  heteroSpeed: z.enum(['default', 'normal', 'fast', 'ultrafast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({

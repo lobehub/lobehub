@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as OauthModule from './oauth';
 import { refreshConnectorToken } from './oauth';
-import { refreshExpiredConnectorTokens } from './tokens';
+import { ensureFreshLinkToken, refreshExpiredConnectorTokens } from './tokens';
 
 vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -207,5 +207,105 @@ describe('refreshExpiredConnectorTokens', () => {
     } as any);
 
     expect(connector.credentials).toMatchObject({ accessToken: 'winner' });
+  });
+});
+
+describe('per-account token refresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: NOW });
+    vi.mocked(discoverAuthorizationServerMetadata).mockResolvedValue({} as any);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+  const makeLink = (id: string) =>
+    ({
+      id,
+      userConnectorId: 'parent',
+      name: id,
+      status: 'connected',
+      credentials: {
+        accessToken: `old-${id}`,
+        refreshToken: `refresh-${id}`,
+        expiresAt: NOW - 1,
+        type: 'oauth2',
+      },
+    }) as any;
+  it('coalesces concurrent refreshes by link id and never writes tokens onto the parent', async () => {
+    vi.mocked(refreshConnectorToken).mockResolvedValue({
+      tokens: { access_token: 'fresh', expires_in: 3600, token_type: 'Bearer' },
+    } as any);
+    const link = makeLink('coalesce');
+    const linkModel = { updateCredentials: vi.fn() } as any;
+    const parentModel = { update: vi.fn() } as any;
+    const connector = oauthConnector('parent', NOW - 1);
+    const results = await Promise.all([
+      ensureFreshLinkToken(connector, link, linkModel, parentModel),
+      ensureFreshLinkToken(connector, link, linkModel, parentModel),
+    ]);
+    expect(refreshConnectorToken).toHaveBeenCalledOnce();
+    expect(linkModel.updateCredentials).toHaveBeenCalledWith(
+      'parent',
+      'coalesce',
+      expect.objectContaining({ accessToken: 'fresh', refreshToken: 'refresh-coalesce' }),
+    );
+    expect(parentModel.update).not.toHaveBeenCalled();
+    expect(results[0].credentials.accessToken).toBe('fresh');
+  });
+  // Account ids are unique within their connector only: every connector read
+  // from a token written before accounts existed has the same one.
+  it('refreshes accounts with the same id on different connectors separately', async () => {
+    vi.mocked(refreshConnectorToken).mockImplementation(async ({ refreshToken }) => ({
+      tokens: { access_token: `fresh-${refreshToken}`, expires_in: 3600, token_type: 'Bearer' },
+    }));
+    const linkModel = { updateCredentials: vi.fn() } as any;
+    const linkOf = (connectorId: string) => ({
+      ...makeLink('lnk_default'),
+      userConnectorId: connectorId,
+      credentials: {
+        ...makeLink('lnk_default').credentials,
+        refreshToken: `refresh-${connectorId}`,
+      },
+    });
+    const results = await Promise.all(
+      ['first', 'second'].map((id) =>
+        ensureFreshLinkToken(oauthConnector(id, NOW - 1), linkOf(id), linkModel, {} as any),
+      ),
+    );
+    expect(refreshConnectorToken).toHaveBeenCalledTimes(2);
+    expect(results.map((link) => link.credentials.accessToken)).toEqual([
+      'fresh-refresh-first',
+      'fresh-refresh-second',
+    ]);
+    expect(linkModel.updateCredentials).toHaveBeenCalledWith(
+      'second',
+      'lnk_default',
+      expect.objectContaining({ accessToken: 'fresh-refresh-second' }),
+    );
+  });
+  it('recovers a rotation from another process before marking invalid_grant as unhealthy', async () => {
+    vi.mocked(refreshConnectorToken).mockRejectedValue({ code: 'invalid_grant' });
+    const stale = makeLink('rotated');
+    const fresh = {
+      ...stale,
+      credentials: { ...stale.credentials, accessToken: 'winner', expiresAt: NOW + 3600000 },
+    };
+    const linkModel = { findById: vi.fn().mockResolvedValue(fresh), updateStatus: vi.fn() } as any;
+    expect(
+      (await ensureFreshLinkToken(oauthConnector('parent', NOW - 1), stale, linkModel, {} as any))
+        .credentials.accessToken,
+    ).toBe('winner');
+    expect(linkModel.updateStatus).not.toHaveBeenCalled();
+    linkModel.findById.mockResolvedValue(stale);
+    const pending = ensureFreshLinkToken(
+      oauthConnector('parent', NOW - 1),
+      stale,
+      linkModel,
+      {} as any,
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    expect((await pending).status).toBe('error');
+    expect(linkModel.updateStatus).toHaveBeenCalledWith('parent', 'rotated', 'error');
   });
 });

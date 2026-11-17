@@ -4,6 +4,7 @@ import type {
   AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
+  ChatTopicWebhookContext,
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
@@ -47,6 +48,8 @@ export interface ExecRunContext {
    * that re-runs later reads them back from there rather than from the turn's
    * request.
    */
+  /** Library skills the agent set to `auto`; mirrored on `world.autoSkillIds`. */
+  autoSkillIds: string[];
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   canUseDevice: boolean;
@@ -223,6 +226,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * relays on (`channelOperationId`), which a client never can.
    */
   llmExecutor?: AgentRunLlmExecutor;
+  /**
+   * Explicit server-only opt-in for an unattended topic run to surface in Inbox.
+   * Set running atomically with its operation marker before dispatch; existing
+   * terminal settlement then projects done to unread and errors to active.
+   * Never inferred from trigger or accepted from client/API parameters.
+   */
+  markTopicRunning?: boolean;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**
@@ -330,6 +340,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
+   * With `agentConfigSnapshot`, still layer the caller's own device override on top, as an
+   * ordinary conversation would. Set by a Channel run whose member has no device picked in the
+   * Channel; the snapshot keeps deciding everything else. Server-only, never client-passable.
+   */
+  snapshotFollowsCallerDevice?: boolean;
+  /**
    * The send directly steered the turn it replaces: an interrupting "send
    * now", not a follow-up that waited in queue and started as the next turn.
    * The user message is persisted with `metadata.steer` so it renders as a
@@ -379,6 +395,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Server-only: the generic webhook thread a run starts for. Written to a
+   * Topic the run creates as `metadata.webhook`, which is how later deliveries
+   * of the same thread find that Topic. Ignored when the run continues one.
+   */
+  webhookThread?: ChatTopicWebhookContext;
 }
 
 /**

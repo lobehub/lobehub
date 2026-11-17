@@ -21,6 +21,7 @@ import {
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
+  RevokedDocumentResultFilter,
   StaleToolResultTrimProcessor,
   SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
@@ -33,8 +34,10 @@ import {
 } from '../../processors';
 import {
   ActiveTopicDocumentContextInjector,
+  AgentAccountContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
+  AgentDocumentChangesInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
@@ -45,6 +48,7 @@ import {
   ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
+  DocumentReferenceContextInjector,
   EvalContextSystemInjector,
   ExpertiseContextInjector,
   ForceFinishSummaryInjector,
@@ -87,6 +91,7 @@ const log = debug('context-engine:MessagesEngine');
 
 /** `AttachmentsIdentifier` from `@lobechat/builtin-tool-attachments`, inlined to avoid a package cycle */
 const ATTACHMENTS_TOOL_ID = 'lobe-attachments';
+const AGENT_DOCUMENTS_TOOL_ID = 'lobe-agent-documents';
 
 /**
  * MessagesEngine - High-level message processing engine
@@ -164,6 +169,7 @@ export class MessagesEngine {
       provider,
       systemRole,
       agentIdentity,
+      agentAccountContext,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -195,11 +201,14 @@ export class MessagesEngine {
       additionalContexts,
       agentGroup,
       agentDocuments,
+      agentDocumentChanges,
+      revokedDocumentReads,
       planTodo,
       userMemory,
       initialContext,
       stepContext,
       topicReferences,
+      documentReferences,
       enableSystemDate,
       timezone,
     } = this.params;
@@ -239,6 +248,8 @@ export class MessagesEngine {
     const hasDateAwareTools =
       toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
     const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    // An eval attempt renders "today" from its case clock, never the wall clock.
+    const evalClock = evalContext?.sessionDate ? new Date(evalContext.sessionDate) : undefined;
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
@@ -253,6 +264,9 @@ export class MessagesEngine {
     // Oversized file previews may only promise `readAttachment` when the model is actually sent that
     // tool; custom / exclusive tool modes, share visitors and clients without it get a plain preview.
     const canReadAttachment = toolIds.includes(ATTACHMENTS_TOOL_ID) && !!canUseFC(model, provider);
+    // Same gate for referenced agent documents: only point at `readDocument` when it is sent.
+    const canReadDocuments =
+      toolIds.includes(AGENT_DOCUMENTS_TOOL_ID) && !!canUseFC(model, provider);
     const injectedActivatedSkills =
       isAgentMode && (skillsConfig?.enabledSkills?.length ?? 0) > 0
         ? selectActivatedSkills(skillsConfig?.enabledSkills)
@@ -319,6 +333,13 @@ export class MessagesEngine {
         enabled: !isGroupContextEnabled,
         identity: agentIdentity,
       }),
+      // The agent's own accounts + inbox, as first-class state. Injected right
+      // after the person's identity because it refines "who am I" with "and I
+      // can be reached here". Skipped entirely when the agent owns nothing.
+      new AgentAccountContextInjector({
+        context: agentAccountContext,
+        enabled: isAgentMode,
+      }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
@@ -327,7 +348,7 @@ export class MessagesEngine {
         enabled: !!botPlatformContext,
       }),
       // System date
-      new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled, now: evalClock, timezone }),
       // Model info (name / id / knowledge cutoff)
       new ModelInfoProvider({
         displayName: modelDisplayName,
@@ -438,6 +459,14 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Agent-document change notes → the user message each belongs to (the
+      // index renders a snapshot; these say what changed since). Not gated on
+      // `hasAgentDocuments`: a snapshot taken before the first document has no
+      // rows, and the notes are then the only place new documents appear.
+      new AgentDocumentChangesInjector({
+        changes: agentDocumentChanges,
+        enabled: isAgentMode && !!agentDocumentChanges,
+      }),
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({
         activeTopicDocument: initialContext?.activeTopicDocument,
@@ -451,7 +480,10 @@ export class MessagesEngine {
       // Selected tools (ephemeral user-selected @tool for this request)
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Generic user-attached selections from chat/code/text contexts.
-      new ContextSelectionsInjector({ enabled: true }),
+      new ContextSelectionsInjector({
+        enabled: true,
+        mcpAppsEnabled: this.params.enableMcpAppContext,
+      }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
       // Project context (members, linked knowledge, open tasks) for a run inside a project
@@ -468,6 +500,12 @@ export class MessagesEngine {
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
         topicReferences,
+      }),
+      // Document Reference context (dragged/referenced agent documents to last user message)
+      new DocumentReferenceContextInjector({
+        canReadDocuments,
+        documentReferences,
+        enabled: !!(documentReferences && documentReferences.length > 0),
       }),
 
       // =============================================
@@ -530,6 +568,13 @@ export class MessagesEngine {
       // Task-callback cards: surface a finished task's handoff as a user turn
       // so the creator agent reads it and continues
       new TaskCallbackMessageProcessor(),
+      // Revoked document reads — withholds historical readKnowledge /
+      // readDocument bodies of documents deleted or disabled since they were
+      // read, so a removed standing rule stops steering the agent. MUST run
+      // AFTER the flatten steps (nested tool results become `role: 'tool'`
+      // rows there) and BEFORE the group role transforms below, which fold
+      // other members' results into user text and drop `plugin`.
+      new RevokedDocumentResultFilter({ revokedDocumentReads }),
       // Supervisor role restore
       new SupervisorRoleRestoreProcessor(),
       // Compressed group role transform

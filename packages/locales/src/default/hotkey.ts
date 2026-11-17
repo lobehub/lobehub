@@ -17,8 +17,9 @@ export default {
   'desktop.showApp.title': 'Show/Hide Main Window',
   'editMessage.desc': 'Enter edit mode by holding Alt and double-clicking the message',
   'editMessage.title': 'Edit Message',
-  'findInTopic.desc': 'Search every message of the current topic in the right panel',
-  'findInTopic.title': 'Find in Topic',
+  'findInTopic.desc':
+    'Search every message of the current topic in the right panel, or find text on the open task page',
+  'findInTopic.title': 'Find in Topic or Task',
   'navigateToChat.desc': 'Switch to the Chat tab and enter Lobe AI',
   'navigateToChat.title': 'Switch to Default Chat',
   'nextTab.desc':
@@ -44,7 +45,8 @@ export default {
   'switchAgent.desc':
     'Switch between pinned agents in the sidebar by holding Ctrl and pressing numbers 0-9',
   'switchAgent.title': 'Quick Switch Agent',
-  'switchTab.desc': 'Jump to a specific tab by its position (1–9) in the Desktop app tab bar',
+  'switchTab.desc':
+    'Jump to a tab by its position (1–8) in the Desktop app tab bar, or to the last tab with 9',
   'switchTab.title': 'Switch to Tab by Number',
   'openTaskFilter.desc': 'Open the filter menu on the Tasks page',
   'openTaskFilter.title': 'Filter Tasks',

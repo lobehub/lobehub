@@ -1,13 +1,6 @@
-import {
-  Center,
-  createStaticStyles,
-  cx,
-  Flexbox,
-  SortableList,
-  Switch,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Center, Flexbox, SortableList, Switch, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,37 +8,26 @@ import { getChannelDisplayName, getChannelIcon } from './const';
 
 const ICON_SIZE = 24;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  icon: css`
-    flex: none;
-    width: ${ICON_SIZE}px;
-    height: ${ICON_SIZE}px;
-  `,
-  inactive: css`
-    opacity: 0.45;
-  `,
-  item: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  name: css`
-    font-weight: 500;
-  `,
-  rank: css`
-    min-width: 16px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: end;
-  `,
-}));
+const styles = stylex.create({
+  icon: { flex: 'none', width: `${ICON_SIZE}px`, height: `${ICON_SIZE}px` },
+  inactive: { opacity: 0.45 },
+  item: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease-in-out',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  name: { fontWeight: 500 },
+  rank: {
+    minWidth: '16px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'end',
+  },
+});
 
 interface ChannelItemProps {
   enabled: boolean;
@@ -78,17 +60,24 @@ const ChannelItem = memo<ChannelItemProps>(({ id, enabled, locked, rank, onToggl
     <SortableList.Item
       horizontal
       align={'center'}
-      className={styles.item}
+      className={stylex.props(styles.item).className}
       gap={8}
       id={id}
       justify={'space-between'}
     >
       <Flexbox horizontal align={'center'} gap={8}>
         <SortableList.DragHandle />
-        <span className={styles.rank}>{rank ?? ''}</span>
-        <Flexbox horizontal align={'center'} className={cx(!enabled && styles.inactive)} gap={10}>
-          <Center className={styles.icon}>{getChannelIcon(id, ICON_SIZE)}</Center>
-          <Text className={styles.name}>{getChannelDisplayName(id)}</Text>
+        <span {...stylex.props(styles.rank)}>{rank ?? ''}</span>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(!enabled && styles.inactive).className}
+          gap={10}
+        >
+          <Center className={stylex.props(styles.icon).className}>
+            {getChannelIcon(id, ICON_SIZE)}
+          </Center>
+          <Text className={stylex.props(styles.name).className}>{getChannelDisplayName(id)}</Text>
         </Flexbox>
       </Flexbox>
       {locked ? (

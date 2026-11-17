@@ -6,7 +6,6 @@ import {
   Button,
   confirmModal,
   CopyButton,
-  createStaticStyles,
   cssVar,
   Flexbox,
   Icon,
@@ -14,6 +13,8 @@ import {
   Spin,
   Text,
 } from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleCheckIcon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
@@ -21,94 +22,90 @@ import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { sx } from '@/styles/sx';
 
 import { useOAuthDeviceFlow } from './useOAuthDeviceFlow';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    overflow: hidden;
+// matches the borderless form below so both boxes end on the same edge
+const cardWidth = { maxWidth: MAX_WIDTH };
 
-    /* matches the borderless form below so both boxes end on the same edge */
-    width: 100%;
-    max-width: ${MAX_WIDTH}px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-  `,
-  codeBox: css`
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 16px;
-    padding-inline: 24px;
-    border-radius: 12px;
-
-    font-family: monospace;
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: 6px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  content: css`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    align-items: center;
-
-    padding-block: 8px 4px;
-  `,
-  errorText: css`
-    color: ${cssVar.colorError};
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: sxVar.colorBorderSecondary,
+    borderRadius: '12px',
+  },
+  codeBox: {
+    display: 'flex',
+    flex: '1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '16px',
+    paddingInline: '24px',
+    borderRadius: '12px',
+    fontFamily: 'monospace',
+    fontSize: '28px',
+    fontWeight: 600,
+    letterSpacing: '6px',
+    backgroundColor: sxVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  content: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    alignItems: 'center',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '4px',
+  },
+  errorText: {
+    color: sxVar.colorError,
+  },
+  header: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
   // Prose, so it reads from the left edge rather than being centred with the
   // code box below it.
-  hint: css`
-    width: 100%;
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    text-align: start;
-  `,
-  pollingHint: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-radius: 8px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  successBadge: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 13px;
-    color: ${cssVar.colorSuccess};
-  `,
-  username: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+  hint: {
+    width: '100%',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: sxVar.colorTextSecondary,
+    textAlign: 'start',
+  },
+  pollingHint: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    color: sxVar.colorTextSecondary,
+    backgroundColor: sxVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  successBadge: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '13px',
+    color: sxVar.colorSuccess,
+  },
+  username: {
+    fontSize: '13px',
+    color: sxVar.colorTextSecondary,
+  },
+});
 
 export interface OAuthDeviceFlowAuthProps {
   /**
@@ -205,7 +202,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
             {username && (
               <Flexbox horizontal align={'center'} gap={6}>
                 {avatarUrl && <Avatar avatar={avatarUrl} size={20} title={username} />}
-                <span className={styles.username}>{username}</span>
+                <span {...stylex.props(styles.username)}>{username}</span>
               </Flexbox>
             )}
             <Button
@@ -239,7 +236,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       // Loading state
       if (state === 'requesting' || !deviceCodeInfo)
         return (
-          <div className={styles.content}>
+          <div {...stylex.props(styles.content)}>
             <Spin size="middle" />
             <Text as={'span'} type={'secondary'}>
               {t('providerModels.config.oauth.connecting')}
@@ -251,10 +248,10 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       if (state === 'error' && error) {
         const errorKey = `providerModels.config.oauth.${error}`;
         return (
-          <div className={styles.content}>
+          <div {...stylex.props(styles.content)}>
             <Flexbox horizontal align="center" gap={8}>
               <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
-              <Text as={'span'} className={styles.errorText}>
+              <Text as={'span'} className={stylex.props(styles.errorText).className}>
                 {t(errorKey as any)}
               </Text>
             </Flexbox>
@@ -274,8 +271,8 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       // Connect, so the link is the fallback for when a popup blocker ate it —
       // and the only route when authorizing on a second device.
       return (
-        <div className={styles.content}>
-          <div className={styles.hint}>
+        <div {...stylex.props(styles.content)}>
+          <div {...stylex.props(styles.hint)}>
             {t('providerModels.config.oauth.enterCode')}{' '}
             <a href={deviceCodeInfo.verificationUri} rel="noopener noreferrer" target="_blank">
               {deviceCodeInfo.verificationUri}
@@ -283,11 +280,11 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
           </div>
 
           <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
-            <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
+            <div {...stylex.props(styles.codeBox)}>{deviceCodeInfo.userCode}</div>
             <CopyButton content={deviceCodeInfo.userCode} />
           </Flexbox>
 
-          <div className={styles.pollingHint}>
+          <div {...stylex.props(styles.pollingHint)}>
             <Spin size="small" />
             <span>{t('providerModels.config.oauth.polling')}</span>
           </div>
@@ -297,14 +294,14 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
 
     return (
       <>
-        <div className={styles.card}>
-          <div className={styles.header}>
+        <div {...sx(styles.card, cardWidth)}>
+          <div {...stylex.props(styles.header)}>
             {/* The badge is a property of the provider, not an action on it, so
                 it sits with the name rather than among the controls. */}
             <Flexbox horizontal align={'center'} gap={8}>
               {title}
               {enabled && isAuthenticated && (
-                <div className={styles.successBadge}>
+                <div {...stylex.props(styles.successBadge)}>
                   <Icon icon={CircleCheckIcon} />
                   <span>{t('providerModels.config.oauth.connected')}</span>
                 </div>

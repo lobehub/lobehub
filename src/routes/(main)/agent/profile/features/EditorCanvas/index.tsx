@@ -31,11 +31,6 @@ const styles = createStaticStyles(({ css }) => ({
   editorShell: css`
     min-height: 300px;
     padding-block: 18px;
-    padding-inline: 18px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
   `,
   root: css`
     padding-block-end: 16px;

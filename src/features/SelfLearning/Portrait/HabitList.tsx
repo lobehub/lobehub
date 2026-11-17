@@ -32,6 +32,7 @@ import urlJoin from 'url-join';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ExpertiseHabit } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
+import { expertiseActions } from '@/store/expertise';
 
 import { countTiers, type HabitTier, habitTier, TIER_ORDER } from '../helpers';
 import LessonPreview from './LessonPreview';
@@ -45,7 +46,6 @@ interface HabitListProps {
   /** Present when the list mixes several domains, so each row can say which one it belongs to. */
   domainTitles?: Record<string, string>;
   habits: (ExpertiseHabit & { domainId: string })[];
-  onChanged: () => void;
   /** Where the complete, unfolded list lives; renders a "view all" link in the header. */
   viewAllPath?: string;
 }
@@ -80,11 +80,10 @@ interface HabitRowProps {
   agentId: string;
   domainTitle?: string;
   habit: ExpertiseHabit & { domainId: string };
-  onChanged: () => void;
   tier: HabitTier;
 }
 
-const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, tier }) => {
+const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, tier }) => {
   const { t } = useTranslation('selfLearning');
   const navigate = useWorkspaceAwareNavigate();
   const [teaching, setTeaching] = useState(false);
@@ -119,7 +118,7 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
       await expertiseService.reviseLesson({ lessonId: habit.id, text });
       toast.success(t('habit.teach.done'));
       setTeaching(false);
-      onChanged();
+      void expertiseActions.afterLessonWrite(agentId, habit.id);
     } catch {
       toast.error(t('habit.teach.failed'));
     }
@@ -127,9 +126,9 @@ const HabitRow = memo<HabitRowProps>(({ agentId, domainTitle, habit, onChanged, 
 
   const retire = async () => {
     try {
-      await expertiseService.retireLesson(habit.id);
+      // Drops from the portrait (and its local copy) at once; comes back if the call fails.
+      await expertiseActions.retireLesson(agentId, habit.id);
       toast.success(t('habit.teach.forgot'));
-      onChanged();
     } catch {
       toast.error(t('habit.teach.failed'));
     }
@@ -262,7 +261,7 @@ HabitRow.displayName = 'ExpertiseHabitRow';
  * 值得看的都在上面，稳的收起来 —— 用户不需要有精力逐条过。
  */
 const HabitList = memo<HabitListProps>(
-  ({ agentId, defaultStableOpen = false, domainTitles, habits, onChanged, viewAllPath }) => {
+  ({ agentId, defaultStableOpen = false, domainTitles, habits, viewAllPath }) => {
     const { t } = useTranslation('selfLearning');
     const [search, setSearch] = useState('');
     const [stableOpen, setStableOpen] = useState(defaultStableOpen);
@@ -334,7 +333,6 @@ const HabitList = memo<HabitListProps>(
                     habit={h}
                     key={h.id}
                     tier={tier}
-                    onChanged={onChanged}
                   />
                 ))}
               </Fragment>
@@ -368,7 +366,6 @@ const HabitList = memo<HabitListProps>(
                 habit={h}
                 key={h.id}
                 tier={'stable'}
-                onChanged={onChanged}
               />
             ))}
         </Block>

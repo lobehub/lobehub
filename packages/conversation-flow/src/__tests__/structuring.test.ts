@@ -4,18 +4,40 @@ import { buildHelperMaps } from '../indexing';
 import { buildIdTree } from '../structuring';
 import type { Message } from '../types';
 
+const createMessage = (
+  id: string,
+  role: Message['role'],
+  content: string,
+  createdAt: number,
+  updatedAt: number,
+): Message => ({
+  content,
+  createdAt,
+  id,
+  role,
+  updatedAt,
+});
+
+const createChildMessage = (
+  id: string,
+  parentId: string,
+  role: Message['role'],
+  content: string,
+  createdAt: number,
+  updatedAt: number,
+): Message => ({
+  content,
+  createdAt,
+  id,
+  parentId,
+  role,
+  updatedAt,
+});
+
 describe('buildIdTree', () => {
   describe('basic tree building', () => {
     it('should build tree from single root message', () => {
-      const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-      ];
+      const messages: Message[] = [createMessage('msg-1', 'user', 'Root', 1000, 1000)];
 
       const helperMaps = buildHelperMaps(messages);
       const result = buildIdTree(helperMaps);
@@ -29,29 +51,9 @@ describe('buildIdTree', () => {
 
     it('should build tree with linear conversation', () => {
       const messages: Message[] = [
-        {
-          content: 'Message 1',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Message 2',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Message 3',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 3000,
-        },
+        createMessage('msg-1', 'user', 'Message 1', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Message 2', 2000, 2000),
+        createChildMessage('msg-3', 'msg-2', 'user', 'Message 3', 3000, 3000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -67,20 +69,8 @@ describe('buildIdTree', () => {
 
     it('should handle multiple root messages', () => {
       const messages: Message[] = [
-        {
-          content: 'Root 1',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Root 2',
-          createdAt: 2000,
-          id: 'msg-2',
-          role: 'user',
-          updatedAt: 2000,
-        },
+        createMessage('msg-1', 'user', 'Root 1', 1000, 1000),
+        createMessage('msg-2', 'user', 'Root 2', 2000, 2000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -95,29 +85,9 @@ describe('buildIdTree', () => {
   describe('branching conversations', () => {
     it('should build tree with branches', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Branch 1',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Branch 2',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 3000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Branch 1', 2000, 2000),
+        createChildMessage('msg-3', 'msg-1', 'assistant', 'Branch 2', 3000, 3000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -132,37 +102,10 @@ describe('buildIdTree', () => {
 
     it('should handle nested branches', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Branch 1',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Branch 1.1',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Branch 1.2',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 4000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Branch 1', 2000, 2000),
+        createChildMessage('msg-3', 'msg-2', 'user', 'Branch 1.1', 3000, 3000),
+        createChildMessage('msg-4', 'msg-2', 'user', 'Branch 1.2', 4000, 4000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -177,37 +120,10 @@ describe('buildIdTree', () => {
 
     it('should handle deeply nested tree (4 levels)', () => {
       const messages: Message[] = [
-        {
-          content: 'Level 0',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Level 1',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Level 2',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Level 3',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-3',
-          role: 'assistant',
-          updatedAt: 4000,
-        },
+        createMessage('msg-1', 'user', 'Level 0', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Level 1', 2000, 2000),
+        createChildMessage('msg-3', 'msg-2', 'user', 'Level 2', 3000, 3000),
+        createChildMessage('msg-4', 'msg-3', 'assistant', 'Level 3', 4000, 4000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -233,21 +149,8 @@ describe('buildIdTree', () => {
   describe('thread handling', () => {
     it('should exclude messages with threadId from main tree', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Main flow',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Main flow', 2000, 2000),
         {
           content: 'Thread message',
           createdAt: 3000,
@@ -270,13 +173,7 @@ describe('buildIdTree', () => {
 
     it('should exclude root messages with threadId', () => {
       const messages: Message[] = [
-        {
-          content: 'Main root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
+        createMessage('msg-1', 'user', 'Main root', 1000, 1000),
         {
           content: 'Thread root',
           createdAt: 2000,
@@ -296,29 +193,9 @@ describe('buildIdTree', () => {
 
     it('should filter out thread children at any level', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Main child',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Main grandchild',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 3000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Main child', 2000, 2000),
+        createChildMessage('msg-3', 'msg-2', 'user', 'Main grandchild', 3000, 3000),
         {
           content: 'Thread grandchild',
           createdAt: 4000,
@@ -349,15 +226,7 @@ describe('buildIdTree', () => {
     });
 
     it('should handle messages with no children', () => {
-      const messages: Message[] = [
-        {
-          content: 'Lone message',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-      ];
+      const messages: Message[] = [createMessage('msg-1', 'user', 'Lone message', 1000, 1000)];
 
       const helperMaps = buildHelperMaps(messages);
       const result = buildIdTree(helperMaps);
@@ -371,14 +240,7 @@ describe('buildIdTree', () => {
 
     it('should handle messages with missing parent references', () => {
       const messages: Message[] = [
-        {
-          content: 'Orphan',
-          createdAt: 1000,
-          id: 'msg-1',
-          parentId: 'non-existent',
-          role: 'user',
-          updatedAt: 1000,
-        },
+        createChildMessage('msg-1', 'non-existent', 'user', 'Orphan', 1000, 1000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -423,53 +285,12 @@ describe('buildIdTree', () => {
   describe('complex scenarios', () => {
     it('should build tree with mixed branches and linear paths', () => {
       const messages: Message[] = [
-        {
-          content: 'Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Branch A',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
-        {
-          content: 'Branch A -> Child',
-          createdAt: 3000,
-          id: 'msg-3',
-          parentId: 'msg-2',
-          role: 'user',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Branch B',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 4000,
-        },
-        {
-          content: 'Branch B -> Child 1',
-          createdAt: 5000,
-          id: 'msg-5',
-          parentId: 'msg-4',
-          role: 'user',
-          updatedAt: 5000,
-        },
-        {
-          content: 'Branch B -> Child 2',
-          createdAt: 6000,
-          id: 'msg-6',
-          parentId: 'msg-4',
-          role: 'user',
-          updatedAt: 6000,
-        },
+        createMessage('msg-1', 'user', 'Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Branch A', 2000, 2000),
+        createChildMessage('msg-3', 'msg-2', 'user', 'Branch A -> Child', 3000, 3000),
+        createChildMessage('msg-4', 'msg-1', 'assistant', 'Branch B', 4000, 4000),
+        createChildMessage('msg-5', 'msg-4', 'user', 'Branch B -> Child 1', 5000, 5000),
+        createChildMessage('msg-6', 'msg-4', 'user', 'Branch B -> Child 2', 6000, 6000),
       ];
 
       const helperMaps = buildHelperMaps(messages);
@@ -494,37 +315,11 @@ describe('buildIdTree', () => {
     it('should handle multiple root trees', () => {
       const messages: Message[] = [
         // Tree 1
-        {
-          content: 'Tree 1 Root',
-          createdAt: 1000,
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: 1000,
-        },
-        {
-          content: 'Tree 1 Child',
-          createdAt: 2000,
-          id: 'msg-2',
-          parentId: 'msg-1',
-          role: 'assistant',
-          updatedAt: 2000,
-        },
+        createMessage('msg-1', 'user', 'Tree 1 Root', 1000, 1000),
+        createChildMessage('msg-2', 'msg-1', 'assistant', 'Tree 1 Child', 2000, 2000),
         // Tree 2
-        {
-          content: 'Tree 2 Root',
-          createdAt: 3000,
-          id: 'msg-3',
-          role: 'user',
-          updatedAt: 3000,
-        },
-        {
-          content: 'Tree 2 Child',
-          createdAt: 4000,
-          id: 'msg-4',
-          parentId: 'msg-3',
-          role: 'assistant',
-          updatedAt: 4000,
-        },
+        createMessage('msg-3', 'user', 'Tree 2 Root', 3000, 3000),
+        createChildMessage('msg-4', 'msg-3', 'assistant', 'Tree 2 Child', 4000, 4000),
       ];
 
       const helperMaps = buildHelperMaps(messages);

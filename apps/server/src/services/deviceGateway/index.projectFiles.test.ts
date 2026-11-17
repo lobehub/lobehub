@@ -4,6 +4,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceGateway } from '.';
 import { mockClient, mockEnv, resetGatewayMocks } from './testUtils';
 
+const createWorkspaceInput = () => ({
+  deviceId: 'dev-1',
+  scope: '/proj',
+  userId: 'user-1',
+});
+
+const createReadProjectFileInput = () => ({
+  deviceId: 'dev-1',
+  path: '/proj/App.tsx',
+  userId: 'user-1',
+  workingDirectory: '/proj',
+});
+
+const createProjectSkillItem = () => ({
+  description: 'spa',
+  fileCount: 3,
+  files: ['SKILL.md'],
+  name: 'spa-routes',
+  path: '/proj/.agents/skills/spa-routes/SKILL.md',
+  previewRoot: '/proj',
+  scope: 'project',
+  skillDir: '/proj/.agents/skills/spa-routes',
+  source: '.agents/skills',
+});
+
 vi.mock('@/server/services/redis/client', () =>
   import('./testUtils').then((m) => ({ getRedisServiceClient: m.getRedisServiceClient })),
 );
@@ -31,11 +56,7 @@ describe('DeviceGateway', () => {
 
     it('should return undefined when not configured', async () => {
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.initWorkspace(createWorkspaceInput());
       expect(result).toBeUndefined();
       expect(mockClient.invokeRpc).not.toHaveBeenCalled();
     });
@@ -47,17 +68,7 @@ describe('DeviceGateway', () => {
           instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
           // Device returns rich ProjectSkillItems; only prompt metadata survives.
           skills: [
-            {
-              description: 'spa',
-              fileCount: 3,
-              files: ['SKILL.md'],
-              name: 'spa-routes',
-              path: '/proj/.agents/skills/spa-routes/SKILL.md',
-              previewRoot: '/proj',
-              scope: 'project',
-              skillDir: '/proj/.agents/skills/spa-routes',
-              source: '.agents/skills',
-            },
+            createProjectSkillItem(),
             {
               description: 'device',
               fileCount: 2,
@@ -75,11 +86,7 @@ describe('DeviceGateway', () => {
       });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.initWorkspace(createWorkspaceInput());
 
       expect(result).toEqual({
         instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
@@ -104,16 +111,52 @@ describe('DeviceGateway', () => {
       );
     });
 
+    it('supports a device-only scan without inventing a working directory', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: {
+          instructions: [],
+          skills: [
+            {
+              description: 'Device writing guidance',
+              name: 'writing',
+              path: '/home/user/.agents/skills/writing/SKILL.md',
+              scope: 'device',
+            },
+          ],
+        },
+        success: true,
+      });
+
+      const result = await new DeviceGateway().initWorkspace({
+        deviceId: 'dev-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+
+      expect(result).toEqual({
+        instructions: [],
+        skills: [
+          {
+            description: 'Device writing guidance',
+            name: 'writing',
+            path: '/home/user/.agents/skills/writing/SKILL.md',
+            scope: 'device',
+          },
+        ],
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1', workspaceId: 'workspace-1' },
+        { method: 'initWorkspace', params: { scope: undefined } },
+      );
+    });
+
     it('defaults instructions and skills to empty arrays when absent', async () => {
       configure();
       mockClient.invokeRpc.mockResolvedValue({ data: {}, success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.initWorkspace(createWorkspaceInput());
 
       expect(result).toEqual({ instructions: [], skills: [] });
     });
@@ -123,11 +166,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.initWorkspace(createWorkspaceInput());
 
       expect(result).toBeUndefined();
     });
@@ -137,11 +176,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.initWorkspace(createWorkspaceInput());
 
       expect(result).toBeUndefined();
     });
@@ -151,11 +186,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.initWorkspace(createWorkspaceInput());
 
       expect(result).toBeUndefined();
     });
@@ -190,11 +221,7 @@ describe('DeviceGateway', () => {
 
     it('should return undefined when not configured', async () => {
       const proxy = new DeviceGateway();
-      const result = await proxy.listProjectSkills({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.listProjectSkills(createWorkspaceInput());
       expect(result).toBeUndefined();
       expect(mockClient.invokeRpc).not.toHaveBeenCalled();
     });
@@ -203,29 +230,13 @@ describe('DeviceGateway', () => {
       configure();
       const data = {
         root: '/proj',
-        skills: [
-          {
-            description: 'spa',
-            fileCount: 3,
-            files: ['SKILL.md'],
-            name: 'spa-routes',
-            path: '/proj/.agents/skills/spa-routes/SKILL.md',
-            previewRoot: '/proj',
-            scope: 'project',
-            skillDir: '/proj/.agents/skills/spa-routes',
-            source: '.agents/skills',
-          },
-        ],
+        skills: [createProjectSkillItem()],
         source: '.agents/skills',
       };
       mockClient.invokeRpc.mockResolvedValue({ data, success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.listProjectSkills({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.listProjectSkills(createWorkspaceInput());
 
       expect(result).toEqual(data);
       expect(mockClient.invokeRpc).toHaveBeenCalledWith(
@@ -239,11 +250,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.listProjectSkills({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.listProjectSkills(createWorkspaceInput());
 
       expect(result).toBeUndefined();
     });
@@ -253,11 +260,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.listProjectSkills({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.listProjectSkills(createWorkspaceInput());
 
       expect(result).toBeUndefined();
     });
@@ -267,11 +270,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
 
       const proxy = new DeviceGateway();
-      const result = await proxy.listProjectSkills({
-        deviceId: 'dev-1',
-        scope: '/proj',
-        userId: 'user-1',
-      });
+      const result = await proxy.listProjectSkills(createWorkspaceInput());
 
       expect(result).toBeUndefined();
     });
@@ -306,12 +305,7 @@ describe('DeviceGateway', () => {
 
     it('returns an error result when not configured', async () => {
       const proxy = new DeviceGateway();
-      const result = await proxy.getLocalFilePreview({
-        deviceId: 'dev-1',
-        path: '/proj/App.tsx',
-        userId: 'user-1',
-        workingDirectory: '/proj',
-      });
+      const result = await proxy.getLocalFilePreview(createReadProjectFileInput());
 
       expect(result).toEqual({ error: 'Device gateway not configured', success: false });
       expect(mockClient.invokeRpc).not.toHaveBeenCalled();
@@ -330,12 +324,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ data, success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.getLocalFilePreview({
-        deviceId: 'dev-1',
-        path: '/proj/App.tsx',
-        userId: 'user-1',
-        workingDirectory: '/proj',
-      });
+      const result = await proxy.getLocalFilePreview(createReadProjectFileInput());
 
       expect(result).toEqual(data);
       expect(mockClient.invokeRpc).toHaveBeenCalledWith(
@@ -382,12 +371,7 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.getLocalFilePreview({
-        deviceId: 'dev-1',
-        path: '/proj/App.tsx',
-        userId: 'user-1',
-        workingDirectory: '/proj',
-      });
+      const result = await proxy.getLocalFilePreview(createReadProjectFileInput());
 
       expect(result).toEqual({ error: 'offline', success: false });
     });

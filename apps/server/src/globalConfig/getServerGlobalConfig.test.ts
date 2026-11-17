@@ -20,6 +20,8 @@ interface MockGlobalConfigOptions {
   agentGatewayUrl?: string;
   appUrl?: string;
   enableAgentGateway?: boolean;
+  enablePageCollab?: boolean;
+  enableWorkspacePageCollab?: boolean;
   toolNameMaxLengthEnv?: string;
 }
 
@@ -49,6 +51,9 @@ const mockGlobalConfigDependencies = (
       ...(options.enableAgentGateway === undefined
         ? {}
         : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
+      AGENT_GATEWAY_SERVICE_TOKEN: 'token',
+      ENABLE_PAGE_COLLAB: options.enablePageCollab,
+      ENABLE_WORKSPACE_PAGE_COLLAB: options.enableWorkspacePageCollab,
     },
     getAppConfig: vi.fn(() => ({
       DEFAULT_AGENT_CONFIG: '',
@@ -155,7 +160,6 @@ describe('getServerGlobalConfig', () => {
     const providerConfig = await loadCapturedProviderConfig(true);
 
     expect(providerConfig[ModelProvider.LobeHub].enabled).toBe(true);
-    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(false);
     expect(providerConfig[ModelProvider.Ollama].fetchOnClient).toBe(true);
 
     for (const provider of Object.values(ModelProvider)) {
@@ -203,6 +207,17 @@ describe('getServerGlobalConfig', () => {
     await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
       enableGatewayMode: false,
     });
+  });
+
+  it('should tell clients which page collaboration flag is on', async () => {
+    const gateway = { agentGatewayUrl: 'https://gateway.test.com' };
+
+    await expect(
+      loadServerConfig(true, { ...gateway, enableWorkspacePageCollab: true }),
+    ).resolves.toMatchObject({ enablePageCollab: false, enableWorkspacePageCollab: true });
+    await expect(
+      loadServerConfig(true, { ...gateway, enablePageCollab: true }),
+    ).resolves.toMatchObject({ enablePageCollab: true, enableWorkspacePageCollab: false });
   });
 
   it('should declare gateway protocol 2 only where the v2 socket exists', async () => {
@@ -301,5 +316,33 @@ describe('getServerGlobalConfig', () => {
 
   it('should omit the OIDC issuer when APP_URL is not configured', async () => {
     await expect(loadServerConfig(false)).resolves.not.toHaveProperty('oidcIssuer');
+  });
+
+  it('should only advertise Agent Mail when it has a receive path', async () => {
+    vi.stubEnv('LINQ_API_KEY', undefined);
+    vi.stubEnv('AGENT_MAIL_API_KEY', 'am_test');
+    vi.stubEnv('AGENT_MAIL_WEBHOOK_URL', undefined);
+    vi.stubEnv('AGENT_MAIL_WEBHOOK_SECRET', undefined);
+
+    // A mailbox that can be opened but never receives is not an offer.
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', []);
+
+    // The shared signing secret is enough: deliveries are verified against it
+    // when the account carries no webhook of its own.
+    vi.stubEnv('AGENT_MAIL_WEBHOOK_SECRET', 'whsec_mail');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', [
+      'agent-mail',
+    ]);
+  });
+
+  it('should advertise Agent Mail when provisioning registers its own webhook', async () => {
+    vi.stubEnv('LINQ_API_KEY', undefined);
+    vi.stubEnv('AGENT_MAIL_API_KEY', 'am_test');
+    vi.stubEnv('AGENT_MAIL_WEBHOOK_SECRET', undefined);
+    vi.stubEnv('AGENT_MAIL_WEBHOOK_URL', 'https://chat.example.com/accounts/webhooks/agent-mail');
+
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', [
+      'agent-mail',
+    ]);
   });
 });

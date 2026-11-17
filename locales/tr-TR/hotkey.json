@@ -27,6 +27,8 @@
   "openChatSettings.title": "Sohbet Ayarlarını Aç",
   "openHotkeyHelper.desc": "Tüm klavye kısayolları için talimatları görüntüle",
   "openHotkeyHelper.title": "Kısayol Yardımını Aç",
+  "openTaskFilter.desc": "Görevler sayfasındaki filtre menüsünü aç",
+  "openTaskFilter.title": "Görevleri Filtrele",
   "prevTab.desc": "Masaüstü uygulamasında bir önceki sekmeye geç; başlangıçta son sekmeye geri döner",
   "prevTab.title": "Önceki Sekme",
   "regenerateMessage.desc": "Son mesajı yeniden oluştur",

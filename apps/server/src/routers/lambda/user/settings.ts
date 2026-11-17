@@ -1,4 +1,5 @@
 import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { MAX_ISLAND_DISMISSALS } from '@lobechat/const/goal';
 import type { UserSettings } from '@lobechat/types';
 import {
   NotificationSettingsSchema,
@@ -30,6 +31,16 @@ const hasMemberSettingChange = (input: Partial<UserSettings>) =>
   MEMBER_SETTING_KEYS.some((key) => input[key] !== undefined);
 
 export const settingsRouter = router({
+  /**
+   * Record goal asks the user waved off the approval island. Kept server-side
+   * so every client of the account stops showing them; the goal island reads
+   * leave these keys out. Append-only, so it never takes the whole preference.
+   */
+  addIslandDismissals: userProcedure
+    .input(
+      z.object({ keys: z.array(z.string().min(1).max(512)).min(1).max(MAX_ISLAND_DISMISSALS) }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.userModel.addIslandDismissals(input.keys)),
   getNotificationSettings: userProcedure.query(async ({ ctx }) => {
     return ctx.userModel.getNotificationSetting();
   }),
@@ -50,6 +61,14 @@ export const settingsRouter = router({
   updatePreference: userProcedure.input(UserPreferenceSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updatePreference(input);
   }),
+  /**
+   * Personal-mode "New worktree" switch for one directory. Its own mutation:
+   * `updatePreference` deep-merges arrays by index, and the list's cap must be
+   * applied against the stored copy, not a client's.
+   */
+  setWorktreeModeDir: userProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) => ctx.userModel.setWorktreeModeDir(input.key, input.enabled)),
   /**
    * Personal chat-assist preferences (follow-up chips, input completion). They
    * act on the caller's own chat surface, so — unlike the rest of

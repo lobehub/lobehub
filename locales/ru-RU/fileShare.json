@@ -1,0 +1,15 @@
+{
+  "popover.copyLink": "Копировать ссылку",
+  "popover.copyLinkSuccess": "Ссылка скопирована",
+  "popover.linkHint": "Любой, у кого есть ссылка, может просматривать и скачивать этот файл",
+  "popover.permissionLink": "Все, у кого есть ссылка",
+  "popover.permissionPrivate": "Приватный",
+  "popover.privateHint": "Только вы можете открыть этот файл",
+  "popover.sectionViews_one": "{{count}} просмотр",
+  "popover.sectionViews_other": "{{count}} просмотров",
+  "popover.title": "Поделиться файлом",
+  "popover.updateError": "Не удалось обновить настройки общего доступа",
+  "popover.visibility": "Видимость",
+  "popover.visibilityUpdated": "Видимость обновлена",
+  "shareButton.label": "Поделиться"
+}

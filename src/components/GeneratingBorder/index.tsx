@@ -1,8 +1,10 @@
 'use client';
 
-import './property.css';
-
-import { Flexbox } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- StyleX has no API for a named @property registration
+  createStaticStyles,
+  Flexbox,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
@@ -19,6 +21,19 @@ const sweep = stylex.keyframes({
   from: { '--lobe-generating-border-angle': '0deg' } as SweepFrame,
   to: { '--lobe-generating-border-angle': '360deg' } as SweepFrame,
 });
+
+// `@property` is what makes the angle animatable: an unregistered custom property
+// jumps from 0deg to 360deg instead of sweeping. Emotion hoists the at-rule out of
+// the class, so it is registered once, document-wide.
+const fallback = createStaticStyles(({ css }) => ({
+  angleProperty: css`
+    @property --lobe-generating-border-angle {
+      inherits: false;
+      initial-value: 0deg;
+      syntax: '<angle>';
+    }
+  `,
+}));
 
 const styles = stylex.create({
   shell: { position: 'relative', borderRadius: '8px' },
@@ -81,7 +96,15 @@ export interface GeneratingBorderProps {
  */
 const GeneratingBorder = memo<GeneratingBorderProps>(
   ({ children, className, generating, style }) => (
-    <Flexbox {...sx(styles.shell, generating && styles.shellGenerating, className, style)}>
+    <Flexbox
+      {...sx(
+        styles.shell,
+        generating && styles.shellGenerating,
+        fallback.angleProperty,
+        className,
+        style,
+      )}
+    >
       {children}
     </Flexbox>
   ),

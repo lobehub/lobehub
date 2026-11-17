@@ -25,6 +25,7 @@ import {
   DocumentExplorerTree,
 } from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
+import { startDocumentDrag } from '@/features/ChatInput/InputEditor/ReferDocument/documentDragData';
 import {
   filterSkillItems,
   openRenameSkillModal,
@@ -64,7 +65,6 @@ const styles = stylex.create({
     backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
   },
-  containerActive: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
   description: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
   meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
   pillActive: {
@@ -182,7 +182,7 @@ const DocumentItem = memo<DocumentItemProps>(
       <Flexbox
         horizontal
         align={'flex-start'}
-        className={stylex.props(styles.container, isActive && styles.containerActive).className}
+        className={stylex.props(styles.container).className}
         gap={8}
         onClick={handleOpen}
       >
@@ -391,6 +391,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         navigate(buildAgentDocumentPath(agentId, documentId));
       },
       [agentId, data, navigate, openDocument, resolvedOpenMode],
+    );
+
+    // Dragging a document into the chat input inserts a `<refer_document>` chip;
+    // the server resolves it against this agent's documents when sending.
+    const handleDocumentDragStart = useCallback(
+      (doc: { filename?: string | null; id: string; title?: string | null }, event: DragEvent) => {
+        startDocumentDrag(event, { documentId: doc.id, title: doc.title || doc.filename || '' });
+      },
+      [],
     );
 
     // Open the SKILL.md (skills/index child) when present; fall back to the
@@ -655,6 +664,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           data={documentsData}
           mutate={mutate}
           style={{ height: '100%' }}
+          onDocumentDragStart={handleDocumentDragStart}
           onOpenDocument={openAgentDocument}
         />
       </Flexbox>

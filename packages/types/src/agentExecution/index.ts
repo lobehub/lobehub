@@ -4,6 +4,8 @@ import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { CreateThreadWithMessageParams } from '../aiChat';
 import type { DeviceUnavailableErrorData } from '../device';
 import { workingDirConfigSchema } from '../device';
+import type { EvalToolForwardingConfig } from '../eval/agentEval';
+import type { EvalMemoryReference } from '../eval/evalMemory';
 import type { ComposerUserMessage, TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
@@ -36,6 +38,10 @@ export const initialTopicMetadataSchema = z.object({
   /** The environment to initialize the sandbox from; see `ChatTopicMetadata.sandboxEnvironmentId`. */
   sandboxEnvironmentId: z.string().max(255).optional(),
   sandboxInstanceId: z.string().optional(),
+  /** A default nobody picked; see `ChatTopicMetadata.sandboxSeeded`. */
+  sandboxSeeded: z.boolean().optional(),
+  /** An explicit temporary-sandbox pick; see `ChatTopicMetadata.sandboxTemporary`. */
+  sandboxTemporary: z.boolean().optional(),
   sandboxWorkingDirectory: z.string().max(1024).optional(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
@@ -659,6 +665,25 @@ export interface ExecVirtualSubAgentParams {
    * runs instead of re-routing through the agent-level `boundDeviceId`.
    */
   deviceId?: string;
+  /**
+   * What the child inherits when the parent runs inside an eval attempt: the
+   * attempt's prompt context (session clock), its runtime (tool forwarding,
+   * Memory scope) and its step cap. Without these the child leaves the sandbox:
+   * it reaches real services, the caller's own Memory and the wall clock, and
+   * runs with no step limit.
+   */
+  eval?: {
+    context?: { envPrompt?: string; sessionDate?: string; timezone?: string };
+    maxSteps?: number;
+    runtime?: {
+      /** The parent's tool allowlist; the child may not reach past it either. */
+      allowedTools?: string[];
+      attemptId?: string;
+      caseId?: string;
+      memory?: EvalMemoryReference;
+      toolForwarding?: EvalToolForwardingConfig;
+    };
+  };
   /** The Group ID inherited from the parent operation, when present */
   groupId?: string;
   /** Instruction/prompt for the virtual sub-agent */
@@ -712,9 +737,51 @@ export interface ExecSubAgentResult {
   error?: string;
   /** Operation ID for tracking execution status */
   operationId: string;
+  /**
+   * The thread's previous run was still going, so no run was started: the
+   * instruction was queued behind that run (`operationId`) and joins it before
+   * its next LLM call.
+   */
+  steered?: boolean;
   /** Whether the execution was created successfully */
   success: boolean;
   /** The Thread ID where the execution is isolated */
+  threadId: string;
+  /** Short-lived Gateway ticket for streaming this run (absent when withheld) */
+  token?: string;
+}
+
+/**
+ * Parameters for cancelVirtualSubAgent - stop a running `lobe-agent.callSubAgent`
+ * child run on behalf of the agent that dispatched it.
+ */
+export interface CancelVirtualSubAgentParams {
+  /** The dispatching agent; the sub-agent's thread must belong to it */
+  agentId: string;
+  /** The sub-agent's isolation thread id (its `<sub_agent id>`) */
+  threadId: string;
+  /** The topic the sub-agent was dispatched from */
+  topicId: string;
+}
+
+/**
+ * Result from cancelVirtualSubAgent
+ *
+ * - `cancelled`: the run was asked to stop and acknowledged it.
+ * - `not_running`: there is no live run on the thread; nothing was stopped.
+ * - `failed`: the thread is not a cancellable sub-agent, or the stop could not
+ *   be confirmed (`error` says which).
+ */
+export interface CancelVirtualSubAgentResult {
+  error?: string;
+  /** The stopped (or last) run of the sub-agent */
+  operationId?: string;
+  status: 'cancelled' | 'failed' | 'not_running';
+  /**
+   * For `cancelled`: whether the run already reached its end. `false` means it
+   * is still finishing its current step and refuses follow-ups until then.
+   */
+  stopped?: boolean;
   threadId: string;
 }
 

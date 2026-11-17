@@ -116,7 +116,7 @@ jobs:
     name: Calculate Canary Version
     needs: [check-trigger, core-ota]
     if: |
-      always() && needs.check-trigger.outputs.should_build == 'true' &&
+      !cancelled() && needs.check-trigger.outputs.should_build == 'true' &&
       (inputs.force_full || needs.core-ota.outputs.requires_full_release == 'true' || needs.core-ota.outputs.skipped == 'true')
     runs-on: ubuntu-latest
     outputs:
@@ -254,6 +254,10 @@ jobs:
   test:
     name: Code quality check
     needs: [calculate-version]
+    # force_full skips core-ota, and a skipped ancestor skips every job on the default
+    # success() condition, even when calculate-version itself succeeded. Each job below
+    # therefore checks its direct dependencies explicitly.
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base
@@ -270,11 +274,37 @@ jobs:
       - name: Lint
         run: bun run lint
 
+  overlay-type-check:
+    name: Overlay type check
+    needs: [calculate-version]
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
+      - name: Type check overlaid sources
+        if: steps.overlay-token.outputs.token != ''
+        uses: ./.github/actions/overlay-type-check
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          overlay-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
+
   # ============================================
   # 多平台构建
   # ============================================
   build:
-    needs: [calculate-version, test]
+    needs: [calculate-version, test, overlay-type-check]
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' && needs.test.result == 'success' && needs.overlay-type-check.result == 'success' }}
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
@@ -431,6 +461,7 @@ jobs:
   # ============================================
   merge-mac-files:
     needs: [build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     name: Merge macOS Release Files
     runs-on: ubuntu-latest
     permissions:
@@ -477,6 +508,7 @@ jobs:
   # ============================================
   publish-release:
     needs: [merge-mac-files, calculate-version]
+    if: ${{ !cancelled() && needs.merge-mac-files.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish Canary Release
     runs-on: ubuntu-latest
     permissions:
@@ -522,6 +554,7 @@ jobs:
   # ============================================
   publish-s3:
     needs: [merge-mac-files, calculate-version]
+    if: ${{ !cancelled() && needs.merge-mac-files.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish to S3
     runs-on: ubuntu-latest
     steps:
@@ -551,6 +584,7 @@ jobs:
   # ============================================
   publish-sparkle:
     needs: [publish-s3, calculate-version]
+    if: ${{ !cancelled() && needs.publish-s3.result == 'success' && needs.calculate-version.result == 'success' }}
     name: Publish Sparkle Appcast
     runs-on: macos-15
     steps:
@@ -581,6 +615,7 @@ jobs:
   # ============================================
   cleanup-old-canaries:
     needs: [publish-release, publish-s3]
+    if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.publish-s3.result == 'success' }}
     name: Cleanup Old Canary Releases
     runs-on: ubuntu-latest
     permissions:

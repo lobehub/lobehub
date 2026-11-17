@@ -34,6 +34,17 @@ describe('formatConnectorActionErrorToast', () => {
     },
   );
 
+  it('shows why the server refused the MCP address', () => {
+    // Regression: a blocked sync showed only the generic "action failed".
+    const translate = ((key: string) => key) as TFunction<'tool'>;
+    const reason = 'The MCP server address resolves to a private IP address …';
+    const error = Object.assign(new Error(reason), {
+      data: { code: 'BAD_REQUEST', errorData: { type: 'SSRF_BLOCKED' }, httpStatus: 400 },
+    });
+
+    expect(formatConnectorActionErrorToast(translate, error)).toBe(reason);
+  });
+
   it('explains network failures for all detail-panel actions', () => {
     const translate = ((key: string) => key) as TFunction<'tool'>;
     expect(formatConnectorActionErrorToast(translate, new TypeError('Failed to fetch'))).toBe(

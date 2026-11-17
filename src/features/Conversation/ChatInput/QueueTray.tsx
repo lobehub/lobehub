@@ -4,20 +4,24 @@ import { ActionIcon, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { useSingleton } from '@/hooks/useSingleton';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { canSteerClientRun } from '@/store/chat/slices/agentRun/actions/transports/client/clientSteer';
 import {
+  isServerDeliveringQueuedMessage,
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
 } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
@@ -206,6 +210,7 @@ const QueueTray = memo(() => {
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
   const waitsForRunEnd = useChatStore(operationSelectors.isQueueDrainedAtRunEnd(context));
+  const followUpMode = useUserStore(userGeneralSettingsSelectors.followUpBehavior);
   const withdrawQueuedMessage = useChatStore((s) => s.withdrawQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
@@ -217,6 +222,24 @@ const QueueTray = memo(() => {
   // when the user clicks the pencil.
   // A follow-up queued on the server may already be on its way into the run;
   // then it is neither edited nor sent again.
+  // Still in the tray: a run took it and the agent has not read it yet.
+  // Gone: it already landed in the conversation.
+  const toastAlreadyDelivered = useCallback(
+    (id: string) => {
+      const pending = useChatStore
+        .getState()
+        .queuedMessages[contextKey]?.find((queued) => queued.id === id);
+      toast.info(
+        t(
+          pending && isServerDeliveringQueuedMessage(pending)
+            ? 'inputQueue.alreadyDelivering'
+            : 'inputQueue.alreadyDelivered',
+        ),
+      );
+    },
+    [contextKey, t],
+  );
+
   const withdraw = useCallback(
     async (msg: QueuedMessage) => {
       const withdrawn = await withdrawQueuedMessage(contextKey, msg.id).catch((error) => {
@@ -224,10 +247,10 @@ const QueueTray = memo(() => {
         toast.error(t('inputQueue.withdrawFailed'));
         return undefined;
       });
-      if (withdrawn === false) toast.info(t('inputQueue.alreadyDelivered'));
+      if (withdrawn === false) toastAlreadyDelivered(msg.id);
       return !!withdrawn;
     },
-    [contextKey, t, withdrawQueuedMessage],
+    [contextKey, toastAlreadyDelivered, withdrawQueuedMessage],
   );
 
   const handleEdit = useCallback(
@@ -237,10 +260,10 @@ const QueueTray = memo(() => {
       editor?.focus();
       if (msg.filesPreview?.length) {
         const restored = reconstructUploadFilesFromQueue(msg.filesPreview);
-        dispatchChatUploadFileList({ files: restored, type: 'addFiles' });
+        dispatchChatUploadFileList(contextKey, { files: restored, type: 'addFiles' });
       }
     },
-    [dispatchChatUploadFileList, editor, withdraw],
+    [contextKey, dispatchChatUploadFileList, editor, withdraw],
   );
 
   // "Send now": cancel the currently running agent run for this context, then
@@ -248,21 +271,35 @@ const QueueTray = memo(() => {
   // remaining queue (if any) stays in place — the new turn's onComplete drain
   // will pick them up after it finishes. Reads chatStore inline so we don't
   // re-subscribe the whole tray to the operations map.
+  // The row shows it is on its way at once: stopping a CLI agent waits for the
+  // device to confirm, which can take seconds.
+  const [sendingId, setSendingId] = useState<string>();
   const handleSendNow = useCallback(
     async (msg: QueuedMessage) => {
       await sendNowGate
-        .run(() =>
-          sendQueuedMessageNow({
-            chat: useChatStore.getState(),
-            context,
-            contextKey,
-            msg,
-            withdraw,
-          }),
-        )
-        .catch((error) => console.error('[QueueTray] sendNow failed:', error));
+        .run(async () => {
+          setSendingId(msg.id);
+          try {
+            const outcome = await sendQueuedMessageNow({
+              chat: useChatStore.getState(),
+              context,
+              contextKey,
+              isQueued: (id) =>
+                !!useChatStore.getState().queuedMessages[contextKey]?.some((q) => q.id === id),
+              msg,
+              withdraw: (queued) => withdrawQueuedMessage(contextKey, queued.id),
+            });
+            if (outcome === 'delivered') toastAlreadyDelivered(msg.id);
+          } finally {
+            setSendingId(undefined);
+          }
+        })
+        .catch((error) => {
+          console.error('[QueueTray] sendNow failed:', error);
+          toast.error(t('inputQueue.sendNowFailed'));
+        });
     },
-    [context, contextKey, sendNowGate, withdraw],
+    [context, contextKey, sendNowGate, t, toastAlreadyDelivered, withdrawQueuedMessage],
   );
 
   if (queuedMessages.length === 0) return null;
@@ -274,12 +311,30 @@ const QueueTray = memo(() => {
   // The queue drains as one take-all and is merged into a single send, so a
   // multi-item queue has to say "merges" instead of "sends". A heterogeneous
   // CLI run only drains once the whole run ends, not after the current step.
-  const hintText = t(getQueuedHintKey({ count: queuedMessages.length, waitsForRunEnd }));
+  // One a run already took is no longer part of that merge: it says where it
+  // is instead and offers nothing to do with it.
+  const waitingCount = queuedMessages.filter(
+    (msg) => !isServerDeliveringQueuedMessage(msg) && !msg.localSteer,
+  ).length;
+  const hintText = t(getQueuedHintKey({ count: waitingCount, mode: followUpMode, waitsForRunEnd }));
 
   return (
     <Flexbox {...stylex.props(styles.container)} gap={0}>
       {queuedMessages.map((msg, index) => {
         const previews = msg.filesPreview ?? [];
+        // A "send now" in progress keeps its row as is: it is interrupting the
+        // run to take this message back, and shows that with its spinner.
+        const delivering =
+          (isServerDeliveringQueuedMessage(msg) || msg.localSteer === 'delivering') &&
+          sendingId !== msg.id;
+        const rowHint = delivering
+          ? t('inputQueue.deliveringHint')
+          : msg.localSteer === 'unknown'
+            ? t('inputQueue.steerDeliveryUnknownHint')
+            : // An attachment or selection cannot join a running turn; it starts the next one.
+              followUpMode === 'steer' && !waitsForRunEnd && !canSteerClientRun(msg)
+              ? t('inputQueue.queuedHint')
+              : hintText;
         return (
           <Flexbox
             horizontal
@@ -317,35 +372,43 @@ const QueueTray = memo(() => {
               {/* Collapsed form. It is display:none while the sentence fits, so
                   it adds no tab stop there; when it shows it is a real
                   focusable control carrying the wording as its name. */}
-              <Tooltip title={hintText}>
-                <button aria-label={hintText} {...stylex.props(styles.hintGlyph)} type={'button'}>
+              <Tooltip title={rowHint}>
+                <button aria-label={rowHint} {...stylex.props(styles.hintGlyph)} type={'button'}>
                   <Icon icon={Info} size={13} />
                 </button>
               </Tooltip>
-              <span {...stylex.props(styles.hintText)}>{hintText}</span>
+              <span {...stylex.props(styles.hintText)}>{rowHint}</span>
             </span>
             <div style={{ flex: 1 }} />
-            <ActionIcon
-              aria-label={t('inputQueue.edit')}
-              icon={Pencil}
-              size="small"
-              title={t('inputQueue.edit')}
-              onClick={() => handleEdit(msg)}
-            />
-            <ActionIcon
-              aria-label={t('inputQueue.sendNow')}
-              icon={ArrowUp}
-              size="small"
-              title={t('inputQueue.sendNow')}
-              onClick={() => handleSendNow(msg)}
-            />
-            <ActionIcon
-              aria-label={t('inputQueue.delete')}
-              icon={Trash2}
-              size="small"
-              title={t('inputQueue.delete')}
-              onClick={() => withdraw(msg)}
-            />
+            {!delivering && (
+              <>
+                <ActionIcon
+                  aria-label={t('inputQueue.edit')}
+                  disabled={sendingId === msg.id}
+                  icon={Pencil}
+                  size="small"
+                  title={t('inputQueue.edit')}
+                  onClick={() => handleEdit(msg)}
+                />
+                <ActionIcon
+                  aria-label={t('inputQueue.sendNow')}
+                  disabled={!!sendingId}
+                  icon={ArrowUp}
+                  loading={sendingId === msg.id}
+                  size="small"
+                  title={t('inputQueue.sendNow')}
+                  onClick={() => handleSendNow(msg)}
+                />
+                <ActionIcon
+                  aria-label={t('inputQueue.delete')}
+                  disabled={sendingId === msg.id}
+                  icon={Trash2}
+                  size="small"
+                  title={t('inputQueue.delete')}
+                  onClick={() => withdraw(msg)}
+                />
+              </>
+            )}
           </Flexbox>
         );
       })}

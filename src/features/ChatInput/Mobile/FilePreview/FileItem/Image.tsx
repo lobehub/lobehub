@@ -1,4 +1,6 @@
-import { ActionIcon, createStaticStyles, cssVar, cx, Flexbox, Image } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Image } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCw, Trash } from 'lucide-react';
 import { memo } from 'react';
 
@@ -6,25 +8,21 @@ import { FileUploadErrorActions } from '@/business/client/features/FileUploadErr
 
 import { MIN_IMAGE_SIZE } from './style';
 
-const styles = createStaticStyles(({ css }) => ({
-  deleteButton: css`
-    color: #fff;
-    background: ${cssVar.colorBgMask};
-
-    &:hover {
-      background: ${cssVar.colorError};
-    }
-  `,
-  editableImage: css`
-    background: ${cssVar.colorBgContainer};
-    box-shadow: 0 0 0 1px ${cssVar.colorFill} inset;
-  `,
-  image: css`
-    width: 64px !important;
-    height: 64px !important;
-    margin-block: 0 !important;
-  `,
-}));
+// `image` used `!important` to beat lobe-ui's Image wrapper; that CSS is layered, so the
+// unlayered StyleX rules win without it.
+const styles = stylex.create({
+  deleteButton: {
+    color: '#fff',
+    backgroundColor: { 'default': cssVar.colorBgMask, ':hover': cssVar.colorError },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  editableImage: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: `0 0 0 1px ${cssVar.colorFill} inset`,
+  },
+  image: { width: '64px', height: '64px', marginBlock: '0' },
+});
 
 interface FileItemProps {
   alt?: string;
@@ -44,7 +42,7 @@ const FileItem = memo<FileItemProps>(
       <Image
         alwaysShowActions
         alt={alt || ''}
-        classNames={{ wrapper: cx(styles.image, styles.editableImage) }}
+        classNames={{ wrapper: stylex.props(styles.image, styles.editableImage).className }}
         height={64}
         isLoading={loading}
         objectFit={'cover'}
@@ -58,7 +56,7 @@ const FileItem = memo<FileItemProps>(
             ) : error ? (
               <ActionIcon
                 glass
-                className={styles.deleteButton}
+                className={stylex.props(styles.deleteButton).className}
                 icon={RotateCw}
                 size={'small'}
                 onClick={(e) => {
@@ -69,7 +67,7 @@ const FileItem = memo<FileItemProps>(
             ) : null}
             <ActionIcon
               glass
-              className={styles.deleteButton}
+              className={stylex.props(styles.deleteButton).className}
               icon={Trash}
               size={'small'}
               onClick={(e) => {

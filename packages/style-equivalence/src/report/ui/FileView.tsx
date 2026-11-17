@@ -1,3 +1,4 @@
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -12,41 +13,33 @@ const styles = stylex.create({
   cause: {
     color: cssVar.colorTextSecondary,
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: 11.5,
+    fontSize: cssVar.fontSizeSM,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   chips: { columnGap: 4, display: 'flex', flexWrap: 'wrap', rowGap: 4 },
-  heading: { fontSize: 15, fontWeight: 600, marginBlock: 0, wordBreak: 'break-all' },
-  key: { color: cssVar.colorText, fontFamily: cssVar.fontFamilyCode, fontSize: 12.5 },
-  list: {
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    overflow: 'hidden',
+  heading: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    marginBlock: 0,
+    wordBreak: 'break-all',
   },
+  key: { color: cssVar.colorText, fontFamily: cssVar.fontFamilyCode, fontSize: cssVar.fontSizeSM },
   row: {
     alignItems: 'center',
     backgroundColor: { ':hover': cssVar.colorFillQuaternary, 'default': 'transparent' },
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: { ':first-child': 'none', 'default': 'solid' },
+    borderBlockStartWidth: 1,
     color: 'inherit',
     columnGap: 12,
     display: 'grid',
-    gridTemplateColumns: '160px auto 1fr minmax(0, 1.2fr)',
-    paddingBlock: 10,
-    paddingInline: 14,
+    gridTemplateColumns: '180px auto minmax(0, 1fr) minmax(0, 1.2fr)',
+    paddingBlock: 12,
+    paddingInline: 16,
     textDecorationLine: 'none',
-  },
-  sub: {
-    color: cssVar.colorTextSecondary,
-    fontSize: 12.5,
-    marginBlockEnd: 12,
-    marginBlockStart: 4,
   },
 });
 
@@ -68,14 +61,16 @@ export const FileView = ({
   const unpaired = items.filter((item) => item.file === file && item.category === 'unpaired');
   const signoffOf = (key: string) => items.find((item) => item.key === key)?.signoff;
   return (
-    <section>
-      <h2 {...stylex.props(styles.heading)}>{file}</h2>
-      <div {...stylex.props(styles.sub)}>
-        {list.length} 个用例
-        {unpaired.length ? ` · ${unpaired.length} 个元素两侧配不上` : ''}
-        。每行的小格子是这个用例在各条件下的结果，点开看证据链。
-      </div>
-      <div {...stylex.props(styles.list)}>
+    <Flexbox gap={16}>
+      <Flexbox gap={4}>
+        <h1 {...stylex.props(styles.heading)}>{file}</h1>
+        <Text type="secondary">
+          {list.length} 个用例
+          {unpaired.length ? `，${unpaired.length} 个元素两侧配不上` : ''}
+          。小格子是这个用例在各条件下的结果，点一行看截图。
+        </Text>
+      </Flexbox>
+      <Block style={{ overflow: 'hidden' }} variant="outlined">
         {list.map((entry) => {
           const [cause] = entry.result.rootCauses;
           const signoff = signoffOf(entry.key);
@@ -105,7 +100,11 @@ export const FileView = ({
           );
         })}
         {unpaired.map((item) => (
-          <a href={hrefOf({ kind: 'review' })} key={item.key} {...stylex.props(styles.row)}>
+          <a
+            href={hrefOf({ key: item.key, kind: 'review' })}
+            key={item.key}
+            {...stylex.props(styles.row)}
+          >
             <span {...stylex.props(styles.key)}>{shortKey(item.key)}</span>
             <span />
             <span {...stylex.props(styles.chips)}>
@@ -115,7 +114,7 @@ export const FileView = ({
             <span />
           </a>
         ))}
-      </div>
-    </section>
+      </Block>
+    </Flexbox>
   );
 };

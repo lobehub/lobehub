@@ -5,10 +5,16 @@ import type { App } from '@/core/App';
 
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
 
-const { ipcMainHandleMock, mockFetch } = vi.hoisted(() => ({
+const { appSignInMock, ipcMainHandleMock, mockFetch } = vi.hoisted(() => ({
+  appSignInMock: {
+    refreshAppSignIn: vi.fn(async () => {}),
+    withdrawAppSignIn: vi.fn(async () => {}),
+  },
   ipcMainHandleMock: vi.fn(),
   mockFetch: vi.fn(),
 }));
+
+vi.mock('@/modules/cliEmbedding/appSignInFile', () => appSignInMock);
 
 vi.mock('@/utils/net-fetch', () => ({
   netFetch: mockFetch,
@@ -449,6 +455,15 @@ describe('RemoteServerConfigCtr', () => {
       await controller.clearTokens();
 
       expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalled();
+    });
+
+    /** Local agent runs read the app's sign-in from a file that must follow it. */
+    it("keeps local agent runs' sign-in file in step with the tokens", async () => {
+      await controller.saveTokens('renewed-access', 'refresh', 3600);
+      expect(appSignInMock.refreshAppSignIn).toHaveBeenCalledWith('renewed-access');
+
+      await controller.clearTokens();
+      expect(appSignInMock.withdrawAppSignIn).toHaveBeenCalled();
     });
   });
 

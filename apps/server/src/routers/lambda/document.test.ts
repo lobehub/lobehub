@@ -250,7 +250,7 @@ describe('HTML document writes', () => {
  * the body H1. Only agent documents dropped that heading.
  */
 describe('Markdown writes drop the heading that repeats the title', () => {
-  const title = 'rc 与 device — 讨论纪要（2026-10-20）';
+  const title = '集群与设备 — 讨论纪要（2026-10-20）';
   const content = `# ${title}\n\n来源：eval 频道\n`;
 
   beforeEach(() => {

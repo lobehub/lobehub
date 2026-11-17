@@ -1,11 +1,11 @@
 'use client';
 
-import './Overview.css';
-
 import {
   Accordion,
   Block,
   Button,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- rendered Markdown paragraphs get no className
+  createStaticStyles,
   Flexbox,
   Icon,
   Markdown,
@@ -55,6 +55,14 @@ const styles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  summary: css`
+    p {
+      margin-block: 0 0.8em;
+    }
+  `,
+}));
+
 const SectionLabel = memo<{ children: string }>(({ children }) => (
   <Text as={'h2'} className={stylex.props(styles.sectionLabel).className}>
     {children}
@@ -96,7 +104,7 @@ const Overview = memo(() => {
       {/* ABOUT */}
       <Flexbox gap={12}>
         <SectionLabel>{t('skills.details.overview.about')}</SectionLabel>
-        <div {...sx(styles.summary, 'lobe-overview-22f20c33-summary')}>
+        <div {...sx(styles.summary, fallback.summary)}>
           <Markdown variant={'chat'}>{overview?.summary || description || ''}</Markdown>
         </div>
       </Flexbox>

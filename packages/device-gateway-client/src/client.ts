@@ -20,6 +20,8 @@ import type {
   ServerMessage,
   SystemInfoRequestMessage,
   SystemInfoResponseMessage,
+  ToolCallCompletionAckMessage,
+  ToolCallCompletionMessage,
   ToolCallRequestMessage,
   ToolCallResponseMessage,
 } from './types';
@@ -39,6 +41,7 @@ const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
  */
 const CONNECT_TIMEOUT = 15_000; // 15s
 const METRICS_ACK_TIMEOUT_MS = 15_000;
+const COMPLETION_ACK_TIMEOUT_MS = 30_000;
 /**
  * Close reason the gateway sends when a newer socket with the same
  * `connectionId` takes over. `connectionId` is persisted per install, so this
@@ -55,6 +58,9 @@ export interface GatewayClientLogger {
   info: (msg: string, ...args: unknown[]) => void;
   warn: (msg: string, ...args: unknown[]) => void;
 }
+
+const completionAckKey = (operationId: string, toolCallId: string) =>
+  `${operationId}:${toolCallId}`;
 
 const noopLogger: GatewayClientLogger = {
   debug: () => {},
@@ -123,6 +129,13 @@ export class GatewayClient extends EventEmitter {
     string,
     { reject: (error: Error) => void; resolve: () => void }
   >();
+  private pendingCompletionAcks = new Map<
+    string,
+    {
+      reject: (error: Error) => void;
+      resolve: (ack: Omit<ToolCallCompletionAckMessage, 'type'>) => void;
+    }
+  >();
   private intentionalDisconnect = false;
   /**
    * When each socket abandoned mid-handshake was abandoned. Only such a socket
@@ -179,6 +192,11 @@ export class GatewayClient extends EventEmitter {
 
   get currentDeviceId(): string {
     return this.deviceId;
+  }
+
+  /** Tunnel HTTP requests and WebSockets this device is serving right now. */
+  get activeTunnelCount(): number {
+    return this.tunnelHost?.activeCount ?? 0;
   }
 
   get currentConnectionId(): string {
@@ -277,6 +295,40 @@ export class GatewayClient extends EventEmitter {
         },
       });
       this.sendMessage({ batchId, samples, type: 'device_metrics' });
+    });
+  }
+
+  /**
+   * Send the late result of a call the device kept watching, and resolve with
+   * the gateway's verdict. Rejects when not connected, when the connection drops
+   * mid-flight, or when no ack arrives in time — the caller keeps the result and
+   * sends it again, which is safe because the server applies it at most once.
+   */
+  reportToolCallCompletion(
+    completion: Omit<ToolCallCompletionMessage, 'type'>,
+  ): Promise<Omit<ToolCallCompletionAckMessage, 'type'>> {
+    if (this.status !== 'connected' || this.ws?.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error('Gateway not connected'));
+    }
+    const key = completionAckKey(completion.operationId, completion.toolCallId);
+    // A resend supersedes the attempt still waiting on this socket.
+    this.pendingCompletionAcks.get(key)?.reject(new Error('Superseded by a newer send'));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingCompletionAcks.delete(key);
+        reject(new Error('Timed out waiting for tool_call_completion_ack'));
+      }, COMPLETION_ACK_TIMEOUT_MS);
+      this.pendingCompletionAcks.set(key, {
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+        resolve: (ack) => {
+          clearTimeout(timer);
+          resolve(ack);
+        },
+      });
+      this.sendMessage({ ...completion, type: 'tool_call_completion' });
     });
   }
 
@@ -458,6 +510,15 @@ export class GatewayClient extends EventEmitter {
         case 'auth_expired': {
           this.logger.warn('Received auth_expired from gateway');
           this.emit('auth_expired');
+          break;
+        }
+
+        case 'tool_call_completion_ack': {
+          const { type: _type, ...ack } = message as ToolCallCompletionAckMessage;
+          const key = completionAckKey(ack.operationId, ack.toolCallId);
+          const pending = this.pendingCompletionAcks.get(key);
+          this.pendingCompletionAcks.delete(key);
+          pending?.resolve(ack);
           break;
         }
 
@@ -658,6 +719,10 @@ export class GatewayClient extends EventEmitter {
       pending.reject(new Error('Gateway connection closed'));
     }
     this.pendingMetricAcks.clear();
+    for (const pending of this.pendingCompletionAcks.values()) {
+      pending.reject(new Error('Gateway connection closed'));
+    }
+    this.pendingCompletionAcks.clear();
   }
 
   private closeWebSocket() {

@@ -14,6 +14,7 @@ export enum PortalViewType {
   AcceptanceCheck = 'acceptanceCheck',
   AgentDetail = 'agentDetail',
   Artifact = 'artifact',
+  Browser = 'browser',
   DashboardWidget = 'dashboardWidget',
   Document = 'document',
   FilePreview = 'filePreview',
@@ -89,6 +90,11 @@ export interface OpenLocalFileEntry extends OpenLocalFileParams {
 export type GoalMetricKind =
   'budget' | 'duration' | 'findings' | 'lifecycle' | 'liveness' | 'tasks';
 
+export interface PortalTaskWorkspace {
+  id: string;
+  slug: string;
+}
+
 export type PortalViewData =
   | { type: PortalViewType.Home }
   | { goalId: string; type: PortalViewType.Goal }
@@ -102,6 +108,16 @@ export type PortalViewData =
   | { acceptanceId: string; checkId: string; type: PortalViewType.AcceptanceCheck }
   | { agentId: string; type: PortalViewType.AgentDetail }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
+  /**
+   * The desktop side browser, for hosts without the working sidebar. `sessionId`
+   * names the retained guest page; `request` navigates it once and is then dropped,
+   * so returning to the view keeps wherever the user browsed to.
+   */
+  | {
+      request?: { nonce: number; url: string };
+      sessionId: string;
+      type: PortalViewType.Browser;
+    }
   | { runId?: string; type: PortalViewType.DashboardWidget; widgetId: string }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
   | { type: PortalViewType.Notebook }
@@ -119,7 +135,16 @@ export type PortalViewData =
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
   | { topicId: string; type: PortalViewType.Topic }
   | { agentId: string; type: PortalViewType.GroupThread }
-  | { taskId: string; type: PortalViewType.TaskDetail }
+  | {
+      taskId: string;
+      type: PortalViewType.TaskDetail;
+      /**
+       * Set when the task lives in a workspace other than the active one. The
+       * panel then reads it through that workspace's scope, read-only, instead
+       * of the active-scope task store.
+       */
+      workspace?: PortalTaskWorkspace;
+    }
   | { taskId: string; type: PortalViewType.TaskResult }
   | {
       focusCommentId?: string;

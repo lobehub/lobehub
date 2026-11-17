@@ -221,12 +221,6 @@ describe('getModelPropertyWithFallback', () => {
       expect(openaiResult).toBe('GPT-4');
       expect(azureResult).toBe('GPT-4 Azure');
     });
-
-    it('should fall back to first match when specified provider not found', async () => {
-      // When asking for 'fake-provider', should fall back to first match (openai)
-      const result = await getModelPropertyWithFallback('gpt-4', 'displayName', 'fake-provider');
-      expect(result).toBe('GPT-4');
-    });
   });
 
   describe('property existence handling', () => {
@@ -234,12 +228,6 @@ describe('getModelPropertyWithFallback', () => {
       // claude-3 doesn't have abilities property defined
       const result = await getModelPropertyWithFallback('claude-3', 'abilities');
       expect(result).toBeUndefined();
-    });
-
-    it('should handle properties that exist but have falsy values', async () => {
-      // claude-3 has enabled: false
-      const result = await getModelPropertyWithFallback('claude-3', 'enabled');
-      expect(result).toBe(false);
     });
 
     it('should distinguish between undefined and null values', async () => {

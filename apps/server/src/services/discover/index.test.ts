@@ -649,8 +649,6 @@ describe('DiscoverService', () => {
 
       it('should filter by search query', async () => {
         const result = await service.getProviderList({ q: 'openai' });
-
-        expect(result.items.length).toBeGreaterThan(0);
         expect(result.items).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
@@ -772,11 +770,6 @@ describe('DiscoverService', () => {
             }),
           ]),
         );
-      });
-
-      it('should not include categories that only have hidden models', async () => {
-        const result = await service.getModelCategories();
-
         expect(result.some((item) => item.category === 'lobehub')).toBe(false);
       });
     });

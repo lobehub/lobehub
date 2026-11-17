@@ -27,9 +27,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 import { assertConnectorMaintainable } from './_helpers/connectorManagePolicy';
 
-const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+const composioDbProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const client = getComposioClient();
   const wsId = ctx.workspaceId ?? undefined;
   // Workspace-scoped. A Composio connection bound to a workspace agent (or a
   // workspace's base tools) must land as a workspace-dimension row
@@ -44,9 +43,14 @@ const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
 
   return opts.next({
-    ctx: { ...ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
+    ctx: { ...ctx, connectorModel, connectorToolModel, pluginModel },
   });
 });
+
+// Stored plugin listings do not require the external Composio service to be configured.
+const composioProcedure = composioDbProcedure.use(async (opts) =>
+  opts.next({ ctx: { composioClient: getComposioClient() } }),
+);
 
 // Writes: in a workspace, require at least the member role (blocks viewers).
 // Personal mode passes through. The workspace connector policy is layered on
@@ -148,27 +152,26 @@ async function upsertComposioConnector(
 
   // Exact-scope idempotency: an agent connection updates/creates the agent's own
   // row, a personal connection the base row — never crossing scopes.
+  const fields = {
+    metadata,
+    name: params.label,
+    sourceType: ConnectorSourceType.marketplace,
+    status,
+  };
   const existing = await connectorModel.findScopedByIdentifier(params.identifier, params.agentId);
   let connectorId: string;
   if (existing) {
-    await connectorModel.update(existing.id, {
-      metadata,
-      name: params.label,
-      sourceType: ConnectorSourceType.marketplace,
-      status,
-    });
+    await connectorModel.update(existing.id, fields);
     connectorId = existing.id;
   } else {
-    const created = await connectorModel.create({
-      agentId: params.agentId ?? null,
-      identifier: params.identifier,
-      isEnabled: true,
-      metadata,
-      name: params.label,
-      sourceType: ConnectorSourceType.marketplace,
-      status,
-    });
-    connectorId = created.id;
+    const newRow = { ...fields, identifier: params.identifier, isEnabled: true };
+    const claim = params.agentId
+      ? { created: await connectorModel.create({ ...newRow, agentId: params.agentId }) }
+      : // A base row is claimed under the identifier lock every base-row writer
+        // takes; one a concurrent writer added meanwhile is updated as if found.
+        await connectorModel.createUnlessIdentifierHeld(newRow);
+    if ('holder' in claim) await connectorModel.update(claim.holder.id, fields);
+    connectorId = 'holder' in claim ? claim.holder.id : claim.created.id;
   }
 
   if (params.tools) {
@@ -399,7 +402,7 @@ export const composioRouter = router({
       return { success: true };
     }),
 
-  getComposioPlugins: composioProcedure.query(async ({ ctx }) => {
+  getComposioPlugins: composioDbProcedure.query(async ({ ctx }) => {
     const allPlugins = await ctx.pluginModel.query();
     return allPlugins.filter((plugin) => plugin.customParams?.composio);
   }),

@@ -22,7 +22,7 @@ import {
 } from './api';
 import { createRunSource } from './follow';
 import { caseShot, caseSnapshot, parseCombo, parseCondition } from './inspectCase';
-import { applyReview, reviewPayload } from './review';
+import { applyReview, caseReview, reviewPayload } from './review';
 
 const TYPES: Record<string, string> = {
   '.css': 'text/css',
@@ -138,13 +138,15 @@ export const startServer = async ({
       });
     if (pathname === '/api/method' && method === 'GET')
       return json(response, 200, { selfTest: await readSelfTest(selfTestFile) });
-    const caseMatch = /^\/api\/case\/([^/]+)(?:\/(rerun|snapshot|shot))?$/.exec(pathname);
+    const caseMatch = /^\/api\/case\/([^/]+)(?:\/(rerun|review|snapshot|shot))?$/.exec(pathname);
     if (caseMatch) {
       const key = decodeURIComponent(caseMatch[1]);
       const action = caseMatch[2];
       if (action === 'rerun' && method === 'POST')
         return json(response, 200, await rerun(stored, key));
       if (!action && method === 'GET') return json(response, 200, await caseDetail(stored, key));
+      if (action === 'review' && method === 'GET')
+        return json(response, 200, await caseReview(stored, key, layoutComponents));
       if ((action === 'snapshot' || action === 'shot') && method === 'GET') {
         browser ??= await launchBrowser();
         const inspect = {

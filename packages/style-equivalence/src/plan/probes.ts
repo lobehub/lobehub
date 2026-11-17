@@ -52,6 +52,7 @@ export const runtimeStyleProbe = (name: string, chains: Sides<StyleElement[]>) =
 export const styleDropped = (base: StyleElement, head: StyleElement, probed: Set<string>) => {
   if (Boolean(base.styleExpr) === Boolean(head.styleExpr)) return false;
   const [present, absent] = base.styleExpr ? [base, head] : [head, base];
+  if (present.inlineStyle) return false;
   const parsed = parseExpression(present.styleExpr!);
   const names = parsed ? [...valueIdentifiers(parsed.expression)] : [];
   return !names.some((name) => probed.has(name) || mentions(absent, name));

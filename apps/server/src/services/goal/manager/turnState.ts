@@ -1,12 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { GoalGraphSnapshot, GoalManagerState } from '@lobechat/types';
+import { withoutMarks } from '@lobechat/utils/goalGraph';
 import { eq, sql } from 'drizzle-orm';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { goals } from '@/database/schemas/goal';
 import type { LobeChatDatabase } from '@/database/type';
+
+import { withoutGoalReport } from '../report';
 
 /** The owner a manager operation runs as; every extracted stage takes it explicitly. */
 export interface ManagerContext {
@@ -40,8 +43,16 @@ export const managerTurnToken = (goalId: string) => `${goalId}_${randomUUID()}`;
  * made an in-flight planning turn go stale whenever a background loop rewrote a
  * node it did not own (a coordinator retry re-activating an already-active task
  * rejected every submit with "Stale planning input" until the turn expired).
+ *
+ * The wrap-up report node is left out too. The coordinator hands the manager its
+ * report-free view, while the claim and the plan admission re-read the full
+ * graph; hashing both as they came made every claim on a Goal with a report
+ * node look stale, so `startTurn` re-queued itself every five seconds forever.
  */
-export const managerSnapshot = (graph: GoalGraphSnapshot) => {
+export const managerSnapshot = (input: GoalGraphSnapshot) => {
+  // Marks are left by Tasks that keep running during a takeover turn; they are
+  // context, not planning input, so they must not make the turn's plan stale.
+  const graph = withoutMarks(withoutGoalReport(input));
   // Coordinator receipts are not planning input: arming a Task's quota wake while a
   // turn runs must not make that turn's plan stale, and neither may the system
   // planner's lease — a hand-over starts the turn while the lease is still held

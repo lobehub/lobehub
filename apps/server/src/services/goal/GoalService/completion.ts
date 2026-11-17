@@ -89,17 +89,6 @@ export const settleTerminalAcceptance = async (
     });
     if (!achieved) return measurementChanged;
     effects.push({ type: 'goal_status', detail: 'achieved' });
-    // The sign-off is asked for above, before the Goal turned terminal, so the
-    // owner may already have signed it; that sign-off found the Goal not yet
-    // achieved and archived nothing. Best-effort: the Goal is achieved either way.
-    const terminalTaskId = graph.nodes.find(
-      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
-    )?.taskId;
-    if (terminalTaskId) {
-      await ctx
-        .archiveSignedOffTasks(terminalTaskId)
-        .catch((error) => console.error('[goal:sign-off:archive-tasks]', error));
-    }
     return { goalId, message: move.message, outcome: 'achieved' };
   }
 
@@ -442,8 +431,13 @@ export const consumeCompletedTask = async (
       taskId,
     };
   }
+  // Only a finding counts: a mark the run left also hangs off the node by
+  // `produces`, and must not stand in for the outcome.
   const existingFinding = graph.edges.some(
-    (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
+    (edge) =>
+      edge.sourceNodeId === nodeId &&
+      edge.kind === 'produces' &&
+      graph.nodes.find((node) => node.id === edge.targetNodeId)?.kind === 'finding',
   );
   // The newest row by seq can be a retry that was canceled when verification
   // accepted an earlier delivery — the settle path cancels the in-flight

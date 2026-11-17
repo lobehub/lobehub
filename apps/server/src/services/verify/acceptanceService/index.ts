@@ -8,9 +8,11 @@ import type {
   VerifyRunDecisionDetail,
 } from '@lobechat/types';
 import { statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
+import { GoalModel } from '@/database/models/goal';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReportModel } from '@/database/models/verifyReport';
@@ -374,9 +376,18 @@ export class AcceptanceService {
     if (acceptance.status === 'rejected' && current.userDecision === 'reject') return 'rejected';
 
     const report = await this.reportModel.findByRun(current.id);
-    const status = statusFromRound(current, Boolean(report));
+    const derived = statusFromRound(current, Boolean(report));
+    // A task acceptance settles under a row lock that also closes it when its
+    // goal node has been retired: a round still verifying at retirement lands
+    // here afterwards, and the Goal discarded that node's outcome, so it must
+    // not reopen a sign-off request for dropped work.
+    const status =
+      acceptance.subjectType === 'task'
+        ? ((await this.acceptanceModel.settleTaskPolicyStatus(acceptanceId, derived)) ?? derived)
+        : derived;
     if (status !== acceptance.status) {
-      await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
+      if (acceptance.subjectType !== 'task')
+        await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       notifyAcceptance(acceptanceId, 'session');
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }
@@ -555,9 +566,41 @@ export class AcceptanceService {
    */
   reject = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
     const acceptance = await requireDecidableAcceptance(this.acceptanceModel, acceptanceId);
+    const goal =
+      acceptance.subjectType === 'task'
+        ? await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
+            acceptance.subjectId,
+          )
+        : undefined;
 
-    const settled = await this.stampDecision(acceptanceId, 'reject', comment);
-    await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
+    // A rejected Goal Task is reworked by its goal's coordinator; an archived
+    // goal stays put, so the rejection would be recorded and then lost. The
+    // check and the decision share the goal's row lock, which the archive
+    // UPDATE also takes: an archive landing first is seen here and nothing is
+    // recorded; one landing after sees a goal whose Task was rejected before it.
+    const settled = goal
+      ? await this.db.transaction(async (tx) => {
+          const locked = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goal.id);
+          if (locked?.archivedAt) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: `This goal is archived; restore it before requesting changes (lh goal unarchive ${goal.id})`,
+            });
+          }
+          const runId = await this.stampDecision(
+            acceptanceId,
+            'reject',
+            comment,
+            new VerifyRunModel(tx, this.userId, this.workspaceId),
+          );
+          await new AcceptanceModel(tx, this.userId, this.workspaceId).updateStatus(
+            acceptanceId,
+            'rejected',
+          );
+          return runId;
+        })
+      : await this.stampDecision(acceptanceId, 'reject', comment);
+    if (!goal) await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
     notifyAcceptance(acceptanceId, 'session', this.actorUserId);
 
     this.distilSettledRound(acceptanceId, settled);
@@ -576,8 +619,9 @@ export class AcceptanceService {
     acceptanceId: string,
     decision: 'accept' | 'reject',
     comment?: string,
+    runModel: VerifyRunModel = this.runModel,
   ): Promise<string> => {
-    const runs = await this.runModel.listByAcceptance(acceptanceId);
+    const runs = await runModel.listByAcceptance(acceptanceId);
     const current = runs.at(-1);
     if (!current) throw new Error('This acceptance has no verification round to decide on');
 
@@ -586,7 +630,7 @@ export class AcceptanceService {
       decidedBy: this.actorUserId,
       ...(comment ? { comment } : {}),
     };
-    await this.runModel.setDecision(current.id, decision, detail);
+    await runModel.setDecision(current.id, decision, detail);
 
     return current.id;
   };

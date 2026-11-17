@@ -1,10 +1,13 @@
+import { Flexbox, Segmented, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { ArrowRight } from 'lucide-react';
 
 import type { FollowInfo, RunPayload } from '../api';
 import { CATEGORY_LABELS } from '../labels';
 import { hrefOf } from '../route';
 import { RunBadge } from './RunBadge';
+import { ThemeToggle } from './ThemeToggle';
 
 const styles = stylex.create({
   bar: {
@@ -13,40 +16,19 @@ const styles = stylex.create({
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
-    columnGap: 12,
+    columnGap: 16,
     display: 'flex',
-    height: 48,
+    flex: 'none',
+    height: 52,
     paddingInline: 20,
   },
-  brand: { color: cssVar.colorText, fontSize: 13, fontWeight: 600, textDecorationLine: 'none' },
-  brandNote: { color: cssVar.colorTextTertiary, fontWeight: 400 },
-  link: {
-    alignItems: 'center',
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorder,
-    borderRadius: 6,
-    borderStyle: 'solid',
-    borderWidth: 1,
+  brand: {
     color: cssVar.colorText,
-    display: 'inline-flex',
-    fontSize: 13,
-    height: 28,
-    paddingInline: 10,
+    fontSize: cssVar.fontSize,
+    fontWeight: 600,
     textDecorationLine: 'none',
   },
-  muted: { color: cssVar.colorTextSecondary },
-  rev: {
-    backgroundColor: cssVar.colorFillQuaternary,
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 4,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    color: cssVar.colorTextSecondary,
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 12,
-    paddingBlock: 1,
-    paddingInline: 6,
-  },
+  nav: { alignSelf: 'center' },
   spacer: { flex: '1' },
   strip: {
     alignItems: 'center',
@@ -54,35 +36,67 @@ const styles = stylex.create({
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
-    columnGap: 12,
+    columnGap: 16,
     display: 'flex',
+    flex: 'none',
     flexWrap: 'wrap',
-    fontSize: 13,
-    minHeight: 44,
+    minHeight: 40,
     paddingBlock: 8,
     paddingInline: 20,
+    rowGap: 4,
   },
-  verdict: { fontWeight: 600 },
-  verdictBad: { color: cssVar.colorError },
-  verdictOk: { color: cssVar.colorSuccess },
 });
 
-export const TopBar = ({ follow, run }: { follow?: FollowInfo; run: RunPayload['run'] }) => (
+export type Section = 'method' | 'overview' | 'review';
+
+const SECTIONS: Array<{ label: string; value: Section }> = [
+  { label: '总览', value: 'overview' },
+  { label: '复查', value: 'review' },
+  { label: '方法依据', value: 'method' },
+];
+
+const SECTION_HREFS: Record<Section, string> = {
+  method: hrefOf({ kind: 'method' }),
+  overview: hrefOf({ kind: 'overview' }),
+  review: hrefOf({ kind: 'review' }),
+};
+
+export const TopBar = ({
+  base,
+  follow,
+  head,
+  section,
+}: {
+  base: string;
+  follow?: FollowInfo;
+  head: string;
+  section: Section;
+}) => (
   <header {...stylex.props(styles.bar)}>
     <a href={hrefOf({ kind: 'overview' })} {...stylex.props(styles.brand)}>
-      style-equivalence <span {...stylex.props(styles.brandNote)}>· 本地报告</span>
+      style-equivalence
     </a>
-    <span {...stylex.props(styles.rev)}>{run.base.slice(0, 7)}</span>
-    <span {...stylex.props(styles.muted)}>→</span>
-    <span {...stylex.props(styles.rev)}>{run.head.slice(0, 7)}</span>
+    <Flexbox horizontal align="center" gap={6}>
+      <Text code fontSize={12}>
+        {base.slice(0, 7)}
+      </Text>
+      <ArrowRight aria-label="到" size={12} />
+      <Text code fontSize={12}>
+        {head.slice(0, 7)}
+      </Text>
+    </Flexbox>
     <RunBadge follow={follow} />
     <div {...stylex.props(styles.spacer)} />
-    <a href={hrefOf({ kind: 'review' })} {...stylex.props(styles.link)}>
-      复查
-    </a>
-    <a href={hrefOf({ kind: 'method' })} {...stylex.props(styles.link)}>
-      方法依据
-    </a>
+    <Segmented
+      className={stylex.props(styles.nav).className}
+      options={SECTIONS}
+      size="small"
+      value={section}
+      onChange={(value) => {
+        location.hash = SECTION_HREFS[value];
+      }}
+    />
+    <ThemeToggle />
   </header>
 );
 
@@ -96,19 +110,19 @@ export const VerdictStrip = ({ payload }: { payload: RunPayload }) => {
     `${CATEGORY_LABELS['needs-signoff']} ${count('needs-signoff') + unpaired}`,
     `${CATEGORY_LABELS.blocking} ${count('blocking')}`,
     `${CATEGORY_LABELS.equal} ${count('equal')}`,
-    `共 ${cases.length} 个用例，${files} 个文件`,
+    `共 ${cases.length} 个用例、${files} 个文件`,
     mutation.requested ? `变异 ${mutation.caught}/${mutation.evaluated}` : '变异未运行',
   ];
   return (
     <div {...stylex.props(styles.strip)}>
-      <span
-        {...stylex.props(styles.verdict, verdict.mergeable ? styles.verdictOk : styles.verdictBad)}
-      >
+      <Text strong type={verdict.mergeable ? 'success' : 'danger'}>
         {verdict.mergeable ? '可以合并' : '还不能合并'}
-      </span>
-      <span {...stylex.props(styles.muted)}>{parts.join(' · ')}</span>
+      </Text>
+      <Text type="secondary">{parts.join(' · ')}</Text>
       {!verdict.mergeable && (
-        <span {...stylex.props(styles.muted)}>原因：{verdict.reasons.join('；')}</span>
+        <Text fontSize={12} type="secondary">
+          原因：{verdict.reasons.join('；')}
+        </Text>
       )}
     </div>
   );

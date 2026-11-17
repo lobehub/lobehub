@@ -7,8 +7,12 @@ export interface TaskCreateDraft {
   assigneeAgentId?: string;
   assigneeUserId?: string | null;
   execution?: unknown;
+  /** Picked labels, by id; resolved against the scope's registry on restore. */
+  labelIds?: unknown;
   markdown?: string;
   priority?: number;
+  /** `null` is an explicit "no project"; a missing key follows the scope's default. */
+  projectId?: string | null;
   visibility?: 'private' | 'public';
 }
 

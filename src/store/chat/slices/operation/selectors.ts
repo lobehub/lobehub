@@ -7,6 +7,7 @@ import {
   AI_RUNTIME_OPERATION_TYPES,
   INPUT_LOADING_OPERATION_TYPES,
   isQueueBlockingOperation,
+  isSendableQueuedMessage,
   QUEUE_BLOCKING_OPERATION_TYPES,
   SEND_NOW_CANCEL_REASON,
   TOPIC_VISIBLY_RUNNING_OPERATION_TYPES,
@@ -355,6 +356,7 @@ const isQueueDrainedAtRunEnd =
     if (!context.agentId) return false;
     const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
     const isCliRun = (op: Operation) => {
+      if (op.metadata.liveSteer) return false;
       if (op.type === 'execHeterogeneousAgent') return true;
       if (op.type !== 'execServerAgentRuntime') return false;
 
@@ -1009,7 +1011,8 @@ const getQueuedMessages = (context: MessageMapKeyInput) => (s: ChatStoreState) =
 };
 
 const getIdleQueueHost = (context: MessageMapKeyInput) => (s: ChatStoreState) => {
-  if (getQueuedMessages(context)(s).length === 0) return;
+  // A steer that may already be with the agent waits for the user, not a hand-off.
+  if (!getQueuedMessages(context)(s).some(isSendableQueuedMessage)) return;
 
   let latest: Operation | undefined;
   for (const op of getOperationsByContext(context)(s)) {

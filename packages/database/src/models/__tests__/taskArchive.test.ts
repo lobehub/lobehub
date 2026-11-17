@@ -1,8 +1,10 @@
 // @vitest-environment node
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { users } from '../../schemas';
+import { tasks as tasksTable } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
 import { TaskModel } from '../task';
 import { TaskArchiveModel } from '../taskArchive';
@@ -140,5 +142,27 @@ describe('TaskArchiveModel', () => {
 
     expect(await new TaskArchiveModel(serverDB, userId).archive(task.id)).toBeNull();
     expect(await new TaskArchiveModel(serverDB, userId).unarchive(task.id)).toBeNull();
+  });
+
+  it('restores only the tasks stamped with the given archive time', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    // A goal archiving itself passes its own stamp instead of `now()`.
+    const goalArchivedAt = sql`'2026-11-01T00:00:00Z'::timestamptz`;
+    const withGoal = await tasks.create({ instruction: 'Archived with its goal' });
+    const onItsOwn = await tasks.create({ instruction: 'Archived on its own' });
+
+    await model.archiveMany([withGoal.id], { at: goalArchivedAt });
+    await model.archive(onItsOwn.id);
+
+    const restored = await model.unarchiveMany([withGoal.id, onItsOwn.id], {
+      onlyArchivedAt: goalArchivedAt,
+    });
+
+    expect(restored.map((task) => task.id)).toEqual([withGoal.id]);
+    expect(restored[0].archivedAt).toBeNull();
+    // The task archived on its own keeps its archive.
+    const [kept] = await serverDB.select().from(tasksTable).where(eq(tasksTable.id, onItsOwn.id));
+    expect(kept.archivedAt).toBeInstanceOf(Date);
   });
 });

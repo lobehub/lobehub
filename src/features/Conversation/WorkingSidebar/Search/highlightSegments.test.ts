@@ -15,4 +15,11 @@ describe('splitHighlightSegments', () => {
     expect(splitHighlightSegments('hello', '  ')).toEqual([{ match: false, text: 'hello' }]);
     expect(splitHighlightSegments('hello', 'bye')).toEqual([{ match: false, text: 'hello' }]);
   });
+
+  it('still highlights a snippet whose lower-casing changes length', () => {
+    expect(splitHighlightSegments('İstanbul deployment', 'Deployment')).toEqual([
+      { match: false, text: 'İstanbul ' },
+      { match: true, text: 'deployment' },
+    ]);
+  });
 });

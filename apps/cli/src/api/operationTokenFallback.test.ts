@@ -116,6 +116,19 @@ describe('operation token fallback', () => {
     expect(userScopedRoute).toHaveBeenCalledTimes(1);
   });
 
+  /** The run did carry a token, so "the run passed no sign-in" would misstate the cause. */
+  it('keeps the operation-token wording inside an agent run with no machine login', async () => {
+    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_1');
+    vi.mocked(getValidToken).mockResolvedValue({ status: 'no-login' });
+
+    await expect(query(userScopedRoute)).rejects.toThrow(OPERATION_TOKEN_REFUSAL);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no stored login of the same account'),
+    );
+    expect(log.warn).not.toHaveBeenCalledWith(expect.stringContaining('passed no LobeHub sign-in'));
+    vi.unstubAllEnvs();
+  });
+
   it.each([
     { detail: 'HTTP 502', status: 'unavailable' },
     { detail: 'invalid_client', status: 'refused' },
@@ -146,6 +159,78 @@ describe('operation token fallback', () => {
     expect(log.warn).not.toHaveBeenCalledWith(
       expect.stringContaining('no stored login of the same account'),
     );
+  });
+
+  const upload = (
+    respond: (authorization: string) => unknown,
+    input: object,
+    route = 'file.createFile',
+  ) => {
+    const client = createTRPCClient<AnyRouter>({
+      links: [operationTokenFallbackLink(() => operationToken), serverLink(respond)],
+    }) as any;
+    return route === 'file.createFile'
+      ? client.file.createFile.mutate(input)
+      : client.doc.createDocument.mutate(input);
+  };
+  const uploadRefusal =
+    "This run's token can only upload acceptance evidence or tool-result images";
+
+  it.each([
+    { destination: { knowledgeBaseId: 'kb-1' }, message: uploadRefusal },
+    { destination: { parentId: 'folder-1' }, message: uploadRefusal },
+    {
+      destination: { knowledgeBaseId: 'kb-1' },
+      message: "This run's token can only upload acceptance evidence",
+    },
+  ])(
+    'uses the same account after a library upload refusal for %j',
+    async ({ destination, message }) => {
+      storedLogin('user-1');
+      const respond = vi.fn((authorization: string) =>
+        authorization === operationToken ? trpcError(message, 'FORBIDDEN') : 'uploaded',
+      );
+      await expect(upload(respond, destination)).resolves.toBe('uploaded');
+      expect(respond).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('reports a missing stored login without repeating the upload', async () => {
+    vi.mocked(getValidToken).mockResolvedValue({ status: 'no-login' });
+    const respond = vi.fn(() => trpcError(uploadRefusal, 'FORBIDDEN'));
+    await expect(upload(respond, { knowledgeBaseId: 'kb-1' })).rejects.toThrow(uploadRefusal);
+    expect(respond).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalled();
+  });
+
+  it('never borrows another account for a library upload', async () => {
+    storedLogin('another-user');
+    const respond = vi.fn(() => trpcError(uploadRefusal, 'FORBIDDEN'));
+    await expect(upload(respond, { knowledgeBaseId: 'kb-1' })).rejects.toThrow(uploadRefusal);
+    expect(respond).toHaveBeenCalledTimes(1);
+    expect(log.warn).toHaveBeenCalled();
+  });
+
+  it.each([
+    { input: { knowledgeBaseId: 'kb-1' }, message: 'Permission denied', route: 'file.createFile' },
+    { input: {}, message: uploadRefusal, route: 'file.createFile' },
+    { input: { knowledgeBaseId: 'kb-1' }, message: uploadRefusal, route: 'doc.createDocument' },
+  ])(
+    'does not retry unrelated permissions, evidence, or routes',
+    async ({ input, message, route }) => {
+      storedLogin('user-1');
+      const respond = vi.fn(() => trpcError(message, 'FORBIDDEN'));
+      await expect(upload(respond, input, route)).rejects.toThrow(message);
+      expect(respond).toHaveBeenCalledTimes(1);
+      expect(getValidToken).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not retry a user permission denial after the library fallback', async () => {
+    storedLogin('user-1');
+    const respond = vi.fn(() => trpcError(uploadRefusal, 'FORBIDDEN'));
+    await expect(upload(respond, { knowledgeBaseId: 'kb-1' })).rejects.toThrow(uploadRefusal);
+    expect(respond).toHaveBeenCalledTimes(2);
   });
 
   it('does not retry other authentication errors', async () => {

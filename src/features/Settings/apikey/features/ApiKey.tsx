@@ -6,7 +6,6 @@ import {
   Button,
   Center,
   confirmModal,
-  createStaticStyles,
   DropdownMenu,
   Empty,
   Flexbox,
@@ -14,6 +13,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -39,39 +40,36 @@ import { useWorkspaceApiKeyPolicy } from '../WorkspaceApiKeyPolicyContext';
 import ApiKeyDetail from './ApiKeyDetail';
 import { ApiKeyDisplay, createApiKeyModal } from './index';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    padding-block: 16px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
-  `,
-  expired: css`
-    color: ${cssVar.colorError};
-  `,
-  header: css`
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-    justify-content: space-between;
-
-    padding-block-end: 16px;
-    padding-inline: 24px;
-  `,
-  /* Dates and "never used / never expires" placeholders read as metadata, not
-     content — keep them quieter than the name and key. */
-  muted: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  /* The name doubles as the entry point into the detail drawer. */
-  nameLink: css`
-    font-weight: 500;
-
-    tr:hover & {
-      color: ${cssVar.colorLink};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    paddingBlock: '16px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  expired: {
+    color: cssVar.colorError,
+  },
+  header: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBlockEnd: '16px',
+    paddingInline: '24px',
+  },
+  // Dates and "never used / never expires" placeholders read as metadata, not
+  // content — keep them quieter than the name and key.
+  muted: {
+    color: cssVar.colorTextTertiary,
+  },
+  // The name doubles as the entry point into the detail drawer.
+  nameLink: {
+    fontWeight: 500,
+    color: { 'default': null, ':is(tr:hover *)': cssVar.colorLink },
+  },
+});
 
 dayjs.extend(relativeTime);
 
@@ -173,7 +171,7 @@ const ApiKey: FC = () => {
       // the row reads as navigable rather than inert.
       render: (apiKey) => (
         <Flexbox horizontal align={'center'} gap={8}>
-          <span className={styles.nameLink}>{apiKey.name}</span>
+          <span {...stylex.props(styles.nameLink)}>{apiKey.name}</span>
           {apiKey.enabled === false && <Tag>{t('apikey.status.disabled')}</Tag>}
         </Flexbox>
       ),
@@ -228,13 +226,13 @@ const ApiKey: FC = () => {
       render: (apiKey) =>
         apiKey.expiresAt ? (
           <span
-            className={isExpired(apiKey) ? styles.expired : undefined}
+            {...stylex.props(isExpired(apiKey) ? styles.expired : null)}
             title={apiKey.expiresAt.toLocaleString()}
           >
             {isExpired(apiKey) ? t('apikey.status.expired') : apiKey.expiresAt.toLocaleDateString()}
           </span>
         ) : (
-          <span className={styles.muted}>{t('apikey.display.neverExpires')}</span>
+          <span {...stylex.props(styles.muted)}>{t('apikey.display.neverExpires')}</span>
         ),
       title: t('apikey.list.columns.expiresAt'),
       width: 130,
@@ -249,7 +247,7 @@ const ApiKey: FC = () => {
             {dayjs(apiKey.lastUsedAt).fromNow()}
           </span>
         ) : (
-          <span className={styles.muted}>{t('apikey.display.neverUsed')}</span>
+          <span {...stylex.props(styles.muted)}>{t('apikey.display.neverUsed')}</span>
         ),
       title: t('apikey.list.columns.lastUsedAt'),
     },
@@ -294,8 +292,8 @@ const ApiKey: FC = () => {
   ];
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
+    <div {...stylex.props(styles.container)}>
+      <div {...stylex.props(styles.header)}>
         <Flexbox gap={4}>
           <Text as={'h3'} style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
             {t('apikey.list.title')}

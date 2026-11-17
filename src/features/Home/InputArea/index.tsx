@@ -12,7 +12,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { HOME_NEW_MODELS_BANNER_ID, NewModelShortcuts } from '../NewModelShortcuts';
 import type { HomeMode } from '../types';
-import { HOME_INPUT_RESERVED_HEIGHT } from './constants';
+import { HOME_INPUT_RESERVED_HEIGHT, HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import { EditorSlot } from './EditorSlot';
 import { stripMarkdownLinks } from './hintFormat';
 import { InputBannerQueue, InputBannerSegment } from './InputBanner';
@@ -70,7 +70,12 @@ const InputArea = ({
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
+  const { handleUploadFiles } = useUploadFiles({
+    agentId: resolvedAgentId,
+    contextKey: HOME_UPLOAD_CONTEXT_KEY,
+    model,
+    provider,
+  });
 
   // Daily-generated input hint paired with the fixed Home greeting.
   const { currentPair } = useHomeDailyBrief();

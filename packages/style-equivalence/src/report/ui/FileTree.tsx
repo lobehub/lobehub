@@ -1,78 +1,94 @@
+import { Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import { buildTree, type FileStatus, type ReportCase, type UnpairedEntry } from '../data';
+import { CATEGORY_LABELS } from '../labels';
 import { hrefOf } from '../route';
 
 const styles = stylex.create({
-  count: { color: cssVar.colorTextTertiary, fontSize: 12 },
   directory: {
     color: cssVar.colorTextTertiary,
-    fontSize: 12,
-    paddingBlock: 4,
-    paddingInline: 16,
+    fontSize: cssVar.fontSizeSM,
+    paddingBlockEnd: 4,
+    paddingBlockStart: 12,
+    paddingInline: 12,
     wordBreak: 'break-all',
   },
-  dot: { borderRadius: '50%', height: 8, width: 8 },
+  dot: { borderRadius: '50%', flex: 'none', height: 8, width: 8 },
   file: {
     alignItems: 'center',
-    color: { ':hover': cssVar.colorText, 'default': cssVar.colorTextSecondary },
+    backgroundColor: { ':hover': cssVar.colorFillTertiary, 'default': 'transparent' },
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
     columnGap: 8,
     display: 'grid',
-    fontSize: 13,
-    gridTemplateColumns: '10px 1fr auto',
-    paddingBlock: 5,
-    paddingInlineEnd: 16,
-    paddingInlineStart: 28,
+    fontSize: cssVar.fontSize,
+    gridTemplateColumns: '8px minmax(0, 1fr) auto',
+    paddingBlock: 6,
+    paddingInline: 12,
     textDecorationLine: 'none',
   },
   name: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   root: {
-    backgroundColor: cssVar.colorFillTertiary,
-    borderRadius: 6,
+    backgroundColor: { ':hover': cssVar.colorFillTertiary, 'default': 'transparent' },
+    borderRadius: cssVar.borderRadius,
     color: cssVar.colorText,
     display: 'block',
-    fontSize: 13,
+    fontSize: cssVar.fontSize,
     fontWeight: 500,
-    marginBlockEnd: 6,
-    marginInline: 8,
     paddingBlock: 6,
-    paddingInline: 10,
+    paddingInline: 12,
     textDecorationLine: 'none',
   },
-  selected: { backgroundColor: cssVar.colorFillTertiary, color: cssVar.colorText },
-  tree: { overflowY: 'auto', paddingBlock: 12 },
+  selected: {
+    backgroundColor: { ':hover': cssVar.colorFillSecondary, 'default': cssVar.colorFillSecondary },
+    color: cssVar.colorText,
+    fontWeight: 500,
+  },
+  tree: { padding: 8 },
 });
 
 const dots = stylex.create({
-  'blocking': { backgroundColor: cssVar.colorTextSecondary },
+  'blocking': { backgroundColor: cssVar.colorTextQuaternary },
   'difference': { backgroundColor: cssVar.colorError },
   'equal': { backgroundColor: cssVar.colorSuccess },
   'needs-signoff': { backgroundColor: cssVar.colorWarning },
 });
 
 export const StatusDot = ({ status }: { status: FileStatus }) => (
-  <span {...stylex.props(styles.dot, dots[status])} />
+  <span
+    aria-label={CATEGORY_LABELS[status]}
+    role="img"
+    {...stylex.props(styles.dot, dots[status])}
+  />
 );
 
 export const FileTree = ({
+  atOverview,
   cases,
   selected,
   unpaired,
 }: {
+  atOverview: boolean;
   cases: ReportCase[];
   selected: string | undefined;
   unpaired: UnpairedEntry[];
 }) => (
   <nav {...stylex.props(styles.tree)}>
-    <a href={hrefOf({ kind: 'overview' })} {...stylex.props(styles.root)}>
-      全部文件 · 总览
+    <a
+      aria-current={atOverview ? 'page' : undefined}
+      href={hrefOf({ kind: 'overview' })}
+      {...stylex.props(styles.root, atOverview && styles.selected)}
+    >
+      全部文件
     </a>
     {buildTree(cases, unpaired).map(({ directory, files }) => (
       <div key={directory}>
         <div {...stylex.props(styles.directory)}>{directory || '.'}</div>
         {files.map((file) => (
           <a
+            aria-current={selected === file.file ? 'page' : undefined}
             data-status={file.status}
             href={hrefOf({ file: file.file, kind: 'file' })}
             key={file.file}
@@ -81,9 +97,9 @@ export const FileTree = ({
           >
             <StatusDot status={file.status} />
             <span {...stylex.props(styles.name)}>{file.name}</span>
-            <span {...stylex.props(styles.count)}>
+            <Text fontSize={12} type="secondary">
               {file.open ? `${file.open} / ${file.total}` : file.total}
-            </span>
+            </Text>
           </a>
         ))}
       </div>

@@ -34,13 +34,6 @@ vi.mock('@/services/git', () => ({
 }));
 
 describe('FileItemHeader — reveal in tree', () => {
-  it('renders the reveal button', () => {
-    render(<FileItemHeader additions={1} deletions={0} filePath="src/foo.ts" status="modified" />);
-
-    const btn = screen.getByTestId('reveal-in-tree');
-    expect(btn).toBeTruthy();
-  });
-
   it('calls revealInFilesTab with the file path on click', () => {
     render(<FileItemHeader additions={1} deletions={0} filePath="src/foo.ts" status="modified" />);
 

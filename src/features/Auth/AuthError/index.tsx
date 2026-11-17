@@ -1,6 +1,6 @@
 'use client';
 
-import { SiDiscord } from '@icons-pack/react-simple-icons';
+import SiDiscord from '@icons-pack/react-simple-icons/icons/SiDiscord';
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { memo } from 'react';

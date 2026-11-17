@@ -5,7 +5,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import {
   createQueueSendNowGate,
-  getContextWindowMessages,
+  getContextWindow,
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   getQueuedHintKey,
@@ -55,6 +55,35 @@ describe('createQueueSendNowGate', () => {
     await expect(first).resolves.toBe(true);
     await expect(gate.run(secondTask)).resolves.toBe(true);
     expect(secondTask).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getQueuedHintKey by Follow-up behavior', () => {
+  it('says Queue sends one message per turn once the run ends', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'queue', waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedRunEndHint',
+    );
+    expect(getQueuedHintKey({ count: 2, mode: 'queue', waitsForRunEnd: false })).toBe(
+      'inputQueue.queuedOneByOneHint',
+    );
+  });
+
+  it('says Steer joins the current run, merged', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'steer', waitsForRunEnd: false })).toBe(
+      'inputQueue.steerHint',
+    );
+    expect(getQueuedHintKey({ count: 3, mode: 'steer', waitsForRunEnd: false })).toBe(
+      'inputQueue.steerMergeHint',
+    );
+  });
+
+  it('says a run that cannot take a steer queues it until the end', () => {
+    expect(getQueuedHintKey({ count: 1, mode: 'steer', waitsForRunEnd: true })).toBe(
+      'inputQueue.steerUnsupportedHint',
+    );
+    expect(getQueuedHintKey({ count: 2, mode: 'steer', waitsForRunEnd: true })).toBe(
+      'inputQueue.steerUnsupportedMergeHint',
+    );
   });
 });
 
@@ -129,32 +158,98 @@ describe('toChatInputMessages', () => {
   });
 });
 
-describe('getContextWindowMessages', () => {
+describe('getContextWindow', () => {
+  const accounting = {
+    bySource: {
+      content: 500,
+      fileContext: 0,
+      reasoning: 0,
+      thoughtSignature: 0,
+      toolCallId: 2,
+      toolCalls: 30,
+      toolDefinition: 4000,
+    },
+    estimator: 'tokenx' as const,
+    messageCount: 3,
+    system: 2000,
+    total: 6532,
+  };
+
   it('uses the full conversation when history count is disabled', () => {
-    expect(
-      getContextWindowMessages(tokenMessages, {
-        enableHistoryCount: false,
-        historyCount: 2,
-      }).map((message) => message.content),
-    ).toEqual(['old user', 'old assistant', 'latest tool', 'latest user']);
+    const window = getContextWindow(tokenMessages, { enableHistoryCount: false, historyCount: 2 });
+
+    expect(window.request).toBeUndefined();
+    expect(window.history.map((message) => message.content)).toEqual([
+      'old user',
+      'old assistant',
+      'latest tool',
+      'latest user',
+    ]);
   });
 
   it('slices chat messages according to history count', () => {
     expect(
-      getContextWindowMessages(tokenMessages, {
+      getContextWindow(tokenMessages, {
         enableHistoryCount: true,
         historyCount: 2,
-      }).map((message) => message.content),
+      }).history.map((message) => message.content),
     ).toEqual(['latest tool', 'latest user']);
   });
 
   it('returns no historical chat messages when history count is zero', () => {
     expect(
-      getContextWindowMessages(tokenMessages, {
-        enableHistoryCount: true,
-        historyCount: 0,
-      }),
+      getContextWindow(tokenMessages, { enableHistoryCount: true, historyCount: 0 }).history,
     ).toEqual([]);
+  });
+
+  it('starts from the latest recorded request and keeps every message after it', () => {
+    const messages = [
+      { content: 'first', id: 'u1', role: 'user' },
+      {
+        content: 'older reply',
+        id: 'a1',
+        metadata: { contextAccounting: { ...accounting, total: 1 } },
+        role: 'assistant',
+      },
+      { content: 'read the file', id: 'u2', role: 'user' },
+      {
+        content: '',
+        id: 'a2',
+        metadata: { contextAccounting: accounting },
+        model: 'deepseek-v4-flash',
+        provider: 'deepseek',
+        role: 'assistant',
+        usage: { totalInputTokens: 7000 },
+      },
+      { content: 'file body', id: 't1', role: 'tool', tool_call_id: 'call_1' },
+    ] as UIChatMessage[];
+
+    const window = getContextWindow(messages, { enableHistoryCount: false });
+
+    expect(window.request).toMatchObject({
+      accounting,
+      inputTokens: 7000,
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+    expect(window.request?.messages?.map((message) => message.id)).toEqual(['a2', 't1']);
+
+    // ROOT CAUSE: with a history count every request re-truncates history, so
+    // messages the recorded request covered can drop out of the next one;
+    // adding everything after the recorded reply on top overstated usage.
+    const truncated = getContextWindow(messages, { enableHistoryCount: true, historyCount: 1 });
+
+    expect(truncated.request).toMatchObject({ accounting, model: 'deepseek-v4-flash' });
+    expect(truncated.request?.messages).toBeUndefined();
+    expect(truncated.history.map((message) => message.id)).toEqual(['t1']);
+  });
+
+  it('ignores accounting on non-assistant messages', () => {
+    const messages = [
+      { content: 'hi', id: 'u1', metadata: { contextAccounting: accounting }, role: 'user' },
+    ] as UIChatMessage[];
+
+    expect(getContextWindow(messages, {}).request).toBeUndefined();
   });
 });
 
@@ -370,6 +465,7 @@ describe('sendQueuedMessageNow', () => {
       chat,
       context,
       contextKey: messageMapKey(context),
+      isQueued: () => true,
       msg,
       withdraw,
     });
@@ -389,6 +485,7 @@ describe('sendQueuedMessageNow', () => {
       chat,
       context,
       contextKey: messageMapKey(context),
+      isQueued: () => true,
       msg: { ...msg, forceRuntime: 'gateway' },
       withdraw: async () => true,
     });
@@ -398,18 +495,91 @@ describe('sendQueuedMessageNow', () => {
     );
   });
 
-  it('stops nothing and sends nothing when the run already took it', async () => {
+  it('stops nothing and sends nothing when the run already wrote it', async () => {
     const { chat } = chatWith(true);
 
-    await sendQueuedMessageNow({
+    const outcome = await sendQueuedMessageNow({
       chat,
       context,
       contextKey: messageMapKey(context),
+      isQueued: () => false,
       msg,
       withdraw: async () => false,
     });
 
+    expect(outcome).toBe('delivered');
     expect(chat.cancelOperation).not.toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  //
+  // A CLI agent run takes a follow-up from the server but only writes it
+  // between its own turns, so for minutes it stays "delivering". Send now read
+  // that as already sent: it showed "Already sent to the agent" and neither
+  // interrupted the run nor sent the message.
+  //
+  // Before: a refused withdrawal stopped nothing.
+  // After: one still in the tray interrupts the run, which hands it back, and
+  // is withdrawn again and sent.
+  it('interrupts a run that took it but has not written it yet, then sends it', async () => {
+    const { chat, order } = chatWith(true);
+    let delivering = true;
+    const withdraw = vi.fn(async () => {
+      order.push('withdraw');
+      return !delivering;
+    });
+    chat.cancelOperation.mockImplementation(async () => {
+      order.push('cancel');
+      delivering = false;
+      return true;
+    });
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      isQueued: () => true,
+      msg,
+      withdraw,
+    });
+
+    expect(outcome).toBe('sent');
+    expect(order).toEqual(['withdraw', 'cancel', 'withdraw', 'send']);
+  });
+
+  it('sends nothing when the run wrote it before the interrupt landed', async () => {
+    const { chat } = chatWith(true);
+
+    const outcome = await sendQueuedMessageNow({
+      chat,
+      context,
+      contextKey: messageMapKey(context),
+      isQueued: () => true,
+      msg,
+      withdraw: async () => false,
+    });
+
+    expect(outcome).toBe('delivered');
+    expect(chat.cancelOperation).toHaveBeenCalled();
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an item the run holds in the tray when the interrupt fails', async () => {
+    const { chat } = chatWith(false);
+
+    await expect(
+      sendQueuedMessageNow({
+        chat,
+        context,
+        contextKey: messageMapKey(context),
+        isQueued: () => true,
+        msg,
+        withdraw: async () => false,
+      }),
+    ).rejects.toThrow();
+
+    expect(chat.restoreQueuedMessage).not.toHaveBeenCalled();
     expect(chat.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -424,6 +594,7 @@ describe('sendQueuedMessageNow', () => {
         chat,
         context,
         contextKey: messageMapKey(context),
+        isQueued: () => true,
         msg,
         withdraw: async () => true,
       }),

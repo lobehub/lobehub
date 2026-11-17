@@ -33,8 +33,19 @@ const scopeOf = ({ ctx }: { ctx: any }) => ({
 });
 
 const testRouter = trpc.router({
+  file: trpc.router({
+    createFile: trpc.procedure.use(oidcAuth).mutation(({ ctx }: { ctx: any }) => ({
+      ...scopeOf({ ctx }),
+      capabilities: ctx.heteroOperationCapabilities,
+    })),
+    removeFile: trpc.procedure.use(oidcAuth).mutation(scopeOf),
+  }),
+  upload: trpc.router({
+    createS3PreSignedUrl: trpc.procedure.use(oidcAuth).mutation(scopeOf),
+  }),
   verify: trpc.router({
     deleteRun: trpc.procedure.use(oidcAuth).mutation(scopeOf),
+    disputeCheck: trpc.procedure.use(oidcAuth).mutation(scopeOf),
     submitCheckEvidence: trpc.procedure.use(oidcAuth).mutation(scopeOf),
   }),
 });
@@ -80,6 +91,16 @@ describe('oidcAuth with a Task run operation token', () => {
     );
   });
 
+  /**
+   * Regression: a sandbox builder running `lh acceptance plan dispute` was
+   * rejected because the dispute route was missing from the allowlist.
+   */
+  it('lets the token dispute a check of its own round', async () => {
+    const caller = createCaller({ oidcAuth: operationToken() } as any);
+
+    await expect(caller.verify.disputeCheck()).resolves.toMatchObject({ scope: 'op_task_run' });
+  });
+
   it('keeps rejecting the token on every other route', async () => {
     const caller = createCaller({ oidcAuth: operationToken() } as any);
 
@@ -117,5 +138,66 @@ describe('oidcAuth with a Task run operation token', () => {
     await expect(caller.verify.submitCheckEvidence()).rejects.toMatchObject({
       code: 'CONFLICT',
     });
+  });
+});
+
+describe('oidcAuth with a chat run operation token', () => {
+  const chatRunToken = () =>
+    operationToken({
+      capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+      operation_id: 'op_chat_run',
+    });
+
+  beforeEach(() => {
+    resolvePrincipal.mockReset();
+    resolvePrincipal.mockResolvedValue({
+      operationId: 'op_chat_run',
+      userId: 'operation-owner',
+      workspaceId: 'ws_1',
+    });
+  });
+
+  it('lets the run upload the images its tools return, as the operation owner', async () => {
+    // A remote device holds no other identity for the owner: without these
+    // routes a Claude Code `Read` on an image reaches the card as `[Image: …]`.
+    const caller = createCaller({ oidcAuth: chatRunToken() } as any);
+
+    await expect(caller.upload.createS3PreSignedUrl()).resolves.toEqual({
+      scope: 'op_chat_run',
+      userId: 'operation-owner',
+      workspaceId: 'ws_1',
+    });
+    await expect(caller.file.createFile()).resolves.toMatchObject({
+      capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+      scope: 'op_chat_run',
+    });
+    expect(resolvePrincipal).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: 'hetero:ingest', operationId: 'op_chat_run' }),
+    );
+  });
+
+  it('keeps the acceptance evidence routes closed to it', async () => {
+    const caller = createCaller({ oidcAuth: chatRunToken() } as any);
+
+    await expect(caller.verify.submitCheckEvidence()).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    expect(resolvePrincipal).not.toHaveBeenCalled();
+  });
+
+  it('keeps every other file route closed to it', async () => {
+    const caller = createCaller({ oidcAuth: chatRunToken() } as any);
+
+    await expect(caller.file.removeFile()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(resolvePrincipal).not.toHaveBeenCalled();
+  });
+
+  it('rejects a token that may not ingest', async () => {
+    const caller = createCaller({
+      oidcAuth: operationToken({ capabilities: ['hetero:finish'] }),
+    } as any);
+
+    await expect(caller.file.createFile()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(resolvePrincipal).not.toHaveBeenCalled();
   });
 });

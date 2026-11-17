@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'react-router';
 
@@ -19,34 +20,40 @@ const POLL_INTERVAL = 100;
 // tab switch, which is still a correct result).
 const POLL_TIMEOUT = 3000;
 
-const styles = createStaticStyles(({ css }) => ({
-  anchor: css`
-    scroll-margin-block-start: 80px;
-  `,
-  highlight: css`
-    border-radius: ${cssVar.borderRadius};
-    animation: settings-search-highlight 1.2s ease-in-out 2;
+const highlightKeyframes = stylex.keyframes({
+  '0%': { backgroundColor: 'transparent' },
+  // One step above colorPrimaryBg — plain Bg is barely visible in dark mode
+  '50%': { backgroundColor: cssVar.colorPrimaryBgHover },
+  '100%': { backgroundColor: 'transparent' },
+});
 
-    @keyframes settings-search-highlight {
-      0%,
-      100% {
-        background: transparent;
-      }
+const styles = stylex.create({
+  anchor: {
+    scrollMarginBlockStart: '80px',
+  },
+  highlight: {
+    borderRadius: cssVar.borderRadius,
+    animationName: {
+      'default': highlightKeyframes,
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    animationDuration: { 'default': '1.2s', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': 'ease-in-out',
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
+    animationIterationCount: { 'default': 2, '@media (prefers-reduced-motion: reduce)': 1 },
+    // Keep the locate cue, drop the flashing: a steady highlight that the
+    // removal timer clears
+    backgroundColor: {
+      'default': null,
+      '@media (prefers-reduced-motion: reduce)': cssVar.colorPrimaryBgHover,
+    },
+    backgroundImage: { 'default': null, '@media (prefers-reduced-motion: reduce)': 'none' },
+  },
+});
 
-      50% {
-        /* One step above colorPrimaryBg — plain Bg is barely visible in dark mode */
-        background: ${cssVar.colorPrimaryBgHover};
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      /* Keep the locate cue, drop the flashing: a steady highlight that the
-         removal timer clears */
-      background: ${cssVar.colorPrimaryBgHover};
-      animation: none;
-    }
-  `,
-}));
+const highlightClassNames = (stylex.props(styles.highlight).className ?? '').split(' ');
 
 /**
  * Marks a settings section / item as a search target. Wrap the group title or
@@ -54,7 +61,7 @@ const styles = createStaticStyles(({ css }) => ({
  * must match a `SETTINGS_SEARCH_ITEMS` entry's `anchor`.
  */
 export const SettingsSearchAnchor = memo<PropsWithChildren<{ id: string }>>(({ id, children }) => (
-  <span className={styles.anchor} {...{ [SETTINGS_ANCHOR_ATTR]: id }}>
+  <span {...stylex.props(styles.anchor)} {...{ [SETTINGS_ANCHOR_ATTR]: id }}>
     {children}
   </span>
 ));
@@ -86,8 +93,8 @@ export const scrollToSettingsAnchor = (anchor: string) => {
     // text so the flash is visible at a glance.
     const target =
       el.closest(`.ant-form-item, .ant-collapse-header, [${SETTINGS_ANCHOR_ROW_ATTR}]`) ?? el;
-    target.classList.add(styles.highlight);
-    setTimeout(() => target.classList.remove(styles.highlight), HIGHLIGHT_DURATION);
+    target.classList.add(...highlightClassNames);
+    setTimeout(() => target.classList.remove(...highlightClassNames), HIGHLIGHT_DURATION);
   };
 
   tryScroll();

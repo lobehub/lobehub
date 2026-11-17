@@ -31,6 +31,7 @@ vi.mock('@/libs/trpc/client', () => ({
       list: { query: vi.fn() },
       listAgentBound: { query: vi.fn() },
       listByAgent: { query: vi.fn() },
+      resetPermissions: { mutate: vi.fn() },
       updateToolPermission: { mutate: vi.fn() },
     },
   },
@@ -141,6 +142,88 @@ describe('connector slice replica', () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(useToolStore.getState().connectors).toEqual([]);
     expect(useToolStore.getState().isConnectorsInit).toBe(false);
+  });
+
+  it('loads the base and an agent list from the server once, for callers acting on them', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1', 'needs_approval')]);
+
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+
+    expect(listQuery).toHaveBeenCalledTimes(1);
+    expect(listByAgentQuery).toHaveBeenCalledTimes(1);
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true);
+    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
+  });
+
+  it('loads confirmed lists again for a caller that revalidates', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1')]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+
+    listByAgentQuery.mockResolvedValue([connector('c1', 'needs_approval')]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1', { revalidate: true });
+
+    expect(listQuery).toHaveBeenCalledTimes(2);
+    expect(listByAgentQuery).toHaveBeenCalledTimes(2);
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe(
+      'needs_approval',
+    );
+  });
+
+  it('does not count a list painted from storage as confirmed until the server answers', async () => {
+    // A stored copy may hold permissions the server has since tightened
+    await agentConnectorsResource.storage!.set(
+      { queryKey: AGENT_STORAGE_KEY, scope },
+      { data: [connector('c1', 'auto')], updatedAt: 1 },
+    );
+    listQuery.mockResolvedValue([]);
+    let answer!: (rows: unknown[]) => void;
+    listByAgentQuery.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+
+    const ensured = useToolStore.getState().ensureConfirmedConnectors('a1');
+    await vi.waitFor(() => expect(useToolStore.getState().agentConnectorsInit.a1).toBe(true));
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(false);
+
+    answer([connector('c1', 'needs_approval')]);
+    await ensured;
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true);
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe(
+      'needs_approval',
+    );
+  });
+
+  it('loads the lists again after leaving a scope and coming back to it', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1')]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    const home = scope;
+
+    const elsewhere = `${scope.split(':')[0]}:ws-2`;
+    useScope(elsewhere);
+    broadcastCacheScope(elsewhere);
+    useScope(home);
+    broadcastCacheScope(home);
+
+    // Switching dropped the lists, so their confirmations can't stand
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(false);
+    listByAgentQuery.mockClear();
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    expect(listByAgentQuery).toHaveBeenCalledTimes(1);
+    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
+  });
+
+  it('leaves a list unconfirmed when the server fails, and tries again next time', async () => {
+    listQuery.mockResolvedValue([]);
+    listByAgentQuery.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(useToolStore.getState().ensureConfirmedConnectors('a1')).rejects.toThrow();
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(false);
+
+    listByAgentQuery.mockResolvedValueOnce([]);
+    await useToolStore.getState().ensureConfirmedConnectors('a1');
+    expect(useToolStore.getState().isConnectorListConfirmed('a1')).toBe(true);
   });
 
   // These resources have no `useSync` mount: nothing re-renders them on a scope
@@ -258,6 +341,49 @@ describe('connector slice replica', () => {
     await operation;
     // The rejected write rebuilt the row from the server value.
     expect(useToolStore.getState().connectors[0].tools[0].permission).toBe('auto');
+  });
+
+  it("changes a tool's permission in a loaded agent's list too, and rolls it back there", async () => {
+    listQuery.mockResolvedValue([connector('c1', 'auto')]);
+    listByAgentQuery.mockResolvedValue([connector('c1', 'auto')]);
+    await useToolStore.getState().fetchConnectors();
+    await useToolStore.getState().fetchAgentConnectors('a1');
+
+    updateToolPermissionMutation.mockResolvedValueOnce(undefined);
+    await useToolStore.getState().updateToolPermission('c1-tool', 'needs_approval');
+    // A view's tool call reads the agent's list: it must not keep allowing the tool
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe(
+      'needs_approval',
+    );
+
+    let rejectWrite!: (error: unknown) => void;
+    updateToolPermissionMutation.mockImplementation(
+      () => new Promise((_resolve, reject) => (rejectWrite = reject)),
+    );
+    listByAgentQuery.mockResolvedValue([connector('c1', 'needs_approval')]);
+    const operation = useToolStore.getState().updateToolPermission('c1-tool', 'auto');
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe('auto');
+
+    rejectWrite(new Error('boom'));
+    await operation;
+    expect(useToolStore.getState().agentConnectors.a1[0].tools[0].permission).toBe(
+      'needs_approval',
+    );
+  });
+
+  it("refreshes a loaded agent's list after a connector write", async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1')]);
+    await useToolStore.getState().fetchConnectors();
+    await useToolStore.getState().fetchAgentConnectors('a1');
+    listByAgentQuery.mockClear();
+
+    vi.mocked(lambdaClient.connector.resetPermissions.mutate).mockResolvedValueOnce(
+      undefined as any,
+    );
+    await useToolStore.getState().resetConnectorPermissions('c1');
+
+    expect(listByAgentQuery).toHaveBeenCalledWith({ agentId: 'a1' });
   });
 
   it('keeps a deleted connector mounted until the server confirms, then drops it everywhere', async () => {

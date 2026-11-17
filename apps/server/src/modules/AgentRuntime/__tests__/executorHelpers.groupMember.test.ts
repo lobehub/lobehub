@@ -211,4 +211,70 @@ describe('buildServerAgentMemberRunner', () => {
       }),
     );
   });
+
+  // Unmarked anchors under an isolated executeAgentTasks call rendered as
+  // duplicate orphan skill calls, each carrying the full task list. The tool
+  // card also needs each running member's thread to show its progress.
+  it('marks each member anchor with its agent, task index and thread', async () => {
+    const rows: Record<string, any>[] = [];
+    const messageModel = {
+      create: vi.fn(async (value) => {
+        const row = { ...value, id: `row-${rows.length}` };
+        rows.push(row);
+        return row;
+      }),
+      updatePluginState: vi.fn().mockResolvedValue(undefined),
+      updateToolMessage: vi.fn(),
+    };
+    const runner = buildServerAgentMemberRunner(
+      {
+        execGroupMember: vi.fn(async ({ agentId }) => ({
+          operationId: `op-${agentId}`,
+          started: true,
+          threadId: `thd-${agentId}`,
+        })),
+        messageModel,
+        operationId: 'op-sup',
+        topicId: 'topic-1',
+      } as unknown as RuntimeExecutorContext,
+      {
+        origin: {
+          agentId: 'agt_sup',
+          groupId: 'group-1',
+          topicId: 'topic-1',
+        },
+        world: { group: { agentMap: { agt_eng: { name: 'Engineer' } } } },
+      } as unknown as AgentState,
+      {
+        apiName: 'executeAgentTasks',
+        arguments: '{}',
+        id: 'call_1',
+        identifier: 'lobe-group-management',
+        type: 'builtin',
+      },
+      'sup-msg-1',
+    );
+
+    await runner!.run({
+      members: [
+        { agentId: 'agt_pm', instruction: 'draft' },
+        { agentId: 'Engineer', instruction: 'review' },
+      ],
+      mode: 'isolated',
+      onComplete: 'resume',
+    });
+
+    const [groupTool, ...anchors] = rows;
+    expect(groupTool.metadata?.groupMemberAnchor).toBeUndefined();
+    expect(anchors.map((row) => [row.parentId, row.tool_call_id, row.metadata])).toEqual([
+      ['row-0', 'call_1::m0', { groupMemberAnchor: { agentId: 'agt_pm', index: 0 } }],
+      ['row-0', 'call_1::m1', { groupMemberAnchor: { agentId: 'agt_eng', index: 1 } }],
+    ]);
+    expect(messageModel.updatePluginState.mock.calls).toEqual(
+      expect.arrayContaining([
+        ['row-1', { threadId: 'thd-agt_pm' }],
+        ['row-2', { threadId: 'thd-agt_eng' }],
+      ]),
+    );
+  });
 });

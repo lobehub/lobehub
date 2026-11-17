@@ -10,9 +10,11 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 const mockUpdatePreference = vi.fn();
+const mockSetWorktreeModeDir = vi.fn();
 vi.mock('@/database/models/workspaceUserSettings', () => ({
   WorkspaceUserSettingsModel: vi.fn(function () {
     return {
+      setWorktreeModeDir: mockSetWorktreeModeDir,
       updatePreference: mockUpdatePreference,
     };
   }),
@@ -178,5 +180,24 @@ describe('workspaceUserSettingsRouter.updatePreference', () => {
         agentDeviceOverrides: { agt_1: 'device-1' },
       });
     });
+  });
+});
+
+describe('workspaceUserSettingsRouter.setWorktreeModeDir', () => {
+  const ctx: any = { serverDB: {}, userId: 'user-member', workspaceId: 'ws-1' };
+
+  it('stores one directory switch through the model and returns the list', async () => {
+    mockSetWorktreeModeDir.mockResolvedValue(['dev::/code/a']);
+    const caller = workspaceUserSettingsRouter.createCaller(ctx);
+
+    await expect(
+      caller.setWorktreeModeDir({ enabled: true, key: 'dev::/code/a' }),
+    ).resolves.toEqual(['dev::/code/a']);
+    expect(mockSetWorktreeModeDir).toHaveBeenCalledWith('dev::/code/a', true);
+  });
+
+  it('rejects an empty key', async () => {
+    const caller = workspaceUserSettingsRouter.createCaller(ctx);
+    await expect(caller.setWorktreeModeDir({ enabled: true, key: '' })).rejects.toThrow();
   });
 });

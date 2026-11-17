@@ -2,7 +2,7 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { CheckCircle2Icon, GitPullRequestIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -169,8 +169,11 @@ interface WorkPreviewProps {
 
 const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
   const { t } = useTranslation('file');
+  const { t: tTopic } = useTranslation('topic');
   const descriptor = getWorkTypeDescriptor(item);
   const DescriptorIcon = descriptor.getIcon(item);
+  // The PR state is drawn by its glyph; the description no longer falls back to it.
+  const stateLabelKey = descriptor.getStateLabelKey?.(item);
   const description = descriptor.getDescription(item);
   const identifier = descriptor.getIdentifier(item);
   const displayIdentifier =
@@ -207,9 +210,14 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
         ) : (
           <div className={styles.previewBody}>
             <Flexbox horizontal align={'center'} gap={6}>
-              {item.resourceType === 'github_pull_request' && (
-                <GitPullRequestIcon color={cssVar.colorTextTertiary} size={11} />
-              )}
+              {item.resourceType === 'github_pull_request' &&
+                (stateLabelKey ? (
+                  <Center title={tTopic(stateLabelKey)}>
+                    <DescriptorIcon size={11} />
+                  </Center>
+                ) : (
+                  <GitPullRequestIcon color={cssVar.colorTextTertiary} size={11} />
+                ))}
               <span className={styles.previewIdentifier}>
                 {previewIdentifier || item.resourceType}
               </span>

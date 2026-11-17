@@ -181,7 +181,9 @@ export async function loadOrCreateState(
     notifiedInterventionTransitions: new Set(),
     processedKeys: new Set(),
     publishedKeys: new Set(),
+    steerMessages: new Map(),
     streamStartAssistantIds: new Map(),
+    streamStartParentMessages: new Map(),
     toolMsgIdByCallId: new Map(),
     threadId: running?.threadId ?? undefined,
     topicId,
@@ -260,7 +262,11 @@ export async function refreshToolMessageIndex(
   deps: HeterogeneousPersistenceHandlerDeps,
   state: OperationState,
 ): Promise<void> {
-  const toolPlugins = await deps.messageModel.listMessagePluginsByTopic(state.topicId);
+  // Runs once per event batch over the whole topic: read only the index
+  // columns, not every tool's arguments and state.
+  const toolPlugins = await deps.messageModel.listToolCallIndexByTopic(state.topicId, {
+    interventionStateKey: HETEROGENEOUS_INTERVENTION_STATE_KEY,
+  });
   for (const plugin of toolPlugins) {
     if (plugin.toolCallId) state.toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
     if (plugin.toolCallId && plugin.state && typeof plugin.state === 'object') {

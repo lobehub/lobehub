@@ -60,6 +60,19 @@ describe('taskDetailSelectors', () => {
       expect(taskDetailSelectors.activeTaskStatus(state)).toBe('running');
     });
 
+    it('should return activeTaskProjectId', () => {
+      const withProject = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: { 'T-1': { identifier: 'T-1', projectId: 'p1' } as TaskDetailData },
+      });
+      expect(taskDetailSelectors.activeTaskProjectId(withProject)).toBe('p1');
+    });
+
+    it('should return no project when the detail has none or is missing', () => {
+      expect(taskDetailSelectors.activeTaskProjectId(state)).toBeNull();
+      expect(taskDetailSelectors.activeTaskProjectId(createState())).toBeNull();
+    });
+
     it('should return activeTaskPriority', () => {
       expect(taskDetailSelectors.activeTaskPriority(state)).toBe(2);
     });
@@ -112,6 +125,33 @@ describe('taskDetailSelectors', () => {
 
     it('should return activeTaskSubtasks', () => {
       expect(taskDetailSelectors.activeTaskSubtasks(state)).toHaveLength(1);
+    });
+
+    it('counts subtasks at every depth', () => {
+      const nested = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            subtasks: [
+              {
+                children: [
+                  {
+                    children: [{ identifier: 'T-4', status: 'backlog' }],
+                    identifier: 'T-3',
+                    status: 'backlog',
+                  },
+                ],
+                identifier: 'T-2',
+                status: 'backlog',
+              },
+              { identifier: 'T-5', status: 'backlog' },
+            ],
+          },
+        },
+      });
+      expect(taskDetailSelectors.activeTaskSubtaskCount(nested)).toBe(4);
+      expect(taskDetailSelectors.activeTaskSubtaskCount(createState())).toBe(0);
     });
 
     it('should return empty array when no subtasks', () => {

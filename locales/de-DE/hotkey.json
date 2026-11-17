@@ -27,6 +27,8 @@
   "openChatSettings.title": "Chat-Einstellungen öffnen",
   "openHotkeyHelper.desc": "Anleitung für alle Tastenkombinationen anzeigen",
   "openHotkeyHelper.title": "Tastenkürzel-Hilfe öffnen",
+  "openTaskFilter.desc": "Öffne das Filtermenü auf der Seite Aufgaben",
+  "openTaskFilter.title": "Aufgaben filtern",
   "prevTab.desc": "Wechseln Sie zur vorherigen Registerkarte in der Desktop-App; springt am Anfang zur letzten Registerkarte zurück",
   "prevTab.title": "Vorherige Registerkarte",
   "regenerateMessage.desc": "Letzte Nachricht neu generieren",

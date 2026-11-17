@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST } from './route';
 
 const mocks = vi.hoisted(() => ({
+  latestPreviewOrigin: vi.fn(),
   getInteractionDetails: vi.fn(),
   getInteractionResult: vi.fn(),
   getUserAuth: vi.fn(),
@@ -20,6 +21,9 @@ vi.mock('@/server/services/acceptanceReview/access', () => ({
   resolveReviewAccess: mocks.resolveReviewAccess,
 }));
 
+vi.mock('@/server/services/acceptanceReview/previewOrigin', () => ({
+  latestPreviewOrigin: mocks.latestPreviewOrigin,
+}));
 vi.mock('debug', () => ({ default: () => vi.fn() }));
 
 vi.mock('@lobechat/utils/server', () => ({ getUserAuth: mocks.getUserAuth }));
@@ -104,6 +108,28 @@ describe('POST /oidc/consent', () => {
         error: 'access_denied',
         error_description: 'No access to this acceptance',
       });
+      expect(mocks.findOrCreateGrants).not.toHaveBeenCalled();
+    });
+
+    it('tells the toolbar it was opened away from the preview origin', async () => {
+      mocks.resolveReviewAccess.mockResolvedValue({ acceptance: {}, can: {} });
+      mocks.latestPreviewOrigin.mockResolvedValue('https://pr-12.preview.app');
+      mocks.getInteractionDetails.mockResolvedValue({
+        params: {
+          client_id: 'lobehub-acceptance',
+          resource: `${RESOURCE}:https%3A%2F%2Fevil.example`,
+        },
+        prompt: { details: {}, name: 'consent' },
+      });
+
+      for (const consent of ['accept', 'deny']) {
+        mocks.getInteractionResult.mockClear();
+        await POST(createRequest({ consent, uid: 'uid-1' }));
+        expect(mocks.getInteractionResult).toHaveBeenCalledWith('uid-1', {
+          error: 'wrong_origin',
+          error_description: 'Open this acceptance from its preview address',
+        });
+      }
       expect(mocks.findOrCreateGrants).not.toHaveBeenCalled();
     });
 

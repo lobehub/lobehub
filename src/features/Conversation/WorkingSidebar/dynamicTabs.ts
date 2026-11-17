@@ -26,7 +26,11 @@ export const isCanvasTab = (tab: string) => tab.startsWith(CANVAS_TAB_PREFIX);
 
 // Browser pages and canvases belong to one conversation, so pinning them across
 // every topic of the agent would reopen content that does not exist there.
-export const isDynamicTab = (tab: string) => isBrowserTab(tab) || isCanvasTab(tab);
+export const isMcpAppTab = (tab: string) =>
+  tab.startsWith('mcp-app:') || tab.startsWith('mcp-entry:');
+
+export const isDynamicTab = (tab: string) =>
+  isBrowserTab(tab) || isCanvasTab(tab) || isMcpAppTab(tab);
 
 export const browserSessionIdOfTab = (baseSessionId: string, tab: string) =>
   tab === BROWSER_TAB_KEY

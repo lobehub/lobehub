@@ -1,14 +1,13 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NavHeader from '@/features/NavHeader';
-import SettingContainer from '@/features/Setting/SettingContainer';
 import { usePermission } from '@/hooks/usePermission';
 
+import SettingsPageActions from '../features/SettingsPageActions';
 import { createCreateCredModal } from './features/CreateCredModal';
 import CredsList from './features/CredsList';
 import { personalCredsApi } from './features/useCredsApi';
@@ -35,7 +34,7 @@ const Page = ({ mobile }: PageProps) => {
       <Button
         disabled={!canManageCredentials}
         icon={<Icon icon={Plus} />}
-        size={mobile ? 'large' : 'small'}
+        size={mobile ? 'large' : undefined}
         type={'primary'}
         onClick={handleCreate}
       >
@@ -55,14 +54,11 @@ const Page = ({ mobile }: PageProps) => {
     );
   }
 
+  // The shared settings header shows the title; the button joins its right slot.
   return (
     <>
-      <NavHeader right={createButton} styles={{ center: { alignItems: 'center' } }}>
-        <Text weight={500}>{t('tab.creds')}</Text>
-      </NavHeader>
-      <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
-        <CredsList key={refreshKey} />
-      </SettingContainer>
+      <SettingsPageActions>{createButton}</SettingsPageActions>
+      <CredsList key={refreshKey} />
     </>
   );
 };

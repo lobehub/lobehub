@@ -5,21 +5,32 @@ import { useTranslation } from 'react-i18next';
 import { taskService } from '@/services/task';
 import { useTaskStore } from '@/store/task';
 
+import {
+  confirmedTaskPatches,
+  optimisticTaskPatch,
+  type TaskBatchAction,
+  type TaskBatchChangedRow,
+  type TaskBatchResponse,
+} from './optimisticBatch';
+import { enqueueBatchRequest } from './serverQueue';
 import { useTaskSelectionStore } from './store';
-import { chunkIds, mergeOutcomes, type TaskBatchOutcome } from './taskSelectionModel';
+import { chunkIds, mergeOutcomes } from './taskSelectionModel';
+import { pushUndoEntry } from './undo/stack';
+import { useTaskBatchUndo } from './undo/useTaskBatchUndo';
+import { useBackgroundTaskListRefresh } from './useBackgroundTaskListRefresh';
 
-export type TaskBatchStatus = 'backlog' | 'canceled' | 'completed' | 'paused';
+export type { TaskBatchAction, TaskBatchStatus } from './optimisticBatch';
 
-export type TaskBatchAction =
-  | { archived: boolean; kind: 'archive' }
-  | { kind: 'delete' }
-  | { kind: 'status'; status: TaskBatchStatus }
-  | {
-      kind: 'update';
-      patch: { assigneeAgentId?: string | null; assigneeUserId?: string | null; priority?: number };
-    };
+export interface TaskBatchRunOptions {
+  /**
+   * Work the batch depends on, run in the request queue ahead of it (after the
+   * optimistic overlay is up), e.g. making tasks private before a private
+   * agent is assigned to them. It receives the selected ids.
+   */
+  prepare?: (ids: string[]) => Promise<unknown>;
+}
 
-const runChunk = (action: TaskBatchAction, ids: string[]): Promise<TaskBatchOutcome> => {
+const runChunk = (action: TaskBatchAction, ids: string[]): Promise<TaskBatchResponse> => {
   switch (action.kind) {
     case 'archive': {
       return taskService.batchArchive(ids, action.archived);
@@ -28,74 +39,74 @@ const runChunk = (action: TaskBatchAction, ids: string[]): Promise<TaskBatchOutc
       return taskService.batchDelete(ids);
     }
     case 'status': {
-      return taskService.batchUpdateStatus(ids, action.status);
+      return taskService.batchUpdateStatus(ids, action.status) as Promise<TaskBatchResponse>;
     }
     case 'update': {
-      return taskService.batchUpdate({ ids, ...action.patch });
+      return taskService.batchUpdate({ ids, ...action.patch }) as Promise<TaskBatchResponse>;
     }
   }
 };
 
 /**
- * Apply one action to the current selection: one request per 500 tasks (the
- * server's batch limit), then a single list refresh and a single summary
- * toast. Tasks that failed stay selected so the user can retry them.
+ * Apply one action to the current selection, optimistically: every loaded
+ * list and board shows the result and the selection clears the moment the
+ * action is picked. The requests (one per 500 tasks, the server's batch
+ * limit) run behind it; their answer settles the overlay — rows the server
+ * did not change fall back and come back selected for a retry, a failed
+ * request rolls everything back — and the list refresh that follows runs in
+ * the background, never in front of the user.
  */
 export const useTaskBatchActions = () => {
   const { t } = useTranslation('chat');
-  const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
+  const beginOptimistic = useTaskStore((s) => s.internal_beginCollectionTasksOptimistic);
   const running = useTaskSelectionStore((s) => !!s.progress);
 
+  const refreshInBackground = useBackgroundTaskListRefresh();
+  const { undo } = useTaskBatchUndo();
+
   const run = useCallback(
-    async (action: TaskBatchAction) => {
-      const { generation, progress, selectedIds } = useTaskSelectionStore.getState();
-      // Progress belongs to the selection this batch started from; once that
-      // is cleared (list left, Esc) later updates must not reach the new list.
-      const setProgress = (next?: { done: number; total: number }) => {
-        const store = useTaskSelectionStore.getState();
-        if (store.generation === generation) store.setProgress(next);
-      };
-      // One batch at a time: a second action must not race the first.
-      if (progress) return;
-      const ids = [...selectedIds];
+    async (action: TaskBatchAction, runOptions?: TaskBatchRunOptions) => {
+      const ids = [...useTaskSelectionStore.getState().selectedIds];
       if (ids.length === 0) return;
 
-      setProgress({ done: 0, total: ids.length });
-      const outcomes: TaskBatchOutcome[] = [];
+      const patch = optimisticTaskPatch(action);
+      const overlay = beginOptimistic(ids, patch);
+      // The rows already show the result: the selection is done with.
+      useTaskSelectionStore.getState().clear();
+      const revision = useTaskSelectionStore.getState().revision;
+
+      const outcomes: TaskBatchResponse[] = [];
       let requestError: unknown;
-      try {
-        // Sequential: each chunk is already a set-based write on the server,
-        // and ordering keeps a later chunk from racing an earlier one.
-        let done = 0;
-        for (const chunk of chunkIds(ids)) {
-          outcomes.push(await runChunk(action, chunk));
-          done += chunk.length;
-          setProgress({ done, total: ids.length });
+      await enqueueBatchRequest(async () => {
+        try {
+          await runOptions?.prepare?.(ids);
+          // Sequential: each chunk is already a set-based write on the server,
+          // and ordering keeps a later chunk from racing an earlier one.
+          for (const chunk of chunkIds(ids)) outcomes.push(await runChunk(action, chunk));
+        } catch (error) {
+          requestError = error;
         }
-      } catch (error) {
-        requestError = error;
-      }
-      // The batch is committed whatever happens here; a failed refresh only
-      // means the list on screen is stale, so say that (with a retry) instead
-      // of hiding it behind the success toast.
-      await refreshTaskList().catch((error: unknown) => {
-        console.error('[task batch] list refresh failed after a committed batch', error);
-        const retry = () => {
-          void refreshTaskList().catch((retryError: unknown) => {
-            console.error('[task batch] list refresh retry failed', retryError);
-          });
-        };
-        toast.warning({
-          actions: [{ label: t('taskList.bulk.refreshFailed.retry'), onClick: retry }],
-          description: t('taskList.bulk.refreshFailed.desc'),
-          title: t('taskList.bulk.refreshFailed.title'),
-        });
       });
-      setProgress(undefined);
 
       const { failed, followUpFailed, skipped, updated } = mergeOutcomes(outcomes);
+      const rows = outcomes.flatMap((outcome): TaskBatchChangedRow[] => outcome.tasks ?? []);
       const unprocessed = ids.length - updated.length - skipped.length - failed.length;
       const failedCount = failed.length + Math.max(unprocessed, 0);
+
+      if (updated.length === 0) overlay.rollback();
+      else {
+        overlay.commit(confirmedTaskPatches(patch, updated, rows));
+        refreshInBackground();
+      }
+
+      // Rows still needing attention come back selected — unless the user has
+      // moved on: any selection change since the click (even one undone
+      // since), or leaving the list (a scope or page change clears it). A row the overlay hid (deleted,
+      // archived, or moved to a status the view hides) is only shown again
+      // once the rollback renders; the store selects it on the list's next
+      // prune, if the list then shows it.
+      const restoreSelection = (pending: readonly string[]) =>
+        useTaskSelectionStore.getState().restore(pending, revision);
 
       if (requestError && updated.length === 0) {
         toast.error(
@@ -103,6 +114,7 @@ export const useTaskBatchActions = () => {
             ? requestError.message
             : t('taskList.bulk.result.error'),
         );
+        restoreSelection(ids);
         return;
       }
 
@@ -123,29 +135,41 @@ export const useTaskBatchActions = () => {
           title: t('taskList.bulk.followUpFailed.title'),
         });
       }
+      // Whatever the batch changed can be undone — from the toast, or with
+      // ⌘/Ctrl+Z while the list is on screen (also after the toast is gone).
+      const reverts = outcomes.flatMap((outcome) => outcome.reverts ?? []);
+      const undoEntry =
+        updated.length === 0
+          ? undefined
+          : action.kind === 'delete'
+            ? pushUndoEntry({ kind: 'restore', taskIds: updated })
+            : reverts.length > 0
+              ? pushUndoEntry({ kind: 'revert', reverts })
+              : undefined;
       const message = parts.join(' · ');
-      if (failedCount > 0) toast.warning(message);
-      else toast.success(message);
+      const options = {
+        ...(undoEntry && {
+          actions: [
+            {
+              label: t('taskList.bulk.undo.action'),
+              onClick: () => void undo(undoEntry),
+              variant: 'text' as const,
+            },
+          ],
+          // Long enough to read the result and reach the button.
+          duration: 8000,
+        }),
+        title: message,
+      };
+      if (failedCount > 0) toast.warning(options);
+      else toast.success(options);
 
-      const selection = useTaskSelectionStore.getState();
-      // The list this batch started from was left (or its selection cleared)
-      // while the requests ran: its ids mean nothing to the list on screen now,
-      // so neither restore them nor clear the new list's own selection.
-      if (selection.generation !== generation) return;
       if (failedCount > 0) {
-        // Keep exactly what still needs attention selected.
-        // Only rows the list on screen still shows: after a page or scope change
-        // the old ids are not visible, and must not come back selected.
         const done = new Set([...updated, ...skipped.map((item) => item.id)]);
-        useTaskSelectionStore.setState({
-          panelOpen: false,
-          selectedIds: ids.filter((id) => !done.has(id) && selection.visibleIds.has(id)),
-        });
-      } else {
-        selection.clear();
+        restoreSelection(ids.filter((id) => !done.has(id)));
       }
     },
-    [refreshTaskList, t],
+    [beginOptimistic, refreshInBackground, t, undo],
   );
 
   return { run, running };

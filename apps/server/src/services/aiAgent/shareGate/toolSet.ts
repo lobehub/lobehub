@@ -10,8 +10,14 @@ import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { hasShareToolGrant, PLUGIN_SCHEMA_SEPARATOR, type ShareToolGrant } from '@lobechat/const';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 
-import { isGovernedByBuiltinAllowlist, SHARE_VISITOR_ALLOWED_IDENTIFIERS } from './allowlist';
+import {
+  isGovernedByBuiltinAllowlist,
+  isShareVisitorChannelTool,
+  SHARE_VISITOR_ALLOWED_IDENTIFIERS,
+  SHARE_VISITOR_CHANNEL_BLOCKED_APIS,
+} from './allowlist';
 import { DATA_TOOL_ACCESS_RULES } from './dataToolRules';
+import { isShareDeviceBuiltin } from './deviceAccess';
 import { resolveEffectiveShareToolGrants } from './grants';
 import { stripSubAgentDispatchApis } from './subAgentDispatch';
 import {
@@ -70,7 +76,10 @@ const applyShareGateToDataToolAccess = (toolSet: ShareGateToolSet, gate: AgentSh
  * exempted; a share with no configured tools is a plain-chat run).
  */
 export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentShareGate): void => {
-  const grants = resolveEffectiveShareToolGrants(gate.shareConfig);
+  const grants = resolveEffectiveShareToolGrants({
+    ...gate.shareConfig,
+    canUseDevice: gate.canUseDevice,
+  });
 
   // A tool must clear BOTH gates: the owner's own `toolGrants` picker
   // (`grants` — toolset-level OR scoped to at least one API), AND — for
@@ -80,8 +89,10 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   // they pass straight through to the owner-picker check unaffected — this
   // allowlist must never decide their fate, in either direction.
   // MCP servers only the creator's machine can reach (stdio / localhost / LAN)
-  // never survive, grant or not: dispatching one tunnels to the creator's
-  // device under the creator's identity. Decided from the manifest's runtime
+  // survive only when the share grants this visitor the device
+  // (`gate.canUseDevice`), and then still need their own tool grant:
+  // dispatching one tunnels to the creator's device under the creator's
+  // identity. Decided from the manifest's runtime
   // `mcpParams` (set for connector manifests by `buildConnectorManifests`),
   // the same field `ToolExecutionService.executeMCPTool` dispatches on — which
   // also refuses these calls for visitor runs as the unbypassable backstop.
@@ -95,7 +106,12 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   );
 
   const isAllowed = (id: string) => {
-    if (deviceOnlyMcpIds.has(id)) return false;
+    if (deviceOnlyMcpIds.has(id) && !gate.canUseDevice) return false;
+    // Device builtins are granted by `shareConfig.deviceAccess` alone — they
+    // are never picked in the tool picker, like an IM bot's device tools.
+    if (isShareDeviceBuiltin(id)) return gate.canUseDevice;
+    // Only a Channel run injects this tool; its reads are narrowed below.
+    if (isShareVisitorChannelTool(id)) return true;
     if (!hasShareToolGrant(grants, id)) return false;
     if (!isGovernedByBuiltinAllowlist(id)) return true;
     return SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(id);
@@ -144,6 +160,9 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   }
 
   stripSubAgentDispatchApis(toolSet);
+  for (const id of Object.keys(toolSet.manifestMap))
+    if (isShareVisitorChannelTool(id))
+      stripApisFromTool(toolSet, id, SHARE_VISITOR_CHANNEL_BLOCKED_APIS);
   applyShareGateToDataToolAccess(toolSet, gate);
   applyShareGateToPerApiGrants(toolSet, grants);
   applyShareGateToActivator(toolSet);
@@ -174,7 +193,8 @@ const applyShareGateToCloudSandbox = (toolSet: ShareGateToolSet): void => {
  * Fit `lobe-activator` to the gated set, or drop it when that set leaves it
  * nothing to activate.
  *
- * Its grant is implied by any tool grant (`resolveEffectiveShareToolGrants`),
+ * Its grant is implied by any tool grant or the device grant
+ * (`resolveEffectiveShareToolGrants`),
  * but the activator only ever discovers what is left in `manifestMap` and not
  * already enabled — the same difference `buildToolDiscoveryConfig` renders as
  * `<available_tools>`. A historical activation in `activatableToolIds` counts

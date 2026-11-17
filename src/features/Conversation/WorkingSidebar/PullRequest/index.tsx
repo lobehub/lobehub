@@ -19,6 +19,7 @@ import { sectionProps } from '../Overview/sectionStyles';
 import { resolvePullRequestActionLock } from './actionLock';
 import Header from './Header';
 import MergeDock from './MergeDock';
+import { checkoutPublishesTo } from './mergeDockData';
 import Sections from './Sections';
 import PullRequestSkeleton from './Skeleton';
 import { usePullRequestActions } from './usePullRequestActions';
@@ -169,7 +170,13 @@ const PullRequest = memo<PullRequestProps>(
 
     if (!detail) return loadError(fetchError, () => void mutate());
 
-    const local = aheadBehind?.hasUpstream ? { ahead: aheadBehind.ahead } : undefined;
+    // The checkout's unpushed commits belong to this PR only when the checkout
+    // publishes to its head; otherwise "Push N commits" would publish another
+    // branch under this PR (one topic can link several PRs).
+    const local =
+      aheadBehind?.hasUpstream && checkoutPublishesTo(aheadBehind, detail.headRefName)
+        ? { ahead: aheadBehind.ahead }
+        : undefined;
 
     return (
       <Flexbox className={stylex.props(styles.root).className}>

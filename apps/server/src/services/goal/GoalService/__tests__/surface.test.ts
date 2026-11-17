@@ -40,7 +40,6 @@ const METHODS = [
   'addNode',
   'answerClarifications',
   'answerReleaseGate',
-  'archiveSignedOffTasks',
   'attachTaskDeliverables',
   'bindTopic',
   'buildTaskAcceptanceRequirement',

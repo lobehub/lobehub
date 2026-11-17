@@ -1,7 +1,7 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
-import { PauseIcon, PlayIcon } from 'lucide-react';
+import { Button, createStaticStyles, Flexbox, Tag, Text, toast } from '@lobehub/ui';
+import { ArchiveIcon, ArchiveRestoreIcon, PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -82,6 +82,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const pauseGoal = useGoalStore((s) => s.pauseGoal);
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const startGoal = useGoalStore((s) => s.startGoal);
+  const archiveGoal = useGoalStore((s) => s.archiveGoal);
+  const [restoring, setRestoring] = useState(false);
   // The server lets only a draft's creator or a workspace owner launch it.
   const canStart = useResourceManageable(snapshot?.goal.userId);
 
@@ -288,6 +290,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   be deletable, and this menu is the only place that can do it. */}
                 <GoalDetailActions
                   agentId={agentId}
+                  archivedAt={goal.archivedAt ?? null}
                   goalId={goal.id}
                   projectId={goal.projectId}
                   onRename={focusTitleEditor}
@@ -330,7 +333,32 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'} wrap={'wrap'}>
                   {/* One control at a time: a draft is started, a moving goal is
                       paused or resumed — the two states never overlap. */}
-                  {goal.status === 'draft' ? (
+                  {goal.archivedAt ? (
+                    // Archived goals stay put: start / resume refuse them until
+                    // restored, so restoring is the one control offered.
+                    <>
+                      <Tag icon={<ArchiveIcon size={12} />}>{t('goalList.archived')}</Tag>
+                      {canEdit && canStart && (
+                        <Button
+                          icon={ArchiveRestoreIcon}
+                          loading={restoring}
+                          onClick={async () => {
+                            setRestoring(true);
+                            try {
+                              await archiveGoal(goal.id, false);
+                              toast.success(t('goalList.unarchiveSuccess'));
+                            } catch {
+                              toast.error(t('goalList.unarchiveFailed'));
+                            } finally {
+                              setRestoring(false);
+                            }
+                          }}
+                        >
+                          {t('goalList.unarchive')}
+                        </Button>
+                      )}
+                    </>
+                  ) : goal.status === 'draft' ? (
                     canEdit &&
                     canStart && (
                       <Button
@@ -372,7 +400,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                     }
                   />
                   <GoalVisibilitySelector goalId={goal.id} />
-                  {goal.status === 'draft' && (
+                  {goal.status === 'draft' && !goal.archivedAt && (
                     <Text fontSize={12} type={'secondary'}>
                       {t('goalProcess.draft')}
                     </Text>

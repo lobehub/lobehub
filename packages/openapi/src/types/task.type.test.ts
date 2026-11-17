@@ -44,3 +44,15 @@ describe('task schedule field schemas', () => {
     expect(UpdateTaskRequestSchema.safeParse({ schedulePattern: null }).success).toBe(true);
   });
 });
+
+describe('task project field schemas', () => {
+  it('accepts a project id and null on a patch, and rejects a non-string', () => {
+    expect(UpdateTaskRequestSchema.parse({ projectId: 'proj_1' })).toEqual({ projectId: 'proj_1' });
+    expect(UpdateTaskRequestSchema.parse({ projectId: null })).toEqual({ projectId: null });
+    expect(UpdateTaskRequestSchema.safeParse({ projectId: 42 }).success).toBe(false);
+  });
+
+  it('keeps an omitted project out of a patch, so it cannot overwrite the stored one', () => {
+    expect(UpdateTaskRequestSchema.parse({ name: 'x' })).not.toHaveProperty('projectId');
+  });
+});

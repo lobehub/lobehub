@@ -3,6 +3,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
@@ -319,5 +320,37 @@ describe('useRemoteAgentDeviceGuard', () => {
     );
 
     await waitFor(() => expect(result.current.status).toBe('ok'));
+  });
+  // Regression: a sleeping managed cloud device raised the offline banner, so
+  // the run never reached the dispatch that wakes it.
+  it('lets a CLI agent send to a sleeping managed cloud device', async () => {
+    bindCodexTo('managed-a');
+    mockedListDevices.mockResolvedValue([
+      {
+        deviceId: 'managed-a',
+        identitySource: MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE,
+        managedPhase: 'suspended',
+        online: false,
+      },
+    ] as never);
+
+    const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('ok'));
+  });
+
+  it('still blocks an offline ordinary device next to that rule', async () => {
+    bindCodexTo('desktop-a');
+    mockedListDevices.mockResolvedValue([
+      { deviceId: 'desktop-a', identitySource: 'machine-id', online: false },
+    ] as never);
+
+    const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('device-offline'));
   });
 });

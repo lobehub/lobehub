@@ -212,7 +212,7 @@ describe('review API', () => {
       base: ['<span className={styles.a}>'],
       head: ['<span {...stylex.props(styles.a)}>'],
     });
-    expect(variable.styles).toEqual({ blocks: [], source: {}, usage: {} });
+    expect(variable.styles).toEqual({ blocks: [], moved: {}, source: {}, usage: {} });
     const placed = payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
     expect(placed.styles.blocks.map((block: any) => [block.slot, block.standIn])).toEqual([
       ['icon', 'SkillsIcon'],
@@ -225,6 +225,23 @@ describe('review API', () => {
     );
     expect(payload.pr).toMatchObject({ number: 21054 });
     expect(payload.counts).toMatchObject({ proven: 1, total: 4 });
+  });
+
+  it('describes any case for the case page and says whether it sits in the review queue', async () => {
+    const view = async (key: string) =>
+      (await fetch(`${server.url}/api/case/${encodeURIComponent(key)}/review`)).json() as any;
+    const equal = await view('src/A.tsx|A#3');
+    expect(equal.queued).toBe(false);
+    expect(equal.conditions).toEqual(['light/1280/default', 'dark/1280/default']);
+    expect(equal.item).toMatchObject({ canPass: false, category: 'equal', key: 'src/A.tsx|A#3' });
+    expect(equal.item.combos).toHaveLength(1);
+    const difference = await view('src/A.tsx|A#0');
+    expect(difference.queued).toBe(true);
+    expect(difference.item.summary).toEqual(['文字颜色 black → red']);
+    const missing = await fetch(
+      `${server.url}/api/case/${encodeURIComponent('src/A.tsx|Z#9')}/review`,
+    );
+    expect(missing.status).toBe(404);
   });
 
   it('records a pass in the records reviews', async () => {
@@ -242,8 +259,20 @@ describe('review API', () => {
     expect(stored.passes[0]).toMatchObject({ key: 'src/A.tsx|A#1', reason: 'REVIEW_PASS' });
   });
 
-  it('requires a note to send back and refuses passes that are not allowed', async () => {
-    expect((await post({ action: 'rework', key: 'src/A.tsx|A#0', note: '' })).status).toBe(400);
+  it('requires a note to send back an item without a rendered difference and refuses passes that are not allowed', async () => {
+    expect((await post({ action: 'rework', key: 'src/A.tsx|A#1', note: '' })).status).toBe(400);
+    expect((await post({ action: 'rework', key: 'src/A.tsx|A#2', note: ' ' })).status).toBe(400);
+    const generated = await post({
+      action: 'rework',
+      key: 'src/A.tsx|A#0',
+      note: '',
+      reviewer: 'innei',
+    });
+    expect(generated.status).toBe(200);
+    expect(
+      (await generated.json()).items.find((entry: any) => entry.key === 'src/A.tsx|A#0').rework
+        .note,
+    ).toBe('不一样：文字颜色 black → red');
     expect((await post({ action: 'pass', key: 'src/A.tsx|A#0', note: '误报' })).status).toBe(409);
     expect((await post({ action: 'pass', key: 'src/A.tsx|A#2', note: '' })).status).toBe(409);
     expect(
@@ -257,9 +286,9 @@ describe('review API', () => {
       ).status,
     ).toBe(200);
     const payload = await queue();
-    expect(payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#0').state).toBe(
-      'reworked',
-    );
+    const reworked = payload.items.find((entry: any) => entry.key === 'src/A.tsx|A#0');
+    expect(reworked.state).toBe('reworked');
+    expect(reworked.rework.note).toBe('颜色变红了');
     expect(payload.verdict.reasons).toContain('rework open 1');
   });
 });
@@ -297,16 +326,26 @@ describe('rework and annotate commands', () => {
     expect(text).toContain('颜色变红了');
   });
 
-  it('lists agent-read items and stores notes bound to the current hash', async () => {
+  it('lists agent-read items and keeps a rework note for a person', async () => {
     const stored = await loadRun(runDir);
     const list = await annotateList(stored);
     expect(list.map((entry) => entry.key)).toEqual(['src/A.tsx|A#2']);
     expect(list[0]).toMatchObject({ component: 'SkillsIcon', hash: 'hash-A#2' });
     await applyNotes(stored, [
-      { finding: 'className 落在根 svg 上', key: 'src/A.tsx|A#2', suggestion: 'pass' },
+      { finding: '图标颜色变了', key: 'src/A.tsx|A#2', suggestion: 'rework' },
     ]);
     const item = (await queue()).items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
     expect(item).toMatchObject({ canPass: true, state: 'todo' });
+    expect(item.note.finding).toBe('图标颜色变了');
+  });
+
+  it('signs a rendered-equal item when the agent note confirms it', async () => {
+    const stored = await loadRun(runDir);
+    await applyNotes(stored, [
+      { finding: 'className 落在根 svg 上', key: 'src/A.tsx|A#2', suggestion: 'pass' },
+    ]);
+    const item = (await queue()).items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
+    expect(item).toMatchObject({ state: 'passed' });
     expect(item.note.finding).toBe('className 落在根 svg 上');
   });
 });

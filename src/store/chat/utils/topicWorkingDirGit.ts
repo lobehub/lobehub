@@ -5,7 +5,7 @@ import type {
   WorkingDirConfig,
   WorkingDirGithubState,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { dropStaleAutoCreated, getWorkingDirEffectivePath } from '@lobechat/types';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import type { GitLinkedPRSummary } from '@/services/git';
@@ -91,7 +91,12 @@ export const mergeWorkingDirGithubState = ({
 }: {
   branch: string;
   currentConfig?: WorkingDirConfig;
-  github: WorkingDirGithubState;
+  /**
+   * The linked-PR snapshot to record. Omitted under Better Coding Experience,
+   * which no longer guesses a PR from the branch: the one already recorded is
+   * kept while the branch stays, and dropped once it moves.
+   */
+  github?: WorkingDirGithubState;
   path: string;
   upstream?: DeviceGitUpstreamRef;
 }): WorkingDirConfig => {
@@ -100,13 +105,15 @@ export const mergeWorkingDirGithubState = ({
   const git: NonNullable<WorkingDirConfig['git']> = {
     ...currentConfig?.git,
     branch,
-    github,
     isWorktree,
   };
+  if (github) git.github = github;
+  else if (currentConfig?.git?.branch !== branch) delete git.github;
 
   delete git.detached;
   if (isWorktree) git.activeWorktree = path;
   else delete git.activeWorktree;
+  dropStaleAutoCreated(git, currentConfig?.git?.activeWorktree);
 
   // A probe that resolved no remote ref means the branch is unpushed or its trace is
   // gone — not that a previously recorded ref is wrong. Keep the old one rather than

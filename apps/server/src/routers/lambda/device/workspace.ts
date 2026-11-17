@@ -1,4 +1,4 @@
-import { workingDirConfigSchema } from '@lobechat/types';
+import { isManagedCloudDevice, workingDirConfigSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -15,6 +15,13 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from '../deviceWorkingDirs';
 import { assertWorkspaceDeviceEditable, canEditWorkspaceDevice } from '../deviceWorkspaceGuard';
+import {
+  assertNotManagedDevice,
+  clientIdentitySourceSchema,
+  parseReportedIdentitySource,
+  toRegistrationError,
+} from './guards';
+import { reportManagedDevicesRemoved } from './managedDeviceRemoval';
 
 /**
  * Fixed workspace agents promise every member the same execution device. Keep
@@ -74,7 +81,7 @@ export const workspaceRouter = router({
         architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
-        identitySource: z.enum(['machine-id', 'fallback']),
+        identitySource: clientIdentitySourceSchema,
         /** Extensible client-reported info bag; free-form, size-capped to guard the column. */
         metadata: z
           .record(z.string().max(64), z.string().max(200))
@@ -93,10 +100,7 @@ export const workspaceRouter = router({
       try {
         return await model.registerWorkspaceDevice({ ...input, workspaceId: ctx.workspaceId });
       } catch (error) {
-        if (error instanceof WorkspaceDevicePrivateConflictError) {
-          throw new TRPCError({ code: 'CONFLICT', message: error.message });
-        }
-        throw error;
+        throw toRegistrationError(error);
       }
     }),
   /**
@@ -138,6 +142,7 @@ export const workspaceRouter = router({
       if (!personal || personal.workspaceId) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Personal device not found.' });
       }
+      assertNotManagedDevice(personal, 'A managed cloud device cannot be shared to a workspace.');
 
       const token = await signWorkspaceDeviceToken(ctx.workspaceId);
       // Identity-only probe: learn the machine's workspace deviceId WITHOUT the
@@ -158,6 +163,7 @@ export const workspaceRouter = router({
           message: probe.error ?? 'Device is offline or does not support workspace sharing.',
         });
       }
+      parseReportedIdentitySource(probe.identity.identitySource);
 
       // Fail a cross-user PRIVATE collision NOW, before the machine opens and
       // persists a workspace share connection — rejecting only at the later
@@ -176,6 +182,10 @@ export const workspaceRouter = router({
       // rejected above, so an undefined here really means "no row yet".
       const existing = await model.findWorkspaceDeviceById(probe.identity.deviceId);
       if (existing) {
+        assertNotManagedDevice(
+          existing,
+          'This workspace device is a managed cloud device and cannot be overwritten.',
+        );
         if (!input.confirmOverwrite) {
           return {
             alreadyEnrolled: true as const,
@@ -233,7 +243,7 @@ export const workspaceRouter = router({
         row = await model.registerWorkspaceDevice({
           deviceId: result.identity.deviceId,
           hostname: personal.hostname,
-          identitySource: result.identity.identitySource,
+          identitySource: parseReportedIdentitySource(result.identity.identitySource),
           platform: personal.platform,
           sharedFromDeviceId: personal.deviceId,
           visibility: input.visibility,
@@ -250,10 +260,7 @@ export const workspaceRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
-        if (error instanceof WorkspaceDevicePrivateConflictError) {
-          throw new TRPCError({ code: 'CONFLICT', message: error.message });
-        }
-        throw error;
+        throw toRegistrationError(error);
       }
       // Carry the personal alias over on first share so the workspace list shows
       // the machine under the name its owner gave it; never clobber a name a
@@ -352,33 +359,40 @@ export const workspaceRouter = router({
         });
       }
       await assertDeviceNotBoundToFixedAgent(model, input.deviceId);
-      // Tell a live device to drop its workspace connection and stop
-      // auto-reconnecting, so removal doesn't leave an online ghost. For most
-      // rows this stays best-effort — an offline device simply stops resolving.
-      const unenrolled = await deviceGateway.unenrollWorkspace({
-        deviceId: input.deviceId,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
-      // But never delete the row under a still-live socket that did not
-      // acknowledge the unenroll (old client without the handler, RPC error):
-      // for a PRIVATE row that would resurface the machine to other members
-      // (the row is the only thing `queryWorkspaceHiddenDeviceIds` hides it
-      // by), and for ANY row it leaves an unregistered ghost that members can
-      // still dispatch to yet can no longer remove — there is no row left to
-      // delete. Fail the removal while the socket is demonstrably alive; a
-      // dead socket can't ghost, so an offline device still deletes fine.
-      if (!unenrolled.success) {
-        const online = await deviceGateway.queryDeviceList(ctx.userId, ctx.workspaceId);
-        if (online.some((d) => d.deviceId === input.deviceId)) {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message:
-              'The device is still connected but did not acknowledge the unenroll — retry once it has disconnected or updated its client.',
-          });
+      // A managed cloud device skips the unenroll handshake. Its agent does
+      // not handle the unenroll RPC, so it would never acknowledge. Deleting
+      // the row reports the removal to the deployment, which retires the
+      // device and its credentials, so it cannot reconnect as a ghost.
+      if (!isManagedCloudDevice(row)) {
+        // Tell a live device to drop its workspace connection and stop
+        // auto-reconnecting, so removal doesn't leave an online ghost. For most
+        // rows this stays best-effort — an offline device simply stops resolving.
+        const unenrolled = await deviceGateway.unenrollWorkspace({
+          deviceId: input.deviceId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        // But never delete the row under a still-live socket that did not
+        // acknowledge the unenroll (old client without the handler, RPC error):
+        // for a PRIVATE row that would resurface the machine to other members
+        // (the row is the only thing `queryWorkspaceHiddenDeviceIds` hides it
+        // by), and for ANY row it leaves an unregistered ghost that members can
+        // still dispatch to yet can no longer remove — there is no row left to
+        // delete. Fail the removal while the socket is demonstrably alive; a
+        // dead socket can't ghost, so an offline device still deletes fine.
+        if (!unenrolled.success) {
+          const online = await deviceGateway.queryDeviceList(ctx.userId, ctx.workspaceId);
+          if (online.some((d) => d.deviceId === input.deviceId)) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'The device is still connected but did not acknowledge the unenroll — retry once it has disconnected or updated its client.',
+            });
+          }
         }
       }
-      await model.deleteWorkspaceDevice(input.deviceId);
+      const removed = await model.deleteWorkspaceDevice(input.deviceId);
+      await reportManagedDevicesRemoved(removed);
       return { success: true };
     }),
 });

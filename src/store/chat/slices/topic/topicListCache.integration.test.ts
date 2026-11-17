@@ -21,8 +21,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, createReplicaState } from '@/libs/replica';
 import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
-import { localDataCache } from '@/libs/swr/localDataCache';
-import { createCacheProvider } from '@/libs/swr/localStorageProvider';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { topicService } from '@/services/topic';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -38,14 +36,8 @@ const SCOPE_PREFIX = 'topic-cache-user:personal';
 const AGENT_ID = 'agent-topic-cache-test';
 const CONTAINER_KEY = topicMapKey({ agentId: AGENT_ID });
 
-/** SWR provider as in the app: `topic:` (agent view, search) still persists via SWR. */
-const makeProvider = (scope: string) =>
-  createCacheProvider({
-    debounceMs: 5,
-    getScope: () => scope,
-    idbPatterns: ['topic:'],
-    localPatterns: [],
-  });
+/** A fresh in-memory SWR cache per session, as after a reload (SWR persists nothing). */
+const makeProvider = () => () => new Map();
 
 /** Publish the scoped mutate the way `SWRProvider` does in the app. */
 const MutateBridge = () => {
@@ -55,7 +47,7 @@ const MutateBridge = () => {
 };
 
 const wrapper =
-  (provider: ReturnType<typeof createCacheProvider>) =>
+  (provider: ReturnType<typeof makeProvider>) =>
   ({ children }: PropsWithChildren) =>
     createElement(
       SWRConfig,
@@ -107,10 +99,9 @@ describe('persisted topic list across a reload', () => {
 
   afterEach(async () => {
     await Promise.all(
-      [...scopes].flatMap((scope) => [
-        localDataCache.clearScope(scope),
+      [...scopes].map((scope) =>
         topicListResource.storage!.remove({ queryKey: SIDEBAR_STORAGE_KEY, scope }),
-      ]),
+      ),
     );
     scopes.clear();
     vi.restoreAllMocks();
@@ -123,7 +114,7 @@ describe('persisted topic list across a reload', () => {
     vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
 
     const session1 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scope)),
+      wrapper: wrapper(makeProvider()),
     });
 
     await waitFor(() =>
@@ -148,7 +139,7 @@ describe('persisted topic list across a reload', () => {
     vi.mocked(topicService.getTopics).mockReturnValue(new Promise<never>(() => {}) as any);
 
     const session2 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scope)),
+      wrapper: wrapper(makeProvider()),
     });
 
     await waitFor(() =>
@@ -170,7 +161,7 @@ describe('persisted topic list across a reload', () => {
     vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
 
     const session1 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scope)),
+      wrapper: wrapper(makeProvider()),
     });
 
     await waitFor(() =>
@@ -220,7 +211,7 @@ describe('persisted topic list across a reload', () => {
     vi.mocked(topicService.getTopics).mockReturnValue(new Promise<never>(() => {}) as any);
 
     const session2 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scope)),
+      wrapper: wrapper(makeProvider()),
     });
 
     await waitFor(() =>
@@ -233,7 +224,7 @@ describe('persisted topic list across a reload', () => {
 
   it('does not treat a cached agent-view row as server confirmation', async () => {
     const scope = createScope();
-    const provider = makeProvider(scope);
+    const provider = makeProvider();
     const activeTopic = { ...runningTopic, status: 'active' };
 
     // Prime the management-page cache with the same status a later terminal
@@ -312,7 +303,7 @@ describe('persisted topic list across a reload', () => {
     const topic = { ...runningTopic, id: 'tpc-unloaded-container' };
     vi.mocked(topicService.getTopics).mockResolvedValue({ items: [topic], total: 1 } as any);
     const session1 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scope)),
+      wrapper: wrapper(makeProvider()),
     });
     await waitFor(async () => expect(await persistedTopicStatus(scope, topic.id)).toBe('running'));
     session1.unmount();
@@ -337,7 +328,7 @@ describe('persisted topic list across a reload', () => {
     act(() => useChatStore.setState({ activeAgentId: AGENT_ID }));
     vi.mocked(topicService.getTopics).mockReturnValue(new Promise<never>(() => {}) as any);
     const visit = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scope)),
+      wrapper: wrapper(makeProvider()),
     });
     await waitFor(() =>
       expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items[0]?.status).toBe('unread'),
@@ -349,7 +340,7 @@ describe('persisted topic list across a reload', () => {
     const scopeA = createScope();
     vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
     const sessionA = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scopeA)),
+      wrapper: wrapper(makeProvider()),
     });
     // (status may carry an earlier test's pending pin — only presence matters)
     await waitFor(async () => expect(await persistedTopicStatus(scopeA)).toBeDefined());
@@ -359,7 +350,7 @@ describe('persisted topic list across a reload', () => {
     const scopeB = useScope(`${SCOPE_PREFIX}:${randomUUID()}`);
     vi.mocked(topicService.getTopics).mockReturnValue(new Promise<never>(() => {}) as any);
     const sessionB = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scopeB)),
+      wrapper: wrapper(makeProvider()),
     });
 
     await waitFor(() => expect(sessionB.result.current.isHydrated).toBe(true));
@@ -372,10 +363,10 @@ describe('persisted topic list across a reload', () => {
   /** @example A workspace switch while the "only mine" preference loads must not keep the previous workspace's topics on screen. */
   it('drops another scope’s list on a scope switch while the sync is gated off', async () => {
     resetCacheScopeBroadcast();
-    const scopeA = createScope();
+    createScope();
     vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
     const sessionA = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scopeA)),
+      wrapper: wrapper(makeProvider()),
     });
     await waitFor(() =>
       expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items).toHaveLength(1),
@@ -384,7 +375,7 @@ describe('persisted topic list across a reload', () => {
 
     const scopeB = useScope(`${SCOPE_PREFIX}:${randomUUID()}`);
     const gated = renderHook(() => useChatStore().useFetchTopics(false, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider(scopeB)),
+      wrapper: wrapper(makeProvider()),
     });
     act(() => broadcastCacheScope(scopeB));
 

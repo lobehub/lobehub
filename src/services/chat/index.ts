@@ -1,6 +1,7 @@
 import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
 import {
   REQUEST_AGENT_ID_HEADER,
+  REQUEST_OPERATION_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
@@ -12,6 +13,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   type ChatMessageError,
+  getAutoPluginIds,
   getDisabledPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -228,6 +230,7 @@ class ChatService {
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
+      autoSkillIds: getAutoPluginIds(agentConfig.plugins),
       disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
       // The stored mode passes through: a model without function calling is
       // not demoted to chat mode here, matching the server runtime.
@@ -310,7 +313,7 @@ class ChatService {
   mapChatTrace = (trace?: TracePayload): TracePayload => this.mapTrace(trace, TraceTagMap.Chat);
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
+    const { agentId, metadata, operationId, signal, responseAnimation, topicId } = options ?? {};
     const requestTrigger = metadata?.trigger;
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
@@ -421,6 +424,7 @@ class ChatService {
         ...(agentId && { [REQUEST_AGENT_ID_HEADER]: agentId }),
         ...(requestTrigger && { [REQUEST_TRIGGER_HEADER]: requestTrigger }),
         ...(topicId && { [REQUEST_TOPIC_ID_HEADER]: topicId }),
+        ...(operationId && { [REQUEST_OPERATION_ID_HEADER]: operationId }),
       },
       provider,
     });

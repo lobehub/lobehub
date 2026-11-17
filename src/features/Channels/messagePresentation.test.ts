@@ -2,7 +2,11 @@ import type { ChannelPublicMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { TimelineItem } from './joinEvents';
-import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
+import {
+  channelMessageTime,
+  channelTimeFormatters,
+  presentChannelTimeline,
+} from './messagePresentation';
 
 const message = (at: Date, patch: Partial<ChannelPublicMessage> = {}): TimelineItem => ({
   kind: 'message',
@@ -72,5 +76,25 @@ describe('channel timestamps', () => {
     expect(en.date.format(date)).toBe('October 31, 2026');
     expect(en.time.format(date)).toMatch(/03:04\sPM/);
     expect(zh.full.format(date)).toContain('2026年10月31日');
+  });
+});
+
+describe('channelMessageTime', () => {
+  // Sunday 8 November 2026, a little past midnight: the day boundary is what matters.
+  const now = new Date(2026, 10, 8, 0, 18);
+  const label = (date: Date, locale = 'zh-CN') =>
+    channelMessageTime(date, { locale, now, yesterday: '昨天' });
+
+  it('shows only the time today, and yesterday by calendar day, not by 24 hours', () => {
+    expect(label(new Date(2026, 10, 8, 0, 1))).toBe('00:01');
+    // 01:36 yesterday is under 24 hours ago but still yesterday; 23:59 the day before is not.
+    expect(label(new Date(2026, 10, 7, 1, 36))).toBe('昨天 01:36');
+    expect(label(new Date(2026, 10, 6, 23, 59))).not.toMatch(/^昨天/);
+  });
+
+  it('gives the full numeric date before yesterday, even within the same week or year', () => {
+    expect(label(new Date(2026, 10, 6, 10, 15))).toBe('2026/11/6 10:15');
+    expect(label(new Date(2025, 5, 22, 1, 33))).toBe('2025/6/22 01:33');
+    expect(label(new Date(2026, 10, 6, 10, 15), 'en-US')).toBe('11/6/2026 10:15 AM');
   });
 });

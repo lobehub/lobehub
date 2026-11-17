@@ -8,7 +8,10 @@ import { EditLockService } from '@/server/services/editLock';
 import { TaskService } from '@/server/services/task';
 import { notifyAssignedBestEffort } from '@/server/services/task/assignmentNotification';
 import { resolveTaskPatchInvariants } from '@/server/services/task/patchValidation';
-import { assertResultingScheduleValid } from '@/server/services/task/scheduleValidation';
+import {
+  assertPreciseScheduleAllowed,
+  assertResultingScheduleValid,
+} from '@/server/services/task/scheduleValidation';
 import { normalizeTaskConfig, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
@@ -93,6 +96,11 @@ export class TaskRestService extends BaseService {
     // create boundary, so a schedule the dispatcher cannot evaluate is refused
     // here instead of being stored and silently never firing.
     assertResultingScheduleValid(null, input);
+    await assertPreciseScheduleAllowed(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      null,
+      input.schedulePattern,
+    );
     const task = await this.taskService.createTask({
       ...input,
       config: await normalizeTaskConfig(this.taskModel, input.config),

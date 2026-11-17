@@ -1,9 +1,14 @@
 // Context Provider exports
 export { ActiveTopicDocumentContextInjector } from './ActiveTopicDocumentContextInjector';
+export {
+  AgentAccountContextInjector,
+  type AgentAccountContextInjectorConfig,
+} from './AgentAccountContextInjector';
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   AgentDocumentBeforeSystemInjector,
+  AgentDocumentChangesInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
@@ -15,6 +20,7 @@ export { BotPlatformContextInjector } from './BotPlatformContextInjector';
 export { ConnectorOwnershipInjector } from './ConnectorOwnershipInjector';
 export { ContextSelectionsInjector } from './ContextSelectionsInjector';
 export { DiscordContextProvider } from './DiscordContextProvider';
+export { DocumentReferenceContextInjector } from './DocumentReferenceContextInjector';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
 export {
   buildExpertiseContextSnapshot,
@@ -73,7 +79,10 @@ export type {
 export type {
   AgentContextDocument,
   AgentDocumentBeforeSystemInjectorConfig,
+  AgentDocumentChange,
+  AgentDocumentChangesByMessage,
   AgentDocumentContextInjectorConfig,
+  AgentDocumentIndexSnapshot,
   AgentDocumentInjectionPosition,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,
@@ -96,6 +105,10 @@ export type {
 export type { ConnectorOwnershipInjectorConfig } from './ConnectorOwnershipInjector';
 export type { ContextSelectionsInjectorConfig } from './ContextSelectionsInjector';
 export type { DiscordContext, DiscordContextProviderConfig } from './DiscordContextProvider';
+export type {
+  DocumentReferenceContextInjectorConfig,
+  DocumentReferenceItem,
+} from './DocumentReferenceContextInjector';
 export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
 export type {
   ExpertiseContextInjectorConfig,

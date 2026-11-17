@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
-import { realpath } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { isInvalidBranchRef } from './branches';
+import { isInvalidBranchRef, qualifyStartPoint } from './branches';
 import { getGitWorkingTreeStatus } from './info';
 import type {
   GitAddWorktreeResult,
@@ -170,28 +171,58 @@ export const removeGitWorktree = async (payload: {
 /**
  * Add a linked worktree checked out on a fresh branch, mirroring the branch
  * switcher's "create branch" flow (`git worktree add -b <branch> <path>`). The
- * new branch forks from the repo's current HEAD; the caller supplies the target
- * directory (an absolute sibling path the renderer derives from the source
- * repo). Returns the created path on success so the UI can switch into it.
+ * new branch forks from `startPoint` when given (echoed back on success, so a
+ * caller can tell an older device that ignored it and forked from HEAD), else
+ * from the repo's current HEAD; the caller supplies the target
+ * directory (`deriveWorktreePath`, under `~/.lobehub/worktrees/`). The missing
+ * parent folders are created first, and an existing target or an unwritable
+ * root is reported as such instead of git's generic failure. Returns the
+ * created path on success so the UI can switch into it.
  */
 export const addGitWorktree = async (payload: {
   branch: string;
   path: string;
+  startPoint?: string;
   worktreePath: string;
 }): Promise<GitAddWorktreeResult> => {
-  const { path: dirPath, branch, worktreePath } = payload;
+  const { path: dirPath, branch, startPoint, worktreePath } = payload;
   if (!dirPath?.trim()) return { error: 'Working directory is required', success: false };
   if (!branch?.trim()) return { error: 'Branch name is required', success: false };
   if (!worktreePath?.trim()) return { error: 'Worktree path is required', success: false };
   if (isInvalidBranchRef(branch))
     return { error: `Invalid branch name: ${branch}`, success: false };
+  if (startPoint !== undefined && (!startPoint.trim() || isInvalidBranchRef(startPoint)))
+    return { error: `Invalid start point: ${startPoint}`, success: false };
+
+  if (!path.isAbsolute(worktreePath))
+    return { error: `Worktree path must be absolute: ${worktreePath}`, success: false };
+  if (existsSync(worktreePath))
+    return { error: `Worktree folder already exists: ${worktreePath}`, success: false };
+
+  const parent = path.dirname(worktreePath);
+  try {
+    await mkdir(parent, { recursive: true });
+  } catch (error: any) {
+    const reason = error?.code ?? error?.message ?? 'unknown error';
+    return { error: `Cannot create worktree folder ${parent}: ${reason}`, success: false };
+  }
 
   try {
-    await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
-      cwd: dirPath,
-      timeout: 30_000,
-    });
-    return { success: true, worktreePath };
+    await execFileAsync(
+      'git',
+      [
+        'worktree',
+        'add',
+        '-b',
+        branch,
+        worktreePath,
+        ...(startPoint ? [await qualifyStartPoint(dirPath, startPoint)] : []),
+      ],
+      { cwd: dirPath, timeout: 30_000 },
+    );
+    return startPoint
+      ? { startPoint, success: true, worktreePath }
+      : { success: true, worktreePath };
   } catch (error: any) {
     const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
     return { error: stderr || 'git worktree add failed', success: false };

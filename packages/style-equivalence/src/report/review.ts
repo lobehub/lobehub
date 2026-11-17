@@ -1,4 +1,5 @@
 import { conditionColumns } from './data';
+import { stateLabel, THEME_LABELS } from './labels';
 
 export const OPEN_STATES = new Set(['changed', 'todo']);
 
@@ -27,8 +28,8 @@ const KEYS: Record<string, 'next' | 'pass' | 'previous' | 'rework'> = {
   y: 'pass',
 };
 
-export const keyAction = (key: string, typing: boolean) =>
-  typing ? undefined : KEYS[key.toLowerCase()];
+export const keyAction = (key: string, typing: boolean, covered = false) =>
+  typing || covered ? undefined : KEYS[key.toLowerCase()];
 
 export interface ComboDifference {
   combo: number;
@@ -102,8 +103,17 @@ const TOOL_REASONS: Array<[RegExp, (count: string) => string]> = [
   ],
 ];
 
-export const cellVerdict = (key: string, cell: { differs: boolean; summary: string[] }) => {
+export const cellVerdict = (
+  key: string,
+  cell: { differs: boolean; summary: string[] },
+  counterpart?: 'base' | 'head',
+) => {
   const side = /\|unpaired:(base|head):/.exec(key)?.[1];
+  if (side && counterpart)
+    return {
+      text: `${counterpart === 'base' ? '改之前' : '改之后'}同一位置的元素没有样式类，左右对照看`,
+      tone: 'neutral' as const,
+    };
   if (side === 'head') return { text: '只有改之后，没有可对比的', tone: 'neutral' as const };
   if (side === 'base') return { text: '只有改之前，改之后不见了', tone: 'neutral' as const };
   return cell.differs
@@ -150,3 +160,77 @@ export const shotNotes = (
 
 export const hasScreenshots = (item: { category: string; key: string }) =>
   item.category !== 'blocking' && !item.key.endsWith('|file');
+
+export const groupDifferences = <T extends { label: string; summary: string[] }>(entries: T[]) => {
+  const groups = new Map<string, { entries: T[]; key: string; label: string; summary: string[] }>();
+  for (const entry of entries) {
+    const key = `${entry.label}\n${entry.summary.join('；')}`;
+    const group = groups.get(key);
+    if (group) group.entries.push(entry);
+    else groups.set(key, { entries: [entry], key, label: entry.label, summary: entry.summary });
+  }
+  return [...groups.values()];
+};
+
+const themeName = (theme: string) => THEME_LABELS[theme] ?? theme;
+
+export const conditionName = (label: string) => {
+  const [column] = conditionColumns([label]);
+  return `${themeName(column.theme)} ${column.width} ${stateLabel(column.state, column.variant)}`;
+};
+
+export const describeConditions = (labels: string[]) => {
+  const columns = conditionColumns(labels);
+  return [...new Set(columns.map((column) => column.theme))].map((theme) => {
+    const own = columns.filter((column) => column.theme === theme);
+    const byStates = new Map<string, number[]>();
+    for (const width of new Set(own.map((column) => column.width))) {
+      const states = own
+        .filter((column) => column.width === width)
+        .map((column) => stateLabel(column.state, column.variant))
+        .join('、');
+      byStates.set(states, [...(byStates.get(states) ?? []), width]);
+    }
+    const parts = [...byStates].map(([states, widths]) => `${widths.join('、')}（${states}）`);
+    return `${themeName(theme)} · ${parts.join('；')}`;
+  });
+};
+
+interface DifferenceView {
+  category: string;
+  comboDifferences: ComboDifference[];
+  combos: Array<{ index: number; label: string }>;
+  differingConditions: string[];
+  summary: string[];
+}
+
+export const hasRenderedDifference = (item: DifferenceView) =>
+  item.category === 'difference' ||
+  item.differingConditions.length > 0 ||
+  item.comboDifferences.length > 0;
+
+const MAX_NOTE_GROUPS = 3;
+
+export const defaultReworkNote = (item: DifferenceView) => {
+  if (!hasRenderedDifference(item)) return '';
+  const labels = new Map(item.combos.map((combo) => [combo.index, combo.label]));
+  const named = item.combos.length > 1;
+  const groups = groupDifferences(
+    item.comboDifferences.map((entry) => ({ ...entry, label: labels.get(entry.combo) ?? '默认' })),
+  );
+  if (!groups.length) return item.summary.length ? `不一样：${item.summary.join('；')}` : '';
+  const parts = groups.slice(0, MAX_NOTE_GROUPS).map((group) => {
+    const where =
+      group.entries.length === 1
+        ? conditionName(group.entries[0].condition)
+        : `${group.entries.length} 个条件`;
+    return `${named ? `${group.label} · ` : ''}${group.summary.join('；')}（${where}）`;
+  });
+  const rest = groups.length - parts.length;
+  return `不一样：${parts.join('；')}${rest > 0 ? `；另有 ${rest} 种差异` : ''}`;
+};
+
+export const showsAgentNote = (
+  item: { needsAgent: boolean; note?: unknown },
+  notes: 'needed' | 'written' = 'needed',
+) => Boolean(item.note) || (notes === 'needed' && item.needsAgent);

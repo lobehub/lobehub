@@ -1,9 +1,11 @@
 'use client';
 
-import type { EvalRubricScore } from '@lobechat/types';
+import type { EvalMemorySnapshot, EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import {
   Accordion,
+  Alert,
+  Button,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -13,6 +15,10 @@ import {
 } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { levelLabelKey, resolveCaseDifficulty } from '@/features/Eval/caseDifficulty';
+import { getJudgeFailure } from '@/features/Eval/judgeError';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import SegmentBar from '../../../../../../../../features/SegmentBar';
 
@@ -87,7 +93,11 @@ export interface EvalResultDisplayData {
   cost?: number;
   duration?: number;
   error?: string;
+  errorPhase?: string;
   externalResult?: Record<string, unknown>;
+  judgeError?: string;
+  /** The attempt's Memory at the end: what the case seeded and what the model wrote. */
+  memorySnapshot?: EvalMemorySnapshot;
   rubricScores?: EvalRubricScore[];
   steps?: number;
   tokens?: number;
@@ -95,8 +105,10 @@ export interface EvalResultDisplayData {
 
 interface InfoSidebarProps {
   evalResult?: EvalResultDisplayData | null;
+  experimentId?: string;
   passed?: boolean | null;
   score?: number | null;
+  status?: string | null;
   testCase?: any;
 }
 
@@ -130,10 +142,13 @@ const isDeterministicMode = (rubricId: string): boolean => {
   return DETERMINISTIC_MODES.has(getEvalModeFromRubricId(rubricId));
 };
 
-const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, score }) => {
+const InfoSidebar = memo<InfoSidebarProps>((props) => {
+  const { testCase, evalResult, passed, score, status, experimentId } = props;
   const { t } = useTranslation('eval');
+  const judgeFailure = getJudgeFailure(status, evalResult);
+  const difficulty = resolveCaseDifficulty(testCase?.metadata);
   const rubricScores = evalResult?.rubricScores;
-  const hasRubricScores = rubricScores && rubricScores.length > 0;
+  const hasRubricScores = !judgeFailure && rubricScores && rubricScores.length > 0;
 
   // Check if all rubrics are deterministic (no score/reason display needed)
   const allDeterministic =
@@ -143,8 +158,18 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
     ? rubricScores.filter((s) => !isDeterministicMode(s.rubricId))
     : [];
 
-  const hasScore = score !== undefined && score !== null;
+  const hasScore = !judgeFailure && score !== undefined && score !== null;
   const scorePct = hasScore ? Math.max(0, Math.min(100, Math.round(score * 100))) : 0;
+  // A rule-checklist judge reports one verdict per rule beside its prose reason.
+  const ruleVerdicts = judgeFailure
+    ? []
+    : (rubricScores?.find((s) => s.verdicts?.length)?.verdicts ?? []);
+  const memoryEntries = evalResult?.memorySnapshot?.entries;
+  const formatDay = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 10);
+  };
 
   return (
     <Flexbox
@@ -153,8 +178,28 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
       padding={16}
       style={{ height: '100%', overflowY: 'auto', width: 320 }}
     >
+      {judgeFailure && (
+        <Flexbox className={styles.section} gap={8}>
+          <Alert title={t('lobeBench.compare.judgeError')} type={'warning'} />
+          {judgeFailure.diagnostic && (
+            <Text className={styles.copyBlock} type={'warning'}>
+              {judgeFailure.diagnostic}
+            </Text>
+          )}
+          {experimentId && (
+            <>
+              <Text fontSize={12} type={'secondary'}>
+                {t('caseDetail.judgeError.regradeHint')}
+              </Text>
+              <WorkspaceLink to={`/eval/lobe-bench/experiments/${experimentId}`}>
+                <Button size={'small'}>{t('lobeBench.attempt.backToExperiment')}</Button>
+              </WorkspaceLink>
+            </>
+          )}
+        </Flexbox>
+      )}
       {/* Failure reason — error states surface at the top of the panel */}
-      {evalResult?.error && (
+      {!judgeFailure && evalResult?.error && (
         <Flexbox className={styles.section} gap={8}>
           <SectionTitle>{t('caseDetail.failureReason')}</SectionTitle>
           <Text className={styles.copyBlock} type="danger">
@@ -185,20 +230,26 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
           </Flexbox>
         )}
 
-        {testCase?.metadata?.difficulty && (
+        {difficulty && (
           <Flexbox gap={4}>
             <Text fontSize={12} type="secondary">
               {t('caseDetail.difficulty')}
             </Text>
             <Flexbox horizontal>
-              <Tag>{t(`difficulty.${testCase.metadata.difficulty}` as any)}</Tag>
+              <Tag>
+                {t(
+                  difficulty.kind === 'level'
+                    ? levelLabelKey(difficulty.level)
+                    : `difficulty.${difficulty.value}`,
+                )}
+              </Tag>
             </Flexbox>
           </Flexbox>
         )}
       </Flexbox>
 
       {/* Scoring Details */}
-      {(hasRubricScores || score !== undefined) && (
+      {!judgeFailure && (hasRubricScores || score !== undefined) && (
         <Flexbox className={styles.section} gap={12}>
           <SectionTitle>{t('caseDetail.section.scoring')}</SectionTitle>
 
@@ -227,7 +278,10 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
                   </Flexbox>
                   <SegmentBar
                     segments={[
-                      { color: passed ? cssVar.colorSuccess : cssVar.colorError, value: scorePct },
+                      {
+                        color: passed ? cssVar.colorSuccess : cssVar.colorError,
+                        value: scorePct,
+                      },
                       { color: cssVar.colorFillSecondary, value: 100 - scorePct },
                     ]}
                   />
@@ -256,6 +310,35 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
               )}
             </>
           )}
+        </Flexbox>
+      )}
+
+      {/* Rules: one line per rule, the reason only where the judge found it unmet */}
+      {ruleVerdicts.length > 0 && (
+        <Flexbox className={styles.section} gap={8}>
+          <SectionTitle>{t('caseDetail.section.rules')}</SectionTitle>
+          <Flexbox gap={6}>
+            {ruleVerdicts.map((item, index) => (
+              <Flexbox gap={2} key={index}>
+                <Text
+                  fontSize={12}
+                  type={
+                    item.verdict === 'satisfied'
+                      ? 'secondary'
+                      : item.verdict === 'violated'
+                        ? 'danger'
+                        : 'warning'
+                  }
+                >
+                  {item.verdict === 'satisfied' ? '✓' : item.verdict === 'violated' ? '✗' : '?'}{' '}
+                  {item.rule}
+                </Text>
+                {item.verdict !== 'satisfied' && item.reason && (
+                  <span className={styles.rubricReason}>{item.reason}</span>
+                )}
+              </Flexbox>
+            ))}
+          </Flexbox>
         </Flexbox>
       )}
 
@@ -298,6 +381,46 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
           </div>
         )}
       </Flexbox>
+
+      {/* Memory the attempt ended with: seeded rows and rows the model wrote */}
+      {memoryEntries && (
+        <Flexbox gap={8}>
+          <SectionTitle>{t('caseDetail.section.memory')}</SectionTitle>
+          {memoryEntries.length === 0 ? (
+            <Text fontSize={12} type="secondary">
+              {t('caseDetail.memory.empty')}
+            </Text>
+          ) : (
+            <Flexbox gap={8}>
+              {memoryEntries.map((entry) => (
+                <Flexbox gap={2} key={entry.id}>
+                  <Flexbox horizontal align="center" gap={6} wrap="wrap">
+                    <Tag>{entry.layer}</Tag>
+                    <Tag color={entry.source === 'agent' ? 'processing' : undefined}>
+                      {entry.source === 'agent'
+                        ? t('caseDetail.memory.agent')
+                        : t('caseDetail.memory.seed')}
+                    </Tag>
+                    {entry.removedReason && (
+                      <Tag color="warning">{t('caseDetail.memory.removed')}</Tag>
+                    )}
+                    <span className={styles.rubricScore}>{formatDay(entry.capturedAt)}</span>
+                  </Flexbox>
+                  <Text
+                    fontSize={12}
+                    style={entry.removedReason ? { textDecoration: 'line-through' } : undefined}
+                  >
+                    {entry.title || entry.summary || entry.details || entry.layer}
+                  </Text>
+                  {entry.title && entry.summary && entry.summary !== entry.title && (
+                    <span className={styles.rubricReason}>{entry.summary}</span>
+                  )}
+                </Flexbox>
+              ))}
+            </Flexbox>
+          )}
+        </Flexbox>
+      )}
 
       {evalResult?.externalResult && (
         <Flexbox gap={8}>

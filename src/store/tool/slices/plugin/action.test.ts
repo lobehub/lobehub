@@ -20,19 +20,6 @@ beforeEach(() => {
 });
 
 describe('useToolStore:plugin', () => {
-  describe('checkPluginsIsInstalled', () => {
-    it('should be deprecated and do nothing', async () => {
-      // Old plugin system has been deprecated
-      const { result } = renderHook(() => useToolStore());
-
-      await act(async () => {
-        await result.current.checkPluginsIsInstalled(['plugin1', 'plugin2']);
-      });
-
-      // Should not call any methods since old plugin system is deprecated
-    });
-  });
-
   describe('updatePluginSettings', () => {
     it('should update settings for a given plugin', async () => {
       const pluginId = 'test-plugin';

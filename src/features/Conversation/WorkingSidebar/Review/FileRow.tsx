@@ -24,9 +24,12 @@ const styles = stylex.create({
     // Every row carries its own top border — separates file-from-file AND
     // file-from-header without doubling up when a group is collapsed. The first
     // child of the list drops it: the list's own top border is the separator.
-    borderBlockStartWidth: { 'default': '1px', ':first-child': 0 },
-    borderBlockStartStyle: 'solid',
-    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartWidth: { 'default': '1px', ':first-child': 'medium' },
+    borderBlockStartStyle: { 'default': 'solid', ':first-child': 'none' },
+    borderBlockStartColor: {
+      'default': cssVar.colorBorderSecondary,
+      ':first-child': 'currentcolor',
+    },
   },
   row: {
     cursor: 'pointer',

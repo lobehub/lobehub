@@ -13,21 +13,21 @@ const styles = stylex.create({
   code: {
     backgroundColor: cssVar.colorFillQuaternary,
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 6,
+    borderRadius: cssVar.borderRadius,
     borderStyle: 'solid',
     borderWidth: 1,
     color: cssVar.colorText,
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: 11.5,
+    fontSize: cssVar.fontSizeSM,
     lineHeight: 1.6,
     marginBlock: 0,
     overflowX: 'auto',
-    paddingBlock: 10,
+    paddingBlock: 8,
     paddingInline: 12,
     whiteSpace: 'pre',
   },
-  heading: { fontSize: 13.5, fontWeight: 600, marginBlockEnd: 8, marginBlockStart: 0 },
-  label: { color: cssVar.colorTextTertiary, fontSize: 11.5, marginBlockEnd: 4 },
+  heading: { fontSize: cssVar.fontSize, fontWeight: 600, marginBlockEnd: 8, marginBlockStart: 0 },
+  label: { color: cssVar.colorTextTertiary, fontSize: cssVar.fontSizeSM, marginBlockEnd: 4 },
   list: {
     display: 'flex',
     flexDirection: 'column',
@@ -35,14 +35,14 @@ const styles = stylex.create({
     paddingInlineStart: 18,
     rowGap: 4,
   },
-  note: { color: cssVar.colorTextSecondary, fontSize: 12.5, lineHeight: 1.7 },
+  note: { color: cssVar.colorTextSecondary, fontSize: cssVar.fontSizeSM, lineHeight: 1.7 },
   number: {
     alignItems: 'center',
-    backgroundColor: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
     borderRadius: '50%',
-    color: cssVar.colorBgContainer,
+    color: cssVar.colorText,
     display: 'flex',
-    fontSize: 11,
+    fontSize: cssVar.fontSizeSM,
     fontWeight: 600,
     height: 20,
     justifyContent: 'center',
@@ -55,9 +55,10 @@ const styles = stylex.create({
     columnGap: 12,
     display: 'grid',
     gridTemplateColumns: '20px minmax(0, 1fr)',
-    paddingBlock: 14,
+    paddingBlock: 16,
   },
-  two: { columnGap: 10, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+  strip: { overflowX: 'auto', paddingBlockEnd: 4 },
+  two: { columnGap: 12, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
 });
 
 const CORPUS_FOR: Record<string, string> = { background: 'background-reset', border: 'border' };
@@ -88,7 +89,7 @@ const Declarations = ({ texts }: { texts?: Record<string, string> }) =>
   );
 
 const chainText = (elements?: Array<{ tag: string }>) =>
-  elements?.map((element) => `<${element.tag}>`).join(' › ') ?? '—';
+  elements?.map((element) => `<${element.tag}>`).join(' › ') ?? '--';
 
 export const EvidenceChain = ({
   columns,
@@ -182,7 +183,11 @@ export const EvidenceChain = ({
         </div>
       </Step>
       <Step index={4} title="在哪些条件下比较">
-        {record && <MatrixStrip large columns={columns} entry={record} />}
+        {record && (
+          <div {...stylex.props(styles.strip)}>
+            <MatrixStrip large columns={columns} entry={record} />
+          </div>
+        )}
         <div {...stylex.props(styles.note)}>
           每行一个主题，每列一个宽度和状态的组合。base 加载两次自比（A/A）：
           {record?.result.unstableConditions.length

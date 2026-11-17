@@ -4,9 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hookDispatcher } from '../hooks';
 import { CompletionLifecycle } from '.';
 
-const { releaseAgentRunSlot } = vi.hoisted(() => ({ releaseAgentRunSlot: vi.fn() }));
+const { releaseAgentRunSlot, settleAgentRunFee } = vi.hoisted(() => ({
+  releaseAgentRunSlot: vi.fn(),
+  settleAgentRunFee: vi.fn(async () => {}),
+}));
 
 vi.mock('@/business/server/agent-run/runConcurrency', () => ({ releaseAgentRunSlot }));
+vi.mock('@/business/server/agent-run/runFee', () => ({ settleAgentRunFee }));
 vi.mock('@/database/models/work', () => import('./testUtils').then((m) => m.workModelModule()));
 vi.mock('@/database/models/topic', () => import('./testUtils').then((m) => m.topicModelModule()));
 vi.mock('@/business/server/agent-run/agentInterventionReview', () =>
@@ -74,4 +78,55 @@ describe('CompletionLifecycle.dispatchHooks — concurrency slot', () => {
       expect(releaseAgentRunSlot).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('CompletionLifecycle.dispatchHooks — run fee', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    settleAgentRunFee.mockReset();
+    settleAgentRunFee.mockImplementation(async () => {});
+  });
+
+  it.each(['done', 'error', 'interrupted', 'waiting_for_human'])(
+    'settles the fee with the terminal reason %s',
+    async (reason) => {
+      await buildLifecycle().dispatchHooks(
+        'op-1',
+        { ...state(reason), createdAt: new Date(Date.now() - 45_000).toISOString() },
+        reason,
+        { skipErrorMessageWrite: true },
+      );
+
+      expect(settleAgentRunFee).toHaveBeenCalledWith({
+        durationMs: expect.any(Number),
+        operationId: 'op-1',
+        reason,
+        userId: 'user-1',
+      });
+      expect(settleAgentRunFee.mock.calls[0][0].durationMs).toBeGreaterThanOrEqual(45_000);
+    },
+  );
+
+  it.each(['waiting_for_async_tool', 'waiting_for_client'])(
+    'leaves the fee held while the same run is parked in %s',
+    async (reason) => {
+      await buildLifecycle().dispatchHooks('op-1', state(reason), reason);
+
+      expect(settleAgentRunFee).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still dispatches completion hooks when settling the fee fails', async () => {
+    settleAgentRunFee.mockRejectedValue(new Error('db down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await buildLifecycle().dispatchHooks('op-1', state('done'), 'done');
+
+    expect(hookDispatcher.dispatch).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.anything(),
+      [],
+    );
+  });
 });

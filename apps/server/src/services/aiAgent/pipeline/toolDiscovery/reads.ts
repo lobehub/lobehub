@@ -1,22 +1,37 @@
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
+import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type { FrozenCredentialFacts } from '@lobechat/types';
 import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
+import { AgentAccountModel } from '@/database/models/agentAccount';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
+import {
+  getConnectorLinkModel,
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from '@/server/services/connector/links';
+import {
+  refreshExpiredConnectorTokens,
+  refreshExpiredLinkTokens,
+} from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
+import { hasSupportedEventConnector } from './eventConnectors';
 import { readProjectToolScope } from './projectScope';
 import type { ToolDiscoveryDeps } from './types';
 
@@ -96,6 +111,9 @@ export const readCredentialFacts = async (
   }
 };
 
+/** Connectors refreshed at once; each refresh may call its authorization server. */
+const CONNECTOR_REFRESH_CONCURRENCY = 5;
+
 /**
  * Manifests carry each connector's access token for the whole run, so refresh
  * expired OAuth tokens first. Rotated credentials are persisted encrypted,
@@ -106,26 +124,46 @@ const refreshConnectorTokens = async (
   gateKeeper: KeyVaultsGateKeeper | undefined,
   connectors: DecryptedConnector[],
   onTimeout: () => void,
+  anonymous = false,
 ): Promise<DecryptedConnector[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
-  return refreshExpiredConnectorTokens(
+  const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
+  const linksContext = { connectorModel: model };
+  const map = await loadConnectorLinksMap(connectors, linksContext);
+  return pMap(
     connectors,
-    new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper),
-    { onTimeout },
+    async (connector) => {
+      const links = map.get(connector.id) ?? [];
+      const choices = links.map(({ id, name, userId }, index) => ({
+        id,
+        name: anonymous ? `Account ${index + 1}` : name,
+        userId,
+      }));
+      if (links.length > 1) return { ...connector, credentials: null, links: choices };
+      const primary = pickPrimaryLink(links);
+      if (primary) {
+        const [fresh] = await refreshExpiredLinkTokens(
+          connector,
+          [primary],
+          getConnectorLinkModel(linksContext),
+          model,
+          { onTimeout },
+        );
+        return { ...withLinkCredentials(connector, fresh), links: choices };
+      }
+      return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
+    },
+    { concurrency: CONNECTOR_REFRESH_CONCURRENCY },
   );
 };
 
-/** Base marketplace OAuth rows require installation; agent-owned copies are independent. */
+/** Drop unfinished marketplace installs (see `isMarketplaceInstallRunnable`). */
 const filterInstalledMarketplaceConnectors = (
   connectors: DecryptedConnector[],
   installedIds: Set<string>,
 ) =>
-  connectors.filter(
-    (connector) =>
-      !!connector.agentId ||
-      connector.sourceType !== 'marketplace' ||
-      !connector.mcpServerUrl ||
-      installedIds.has(connector.identifier),
+  connectors.filter((connector) =>
+    isMarketplaceInstallRunnable(connector, installedIds.has(connector.identifier)),
   );
 
 const readConnectors = async (
@@ -160,15 +198,16 @@ const readConnectors = async (
     // must not make an unfinished marketplace install callable by a server run.
     const connectors = filterInstalledMarketplaceConnectors(resolved, installedIds);
 
-    // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
+    // Only connectors WITH a real MCP endpoint (mcpServerUrl, stdio or cloud) can replace plugins in the
     // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
     // syncToolsFromClient) must continue using their original plugin executor path — otherwise
     // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
     const connectorsMcp = await refreshConnectorTokens(
       deps,
       connectorGateKeeper,
-      connectors.filter((c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      connectors.filter(hasCallableMcpEndpoint),
       onRefreshTimeout,
+      !!ctx.shareGate,
     );
 
     // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
@@ -192,6 +231,10 @@ const readConnectors = async (
       connectorGateKeeper,
       connectors,
       connectorsMcp,
+      hasEventConnector:
+        !ctx.shareGate &&
+        hasSupportedEventConnector([...connectorsMcp, ...discoverable.connectorsMcp]) &&
+        (await isWebhookEnabled(deps.userId)),
       connectorTools,
       discoverableConnectorManifests: discoverable.manifests,
       discoverableConnectorsMcp: discoverable.connectorsMcp,
@@ -242,7 +285,7 @@ const readDiscoverableConnectors = async (
       resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
     }
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
-      (c) => !candidates.has(c.identifier) && (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
     );
     if (connectorsMcp.length === 0) return none;
 
@@ -254,10 +297,15 @@ const readDiscoverableConnectors = async (
       gateKeeper,
       connectorsMcp,
       onRefreshTimeout,
+      !!ctx.shareGate,
     );
     return {
       connectorsMcp: refreshed,
-      manifests: buildConnectorManifests(refreshed, tools) as LobeToolManifest[],
+      manifests: buildConnectorManifests(
+        refreshed,
+        tools,
+        await isMcpAppsEnabled(deps.userId),
+      ) as LobeToolManifest[],
       tools,
     };
   } catch (error) {
@@ -416,6 +464,27 @@ const readHasOversizedFiles = async (
 };
 
 /**
+ * Whether the executing agent owns at least one live identity account. This
+ * is the fact the tool rules read to decide whether the agent-account tool
+ * ships this turn: the addresses and inbox reach the model as context, so the
+ * tool is enabled only when there is something for it to act on. Non-critical
+ * — a failed read simply leaves the tool out.
+ */
+const readHasIdentityAccount = async (
+  deps: ToolDiscoveryDeps,
+  ctx: ToolReadsContext,
+): Promise<boolean> => {
+  const accounts = await new AgentAccountModel(
+    deps.db,
+    deps.userId,
+    undefined,
+    deps.workspaceId,
+  ).query({ agentId: ctx.resolvedAgentId, liveOnly: true });
+
+  return accounts.length > 0;
+};
+
+/**
  * Every other read this send needs, started together. They hit different
  * backends — Postgres rows, the Market's live skill discovery, the device
  * gateway. Connector visibility uses the same installed-plugin snapshot; the
@@ -441,6 +510,7 @@ export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =
     ),
     attachedFileTypes: started(readAttachedFileTypes(deps, ctx)),
     oversizedFiles: started(readHasOversizedFiles(deps, ctx).catch(() => false)), // non-critical
+    hasIdentityAccount: started(readHasIdentityAccount(deps, ctx).catch(() => false)), // non-critical
     // A share run reads only the granted Composio connections, and skips the
     // read when nothing is granted.
     composioManifests: started(

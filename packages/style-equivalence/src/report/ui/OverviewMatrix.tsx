@@ -1,3 +1,4 @@
+import { Block, Button } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
@@ -8,51 +9,47 @@ import { hrefOf } from '../route';
 
 const styles = stylex.create({
   cell: {
-    borderRadius: 4,
-    fontSize: 10.5,
-    height: 22,
+    borderRadius: cssVar.borderRadiusXS,
+    fontSize: cssVar.fontSizeSM,
+    height: 24,
     minWidth: 40,
     textAlign: 'center',
   },
-  expand: {
-    backgroundColor: 'transparent',
-    borderStyle: 'none',
+  head: {
     color: cssVar.colorTextTertiary,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    fontSize: 11.5,
-    paddingInline: 0,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 400,
+    lineHeight: 1.4,
+    textAlign: 'center',
   },
-  head: { color: cssVar.colorTextTertiary, fontSize: 10.5, fontWeight: 500, textAlign: 'center' },
-  rowHead: { fontWeight: 400, textAlign: 'start' },
+  name: {
+    color: cssVar.colorText,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    paddingInlineEnd: 12,
+    textDecorationLine: { ':hover': 'underline', 'default': 'none' },
+    whiteSpace: 'nowrap',
+  },
+  rowHead: {
+    backgroundColor: cssVar.colorBgContainer,
+    fontWeight: 400,
+    insetInlineStart: 0,
+    position: 'sticky',
+    textAlign: 'start',
+    zIndex: 1,
+  },
+  scroll: { overflowX: 'auto', padding: 16 },
+  table: { borderCollapse: 'separate', borderSpacing: 4 },
   themeHead: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
     borderBlockEndWidth: 1,
     color: cssVar.colorTextSecondary,
-    fontSize: 11.5,
+    fontSize: cssVar.fontSizeSM,
     fontWeight: 500,
+    paddingBlockEnd: 4,
     textAlign: 'start',
   },
-  name: {
-    color: cssVar.colorText,
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 11.5,
-    paddingInlineEnd: 12,
-    textDecorationLine: { ':hover': 'underline', 'default': 'none' },
-    whiteSpace: 'nowrap',
-  },
-  panel: {
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    overflowX: 'auto',
-    paddingBlock: 12,
-    paddingInline: 14,
-  },
-  table: { borderCollapse: 'separate', borderSpacing: 3 },
 });
 
 const cells = stylex.create({
@@ -78,76 +75,74 @@ export const OverviewMatrix = ({
   const { equal, open } = overviewRows(cases, columns);
   const rows = showEqual ? [...open, ...equal] : open;
   return (
-    <div {...stylex.props(styles.panel)}>
-      <table {...stylex.props(styles.table)}>
-        <thead>
-          <tr>
-            <th />
-            {themes.map((theme) => (
-              <th
-                colSpan={columns.filter((column) => column.theme === theme).length}
-                key={theme}
-                {...stylex.props(styles.themeHead)}
-              >
-                {THEME_LABELS[theme] ?? theme}
-              </th>
-            ))}
-          </tr>
-          <tr>
-            <th />
-            {columns.map((column) => (
-              <th key={column.label} title={column.label} {...stylex.props(styles.head)}>
-                {column.width}
-                <br />
-                {stateLabel(column.state, column.variant)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr aria-label={row.file} key={row.file}>
-              <th scope="row" {...stylex.props(styles.rowHead)}>
-                <a href={hrefOf({ file: row.file, kind: 'file' })} {...stylex.props(styles.name)}>
-                  {row.file}
-                </a>
-              </th>
-              {row.matrix.map((cell) => (
-                <td
-                  data-status={cell.status}
-                  key={cell.label}
-                  title={cell.label}
-                  {...stylex.props(styles.cell, cells[cell.status])}
+    <Block variant="outlined">
+      <div {...stylex.props(styles.scroll)}>
+        <table {...stylex.props(styles.table)}>
+          <thead>
+            <tr>
+              <th {...stylex.props(styles.rowHead)} />
+              {themes.map((theme) => (
+                <th
+                  colSpan={columns.filter((column) => column.theme === theme).length}
+                  key={theme}
+                  {...stylex.props(styles.themeHead)}
                 >
-                  {cellText(cell.status, cell.count)}
-                </td>
+                  {THEME_LABELS[theme] ?? theme}
+                </th>
               ))}
             </tr>
-          ))}
-          {!showEqual && equal.length > 0 && (
-            <tr aria-label={`另外 ${equal.length} 个文件全部相等`}>
-              <th scope="row" {...stylex.props(styles.rowHead)}>
-                <button
-                  type="button"
-                  onClick={() => setShowEqual(true)}
-                  {...stylex.props(styles.expand)}
-                >
-                  另外 {equal.length} 个文件全部相等 · 展开
-                </button>
-              </th>
+            <tr>
+              <th {...stylex.props(styles.rowHead)} />
               {columns.map((column) => (
-                <td
-                  data-status="equal"
-                  key={column.label}
-                  {...stylex.props(styles.cell, cells.equal)}
-                >
-                  ✓
-                </td>
+                <th key={column.label} title={column.label} {...stylex.props(styles.head)}>
+                  {column.width}
+                  <br />
+                  {stateLabel(column.state, column.variant)}
+                </th>
               ))}
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr aria-label={row.file} key={row.file}>
+                <th scope="row" {...stylex.props(styles.rowHead)}>
+                  <a href={hrefOf({ file: row.file, kind: 'file' })} {...stylex.props(styles.name)}>
+                    {row.file}
+                  </a>
+                </th>
+                {row.matrix.map((cell) => (
+                  <td
+                    data-status={cell.status}
+                    key={cell.label}
+                    title={cell.label}
+                    {...stylex.props(styles.cell, cells[cell.status])}
+                  >
+                    {cellText(cell.status, cell.count)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {!showEqual && equal.length > 0 && (
+              <tr aria-label={`另外 ${equal.length} 个文件全部相等`}>
+                <th scope="row" {...stylex.props(styles.rowHead)}>
+                  <Button size="small" type="text" onClick={() => setShowEqual(true)}>
+                    另外 {equal.length} 个文件全部相等，展开
+                  </Button>
+                </th>
+                {columns.map((column) => (
+                  <td
+                    data-status="equal"
+                    key={column.label}
+                    {...stylex.props(styles.cell, cells.equal)}
+                  >
+                    ✓
+                  </td>
+                ))}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Block>
   );
 };

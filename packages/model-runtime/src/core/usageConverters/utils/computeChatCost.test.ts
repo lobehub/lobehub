@@ -12,6 +12,25 @@ import { describe, expect, it } from 'vitest';
 
 import { computeChatCost } from './computeChatCost';
 
+const createCachedAudioPricing = (): Pricing => ({
+  units: [
+    { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+    {
+      name: 'textInput_cacheRead',
+      rate: 0.1,
+      strategy: 'fixed',
+      unit: 'millionTokens',
+    },
+    { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+    {
+      name: 'audioInput_cacheRead',
+      rate: 1,
+      strategy: 'fixed',
+      unit: 'millionTokens',
+    },
+  ],
+});
+
 describe('computeChatPricing', () => {
   describe('OpenAI', () => {
     it('handles simple request without cache for gpt-4.1', () => {
@@ -495,24 +514,7 @@ describe('computeChatPricing', () => {
     });
 
     it('does not produce a cost when aggregate cache usage omits the cached audio split', () => {
-      const pricing: Pricing = {
-        units: [
-          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-          {
-            name: 'textInput_cacheRead',
-            rate: 0.1,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-          { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-          {
-            name: 'audioInput_cacheRead',
-            rate: 1,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createCachedAudioPricing();
       const usage: ModelTokensUsage = {
         inputAudioTokens: 80,
         inputCachedTokens: 40,
@@ -528,24 +530,7 @@ describe('computeChatPricing', () => {
     });
 
     it('continues when the provider explicitly reports zero audio tokens', () => {
-      const pricing: Pricing = {
-        units: [
-          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-          {
-            name: 'textInput_cacheRead',
-            rate: 0.1,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-          { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-          {
-            name: 'audioInput_cacheRead',
-            rate: 1,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createCachedAudioPricing();
       const usage: ModelTokensUsage = {
         inputAudioTokens: 0,
         inputCachedTokens: 40,
@@ -566,24 +551,7 @@ describe('computeChatPricing', () => {
     });
 
     it('continues when the provider explicitly reports zero cached audio tokens', () => {
-      const pricing: Pricing = {
-        units: [
-          { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-          {
-            name: 'textInput_cacheRead',
-            rate: 0.1,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-          { name: 'audioInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-          {
-            name: 'audioInput_cacheRead',
-            rate: 1,
-            strategy: 'fixed',
-            unit: 'millionTokens',
-          },
-        ],
-      };
+      const pricing: Pricing = createCachedAudioPricing();
       const usage: ModelTokensUsage = {
         inputAudioTokens: 20,
         inputCachedAudioTokens: 0,

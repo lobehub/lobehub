@@ -40,6 +40,99 @@ const publish = async (channelId: string, messageId: string) => {
 };
 
 describe('direct Channel identity', () => {
+  it('finds the caller’s direct conversation with an Agent only in its own scope', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    await expect(repository.findDirectAccess(agent.id)).resolves.toBeUndefined();
+
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    await expect(repository.findDirectAccess(agent.id)).resolves.toMatchObject({
+      channel: { id: channel.id },
+      member: { actorType: 'user', userId: fixture.ownerId },
+    });
+    await expect(
+      new ChannelRepository(db, fixture.ownerId, null).findDirectAccess(agent.id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('lists each Channel with its newest main message and unread count', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: null,
+      unreadCount: 0,
+    });
+
+    await repository.send(channel.id, { ...sendInput, content: 'First', requestKey: 'first' });
+    await repository.send(channel.id, { ...sendInput, content: 'Second', requestKey: 'second' });
+    expect((await repository.list()).find((item) => item.id === channel.id)).toMatchObject({
+      lastMessage: { content: 'Second', thread: null },
+      unreadCount: 2,
+    });
+  });
+
+  // The preview stopped at the main conversation, so a newer Thread reply looked like no news.
+  it('previews a newer Thread reply with its Thread, until the Thread is trashed', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const root = await repository.send(channel.id, {
+      ...sendInput,
+      content: '  Root line\nmore',
+      requestKey: 'root',
+    });
+    const reply = await repository.send(channel.id, {
+      ...sendInput,
+      content: 'In the thread',
+      requestKey: 'thread-reply',
+      rootMessageId: root.id,
+    });
+    const listed = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.lastMessage;
+
+    expect(await listed()).toMatchObject({
+      content: 'In the thread',
+      thread: { id: reply.threadId, title: 'Root line' },
+    });
+
+    await repository.removeThread(channel.id, reply.threadId!);
+    expect(await listed()).toMatchObject({ content: '  Root line\nmore', thread: null });
+  });
+
+  // A list row only knew a reply was in progress once its conversation was opened.
+  it('lists the main-conversation replies still pending', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const replyJobs = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.replyJobs;
+    expect(await replyJobs()).toEqual([]);
+
+    const message = await repository.send(channel.id, sendInput);
+    const [job] = await jobsOf(db, message.id);
+    expect(await replyJobs()).toEqual([
+      {
+        blockedCode: null,
+        id: job.id,
+        memberId: job.memberId,
+        publicationRevoked: false,
+        status: 'queued',
+        threadId: null,
+        writerHeld: false,
+      },
+    ]);
+
+    await execution.claim(channel.id, job.id, lease);
+    expect(await replyJobs()).toMatchObject([{ id: job.id, status: 'running', writerHeld: true }]);
+
+    await execution.accepted(channel.id, job.id);
+    await execution.saveDraft(channel.id, job.id, 'Answer');
+    await execution.publish(channel.id, job.id);
+    await execution.releaseWriter(channel.id, job.id);
+    expect(await replyJobs()).toEqual([]);
+  });
+
   it.each([null, fixture.workspaceId])(
     'creates a private user/Agent conversation in scope %s',
     async (workspaceId) => {

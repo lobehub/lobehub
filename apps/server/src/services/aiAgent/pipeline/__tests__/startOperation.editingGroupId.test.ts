@@ -48,14 +48,16 @@ describe('startOperation › group builder editing target inheritance', () => {
         approvalClaim: {},
         approvalSourceToolMessageIds: [],
         autoStart: true,
-        discovery: {
-          credentialFactsPromise: Promise.resolve(undefined),
-          modelMediaCapabilities: {},
-          toolsResult: { enabledToolIds: [] },
+        init: {
+          discovery: {
+            credentialFactsPromise: Promise.resolve(undefined),
+            modelMediaCapabilities: {},
+            toolsResult: { enabledToolIds: [] },
+          },
+          initialContext: {},
+          prep: { allMessages: [], deviceSystemInfo: {} },
         },
-        initialContext: {},
         operationId: 'op-new',
-        prep: { allMessages: [], deviceSystemInfo: {} },
         updateAbortedAssistantMessage: vi.fn(),
         userInterventionConfig: { approvalMode: 'manual' },
         ...extra,
@@ -64,14 +66,13 @@ describe('startOperation › group builder editing target inheritance', () => {
   };
 
   it('recovers the parked run editing group when the request names none', async () => {
-    const { agentRuntimeService, ctx, deps, input } = setup('cg_edited');
+    const { agentRuntimeService, calls, ctx, deps, input } = setup('cg_edited');
 
     await startOperation(
       deps,
       ctx,
       input({
         approvalSourceOperationId: 'op-parked',
-        initialContext: { appContext: { topicId: 'tpc-1' } },
       }),
     );
 
@@ -82,6 +83,7 @@ describe('startOperation › group builder editing target inheritance', () => {
       }),
     );
     // Read before the parked operation is retired.
+    expect(calls.indexOf('read-group-target')).toBeLessThan(calls.indexOf('retire-source'));
   });
 
   it('lets the parked target win without overwriting a request-named group', async () => {
@@ -108,7 +110,6 @@ describe('startOperation › group builder editing target inheritance', () => {
       ctx,
       input({
         approvalSourceOperationId: 'op-parked',
-        initialContext: { appContext: { topicId: 'tpc-1' } },
       }),
     );
 
@@ -130,13 +131,5 @@ describe('startOperation › group builder editing target inheritance', () => {
         appContext: expect.not.objectContaining({ editingGroupId: expect.anything() }),
       }),
     );
-  });
-
-  it('reads the durable target before retiring the parked operation', async () => {
-    const { calls, ctx, deps, input } = setup('cg_edited');
-
-    await startOperation(deps, ctx, input({ approvalSourceOperationId: 'op-parked' }));
-
-    expect(calls.indexOf('read-group-target')).toBeLessThan(calls.indexOf('retire-source'));
   });
 });

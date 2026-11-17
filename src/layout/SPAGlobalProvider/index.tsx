@@ -11,7 +11,6 @@ import { useDevDockMounted } from '@/hooks/useDevDockMounted';
 import AuthProvider from '@/layout/AuthProvider';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
-import CacheHydrationGate from '@/layout/GlobalProvider/CacheHydrationGate';
 import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import QueryProvider from '@/layout/GlobalProvider/Query';
@@ -20,6 +19,7 @@ import StoreInitialization, {
   BuiltinAgentInitialization,
 } from '@/layout/GlobalProvider/StoreInitialization';
 import { registerNativeContextMenuInterceptor } from '@/libs/contextMenu';
+import PrePaintSignal from '@/libs/replica/PrePaintSignal';
 import { usePostRenderReady } from '@/spa/atoms/app';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import type { SPAServerConfig } from '@/types/spaServerConfig';
@@ -98,10 +98,10 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
               <LazyMotion features={domMax}>
                 <TooltipGroup layoutAnimation={false}>
                   <LobeAnalyticsProviderWrapper>
-                    <CacheHydrationGate>
+                    <PrePaintSignal>
                       <BuiltinAgentInitialization />
                       <DevDockLayout>{children}</DevDockLayout>
-                    </CacheHydrationGate>
+                    </PrePaintSignal>
                   </LobeAnalyticsProviderWrapper>
                 </TooltipGroup>
                 <ModalHost />

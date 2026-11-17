@@ -127,6 +127,7 @@
   "workingDirectory.refreshFolders": "Rafraîchir les dossiers",
   "workingDirectory.refreshGitStatus": "Actualiser l'état des branches et des PR",
   "workingDirectory.removeRecent": "Supprimer des récents",
+  "workingDirectory.removeRecentFailed": "Impossible de supprimer ce dossier. Veuillez réessayer.",
   "workingDirectory.removeWorktreeAction": "Supprimer le worktree",
   "workingDirectory.removeWorktreeConfirm": "Supprimer le worktree « {{name}} » ? Cela supprime le répertoire du worktree mais conserve sa branche. Git refusera si des modifications non validées sont présentes.",
   "workingDirectory.removeWorktreeFailed": "Échec de la suppression du worktree",

@@ -5,6 +5,7 @@ import {
   AccordionRoot,
   AccordionTrigger,
   createStaticStyles,
+  cssVar,
   Flexbox,
   Icon,
   Tag,
@@ -85,6 +86,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: inline-flex;
     gap: 4px;
     align-items: baseline;
+    font-variant-numeric: tabular-nums;
   `,
   titleText: css`
     font-size: 14px;
@@ -115,6 +117,19 @@ const PriceValue: FC<PriceValueProps> = ({ price, prefix = '', suffix = '' }) =>
   </span>
 );
 
+/** The short colored bar before a section title; tokens keep it in step with the theme. */
+const SectionAccent: FC<{ color: string }> = ({ color }) => (
+  <div
+    style={{
+      background: color,
+      borderRadius: 2,
+      flexShrink: 0,
+      height: 14,
+      width: 3,
+    }}
+  />
+);
+
 interface ModelDetailPanelProps {
   enabledList?: EnabledProviderWithModels[];
   model?: string;
@@ -139,7 +154,6 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       hasCachedInputPricing,
       hasPricing,
       isAbilitiesExpanded,
-      isCreditPricing,
       isPricingExpanded,
       model,
       pricingGroups,
@@ -209,15 +223,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>
                     <Flexbox horizontal align={'center'} gap={8}>
-                      <div
-                        style={{
-                          background: '#eb2f96',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                          height: 14,
-                          width: 3,
-                        }}
-                      />
+                      <SectionAccent color={cssVar.magenta} />
                       <span className={styles.titleText}>
                         {t('ModelSwitchPanel.detail.rating')}
                       </span>
@@ -278,15 +284,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
               <AccordionItem disabled value="context">
                 <AccordionHeader style={{ paddingBlock: 6, paddingInline: 8 }}>
                   <Flexbox horizontal align={'center'} flex={1} gap={8}>
-                    <div
-                      style={{
-                        background: '#1677ff',
-                        borderRadius: 2,
-                        flexShrink: 0,
-                        height: 14,
-                        width: 3,
-                      }}
-                    />
+                    <SectionAccent color={cssVar.blue} />
                     <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
                   </Flexbox>
                   <span className={styles.actionText}>{contextWindowLabel}</span>
@@ -300,15 +298,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>
                     <Flexbox horizontal align={'center'} gap={8}>
-                      <div
-                        style={{
-                          background: '#722ed1',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                          height: 14,
-                          width: 3,
-                        }}
-                      />
+                      <SectionAccent color={cssVar.purple} />
                       <span className={styles.titleText}>
                         {t('ModelSwitchPanel.detail.abilities')}
                       </span>
@@ -362,15 +352,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 6, paddingInline: 8 }}>
                     <Flexbox horizontal align={'center'} gap={8}>
-                      <div
-                        style={{
-                          background: '#fa8c16',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                          height: 14,
-                          width: 3,
-                        }}
-                      />
+                      <SectionAccent color={cssVar.orange} />
                       <span className={styles.titleText}>
                         {t('ModelSwitchPanel.detail.pricing')}
                       </span>
@@ -390,20 +372,20 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           >
                             <Flexbox horizontal align={'center'} gap={2}>
                               <Icon icon={CircleFadingArrowUp} size={'small'} />
-                              <PriceValue price={formatPrice!.cachedInput} />
+                              <PriceValue prefix="$" price={formatPrice!.cachedInput} />
                             </Flexbox>
                           </Tooltip>
                         )}
                         <Tooltip title={getPricingTooltip('input', formatPrice!.input.current)}>
                           <Flexbox horizontal align={'center'} gap={2}>
                             <Icon icon={ArrowUpFromDot} size={'small'} />
-                            <PriceValue price={formatPrice!.input} />
+                            <PriceValue prefix="$" price={formatPrice!.input} />
                           </Flexbox>
                         </Tooltip>
                         <Tooltip title={getPricingTooltip('output', formatPrice!.output.current)}>
                           <Flexbox horizontal align={'center'} gap={2}>
                             <Icon icon={ArrowDownToDot} size={'small'} />
-                            <PriceValue price={formatPrice!.output} />
+                            <PriceValue prefix="$" price={formatPrice!.output} />
                           </Flexbox>
                         </Tooltip>
                       </Flexbox>
@@ -440,7 +422,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                               </span>
                             </Flexbox>
                             <PriceValue
-                              prefix={isCreditPricing ? '' : '$'}
+                              prefix="$"
                               price={formatUnitPrice(unit)}
                               suffix={getUnitPriceSuffix(unit.unit)}
                             />

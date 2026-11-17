@@ -15,6 +15,7 @@ import {
   formatTime,
   formatTokenNumber,
   formatUsageValue,
+  formatUsd,
 } from './format';
 
 describe('format', () => {
@@ -333,6 +334,26 @@ describe('format', () => {
       expect(formatSpendTime(null)).toBe('--');
       expect(formatSpendTime('')).toBe('--');
       expect(formatSpendTime('not a date')).toBe('--');
+    });
+  });
+
+  describe('formatUsd', () => {
+    it('formats dollars with grouping and two decimals', () => {
+      expect(formatUsd(0)).toBe('$0.00');
+      expect(formatUsd(1234.5)).toBe('$1,234.50');
+    });
+
+    it('keeps up to four decimals below one dollar', () => {
+      expect(formatUsd(0.01234)).toBe('$0.0123');
+      expect(formatUsd(0.0001)).toBe('$0.0001');
+    });
+
+    it('shows a floor marker for tiny positive amounts', () => {
+      expect(formatUsd(0.00001)).toBe('<$0.0001');
+    });
+
+    it('returns a placeholder for non-finite values', () => {
+      expect(formatUsd(Number.NaN)).toBe('--');
     });
   });
 });

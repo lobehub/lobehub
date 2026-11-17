@@ -5,14 +5,12 @@ import { Form } from '@lobehub/ui/form';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import dayjs from 'dayjs';
 import { Brain, UserIcon } from 'lucide-react';
-import { memo, type ReactNode, useEffect, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { usageService } from '@/services/usage';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 
 import {
   ShareButton,
@@ -57,15 +55,10 @@ const StatsSetting = memo<StatsSettingProps>(
     const [dateRange, setDateRange] = useState<dayjs.Dayjs>(dayjs(new Date()));
     const [dateStrings, setDateStrings] = useState<string>();
 
-    const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.usageStat(), async () =>
-      usageService.findAndGroupByDay(dateStrings),
-    );
-
-    useEffect(() => {
-      if (dateStrings) {
-        mutate();
-      }
-    }, [dateStrings]);
+    // Keyed by month: each picked month keeps its own local copy.
+    const { error, revalidate } = statsActions.useFetchUsageByDay(dateStrings);
+    const data = useStatsStore(statsSelectors.usageByDay(dateStrings));
+    const isLoading = !data;
 
     const handleDateChange = (month: dayjs.Dayjs | null) => {
       if (!month) return;
@@ -145,7 +138,12 @@ const StatsSetting = memo<StatsSettingProps>(
             </>
           }
         >
-          <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
+          <AsyncBoundary
+            data={data}
+            error={error}
+            errorVariant={'block'}
+            onRetry={() => revalidate()}
+          >
             <UsageCards
               data={data}
               groupBy={groupBy}

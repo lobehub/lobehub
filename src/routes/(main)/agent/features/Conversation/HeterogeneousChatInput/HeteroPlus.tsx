@@ -3,20 +3,13 @@
 import { cssVar, Icon, Upload } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import {
-  CalendarClockIcon,
-  CheckIcon,
-  ChevronRight,
-  FileUp,
-  PlusIcon,
-  TargetIcon,
-  TypeIcon,
-} from 'lucide-react';
+import { CalendarClockIcon, CheckIcon, FileUp, PlusIcon, TargetIcon, TypeIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ActionDropdownMenuItems } from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import { ChatInputAction } from '@/features/ChatInput/ActionBar/components/ChatInputAction';
+import SubmenuChevron from '@/features/ChatInput/ActionBar/components/SubmenuChevron';
 import { insertGoalTag } from '@/features/ChatInput/InputEditor/ActionTag/goalTag';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useConversationStore } from '@/features/Conversation';
@@ -121,7 +114,7 @@ const HeteroPlus = memo<HeteroPlusProps>(({ providerType }) => {
         })),
         // Trailing chevron (replaces base-ui's default triangle submenu arrow,
         // which ActionDropdown hides via the .lobe-submenu-chevron rule).
-        extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
+        extra: <SubmenuChevron />,
         icon: CalendarClockIcon,
         key: 'scheduleSend',
         label: t('input.schedule.title'),

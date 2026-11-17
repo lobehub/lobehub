@@ -5,6 +5,8 @@ export interface RuntimeMessageRef {
   agentId?: string | null;
   /** Returned by `findById` reads only; creates leave it out. */
   content?: string | null;
+  /** Server creation time; the client orders a seeded row by it, not by its own clock. */
+  createdAt?: Date | number | string | null;
   groupId?: string | null;
   id: string;
   /** Returned by `findById` reads only; creates leave it out. */

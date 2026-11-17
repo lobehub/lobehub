@@ -6,6 +6,7 @@ import { getOpenApi } from '../api/openapi';
 import { resolveWorkspaceScope } from '../api/workspace';
 import { resolveWorkspaceRef } from '../api/workspaceRef';
 import { CLI_PRODUCT_NAME } from '../constants/identity';
+import { isMissingProcedure } from '../utils/error';
 import {
   type BoxTableRow,
   formatCost,
@@ -24,22 +25,35 @@ export function registerConfigCommand(program: Command) {
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(async (options: { json?: string | boolean }) => {
       const client = await getTrpcClient();
-      const state = await client.user.getUserState.query();
-
-      // Every command resolves its scope the same way, so reporting it here is
-      // what lets a caller (usually an agent editing its own config) tell a
-      // genuine "not found" from "I'm looking in the wrong workspace".
-      const scope = resolveWorkspaceScope();
-      const workspaceId = scope.workspaceId;
+      // The scope comes from the server: it is the workspace the request
+      // actually ran under (a workspace API key pins its own workspace; a
+      // header naming a workspace the caller is not a member of falls back to
+      // personal), which is what lets a caller — usually an agent editing its
+      // own config — tell a genuine "not found" from "I'm looking in the wrong
+      // workspace".
+      const [state, { scope, source, workspaceId }] = await Promise.all([
+        client.user.getUserState.query(),
+        client.auth.getScope.query().catch((error: unknown) => {
+          if (!isMissingProcedure(error)) throw error;
+          // Self-hosted servers older than this CLI have no `auth.getScope`;
+          // report the scope this CLI sends instead.
+          const local = resolveWorkspaceScope();
+          return {
+            scope: local.workspaceId ? 'workspace' : 'personal',
+            source: local.source,
+            workspaceId: local.workspaceId ?? null,
+          };
+        }),
+      ]);
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
         outputJson(
           {
             ...(state as any),
-            scope: workspaceId ? 'workspace' : 'personal',
-            scopeSource: scope.source,
-            workspaceId: workspaceId ?? null,
+            scope,
+            scopeSource: source,
+            workspaceId,
           },
           fields,
         );
@@ -54,7 +68,7 @@ export function registerConfigCommand(program: Command) {
       if (s.userId) console.log(`  User ID:  ${s.userId}`);
       if (s.subscriptionPlan) console.log(`  Plan:     ${s.subscriptionPlan}`);
       console.log(
-        `  Scope:    ${workspaceId ? `workspace ${workspaceId} ${pc.dim(`(from ${scope.source})`)}` : pc.dim('personal (no workspace scope)')}`,
+        `  Scope:    ${workspaceId ? `workspace ${workspaceId} ${pc.dim(`(from ${source})`)}` : pc.dim('personal (no workspace scope)')}`,
       );
     });
 
@@ -235,7 +249,7 @@ export function registerConfigCommand(program: Command) {
 
   usage
     .command('quota')
-    .description("Show how much of this cycle's credit allowance is used and left")
+    .description("Show how much of this cycle's usage allowance is used and left")
     .option(
       '--workspace <id|slug>',
       'Read the allowance in this workspace (defaults to the active scope)',
@@ -260,11 +274,11 @@ export function registerConfigCommand(program: Command) {
 
       const { quota } = summary;
       if (!quota) {
-        console.log('No credit allowance on this server.');
+        console.log('No usage allowance on this server.');
         return;
       }
 
-      console.log(pc.bold('Credit Allowance'));
+      console.log(pc.bold('Usage Allowance'));
       console.log(`  Source:    ${QUOTA_SOURCE_LABELS[quota.source]}`);
       if (quota.limit === null) {
         console.log(`  Used:      ${formatCost(quota.used)} ${pc.dim('(no cap)')}`);
@@ -294,6 +308,6 @@ interface UsageSummary {
 
 const QUOTA_SOURCE_LABELS: Record<NonNullable<UsageSummary['quota']>['source'], string> = {
   member_budget: 'your member limit in this workspace',
-  personal: 'personal credits',
-  workspace_pool: 'workspace credit pool',
+  personal: 'personal usage',
+  workspace_pool: 'workspace usage pool',
 };

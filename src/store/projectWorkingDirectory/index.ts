@@ -93,16 +93,32 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   ) => Promise<ServiceData<'associateTopic'>>;
   /** Link an environment to a project. */
   attachEnvironment: (...args: ServiceParams<'attachEnvironment'>) => Promise<void>;
+  /** Link a GitHub repository to a project, making its environment when needed. */
+  attachRepository: (
+    ...args: ServiceParams<'attachRepository'>
+  ) => Promise<ServiceData<'attachRepository'>>;
   /** Register a working directory, absorbing the conversations it covers. */
   bind: (...args: ServiceParams<'bind'>) => Promise<ServiceData<'bind'>>;
   /** Open a project conversation outside any directory binding. */
   createProjectTopic: (
     ...args: ServiceParams<'createProjectTopic'>
   ) => Promise<ServiceData<'createProjectTopic'>>;
+  /** Unlink an environment from a project; the environment itself is kept. */
+  detachEnvironment: (...args: ServiceParams<'detachEnvironment'>) => Promise<void>;
   /** Move a directory conversation to its project's directory on another device. */
   moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
+  /**
+   * Refetch every environment and directory projection after an environment
+   * was edited elsewhere (the shared settings panel): directory rows carry its
+   * name denormalized.
+   */
+  refreshEnvironments: () => Promise<void>;
   /** Refetch a project's conversations after a change made elsewhere, e.g. a new main agent. */
   refreshProjectTopics: (projectId: string) => Promise<void>;
+  /** Repoint a directory at another device location; its conversations follow it. */
+  relocateDirectory: (...args: ServiceParams<'relocate'>) => Promise<ServiceData<'relocate'>>;
+  /** Remove a directory from a project; its conversations stay in the project. */
+  removeDirectory: (projectId: string, id: string) => Promise<void>;
   /** Create or rename an environment. */
   saveEnvironment: (
     ...args: ServiceParams<'saveEnvironment'>
@@ -223,12 +239,40 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       ]);
       return result.data;
     },
+    refreshEnvironments: async () => {
+      await Promise.all([environments.revalidate(), directories.revalidate()]);
+    },
     refreshProjectTopics: async (projectId) => {
       // Directory and environment rows carry the same topics with their agent
       // denormalized, so every projection that lists them is stale too.
       await Promise.all([
         projectTopics.revalidate(projectId),
         directoryTopics.revalidate(),
+        environmentTopics.revalidate(),
+      ]);
+    },
+    relocateDirectory: async (input) => {
+      const result = await projectWorkingDirectoryService.relocate(input);
+      await Promise.all([
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(input.projectId),
+        // The directory's conversations now point at the new location.
+        projectTopics.revalidate(input.projectId),
+        directoryTopics.revalidate(),
+        environmentTopics.revalidate(),
+        environments.revalidate(),
+        environments.revalidate(input.projectId),
+      ]);
+      return result.data;
+    },
+    removeDirectory: async (projectId, id) => {
+      await projectWorkingDirectoryService.remove({ id, projectId });
+      await Promise.all([
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
+        // The removal cleared the directory binding on its conversations.
+        projectTopics.revalidate(projectId),
+        directoryTopics.revalidate(id),
         environmentTopics.revalidate(),
       ]);
     },
@@ -244,9 +288,29 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       await projectWorkingDirectoryService.attachEnvironment(projectId, environmentId);
       await Promise.all([
         environments.revalidate(projectId),
+        // Relinking makes the project's folders made from it runnable again.
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
         // The scope-wide list gained the environment instanced by the attach.
         environments.revalidate(ALL_PROJECTS_KEY),
       ]);
+    },
+    detachEnvironment: async (projectId, environmentId) => {
+      await projectWorkingDirectoryService.detachEnvironment(projectId, environmentId);
+      await Promise.all([
+        environments.revalidate(projectId),
+        // The project's folders made from it lose their runnable environment.
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
+      ]);
+    },
+    attachRepository: async (input) => {
+      const result = await projectWorkingDirectoryService.attachRepository(input);
+      await Promise.all([
+        environments.revalidate(input.projectId),
+        environments.revalidate(ALL_PROJECTS_KEY),
+      ]);
+      return result.data;
     },
     bind: async (input) => {
       const result = await projectWorkingDirectoryService.bind(input);

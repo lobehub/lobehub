@@ -71,6 +71,12 @@ export const reviewAuth: MiddlewareHandler<ReviewEnv> = async (c, next) => {
     c.set('role', project ? await resolveProjectReviewRole(db, claims.userId, project) : null);
     c.set('site', { id: site.id, name: site.name });
   } else {
+    if (claims.acceptanceOrigin) {
+      const origin = requestOrigin(c.req.header('origin'), c.req.header('sec-fetch-site'));
+      if (origin !== claims.acceptanceOrigin) {
+        return reviewError(c, 403, 'FORBIDDEN', 'Origin not allowed for this token');
+      }
+    }
     const access = claims.acceptanceId
       ? await resolveReviewAccess(db, claims.userId, claims.acceptanceId)
       : null;

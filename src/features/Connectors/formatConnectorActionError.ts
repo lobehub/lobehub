@@ -8,6 +8,12 @@ import {
 
 /** Shared by sync, disconnect, delete and permission changes in the detail panel. */
 export const formatConnectorActionErrorToast = (t: TFunction<'tool'>, error: unknown): string => {
+  // The server refused the MCP address (private / reserved IP); its message
+  // names the self-hosting switches that allow it, so show it as-is.
+  const errorType = (error as { data?: { errorData?: { type?: unknown } } } | undefined)?.data
+    ?.errorData?.type;
+  if (errorType === 'SSRF_BLOCKED' && error instanceof Error && error.message) return error.message;
+
   switch (getConnectorActionErrorCode(error)) {
     case ConnectorErrorCode.StdioDesktopOnly: {
       return t('connector.error.stdioDesktopOnly');

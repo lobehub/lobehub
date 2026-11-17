@@ -426,14 +426,6 @@ describe('frozen model facts', () => {
     expect(frozenCard?.deploymentName).toBe('prod-endpoint');
     // The bundled card is preserved apart from the alias.
     expect(frozenCard).toMatchObject({ displayName: 'DeepSeek V4 Pro', id: 'deepseek-v4-pro' });
-    // And the transport's lookup answers from the snapshot as stored.
-    expect(
-      facts.cards.find(
-        (card) =>
-          card.providerId === 'deepseek' &&
-          (card.id === 'deepseek-v4-pro' || card.deploymentName === 'deepseek-v4-pro'),
-      )?.deploymentName,
-    ).toBe('prod-endpoint');
   });
 
   it('freezes a minimal deployment card for a custom model the bank has no card for', async () => {

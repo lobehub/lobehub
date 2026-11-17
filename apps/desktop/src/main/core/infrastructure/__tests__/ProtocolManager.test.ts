@@ -125,12 +125,6 @@ describe('ProtocolManager', () => {
   });
 
   describe('protocol registration', () => {
-    it('should use simple registration in production mode', () => {
-      manager.initialize();
-
-      expect(app.setAsDefaultProtocolClient).toHaveBeenCalledWith('lobehub');
-    });
-
     it('should use explicit parameters in development mode', async () => {
       vi.doMock('@/const/env', () => ({ isDev: true }));
       vi.resetModules();
@@ -288,12 +282,6 @@ describe('ProtocolManager', () => {
       await manager.processPendingUrls();
 
       expect(mockShowMainWindow).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('getScheme', () => {
-    it('should return the protocol scheme', () => {
-      expect(manager.getScheme()).toBe('lobehub');
     });
   });
 

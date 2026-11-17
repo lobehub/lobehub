@@ -19,6 +19,7 @@ import {
   type GoalMetricKind,
   type OpenLocalFileParams,
   type PortalFile,
+  type PortalTaskWorkspace,
   type PortalViewData,
 } from './initialState';
 import { PortalViewType } from './initialState';
@@ -685,6 +686,14 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
   };
 
+  openBrowser = (sessionId: string, url: string): void => {
+    this.#get().pushPortalView({
+      request: { nonce: Date.now(), url },
+      sessionId,
+      type: PortalViewType.Browser,
+    });
+  };
+
   openAcceptanceCheck = (acceptanceId: string, checkId: string): void => {
     this.#get().pushPortalView({ acceptanceId, checkId, type: PortalViewType.AcceptanceCheck });
   };
@@ -722,8 +731,12 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
-  openTaskDetail = (taskId: string): void => {
-    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
+  openTaskDetail = (taskId: string, workspace?: PortalTaskWorkspace): void => {
+    this.#get().pushPortalView({
+      taskId,
+      type: PortalViewType.TaskDetail,
+      ...(workspace ? { workspace } : {}),
+    });
   };
 
   openTaskResult = (taskId: string): void => {

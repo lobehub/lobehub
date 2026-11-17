@@ -27,6 +27,8 @@ export {
   type PiRpcCommand,
   type PiRpcEvent,
   type PiRpcImage,
+  type PiRpcPromptDisposition,
+  type PiRpcPromptResponseData,
   type PiRpcResponse,
   type PiRpcStateData,
   type PiSessionEvent,

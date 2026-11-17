@@ -1,4 +1,9 @@
-import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
+import {
+  type MessageContextAccounting,
+  type OpenAIChatMessage,
+  type UIChatMessage,
+  type VoiceMessageRecording,
+} from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { type DropdownItem } from '@lobehub/ui';
@@ -36,8 +41,28 @@ export const initialSendButtonState: SendButtonProps = {
 
 export type SlashPlacement = 'top' | 'bottom';
 
-export interface ContextWindowMessage {
-  content: string;
+/**
+ * What the conversation's next request carries before the composer draft, for
+ * the context breakdown (see `getContextWindow`).
+ */
+export interface ContextWindow {
+  /** The history window the next request includes, as the history count slices it. */
+  history: UIChatMessage[];
+  /** The latest request the agent runtime recorded in this conversation. */
+  request?: {
+    accounting: MessageContextAccounting;
+    /** Provider-reported input tokens of that request, when known. */
+    inputTokens?: number;
+    /**
+     * Messages added since: the recorded reply itself and everything after it.
+     * Absent when a history count re-truncates every request; the recorded
+     * messages may then drop out, so count `history` instead.
+     */
+    messages?: UIChatMessage[];
+    /** Model and provider that request went to. */
+    model?: string;
+    provider?: string;
+  };
 }
 
 export interface ChatInputFeature {
@@ -67,7 +92,7 @@ export interface PublicState {
   allowExpand?: boolean;
   canRecordVoiceMessage?: boolean;
   contextSelectionKey?: string;
-  contextWindowMessages?: ContextWindowMessage[];
+  contextWindow?: ContextWindow;
   draftKey?: string;
   expand?: boolean;
   feature?: ChatInputFeature;
@@ -105,6 +130,13 @@ export interface PublicState {
    * topic than the surrounding page.
    */
   topicId?: string | null;
+  /**
+   * Key of this composer's upload list in the file store. Defaults to
+   * `contextSelectionKey`; a host whose text draft outlives that key (Home
+   * keeps its text across mode and agent switches) passes a steadier one so
+   * attachments stay alongside the text.
+   */
+  uploadContextKey?: string;
 }
 
 export interface State extends PublicState {
@@ -112,6 +144,8 @@ export interface State extends PublicState {
   editor?: IEditor;
   inputCompletionError?: InputCompletionError;
   inputCompletionErrorDismissed: boolean;
+  /** Market agents/skills picked from the @ menu are being installed before the send commits. */
+  installingMarketMentions: boolean;
   isContentEmpty: boolean;
   markdownContent: string;
   slashMenuRef: ChatInputProps['slashMenuRef'];
@@ -123,6 +157,7 @@ export const initialState: State = {
   expand: false,
   feature: DEFAULT_CHAT_INPUT_FEATURE,
   inputCompletionErrorDismissed: false,
+  installingMarketMentions: false,
   isContentEmpty: false,
   leftActions: [],
   markdownContent: '',

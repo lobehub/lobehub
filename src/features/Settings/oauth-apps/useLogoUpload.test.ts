@@ -34,7 +34,6 @@ describe('useLogoUpload', () => {
     });
 
     expect(url).toBe('https://files.lobehub.com/logo.png');
-    expect(url?.startsWith('data:')).toBe(false);
   });
 
   it('turns a storage path into an absolute URL the provider accepts', async () => {

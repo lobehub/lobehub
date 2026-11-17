@@ -4,7 +4,7 @@ import qs from 'query-string';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { OG_URL } from '@/const/url';
-import { isCustomORG } from '@/const/version';
+import { isCustomBranding, isCustomORG } from '@/const/version';
 import { type Locales } from '@/locales/resources';
 import { locales } from '@/locales/resources';
 import { getCanonicalUrl } from '@/server/utils/url';
@@ -12,7 +12,9 @@ import { formatDescLength, formatTitleLength } from '@/utils/genOG';
 
 export class Meta {
   public generate({
-    description = 'LobeChat offers you the best ChatGPT, OLLaMA, Gemini, Claude WebUI user experience',
+    description = isCustomBranding
+      ? `${BRANDING_NAME} offers you the best ChatGPT, OLLaMA, Gemini, Claude WebUI user experience`
+      : 'LobeChat offers you the best ChatGPT, OLLaMA, Gemini, Claude WebUI user experience',
     title,
     image = OG_URL,
     url,

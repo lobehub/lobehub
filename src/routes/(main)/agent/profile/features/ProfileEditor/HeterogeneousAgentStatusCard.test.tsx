@@ -46,17 +46,23 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
                   icon: () => <span>OpenCode Icon</span>,
                   title: 'OpenCode',
                 }
-              : type === 'pi'
+              : type === 'copilot'
                 ? {
-                    defaultCommand: 'pi',
-                    icon: () => <span>Pi Icon</span>,
-                    title: 'Pi',
+                    defaultCommand: 'copilot',
+                    icon: () => <span>GitHub Copilot Icon</span>,
+                    title: 'GitHub Copilot',
                   }
-                : {
-                    defaultCommand: 'codex',
-                    icon: () => <span>Codex Icon</span>,
-                    title: 'Codex',
-                  },
+                : type === 'pi'
+                  ? {
+                      defaultCommand: 'pi',
+                      icon: () => <span>Pi Icon</span>,
+                      title: 'Pi',
+                    }
+                  : {
+                      defaultCommand: 'codex',
+                      icon: () => <span>Codex Icon</span>,
+                      title: 'Codex',
+                    },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
   isLocalRuntimeHeterogeneousType: (type: string) => type === 'deepseek-harness',
 }));
@@ -411,6 +417,32 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('Pi CLI')).toBeInTheDocument();
     expect(screen.getByText('Pi CLI is unavailable')).toBeInTheDocument();
     expect(screen.getByText('pi Install Guide')).toBeInTheDocument();
+  });
+
+  it('detects GitHub Copilot and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'copilot',
+      type: 'copilot',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'copilot',
+        command: 'copilot',
+      });
+    });
+
+    expect(screen.getByText('GitHub Copilot CLI')).toBeInTheDocument();
+    expect(screen.getByText('GitHub Copilot CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('copilot Install Guide')).toBeInTheDocument();
   });
 
   it('shows the embedded Claude Code install guide when the CLI is unavailable', async () => {

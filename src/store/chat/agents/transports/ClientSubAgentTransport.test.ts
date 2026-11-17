@@ -104,6 +104,27 @@ describe('ClientSubAgentTransport', () => {
     });
   });
 
+  it('hands the accepted dispatch to the caller before waiting on the child', async () => {
+    const { store } = createStore();
+    vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValueOnce({
+      ...dispatchResult,
+      token: 'child-ticket',
+    });
+    const onDispatched = vi.fn(() => {
+      expect(aiAgentService.getSubAgentTaskStatus).not.toHaveBeenCalled();
+    });
+    vi.mocked(aiAgentService.getSubAgentTaskStatus).mockResolvedValueOnce({
+      result: 'done',
+      status: 'completed',
+    });
+
+    await new ClientSubAgentTransport(() => store, 'root-operation', {
+      onDispatched,
+    }).execSubAgent(params);
+
+    expect(onDispatched).toHaveBeenCalledWith({ ...dispatchResult, token: 'child-ticket' });
+  });
+
   it('returns a terminal failure when dispatch is rejected', async () => {
     const { store } = createStore();
     vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValueOnce({

@@ -35,6 +35,7 @@ import {
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getToolStoreState } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
@@ -67,6 +68,12 @@ interface ContextEngineeringContext {
    * budget is spent (planned by `shouldCompress`).
    */
   attachmentPreviewFileIds?: string[];
+  /**
+   * Library skills the agent set to `auto` (`agents.plugins` tri-state). A
+   * library skill is opt-in per agent, so one that is neither here nor in
+   * `plugins` (pinned) is left out of the client skill pool.
+   */
+  autoSkillIds?: string[];
   /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
@@ -134,6 +141,7 @@ export const contextEngineering = async ({
   historyCount,
   historySummary,
   agentId,
+  autoSkillIds,
   disabledPluginIds,
   enableAgentMode,
   groupId,
@@ -306,6 +314,7 @@ export const contextEngineering = async ({
         // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
         // which the lobehub skill teaches.
         mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
+        autoSkillIds,
       )
     ).skills;
   }
@@ -331,6 +340,7 @@ export const contextEngineering = async ({
       identity: { name: agentMeta?.name, title: agentMeta?.title },
       inputTemplate,
       knowledge: { fileContents, knowledgeBases },
+      revokedDocumentReads: facts.revokedDocumentReads,
       systemRole,
     },
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
@@ -347,6 +357,9 @@ export const contextEngineering = async ({
       provider,
     },
     run: {
+      enableMcpAppContext:
+        !!getServerConfigStoreState() &&
+        serverConfigSelectors.enableMcpApps(getServerConfigStoreState()!),
       additionalContexts,
       // MessagesEngine force-disables skills / agent-document injectors when this
       // is `false` (chat mode). ChatService resolves it from stored user intent

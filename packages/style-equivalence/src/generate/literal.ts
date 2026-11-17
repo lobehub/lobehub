@@ -16,7 +16,7 @@ export const VOID_TAGS = new Set([
 
 export const keepLiteral = (name: string, substituted: boolean) => {
   if (name === 'key' || name === 'ref' || /^on[A-Z]/.test(name)) return false;
-  return substituted ? /^(?:data-|aria-|role$)/.test(name) : true;
+  return substituted ? /^(?:data-|aria-|role$|style$)/.test(name) : true;
 };
 
 export const renderLiteral = (name: string, value: LiteralValue) =>

@@ -4,6 +4,7 @@ import type {
   AgentRuntimeContext,
   AgentState,
 } from '@lobechat/agent-runtime';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { type ClientLlmWaitItem, type ResumeClientLlmWaitResult } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -520,7 +521,7 @@ export async function finishClientLlmWaitExpiry(
   await deps.traceRecorder.finalize(operationId, {
     completionReason: 'error',
     error: {
-      message: `No LobeHub client picked up the ${provider ?? 'local model'} call in time`,
+      message: `No ${BRANDING_NAME} client picked up the ${provider ?? 'local model'} call in time`,
       type: String(finalState.error?.type ?? 'ClientLlmExecutorUnavailable'),
     },
     state: finalState,

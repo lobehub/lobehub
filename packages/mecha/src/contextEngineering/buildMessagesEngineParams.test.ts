@@ -29,22 +29,27 @@ describe('buildMessagesEngineParams', () => {
     expect(explicit.toolsConfig?.disabledToolIdentifiers).toEqual(['x']);
   });
 
-  it('only sets skills and topic references when there is something to inject', () => {
+  it('only sets skills, topic and document references when there is something to inject', () => {
     const empty = buildMessagesEngineParams({
       ...baseSnapshot(),
-      step: { topicReferences: [] },
+      step: { documentReferences: [], topicReferences: [] },
       tools: { enabledSkills: [] },
     });
     expect(empty).not.toHaveProperty('skillsConfig');
     expect(empty).not.toHaveProperty('topicReferences');
+    expect(empty).not.toHaveProperty('documentReferences');
 
     const filled = buildMessagesEngineParams({
       ...baseSnapshot(),
-      step: { topicReferences: [{ id: 't1' } as any] },
+      step: {
+        documentReferences: [{ documentId: 'd1' }],
+        topicReferences: [{ id: 't1' } as any],
+      },
       tools: { enabledSkills: [{ identifier: 's1' } as any] },
     });
     expect(filled.skillsConfig).toEqual({ enabledSkills: [{ identifier: 's1' }] });
     expect(filled.topicReferences).toEqual([{ id: 't1' }]);
+    expect(filled.documentReferences).toEqual([{ documentId: 'd1' }]);
   });
 
   it('places world and step facts without leaking undefined keys', () => {
@@ -105,5 +110,40 @@ describe('buildMessagesEngineParams', () => {
     // Unresolved device placeholders never leak their literal token.
     expect(generators.hostname()).toBe('unknown');
     expect(generators.defaultShell()).not.toContain('{{');
+  });
+
+  it('renders every date the model sees from the eval session clock', () => {
+    const params = buildMessagesEngineParams({
+      ...baseSnapshot(),
+      tools: {
+        manifests: [
+          {
+            identifier: 'lobe-web-browsing',
+            systemRole: 'Search.\nCurrent date: 2026-10-22',
+          } as any,
+          { identifier: 'other', systemRole: 'No date here' } as any,
+        ],
+      },
+      world: {
+        evalContext: { sessionDate: '2026-07-21', timezone: 'Asia/Shanghai' },
+        userTimezone: 'America/New_York',
+      },
+    });
+
+    expect(params.timezone).toBe('Asia/Shanghai');
+    expect(params.variableGenerators!.date()).toContain('July 21, 2026');
+    expect(params.variableGenerators!.timezone()).toBe('Asia/Shanghai');
+    expect(params.toolsConfig?.manifests?.[0].systemRole).toBe('Search.\nCurrent date: 2026-07-21');
+    expect(params.toolsConfig?.manifests?.[1].systemRole).toBe('No date here');
+  });
+
+  it('renders the eval clock in UTC when the case names no timezone', () => {
+    const params = buildMessagesEngineParams({
+      ...baseSnapshot(),
+      world: { evalContext: { sessionDate: '2026-07-21T23:30:00Z' }, userTimezone: 'Asia/Tokyo' },
+    });
+
+    expect(params.timezone).toBe('UTC');
+    expect(params.variableGenerators!.date()).toContain('July 21, 2026');
   });
 });

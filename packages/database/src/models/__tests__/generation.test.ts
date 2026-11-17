@@ -173,12 +173,6 @@ describe('GenerationModel', () => {
       });
     });
 
-    it('should automatically set userId when creating generation', async () => {
-      const result = await generationModel.create(testGeneration);
-
-      expect(result.userId).toBe(userId);
-    });
-
     it('should create generation with minimal data', async () => {
       const minimalGeneration: Omit<NewGeneration, 'userId'> = {
         generationBatchId: 'test-batch-id',

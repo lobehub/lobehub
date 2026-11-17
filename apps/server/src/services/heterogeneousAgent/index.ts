@@ -27,6 +27,7 @@ import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
+import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
@@ -95,6 +96,20 @@ export interface HeterogeneousFinishParams {
 }
 
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
+
+/**
+ * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
+ * publishes the run's end after clearing the topic's running marker, and an
+ * earlier end lets a client reconnect on that marker and complete the run twice.
+ * A stop stays published because a CLI that exits 0 reports it to heteroFinish
+ * as `success`, so this event is the only signal that the user stopped the run.
+ */
+const isCleanRuntimeEnd = (event: AgentStreamEvent): boolean => {
+  if (event.type !== 'agent_runtime_end') return false;
+
+  const reason = (event.data as { reason?: string } | undefined)?.reason;
+  return !reason || reason === 'success' || reason === 'complete';
+};
 
 /**
  * Older or partially upgraded `lh hetero exec` producers can flatten an
@@ -298,6 +313,10 @@ export class HeterogeneousAgentService {
       );
     }
     for (const event of unpublished) {
+      if (isCleanRuntimeEnd(event)) {
+        this.persistenceHandler.markEventPublished(operationId, event);
+        continue;
+      }
       // Each event already carries operationId; the wire shape matches
       // gateway-driven runs, which also name the step's assistant row on
       // `stream_start` (see `publishData`).
@@ -740,7 +759,13 @@ export class HeterogeneousAgentService {
     // Follow-ups the user queued behind this run start as the next turn here,
     // as they do when a native run ends. The completion above released the
     // topic, which the next turn has to claim. A failed run leaves its queue
-    // to the user.
+    // to the user. Messages typed into the session that it never picked up go
+    // back to the queue first, so they are among them.
+    if (steerScope) {
+      await releaseHeteroSteers(operationId).catch((err) => {
+        log('heteroFinish: returning undelivered steer messages failed: %O', err);
+      });
+    }
     if (result === 'success' && steerScope) await this.startQueuedFollowUp(operationId, steerScope);
   }
 

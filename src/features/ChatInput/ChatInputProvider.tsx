@@ -18,7 +18,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     canRecordVoiceMessage,
     children,
     contextSelectionKey,
-    contextWindowMessages,
+    contextWindow,
     draftKey,
     feature = DEFAULT_CHAT_INPUT_FEATURE,
     leftActions,
@@ -36,6 +36,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     getMessages,
     resolveSendBlocked,
     topicId,
+    uploadContextKey,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -47,7 +48,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
             allowExpand,
             canRecordVoiceMessage,
             contextSelectionKey,
-            contextWindowMessages,
+            contextWindow,
             draftKey,
             editor,
             feature,
@@ -61,6 +62,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
             slashMenuRef,
             slashPlacement,
             topicId,
+            uploadContextKey,
           })
         }
       >
@@ -70,7 +72,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           canRecordVoiceMessage={canRecordVoiceMessage}
           chatInputEditorRef={chatInputEditorRef}
           contextSelectionKey={contextSelectionKey}
-          contextWindowMessages={contextWindowMessages}
+          contextWindow={contextWindow}
           draftKey={draftKey}
           feature={feature}
           getMessages={getMessages}
@@ -83,6 +85,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           sendMenu={sendMenu}
           slashPlacement={slashPlacement}
           topicId={topicId}
+          uploadContextKey={uploadContextKey}
           onMarkdownContentChange={onMarkdownContentChange}
           onSend={onSend}
           onVoiceMessageSend={onVoiceMessageSend}

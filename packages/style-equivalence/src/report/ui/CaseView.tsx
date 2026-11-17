@@ -1,101 +1,83 @@
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import * as stylex from '@stylexjs/stylex';
+import { Button, Flexbox } from '@lobehub/ui';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { type CaseDetail, fetchCase, type RunPayload } from '../api';
-import { conditionColumns } from '../data';
-import { declaredProperties } from '../declared';
-import { CATEGORY_LABELS, flagLabel, shortKey } from '../labels';
+import { type CaseReview, fetchCaseReview, type ReviewState, type RunPayload } from '../api';
 import { hrefOf } from '../route';
-import { CATEGORY_TONES, Chip } from './Chip';
-import { EvidenceChain } from './EvidenceChain';
-import { LiveCompare } from './LiveCompare';
+import { CaseDebug } from './CaseDebug';
+import { Chip, type ChipTone } from './Chip';
+import { InlineState } from './PageState';
+import { ReviewEvidence } from './ReviewEvidence';
+import { ItemHeader, ReworkNote } from './ReviewItemView';
 
-const styles = stylex.create({
-  back: { color: cssVar.colorTextSecondary, fontSize: 12.5 },
-  body: { columnGap: 24, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' },
-  file: { color: cssVar.colorTextTertiary, fontFamily: cssVar.fontFamilyCode, fontSize: 12 },
-  head: {
-    alignItems: 'center',
-    columnGap: 12,
-    display: 'flex',
-    flexWrap: 'wrap',
-    marginBlockEnd: 8,
-    rowGap: 6,
-  },
-  muted: { color: cssVar.colorTextSecondary, fontSize: 13 },
-  title: { fontSize: 17, fontWeight: 600, marginBlock: 0 },
-});
-
-const SIGNOFF_LABELS: Record<string, string> = {
-  missing: '未签收',
-  stale: '签收已失效',
-  valid: '已签收',
+const STATES: Record<ReviewState, { label: string; tone: ChipTone }> = {
+  'changed': { label: '改过了，待重看', tone: 'warn' },
+  'passed': { label: '已通过', tone: 'ok' },
+  'reworked': { label: '已打回', tone: 'bad' },
+  'todo': { label: '待看', tone: 'warn' },
+  'waiting-agent': { label: '等 agent', tone: 'plain' },
 };
 
-export const CaseView = ({ caseKey, payload }: { caseKey: string; payload: RunPayload }) => {
-  const [loaded, setLoaded] = useState<{ detail?: CaseDetail; error?: string; key: string }>();
+const stateChip = ({ item, queued }: CaseReview) =>
+  queued ? STATES[item.state] : { label: '工具已证明，不用人工看', tone: 'ok' as const };
+
+const useCaseReview = (caseKey: string) => {
+  const [loaded, setLoaded] = useState<{ error?: string; key: string; review?: CaseReview }>();
   useEffect(() => {
     let current = true;
-    fetchCase(caseKey)
-      .then((detail) => current && setLoaded({ detail, key: caseKey }))
+    fetchCaseReview(caseKey)
+      .then((review) => current && setLoaded({ key: caseKey, review }))
       .catch((reason: unknown) => current && setLoaded({ error: String(reason), key: caseKey }));
     return () => {
       current = false;
     };
   }, [caseKey]);
-  const detail = loaded?.key === caseKey ? loaded.detail : undefined;
-  const error = loaded?.key === caseKey ? loaded.error : undefined;
-  if (error) return <div {...stylex.props(styles.muted)}>读取用例失败：{error}</div>;
-  if (!detail) return <div {...stylex.props(styles.muted)}>正在读取用例…</div>;
-  const columns = conditionColumns(payload.run.conditions ?? []);
-  const record = detail.case;
-  const file = record?.plan.file ?? detail.item?.file ?? '';
-  const category = record?.category ?? detail.item?.category ?? 'unpaired';
-  const target = detail.evidence?.elements.head?.at(-1) ?? detail.evidence?.elements.base?.at(-1);
-  const declared = declaredProperties([
-    ...Object.values(detail.evidence?.declarations.base ?? {}),
-    ...Object.values(detail.evidence?.declarations.head ?? {}),
-  ]);
+  return loaded?.key === caseKey ? loaded : undefined;
+};
+
+export const CaseView = ({ caseKey, payload }: { caseKey: string; payload: RunPayload }) => {
+  const loaded = useCaseReview(caseKey);
+  const review = loaded?.review;
+  const file = review?.item.file ?? caseKey.slice(0, caseKey.indexOf('|'));
+  const state = review && stateChip(review);
   return (
-    <section>
-      <a href={hrefOf({ file, kind: 'file' })} {...stylex.props(styles.back)}>
-        ← {file}
-      </a>
-      <div {...stylex.props(styles.head)}>
-        <h1 {...stylex.props(styles.title)}>
-          {shortKey(caseKey)}
-          {target ? ` · ${target.tag}` : ''}
-        </h1>
-        <Chip tone={CATEGORY_TONES[category] ?? 'plain'}>
-          {CATEGORY_LABELS[category] ?? category}
-        </Chip>
-        {detail.item && SIGNOFF_LABELS[detail.item.signoff] && (
-          <Chip tone={detail.item.signoff === 'valid' ? 'ok' : 'plain'}>
-            {SIGNOFF_LABELS[detail.item.signoff]}
-          </Chip>
-        )}
-        <span {...stylex.props(styles.file)}>{file}</span>
-      </div>
-      <div {...stylex.props(styles.body)}>
-        <EvidenceChain columns={columns} detail={detail} />
-        {record ? (
-          <LiveCompare
-            base={payload.run.base}
-            caseKey={caseKey}
-            columns={columns}
-            combos={record.plan.combos.length}
-            declared={declared}
-            head={payload.run.head}
+    <Flexbox gap={24} style={{ maxWidth: 1440 }}>
+      <Flexbox gap={12}>
+        <Flexbox horizontal>
+          <Button href={hrefOf({ file, kind: 'file' })} icon={ArrowLeft} size="small" type="text">
+            {file}
+          </Button>
+        </Flexbox>
+        {!review && (
+          <InlineState
+            error={loaded?.error && `读取用例失败：${loaded.error}`}
+            loading="正在读取用例…"
           />
-        ) : (
-          <div {...stylex.props(styles.muted)}>
-            {category === 'unpaired'
-              ? '这个元素两侧配不上，没有可以对照的渲染。到签收页逐条确认。'
-              : `这个文件有合成环境比较不了的样式用法：${(detail.item?.flags ?? []).map(flagLabel).join('、')}。到签收页确认。`}
-          </div>
         )}
-      </div>
-    </section>
+        {review && state && (
+          <ItemHeader
+            extra={<Chip tone={state.tone}>{state.label}</Chip>}
+            item={review.item}
+            action={
+              review.queued && (
+                <Button
+                  href={hrefOf({ key: caseKey, kind: 'review' })}
+                  icon={ArrowRight}
+                  iconPosition="end"
+                  size="small"
+                >
+                  在复查里打开
+                </Button>
+              )
+            }
+          />
+        )}
+        {review?.item.rework && <ReworkNote note={review.item.rework.note} />}
+      </Flexbox>
+      {review && (
+        <ReviewEvidence conditions={review.conditions} item={review.item} notes="written" />
+      )}
+      <CaseDebug caseKey={caseKey} payload={payload} />
+    </Flexbox>
   );
 };

@@ -29,6 +29,17 @@ export interface KnowledgeBaseItem {
   visibility?: 'private' | 'public';
 }
 
+/** An agent's dedicated knowledge base, identified to the user by its agent. */
+export interface AgentKnowledgeSpaceItem {
+  agentId: string;
+  avatar: string | null;
+  backgroundColor: string | null;
+  description: string | null;
+  /** The knowledge base id. */
+  id: string;
+  title: string | null;
+}
+
 export interface CreateKnowledgeBaseParams {
   avatar?: string;
   /** Cover image: a preset key (`preset:<id>`) or an uploaded image URL. */

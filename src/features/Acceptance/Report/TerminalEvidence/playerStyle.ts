@@ -1,6 +1,8 @@
-import './player.css';
-
-import { cx } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- xterm renders its own DOM without slots
+  createStaticStyles,
+  cx,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
@@ -62,8 +64,16 @@ const definitions = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css }) => ({
+  screen: css`
+    .xterm {
+      width: max-content;
+    }
+  `,
+}));
+
 export const styles = {
-  screen: cx(stylex.props(definitions.screen).className ?? '', 'lobe-player-15569863-screen'),
+  screen: cx(stylex.props(definitions.screen).className ?? '', fallback.screen),
   clock: stylex.props(definitions.clock).className ?? '',
   rate: stylex.props(definitions.rate).className ?? '',
   rateActive: stylex.props(definitions.rateActive).className ?? '',

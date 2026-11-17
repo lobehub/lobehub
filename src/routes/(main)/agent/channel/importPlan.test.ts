@@ -44,6 +44,30 @@ describe('planChannelImport', () => {
   });
 });
 
+describe('planChannelImport status reactions', () => {
+  it('restores a bot exported before reactionMode existed with its legacy reactions on', () => {
+    const [step] = planChannelImport([
+      { applicationId: 'app-1', platform: 'discord', settings: { charLimit: 2000 } },
+    ]);
+
+    expect(step.settings).toEqual({ charLimit: 2000, reactionMode: 'minimal' });
+  });
+
+  it('restores an entry without settings the same way', () => {
+    const [step] = planChannelImport([{ applicationId: 'app-1', platform: 'discord' }]);
+
+    expect(step.settings.reactionMode).toBe('minimal');
+  });
+
+  it('keeps the mode an export carries, reactions off included', () => {
+    const [step] = planChannelImport([
+      { applicationId: 'app-1', platform: 'discord', settings: { reactionMode: 'none' } },
+    ]);
+
+    expect(step.settings.reactionMode).toBe('none');
+  });
+});
+
 describe('isImportableChannel', () => {
   it.each([
     [{ applicationId: 'a', platform: 'discord' }, true],

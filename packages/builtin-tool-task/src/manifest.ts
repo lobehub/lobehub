@@ -30,6 +30,12 @@ export const TaskManifest: BuiltinToolManifest = {
               "Optional workspace member (user ID) to set as the task's human owner. Coexists with assigneeAgentId — the agent executes the task, the member owns the outcome. Resolve the ID with listWorkspaceMembers first; never guess it.",
             type: 'string',
           },
+          labels: {
+            description:
+              'Optional existing task label names to attach (e.g. ["Bug", "Frontend"]; a grouped label may be written "Type/Bug"). Only use labels that already exist — unknown names fail with suggestions and nothing is created. A task carries at most one label per label group.',
+            items: { type: 'string' },
+            type: 'array',
+          },
           model: {
             description:
               'Optional model ID this task runs with (e.g. "deepseek-chat"), instead of the assignee agent\'s default. Only set it when the user asks for a specific model. Omit to pin the assignee agent\'s current model.',
@@ -92,6 +98,12 @@ export const TaskManifest: BuiltinToolManifest = {
                     "Optional workspace member (user ID) to set as the task's human owner (coexists with assigneeAgentId). Resolve the ID with listWorkspaceMembers first.",
                   type: 'string',
                 },
+                labels: {
+                  description:
+                    'Optional existing task label names to attach (same rules as createTask.labels).',
+                  items: { type: 'string' },
+                  type: 'array',
+                },
                 model: {
                   description:
                     'Optional model ID this task runs with (e.g. "deepseek-chat"), instead of the assignee agent\'s default. Only set it when the user asks for a specific model. Omit to pin the assignee agent\'s current model.',
@@ -146,6 +158,12 @@ export const TaskManifest: BuiltinToolManifest = {
             description:
               'Restrict to tasks assigned to this agent. When omitted, no assignee filter is applied unless listTasks is called without any filters in an agent conversation, which defaults to the current agent.',
             type: 'string',
+          },
+          labels: {
+            description:
+              'Only tasks carrying any of these existing label names. A label group name (e.g. "Type") matches any label in that group.',
+            items: { type: 'string' },
+            type: 'array',
           },
           limit: { description: `Max 1-100. Default ${DEFAULT_LIST_TASK_LIMIT}.`, type: 'number' },
           offset: { description: 'Pagination offset.', type: 'number' },
@@ -267,13 +285,19 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Edit a task's fields (name, description, instruction, priority, model/provider), assignee (agent or workspace member), parent, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
+        "Edit a task's fields (name, description, instruction, priority, model/provider), assignee (agent or workspace member), parent, labels, or dependencies (batched). Status changes go through updateTaskStatus; schedule configuration goes through setTaskSchedule.",
       name: TaskApiName.editTask,
       parameters: {
         properties: {
           addDependencies: {
             description:
               'Identifiers of tasks this task should block on (e.g. ["T-2", "T-3"]). Accepts identifiers or ids returned by previous results; prefer stable ids.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          addLabels: {
+            description:
+              'Existing task label names to add (e.g. ["Bug"]; "Type/Bug" also works). Adding a label from a label group replaces the task\'s current label of that group. Unknown names fail with suggestions; labels are never created.',
             items: { type: 'string' },
             type: 'array',
           },
@@ -327,6 +351,11 @@ export const TaskManifest: BuiltinToolManifest = {
           removeDependencies: {
             description:
               'Identifiers of existing dependencies to remove. Accepts identifiers or ids returned by previous results; prefer stable ids.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          removeLabels: {
+            description: 'Task label names to remove from the task.',
             items: { type: 'string' },
             type: 'array',
           },
@@ -527,7 +556,7 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Permanently delete a task by identifier. Subtasks are NOT cascaded — they become top-level tasks after deletion. Dependencies, topics, pinned documents, comments, and briefs attached to the task are cascade-deleted. This action is irreversible.',
+        'Delete a task by identifier. The task moves to the recycle bin together with its topics, and the user can restore it within 30 days; it is removed for good when the bin is emptied or the retention window ends. Subtasks are NOT cascaded — they stay in the list. A dependency on the deleted task stops blocking its dependents.',
       name: TaskApiName.deleteTask,
       parameters: {
         properties: {

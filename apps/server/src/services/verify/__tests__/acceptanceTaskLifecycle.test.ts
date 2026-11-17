@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { isClosedByRetirement } from '@lobechat/utils/verify/acceptanceStatus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcceptanceService } from '../acceptanceService';
@@ -14,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   findPolicyById: vi.fn(),
   findReportByRun: vi.fn(),
   goalFindByGraphTask: vi.fn(),
+  goalLockById: vi.fn(),
+  isRetiredGoalTask: vi.fn(),
+  settleTaskPolicyStatus: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
   taskFindById: vi.fn(),
@@ -30,6 +34,7 @@ vi.mock('@/database/models/acceptance', () => ({
     return {
       findById: mocks.findById,
       findPolicyById: mocks.findPolicyById,
+      settleTaskPolicyStatus: mocks.settleTaskPolicyStatus,
       updatePolicyStatus: mocks.updatePolicyStatus,
       updateStatus: mocks.updateStatus,
     };
@@ -59,7 +64,7 @@ vi.mock('@/database/models/task', () => ({
 }));
 vi.mock('@/database/models/goal', () => ({
   GoalModel: vi.fn(function () {
-    return { findByGraphTask: mocks.goalFindByGraphTask };
+    return { findByGraphTask: mocks.goalFindByGraphTask, lockById: mocks.goalLockById };
   }),
 }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: vi.fn() }));
@@ -73,7 +78,9 @@ vi.mock('@/server/workflows/expertiseRejection', () => ({
   ExpertiseRejectionWorkflow: { trigger: mocks.distilRejections },
 }));
 
-const service = () => new AcceptanceService({} as any, 'user-1');
+// A goal-guarded reject runs in a transaction; the mocked models ignore the handle.
+const db = { transaction: (run: (tx: unknown) => unknown) => run(db) };
+const service = () => new AcceptanceService(db as any, 'user-1');
 
 const taskAcceptance = (status: string) => ({
   id: 'acc-1',
@@ -87,6 +94,20 @@ describe('AcceptanceService task lifecycle', () => {
     vi.clearAllMocks();
     mocks.findPolicyById.mockImplementation((...args: unknown[]) => mocks.findById(...args));
     mocks.goalFindByGraphTask.mockResolvedValue(undefined);
+    mocks.goalLockById.mockImplementation(async (id: string) => ({ archivedAt: null, id }));
+    mocks.isRetiredGoalTask.mockResolvedValue(false);
+    // Mirrors AcceptanceModel.settleTaskPolicyStatus: closes a settled status on
+    // a retired goal node, keeps a user's terminal decision, writes on change.
+    mocks.settleTaskPolicyStatus.mockImplementation(async (id: string, status: string) => {
+      const row = await mocks.findById(id);
+      if (row?.status === 'accepted' || row?.status === 'closed') return row.status;
+      const next =
+        isClosedByRetirement(status) && (await mocks.isRetiredGoalTask(row?.subjectId))
+          ? 'closed'
+          : status;
+      if (next !== row?.status) await mocks.updatePolicyStatus(id, next);
+      return next;
+    });
     mocks.taskResolve.mockResolvedValue({ automationMode: null, id: 'task_1', status: 'running' });
     // The row read back after the completion write.
     mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });
@@ -225,6 +246,47 @@ describe('AcceptanceService task lifecycle', () => {
       await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
       expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'delivered');
     });
+
+    describe('a round that settles after its goal node was retired', () => {
+      // Retirement closes only what is already waiting; a round still verifying
+      // lands later and must not reopen a sign-off for work the Goal dropped.
+      beforeEach(() => {
+        mocks.isRetiredGoalTask.mockResolvedValue(true);
+      });
+
+      it.each([
+        ['delivered', 'failed'],
+        ['delivered', 'delivered'],
+        ['errored', 'errored'],
+      ])('closes instead of %s (round %s) and leaves the task alone', async (_, roundStatus) => {
+        mocks.listByAcceptance.mockResolvedValue([
+          { id: 'run-1', roundIndex: 1, status: roundStatus },
+        ]);
+
+        await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
+        expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'closed');
+        expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
+      });
+
+      it('closes a round that comes back only planned', async () => {
+        mocks.listByAcceptance.mockResolvedValue([
+          { id: 'run-1', roundIndex: 1, status: 'planned' },
+        ]);
+
+        await expect(service().recomputeStatus('acc-1')).resolves.toBe('closed');
+        expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'closed');
+      });
+
+      it('keeps a round still verifying open', async () => {
+        mocks.listByAcceptance.mockResolvedValue([
+          { id: 'run-1', roundIndex: 1, status: 'verifying' },
+        ]);
+        stored.status = 'planned';
+
+        await expect(service().recomputeStatus('acc-1')).resolves.toBe('verifying');
+        expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'verifying');
+      });
+    });
   });
 
   describe('a reject racing the completion', () => {
@@ -344,6 +406,18 @@ describe('AcceptanceService task lifecycle', () => {
         id: 'task_1',
         status: 'completed',
       });
+    });
+
+    it('refuses a Task of a goal found archived under its lock, recording nothing', async () => {
+      mocks.goalFindByGraphTask.mockResolvedValue({ archivedAt: null, id: 'goal-1' });
+      mocks.goalLockById.mockResolvedValue({ archivedAt: new Date(), id: 'goal-1' });
+
+      await expect(service().reject('acc-1', 'Fix the header')).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+      });
+      expect(mocks.setDecision).not.toHaveBeenCalled();
+      expect(mocks.updateStatus).not.toHaveBeenCalled();
+      expect(mocks.taskUpdateStatusIfCurrent).not.toHaveBeenCalled();
     });
 
     it('moves the completed task back to paused', async () => {

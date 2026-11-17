@@ -13,6 +13,8 @@ export {
   CODEBUDDY_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_COMMANDS,
   CODEX_CLI_INSTALL_DOCS_URL,
+  COPILOT_CLI_INSTALL_COMMANDS,
+  COPILOT_CLI_INSTALL_DOCS_URL,
   CURSOR_CLI_INSTALL_COMMANDS,
   CURSOR_CLI_INSTALL_DOCS_URL,
   DROID_CLI_INSTALL_COMMANDS,
@@ -128,6 +130,7 @@ export interface HeterogeneousAgentRuntimeStatus {
     | 'claude-sdk'
     | 'cli-spawn'
     | 'codex-app-server'
+    | 'copilot-acp'
     | 'cursor-acp'
     | 'droid-acp'
     | 'dsh-jsonrpc'

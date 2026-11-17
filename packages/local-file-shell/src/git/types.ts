@@ -183,6 +183,13 @@ export interface GitWorktreeListItem {
 export interface GitAheadBehind {
   ahead: number;
   behind: number;
+  /**
+   * The branch the counts describe, echoed back when the caller asked about a
+   * named branch rather than HEAD. A device that predates the parameter ignores
+   * it and counts HEAD instead, so callers must treat a missing or different
+   * echo as "this device cannot answer for that branch".
+   */
+  branch?: string;
   hasUpstream: boolean;
   pushTarget?: string;
   pushTargetExists?: boolean;
@@ -314,6 +321,12 @@ export interface GitBranchDiffPatches {
 
 export interface GitCheckoutResult {
   error?: string;
+  /**
+   * The start point the new branch was actually cut from, echoed back only when
+   * the caller passed one. A device that predates `startPoint` silently forks
+   * from HEAD and echoes nothing — callers verify this before trusting the result.
+   */
+  startPoint?: string;
   success: boolean;
 }
 
@@ -339,19 +352,37 @@ export interface GitRemoveWorktreeResult {
 
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the start point the worktree's branch was cut from; see {@link GitCheckoutResult.startPoint}. */
+  startPoint?: string;
   success: boolean;
   /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
   worktreePath?: string;
 }
 
+/**
+ * Why a pull / push of a named branch was refused before git ran, so the UI can
+ * say it in the user's language instead of relaying git's stderr.
+ * - `checkedOutElsewhere`: another worktree has the branch checked out, and git
+ *   refuses to fast-forward a ref under a working tree it does not own.
+ * - `noUpstream`: the branch tracks nothing, so there is nothing to pull from.
+ */
+export type GitSyncRefusal = 'checkedOutElsewhere' | 'noUpstream';
+
 export interface GitPullResult {
+  /** Echo of the named branch that was pulled; absent for a HEAD pull. */
+  branch?: string;
   error?: string;
   /** True when `git pull` reported the branch was already up-to-date */
   noop?: boolean;
+  reason?: GitSyncRefusal;
   success: boolean;
+  /** The worktree holding the branch, for `reason: 'checkedOutElsewhere'`. */
+  worktreePath?: string;
 }
 
 export interface GitPushResult {
+  /** Echo of the named branch that was pushed; absent for a HEAD push. */
+  branch?: string;
   error?: string;
   /** True when `git push` reported everything is already up-to-date */
   noop?: boolean;

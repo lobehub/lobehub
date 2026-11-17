@@ -4,6 +4,16 @@ import { createMockResponse } from '../../test-utils';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
 import { firecrawl } from '../firecrawl';
 
+const pageMetadata = () => ({
+  title: 'Test',
+  description: 'Test',
+  sourceURL: 'https://example.com',
+  statusCode: 200,
+  language: 'en',
+  keywords: 'test',
+  robots: 'index',
+});
+
 // Mock dependencies
 vi.mock('../../utils/withTimeout', () => ({
   DEFAULT_TIMEOUT: 30000,
@@ -62,15 +72,7 @@ describe('firecrawl crawler', () => {
       success: true,
       data: {
         markdown: 'Test content with sufficient length. '.repeat(5),
-        metadata: {
-          title: 'Test',
-          description: 'Test',
-          sourceURL: 'https://example.com',
-          statusCode: 200,
-          language: 'en',
-          keywords: 'test',
-          robots: 'index',
-        },
+        metadata: pageMetadata(),
       },
     });
 
@@ -89,15 +91,7 @@ describe('firecrawl crawler', () => {
       success: true,
       data: {
         markdown: 'Short', // Content too short
-        metadata: {
-          title: 'Test',
-          description: 'Test',
-          sourceURL: 'https://example.com',
-          statusCode: 200,
-          language: 'en',
-          keywords: 'test',
-          robots: 'index',
-        },
+        metadata: pageMetadata(),
       },
     });
 
@@ -116,15 +110,7 @@ describe('firecrawl crawler', () => {
       success: true,
       data: {
         // markdown is missing
-        metadata: {
-          title: 'Test',
-          description: 'Test',
-          sourceURL: 'https://example.com',
-          statusCode: 200,
-          language: 'en',
-          keywords: 'test',
-          robots: 'index',
-        },
+        metadata: pageMetadata(),
       },
     });
 

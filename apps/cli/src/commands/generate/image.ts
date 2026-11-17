@@ -44,8 +44,12 @@ export function registerImageCommand(parent: Command) {
   parent
     .command('image <prompt>')
     .description('Generate an image from text')
-    .option('-m, --model <model>', 'Model ID', 'dall-e-3')
-    .option('-p, --provider <provider>', 'Provider name', 'openai')
+    // No client-side defaults: the server picks the same default image model as the web image page.
+    .option('-m, --model <model>', 'Model ID (default: same default model as the web image page)')
+    .option(
+      '-p, --provider <provider>',
+      'Provider name (default: first enabled provider serving the model)',
+    )
     .option('-n, --num <n>', 'Number of images', '1')
     .option(
       '--param <key=value>',
@@ -64,10 +68,10 @@ export function registerImageCommand(parent: Command) {
         options: {
           height?: string;
           json?: boolean;
-          model: string;
+          model?: string;
           num: string;
           param: string[];
-          provider: string;
+          provider?: string;
           seed?: string;
           steps?: string;
           width?: string;
@@ -117,6 +121,9 @@ export function registerImageCommand(parent: Command) {
 
         const data = r.data || r;
         console.log(`${pc.green('✓')} Image generation started`);
+        if (data.batch?.provider && data.batch?.model) {
+          console.log(`  Model: ${pc.bold(`${data.batch.provider}/${data.batch.model}`)}`);
+        }
         if (data.batch?.id) console.log(`  Batch ID: ${pc.bold(data.batch.id)}`);
 
         const generations = data.generations || [];

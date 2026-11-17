@@ -1,4 +1,4 @@
-import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import { createStaticStyles } from '@lobehub/ui';
@@ -46,7 +46,7 @@ export const AgentSearchList = memo<AgentSearchListProps>(({ dataSource }) => {
         >
           <ListItem
             agentId={item.id}
-            avatar={item.avatar || DEFAULT_AVATAR}
+            avatar={item.avatar || ''}
             avatarBackground={item.backgroundColor || undefined}
             title={title}
             type={item.type}

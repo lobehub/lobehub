@@ -1,6 +1,6 @@
 'use client';
 
-import type { QuotaAccountIdentity } from '@lobechat/heterogeneous-agents/quota';
+import { displayPlanTier, type QuotaAccountIdentity } from '@lobechat/heterogeneous-agents/quota';
 import { ActionIcon, Button, Flexbox, Text, usePopoverContext } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -69,7 +69,7 @@ const QuotaAccountSwitcher = memo<{
         </Text>
         {identity?.planTier && (
           <Text style={{ flex: 'none', fontSize: 12 }} type={'secondary'}>
-            {identity.planTier}
+            {displayPlanTier(identity)}
           </Text>
         )}
         <ActionIcon

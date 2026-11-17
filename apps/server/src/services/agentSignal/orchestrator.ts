@@ -10,6 +10,7 @@ import type {
 import type { AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import { createSourceEvent } from '@lobechat/agent-signal/source';
 
+import type { WakeDecision } from '@/server/services/conversationWake/types';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
 
 import { acquireAgentSignalDailyBudget } from './budget';
@@ -25,7 +26,7 @@ import { createDefaultAgentSignalPolicies } from './policies';
 import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
-import type { AgentSignalScenarioId, WakeDecision } from './scenarios';
+import type { AgentSignalScenarioId } from './scenarios';
 import { AGENT_SIGNAL_SCENARIO_IDS, createScenarioPolicies } from './scenarios';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
 import { createSelfIterationCompletionHandler } from './services/selfIteration/completion';

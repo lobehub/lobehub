@@ -1,5 +1,6 @@
 import { AcceptanceEvidenceManifest } from '@lobechat/builtin-tool-acceptance-evidence';
 import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
+import { AgentAccountManifest } from '@lobechat/builtin-tool-agent-account';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import {
   AgentDocumentsManifest,
@@ -36,6 +37,7 @@ import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -177,7 +179,12 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  McpEventsManifest.identifier,
   AttachmentsManifest.identifier,
+  // Enabled by a runtime rule (`hasIdentityAccount`) rather than by user
+  // selection: the identity/inbox state reaches the model as context, so this
+  // tool only exists for an agent that actually owns an account.
+  AgentAccountManifest.identifier,
   BrowserManifest.identifier,
   CloudSandboxManifest.identifier,
   KnowledgeBaseManifest.identifier,
@@ -436,6 +443,20 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CredsManifest.identifier,
     manifest: CredsManifest,
+    type: 'builtin',
+  },
+  {
+    // Runtime-managed: enabled only when the agent owns an account, so it is
+    // not a user-facing row and not an always-on tool.
+    hidden: true,
+    identifier: AgentAccountManifest.identifier,
+    manifest: AgentAccountManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: McpEventsManifest.identifier,
+    manifest: McpEventsManifest,
     type: 'builtin',
   },
   {

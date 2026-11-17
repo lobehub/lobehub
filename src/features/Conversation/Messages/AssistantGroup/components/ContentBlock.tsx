@@ -52,7 +52,7 @@ const ContentBlock = memo<ContentBlockProps>(
     );
     /** The persisted reason may arrive after the grouped projection without changing its props. */
     const persistedFinishType = useConversationStore(
-      (s) => s.dbMessages.find((message) => message.id === id)?.metadata?.finishType,
+      (s) => dataSelectors.getDbMessageById(id)(s)?.metadata?.finishType,
     );
     const finishType = metadata?.finishType ?? persistedFinishType;
     // The call that launched the finished task can sit in an earlier step or

@@ -40,7 +40,7 @@ vi.mock('@/services/topic', () => ({
 }));
 
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections: vi.fn() }),
+  getFileStoreState: () => ({ moveChatComposerAttachments: vi.fn() }),
 }));
 
 /** The deployment capability the transport requires. */

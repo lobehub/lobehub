@@ -7,6 +7,7 @@ import {
   type ChatInputProps as EditorChatInputProps,
 } from '@lobehub/editor/react';
 import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
+import i18next from 'i18next';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -16,6 +17,12 @@ import {
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import {
+  needsSendTimeGit,
+  prepareComposerGitSend,
+  snapshotDraftGit,
+} from '@/features/ChatInput/ControlBar/DraftGit';
+import { resolveComposerHandoff } from '@/features/ChatInput/ControlBar/DraftGit/composerHandoff';
 import {
   type SendButtonHandler,
   type SendButtonProps,
@@ -49,11 +56,7 @@ import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
 import { useRestoreServerQueue } from './useRestoreServerQueue';
-import {
-  getContextWindowMessages,
-  getConversationSendButtonProps,
-  toChatInputMessages,
-} from './utils';
+import { getContextWindow, getConversationSendButtonProps, toChatInputMessages } from './utils';
 import {
   canSendVoiceMessage,
   isVoiceMessageTranscribed,
@@ -232,9 +235,9 @@ const ChatInput = memo<ChatInputProps>(
       chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
     ]);
     const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
-    const contextWindowMessages = useMemo(
+    const contextWindow = useMemo(
       () =>
-        getContextWindowMessages(dbMessages, {
+        getContextWindow(dbMessages, {
           enableHistoryCount,
           historyCount,
         }),
@@ -278,9 +281,9 @@ const ChatInput = memo<ChatInputProps>(
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
     // File store - for UI state only (disabled button, etc.)
-    const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
+    const fileList = useFileStore(fileChatSelectors.chatUploadFileList(contextKey));
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
-    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
+    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles(contextKey));
 
     // Queue state
     const hasQueuedMessages = useChatStore(
@@ -317,11 +320,12 @@ const ChatInput = memo<ChatInputProps>(
     const resolveSendBlocked = useCallback(() => {
       if (disableSend) return true;
 
+      const { context: liveContext, editor } = storeApi.getState();
+      const liveContextKey = messageMapKey(liveContext);
       const fileStore = useFileStore.getState();
-      if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+      if (fileChatSelectors.isUploadingFiles(liveContextKey)(fileStore)) return true;
       if (customDisabled !== undefined) return customDisabled;
 
-      const { context: liveContext, editor } = storeApi.getState();
       if (
         disableQueue &&
         operationSelectors.isInputLoadingByContext(liveContext)(useChatStore.getState())
@@ -329,9 +333,9 @@ const ChatInput = memo<ChatInputProps>(
         return true;
 
       const hasText = String(editor?.getMarkdownContent?.() || '').trim().length > 0;
-      const hasFiles = fileChatSelectors.chatUploadFileList(fileStore).length > 0;
+      const hasFiles = fileChatSelectors.chatUploadFileList(liveContextKey)(fileStore).length > 0;
       const hasContextSelections =
-        fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
+        fileChatSelectors.chatContextSelections(liveContextKey)(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
     }, [customDisabled, disableQueue, disableSend, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
@@ -347,8 +351,8 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
-        const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
-        const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
+        const currentFileList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
+        const currentIsUploading = fileChatSelectors.isUploadingFiles(contextKey)(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
@@ -382,7 +386,7 @@ const ChatInput = memo<ChatInputProps>(
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList();
+          fileStore.clearChatUploadFileList(contextKey);
           fileStore.clearChatContextSelections(contextKey);
         };
 
@@ -395,13 +399,33 @@ const ChatInput = memo<ChatInputProps>(
         // the request failed) leaves no message row to recover the text from, so
         // an up-front clear would simply lose it.
         if (storeApi.getState().scheduledSendAt) {
+          // The scheduled run is created server-side later and cannot switch
+          // the picked branch or fork a worktree: refuse rather than drop them.
+          if (needsSendTimeGit(snapshotDraftGit(sendContext, editorData))) {
+            toast.error(i18next.t('workingDirectory.scheduleGitUnsupported', { ns: 'device' }));
+            return;
+          }
           const scheduled = await storeApi.getState().commitScheduledSend(message, currentFileList);
           if (scheduled) clearComposer();
           return;
         }
 
-        // Clear content immediately for responsive UX
-        clearComposer();
+        // A new topic's first send acts on the branch picked in the composer
+        // (switch, or fork a worktree) before any message exists. Cancelled or
+        // failed, nothing is sent and the draft stays.
+        const gitPrep = await prepareComposerGitSend(sendContext, { editorData });
+        if (!gitPrep.ok) return;
+
+        // Clear content immediately for responsive UX — unless a git step ran
+        // and the composer changed hands meanwhile (see `resolveComposerHandoff`).
+        const handoff = resolveComposerHandoff({
+          acted: !!gitPrep.acted,
+          editorUnchanged: getMarkdownContent() === message,
+          stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
+        });
+        if (handoff.clearEditor) clearContent();
+        fileStore.clearChatUploadFileList(contextKey);
+        fileStore.clearChatContextSelections(contextKey);
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
@@ -412,13 +436,17 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
+          ...(gitPrep.newTopicWorkingDirectory
+            ? { newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory }
+            : {}),
+          ...(handoff.sendToOrigin ? { conversationContext: sendContext } : {}),
           onPreflightFailure: () => {
             const store = useFileStore.getState();
             // The composer was cleared up front; a send rejected before any
             // message owned the content must hand every part of it back —
             // uploads and context selections, not just the editor text the
             // lifecycle restores on its own.
-            store.restoreChatUploadFileList(currentFileList);
+            store.restoreChatUploadFileList(contextKey, currentFileList);
             store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
@@ -444,6 +472,11 @@ const ChatInput = memo<ChatInputProps>(
           return false;
         }
 
+        // Read the branch pick and worktree switch now: the send runs after
+        // upload and transcription, by when the composer may show another
+        // conversation.
+        const gitSnapshot = snapshotDraftGit(context) ?? null;
+
         return Boolean(
           useChatStore.getState().sendVoiceMessage({
             canSend: canSendVoiceMessage,
@@ -453,6 +486,9 @@ const ChatInput = memo<ChatInputProps>(
               sendVoiceMessage(sendMessage, file, {
                 context: targetContext,
                 optimisticUserMessageId: messageId,
+                // The same send-time git step as a typed first message.
+                prepare: () =>
+                  prepareComposerGitSend(targetContext ?? context, { snapshot: gitSnapshot }),
                 signal,
                 ...(isVoiceMessageTranscribed(targetContext)
                   ? {
@@ -527,7 +563,7 @@ const ChatInput = memo<ChatInputProps>(
         allowExpand={allowExpand}
         canRecordVoiceMessage={canRecordVoiceMessage}
         contextSelectionKey={contextKey}
-        contextWindowMessages={contextWindowMessages}
+        contextWindow={contextWindow}
         draftKey={contextKey}
         feature={feature}
         getMessages={getMessages}

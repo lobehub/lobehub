@@ -12,6 +12,7 @@ import {
 } from '@/types/files';
 
 interface CreateFileParams extends Omit<UploadFileParams, 'url'> {
+  conversationAgentId?: string;
   knowledgeBaseId?: string;
   parentId?: string;
   url: string;
@@ -23,6 +24,8 @@ export class FileService {
 
   createFile = async (
     params: UploadFileParams & {
+      /** Agent whose conversation this upload is attached to; the server resolves its visibility. */
+      conversationAgentId?: string;
       parentId?: string;
       /**
        * Workspace visibility for the new file. `undefined` lets the server

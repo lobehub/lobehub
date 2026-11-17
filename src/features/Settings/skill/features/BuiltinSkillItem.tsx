@@ -10,6 +10,7 @@ import {
   Icon,
   stopPropagation,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
+import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -67,13 +69,13 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
     const renderStatus = () => {
       if (isInstalled) {
         return (
-          <span className={styles.connected}>
+          <span {...stylex.props(styles.connected)}>
             {t('tools.builtins.installed', { ns: 'setting' })}
           </span>
         );
       }
       return (
-        <span className={styles.disconnected}>
+        <span {...stylex.props(styles.disconnected)}>
           {t('tools.builtins.uninstalled', { ns: 'setting' })}
         </span>
       );
@@ -95,7 +97,11 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
               },
             ]}
           >
-            <Button disabled={!canEdit} icon={MoreHorizontalIcon} />
+            <Button
+              aria-label={t('connectorMarket.action.manage')}
+              disabled={!canEdit}
+              icon={MoreHorizontalIcon}
+            />
           </DropdownMenu>
         );
       }
@@ -107,11 +113,35 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
       );
     };
 
+    // Page row: `+` installs in place; once installed it becomes the manage menu.
+    const renderPageExtra = () =>
+      isInstalled ? (
+        <RowMoreMenu
+          items={[
+            {
+              danger: true,
+              disabled: !canEdit,
+              icon: <Icon icon={Trash2} />,
+              key: 'uninstall',
+              label: t('store.actions.uninstall', { ns: 'plugin' }),
+              onClick: handleUninstall,
+            },
+          ]}
+          onOpenDetail={onSelect}
+        />
+      ) : (
+        <RowAddAction
+          disabled={!canCreate}
+          label={t('connectorMarket.action.install')}
+          onClick={handleInstall}
+        />
+      );
+
     if (onSelect) {
       return (
         <SkillListRow
           active={isSelected}
-          extra={isPage && !isInstalled ? renderStatus() : undefined}
+          extra={isPage ? renderPageExtra() : undefined}
           icon={() => <Avatar avatar={avatar} size={isPage ? 20 : 18} />}
           title={title}
           titleColor={!isInstalled ? cssVar.colorTextDescription : undefined}
@@ -128,7 +158,7 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={8}
         justify="space-between"
         style={{
@@ -145,10 +175,10 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
             style={{ cursor: onSelect ? undefined : 'pointer' }}
             onClick={onSelect ? undefined : () => createBuiltinSkillDetailModal({ identifier })}
           >
-            <div className={`${styles.icon} ${!isInstalled ? styles.disconnectedIcon : ''}`}>
+            <div {...stylex.props(styles.icon, !isInstalled && styles.disconnectedIcon)}>
               <Avatar avatar={avatar} size={16} />
             </div>
-            <span className={`${styles.title} ${!isInstalled ? styles.disconnectedTitle : ''}`}>
+            <span {...stylex.props(styles.title, !isInstalled && styles.disconnectedTitle)}>
               {title}
             </span>
           </Flexbox>

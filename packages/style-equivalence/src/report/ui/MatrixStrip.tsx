@@ -20,7 +20,7 @@ const tones = stylex.create({
   'difference': { backgroundColor: cssVar.colorError },
   'equal': { backgroundColor: cssVar.colorSuccess, opacity: 0.85 },
   'flagged-difference': { backgroundColor: cssVar.colorWarning },
-  'unknown': { backgroundColor: cssVar.colorBorder },
+  'unknown': { backgroundColor: cssVar.colorFillSecondary },
 });
 
 export const MatrixStrip = ({

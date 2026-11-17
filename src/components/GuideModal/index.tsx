@@ -1,10 +1,29 @@
 'use client';
 
-import './GuideModal.css';
-
-import { Button, createModal, Flexbox, type ModalInstance, useModalContext } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- title and desc are caller-provided nodes under bare h3 / p
+  createStaticStyles,
+  Flexbox,
+  type ModalInstance,
+  useModalContext,
+} from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
+
+const fallback = createStaticStyles(({ css }) => ({
+  body: css`
+    h3 {
+      margin: 0;
+      font-weight: bold;
+    }
+
+    p {
+      margin: 0;
+    }
+  `,
+}));
 
 interface GuideModalContentProps {
   cancelText?: ReactNode;
@@ -31,7 +50,7 @@ const GuideModalContent = memo<GuideModalContentProps>(
     };
 
     return (
-      <Flexbox className={'lobe-guide-modal-92efaf88-body'}>
+      <Flexbox className={fallback.body}>
         {cover}
         <Flexbox gap={4} padding={16}>
           <h3>{title}</h3>

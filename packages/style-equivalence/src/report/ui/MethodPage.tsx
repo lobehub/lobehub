@@ -1,3 +1,4 @@
+import { Block, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -9,44 +10,31 @@ import { aaSummary, conditionScope } from '../method';
 import { hrefOf } from '../route';
 
 const styles = stylex.create({
-  card: {
-    backgroundColor: cssVar.colorBgContainer,
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    paddingBlock: 16,
-    paddingInline: 18,
-  },
-  code: { fontFamily: cssVar.fontFamilyCode, fontSize: 12 },
+  code: { fontFamily: cssVar.fontFamilyCode, fontSize: cssVar.fontSizeSM },
   corpus: { columnGap: 16, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
-  count: { color: cssVar.colorTextTertiary, fontSize: 12.5, fontWeight: 400, marginInlineStart: 8 },
-  grid: { display: 'grid', rowGap: 14 },
-  heading: { fontSize: 14, fontWeight: 600, marginBlock: 0 },
-  intro: { color: cssVar.colorTextSecondary, fontSize: 13, lineHeight: 1.7, marginBlock: 0 },
-  lead: {
-    color: cssVar.colorTextSecondary,
-    fontSize: 12.5,
-    marginBlockEnd: 10,
-    marginBlockStart: 4,
-  },
+  heading: { fontSize: cssVar.fontSizeLG, fontWeight: 600, marginBlock: 0 },
   muted: { color: cssVar.colorTextTertiary },
   row: {
     alignItems: 'baseline',
-    borderRadius: 4,
+    borderRadius: cssVar.borderRadiusSM,
     columnGap: 8,
     display: 'flex',
-    fontSize: 12.5,
+    fontSize: cssVar.fontSizeSM,
     minWidth: 0,
-    paddingBlock: 3,
+    paddingBlock: 4,
     paddingInline: 4,
   },
   rowBad: { color: cssVar.colorError },
   spread: { justifyContent: 'space-between' },
-  sub: { color: cssVar.colorTextTertiary, fontSize: 12.5, marginBlockStart: 4 },
-  subheading: { color: cssVar.colorTextSecondary, fontSize: 12.5, fontWeight: 500, marginBlock: 8 },
+  subheading: {
+    color: cssVar.colorTextSecondary,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 600,
+    marginBlockEnd: 8,
+    marginBlockStart: 16,
+  },
   target: { backgroundColor: cssVar.colorWarningBg },
-  title: { fontSize: 15, fontWeight: 600, marginBlock: 0 },
+  title: { fontSize: cssVar.fontSizeHeading4, fontWeight: 600, marginBlock: 0 },
 });
 
 const Card = ({
@@ -60,14 +48,22 @@ const Card = ({
   lead: string;
   title: string;
 }) => (
-  <section {...stylex.props(styles.card)}>
-    <h3 {...stylex.props(styles.heading)}>
-      {title}
-      {count !== undefined && <span {...stylex.props(styles.count)}>{count}</span>}
-    </h3>
-    <div {...stylex.props(styles.lead)}>{lead}</div>
-    {children}
-  </section>
+  <Block as="section" gap={12} padding={20} variant="outlined">
+    <Flexbox gap={4}>
+      <Flexbox horizontal align="baseline" gap={8}>
+        <h2 {...stylex.props(styles.heading)}>{title}</h2>
+        {count !== undefined && (
+          <Text fontSize={12} type="secondary">
+            {count}
+          </Text>
+        )}
+      </Flexbox>
+      <Text fontSize={12} type="secondary">
+        {lead}
+      </Text>
+    </Flexbox>
+    <div>{children}</div>
+  </Block>
 );
 
 const passedOf = (entries: CorpusEntry[]) =>
@@ -101,19 +97,19 @@ const SelfTest = ({
   anchor?: string;
   selfTest: SelfTestPayload | null | undefined;
 }) => {
-  if (selfTest === undefined) return <div {...stylex.props(styles.muted)}>正在读取自检结果…</div>;
+  if (selfTest === undefined) return <Text type="secondary">正在读取自检结果…</Text>;
   if (!selfTest)
     return (
-      <div {...stylex.props(styles.muted)}>
+      <Text type="secondary">
         还没有自检记录。运行 <code {...stylex.props(styles.code)}>bun run style-eq self-test</code>{' '}
         后刷新这一页。
-      </div>
+      </Text>
     );
   return (
     <>
-      <div {...stylex.props(styles.sub)}>
-        验证器 {selfTest.verifierVersion} · {new Date(selfTest.ranAt).toLocaleString()}
-      </div>
+      <Text fontSize={12} type="secondary">
+        验证器 {selfTest.verifierVersion} · {new Date(selfTest.ranAt).toLocaleString('zh-CN')}
+      </Text>
       <h4 {...stylex.props(styles.subheading)}>CSS 语料 · {passedOf(selfTest.css)}</h4>
       <CorpusList anchor={anchor} entries={selfTest.css} />
       <h4 {...stylex.props(styles.subheading)}>源码语料 · {passedOf(selfTest.source)}</h4>
@@ -138,18 +134,20 @@ export const MethodPage = ({ anchor, payload }: { anchor?: string; payload: RunP
   const aa = aaSummary(payload.cases, conditions.length);
   const { mutation } = payload;
   return (
-    <div {...stylex.props(styles.grid)}>
-      <h2 {...stylex.props(styles.title)}>方法依据</h2>
-      <p {...stylex.props(styles.intro)}>
-        「相等」的意思是：<b>在列出的条件下，两侧每个元素的全部计算属性和盒模型逐项一致</b>
-        。下面四项说明为什么这个比较可信，以及它看不到什么。
-      </p>
+    <Flexbox gap={16} style={{ maxWidth: 1200 }}>
+      <Flexbox gap={4}>
+        <h1 {...stylex.props(styles.title)}>方法依据</h1>
+        <Text type="secondary">
+          「相等」的意思是：<b>在列出的条件下，两侧每个元素的全部计算属性和盒模型逐项一致</b>
+          。下面几项说明为什么这个比较可信，以及它看不到什么。
+        </Text>
+      </Flexbox>
       <Card
         lead="每一类 CSS 差异都构造一对已知结果的样式，确认比较器该报的报出来、不该报的不报。"
         title="边界语料"
       >
         {error ? (
-          <div {...stylex.props(styles.rowBad)}>读取自检结果失败：{error}</div>
+          <Text type="danger">读取自检结果失败：{error}</Text>
         ) : (
           <SelfTest anchor={anchor} selfTest={selfTest} />
         )}
@@ -218,6 +216,6 @@ export const MethodPage = ({ anchor, payload }: { anchor?: string; payload: RunP
           </div>
         ))}
       </Card>
-    </div>
+    </Flexbox>
   );
 };

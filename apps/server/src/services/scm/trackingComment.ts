@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { AcceptanceStatus, ScmProvider } from '@lobechat/types';
 
 /**
@@ -110,7 +111,7 @@ export const buildTrackingComment = (input: TrackingCommentInput): string => {
   return [
     encodeTrackingMarker(marker),
     '',
-    `**LobeHub is tracking this pull request.** Merging accepts the delivery; failing checks and review feedback reach the agent that opened it. [Learn more ↗︎](${GITHUB_INTEGRATION_DOCS_URL})`,
+    `**${BRANDING_NAME} is tracking this pull request.** Merging accepts the delivery; failing checks and review feedback reach the agent that opened it. [Learn more ↗︎](${GITHUB_INTEGRATION_DOCS_URL})`,
     '',
     '| Acceptance | Status | Conversation | Notifications | Updated (UTC) |',
     '| :--- | :--- | :--- | :--- | :--- |',

@@ -1,21 +1,10 @@
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import * as stylex from '@stylexjs/stylex';
+import { Flexbox, Text } from '@lobehub/ui';
 import { useEffect } from 'react';
 
 import { fetchCurrent, type FollowInfo } from '../api';
 import { Chip } from './Chip';
 
 const POLL_MS = 5000;
-
-const styles = stylex.create({
-  badge: {
-    alignItems: 'center',
-    color: cssVar.colorTextSecondary,
-    columnGap: 6,
-    display: 'inline-flex',
-    fontSize: 12.5,
-  },
-});
 
 const timeOf = (startedAt: string | undefined) =>
   startedAt ? new Date(startedAt).toLocaleString('zh-CN', { hour12: false }) : undefined;
@@ -38,11 +27,10 @@ export const RunBadge = ({ follow }: { follow?: FollowInfo }) => {
   if (!follow) return null;
   const time = timeOf(follow.startedAt);
   return (
-    <span {...stylex.props(styles.badge)} title={follow.runId}>
-      <span>
-        运行 {follow.head.slice(0, 7)}
-        {time ? ` · ${time}` : ''}
-      </span>
+    <Flexbox horizontal align="center" gap={8} title={follow.runId}>
+      <Text fontSize={12} type="secondary">
+        运行于 {time ?? follow.runId}
+      </Text>
       {follow.pinned ? (
         <Chip tone="plain">已固定这次运行</Chip>
       ) : follow.runId === follow.requested ? null : (
@@ -50,6 +38,6 @@ export const RunBadge = ({ follow }: { follow?: FollowInfo }) => {
           已自动切到最新一次运行
         </Chip>
       )}
-    </span>
+    </Flexbox>
   );
 };

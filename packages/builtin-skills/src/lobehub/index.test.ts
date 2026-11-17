@@ -18,6 +18,11 @@ describe('LobeHubSkill', () => {
     }
   });
 
+  it('activates for MCP connector requests and documents them', () => {
+    expect(LobeHubSkill.description).toContain('MCP servers / connectors');
+    expect(LobeHubSkill.content).toContain('references/connector');
+  });
+
   it('documents workspace scope in the guide', () => {
     expect(LobeHubSkill.content).toContain('`lh workspace`');
     expect(LobeHubSkill.content).toContain('references/workspace');

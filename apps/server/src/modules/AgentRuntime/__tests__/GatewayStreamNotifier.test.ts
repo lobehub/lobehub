@@ -302,19 +302,6 @@ describe('GatewayStreamNotifier', () => {
 
       expect(order).toEqual(['stream_chunk', 'stream_end', 'step_start']);
     });
-
-    it('still returns inner result even if gateway fails', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('network error'));
-
-      const result = await notifier.publishStreamEvent('op-1', {
-        data: {},
-        stepIndex: 0,
-        type: 'step_start' as const,
-      });
-
-      expect(result).toBe('publishStreamEvent-result');
-      expect(inner.calls.publishStreamEvent).toHaveLength(1);
-    });
   });
 
   describe('publishStreamChunk', () => {

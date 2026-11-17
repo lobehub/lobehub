@@ -1,4 +1,5 @@
 import type { ResolvedToolSet } from '@lobechat/context-engine';
+import type { MessageContextAccounting } from '@lobechat/types';
 
 import type { AgentState, CallLLMPayload } from '../types';
 
@@ -17,6 +18,12 @@ export interface ContextBuildInput {
 }
 
 export interface ContextBuildOutput {
+  /**
+   * Estimated token accounting of the final request (processed messages plus
+   * the resolved `tools` array). Persisted on the assistant message as
+   * `metadata.contextAccounting` for the chat input's context breakdown.
+   */
+  contextAccounting?: MessageContextAccounting;
   /** Adapter-native prepared messages; kept in-memory and out of serialized state. */
   messages: unknown[];
   /** Adapter-native model extension parameters consumed by the LLM transport. */

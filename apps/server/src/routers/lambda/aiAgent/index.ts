@@ -5,6 +5,7 @@ import { execRouter } from './exec';
 import { gatewayRelayRouter } from './gatewayRelay';
 import { heteroRouter } from './hetero';
 import { interventionRouter } from './intervention';
+import { localHeteroRunFeeRouter } from './localHeteroRunFee';
 import { operationStatusRouter } from './operationStatus';
 import { runControlRouter } from './runControl';
 import { serverDefaultHeteroRouter } from './serverDefaultHetero';
@@ -28,4 +29,5 @@ export const aiAgentRouter = mergeRouters(
   gatewayRelayRouter,
   runControlRouter,
   heteroRouter,
+  localHeteroRunFeeRouter,
 );

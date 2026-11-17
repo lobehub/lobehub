@@ -36,6 +36,7 @@ const stepPulse = stylex.keyframes({
 });
 
 const styles = stylex.create({
+  collapsed: { display: 'none' },
   count: {
     flexShrink: 0,
     paddingBlock: '1px',
@@ -309,7 +310,7 @@ const GoalWorkflowCard = memo<{
         />
       </Flexbox>
 
-      <div hidden={collapsed} id={bodyId}>
+      <div hidden={collapsed} {...stylex.props(collapsed && styles.collapsed)} id={bodyId}>
         {goal.error ? (
           <div {...stylex.props(styles.loading)}>
             <AsyncError error={goal.error} variant={'inline'} onRetry={goal.retry} />

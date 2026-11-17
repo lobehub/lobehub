@@ -147,6 +147,14 @@ describe('acceptance repair handoff', () => {
     await cleanupTestUser(serverDB, userId);
   });
 
+  const passedRunWithOrigin = (topic: { id: string }): typeof verifyRuns.$inferInsert => ({
+    acceptanceId,
+    userId,
+    roundIndex: 1,
+    status: 'passed',
+    metadata: { origin: { agentId, topicId: topic.id } },
+  });
+
   it('creates and runs a project Agent Task with a durable source and feedback scope', async () => {
     const result = await acceptanceRouter.createCaller(createTestContext(userId)).requestRepair({
       id: acceptanceId,
@@ -368,13 +376,7 @@ describe('acceptance repair handoff', () => {
           .set({ subjectType: 'standalone', status: 'delivered' })
           .where(eq(acceptances.id, acceptanceId));
         const [topic] = await serverDB.insert(topics).values({ userId, agentId }).returning();
-        await serverDB.insert(verifyRuns).values({
-          acceptanceId,
-          userId,
-          roundIndex: 1,
-          status: 'passed',
-          metadata: { origin: { agentId, topicId: topic.id } },
-        });
+        await serverDB.insert(verifyRuns).values(passedRunWithOrigin(topic));
       }
       const start = execAgent.getMockImplementation()!;
       let failedOperationId: string;
@@ -408,13 +410,7 @@ describe('acceptance repair handoff', () => {
       .insert(topics)
       .values({ userId, agentId, projectId })
       .returning();
-    await serverDB.insert(verifyRuns).values({
-      acceptanceId,
-      userId,
-      roundIndex: 1,
-      status: 'passed',
-      metadata: { origin: { agentId, topicId: topic.id } },
-    });
+    await serverDB.insert(verifyRuns).values(passedRunWithOrigin(topic));
     const result = await acceptanceRouter
       .createCaller(createTestContext(userId))
       .requestRepair({ id: acceptanceId });
@@ -445,13 +441,7 @@ describe('acceptance repair handoff', () => {
       const [topic] = await serverDB.insert(topics).values({ userId, agentId }).returning();
       const [round] = await serverDB
         .insert(verifyRuns)
-        .values({
-          acceptanceId,
-          userId,
-          roundIndex: 1,
-          status: 'passed',
-          metadata: { origin: { agentId, topicId: topic.id } },
-        })
+        .values(passedRunWithOrigin(topic))
         .returning();
       const caller = acceptanceRouter.createCaller(createTestContext(userId));
       if (failure === 'startup') execAgent.mockRejectedValueOnce(new Error('offline'));

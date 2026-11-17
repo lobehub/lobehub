@@ -27,6 +27,8 @@
   "openChatSettings.title": "Otwórz ustawienia czatu",
   "openHotkeyHelper.desc": "Zobacz instrukcje dotyczące wszystkich skrótów klawiaturowych",
   "openHotkeyHelper.title": "Pomoc skrótów klawiaturowych",
+  "openTaskFilter.desc": "Otwórz menu filtrów na stronie Zadań",
+  "openTaskFilter.title": "Filtruj zadania",
   "prevTab.desc": "Przejdź do poprzedniej zakładki w aplikacji Desktop; po osiągnięciu początku przechodzi do ostatniej zakładki",
   "prevTab.title": "Poprzednia zakładka",
   "regenerateMessage.desc": "Wygeneruj ponownie ostatnią wiadomość",

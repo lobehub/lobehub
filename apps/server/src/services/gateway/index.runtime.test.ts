@@ -110,6 +110,23 @@ describe('GatewayService', () => {
         status: 'failed',
       });
     });
+
+    it('skips a platform the gateway cannot host', async () => {
+      mockResolveConnectionMode.mockReturnValue('websocket');
+      mockFindByAgentId.mockResolvedValue([
+        {
+          applicationId: 'ding-app',
+          enabled: true,
+          id: 'prov-ding',
+          platform: 'dingtalk',
+          settings: {},
+        },
+      ]);
+
+      await service.refreshBotRuntimeStatusesByAgent('agent-1');
+
+      expect(mockGatewayClient.getStatus).not.toHaveBeenCalled();
+    });
   });
 
   // ─── ensureRunning ───

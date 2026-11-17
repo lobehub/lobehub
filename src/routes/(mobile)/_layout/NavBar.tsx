@@ -1,8 +1,10 @@
 'use client';
 
-import './NavBar.css';
-
-import { Icon } from '@lobehub/ui';
+import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- Icon renders its svg without a slot
+  createStaticStyles,
+  Icon,
+} from '@lobehub/ui';
 import { type TabBarProps } from '@lobehub/ui/mobile';
 import { TabBar } from '@lobehub/ui/mobile';
 import * as stylex from '@stylexjs/stylex';
@@ -25,6 +27,14 @@ const styles = stylex.create({
   },
 });
 
+const fallback = createStaticStyles(({ css, cssVar }) => ({
+  active: css`
+    svg {
+      fill: color-mix(in srgb, ${cssVar.colorPrimary} 33%, transparent);
+    }
+  `,
+}));
+
 const NavBar = memo(() => {
   const { t } = useTranslation('common');
   const { activeKey } = useMobileNavigation();
@@ -37,10 +47,7 @@ const NavBar = memo(() => {
       [
         {
           icon: (active: boolean) => (
-            <Icon
-              className={active ? 'lobe-nav-bar-c7ad71e3-active' : undefined}
-              icon={MessageSquare}
-            />
+            <Icon className={active ? fallback.active : undefined} icon={MessageSquare} />
           ),
           key: SidebarTabKey.Chat,
           onClick: () => {
@@ -50,7 +57,7 @@ const NavBar = memo(() => {
         },
         showMarket && {
           icon: (active: boolean) => (
-            <Icon className={active ? 'lobe-nav-bar-c7ad71e3-active' : undefined} icon={Compass} />
+            <Icon className={active ? fallback.active : undefined} icon={Compass} />
           ),
           key: SidebarTabKey.Community,
           onClick: () => {
@@ -60,7 +67,7 @@ const NavBar = memo(() => {
         },
         {
           icon: (active: boolean) => (
-            <Icon className={active ? 'lobe-nav-bar-c7ad71e3-active' : undefined} icon={User} />
+            <Icon className={active ? fallback.active : undefined} icon={User} />
           ),
           key: SidebarTabKey.Me,
           onClick: () => {

@@ -20,12 +20,12 @@ import {
   resolveHeterogeneousAgentCommand,
   type SubagentIntent,
   type SubagentRunSnapshot,
+  usesHeterogeneousSessionInitialModel,
 } from '@lobechat/heterogeneous-agents';
 import {
   isEchoedErrorText,
   normalizeHeterogeneousMessageError,
 } from '@lobechat/heterogeneous-agents/errors';
-import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
   ChatMessageError,
   ChatToolPayload,
@@ -72,12 +72,7 @@ import { hydrateProjectedToolMessages } from '@/services/message/hydrateProjecte
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
 import { topicSelectors } from '@/store/chat/selectors';
-import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
-import {
-  mergeQueuedMessages,
-  reconstructUploadFilesFromQueue,
-  type StreamRetryMetadata,
-} from '@/store/chat/slices/operation/types';
+import { type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -87,14 +82,21 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 
 import { dispatchInterventionState } from '../../entries/interventionProjection';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { drainQueuedTurn, sendQueuedTurn } from '../../lifecycle/queuedFollowUp';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
+import { registerLocalBackgroundTaskStopper, writeBackgroundTaskSnapshot } from './backgroundTasks';
+import { markUnfinishedToolsCancelled } from './cancelledTools';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
+import { claimLocalRunFee, type LocalRunFeeClaim, settleLocalRunFee } from './localRunFee';
+import { type LocalSteer, startLocalSteer } from './localSteer';
+import { buildLocalHeterogeneousSystemContext } from './localSystemContext';
 import { createMessageWriteBatcher, type ToolMessageUpdateOperation } from './messageWriteBatcher';
 import { createPendingCreateLedger } from './pendingCreateLedger';
+import { waitForPersistQueue } from './persistQueue';
 import { resolveQuotaAccountSpawnPlan } from './resolveQuotaAccountEnv';
 import {
   buildEditedTopicPreviousConversation,
@@ -106,6 +108,7 @@ import {
   createSubagentStoreDispatcher,
   type SubagentStoreDispatcher,
 } from './subagentStoreDispatcher';
+import { createToolStateSnapshotClaimer } from './toolStateSnapshot';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -229,6 +232,8 @@ export interface HeterogeneousAgentExecutorParams {
   attachedFiles?: HeteroAttachedFileRef[];
   context: ConversationContext;
   contextSelections?: ContextSelection[];
+  /** Continues a run that already paid its fee (restart recovery, continue-after-error). */
+  continuesRun?: boolean;
   heterogeneousProvider: HeterogeneousProviderConfig;
   /** Image attachments from user message — passed to Main for vision support */
   imageList?: Array<{ id: string; url: string }>;
@@ -247,6 +252,8 @@ export interface HeterogeneousAgentExecutorParams {
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeBindingKey?: string;
   resumeSessionId?: string;
+  /** Internal: the fee claim a resume-fallback retry inherits from its run. */
+  runFee?: LocalRunFeeClaim;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
   workspaceId?: string | null; // workspace the run started in (null = personal)
@@ -266,34 +273,6 @@ export interface HeterogeneousAgentExecutionOutcome {
    */
   terminalError?: boolean;
 }
-
-const buildLocalHeterogeneousSystemContext = ({
-  agentSystemContext,
-  contextSelections,
-  pageSelections,
-  previousConversation,
-}: {
-  agentSystemContext?: string;
-  contextSelections?: ContextSelection[];
-  pageSelections?: PageSelection[];
-  previousConversation?: string;
-}): string | undefined => {
-  const parts: string[] = [];
-
-  if (agentSystemContext?.trim()) parts.push(agentSystemContext.trim());
-  if (previousConversation) parts.push(previousConversation);
-
-  const selectionContext =
-    contextSelections && contextSelections.length > 0
-      ? formatContextSelections(contextSelections)
-      : pageSelections && pageSelections.length > 0
-        ? formatPageSelections(pageSelections)
-        : '';
-
-  if (selectionContext) parts.push(selectionContext);
-
-  return parts.length > 0 ? parts.join('\n\n') : undefined;
-};
 
 const getTopicMetadataById = (
   store: ChatStore,
@@ -376,40 +355,7 @@ const subscribeBroadcasts = (
   };
 };
 
-const HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS = 10_000;
 const HETERO_TERMINAL_EVENT_GRACE_TIMEOUT_MS = 3_000;
-
-const waitForPersistQueue = async (
-  queue: Promise<void>,
-  label: string,
-  timeoutMs = HETERO_TERMINAL_PERSIST_DRAIN_TIMEOUT_MS,
-): Promise<boolean> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  const result = await Promise.race<
-    { error: unknown; status: 'rejected' } | { status: 'resolved' } | { status: 'timeout' }
-  >([
-    queue.then(
-      () => ({ status: 'resolved' }),
-      (error) => ({ error, status: 'rejected' }),
-    ),
-    new Promise<{ status: 'timeout' }>((resolve) => {
-      timeoutId = setTimeout(() => resolve({ status: 'timeout' }), timeoutMs);
-    }),
-  ]);
-
-  if (timeoutId) clearTimeout(timeoutId);
-
-  if (result.status === 'rejected') throw result.error;
-  if (result.status === 'timeout') {
-    console.warn(
-      `[HeterogeneousAgent] persistQueue did not drain within ${timeoutMs}ms (${label}); continuing terminal flow.`,
-    );
-    return false;
-  }
-
-  return true;
-};
 
 interface MessageBatchMutationResult {
   results?: Array<{ error?: string; index: number; success: boolean }>;
@@ -664,7 +610,9 @@ export const executeHeterogeneousAgent = async (
 
   let ipcRunSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
+  let unregisterTaskStopper: (() => void) | undefined;
   let completed = false;
+  const runFee: LocalRunFeeClaim = params.runFee ?? {};
   let fallbackPromise: Promise<void> | undefined;
   let resumeFallbackTriggered = false;
 
@@ -698,7 +646,6 @@ export const executeHeterogeneousAgent = async (
   // a subagent finalizes, so unscoped bridge requests cannot create main copies.
   const toolMsgIdByCallId: Map<string, string> = new Map();
   const toolThreadIdByCallId = new Map<string, string>();
-  const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const mainToolCallIds = new Set<string>();
   /** Terminal results reject later state until a new tool_start reopens the call id. */
   const completedToolStateCallIds = new Set<string>();
@@ -714,6 +661,7 @@ export const executeHeterogeneousAgent = async (
    * + live UI. Reassigned (commit-on-success) by `reduceAndApplyMain`.
    */
   let mainState: MainAgentRunState = createMainAgentRunState(assistantMessageId);
+  let localSteer: LocalSteer | undefined;
   /**
    * Per-thread UI handles the reducer doesn't model: the thread-scoped store
    * dispatcher + its sub-operation id. Created on the `createThread` intent,
@@ -1019,26 +967,7 @@ export const executeHeterogeneousAgent = async (
       pendingToolFlush.set(toolMsgId, toolUpdate);
     });
   };
-  const claimToolStateSnapshot = (
-    toolCallId: string,
-    toolMsgId: string,
-    snapshotSeq: number,
-  ): NonNullable<UIChatMessage['metadata']> | undefined => {
-    const stored = dbMessageSelectors.getDbMessageById(toolMsgId)(get());
-    const durableSeq =
-      stored?.metadata?.heterogeneousToolStateOperationId === operationId &&
-      typeof stored.metadata.heterogeneousToolStateSeq === 'number'
-        ? stored.metadata.heterogeneousToolStateSeq
-        : 0;
-    const lastApplied = Math.max(durableSeq, lastAppliedToolStateSeqByCallId.get(toolCallId) ?? 0);
-    if (snapshotSeq <= lastApplied) return;
-
-    lastAppliedToolStateSeqByCallId.set(toolCallId, snapshotSeq);
-    return {
-      heterogeneousToolStateOperationId: operationId,
-      heterogeneousToolStateSeq: snapshotSeq,
-    };
-  };
+  const claimToolStateSnapshot = createToolStateSnapshotClaimer(get, operationId);
   const retryWithoutResume = (error: unknown): boolean => {
     if (
       resumeFallbackTriggered ||
@@ -1061,7 +990,12 @@ export const executeHeterogeneousAgent = async (
           { ns: 'chat' },
         ),
       );
-      await executeHeterogeneousAgent(get, { ...params, resumeSessionId: undefined, workspaceId });
+      await executeHeterogeneousAgent(get, {
+        ...params,
+        resumeSessionId: undefined,
+        runFee,
+        workspaceId,
+      });
     })();
 
     return true;
@@ -1492,6 +1426,17 @@ export const executeHeterogeneousAgent = async (
   // The persisted row owns the thread for bridge transitions as well as tool results.
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
+      case 'updateBackgroundTask': {
+        const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        if (!toolMsgId || !mainToolCallIds.has(intent.toolCallId)) return;
+        writeBackgroundTaskSnapshot(get, messageWriteBatcher, {
+          messageWriteCtx,
+          operationId,
+          task: intent.backgroundTask,
+          toolMessageId: toolMsgId,
+        });
+        return;
+      }
       case 'setToolIntervention': {
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (!toolMsgId) throw new Error(`Missing intervention tool: ${intent.toolCallId}`);
@@ -1895,6 +1840,14 @@ export const executeHeterogeneousAgent = async (
     return;
   }
 
+  // A run this desktop spawns never reaches `execAgent`: it reports its fee here,
+  // and a refused fee, or a Stop while the hold was pending, ends it before the CLI starts.
+  const feeStop = params.runFee
+    ? undefined
+    : await claimLocalRunFee(runFee, { ...params, workspaceId }, abortSignal);
+  if (feeStop === 'stopped') return void writeTopicStatus('active');
+  if (feeStop) return void (await persistTerminalError(feeStop));
+
   try {
     // Account routing: realize the pinned/balanced account choice as spawn env
     // (CLAUDE_CONFIG_DIR profile). Unbound agents get {} and spawn exactly as
@@ -1939,7 +1892,7 @@ export const executeHeterogeneousAgent = async (
           }
         : undefined;
 
-    // Start session (pass resumeSessionId for multi-turn --resume)
+    const useClaudeCodeSdk = labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState());
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: spawnArgs,
@@ -1950,10 +1903,7 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'devin' ||
-          adapterType === 'droid' ||
-          adapterType === 'trae' ||
-          adapterType === 'deepseek-harness') &&
+        usesHeterogeneousSessionInitialModel(adapterType) &&
         !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
@@ -1961,7 +1911,7 @@ export const executeHeterogeneousAgent = async (
           : undefined,
       providerBinding,
       resumeSessionId,
-      useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
+      useClaudeCodeSdk,
       useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
     activeSessionBindingKey =
@@ -2049,13 +1999,13 @@ export const executeHeterogeneousAgent = async (
         get().updateOperationMetadata?.(operationId, { streamRetry: undefined });
       }
 
-      // Requests, ACKs and tool/runtime completion share one state machine so
-      // a missing bridge response cannot leave a completed question pending.
+      // Requests, ACKs and tool/runtime completion share one state machine so a missing
+      // bridge response cannot leave a completed question pending. A settled one frees steers.
       if (
         event.type === 'agent_intervention_request' ||
         event.type === 'agent_intervention_response'
       ) {
-        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event)).then(localSteer?.pump);
         return;
       }
 
@@ -2090,6 +2040,10 @@ export const executeHeterogeneousAgent = async (
       // usage tray derives its total from these per-message usages directly
       // (OpStatusTray → calculateOperationUsageMetrics), so there is no separate
       // accumulation here. Not forwarded (bookkeeping).
+      if (event.type === 'step_complete' && event.data?.phase === 'user_message') {
+        persistQueue = persistQueue.then(async () => void (await localSteer?.confirm(event.data)));
+        return;
+      }
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
@@ -2124,11 +2078,11 @@ export const executeHeterogeneousAgent = async (
         return;
       }
 
-      // tool_state is interpreted locally after the preceding tools_calling
-      // intent has registered its tool row. Do not also forward it to the
-      // gateway handler: that path would bootstrap-refetch while the local
+      // tool_state / background_task are interpreted locally after the preceding
+      // tools_calling intent has registered its tool row. Do not also forward them
+      // to the gateway handler: that path would bootstrap-refetch while the local
       // write-behind create may still be queued.
-      if (event.type === 'stream_chunk' && event.data?.chunkType === 'tool_state') {
+      if (event.type === 'background_task' || event.data?.chunkType === 'tool_state') {
         sawStreamedEvent = true;
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
@@ -2522,6 +2476,29 @@ export const executeHeterogeneousAgent = async (
         )
       : undefined;
 
+    localSteer = startLocalSteer({
+      agentType: adapterType,
+      codexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
+      context,
+      contextKey: messageMapKey(context),
+      get,
+      ipcSessionId: ipcRunSessionId,
+      isReady: () => sawStreamedEvent,
+      isWaitingForUser: () =>
+        [...mainState.interventionsByCallId.values()].some((i) => i.transition === 'pending'),
+      operationId,
+      rows: pendingCreateLedger,
+      spine: {
+        get: () => mainState.lastSpineMessageId,
+        set: (id) => void (mainState = { ...mainState, lastSpineMessageId: id }),
+      },
+    });
+    // Claude Code keeps its input (SDK stream or CLI stdin) open in every Follow-up mode.
+    if (adapterType === 'claude-code') {
+      unregisterTaskStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
+        heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
+      );
+    }
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
@@ -2588,14 +2565,13 @@ export const executeHeterogeneousAgent = async (
     const drainableTerminal =
       terminalEvent?.type !== 'error' &&
       isCompletedRuntimeEnd((terminalEvent?.data as { reason?: string } | undefined)?.reason);
+    localSteer?.settle();
     if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
-      const remainingQueued = get().drainQueuedMessages?.(contextKey) ?? [];
-      if (remainingQueued.length > 0) {
-        // Force-complete this op + mark unread BEFORE the next sendMessage,
-        // otherwise its queue check (covering all AI_RUNTIME_OPERATION_TYPES)
-        // would still see this op as "running" and re-queue the merged content
-        // into a now-orphaned operation.
+      const turn = drainQueuedTurn(get, contextKey); // Queue mode: the head alone
+      if (turn.messages.length > 0) {
+        // Complete this op + mark unread BEFORE the next sendMessage: its queue check would
+        // still see this op as running and re-queue the content into an orphaned operation.
         get().completeOperation(operationId);
         const completedOp = get().operations?.[operationId];
         if (completedOp?.context.agentId) {
@@ -2606,31 +2582,10 @@ export const executeHeterogeneousAgent = async (
           });
         }
 
-        const merged = mergeQueuedMessages(remainingQueued);
-        const mergedFiles =
-          merged.filesPreview.length > 0
-            ? reconstructUploadFilesFromQueue(merged.filesPreview)
-            : merged.files.length > 0
-              ? (merged.files.map((id) => ({ id })) as any)
-              : undefined;
-
         setTimeout(() => {
-          useChatStore
-            .getState()
-            .sendMessage({
-              context: { ...context },
-              editorData: merged.editorData,
-              files: mergedFiles,
-              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
-              message: merged.content,
-              metadata: merged.metadata,
-            })
-            .catch((e: unknown) => {
-              console.error(
-                '[heterogeneousAgentExecutor] sendMessage for queued content failed:',
-                e,
-              );
-            });
+          sendQueuedTurn(useChatStore.getState, { ...context }, turn).catch((e: unknown) => {
+            console.error('[heterogeneousAgentExecutor] sendMessage for queued content failed:', e);
+          });
         }, 100);
       }
     }
@@ -2654,7 +2609,21 @@ export const executeHeterogeneousAgent = async (
     }
   } finally {
     await waitForCompletionCallback();
+    if (isAborted() && !resumeFallbackTriggered) {
+      persistQueue = persistQueue.then(() => messageWriteBatcher.flush('cancel'));
+      await waitForPersistQueue(persistQueue, 'cancel')
+        .then(() =>
+          markUnfinishedToolsCancelled(get(), operationId, {
+            completedCallIds: completedToolStateCallIds,
+            mainCallIds: mainToolCallIds,
+            messageIdByCallId: toolMsgIdByCallId,
+          }),
+        )
+        .catch((err) => console.error('[HeterogeneousAgent] cancelled tool cleanup failed:', err));
+    }
     unsubscribe?.();
+    unregisterTaskStopper?.();
+    localSteer?.settle();
     // The desktop IPC session only owns this run's config and process handles.
     // Multi-turn resume uses the native agentSessionId persisted above, so the
     // IPC session must be released after every run instead of accumulating in
@@ -2692,6 +2661,15 @@ export const executeHeterogeneousAgent = async (
       } catch (err) {
         console.error('[HeterogeneousAgent] status reconcile backstop failed:', err);
       }
+    }
+    // The resume-fallback retry inherited the claim and settles it.
+    if (!resumeFallbackTriggered) {
+      const terminal = deferredTerminalEvent as AgentStreamEvent | null;
+      await settleLocalRunFee(runFee, {
+        aborted: isAborted(),
+        failed: terminalErrorPersisted,
+        terminal,
+      });
     }
   }
 

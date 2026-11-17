@@ -743,6 +743,27 @@ describe('generate command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Image generation started'));
     });
 
+    it('should leave model and provider to the server when omitted', async () => {
+      mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-1');
+      mockTrpcClient.image.createImage.mutate.mockResolvedValue({
+        data: {
+          batch: { id: 'batch-1', model: 'gemini-3.1-flash-image:image', provider: 'lobehub' },
+          generations: [],
+        },
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'image', 'a cute cat']);
+
+      const payload = mockTrpcClient.image.createImage.mutate.mock.calls[0][0];
+      expect(payload.model).toBeUndefined();
+      expect(payload.provider).toBeUndefined();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('lobehub/gemini-3.1-flash-image:image'),
+      );
+    });
+
     it('should pass repeated --param values with JSON types preserved', async () => {
       mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-1');
       mockTrpcClient.image.createImage.mutate.mockResolvedValue({ data: {}, success: true });

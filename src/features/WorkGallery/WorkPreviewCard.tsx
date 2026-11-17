@@ -4,7 +4,6 @@ import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
 import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
 import {
   ActionIcon,
-  Avatar,
   createStaticStyles,
   cssVar,
   cx,
@@ -16,6 +15,7 @@ import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
@@ -246,12 +246,12 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) =
         <Flexbox horizontal align={'baseline'} className={styles.footer} gap={7}>
           {agent && (
             <>
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={item.originAgentId}
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
                 className={styles.agentAvatar}
-                shape={'square'}
+                name={agent.title}
                 size={24}
               />
               <Flexbox className={styles.identityMeta} gap={1}>

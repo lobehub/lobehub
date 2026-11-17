@@ -1,12 +1,15 @@
 import type { CredSummary } from '@lobechat/builtin-tool-creds';
 import type {
   AgentContextDocument,
+  AgentDocumentChangesByMessage,
   AgentManagementContext,
   AvailablePluginInfo,
   AvailableProviderInfo,
   OnboardingContext,
+  RevokedDocumentReads,
 } from '@lobechat/context-engine';
 import type {
+  AgentAccountContext,
   AgentShareVisitorContext,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
@@ -126,6 +129,27 @@ export interface ContextFactRequest {
  * fact" and never blocks the turn.
  */
 export interface ContextFactProviders {
+  /**
+   * An agent document by its `agent_documents.id`, or null when it is missing,
+   * belongs to another agent, or the caller may not read it.
+   */
+  findAgentDocument?: (
+    agentId: string,
+    documentId: string,
+  ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
+  /**
+   * Of the given document ids (`documents.id` or `agent_documents.id`) that
+   * `agentId` read in earlier turns, those whose content must no longer reach
+   * the model: `documentIds` for every read route, `agentDocumentReadIds` for
+   * `readDocument` only (still a knowledge-base page). Ids never bound to the
+   * agent (knowledge-base documents, uploads) are not revoked.
+   */
+  findRevokedDocumentReads?: (
+    agentId: string,
+    documentIds: string[],
+  ) => Promise<
+    { agentDocumentReadIds?: Iterable<string>; documentIds?: Iterable<string> } | undefined
+  >;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */
@@ -144,6 +168,18 @@ export interface ContextFactProviders {
   getWorkspaceContext?: (
     workspaceId?: string,
   ) => Promise<{ appUrl?: string; slug?: string } | undefined>;
+  /**
+   * The agent's own accounts and inbox, as first-class identity state. Absent
+   * on a host with no identity store.
+   */
+  listAgentAccountContext?: (agentId?: string) => Promise<AgentAccountContext | undefined>;
+  /**
+   * Change notes for an index rendered from a snapshot, keyed by user message.
+   * Only a host whose `listAgentDocuments` returns snapshot rows provides it.
+   */
+  listAgentDocumentChanges?: (
+    agentId: string,
+  ) => Promise<AgentDocumentChangesByMessage | undefined>;
   /** Context documents attached to an agent. */
   listAgentDocuments?: (agentId: string) => Promise<AgentContextDocument[] | undefined>;
   /** Connector identifiers (Composio services, LobeHub skill providers) connected for the agent. */
@@ -182,7 +218,10 @@ export interface ContextFactProviders {
 }
 
 export interface GatheredContextFacts {
+  agentDocumentChanges?: AgentDocumentChangesByMessage;
   agentDocuments?: AgentContextDocument[];
+  /** Documents whose earlier reads must no longer reach the model, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   step: ContextStepSnapshot & { agentManagementContext?: AgentManagementContext };
   variables: ContextVariables;
 }

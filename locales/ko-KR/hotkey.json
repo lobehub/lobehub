@@ -27,6 +27,8 @@
   "openChatSettings.title": "대화 설정 열기",
   "openHotkeyHelper.desc": "모든 단축키 사용법 보기",
   "openHotkeyHelper.title": "단축키 도움말 열기",
+  "openTaskFilter.desc": "작업 페이지에서 필터 메뉴 열기",
+  "openTaskFilter.title": "작업 필터",
   "prevTab.desc": "데스크톱 앱에서 이전 탭으로 이동합니다. 시작에서 마지막 탭으로 돌아갑니다.",
   "prevTab.title": "이전 탭",
   "regenerateMessage.desc": "마지막 메시지를 다시 생성",

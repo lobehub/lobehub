@@ -23,6 +23,7 @@ import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
 import ProviderSettingsSkeleton, {
   ProviderDetailSkeleton,
 } from '@/components/Skeleton/Settings/Provider';
+import { getSettingsTabSkeleton } from '@/components/Skeleton/Settings/tabs';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
 import TopicsSkeleton from '@/components/Skeleton/Topics';
@@ -87,6 +88,7 @@ async function readRouterSources() {
       'memoryRoutes.tsx',
       'onboardingRoute.tsx',
       'collaborationRoutes.tsx',
+      'evalRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -215,6 +217,7 @@ describe('desktop router shared definition', () => {
         'topic/:topicId?',
         'conversation/:topicId?',
         'channels/:channelId',
+        'channels/:channelId/settings',
         'tasks',
         'settings/:section?',
         'goals',
@@ -234,11 +237,31 @@ describe('desktop router shared definition', () => {
         '/project/project-1/channels/chn_1',
       );
       expect(channelMatches?.at(-1)?.params.channelId).toBe('chn_1');
+      // A thread page stays inside its Channel's route, so the Channel page keeps rendering it.
+      const threadMatches = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/project/project-1/channels/chn_1/threads/cht_1',
+      );
+      expect(threadMatches?.at(-2)?.route.path).toBe('channels/:channelId');
+      expect(threadMatches?.at(-1)?.params).toMatchObject({
+        channelId: 'chn_1',
+        threadId: 'cht_1',
+      });
       // The project root is its home page (composer + overview), not a redirect.
       expect(
         (projectIndexRoute?.element as ReactElement<{ to?: string }> | undefined)?.props.to,
       ).toBeUndefined();
       expect(projectIndexRoute?.handle?.meta?.titleKey).toBe('project:sections.home');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s opens a Channel thread as a page under its Channel',
+    (_, factory) => {
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/channels/chn_1/threads/cht_1');
+
+      expect(matches?.at(-2)?.route.path).toBe(':channelId');
+      expect(matches?.at(-1)?.params).toMatchObject({ channelId: 'chn_1', threadId: 'cht_1' });
     },
   );
 
@@ -293,7 +316,7 @@ describe('desktop router shared definition', () => {
   );
 
   it.each(mainAreaVariants)(
-    '%s personal devices list and detail use their own skeletons, not the settings form',
+    '%s personal devices list and detail resolve the devices tab skeleton',
     (_, factory) => {
       for (const [url, leaf] of [
         ['/settings/devices', 'devices'],
@@ -307,9 +330,11 @@ describe('desktop router shared definition', () => {
 
         expect(matches?.at(-1)?.route.path).toBe(leaf);
         expect(handle.settingsTab).toBe('devices');
-        expect(handle.meta?.Skeleton).toBeDefined();
-        expect(handle.meta?.Skeleton).not.toBe(SettingsPageSkeleton);
+        // The settings page skeleton picks the devices entry by pathname, so the
+        // explicit routes render the card grid, not the generic settings form.
+        expect(handle.meta?.Skeleton).toBe(SettingsPageSkeleton);
       }
+      expect(getSettingsTabSkeleton('devices')).toBeDefined();
     },
   );
 

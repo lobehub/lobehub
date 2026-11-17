@@ -1,29 +1,15 @@
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import * as stylex from '@stylexjs/stylex';
+import { Tag } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
-const styles = stylex.create({
-  chip: {
-    alignItems: 'center',
-    borderRadius: 4,
-    display: 'inline-flex',
-    fontSize: 12,
-    fontWeight: 500,
-    height: 20,
-    paddingInline: 6,
-    whiteSpace: 'nowrap',
-  },
-});
+const TONE_COLORS = {
+  bad: 'error',
+  info: 'info',
+  ok: 'success',
+  plain: undefined,
+  warn: 'warning',
+} as const;
 
-const tones = stylex.create({
-  bad: { backgroundColor: cssVar.colorErrorBg, color: cssVar.colorError },
-  info: { backgroundColor: cssVar.colorInfoBg, color: cssVar.colorInfo },
-  ok: { backgroundColor: cssVar.colorSuccessBg, color: cssVar.colorSuccess },
-  plain: { backgroundColor: cssVar.colorFillTertiary, color: cssVar.colorTextSecondary },
-  warn: { backgroundColor: cssVar.colorWarningBg, color: cssVar.colorWarning },
-});
-
-export type ChipTone = keyof typeof tones;
+export type ChipTone = keyof typeof TONE_COLORS;
 
 export const Chip = ({
   children,
@@ -34,9 +20,9 @@ export const Chip = ({
   title?: string;
   tone: ChipTone;
 }) => (
-  <span title={title} {...stylex.props(styles.chip, tones[tone])}>
+  <Tag color={TONE_COLORS[tone]} size="small" title={title}>
     {children}
-  </span>
+  </Tag>
 );
 
 export const CATEGORY_TONES: Record<string, ChipTone> = {

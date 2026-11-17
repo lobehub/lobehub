@@ -41,7 +41,7 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableGoals`                                                                                       |
 | P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                                                     |
 | P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                                                       |
-| P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                                                             |
+| P20 | cli           | any             | fixture        | Strip ambient conversation ids and set the local credential's workspace for LOCAL API/ingest; retain production scope for publishing                         |
 | P21 | web           | any             | drive          | Upload through the Add-menu input, poll `dockUploadFileList`, A/B the hashing worker with `window.Worker = undefined`                                        |
 | P22 | web, electron | any             | drive          | `keyboard type` emits no keydown; fire `/` (and any menu trigger) with `press`                                                                               |
 | P23 | web, electron | any             | drive          | Tag `svg.lucide-<rendered-name>` and click through agent-browser; `el.click()` on the wrapper does nothing                                                   |
@@ -463,9 +463,9 @@ docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
   "update agents set agency_config = '{\"executionTarget\":\"local\",\"heterogeneousProvider\":{\"type\":\"claude-code\",\"command\":\"claude\"}}'::jsonb where id='<agentId>';"
 ```
 
-Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
-cache, so the renderer still shows the pre-write value (generic M6). Clear
-`lobechat-swr-cache*` + `lobehub-local-data` through
+Then cold-load: a plain reload keeps serving the agent config from its persisted
+replica, so the renderer still shows the pre-write value (generic M6). Clear
+`lobehub-local-data` (and the `replica:*` localStorage rows) through
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
 
@@ -490,6 +490,11 @@ client's real request window (fetch wrapper on the batch URL) against the seeded
 timestamps before suspecting the query.
 
 #### P16 · Cold SWR cache: clearing then reloading is undone by the outgoing page
+
+> The tiered SWR cache this entry describes has been removed: SWR persists nothing,
+> and persisted server data lives in replicas (`query-projections` in
+> `lobehub-local-data`, plus `replica:*` localStorage rows). Clear those at
+> document start the same way to force a cold first load.
 
 **applies-to:** surface=web, electron · runtime=any · phase=fixture
 
@@ -664,6 +669,14 @@ also exports `LOBEHUB_ASSISTANT_MESSAGE_ID`, which the CLI forwards as the inges
 assistant, so every batch fails with `Seeded assistantMessageId msg_… was not found for
 topic <t>`. Set it to the fixture's seeded assistant id and unset
 `LOBEHUB_HETERO_EXEC_INHERIT_PROCESS_GROUP` together with the ids above.
+
+`LOBEHUB_WORKSPACE_ID` is also inherited. A personal local seed API key with a
+production workspace header returns HTTP 401 even when its hash, enabled flag,
+and user are valid. For local API creation and native CLI replay, explicitly set
+`LOBEHUB_WORKSPACE_ID=personal` (or the verified workspace owned by the test
+credential) in that subprocess. Verify a real authenticated API call on the local
+server before creating the operation. Do not change persistent CLI workspace
+scope, and restore the production context for report publication.
 
 ### Driving the UI
 
@@ -2011,8 +2024,9 @@ breaks the Electron renderer outright — the local database adapter registered 
 HTML loading screen stays up forever. The symptom reads as "the phase under test never
 appears", i.e. exactly like the product defect you were looking for.
 
-**Works:** use the stall only on the web entry, where it holds `CacheHydrationGate`
-for its full `HYDRATION_TIMEOUT` (about 8s) — ample for a screenshot plus
+**Works:** use the stall only on the web entry, where it held the former
+`CacheHydrationGate` for its full `HYDRATION_TIMEOUT` (about 8s; the gate is removed,
+so route loaders now wait at most `PRE_PAINT_HYDRATE_TIMEOUT` instead) — ample for a screenshot plus
 `getBoundingClientRect` / `getComputedStyle` measurements over the same CDP
 connection. For desktop, do not stall storage: observe the natural boot with the
 in-page sampler above. Either way, disarm with

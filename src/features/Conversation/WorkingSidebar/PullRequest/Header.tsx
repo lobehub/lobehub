@@ -1,6 +1,12 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
-import { copyToClipboard, Icon } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  copyToClipboard,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  toast,
+} from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import {
   ArrowRightIcon,

@@ -6,7 +6,7 @@ import { LogIn } from 'lucide-react';
 import { type FC, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ListSkeleton from '@/components/ListSkeleton';
+import { CredsListSkeleton } from '@/components/Skeleton/Settings/tabs/Creds';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
 const styles = stylex.create({
@@ -28,7 +28,7 @@ const MarketSignInGate: FC<{ children: ReactNode }> = ({ children }) => {
   const { t } = useTranslation('setting');
   const { isAuthenticated, isLoading, signIn } = useMarketAuth();
 
-  if (isLoading) return <ListSkeleton paddingInline={0} />;
+  if (isLoading) return <CredsListSkeleton />;
 
   if (!isAuthenticated) {
     return (

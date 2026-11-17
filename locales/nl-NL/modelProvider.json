@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Ondersteunt videodetectie",
   "providerModels.item.modelConfig.vision.extra": "Deze configuratie activeert alleen beeldupload in de applicatie. Of herkenning werkt, hangt af van het model. Test dit zelf.",
   "providerModels.item.modelConfig.vision.title": "Ondersteunt visuele herkenning",
+  "providerModels.item.pricing.audioOutputTokens": "Audio-uitvoer ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/Afbeelding",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M tekens",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Minuten",

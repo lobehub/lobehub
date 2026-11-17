@@ -1,7 +1,7 @@
 'use client';
 
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Button, Empty, Flexbox, Icon, Skeleton, toast, Tooltip } from '@lobehub/ui';
+import { Button, Empty, Flexbox, Icon, Skeleton, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -22,17 +22,12 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import {
-  getCiVisual,
-  getPullRequestState,
-  PR_STATE_VISUAL,
-} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import ThreadListSection from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/ThreadListSection';
 import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
-import { useImLayout } from '@/features/NavRail/useImLayout';
+import type { TopicPullRequestView } from '@/features/TopicPullRequests/pullRequestView';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { gitService } from '@/services/git';
 import { useAgentStore } from '@/store/agent';
@@ -51,18 +46,20 @@ import { sx } from '@/styles/sx';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
-import AgentProfilePanel from './AgentProfilePanel';
+import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
+import { BackgroundTasksSection } from './BackgroundTasks';
 import DeviceStatusSection from './DeviceStatusSection';
 import {
   collectChangeStats,
   isLinkedWorktreeCheckout,
-  shouldShowCiLabel,
   shouldShowGitSkeleton,
 } from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
+import PullRequestRow from './PullRequestRow';
 import { sectionProps, sectionStyles } from './sectionStyles';
+import { TerminalRow } from './TerminalRow';
 
 const styles = stylex.create({
   body: { overflowY: 'auto' },
@@ -80,10 +77,17 @@ interface OverviewProps {
   /** Routes file / git RPCs; empty for "This device", which reads over IPC. */
   deviceId?: string;
   environmentAvailable: boolean;
+  /** Better Coding Experience: open one of {@link pullRequests}. */
+  onOpenPullRequest?: (pullRequest: TopicPullRequestView) => void;
   onOpenTab: (tab: string) => void;
   onRefreshPullRequest: () => Promise<unknown>;
   /** Parent-owned so the Overview row and the on-demand PR tab cannot disagree. */
   pullRequest?: DeviceGitLinkedPullRequest | null;
+  /**
+   * Better Coding Experience: every PR the topic's Work rows link, listed
+   * under Changes in place of the single branch PR.
+   */
+  pullRequests?: TopicPullRequestView[];
   repoType?: string;
   sourcePath?: string;
   /** The bound machine whose live status to show, local desktop included. */
@@ -99,9 +103,11 @@ const Overview = memo<OverviewProps>(
     agentId,
     deviceId,
     environmentAvailable,
+    onOpenPullRequest,
     onOpenTab,
     onRefreshPullRequest,
     pullRequest,
+    pullRequests,
     repoType,
     sourcePath,
     statusDeviceId,
@@ -111,7 +117,6 @@ const Overview = memo<OverviewProps>(
     const { t: tDevice } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-    const imLayout = useImLayout();
     const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
     const threadId = useChatStore((s) => s.activeThreadId);
@@ -244,10 +249,6 @@ const Overview = memo<OverviewProps>(
       }
     }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
 
-    const ciStatus = pullRequest?.ciStatus;
-    const ci = pullRequest ? getCiVisual(ciStatus) : undefined;
-    const prVisual = pullRequest ? PR_STATE_VISUAL[getPullRequestState(pullRequest)] : undefined;
-
     const showAhead = !!aheadBehind?.hasUpstream && aheadBehind.ahead > 0;
     const showBehind = !!aheadBehind?.hasUpstream && aheadBehind.behind > 0;
 
@@ -273,6 +274,19 @@ const Overview = memo<OverviewProps>(
         }
       />
     );
+
+    // Better Coding Experience PRs are server records: they stay listed with
+    // their last known state even when the working directory cannot be read.
+    const pullRequestRows = pullRequests
+      ? pullRequests.map((view) => (
+          <PullRequestRow
+            key={view.identifier}
+            pullRequest={toLinkedPullRequest(view)}
+            tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
+            onClick={() => onOpenPullRequest?.(view)}
+          />
+        ))
+      : pullRequest && <PullRequestRow pullRequest={pullRequest} onClick={() => onOpenTab('pr')} />;
 
     const gitRows = (
       <>
@@ -384,38 +398,7 @@ const Overview = memo<OverviewProps>(
           onClick={() => onOpenTab('review')}
         />
 
-        {pullRequest && prVisual && ci && (
-          <Tooltip title={`#${pullRequest.number} ${pullRequest.title}`}>
-            <div>
-              <OverviewRow
-                icon={prVisual.icon}
-                iconColor={prVisual.color}
-                trailing={
-                  <span
-                    {...sx(sectionStyles.pill, {
-                      background: `color-mix(in srgb,  12%, transparent)`,
-                      color: ci.color,
-                    })}
-                  >
-                    <Icon icon={ci.icon} size={12} />
-                    {shouldShowCiLabel(ciStatus)
-                      ? t(
-                          `workingPanel.overview.ci.${ciStatus as 'failure' | 'pending'}` as 'workingPanel.overview.ci.failure',
-                        )
-                      : null}
-                  </span>
-                }
-                value={
-                  <>
-                    <span {...stylex.props(rowStyles.num)}>#{pullRequest.number}</span>
-                    {pullRequest.title}
-                  </>
-                }
-                onClick={() => onOpenTab('pr')}
-              />
-            </div>
-          </Tooltip>
-        )}
+        {pullRequestRows}
       </>
     );
 
@@ -425,28 +408,31 @@ const Overview = memo<OverviewProps>(
           <Skeleton.Text rows={3} />
         </div>
       ) : gitError ? (
-        <OverviewRow
-          danger
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorError}
-          value={t('workingPanel.overview.environmentError')}
-          trailing={
-            <Button
-              icon={<Icon icon={RefreshCwIcon} size={12} />}
-              size={'small'}
-              onClick={() => void refreshGit()}
-            >
-              {tCommon('retry')}
-            </Button>
-          }
-        />
+        <>
+          <OverviewRow
+            danger
+            icon={TriangleAlertIcon}
+            iconColor={cssVar.colorError}
+            value={t('workingPanel.overview.environmentError')}
+            trailing={
+              <Button
+                icon={<Icon icon={RefreshCwIcon} size={12} />}
+                size={'small'}
+                onClick={() => void refreshGit()}
+              >
+                {tCommon('retry')}
+              </Button>
+            }
+          />
+          {pullRequests && pullRequestRows}
+        </>
       ) : (
         gitRows
       )
     ) : null;
 
-    const workspaceBody = (
-      <Flexbox>
+    return (
+      <Flexbox className={stylex.props(styles.body).className}>
         {hasWorkspace && (
           <>
             <OverviewHeader
@@ -522,6 +508,13 @@ const Overview = memo<OverviewProps>(
           />
         )}
 
+        {/* Claude Code background tasks; async subagents stay in the thread list below. */}
+        <BackgroundTasksSection
+          afterBreak={showEmptyWorkspace}
+          deviceId={deviceId}
+          outputReadable={environmentAvailable}
+        />
+
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
         {topicId && <ThreadListSection afterBreak={showEmptyWorkspace} topicId={topicId} />}
@@ -555,19 +548,8 @@ const Overview = memo<OverviewProps>(
               onClick={() => onOpenTab('documents')}
             />
           )}
+          <TerminalRow />
         </Flexbox>
-      </Flexbox>
-    );
-
-    // `im_layout`: with an agent, the panel opens as its profile and this
-    // overview becomes the profile's Workspace tab.
-    return (
-      <Flexbox className={stylex.props(styles.body).className}>
-        {imLayout && agentId ? (
-          <AgentProfilePanel agentId={agentId} key={agentId} workspace={workspaceBody} />
-        ) : (
-          workspaceBody
-        )}
       </Flexbox>
     );
   },

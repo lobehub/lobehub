@@ -119,6 +119,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const firstUserMessage = (): UIChatMessage => ({
+  id: 'msg-1',
+  role: 'user',
+  content: 'first',
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+  agentId: 'test-session-id',
+});
+
 describe('thread action', () => {
   describe('openThreadCreator', () => {
     it('should set thread creator state and open portal', () => {
@@ -142,14 +151,7 @@ describe('thread action', () => {
       const { result } = renderHook(() => useChatStore());
 
       const mainMessages: UIChatMessage[] = [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'first',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          agentId: 'test-session-id',
-        },
+        firstUserMessage(),
         {
           id: 'msg-2',
           role: 'assistant',
@@ -193,14 +195,7 @@ describe('thread action', () => {
       const { result } = renderHook(() => useChatStore());
 
       const mainMessages: UIChatMessage[] = [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'first',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          agentId: 'test-session-id',
-        },
+        firstUserMessage(),
         {
           id: 'msg-2',
           role: 'assistant',
@@ -220,14 +215,7 @@ describe('thread action', () => {
       ];
 
       const threadMessages: UIChatMessage[] = [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'first',
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          agentId: 'test-session-id',
-        },
+        firstUserMessage(),
         {
           id: 'thread-msg-1',
           role: 'user',

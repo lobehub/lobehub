@@ -42,7 +42,7 @@ export class UserService extends BaseService {
    * @param userId User ID
    * @returns User info and role info
    */
-  private async getUserWithRoles(userId: string, includeCount = true): Promise<UserWithRoles> {
+  private async getUserWithRoles(userId: string, includeCount = false): Promise<UserWithRoles> {
     // Use subquery approach to avoid complex GROUP BY
     const user = await this.db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -90,7 +90,7 @@ export class UserService extends BaseService {
    * Get the currently logged-in user info
    * @returns User info
    */
-  async getCurrentUser(includeCount = true): ServiceResult<UserWithRoles> {
+  async getCurrentUser(includeCount = false): ServiceResult<UserWithRoles> {
     this.log('info', '获取当前登录用户信息及角色信息');
 
     // Query basic user info

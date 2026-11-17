@@ -7,6 +7,7 @@ import type {
   WorkMetadata,
   WorkResourceType,
   WorkType,
+  WorkVersionMetadata,
   WorkVisibility,
 } from '@lobechat/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -111,6 +112,20 @@ const buildVersionSnapshot = (
 };
 
 /**
+ * Version metadata follows the display snapshot: a partial registration keeps
+ * the current version's keys and overrides only the ones it carries, so a
+ * `gh pr edit` without `--head` does not drop the branch captured at create.
+ */
+const buildVersionMetadata = (
+  input: CreateVersionInput,
+  currentMetadata?: WorkVersionMetadata | null,
+): WorkVersionMetadata | null => {
+  if (!input.patchFields || !currentMetadata) return input.metadata ?? null;
+
+  return { ...currentMetadata, ...input.metadata };
+};
+
+/**
  * Shared registration pipeline: find-or-create the Work identity, dedupe by
  * toolCallId, allocate the next version number, insert the complete immutable
  * snapshot, and update the Work's current projection in ONE transaction. Retry
@@ -201,9 +216,9 @@ export const registerWorkVersion = async (
         if (dedupedUnderLock) return locked;
 
         const input = await buildInput(txCtx);
-        const [currentSnapshot] = locked.currentVersionId
+        const [currentVersion] = locked.currentVersionId
           ? await tx
-              .select(versionSnapshotSelection)
+              .select({ ...versionSnapshotSelection, metadata: workVersions.metadata })
               .from(workVersions)
               .where(
                 and(
@@ -213,6 +228,7 @@ export const registerWorkVersion = async (
               )
               .limit(1)
           : [];
+        const { metadata: currentMetadata, ...currentSnapshot } = currentVersion ?? {};
         const snapshot = buildVersionSnapshot(input, currentSnapshot);
 
         const now = new Date();
@@ -238,7 +254,7 @@ export const registerWorkVersion = async (
             description: snapshot.description,
             identifier: snapshot.identifier,
             messageId: params.messageId ?? null,
-            metadata: input.metadata ?? null,
+            metadata: buildVersionMetadata(input, currentMetadata),
             changeType: params.changeType,
             rootOperationId: params.rootOperationId ?? null,
             status: snapshot.status,

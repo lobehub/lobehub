@@ -406,6 +406,28 @@ export class AgentOperationModel {
       : null;
   }
 
+  /** A rejected publish must never be resurrected by stale recovery. */
+  async recordDispatchFailure(operationId: string, message: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: { message, type: 'QueueDispatchError' },
+        status: 'error',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
   async settleRunning(
     operationId: string,

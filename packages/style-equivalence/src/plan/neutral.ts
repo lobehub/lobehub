@@ -21,7 +21,10 @@ const keysOf = (expr: string) => {
 const signatureOf = (element: StyleElement | undefined) =>
   (element?.bindings ?? [])
     .filter((binding) => !binding.spread && binding.prop !== 'className')
-    .map((binding) => `${binding.prop}:${keysOf(binding.expr)}`)
+    .map(
+      (binding) =>
+        `${binding.prop === 'styles' ? 'classNames' : binding.prop}:${keysOf(binding.expansion ?? binding.expr)}`,
+    )
     .sort()
     .join(';');
 

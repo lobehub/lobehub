@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Hỗ trợ nhận diện video",
   "providerModels.item.modelConfig.vision.extra": "Cấu hình này chỉ bật khả năng tải hình ảnh trong ứng dụng. Việc có hỗ trợ nhận diện hình ảnh hay không phụ thuộc vào mô hình. Vui lòng tự kiểm tra khả năng nhận diện hình ảnh của mô hình.",
   "providerModels.item.modelConfig.vision.title": "Hỗ trợ thị giác",
+  "providerModels.item.pricing.audioOutputTokens": "Đầu ra âm thanh ${{amount}}/Triệu",
   "providerModels.item.pricing.image": "${{amount}}/Hình ảnh",
   "providerModels.item.pricing.inputCharts": "${{amount}}/Triệu ký tự",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Phút",

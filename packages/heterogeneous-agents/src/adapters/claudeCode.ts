@@ -58,6 +58,7 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+import { ClaudeCodeBackgroundTasks } from './claudeCodeBackgroundTasks';
 import { ClaudeCodeTaskSignals } from './claudeCodeTaskSignals';
 
 /**
@@ -1183,6 +1184,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   private mainToolNamesById = new Map<string, string>();
   /** CC's long-running task lifecycle and the signal lineage it stamps on turns. */
   private readonly taskSignals: ClaudeCodeTaskSignals;
+  private readonly backgroundTasks: ClaudeCodeBackgroundTasks;
   /**
    * True after a `user` event has been seen but the next turn hasn't yet
    * opened (`message_start` not yet fired). Carries the "this next turn
@@ -1244,6 +1246,11 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     this.options = { ...DEFAULT_ADAPTER_OPTIONS, ...options };
     this.profile = profile;
     this.taskSignals = new ClaudeCodeTaskSignals(this.options.signalBackgroundTaskCompletion);
+    // Claude Code only: other Claude-compatible CLIs take no stop_task control request.
+    this.backgroundTasks = new ClaudeCodeBackgroundTasks(
+      profile.agentType === 'claude-code',
+      (data) => this.makeEvent('background_task', data),
+    );
   }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
@@ -1289,7 +1296,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       this.makeEvent('tool_end', this.buildToolEndData(id, false)),
     );
     this.pendingToolCalls.clear();
-    return events;
+    return [...events, ...this.backgroundTasks.flush()];
   }
 
   // ─── Private handlers ───
@@ -1299,25 +1306,14 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       return [this.makeEvent('stream_retry', getApiRetryData(raw, this.profile.agentType))];
     }
 
-    // CC's long-running task lifecycle (Monitor, etc.) — see ClaudeCodeTaskSignals.
-    if (raw.subtype === 'task_started' && raw.task_id && raw.tool_use_id) {
-      const toolUseId: string = raw.tool_use_id;
-      this.taskSignals.start(
-        raw.task_id,
-        toolUseId,
-        this.mainToolNamesById.get(toolUseId) ?? 'unknown',
-        this.mainToolInputsById.get(toolUseId),
-      );
-      return [];
+    // CC's task lifecycle: callback-turn lineage + background task snapshots.
+    if (ClaudeCodeBackgroundTasks.isTaskEvent(raw)) {
+      return this.backgroundTasks.onSystem(raw, {
+        mainToolInput: (id) => this.mainToolInputsById.get(id),
+        mainToolName: (id) => this.mainToolNamesById.get(id),
+        taskSignals: this.taskSignals,
+      });
     }
-    if (raw.subtype === 'task_notification' && raw.task_id) {
-      this.taskSignals.end(raw.task_id);
-      return [];
-    }
-    // `task_updated` is a status patch (status: 'completed' fires
-    // alongside `task_notification`). Drop it — we drive lifecycle off
-    // task_started / task_notification only.
-    if (raw.subtype === 'task_updated') return [];
 
     if (raw.subtype !== 'init') return [];
     this.sessionId = raw.session_id;
@@ -1812,12 +1808,12 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * not main-agent-scoped).
    */
   private handleUser(raw: any): HeterogeneousAgentEvent[] {
-    // A replayed user message (`--replay-user-messages`) is input the host
-    // delivered into a live session: the turn it opens answers the user, not a
-    // background task — even if a task notification lands before it opens.
+    // A replayed user message (`--replay-user-messages`) is host input to the live session: its
+    // turn answers the user (even after a task notification); its uuid names the delivery taken.
     if (raw.isReplay && !raw.parent_tool_use_id) {
       this.hasUnhandledUserInput = true;
-      return [];
+      if (typeof raw.uuid !== 'string' || !raw.uuid) return [];
+      return [this.makeEvent('step_complete', { phase: 'user_message', uuid: raw.uuid })];
     }
 
     const content = raw.message?.content;
@@ -1942,6 +1938,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
           toolCallId,
         } satisfies ToolResultData),
       );
+      events.push(...this.backgroundTasks.onToolResult(toolCallId, resultContent));
 
       // Then emit tool_end (signals handler to refresh tool result UI)
       if (this.pendingToolCalls.has(toolCallId)) {

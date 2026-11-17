@@ -75,6 +75,22 @@ const repo = { name: 'repo', owner: 'owner' };
 const env = { TOKEN: 'x' };
 
 const cases: RpcCase[] = [
+  {
+    address: address(30_000),
+    call: (g) =>
+      g.antigravityQuota({
+        ...base,
+        command: '/bin/agy',
+        env: { AGY_PROFILE: 'test' },
+        force: true,
+      }),
+    failure: UNDEFINED,
+    name: 'antigravityQuota',
+    payload: {
+      method: 'getAntigravityQuota',
+      params: { command: '/bin/agy', env: { AGY_PROFILE: 'test' }, force: true },
+    },
+  },
   // ─── git reads ───
   {
     address: address(15_000),
@@ -141,6 +157,13 @@ const cases: RpcCase[] = [
   },
   {
     address: address(15_000),
+    call: (g) => g.gitAheadBehind({ ...base, branch: 'feat', path: '/p' }),
+    failure: UNDEFINED,
+    name: 'gitAheadBehind (named branch)',
+    payload: { method: 'getGitAheadBehind', params: { branch: 'feat', path: '/p' } },
+  },
+  {
+    address: address(15_000),
     call: (g) => g.listGitWorktrees({ ...base, path: '/p' }),
     failure: UNDEFINED,
     name: 'listGitWorktrees',
@@ -191,6 +214,17 @@ const cases: RpcCase[] = [
   },
   {
     address: address(30_000),
+    call: (g) =>
+      g.checkoutGitBranch({ ...base, branch: 'b', create: true, path: '/p', startPoint: 's' }),
+    failure: errorResult('Checkout failed'),
+    name: 'checkoutGitBranch (start point)',
+    payload: {
+      method: 'checkoutGitBranch',
+      params: { branch: 'b', create: true, path: '/p', startPoint: 's' },
+    },
+  },
+  {
+    address: address(30_000),
     call: (g) => g.renameGitBranch({ ...base, from: 'a', path: '/p', to: 'b' }),
     failure: errorResult('Rename failed'),
     name: 'renameGitBranch',
@@ -219,6 +253,31 @@ const cases: RpcCase[] = [
       method: 'addGitWorktree',
       params: { branch: 'b', path: '/p', worktreePath: '/w' },
     },
+  },
+  {
+    address: address(30_000),
+    call: (g) =>
+      g.addGitWorktree({ ...base, branch: 'b', path: '/p', startPoint: 's', worktreePath: '/w' }),
+    failure: errorResult('Add worktree failed'),
+    name: 'addGitWorktree (start point)',
+    payload: {
+      method: 'addGitWorktree',
+      params: { branch: 'b', path: '/p', startPoint: 's', worktreePath: '/w' },
+    },
+  },
+  {
+    address: address(65_000),
+    call: (g) => g.pullGitBranch({ ...base, branch: 'feat', path: '/p' }),
+    failure: errorResult('Pull failed'),
+    name: 'pullGitBranch (named branch)',
+    payload: { method: 'pullGitBranch', params: { branch: 'feat', path: '/p' } },
+  },
+  {
+    address: address(65_000),
+    call: (g) => g.pushGitBranch({ ...base, branch: 'feat', path: '/p' }),
+    failure: errorResult('Push failed'),
+    name: 'pushGitBranch (named branch)',
+    payload: { method: 'pushGitBranch', params: { branch: 'feat', path: '/p' } },
   },
   {
     address: address(65_000),
@@ -519,6 +578,14 @@ const cases: RpcCase[] = [
     success: undefined,
   },
   {
+    // A session's later calls stay on the client that created it.
+    address: address(15_000, { channel: 'cli', clientKinds: ['desktop'] }),
+    call: (g) => g.readTerminal({ ...base, client: 'desktop', cursor: 0, id: 't1' }),
+    failure: terminalThrow('readTerminal'),
+    name: 'readTerminal (pinned to the desktop)',
+    payload: { method: 'readTerminal', params: { cursor: 0, id: 't1' } },
+  },
+  {
     address: address(15_000, { channel: 'cli' }),
     call: (g) => g.closeTerminal({ ...base, id: 't1' }),
     failure: terminalThrow('closeTerminal'),
@@ -594,26 +661,35 @@ describe('DeviceGateway RPC surface', () => {
   });
 
   describe('listHeterogeneousAgentModels', () => {
-    const call = () =>
+    const call = (type: 'antigravity' | 'codex' = 'codex') =>
       new DeviceGateway().listHeterogeneousAgentModels({
         ...base,
         args: ['--x'],
-        command: 'codex',
+        command: type === 'antigravity' ? 'agy' : 'codex',
         cwd: '/p',
         env,
-        type: 'codex',
+        type,
       });
 
-    it('relays the catalog RPC with a 20s budget', async () => {
-      configureGateway();
-      mockClient.invokeRpc.mockResolvedValue({ data: DATA, success: true });
+    it.each(['antigravity', 'codex'] as const)(
+      'relays the %s catalog RPC with a 20s budget',
+      async (type) => {
+        configureGateway();
+        mockClient.invokeRpc.mockResolvedValue({ data: DATA, success: true });
 
-      await expect(call()).resolves.toEqual(DATA);
-      expect(mockClient.invokeRpc).toHaveBeenCalledWith(address(20_000), {
-        method: 'listHeterogeneousAgentModels',
-        params: { args: ['--x'], command: 'codex', cwd: '/p', env, type: 'codex' },
-      });
-    });
+        await expect(call(type)).resolves.toEqual(DATA);
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(address(20_000), {
+          method: 'listHeterogeneousAgentModels',
+          params: {
+            args: ['--x'],
+            command: type === 'antigravity' ? 'agy' : 'codex',
+            cwd: '/p',
+            env,
+            type,
+          },
+        });
+      },
+    );
 
     it.each([
       ['unconfigured', undefined, 'device_unavailable', 'Device gateway is not configured'],

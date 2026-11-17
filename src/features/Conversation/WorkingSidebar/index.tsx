@@ -1,12 +1,11 @@
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Skeleton } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   BoxesIcon,
-  CheckIcon,
   ClipboardListIcon,
   FilesIcon,
   FileTextIcon,
@@ -17,7 +16,6 @@ import {
   PlusIcon,
   SearchIcon,
   Settings2Icon,
-  SquareTerminalIcon,
 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -42,10 +40,10 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
-import { useImLayout } from '@/features/NavRail/useImLayout';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
+import TopicPullRequestProbes from '@/features/TopicPullRequests/TopicPullRequestProbes';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
@@ -65,6 +63,7 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import DeferredSkeleton from './DeferredSkeleton';
@@ -76,6 +75,7 @@ import {
   isBrowserTab,
   isCanvasTab,
   isDynamicTab,
+  isMcpAppTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -85,12 +85,14 @@ import { CANVAS_MIN_WIDTH, MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDT
 import Overview from './Overview';
 import { getStatusDeviceId } from './Overview/overviewData';
 import OverviewSlot from './OverviewSlot';
-import PullRequest from './PullRequest';
-import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
+import PullRequestSidebarTab from './PullRequest/SidebarTab';
+import { useSidebarPullRequests } from './PullRequest/useSidebarPullRequests';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import { TopicSearchPane } from './Search';
 import { useExtraWorkingSidebarTabs } from './useExtraWorkingSidebarTabs';
+import { useMcpAppSidebar } from './useMcpAppSidebar';
+import { useOpenMenuItems } from './useOpenMenuItems';
 import { useRetainAfterHide } from './useRetainAfterHide';
 import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
 import { useTabContextMenuItems } from './useTabContextMenuItems';
@@ -122,19 +124,6 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
     boxShadow: cssVar.boxShadowTertiary,
-  },
-  overviewPanelDocked: {
-    height: '100%',
-    maxHeight: 'none',
-    margin: '0',
-    borderWidth: 'medium',
-    borderStyle: 'none',
-    borderColor: 'currentcolor',
-    borderInlineStartWidth: '1px',
-    borderInlineStartStyle: 'solid',
-    borderInlineStartColor: cssVar.colorBorderSecondary,
-    borderRadius: '0',
-    boxShadow: 'none',
   },
   overviewSlot: {
     overflow: 'hidden',
@@ -179,7 +168,6 @@ interface AgentWorkingSidebarProps {
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
   const { t } = useTranslation(['chat', 'setting']);
-  const imLayout = useImLayout();
   // Keep the panel frame + tabs on the navigation commit; the pane contents
   // mount in a deferred follow-up pass behind a skeleton.
   const contentReady = useDeferredMount();
@@ -381,15 +369,20 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const {
+    pickPullRequest,
+    probes: pullRequestProbes,
     pullRequest,
+    pullRequests,
     refresh: refreshPullRequest,
     ...pullRequestLink // confirmed, confirmError, onRetryConfirm
-  } = useLinkedPullRequest({
+  } = useSidebarPullRequests({
     available: filesystemEnvironmentAvailable && !!workingDirectory,
     deviceId: remoteDeviceId,
     gitPath,
     isGithub,
     snapshot: snapshotConfig?.git,
+    topicId,
+    workingDirectory,
   });
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
@@ -486,6 +479,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       t,
     ],
   );
+  const { enabled: mcpAppsEnabled } = useMcpAppSidebar(composerTarget);
   const availableTabs = useMemo(
     () => new Map(tabDescriptors.map((tab) => [tab.key, tab])),
     [tabDescriptors],
@@ -493,8 +487,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
   const isAvailableTab = useCallback(
     (tab: string) =>
-      availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)) || isCanvasTab(tab),
-    [availableTabs, browserAvailable],
+      availableTabs.has(tab) ||
+      (browserAvailable && isBrowserTab(tab)) ||
+      isCanvasTab(tab) ||
+      (mcpAppsEnabled && isMcpAppTab(tab)),
+    [availableTabs, browserAvailable, mcpAppsEnabled],
   );
   const openTabsContextKey = topicId
     ? `topic:${topicId}`
@@ -711,6 +708,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           tab,
           browserTabMetadata[`${openTabsContextKey}:${tab}`],
           t('workingPanel.browser.title'),
+          activeAgentId,
         ) ?? availableTabs.get(tab),
     )
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
@@ -829,93 +827,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // Also cap the drag range so releasing a drag can never persist a width that
   // immediately fails the fit check and hides the panel.
   const maxPanelWidth = Math.min(MAX_PANEL_WIDTH, Math.max(widthBudget, minDisplayWidth));
-  const openMenuItems = useCallback((): DropdownItem[] => {
-    const itemOf = (key: string): DropdownItem | undefined => {
-      const tab = availableTabs.get(key);
-      if (!tab) return undefined;
-
-      if (key === BROWSER_TAB_KEY) {
-        return {
-          icon: <Icon icon={tab.icon} size={14} />,
-          key,
-          label: tab.label,
-          onClick: () => {
-            const browserTab = openBrowserTab();
-            if (browserTab) requestTabFocus(browserTab);
-          },
-        };
-      }
-
-      return {
-        icon: <Icon icon={openedTabs.includes(key) ? CheckIcon : tab.icon} size={14} />,
-        key,
-        label: tab.label,
-        onClick: () => {
-          openTab(key);
-          requestTabFocus(key);
-        },
-      };
-    };
-    const groupLabel = (label: string) => <span style={{ textTransform: 'none' }}>{label}</span>;
-    const group = (key: string, label: string, keys: string[]): DropdownItem | undefined => {
-      const children = keys.map(itemOf).filter((item): item is DropdownItem => Boolean(item));
-      return children.length
-        ? { children, key, label: groupLabel(label), type: 'group' }
-        : undefined;
-    };
-
-    const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
-      'search',
-      'review',
-      'pr',
-      'files',
-      'works',
-      'comments',
-      'skills',
-      'documents',
-      'web',
-      ...extraTabs.map((tab) => tab.key),
-    ]);
-    const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
-    if (terminalAvailable) {
-      toolChildren.push({
-        icon: <Icon icon={SquareTerminalIcon} size={14} />,
-        key: 'terminal',
-        label: t('workingPanel.openMenu.terminal'),
-        onClick: () => toggleTerminalPanel(true),
-      });
-    }
-    const toolGroup = toolChildren.length
-      ? {
-          children: toolChildren,
-          key: 'tools',
-          label: groupLabel(t('workingPanel.openMenu.tools')),
-          type: 'group' as const,
-        }
-      : undefined;
-    const configurationGroup = group('configuration', t('workingPanel.openMenu.configuration'), [
-      'params',
-    ]);
-
-    return [workspaceGroup, toolGroup, configurationGroup]
-      .filter((item): item is DropdownItem => Boolean(item))
-      .flatMap((item, index, items) =>
-        index < items.length - 1 ? [item, { type: 'divider' as const }] : [item],
-      );
-  }, [
+  const openMenuItems = useOpenMenuItems({
+    agentId: activeAgentId,
+    mcpAppsAvailable: mcpAppsEnabled && composerTarget.writable,
     availableTabs,
     extraTabs,
     openBrowserTab,
     openTab,
     openedTabs,
     requestTabFocus,
-    t,
+    scope: composerTarget.writable ? composerTarget.contextKey : undefined,
     terminalAvailable,
     toggleTerminalPanel,
-  ]);
+  });
 
-  // The floating card keeps a 16px margin on each side; the docked panel has none.
-  const overviewGutter = imLayout ? 0 : 32;
+  // The floating card keeps a 16px margin on each side.
+  const overviewGutter = 32;
   const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - overviewGutter);
   const overviewPanel = (
     <OverviewSlot>
@@ -930,14 +857,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           >
             <m.div
               animate={{ opacity: 1, x: 0 }}
+              className={stylex.props(styles.overviewPanel).className}
               exit={{ opacity: 0, transition: overviewExitTransition, x: 12 }}
               initial={{ opacity: 0, x: 12 }}
               role={'complementary'}
               style={{ width: overviewWidth }}
               transition={OVERVIEW_TRANSITION}
-              className={
-                stylex.props(styles.overviewPanel, imLayout && styles.overviewPanelDocked).className
-              }
             >
               <Flexbox className={stylex.props(styles.overviewBody).className}>
                 <Overview
@@ -946,12 +871,18 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   deviceId={remoteDeviceId}
                   environmentAvailable={filesystemEnvironmentAvailable}
                   pullRequest={pullRequest}
+                  pullRequests={pullRequests}
                   repoType={environmentRepoType}
                   sourcePath={sourceWorkingDirectory}
                   statusDeviceId={getStatusDeviceId(effectiveTarget, agencyConfig?.boundDeviceId)}
                   workingDirectory={environmentWorkingDirectory}
                   onOpenTab={openTab}
                   onRefreshPullRequest={refreshPullRequest}
+                  onOpenPullRequest={
+                    pickPullRequest &&
+                    ((view) =>
+                      pickPullRequest(view) ? openTab('pr') : openTrustedExternalUrl(view.url))
+                  }
                 />
               </Flexbox>
             </m.div>
@@ -964,6 +895,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   return (
     <>
       {overviewPanel}
+      <TopicPullRequestProbes
+        deviceId={remoteDeviceId}
+        path={environmentWorkingDirectory}
+        probes={pullRequestProbes}
+      />
       <RightPanel
         collapseThreshold={320}
         defaultWidth={renderWidth}
@@ -1108,21 +1044,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   </Activity>
                 )}
                 {pullRequest && workingDirectory && (
-                  <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>
-                    <Flexbox className={stylex.props(styles.pane).className}>
-                      <PullRequest
-                        active={!!showRightPanel && activeTab === 'pr'}
-                        {...pullRequestLink}
-                        deviceId={remoteDeviceId}
-                        key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
-                        number={pullRequest.number}
-                        summary={pullRequest}
-                        url={pullRequest.url}
-                        workingDirectory={workingDirectory}
-                        onOpenTab={openTab}
-                      />
-                    </Flexbox>
-                  </Activity>
+                  // The PR tab renders at MIN_PANEL_WIDTH: it fits exactly when Overview does.
+                  <PullRequestSidebarTab
+                    {...pullRequestLink}
+                    active={!!showRightPanel && activeTab === 'pr'}
+                    canShow={overviewFits}
+                    className={stylex.props(styles.pane).className}
+                    deviceId={remoteDeviceId}
+                    pullRequest={pullRequest}
+                    workingDirectory={workingDirectory}
+                    onOpenTab={openTab}
+                  />
                 )}
                 <DynamicTabPanes
                   activeTab={activeTab}
@@ -1132,6 +1064,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   composerTarget={composerTarget}
                   openedTabs={openedTabs}
                   visible={!!showRightPanel}
+                  onCloseTab={closeTab}
                   onBrowserMetadataChange={(tab, metadata) => {
                     const metadataKey = `${openTabsContextKey}:${tab}`;
                     setBrowserTabMetadata((current) =>

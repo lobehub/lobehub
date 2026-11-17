@@ -59,6 +59,8 @@ export interface CreateTaskParams {
   /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
   assigneeUserId?: string;
   instruction: string;
+  /** Existing task label names to attach; unknown names fail, nothing is created. */
+  labels?: string[];
   /** Model the task runs with; omitted pins the assignee agent's current model. */
   model?: string;
   name: string;
@@ -144,6 +146,8 @@ export interface CreateTasksState {
 
 export interface ListTasksParams {
   assigneeAgentId?: string;
+  /** Label or label group names; matches tasks carrying any of them. */
+  labels?: string[];
   limit?: number;
   offset?: number;
   parentIdentifier?: string;
@@ -224,6 +228,8 @@ export interface DeleteTaskCommentState {
 
 export interface EditTaskParams {
   addDependencies?: string[];
+  /** Existing label names to add; a grouped label replaces its sibling. */
+  addLabels?: string[];
   assigneeAgentId?: string | null;
   /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
   assigneeUserId?: string | null;
@@ -238,6 +244,7 @@ export interface EditTaskParams {
   /** Provider for the task model; `null` clears it. */
   provider?: string | null;
   removeDependencies?: string[];
+  removeLabels?: string[];
 }
 
 export interface EditTaskState {

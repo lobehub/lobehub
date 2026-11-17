@@ -303,6 +303,10 @@ export class DeviceGateway {
     return agents.claudeCodeQuota(this.clientGetter, ...args);
   }
 
+  antigravityQuota(...args: DeviceRpcArgs<typeof agents.antigravityQuota>) {
+    return agents.antigravityQuota(this.clientGetter, ...args);
+  }
+
   codexQuota(...args: DeviceRpcArgs<typeof agents.codexQuota>) {
     return agents.codexQuota(this.clientGetter, ...args);
   }
@@ -461,6 +465,10 @@ export class DeviceGateway {
 
   executeMcpCall(...args: DeviceRpcArgs<typeof agents.executeMcpCall>) {
     return agents.executeMcpCall(this.clientGetter, ...args);
+  }
+
+  listMcpTools(...args: DeviceRpcArgs<typeof agents.listMcpTools>) {
+    return agents.listMcpTools(this.clientGetter, ...args);
   }
 
   executeMessageApi(...args: DeviceRpcArgs<typeof agents.executeMessageApi>) {

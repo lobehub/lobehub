@@ -7,8 +7,11 @@ export const labPreferSelectors = {
     s.preference.lab?.enableAgentGraphConfig ??
     DEFAULT_PREFERENCE.lab?.enableAgentGraphConfig ??
     false,
+  enableAgentIdentity: (s: UserState): boolean => s.preference.lab?.enableAgentIdentity ?? false,
   enableArtifactDeployment: (s: UserState): boolean =>
     s.preference.lab?.enableArtifactDeployment ?? false,
+  enableBetterCodingExperience: (s: UserState): boolean =>
+    s.preference.lab?.enableBetterCodingExperience ?? false,
   enableClaudeCodeSdk: (s: UserState): boolean => s.preference.lab?.enableClaudeCodeSdk ?? false,
   enableCodexAppServer: (s: UserState): boolean => s.preference.lab?.enableCodexAppServer ?? false,
   enableDeviceTunnel: (s: UserState): boolean => s.preference.lab?.enableDeviceTunnel ?? false,
@@ -22,6 +25,7 @@ export const labPreferSelectors = {
     s.preference.lab?.enableMessageTextSelectionActions ??
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
+  enablePageCollab: (s: UserState): boolean => s.preference.lab?.enablePageCollab ?? false,
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
   enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,

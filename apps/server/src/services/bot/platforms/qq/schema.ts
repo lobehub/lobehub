@@ -6,6 +6,7 @@ import {
   makeDmPolicyField,
   makeGroupPolicyFields,
   makeUserIdField,
+  processingMessageField,
   watchKeywordsField,
 } from '../const';
 import { deviceAccessFields } from '../deviceAccess';
@@ -99,6 +100,7 @@ export const schema: FieldSchema[] = [
         type: 'boolean',
       },
       displayToolCallsField,
+      processingMessageField,
       makeDmPolicyField({ policy: 'open' }),
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,

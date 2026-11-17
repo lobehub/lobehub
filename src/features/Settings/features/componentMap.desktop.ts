@@ -9,10 +9,10 @@ import About from '../about';
 import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
+import Automations from '../automations';
 import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
-import Drive from '../drive';
 import Environments from '../environments';
 import Hotkey from '../hotkey';
 import Integrations from '../integrations';
@@ -51,7 +51,6 @@ export const componentMap = {
   [SettingsTabs.Storage]: Storage,
   [SettingsTabs.Trash]: Trash,
   [SettingsTabs.Devices]: Devices,
-  [SettingsTabs.Drive]: Drive,
   [SettingsTabs.Environments]: Environments,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs
@@ -64,6 +63,7 @@ export const componentMap = {
   [SettingsTabs.Security]: Security,
   [SettingsTabs.Skill]: Skill,
   [SettingsTabs.Connector]: Connector,
+  [SettingsTabs.Automations]: Automations,
   [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,

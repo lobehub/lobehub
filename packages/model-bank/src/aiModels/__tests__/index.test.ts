@@ -106,7 +106,7 @@ describe('ChatGPT subscription models', () => {
       (model) => model.providerId === ModelProvider.ChatGPT,
     );
 
-    expect(models).toHaveLength(8);
+    expect(models).toHaveLength(9);
     expect(
       models.every((model) => model.settings?.extendParams?.includes('preserveThinking')),
     ).toBe(true);
@@ -351,6 +351,9 @@ describe('recent direct-provider models', () => {
     ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
     ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
+    ['google', 'gemini-4-carbon', 'thinkingLevel3'],
+    ['vertexai', 'gemini-4-carbon', 'thinkingLevel3'],
+    ['openrouter', 'google/gemini-4-carbon', 'thinkingLevel3'],
     ['xai', 'grok-4.6', 'grok4_6ReasoningEffort'],
     ['qwen', 'qwen3.8-max', 'qwen38ReasoningEffort'],
     ['qwen', 'qwen3.8-max-0902', 'qwen38ReasoningEffort'],
@@ -382,10 +385,29 @@ describe('Gemini 3.8 introductory pricing', () => {
   });
 });
 
+describe('Gemini 4 Carbon introductory pricing', () => {
+  it.each([
+    ['google', 'gemini-4-carbon'],
+    ['vertexai', 'gemini-4-carbon'],
+    ['openrouter', 'google/gemini-4-carbon'],
+  ])('bills %s/%s at $2 input and $10 output', (providerId, id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(model?.pricing?.units).toEqual(
+      expect.arrayContaining([
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ]),
+    );
+  });
+});
+
 describe('subscription model catalogs', () => {
   it.each([
     ['chatgpt', 'gpt-6-astra', 'gpt6ReasoningEffort'],
     ['chatgpt', 'gpt-6.1-sol', 'gpt6ReasoningEffort'],
+    ['chatgpt', 'gpt-6.1-terra', 'gpt5_6ReasoningEffort'],
     ['supergrok', 'grok-4.6', 'grok4_6ReasoningEffort'],
   ])('exposes %s/%s without usage-based pricing', (providerId, id, reasoningParam) => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(

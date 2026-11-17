@@ -26,9 +26,15 @@ export const resolveToolReplay = async ({
     throw new Error(`Cannot read tool result for ${toolMessageId}`);
   }
 
-  const pending =
-    message.pluginState?.status === 'pending' || message.pluginIntervention?.status === 'pending';
   const placeholder = !message.content || message.content === '...';
+  // A written result outranks a pending state: a tool that keeps working after
+  // it returns (a background sub-agent's start receipt) leaves `status: pending`
+  // on its row until it reports back, and running the call again would start
+  // that work a second time.
+  const resultWritten = !placeholder && typeof message.metadata?.toolExecutionTimeMs === 'number';
+  const pending =
+    (message.pluginState?.status === 'pending' && !resultWritten) ||
+    message.pluginIntervention?.status === 'pending';
   if (
     pending ||
     (placeholder &&

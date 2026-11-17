@@ -1686,14 +1686,14 @@ export class ConversationControlActionImpl {
 
     // Walk up to the assistant that owns this tool. `messageOperationMap` is a
     // most-granular pointer, so it may reference a transient child op
-    // (`reasoning`, `toolCalling`, ...), not the runtime execution that owns
-    // the AskUser bridge. This memory-only lookup is deliberately deferred
-    // until the durable path is unavailable or reports `handled: false`; it is
-    // provenance for local desktop IPC / legacy fallback, never server auth.
+    // (`reasoning`, `toolCalling`, ...), not the runtime owning the AskUser bridge.
+    // Prefer live IPC provenance; on OSS reload, the persisted op locates the
+    // remote callback. The server still authorizes the operation independently.
     const { messageOperationMap } = this.#get();
     const candidateOperationId =
       (toolMessage.parentId && messageOperationMap?.[toolMessage.parentId]) ??
-      messageOperationMap?.[toolMessageId];
+      messageOperationMap?.[toolMessageId] ??
+      originalIntervention?.operationId;
 
     if (!candidateOperationId) {
       if (await this.#get().checkQuestionSubmission(toolMessageId, effectiveContext)) {

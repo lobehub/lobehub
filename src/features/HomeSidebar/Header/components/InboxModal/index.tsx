@@ -31,7 +31,7 @@ import {
   SparklesIcon,
   TagIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -39,15 +39,14 @@ import AsyncError from '@/components/AsyncError';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { PENDING_TRANSFERS_SWR_KEY } from '@/features/ResourceTransferRequest';
 import dynamic from '@/libs/next/dynamic';
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { inboxKeys } from '@/libs/swr/keys';
-import { notificationService } from '@/services/notification';
-import type { PendingTransferRequest } from '@/services/resourceTransferRequest';
-import { resourceTransferRequestService } from '@/services/resourceTransferRequest';
+import { useHomeStore } from '@/store/home';
+import { homeNotificationSelectors } from '@/store/home/selectors';
+import type { InboxNavigationCount } from '@/store/home/slices/notification/projection';
 
-import type { NotificationListHandle } from './useNotificationList';
+import { useNavigationCounts } from './useNavigationCounts';
 
 const Content = dynamic(() => import('./Content'), {
   loading: () => (
@@ -91,12 +90,7 @@ const styles = stylex.create({
   },
 });
 
-interface CategoryCount {
-  category: string;
-  readCount: number;
-  totalCount: number;
-  unreadCount: number;
-}
+type CategoryCount = InboxNavigationCount;
 
 type ReadStatus = 'all' | 'read' | 'unread';
 
@@ -135,32 +129,23 @@ const InboxModalContent = memo(() => {
   const [navigationFilter, setNavigationFilter] = useState(ALL_FILTER);
   const [readStatus, setReadStatus] = useState<ReadStatus>('unread');
   const [bulkAction, setBulkAction] = useState<'archive' | 'read'>();
-  const listHandleRef = useRef<NotificationListHandle>(null);
-  const registerListHandle = useCallback((handle: NotificationListHandle) => {
-    listHandleRef.current = handle;
-  }, []);
   // `undefined` = the combined "all" view (no read-state filter).
   const isRead = readStatus === 'all' ? undefined : readStatus === 'read';
 
   const {
-    data: navigationCounts,
+    counts: navigationCounts,
     error: navigationCountsError,
+    isConfirmed: isNavigationCountsConfirmed,
     isLoading: isNavigationCountsLoading,
     isValidating: isNavigationCountsValidating,
-    mutate: refreshNavigationCounts,
-  } = useClientDataSWR<CategoryCount[]>(
-    inboxKeys.navigationCounts(workspaceId),
-    () => notificationService.getNavigationCounts(),
-    { revalidateOnFocus: false },
-  );
+    retry: refreshNavigationCounts,
+  } = useNavigationCounts();
 
-  // Same key Content uses, so this reads the shared cache entry. The server
+  // The same replica Content reads (one request serves both). The server
   // folds one totalCount unit per live card into `pending`, and archive-all
   // cannot touch live cards — subtracting them yields the archivable rows.
-  const { data: liveTransfers } = useClientDataSWR<PendingTransferRequest[]>(
-    workspaceId ? [PENDING_TRANSFERS_SWR_KEY, workspaceId] : null,
-    () => resourceTransferRequestService.listMine(),
-  );
+  useHomeStore((s) => s.useFetchPendingTransferRequests)(!!workspaceId);
+  const liveTransfers = useHomeStore(homeNotificationSelectors.pendingTransferRequests);
   const liveTransferCount = liveTransfers?.length ?? 0;
 
   const categoryCounts = navigationCounts ?? [];
@@ -191,34 +176,29 @@ const InboxModalContent = memo(() => {
   const category = navigationFilter === ALL_FILTER ? undefined : navigationFilter;
 
   useEffect(() => {
+    // Only a server answer may drop a category: a restored snapshot can be stale.
     if (
       category &&
-      !isNavigationCountsLoading &&
-      !navigationCountsError &&
+      isNavigationCountsConfirmed &&
       !visibleCategorySignature.split('\0').includes(category)
     ) {
       setNavigationFilter(ALL_FILTER);
     }
-  }, [category, isNavigationCountsLoading, navigationCountsError, visibleCategorySignature]);
+  }, [category, isNavigationCountsConfirmed, visibleCategorySignature]);
 
   const refreshInbox = useCallback(() => {
-    // The notification list lives in a useSWRInfinite hook whose `$inf$` cache
-    // key is skipped by SWR's filter-form mutate, so refresh it through the
-    // bound handle Content registers instead. This is also the rollback path
-    // for optimistic updates: on failure a revalidation restores server state.
-    listHandleRef.current?.refresh();
+    // Re-reads every mounted inbox view and the counts; a rejected write has
+    // already rolled its optimistic change back, so this only reconciles.
+    void useHomeStore.getState().refreshInboxNotifications();
     void mutate(inboxKeys.unreadCount(workspaceId));
-    void mutate(inboxKeys.navigationCounts(workspaceId));
   }, [workspaceId]);
 
   const handleMarkAsRead = useCallback(
     async (id: string) => {
-      // A row read in the unread view leaves the list; in the All view it
-      // STAYS (as combined history), so removing it there would drop it from
-      // the cache until a later refresh — let the revalidation flip its state.
-      if (readStatus !== 'all') listHandleRef.current?.optimisticRemove(id);
+      // The row flips to read: the unread view drops it, the All view keeps
+      // it (as combined history) in its read state.
       try {
-        await notificationService.markAsRead([id]);
+        await useHomeStore.getState().markInboxNotificationRead(id, { category, isRead });
         refreshInbox();
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
@@ -226,14 +206,13 @@ const InboxModalContent = memo(() => {
         refreshInbox();
       }
     },
-    [readStatus, refreshInbox, t],
+    [category, isRead, refreshInbox, t],
   );
 
   const handleArchive = useCallback(
     async (id: string) => {
-      listHandleRef.current?.optimisticRemove(id);
       try {
-        await notificationService.archive(id);
+        await useHomeStore.getState().archiveInboxNotification(id, { category, isRead });
         refreshInbox();
       } catch (error) {
         console.error('Failed to archive notification:', error);
@@ -241,25 +220,16 @@ const InboxModalContent = memo(() => {
         refreshInbox();
       }
     },
-    [refreshInbox, t],
+    [category, isRead, refreshInbox, t],
   );
 
   const handleMarkAllAsRead = useCallback(async () => {
     setBulkAction('read');
-    // Rows only leave the unread view when read; in the all view they stay
-    // (as read rows), so there the post-action refresh updates them in place.
-    if (readStatus === 'unread') listHandleRef.current?.optimisticClear();
-    // Pending is action-driven, not read-driven: its badge counts live
-    // requests that mark-all-as-read cannot (and must not) resolve. Zeroing
-    // it optimistically would flash the count away only to bounce back on the
-    // refresh — reading as a broken button — so it stays untouched.
-    void refreshNavigationCounts(
-      (counts) =>
-        counts?.map((item) => (item.category === 'pending' ? item : { ...item, unreadCount: 0 })),
-      { revalidate: false },
-    );
+    // Rows leave the unread view and stay (as read rows) in the all view.
+    // Pending's badge is left alone: it counts live requests that
+    // mark-all-as-read cannot (and must not) resolve.
     try {
-      await notificationService.markAllAsRead();
+      await useHomeStore.getState().markAllInboxNotificationsRead({ category, isRead });
       refreshInbox();
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
@@ -268,13 +238,12 @@ const InboxModalContent = memo(() => {
     } finally {
       setBulkAction(undefined);
     }
-  }, [readStatus, refreshInbox, refreshNavigationCounts, t]);
+  }, [category, isRead, refreshInbox, t]);
 
   const handleArchiveAll = useCallback(async () => {
     setBulkAction('archive');
-    listHandleRef.current?.optimisticClear();
     try {
-      await notificationService.archiveAll();
+      await useHomeStore.getState().archiveAllInboxNotifications({ category, isRead });
       refreshInbox();
     } catch (error) {
       console.error('Failed to archive all notifications:', error);
@@ -283,7 +252,7 @@ const InboxModalContent = memo(() => {
     } finally {
       setBulkAction(undefined);
     }
-  }, [refreshInbox, t]);
+  }, [category, isRead, refreshInbox, t]);
 
   const countForStatus = (item: CategoryCount) => {
     if (readStatus === 'all') return item.totalCount;
@@ -409,7 +378,7 @@ const InboxModalContent = memo(() => {
                       key={item.category}
                       title={categoryLabel(item.category)}
                       extra={
-                        !navigationCountsError && count > 0 ? (
+                        count > 0 ? (
                           <Text style={{ marginInlineEnd: 6 }} type="secondary">
                             {count}
                           </Text>
@@ -428,7 +397,6 @@ const InboxModalContent = memo(() => {
             <Content
               category={category}
               isRead={isRead}
-              registerHandle={registerListHandle}
               onArchive={handleArchive}
               onMarkAsRead={handleMarkAsRead}
               onRefreshInbox={refreshInbox}

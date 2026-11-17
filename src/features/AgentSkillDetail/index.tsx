@@ -21,11 +21,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin: 0;
 
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 12px;
+    line-height: 16px;
     color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  /**
+   * Two stacked lines whose combined height matches the 40px avatar on the
+   * left, so the header block reads as one row aligned with the icon instead of
+   * a loose paragraph hanging beside it.
+   */
+  headerText: css`
+    overflow: hidden;
+    height: 40px;
   `,
   divider: css`
     flex-shrink: 0;
@@ -46,7 +55,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   name: css`
     font-size: 16px;
     font-weight: 500;
-    line-height: 1.4;
+    line-height: 20px;
     color: ${cssVar.colorText};
   `,
   right: css`
@@ -114,7 +123,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
         <div className={styles.meta}>
           <Flexbox horizontal align={'center'} gap={12}>
             <SkillAvatar size={40} />
-            <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
+            <Flexbox className={styles.headerText} flex={1} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                 <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
                   <span className={styles.name}>{skillDetail.name}</span>
@@ -138,6 +147,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                         <ActionIcon
                           fill={cssVar.colorTextDescription}
                           icon={Github}
+                          size={'small'}
                           title={t('agentSkillDetail.repository')}
                         />
                       </a>
@@ -146,6 +156,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                       <a href={sourceUrl} rel="noreferrer" target={'_blank'}>
                         <ActionIcon
                           icon={ExternalLinkIcon}
+                          size={'small'}
                           title={t('agentSkillDetail.sourceUrl')}
                         />
                       </a>
