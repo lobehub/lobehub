@@ -47,6 +47,23 @@ const copyEntries = async (from: string, into: string) => {
 const BORROWED_FROM_COMMON = ['commondir', 'config', 'gitdir', 'objects', 'packed-refs', 'refs'];
 
 /**
+ * A linked worktree of a bare repository borrows a `config` that says `core.bare = true`,
+ * because the shared repository is the bare one. The copy is a working tree, so it has to
+ * say so: left bare, every `git status`, `add` or `checkout` in the lane fails with
+ * "this operation must be run in a work tree".
+ */
+const normalizeBareConfig = async (gitDir: string) => {
+  const file = path.join(gitDir, 'config');
+  const config = await readFile(file, 'utf8').catch(() => undefined);
+  const bare = /^[^\S\n]*bare[^\S\n]*=[^\S\n]*true[^\S\n]*$/m;
+  if (!config || !bare.test(config)) return;
+  await writeFile(
+    file,
+    config.replace(bare, (line) => line.replace('true', 'false')),
+  );
+};
+
+/**
  * A repository's own `.git` directory travels with the copy: index and HEAD are
  * inside it, so a lane stages and commits on its own.
  *
@@ -83,6 +100,7 @@ const materializeGitDir = async (from: string, into: string) => {
   // come from the worktree itself, in the second pass.
   await copyFrom(shared, ['index', 'logs', 'worktrees']);
   await copyFrom(source, BORROWED_FROM_COMMON);
+  await normalizeBareConfig(gitDir);
 };
 
 /**
@@ -130,13 +148,26 @@ export const prepareSwarmLane = async (cwd: string): Promise<string> => {
 };
 
 /** Replace `target`'s contents (but its `.lanes`) with `source`'s, keeping the old ones in `snapshot`. */
-const replaceContents = async (source: string, target: string, snapshot: string) => {
+const replaceContents = async (
+  source: string,
+  target: string,
+  snapshot: string,
+  options: { keepGit?: boolean } = {},
+) => {
   await rm(snapshot, { force: true, recursive: true });
   await copyWorkspace(target, snapshot);
+  // A promoted workspace keeps its own `.git`: a lane's gitdir was materialized for the copy,
+  // so landing it here would turn a linked worktree into an unrelated standalone repository and
+  // leave the parent branch — and this worktree's registration — pointing at the old HEAD.
+  const skip = (entry: string) =>
+    isBookkeeping(entry) || (Boolean(options.keepGit) && entry === '.git');
   for (const entry of await readdir(target)) {
-    if (!isBookkeeping(entry)) await rm(path.join(target, entry), { force: true, recursive: true });
+    if (!skip(entry)) await rm(path.join(target, entry), { force: true, recursive: true });
   }
-  await copyEntries(source, target);
+  for (const entry of await readdir(source)) {
+    if (skip(entry)) continue;
+    await cp(path.join(source, entry), path.join(target, entry), COPY);
+  }
 };
 
 /**
@@ -219,6 +250,6 @@ export const promoteSwarmLane = async (workspace: string, key: string) => {
   const best = swarmLaneBestDirectory(workspace, key);
   const source = (await exists(best)) ? best : live;
   const snapshot = path.join(lanes, '_before_promote');
-  await replaceContents(source, workspace, snapshot);
+  await replaceContents(source, workspace, snapshot, { keepGit: true });
   return { graded: source === best, snapshot, source, target: workspace };
 };

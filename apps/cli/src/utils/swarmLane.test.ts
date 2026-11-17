@@ -164,7 +164,7 @@ describe('stakeSwarmLanes', () => {
 
 describe('prepareSwarmLane on a linked worktree', () => {
   /** A workspace whose `.git` is a pointer file, next to the repository it borrows from. */
-  const linkedWorktree = async () => {
+  const linkedWorktree = async (options: { config?: string } = {}) => {
     const root = await mkdtemp(path.join(tmpdir(), 'lh-swarm-wt-'));
     const shared = path.join(root, 'repo', '.git');
     const worktreeGit = path.join(shared, 'worktrees', 'wt');
@@ -172,7 +172,7 @@ describe('prepareSwarmLane on a linked worktree', () => {
     await writeFile(path.join(shared, 'objects', 'pack-1.pack'), 'objects');
     await mkdir(path.join(shared, 'refs', 'heads'), { recursive: true });
     await writeFile(path.join(shared, 'refs', 'heads', 'main'), 'sha-main\n');
-    await writeFile(path.join(shared, 'config'), '[core]\n');
+    await writeFile(path.join(shared, 'config'), options.config ?? '[core]\n');
     await writeFile(path.join(shared, 'index'), 'original-index');
     await mkdir(worktreeGit, { recursive: true });
     await writeFile(path.join(worktreeGit, 'commondir'), '../..\n');
@@ -207,6 +207,31 @@ describe('prepareSwarmLane on a linked worktree', () => {
 
     // The original workspace keeps its pointer.
     expect(await read(path.join(worktree, '.git'))).toBe(`gitdir: ${worktreeGit}\n`);
+  });
+
+  it('marks the copy as a working tree when the shared repository is bare', async () => {
+    const { worktree } = await linkedWorktree({ config: '[core]\n\tbare = true\n' });
+    const lane = path.join(worktree, '.lanes', 'A');
+    await prepareSwarmLane(lane);
+
+    // A bare repository's config would make every `git status`/`add` in the lane fail with
+    // "this operation must be run in a work tree".
+    expect(await read(path.join(lane, '.git', 'config'))).toBe('[core]\n\tbare = false\n');
+  });
+
+  it("keeps the workspace's own git metadata when a lane is promoted over it", async () => {
+    const { worktree, worktreeGit } = await linkedWorktree();
+    const lane = path.join(worktree, '.lanes', 'A');
+    await prepareSwarmLane(lane);
+    await writeFile(path.join(lane, 'train.py'), 'champion');
+
+    await promoteSwarmLane(worktree, 'A');
+
+    expect(await read(path.join(worktree, 'train.py'))).toBe('champion');
+    // The workspace stays a linked worktree: its pointer is untouched, and the parent
+    // repository keeps this worktree's registration instead of gaining a stray repository.
+    expect(await read(path.join(worktree, '.git'))).toBe(`gitdir: ${worktreeGit}\n`);
+    expect((await lstat(path.join(lane, '.git'))).isDirectory()).toBe(true);
   });
 
   it('keeps a plain repository copy as its own .git directory', async () => {
