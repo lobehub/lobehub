@@ -501,6 +501,7 @@ export class TabPagesActionImpl {
 
     this.#set({ tabs: newTabs }, false, 'updateTabCache');
     this.#persist();
+    this.#get().updateRecentPageCache(tabs[index].url, cached);
   };
 
   // Pinning is a retention promise, so a bulk close only ever narrows the unpinned run —
