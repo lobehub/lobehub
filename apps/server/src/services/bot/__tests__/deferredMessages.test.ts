@@ -25,7 +25,13 @@ function createRedis(execResult: unknown = []) {
     });
   }
   chain.exec = vi.fn().mockResolvedValue(execResult);
-  return { calls, chain, lrange: vi.fn().mockResolvedValue([]), multi: vi.fn(() => chain) };
+  return {
+    calls,
+    chain,
+    hmget: vi.fn().mockResolvedValue([]),
+    lrange: vi.fn().mockResolvedValue([]),
+    multi: vi.fn(() => chain),
+  };
 }
 
 const makeMessage = (id: string) => ({ id, toJSON: () => ({ _type: 'chat:Message', id }) }) as any;

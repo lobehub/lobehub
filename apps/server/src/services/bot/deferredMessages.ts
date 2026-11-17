@@ -148,8 +148,10 @@ const latestPerOrigin = (messages: DeferredBotMessage[]): DeferredBotMessage[] =
 };
 
 /**
- * Count this replay against each message's budget and drop the ones that ran out. A counter that
- * cannot be written fails open: the per-origin collapse above already stops the known loop.
+ * Drop the messages whose replay budget is spent. Only reads the counts: a delivery that fails
+ * before the SDK takes the message (no adapter, Redis hiccup) must not use up the budget, or the
+ * retry job would drop a message it was meant to deliver. A count that cannot be read fails open:
+ * the per-origin collapse above already stops the known loop.
  */
 const withinReplayBudget = async (
   applicationId: string,
@@ -158,22 +160,19 @@ const withinReplayBudget = async (
 ): Promise<DeferredBotMessage[]> => {
   const redis = getAgentRuntimeRedisClient();
   if (!redis || messages.length === 0) return messages;
-  const key = buildReplayCountKey(applicationId, platformThreadId);
   try {
-    const transaction = redis.multi();
-    for (const message of messages) transaction.hincrby(key, getOriginMessageId(message), 1);
-    transaction.expire(key, TTL_SECONDS);
-    const results = await transaction.exec();
-    if (!results) return messages;
+    const counts = await redis.hmget(
+      buildReplayCountKey(applicationId, platformThreadId),
+      ...messages.map((message) => getOriginMessageId(message)),
+    );
     return messages.filter((message, index) => {
-      const [error, count] = results[index] ?? [];
-      // No count (failed or missing reply) is not evidence of a loop.
-      if (error || !(Number(count) > MAX_REPLAYS_PER_MESSAGE)) return true;
+      // No count (never replayed, or a missing reply) is not evidence of a loop.
+      if (!(Number(counts?.[index]) >= MAX_REPLAYS_PER_MESSAGE)) return true;
       log(
         'Dropping message=%s on thread=%s: replayed %d times without leaving the queue',
         getOriginMessageId(message),
         platformThreadId,
-        Number(count) - 1,
+        Number(counts?.[index]),
       );
       return false;
     });
@@ -183,12 +182,32 @@ const withinReplayBudget = async (
   }
 };
 
+/** Count a delivery the SDK accepted against each message's budget. Best-effort. */
+const recordReplays = async (
+  applicationId: string,
+  platformThreadId: string,
+  messages: DeferredBotMessage[],
+): Promise<void> => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis || messages.length === 0) return;
+  const key = buildReplayCountKey(applicationId, platformThreadId);
+  try {
+    const transaction = redis.multi();
+    for (const message of messages) transaction.hincrby(key, getOriginMessageId(message), 1);
+    transaction.expire(key, TTL_SECONDS);
+    await transaction.exec();
+  } catch (error) {
+    log('Could not count replays for thread=%s: %O', platformThreadId, error);
+  }
+};
+
 /**
  * Acknowledge only the snapshot successfully handed to the SDK. New arrivals
  * remain queued. A failure (including process/Redis failure) leaves the original
  * entries available for retry. Delivery is at-least-once if a batch partially
  * succeeds or completion callbacks overlap; copies of one message are replayed
- * once, and a message is replayed at most {@link MAX_REPLAYS_PER_MESSAGE} times.
+ * once, and a message is delivered at most {@link MAX_REPLAYS_PER_MESSAGE} times
+ * (failed deliveries do not count).
  */
 export async function replayDeferredBotMessages(
   applicationId: string,
@@ -202,7 +221,10 @@ export async function replayDeferredBotMessages(
     platformThreadId,
     latestPerOrigin(snapshot.map((entry) => entry.message)),
   );
-  if (due.length > 0) await replay(due);
+  if (due.length > 0) {
+    await replay(due);
+    await recordReplays(applicationId, platformThreadId, due);
+  }
 
   const redis = getAgentRuntimeRedisClient();
   if (!redis) throw new Error('Redis unavailable while acknowledging deferred messages');

@@ -45,6 +45,11 @@ function createStatefulRedis() {
     rpush: (key: string, ...values: string[]) => list(key).push(...values),
   };
   return {
+    hmget: async (key: string, ...fields: string[]) =>
+      fields.map((field) => {
+        const count = hashes.get(key)?.get(field);
+        return count === undefined ? null : String(count);
+      }),
     lists,
     lrange: async (key: string) => [...list(key)],
     multi: () => {
@@ -146,6 +151,24 @@ describe('deferred replay loop', () => {
     }
 
     expect(replay).toHaveBeenCalledTimes(MAX_REPLAYS_PER_MESSAGE);
+    expect(redis.lists.get(KEY)).toEqual([]);
+  });
+
+  it('does not spend the budget on deliveries that fail before the SDK takes the message', async () => {
+    await deferBotMessages('app-1', 'feishu:group:oc_1', [asMessage('om_1')]);
+    const replay = vi.fn().mockRejectedValue(new Error('Bot adapter unavailable for feishu'));
+
+    // More failed attempts than the budget allows (the retry job schedules up to eight).
+    for (let attempt = 0; attempt < MAX_REPLAYS_PER_MESSAGE + 2; attempt++) {
+      await expect(replayDeferredBotMessages('app-1', 'feishu:group:oc_1', replay)).rejects.toThrow(
+        'Bot adapter unavailable',
+      );
+    }
+    replay.mockResolvedValueOnce(undefined);
+    await replayDeferredBotMessages('app-1', 'feishu:group:oc_1', replay);
+
+    expect(replay).toHaveBeenCalledTimes(MAX_REPLAYS_PER_MESSAGE + 3);
+    expect(replay.mock.lastCall?.[0].map((entry: { id: string }) => entry.id)).toEqual(['om_1']);
     expect(redis.lists.get(KEY)).toEqual([]);
   });
 });
