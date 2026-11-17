@@ -79,30 +79,6 @@ export const environmentProcedures = {
       ctx.environmentModel.create(input).catch(rethrowDuplicateEnvironmentName),
     ),
 
-  /**
-   * A repository, added the way a project adds one: named after it, and
-   * answered with the environment already checking it out when there is one.
-   * Picking a repository is the whole decision — a second entry for the same
-   * checkout, or a name the person has to invent, would only be noise.
-   */
-  createFromRepository: environmentProcedure
-    .input(
-      z.object({
-        name: nameSchema,
-        ref: environmentSourceSchema.shape.ref,
-        url: environmentSourceSchema.shape.url,
-        visibility: visibilitySchema.optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) =>
-      ctx.environmentModel.ensureForRepository({
-        defaultBranch: input.ref,
-        name: input.name,
-        repositoryUrl: input.url,
-        visibility: input.visibility,
-      }),
-    ),
-
   /** Specifications only. Nothing here needs a sandbox session to answer. */
   listEnvironments: environmentProcedure
     .input(z.object({ visibility: visibilitySchema.optional() }).optional())
@@ -240,6 +216,33 @@ export const environmentProcedures = {
     }),
 };
 
-export const environmentRouter = router(environmentProcedures);
+/**
+ * A repository, added the way a project adds one: named after it, and
+ * answered with the environment already checking it out when there is one.
+ * Picking a repository is the whole decision — a second entry for the same
+ * checkout, or a name the person has to invent, would only be noise.
+ *
+ * Served on the `environment` router only: older clients reach the released
+ * procedures under `sandboxStorage`, and none of them call this one.
+ */
+const createFromRepository = environmentProcedure
+  .input(
+    z.object({
+      name: nameSchema,
+      ref: environmentSourceSchema.shape.ref,
+      url: environmentSourceSchema.shape.url,
+      visibility: visibilitySchema.optional(),
+    }),
+  )
+  .mutation(async ({ ctx, input }) =>
+    ctx.environmentModel.ensureForRepository({
+      defaultBranch: input.ref,
+      name: input.name,
+      repositoryUrl: input.url,
+      visibility: input.visibility,
+    }),
+  );
+
+export const environmentRouter = router({ ...environmentProcedures, createFromRepository });
 
 export type EnvironmentRouter = typeof environmentRouter;
