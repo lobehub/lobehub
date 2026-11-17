@@ -80,6 +80,8 @@ export interface OpenLocalFileParams {
 
 export interface OpenLocalFileEntry extends OpenLocalFileParams {
   id: string;
+  /** The topic the device file was opened from. */
+  topicId?: string;
 }
 
 /**

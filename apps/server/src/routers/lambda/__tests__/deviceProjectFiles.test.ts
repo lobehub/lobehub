@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   createProjectDirectory: vi.fn(),
   createProjectFile: vi.fn(),
   findByDeviceId: vi.fn(),
+  findTopic: vi.fn(),
+  getLocalFilePreview: vi.fn(),
   getAgentAgencyConfig: vi.fn(),
   listClaudeCodeMemory: vi.fn(),
   moveProjectFiles: vi.fn(),
@@ -44,12 +46,18 @@ vi.mock('@/database/models/device', () => ({
     findByDeviceId = mocks.findByDeviceId;
   },
 }));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = mocks.findTopic;
+  },
+}));
 vi.mock('@/server/services/deviceGateway', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   deviceGateway: {
     copyProjectFiles: mocks.copyProjectFiles,
     createProjectDirectory: mocks.createProjectDirectory,
     createProjectFile: mocks.createProjectFile,
+    getLocalFilePreview: mocks.getLocalFilePreview,
     listClaudeCodeMemory: mocks.listClaudeCodeMemory,
     moveProjectFiles: mocks.moveProjectFiles,
     renameProjectFile: mocks.renameProjectFile,
@@ -123,6 +131,79 @@ describe('device project file mutations', () => {
     } as never);
     await expect((viewer[route] as any)(input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(mocks[route]).not.toHaveBeenCalled();
+  });
+});
+
+describe('files in a persisted session worktree', () => {
+  const approvedRoot = '/Users/me/proj';
+  const worktreePath = '/Users/me/worktrees/first';
+  const input = {
+    ...base,
+    path: `${worktreePath}/notes.md`,
+    topicId: 'tpc_first',
+    workingDirectory: worktreePath,
+  };
+
+  const topic = (worktree: string, source = approvedRoot, deviceId = base.deviceId) => ({
+    metadata: {
+      boundDeviceId: deviceId,
+      workingDirectoryConfig: { git: { activeWorktree: worktree }, path: source },
+    },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findTopic.mockResolvedValue(topic(worktreePath));
+    mocks.findByDeviceId.mockResolvedValue({
+      workingDirs: [{ git: { activeWorktree: '/Users/me/worktrees/latest' }, path: approvedRoot }],
+    });
+    mocks.getLocalFilePreview.mockResolvedValue({ success: true });
+    mocks.writeProjectFile.mockResolvedValue({ success: true });
+  });
+
+  it('previews and saves two session checkouts with no device workingDirs update', async () => {
+    const secondCheckout = '/Users/me/worktrees/second';
+    mocks.findTopic.mockImplementation(async (id: string) =>
+      id === 'tpc_first' ? topic(worktreePath) : topic(secondCheckout),
+    );
+
+    for (const [topicId, checkout] of [
+      ['tpc_first', worktreePath],
+      ['tpc_second', secondCheckout],
+    ]) {
+      const args = { ...input, path: `${checkout}/notes.md`, topicId, workingDirectory: checkout };
+      const worktree = { approvedRoot, sourcePath: approvedRoot, worktreePath: checkout };
+      await expect(caller().getLocalFilePreview(args)).resolves.toEqual({ success: true });
+      await expect(caller().writeProjectFile({ ...args, content: 'saved' })).resolves.toEqual({
+        success: true,
+      });
+      expect(mocks.getLocalFilePreview).toHaveBeenLastCalledWith(
+        expect.objectContaining({ path: args.path, worktree }),
+      );
+      expect(mocks.writeProjectFile).toHaveBeenLastCalledWith(
+        expect.objectContaining({ content: 'saved', path: args.path, worktree }),
+      );
+    }
+
+    expect(mocks.findTopic).toHaveBeenCalledWith('tpc_first');
+    expect(mocks.findTopic).toHaveBeenCalledWith('tpc_second');
+  });
+
+  it.each([
+    ['missing topic', undefined],
+    ['wrong device', topic(worktreePath, approvedRoot, 'dev-2')],
+    ['different worktree', topic('/Users/me/worktrees/other')],
+    ['unregistered source', topic(worktreePath, '/Users/me/other')],
+    ['legacy worktree slot as source', topic(worktreePath, '/Users/me/worktrees/latest')],
+  ])('refuses access with %s', async (_label, savedTopic) => {
+    mocks.findTopic.mockResolvedValue(savedTopic);
+
+    await expect(caller().getLocalFilePreview(input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(caller().writeProjectFile({ ...input, content: 'x' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(mocks.getLocalFilePreview).not.toHaveBeenCalled();
+    expect(mocks.writeProjectFile).not.toHaveBeenCalled();
   });
 });
 
