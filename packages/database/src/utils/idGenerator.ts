@@ -18,6 +18,7 @@ const prefixes = {
   artboardPages: 'abp',
   artboards: 'art',
   budget: 'bgt',
+  channelSections: 'chs',
   channelThreads: 'cht',
   channels: 'chn',
   chatGroups: 'cg',
