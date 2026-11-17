@@ -7,6 +7,7 @@ export const parsePullRequestUrl = (url: string) => {
 
   const repoFullName = `${match[1]}/${match[2]}`;
   const number = Number(match[3]);
+  if (!Number.isSafeInteger(number) || number < 1) return null;
   return {
     identifier: `${repoFullName}#${number}`,
     number,
