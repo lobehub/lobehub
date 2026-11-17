@@ -10,7 +10,10 @@ import { ContactModel } from '@/database/models/contact';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
-import { notifyContactRequestAfterResponse } from '@/server/services/contact/notify';
+import {
+  notifyContactRequestAfterResponse,
+  notifyContactsChangedAfterResponse,
+} from '@/server/services/contact/notify';
 
 /**
  * The address book belongs to the Channel experience: contacts are who you can message there.
@@ -63,6 +66,7 @@ export const contactRouter = router({
         recipientUserId: input.userId,
         requestId: result.requestId,
       });
+      notifyContactsChangedAfterResponse([ctx.userId, input.userId]);
       return result;
     }),
 
@@ -76,25 +80,29 @@ export const contactRouter = router({
         recipientUserId: result.contactUserId,
         requestId: input.requestId,
       });
+      notifyContactsChangedAfterResponse([ctx.userId, result.contactUserId]);
       return result;
     }),
 
   declineRequest: contactProcedure
     .input(z.object({ requestId }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.contactModel.declineRequest(input.requestId);
+      const { requesterId } = await ctx.contactModel.declineRequest(input.requestId);
+      notifyContactsChangedAfterResponse([ctx.userId, requesterId]);
       return { success: true };
     }),
 
   cancelRequest: contactProcedure
     .input(z.object({ requestId }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.contactModel.cancelRequest(input.requestId);
+      const { addresseeId } = await ctx.contactModel.cancelRequest(input.requestId);
+      notifyContactsChangedAfterResponse([ctx.userId, addresseeId]);
       return { success: true };
     }),
 
   removeUser: contactProcedure.input(z.object({ userId })).mutation(async ({ ctx, input }) => {
     await ctx.contactModel.removeUser(input.userId);
+    notifyContactsChangedAfterResponse([ctx.userId, input.userId]);
     return { success: true };
   }),
 
@@ -104,6 +112,7 @@ export const contactRouter = router({
     .input(z.object({ userId }))
     .mutation(async ({ ctx, input }) => {
       await ctx.contactModel.openTo(input.userId);
+      notifyContactsChangedAfterResponse([ctx.userId, input.userId]);
       return { success: true };
     }),
 
@@ -113,6 +122,7 @@ export const contactRouter = router({
     .input(z.object({ userId }))
     .mutation(async ({ ctx, input }) => {
       await ctx.contactModel.removeExternal(input.userId);
+      notifyContactsChangedAfterResponse([ctx.userId, input.userId]);
       return { success: true };
     }),
 

@@ -481,8 +481,9 @@ export class ContactModel {
       return { contactUserId: requesterId, workspaceId };
     });
 
-  declineRequest = async (requestId: string) => {
-    await this.db.transaction(async (tx) => {
+  /** Returns who sent it, so they can be told their request is no longer pending. */
+  declineRequest = async (requestId: string): Promise<{ requesterId: string }> =>
+    this.db.transaction(async (tx) => {
       const request = await this.incomingPending(tx, requestId);
       // Same rule as accepting: only a request still pending can be answered.
       const [declined] = await tx
@@ -493,10 +494,11 @@ export class ContactModel {
         )
         .returning({ id: userContactRequests.id });
       if (!declined) throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
+      return { requesterId: request.requesterId };
     });
-  };
 
-  cancelRequest = async (requestId: string) => {
+  /** Returns who it was sent to, so their incoming request can disappear. */
+  cancelRequest = async (requestId: string): Promise<{ addresseeId: string }> => {
     if (!isUuid(requestId))
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
     const [cancelled] = await this.db
@@ -509,8 +511,9 @@ export class ContactModel {
           eq(userContactRequests.status, 'pending'),
         ),
       )
-      .returning({ id: userContactRequests.id });
+      .returning({ addresseeId: userContactRequests.addresseeId });
     if (!cancelled) throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
+    return { addresseeId: cancelled.addresseeId };
   };
 
   /**
