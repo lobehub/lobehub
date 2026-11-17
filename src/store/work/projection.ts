@@ -114,8 +114,8 @@ export interface TopicPullRequestsParams {
  * The pull requests a topic's Work rows link (Better Coding Experience): the
  * control bar's PR chip and the working sidebar's repository card. A reload
  * paints the last list — with the last known states — before the network
- * answers. The sync adopts `work:topicPullRequests`, which the conversation
- * view refresh revalidates at every operation end.
+ * answers. Revalidated by `workService.refreshTopicPullRequests` (run end,
+ * conversation view refresh, a linked push).
  */
 export const topicPullRequestsResource = defineReplica<
   TopicPullRequestsParams,
@@ -125,7 +125,6 @@ export const topicPullRequestsResource = defineReplica<
   name: 'topicPullRequests',
   persist: { maxEntries: 100 },
   storage: 'indexedDB',
-  syncKey: ({ topicId }) => workKeys.topicPullRequests(topicId),
   version: 1,
 });
 

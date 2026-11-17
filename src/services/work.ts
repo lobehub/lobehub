@@ -16,10 +16,12 @@ import type {
   WorkVisibility,
 } from '@lobechat/types';
 
+import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { matchDomain, workKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { revalidateConversationMessages } from '@/services/message/replica';
+import { topicPullRequestsResource } from '@/store/work/projection';
 
 /** One cursor page of the workspace-wide Work list (resource page 产物 gallery). */
 export interface WorkSummaryPage {
@@ -154,7 +156,7 @@ class WorkService {
   /** Revalidate a topic's linked pull requests (mounted reads only). */
   refreshTopicPullRequests = async (topicId?: string | null) => {
     if (!topicId) return;
-    await mutate(workKeys.topicPullRequests(topicId));
+    await revalidateReplica(topicPullRequestsResource, topicId);
   };
 
   /**
@@ -227,7 +229,7 @@ class WorkService {
       mutate(workKeys.conversation(topicId, threadId ?? null)),
       mutate((key) => Array.isArray(key) && key[0] === workKeys.versions.root),
       // A run's gh / push commands link pull requests through the same scan.
-      mutate(workKeys.topicPullRequests(topicId)),
+      this.refreshTopicPullRequests(topicId),
     ]);
   };
 
