@@ -268,6 +268,23 @@ export const getDefaultRemote = async (dirPath: string): Promise<string | undefi
   return remotes[0];
 };
 
+/**
+ * git remote URL forms that name a GitHub repository: https (with or without
+ * credentials), ssh://, and scp-like `git@github.com:owner/repo.git`.
+ */
+const GITHUB_REMOTE_RE =
+  /^(?:https?:\/\/(?:[^@/\s]+@)?github\.com\/|ssh:\/\/(?:[^@/\s]+@)?github\.com(?::\d+)?\/|(?:[^@/\s]+@)?github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i;
+
+/** `owner/repo` of a remote's GitHub push URL; undefined for any other host. */
+export const getRemoteGithubRepo = async (
+  dirPath: string,
+  remote: string,
+): Promise<string | undefined> => {
+  const url = (await runGit(['remote', 'get-url', '--push', remote], dirPath))?.trim();
+  const match = url ? GITHUB_REMOTE_RE.exec(url) : null;
+  return match ? `${match[1]}/${match[2]}` : undefined;
+};
+
 /** Exit-status-only probe — `runGit` cannot tell success-with-no-output from failure. */
 const gitSucceeds = async (args: string[], cwd: string): Promise<boolean> => {
   try {

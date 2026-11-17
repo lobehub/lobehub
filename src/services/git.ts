@@ -83,6 +83,8 @@ export interface GitLinkedPRSummary {
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
   pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  /** `owner/repo` of the GitHub remote the branch publishes to. */
+  remoteRepoFullName?: string;
   upstream?: DeviceGitUpstreamRef;
 }
 
@@ -316,6 +318,7 @@ class GitService {
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
       pullRequestStatus: pr.status,
+      remoteRepoFullName: pr.remoteRepoFullName,
       upstream: pr.upstream,
     };
   }
