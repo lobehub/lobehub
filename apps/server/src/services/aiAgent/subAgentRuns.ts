@@ -127,35 +127,33 @@ export interface ExecAgentThreadRunOptions {
 type ThreadRow = NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
 
 /**
- * Take over an earlier `callSubAgent` isolation thread for a new turn, so the
- * same sub-agent continues on its preserved history.
+ * Find a sub-agent's isolation thread on behalf of the agent that dispatched it.
  *
- * Refuses threads outside the parent's topic/agent and threads not created by
- * `callSubAgent` (group members, `callAgent` children, …). A thread whose
- * previous run is still going is not claimed: its run comes back as `running`,
- * for the caller to steer instead. The final compare-and-set claim makes
- * concurrent follow-ups to one sub-agent race-safe.
- *
- * Returns what the thread carries (its spawning tool call and the usage it
- * accumulated so far); the claim and every later write of this run carry it
- * forward instead of resetting it.
+ * Accepts threads spawned by `callSubAgent` — a copy of the dispatcher, or a
+ * named target agent — and by the legacy `callAgent`. Refuses threads outside
+ * the topic, threads of other kinds (group members, …), and threads another
+ * agent dispatched: a copy's thread runs as the dispatcher itself, while a
+ * named target's thread runs as the target and is anchored on the
+ * dispatcher's tool call. `agentId`, when given, is the agent the next run
+ * executes as and must be the one the thread runs as.
  */
 const findCallSubAgentThread = async (
   deps: Pick<SubAgentRunDeps, 'messageModel' | 'threadModel'>,
-  params: { agentId: string; threadId: string; topicId: string },
+  params: { agentId?: string; dispatcherAgentId: string; threadId: string; topicId: string },
 ): Promise<{ error: string } | { thread: ThreadRow }> => {
-  const { agentId, threadId, topicId } = params;
+  const { agentId, dispatcherAgentId, threadId, topicId } = params;
   const thread = await deps.threadModel.findById(threadId);
+  const notFound = {
+    error: `Sub-agent "${threadId}" was not found in this conversation. subAgentId only takes the id from an earlier <sub_agent id="..." /> tag; leave it empty to start a new sub-agent.`,
+  };
 
   if (
     !thread ||
     thread.type !== ThreadType.Isolation ||
     thread.topicId !== topicId ||
-    thread.agentId !== agentId
+    (agentId !== undefined && thread.agentId !== agentId)
   ) {
-    return {
-      error: `Sub-agent "${threadId}" was not found in this conversation. subAgentId only takes the id from an earlier <sub_agent id="..." /> tag; leave it empty to start a new sub-agent.`,
-    };
+    return notFound;
   }
 
   const sourcePlugin = thread.sourceMessageId
@@ -163,6 +161,13 @@ const findCallSubAgentThread = async (
     : undefined;
   if (!isCallSubAgentCall(sourcePlugin)) {
     return { error: `"${threadId}" is not a sub-agent started by callSubAgent.` };
+  }
+
+  if (thread.agentId !== dispatcherAgentId) {
+    const source = thread.sourceMessageId
+      ? await deps.messageModel.findById(thread.sourceMessageId)
+      : undefined;
+    if (source?.agentId !== dispatcherAgentId) return notFound;
   }
 
   return { thread };
@@ -198,17 +203,40 @@ const isStopping = async (deps: SubAgentRunDeps, operationId: string): Promise<b
   }
 };
 
+/**
+ * Take over an earlier sub-agent's isolation thread for a new turn, so the
+ * same sub-agent continues on its preserved history (see
+ * {@link findCallSubAgentThread} for which threads qualify). A thread whose
+ * previous run is still going is not claimed: its run comes back as
+ * `running`, for the caller to steer instead. The final compare-and-set claim
+ * makes concurrent follow-ups to one sub-agent race-safe.
+ *
+ * Returns what the thread carries (its spawning tool call, the usage it
+ * accumulated so far, an external agent's session); the claim and every later
+ * write of this run carry it forward instead of resetting it.
+ */
 const claimSubAgentThread = async (
   deps: SubAgentRunDeps,
-  params: { agentId: string; startedAt: string; threadId: string; topicId: string },
+  params: {
+    agentId: string;
+    dispatcherAgentId: string;
+    startedAt: string;
+    threadId: string;
+    topicId: string;
+  },
 ): Promise<
   | { error: string }
   | { running: { operationId: string } }
   | { thread: ThreadRow; carryOver: ThreadCarryOver }
   | { claimLost: true }
 > => {
-  const { agentId, startedAt, threadId, topicId } = params;
-  const found = await findCallSubAgentThread(deps, { agentId, threadId, topicId });
+  const { agentId, dispatcherAgentId, startedAt, threadId, topicId } = params;
+  const found = await findCallSubAgentThread(deps, {
+    agentId,
+    dispatcherAgentId,
+    threadId,
+    topicId,
+  });
   if ('error' in found) return found;
 
   const { thread } = found;
@@ -273,6 +301,8 @@ const continueSubAgentThread = async (
   deps: SubAgentRunDeps,
   params: {
     agentId: string;
+    canSteer?: boolean;
+    dispatcherAgentId: string;
     groupId?: string | null;
     instruction: string;
     startedAt: string;
@@ -284,13 +314,18 @@ const continueSubAgentThread = async (
   | { steered: { operationId: string } }
   | { thread: ThreadRow; carryOver: ThreadCarryOver }
 > => {
-  const { groupId, instruction, ...claimParams } = params;
+  const { canSteer = true, groupId, instruction, ...claimParams } = params;
   const { threadId } = claimParams;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const claim = await claimSubAgentThread(deps, claimParams);
     if ('claimLost' in claim) continue;
     if (!('running' in claim)) return claim;
+    if (!canSteer) {
+      return {
+        error: `Sub-agent "${threadId}" is still running and cannot take a new instruction until it finishes. Wait for its result, then send the instruction again; its history is kept.`,
+      };
+    }
 
     const { operationId } = claim.running;
     const outcome = await deps.queueSubAgentSteer({
@@ -345,9 +380,10 @@ const waitForRunToStop = async (
 };
 
 /**
- * Stop a running `callSubAgent` child on behalf of the agent that dispatched it
+ * Stop a running sub-agent on behalf of the agent that dispatched it
  * (`lobe-agent.cancelSubAgent`). Only the dispatcher's own sub-agents in the
- * same topic can be cancelled.
+ * same topic can be cancelled — its copies and the named agents it started,
+ * including those started by the legacy `callAgent`.
  *
  * The run is interrupted like a user Stop: it ends at its next step boundary
  * and its thread turns `cancel`. Its history stays on the thread, so the parent
@@ -366,7 +402,11 @@ export const cancelSubAgentThreadRun = async (
 ): Promise<CancelVirtualSubAgentResult> => {
   const { agentId, threadId, topicId } = params;
 
-  const found = await findCallSubAgentThread(deps, { agentId, threadId, topicId });
+  const found = await findCallSubAgentThread(deps, {
+    dispatcherAgentId: agentId,
+    threadId,
+    topicId,
+  });
   if ('error' in found) return { error: found.error, status: 'failed', threadId };
 
   const { operationId, running } = await readSubAgentThreadRun(deps, found.thread);
@@ -503,6 +543,9 @@ export const execAgentThreadRun = async (
     // While its previous run is still going, the instruction steers that run.
     const claim = await continueSubAgentThread(deps, {
       agentId,
+      ...('canSteer' in params && { canSteer: params.canSteer }),
+      dispatcherAgentId:
+        ('dispatcherAgentId' in params ? params.dispatcherAgentId : undefined) ?? agentId,
       groupId,
       instruction,
       startedAt,

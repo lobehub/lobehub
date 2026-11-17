@@ -645,7 +645,7 @@ export interface ExecSubAgentParams {
  * parent's placeholder tool message before resuming the parent operation.
  */
 export interface ExecVirtualSubAgentParams {
-  /** The agent ID to execute */
+  /** The agent ID to execute: the dispatching agent for a copy, or the named target */
   agentId: string;
   /**
    * Detached run (`callSubAgent({ runInBackground })`): the parent is not
@@ -653,6 +653,12 @@ export interface ExecVirtualSubAgentParams {
    * answer is delivered to the parent as a separate message on completion.
    */
   background?: boolean;
+  /**
+   * Whether an instruction for a still-running thread may be queued for its
+   * next step (default true). External agents never read that queue, so for
+   * them a busy thread is refused instead.
+   */
+  canSteer?: boolean;
   /**
    * chatConfig overrides (thinking / reasoning-effort extend params) for the
    * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
@@ -665,6 +671,12 @@ export interface ExecVirtualSubAgentParams {
    * runs instead of re-routing through the agent-level `boundDeviceId`.
    */
   deviceId?: string;
+  /**
+   * The agent that dispatched the call. A continued sub-agent must be its own:
+   * a copy's thread belongs to it, a named target's thread was started from its
+   * tool call. Defaults to `agentId` (a copy).
+   */
+  dispatcherAgentId?: string;
   /**
    * What the child inherits when the parent runs inside an eval attempt: the
    * attempt's prompt context (session clock), its runtime (tool forwarding,
@@ -690,7 +702,7 @@ export interface ExecVirtualSubAgentParams {
   instruction: string;
   /**
    * What "this machine" means for the child: the parent run's device. Only
-   * consulted when the child's target is `local`, so a named `callAgent` target
+   * consulted when the child's target is `local`, so a named target agent
    * keeps its own execution target.
    */
   localDeviceId?: string;
@@ -708,13 +720,14 @@ export interface ExecVirtualSubAgentParams {
   /** Provider for {@link model}. */
   provider?: string;
   /**
-   * The tool call (`callSubAgent` / `callAgent`) that spawned this sub-agent,
+   * The tool call (`callSubAgent`, or the legacy `callAgent`) that spawned this sub-agent,
    * stored on a new thread's metadata so the UI shows the thread as a
    * sub-agent. A continued thread keeps the call that first spawned it.
    */
   sourceToolCallId?: string;
   /**
-   * Existing isolation thread of an earlier `callSubAgent` run to continue.
+   * Existing isolation thread of an earlier `callSubAgent` (or legacy
+   * `callAgent`) run to continue.
    * When set, the instruction becomes a new turn on that thread (the sub-agent
    * keeps its history) instead of a new thread being created.
    */
@@ -756,7 +769,7 @@ export interface ExecSubAgentResult {
  * child run on behalf of the agent that dispatched it.
  */
 export interface CancelVirtualSubAgentParams {
-  /** The dispatching agent; the sub-agent's thread must belong to it */
+  /** The dispatching agent: its copies and the named agents it started can be cancelled */
   agentId: string;
   /** The sub-agent's isolation thread id (its `<sub_agent id>`) */
   threadId: string;

@@ -1,10 +1,15 @@
 // @vitest-environment node
 /**
- * Integration test for the server `lobe-agent-management.callAgent` deferred
- * execution flow.
+ * Integration test for handing work to another agent on the server:
+ * `lobe-agent.callSubAgent({ agentId })`.
+ *
+ * The retired `lobe-agent-management.callAgent` is no longer offered, so a
+ * new run's tool resolver drops it like any unoffered call; its executor alias
+ * only serves runs whose tool set was frozen before the change (see
+ * `agentManagement.callAgentAlias.test.ts`).
  *
  * Verifies the full lifecycle end-to-end on the in-memory runtime:
- *   1. Parent op LLM emits a `lobe-agent-management____callAgent` tool call.
+ *   1. Parent op LLM emits the tool call.
  *   2. The real server executor parks the parent, creates a pending tool
  *      placeholder, and forks the target agent as a child op.
  *   3. The child op completes.
@@ -55,17 +60,20 @@ const PARENT_FINAL = 'I received the target agent result and the delegated work 
 
 const createTestContext = () => ({ jwtPayload: { userId }, userId });
 
-const createCallAgentResponse = () => {
+const CALL_SUB_AGENT = { apiName: 'callSubAgent', identifier: 'lobe-agent' };
+
+const createCallAgentResponse = (tool: { apiName: string; identifier: string }) => {
   const responseId = `resp_call_agent_${Date.now()}`;
   const msgItemId = `msg_call_agent_${Date.now()}`;
   const callId = 'call_agent_1';
   const fnCall = {
     arguments: JSON.stringify({
       agentId: targetAgentId,
+      description: 'Backend integration',
       instruction: 'Handle the delegated backend integration task.',
     }),
     call_id: callId,
-    name: 'lobe-agent-management____callAgent',
+    name: `${tool.identifier}____${tool.apiName}`,
     type: 'function_call',
   };
 
@@ -181,10 +189,11 @@ beforeEach(async () => {
       {
         chatConfig: {},
         model: 'gpt-5-pro',
-        plugins: ['lobe-agent-management'],
+        // lobe-agent is always on: handing work to another agent needs no plugin.
+        plugins: [],
         provider: 'openai',
         systemRole: 'You are a supervisor that delegates work to other agents.',
-        title: 'callAgent Supervisor',
+        title: 'Delegating Supervisor',
         userId,
       },
       {
@@ -193,7 +202,7 @@ beforeEach(async () => {
         plugins: [],
         provider: 'openai',
         systemRole: 'You are the target agent. Return a concise result.',
-        title: 'callAgent Target',
+        title: 'Delegation Target',
         userId,
       },
     ])
@@ -218,12 +227,13 @@ afterEach(async () => {
   inMemoryStreamEventManager.clear();
 });
 
-describe('Server callAgent deferred execution', () => {
-  it('parks the parent, runs the target agent, backfills the tool message and resumes', async () => {
+describe('Server hand-off to another agent', () => {
+  it('callSubAgent({ agentId }) parks the parent, runs the target, backfills the tool message and resumes', async () => {
+    const tool = CALL_SUB_AGENT;
     let callCount = 0;
     mockResponsesCreate.mockImplementation(function () {
       callCount++;
-      if (callCount === 1) return Promise.resolve(createCallAgentResponse() as any);
+      if (callCount === 1) return Promise.resolve(createCallAgentResponse(tool) as any);
       if (callCount === 2) return Promise.resolve(createFinalTextResponse(TARGET_ANSWER) as any);
       return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
     });
@@ -271,19 +281,20 @@ describe('Server callAgent deferred execution', () => {
       .where(
         and(
           eq(messages.userId, userId),
-          eq(messagePlugins.identifier, 'lobe-agent-management'),
-          eq(messagePlugins.apiName, 'callAgent'),
+          eq(messagePlugins.identifier, tool.identifier),
+          eq(messagePlugins.apiName, tool.apiName),
         ),
       );
 
     expect(toolMessages).toHaveLength(1);
     expect(toolMessages[0]).toMatchObject({
-      apiName: 'callAgent',
-      content: TARGET_ANSWER,
-      identifier: 'lobe-agent-management',
+      ...tool,
       role: 'tool',
       toolCallId: 'call_agent_1',
     });
+    // The answer, then the follow-up handle: the target can be continued.
+    expect(toolMessages[0].content).toContain(TARGET_ANSWER);
+    expect(toolMessages[0].content).toContain(`<sub_agent id="${childOps[0].threadId}" />`);
     expect(toolMessages[0].state).toMatchObject({
       status: 'completed',
       threadId: childOps[0].threadId,

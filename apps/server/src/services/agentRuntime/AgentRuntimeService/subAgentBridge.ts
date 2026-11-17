@@ -1,6 +1,11 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import type { CallSubAgentState } from '@lobechat/builtin-tool-lobe-agent';
-import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
+import {
+  appendSubAgentReference,
+  isCallSubAgentCall,
+  isLegacyCallAgentCall,
+  withLegacyCallAgentNote,
+} from '@lobechat/builtin-tool-lobe-agent';
 import debug from 'debug';
 
 import {
@@ -20,7 +25,7 @@ export type SubAgentBridgeDeps = Pick<
   | 'controlCompletedToolResult'
   | 'coordinator'
   | 'delegate'
-  | 'isCallSubAgentToolMessage'
+  | 'readSubAgentCallKind'
   | 'messageModel'
   | 'resolveLastAssistantContentFromThread'
   | 'resolveLastAssistantMessageFromDB'
@@ -222,8 +227,13 @@ export async function completeSubAgentBridge(
   // callSubAgent results carry the sub-agent id so the parent can later send
   // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
   // to hand over what it gathered before failing — instead of redoing it.
-  const content = (await deps.isCallSubAgentToolMessage(toolMessageId, threadId))
-    ? appendSubAgentReference(resultContent, threadId)
+  // The retired `callAgent` alias also tells the model to move to callSubAgent.
+  const callKind = await deps.readSubAgentCallKind(toolMessageId, threadId);
+  const content = callKind
+    ? appendSubAgentReference(
+        callKind === 'legacyCallAgent' ? withLegacyCallAgentNote(resultContent) : resultContent,
+        threadId,
+      )
     : resultContent;
 
   const { result: completed, blocked } = await deps.controlCompletedToolResult({
@@ -345,20 +355,23 @@ async function recordBackgroundSubAgentResult(
 }
 
 /**
- * Whether the bridged placeholder belongs to `lobe-agent.callSubAgent` (the
- * same bridge also serves `callAgent`, whose children cannot be continued).
- * Best-effort: a failed lookup only drops the id trailer, never the bridge.
+ * Which sub-agent call the bridged placeholder belongs to: `lobe-agent.callSubAgent`
+ * or the legacy `callAgent` alias, both continuable through the id trailer.
+ * Anything else (group members) gets no trailer. Best-effort: a failed lookup
+ * only drops the trailer, never the bridge.
  */
-export async function isCallSubAgentToolMessage(
+export async function readSubAgentCallKind(
   deps: SubAgentBridgeDeps,
   toolMessageId: string,
   threadId: string | undefined,
-): Promise<boolean> {
-  if (!threadId) return false;
+): Promise<'callSubAgent' | 'legacyCallAgent' | undefined> {
+  if (!threadId) return undefined;
   try {
-    return isCallSubAgentCall(await deps.messageModel.findMessagePlugin(toolMessageId));
+    const plugin = await deps.messageModel.findMessagePlugin(toolMessageId);
+    if (!isCallSubAgentCall(plugin)) return undefined;
+    return isLegacyCallAgentCall(plugin) ? 'legacyCallAgent' : 'callSubAgent';
   } catch (error) {
     log('[%s] sub-agent bridge: failed to read tool plugin: %O', toolMessageId, error);
-    return false;
+    return undefined;
   }
 }
