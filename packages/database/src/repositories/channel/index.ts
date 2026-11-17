@@ -27,6 +27,7 @@ import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
 import {
   addAgentMember,
+  isSharedAgentChannel,
   memberEnvironment,
   requireAgentMember,
   requireChannelAgent,
@@ -36,7 +37,7 @@ import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { setMemberMuted } from './mute';
-import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
+import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import {
   addChannelUser,
   channelUserCandidates,
@@ -602,6 +603,8 @@ export class ChannelRepository {
     const rows = await this.db
       .select({
         agentOwnerId: agents.userId,
+        agentVisibility: agents.visibility,
+        agentWorkspaceId: agents.workspaceId,
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
@@ -738,8 +741,8 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    return rows.map(({ agentOwnerId, channel, lastReadSequence, role, shareId, shareSlug }) => {
-      const sharedAgent = !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId;
+    return rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
+      const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
       return {
         ...channel,
         agentIds: agentIdsOf.get(channel.id) ?? [],
@@ -758,25 +761,30 @@ export class ChannelRepository {
   };
 
   /**
-   * The caller's personal conversation with a contact, opened by either of them. Requires the
-   * mutual contact relation; an existing conversation opens as it is, trashed or not.
+   * The caller's one-on-one conversation with another person in this scope, opened by either of
+   * them: with a mutual contact in the personal space, with a fellow member in a workspace. An
+   * existing conversation opens as it is, trashed or not.
    */
   openPeer = (peerUserId: string, title: string): Promise<ChannelAccess> =>
     this.db.transaction(async (tx) => {
-      if (this.workspaceId)
-        throw new ChannelError('BAD_REQUEST', 'A conversation between people is personal');
       if (peerUserId === this.userId)
         throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
-      await requireMutualContacts(tx, this.userId, peerUserId);
+      await requirePeerRelation(tx, this.workspaceId, this.userId, peerUserId);
       // No unique index keeps one conversation per pair: serialize opening it, so two people
       // opening it at once (or one twice) find the first one instead of creating a second.
-      await lockPeerPair(tx, this.userId, peerUserId);
-      const existing = await this.findPeer(tx, peerUserId);
+      await lockPeerPair(tx, this.workspaceId, this.userId, peerUserId);
+      const existing = await findPeer(tx, this.workspaceId, this.userId, peerUserId);
       if (existing) return existing;
 
       const [channel] = await tx
         .insert(channels)
-        .values({ peerUserId, title, userId: this.userId, visibility: 'private' })
+        .values({
+          peerUserId,
+          title,
+          userId: this.userId,
+          visibility: 'private',
+          workspaceId: this.workspaceId,
+        })
         .returning();
       const member = await this.addOwner(tx, channel.id);
       await tx.insert(channelMembers).values({
@@ -788,24 +796,6 @@ export class ChannelRepository {
       });
       return { channel, member };
     });
-
-  private findPeer = async (tx: Transaction, peerUserId: string) => {
-    const [row] = await tx
-      .select({ channel: channels, member: channelMembers })
-      .from(channels)
-      .innerJoin(
-        channelMembers,
-        and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, this.userId)),
-      )
-      .where(
-        or(
-          and(eq(channels.userId, this.userId), eq(channels.peerUserId, peerUserId)),
-          and(eq(channels.userId, peerUserId), eq(channels.peerUserId, this.userId)),
-        ),
-      )
-      .limit(1);
-    return row as ChannelAccess | undefined;
-  };
 
   /**
    * The caller's active Channels with their active Agent members, newest first: where the caller

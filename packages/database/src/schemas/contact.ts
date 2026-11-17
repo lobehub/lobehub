@@ -17,8 +17,8 @@ import { users } from './user';
 import { workspaces } from './workspace';
 
 /**
- * One entry in an address book. People are personal: their entries pin `user_id` and appear in
- * every scope. An `agent` entry belongs to the scope it was added in: with no `workspace_id` it
+ * One entry in an address book. People are personal: their entries pin `user_id` and are listed
+ * only in the personal space, since a workspace's colleagues are its members. An `agent` entry belongs to the scope it was added in: with no `workspace_id` it
  * is its owner's alone; with one it is the workspace's, shown to every member there, and
  * `user_id` only records who added it.
  *

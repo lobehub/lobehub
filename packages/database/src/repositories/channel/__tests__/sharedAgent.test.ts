@@ -261,3 +261,81 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     });
   });
 });
+
+describe('a shared Agent in the visitor’s workspace', () => {
+  const inWorkspace = new ChannelRepository(db, visitorId, fixture.workspaceId);
+
+  const open = async () => {
+    const { channel } = await inWorkspace.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+    return channel;
+  };
+
+  it('opens a direct conversation in that workspace through the live share', async () => {
+    const channel = await open();
+    expect(channel).toMatchObject({ agentId, userId: visitorId, workspaceId: fixture.workspaceId });
+
+    const [listed] = await inWorkspace.list();
+    expect(listed).toMatchObject({
+      id: channel.id,
+      sharedAgent: true,
+      sharedAgentHandle: 'shared-helper',
+    });
+    // Personal and workspace conversations stay apart.
+    expect(await visitor.list()).toEqual([]);
+  });
+
+  it('runs as its owner in the owner’s scope, and only the run reads the conversation', async () => {
+    const channel = await open();
+    const message = await inWorkspace.send(channel.id, {
+      content: 'Hello from the team',
+      requestKey: 'ws',
+      routing: 'fallback',
+    });
+    const [job] = await jobsOf(db, message.id);
+
+    const claim = (await execution.claim(channel.id, job.id, lease))!;
+    expect(claim.job.executionConfig).toMatchObject({
+      runtime: 'native',
+      share: { ownerId, shareId, workspaceId: null },
+    });
+    expect(claim.topic).toMatchObject({ senderId: visitorId, userId: ownerId, workspaceId: null });
+
+    const operationId = claim.job.operationId!;
+    await db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(eq(agentOperations.id, operationId));
+    const page = await new ChannelHistoryRepository(db, ownerId).readMessages(operationId);
+    expect(page.messages.map((item) => item.content)).toContain('Hello from the team');
+    await expect(new ChannelHistoryRepository(db, ownerId).currentRun(operationId)).rejects.toThrow(
+      'A shared Agent can only read its own conversation',
+    );
+    await expect(
+      new ChannelHistoryRepository(db, visitorId, fixture.workspaceId).readMessages(operationId),
+    ).rejects.toThrow('Channel operation not found');
+  });
+
+  it('still cannot join a workspace group', async () => {
+    const { channel } = await inWorkspace.create({ title: 'Group' });
+    await expect(inWorkspace.addAgent(channel.id, { agentId })).rejects.toThrow('Agent not found');
+  });
+
+  it('does not mark a colleague’s workspace Agent as shared', async () => {
+    const teamAgentId = 'agt_channel_shared_team';
+    await db.insert(agents).values({
+      id: teamAgentId,
+      title: 'Team Helper',
+      userId: ownerId,
+      visibility: 'public',
+      workspaceId: fixture.workspaceId,
+    });
+    const { channel } = await inWorkspace.create({ agentId: teamAgentId, title: 'Team Helper' });
+
+    const [listed] = await inWorkspace.list();
+    expect(listed).toMatchObject({ id: channel.id, sharedAgent: false, sharedAgentHandle: null });
+  });
+});
