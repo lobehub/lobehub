@@ -1,4 +1,9 @@
-import type { AgentOperationStatus, ChatTopicStatus, TopicOpenedBy } from '@lobechat/types';
+import type {
+  AgentOperationStatus,
+  ChatTopicStatus,
+  OpenedTopicItem,
+  TopicOpenedBy,
+} from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, not, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -23,22 +28,7 @@ const MAX_OPENED_BY_DEPTH = 4;
 /** Upper bound on rows one listing returns, so a runaway fan-out cannot flood a sidebar. */
 const MAX_OPENED_BY_ROWS = 500;
 
-export interface OpenedTopicItem {
-  agentId: string | null;
-  createdAt: Date;
-  favorite: boolean | null;
-  id: string;
-  /** Status of the topic's latest top-level operation; null before its first run. */
-  latestRunStatus: AgentOperationStatus | null;
-  openedBy: TopicOpenedBy;
-  runStartedAt: Date | null;
-  status: ChatTopicStatus | null;
-  /** The task a task-run sub-topic belongs to (`metadata.taskId`). */
-  taskId: string | null;
-  title: string | null;
-  trigger: string | null;
-  updatedAt: Date;
-}
+export type { OpenedTopicItem } from '@lobechat/types';
 
 export interface ListOpenedTopicsParams {
   /** Statuses that hide a sub-topic (and stop the walk below it). */

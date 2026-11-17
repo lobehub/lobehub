@@ -1,3 +1,4 @@
+import type { AgentOperationStatus } from '../agentOperation';
 import type { ChatTopicStatus, TopicOpenedBy } from './topic';
 
 /** What a sub-topic is doing, read from its latest run and its own status. */
@@ -8,6 +9,27 @@ export interface SubTopicAgentDisplay {
   avatar: null | string;
   backgroundColor: null | string;
   title: null | string;
+}
+
+/**
+ * A live topic opened from another one, as the opened-by queries return it
+ * (`TopicModel.listOpenedTopics` / `listOpenedDescendants`).
+ */
+export interface OpenedTopicItem {
+  agentId: string | null;
+  createdAt: Date;
+  favorite: boolean | null;
+  id: string;
+  /** Status of the topic's latest top-level operation; null before its first run. */
+  latestRunStatus: AgentOperationStatus | null;
+  openedBy: TopicOpenedBy;
+  runStartedAt: Date | null;
+  status: ChatTopicStatus | null;
+  /** The task a task-run sub-topic belongs to (`metadata.taskId`). */
+  taskId: string | null;
+  title: string | null;
+  trigger: string | null;
+  updatedAt: Date;
 }
 
 /** One live sub-topic row of the sidebar hierarchy (`subTopic.listOpened`). */

@@ -6,13 +6,13 @@ import type {
   ChatTopicMetadata,
   ChatTopicStatus,
   ExecAgentResult,
+  OpenedTopicItem,
   SubTopicState,
   UserInterventionConfig,
   WorkingDirConfig,
 } from '@lobechat/types';
 import pMap from 'p-map';
 
-import type { OpenedTopicItem } from '@/database/models/topic';
 import { pickSandboxPlacement } from '@/server/services/aiAgent/pipeline/sandboxPlacement';
 
 /**
