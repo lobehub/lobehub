@@ -581,7 +581,9 @@ export const sharedOptimizeDeps = {
   // Vite resolves an optimized dep by bare name for every importer. Pre-bundling
   // the workspace-pinned 2.1.x would hand it to mdast-util-to-markdown-cjk-friendly,
   // which needs the 2.2 attention API, and <Markdown> throws in dev.
-  exclude: [...stylexTokenModules, 'mdast-util-to-markdown'],
+  // Keep its remark importer unbundled too: otherwise the external mdast import
+  // moves into the optimizer's output and resolves from the root, not the CJK package.
+  exclude: [...stylexTokenModules, 'mdast-util-to-markdown', 'remark-cjk-friendly'],
   include: [
     'react',
     'react-dom',

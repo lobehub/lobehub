@@ -71,6 +71,7 @@ describe('sharedOptimizeDeps', () => {
       '@lobehub/ui/stylex/cssVar.stylex',
       '@lobehub/ui/stylex/media.stylex',
       'mdast-util-to-markdown',
+      'remark-cjk-friendly',
     ]);
   });
 });
