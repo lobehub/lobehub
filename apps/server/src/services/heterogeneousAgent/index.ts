@@ -10,7 +10,7 @@ import {
   classifyHeteroProcessFailure,
   isHeteroStatusGuideErrorData,
 } from '@lobechat/heterogeneous-agents/processFailure';
-import { type ChatMessageError, ThreadStatus } from '@lobechat/types';
+import { type ChatMessageError, ThreadStatus, ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -584,7 +584,13 @@ export class HeterogeneousAgentService {
       : result === 'error' && resumeSessionInvalidated
         ? { heteroSessionId: undefined }
         : undefined;
-    if (resumeBindingUpdate) {
+    // A sub-agent run in an isolation thread keeps its session on that thread:
+    // the topic's binding belongs to the conversation's own agent.
+    const bindsThreadSession =
+      !!resumeBindingUpdate &&
+      !!isolationThreadId &&
+      (await this.bindIsolationThreadSession(isolationThreadId, resumeBindingUpdate));
+    if (resumeBindingUpdate && !bindsThreadSession) {
       try {
         // Only the producer can distinguish a missing native session from a
         // transient pre-init error such as Codex's "already has an active writer".
@@ -788,6 +794,12 @@ export class HeterogeneousAgentService {
     await lifecycle.completeOperation({ ...completionInput, worksRegistered }, completionReason);
     log('heteroFinish: dispatched completion lifecycle for op=%s result=%s', operationId, result);
 
+    // The completion's thread hooks rewrite the thread's metadata from what the
+    // run claimed it with, which predates this run's session. Bind it again.
+    if (bindsThreadSession && resumeBindingUpdate && isolationThreadId) {
+      await this.bindIsolationThreadSession(isolationThreadId, resumeBindingUpdate);
+    }
+
     // Follow-ups the user queued behind this run start as the next turn here,
     // as they do when a native run ends. The completion above released the
     // topic, which the next turn has to claim. A failed run leaves its queue
@@ -813,6 +825,39 @@ export class HeterogeneousAgentService {
     } catch (err) {
       log('heteroFinish: starting queued follow-ups failed (non-fatal): %O', err);
     }
+  }
+
+  /**
+   * Record an external agent's native session on the isolation thread it runs
+   * in (a sub-agent), so a follow-up to that sub-agent resumes it. Returns
+   * false when the thread is not an isolation thread — the session then binds
+   * to the topic as before. Never throws.
+   */
+  private async bindIsolationThreadSession(
+    threadId: string,
+    update: { heteroSessionId?: string },
+  ): Promise<boolean> {
+    try {
+      const threadModel = new ThreadModel(this.db, this.userId, this.workspaceId);
+      const thread = await threadModel.findById(threadId);
+      if (thread?.type !== ThreadType.Isolation) return false;
+      await threadModel.update(threadId, {
+        metadata: { ...thread.metadata, heteroSessionId: update.heteroSessionId },
+      });
+      return true;
+    } catch (err) {
+      log('heteroFinish: binding thread %s session failed (non-fatal): %O', threadId, err);
+      return true;
+    }
+  }
+
+  /**
+   * Resume session of an external agent running in an isolation thread (a
+   * sub-agent). Undefined for a new sub-agent.
+   */
+  async getIsolationThreadResumeSessionId(threadId: string): Promise<string | undefined> {
+    const thread = await new ThreadModel(this.db, this.userId, this.workspaceId).findById(threadId);
+    return thread?.metadata?.heteroSessionId;
   }
 
   /**

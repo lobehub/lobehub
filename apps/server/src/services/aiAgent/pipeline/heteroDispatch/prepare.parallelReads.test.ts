@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
     gated,
     getFullFileUrl: vi.fn(),
     getResumeSessionId: vi.fn(),
+    getThreadResumeSessionId: vi.fn(),
     reset: () => {
       started.length = 0;
       spans.ended.length = 0;
@@ -61,7 +62,10 @@ vi.mock('@lobechat/observability-otel/modules/agent-runtime', () => ({
 
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
-    return { getHeterogeneousResumeSessionId: mocks.getResumeSessionId };
+    return {
+      getHeterogeneousResumeSessionId: mocks.getResumeSessionId,
+      getIsolationThreadResumeSessionId: mocks.getThreadResumeSessionId,
+    };
   }),
 }));
 
@@ -185,6 +189,25 @@ describe('prepareHeteroRun — overlapping reads', () => {
       ]),
     );
     expect(mocks.spans.failed).toEqual([]);
+  });
+
+  // A sub-agent resumes its own session, never the topic's.
+  it('resumes a sub-agent run from its isolation thread', async () => {
+    const { deps } = createDeps();
+    mocks.getThreadResumeSessionId.mockImplementation(
+      mocks.gated('resume_session', () => 'cc-thread-sess'),
+    );
+
+    const prepared = await prepareHeteroRun(
+      deps,
+      { ...ctx, appContext: { isolationThread: true, threadId: 'thread-1' } },
+      input,
+      'op-1',
+    );
+
+    expect(mocks.getThreadResumeSessionId).toHaveBeenCalledWith('thread-1');
+    expect(mocks.getResumeSessionId).not.toHaveBeenCalled();
+    expect(prepared.resumeSessionId).toBe('cc-thread-sess');
   });
 
   it('keeps the best-effort reads best-effort when they fail', async () => {

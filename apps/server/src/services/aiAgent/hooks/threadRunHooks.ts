@@ -28,11 +28,13 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
  * What a thread's metadata carries from one write and one run to the next.
  * Every thread write replaces `metadata`, so each writer spreads these back
  * in: the tool call that spawned the thread (how the UI tells a sub-agent
- * from an ordinary thread), and the usage of earlier runs, which a follow-up
- * run adds its own usage on top of.
+ * from an ordinary thread), the usage of earlier runs, which a follow-up
+ * run adds its own usage on top of, and an external agent's native session,
+ * which a follow-up resumes.
  */
 export type ThreadCarryOver = Pick<
   ThreadMetadata,
+  | 'heteroSessionId'
   | 'runUsageBaseline'
   | 'sourceToolCallId'
   | 'totalCost'
@@ -43,6 +45,7 @@ export type ThreadCarryOver = Pick<
 >;
 
 export const pickThreadCarryOver = (metadata?: ThreadMetadata | null): ThreadCarryOver => ({
+  heteroSessionId: metadata?.heteroSessionId,
   runUsageBaseline: {
     totalCost: metadata?.totalCost,
     totalLlmCalls: metadata?.totalLlmCalls,
@@ -225,6 +228,7 @@ export function createThreadHooks(
         try {
           await threadModel.update(threadId, {
             metadata: {
+              heteroSessionId: carryOver.heteroSessionId,
               operationId: event.operationId,
               sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,
@@ -305,6 +309,7 @@ export function createThreadHooks(
               completedAt,
               duration,
               error: formattedError,
+              heteroSessionId: carryOver.heteroSessionId,
               operationId: finalState.operationId,
               sourceToolCallId: carryOver.sourceToolCallId,
               startedAt,
