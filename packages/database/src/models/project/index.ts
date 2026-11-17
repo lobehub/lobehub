@@ -38,8 +38,17 @@ import {
   ProjectIdentifierTakenError,
 } from '../projectIdentifier';
 import { topicHasGoal } from '../topicGoal';
+import type { ProjectAgentInput, ProjectAgentPatch } from './agents';
+import {
+  deleteProjectAgent,
+  hasProjectAgentBinding,
+  seatCoordinator,
+  updateProjectAgent,
+  upsertProjectAgent,
+} from './agents';
 
 export { normalizeProjectIdentifier, ProjectIdentifierTakenError } from '../projectIdentifier';
+export type { ProjectAgentInput, ProjectAgentPatch } from './agents';
 
 export interface CreateProjectInput {
   avatar?: string;
@@ -80,16 +89,6 @@ export interface UpdateProjectInput {
   slug?: string | null;
   visibility?: ProjectVisibility;
 }
-
-export interface ProjectAgentInput {
-  agentId: string;
-  enabled?: boolean;
-  responsibility?: string | null;
-  role?: string | null;
-  sortOrder?: number;
-}
-
-export type ProjectAgentPatch = Partial<Omit<ProjectAgentInput, 'agentId'>>;
 
 export interface ProjectKnowledgeBaseInput {
   enabled?: boolean;
@@ -616,12 +615,7 @@ export class ProjectModel {
     const project = await this.findById(projectId);
     if (!project) return false;
     if (project.coordinatorAgentId === agentId) return true;
-    const [binding] = await this.db
-      .select({ id: projectAgents.id })
-      .from(projectAgents)
-      .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))
-      .limit(1);
-    return !!binding;
+    return hasProjectAgentBinding(this.db, projectId, agentId);
   }
 
   async addAgent(projectId: string, input: ProjectAgentInput) {
@@ -638,26 +632,11 @@ export class ProjectModel {
       'A shared project only takes shared agents',
     );
 
-    const [binding] = await this.db
-      .insert(projectAgents)
-      .values({
-        ...input,
-        addedByUserId: this.userId,
-        projectId,
-        workspaceId: this.workspaceId ?? null,
-      })
-      .onConflictDoUpdate({
-        set: {
-          enabled: input.enabled,
-          responsibility: input.responsibility,
-          role: input.role,
-          sortOrder: input.sortOrder,
-          updatedAt: new Date(),
-        },
-        target: [projectAgents.projectId, projectAgents.agentId],
-      })
-      .returning();
-    return binding;
+    return upsertProjectAgent(this.db, this.bindingScope(projectId), input);
+  }
+
+  private bindingScope(projectId: string) {
+    return { addedByUserId: this.userId, projectId, workspaceId: this.workspaceId ?? null };
   }
 
   async updateAgent(projectId: string, agentId: string, patch: ProjectAgentPatch) {
@@ -666,12 +645,7 @@ export class ProjectModel {
     if (project.coordinatorAgentId === agentId) {
       throw new Error('The project coordinator is managed by the project');
     }
-    const [binding] = await this.db
-      .update(projectAgents)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))
-      .returning();
-    return binding ?? null;
+    return updateProjectAgent(this.db, projectId, agentId, patch);
   }
 
   async removeAgent(projectId: string, agentId: string) {
@@ -680,11 +654,7 @@ export class ProjectModel {
     if (project.coordinatorAgentId === agentId) {
       throw new Error('The project coordinator cannot be removed');
     }
-    const deleted = await this.db
-      .delete(projectAgents)
-      .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))
-      .returning({ id: projectAgents.id });
-    return deleted.length > 0;
+    return deleteProjectAgent(this.db, projectId, agentId);
   }
 
   /**
@@ -703,16 +673,7 @@ export class ProjectModel {
     if (!project) return null;
     if (project.coordinatorAgentId === agentId) return { previousId: null, project };
 
-    const [agent] = await this.db
-      .select({ id: agents.id, visibility: agents.visibility })
-      .from(agents)
-      .where(
-        and(
-          eq(agents.id, agentId),
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
-        ),
-      )
-      .limit(1);
+    const agent = await this.findAccessibleAgent(this.db, agentId);
     if (!agent) throw new Error('Agent not found');
     this.assertSharedResource(
       project,
@@ -725,33 +686,8 @@ export class ProjectModel {
       .set({ coordinatorAgentId: agentId, updatedAt: new Date() })
       .where(eq(projects.id, projectId))
       .returning();
-    await this.db
-      .insert(projectAgents)
-      .values({
-        addedByUserId: this.userId,
-        agentId,
-        projectId,
-        workspaceId: this.workspaceId ?? null,
-      })
-      .onConflictDoUpdate({
-        set: { enabled: true, updatedAt: new Date() },
-        target: [projectAgents.projectId, projectAgents.agentId],
-      });
-
     const previousId = project.coordinatorAgentId;
-    if (previousId) {
-      // The project role belonged to the main agent; as a member it reads like any other.
-      await this.db
-        .update(projectAgents)
-        .set({ role: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(projectAgents.projectId, projectId),
-            eq(projectAgents.agentId, previousId),
-            eq(projectAgents.role, 'coordinator'),
-          ),
-        );
-    }
+    await seatCoordinator(this.db, { ...this.bindingScope(projectId), agentId, previousId });
     return { previousId, project: updated };
   }
 
