@@ -104,6 +104,47 @@ describe('Channel request prompt', () => {
     ).not.toMatch(/channel_reply|asked to answer this request first/);
   });
 
+  it('renders requests merged into one run in order, each after its own quote', () => {
+    const ada = { id: 'ada', name: 'Ada', type: 'user' } as const;
+    const prompt = buildChannelPrompt(
+      { ...manifest, requestMessageId: 'first', requestMessageIds: ['first', 'second'] },
+      [
+        message('quoted', 'The old plan', coder),
+        message('first', 'Are you on it?', caller),
+        message('second', 'Also check this', ada, { replyToId: 'quoted' }),
+      ],
+      { boundary: 'b0', context: [message('first', 'Are you on it?', caller)] },
+    );
+
+    expect(prompt).toBe(
+      [
+        '<channel_request from="Mia" type="user" to="Codex" boundary="b0">',
+        'Are you on it?',
+        '</channel_request boundary="b0">',
+        '<channel_quote from="Coder" type="agent" boundary="b0">',
+        'The old plan',
+        '</channel_quote boundary="b0">',
+        '<channel_request from="Ada" type="user" to="Codex" boundary="b0">',
+        'Also check this',
+        '</channel_request boundary="b0">',
+      ].join('\n'),
+    );
+  });
+
+  it('tells a running run that the requests joined it mid-work', () => {
+    const prompt = buildChannelPrompt(manifest, [message('current', 'How is it going?', caller)], {
+      boundary: 'b0',
+      steer: true,
+    });
+
+    expect(prompt.split('\n').slice(3)).toEqual([
+      '<channel_steer boundary="b0">',
+      'This request arrived while you were working. Take it into account in what you are doing now; your one final answer covers it together with the request you started with.',
+      '</channel_steer boundary="b0">',
+    ]);
+    expect(CHANNEL_INSTRUCTIONS).toContain('answer them together in one reply');
+  });
+
   it('tells a run it already acknowledged the request, after the request', () => {
     const request = [message('current', 'Why did the deploy fail?', caller)];
     const prompt = buildChannelPrompt(manifest, request, {

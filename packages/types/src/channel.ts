@@ -319,9 +319,12 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
  * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
+ * - `merged`: answered by another job of the same member and branch (`mergedIntoJobId`), which
+ *   took its request in: the queue head claiming the backlog behind it, or a running Native run
+ *   reading it mid-run. It never runs or publishes; the job it merged into carries the outcome.
  */
 export type ChannelJobStatus =
-  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+  'cancelled' | 'completed' | 'failed' | 'merged' | 'queued' | 'running' | 'silent';
 
 /**
  * Why a job was woken, frozen when it is delivered.
@@ -515,6 +518,11 @@ export interface ChannelInputManifest {
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
   requestMessageId: string;
+  /**
+   * Every request this run answers, oldest first, starting with `requestMessageId`: requests
+   * merged in from the member's queue (`merged` jobs) follow it. Absent for a single request.
+   */
+  requestMessageIds?: string[];
   /** Fixed at claim time. */
   self: { agentId: string; memberId: string; name: string };
   threadId: string | null;
@@ -700,6 +708,11 @@ export interface ChannelPublicJob {
   errorType?: string | null;
   id: string;
   memberId: string;
+  /**
+   * A `merged` job's request is answered by this job of the same member and branch. Derived from
+   * that job's `manifest.requestMessageIds`; null for any other status.
+   */
+  mergedIntoJobId: string | null;
   messageId: string;
   publicationRevoked: boolean;
   status: ChannelJobStatus;

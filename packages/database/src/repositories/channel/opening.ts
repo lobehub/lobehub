@@ -14,6 +14,7 @@ import type { LobeChatDatabase, Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
+import { sameBranch } from './merge';
 import type { OpeningFacts, OpeningLayout } from './openingLayout';
 import { chooseOpeningLayout } from './openingLayout';
 import { audit, withChannelLock } from './transaction';
@@ -98,6 +99,23 @@ export const findOpeningCandidate = async (
     );
   if (!row?.agentId || !opensReply(row.job) || (await isOpened(db, jobId))) return;
   const { job } = row;
+
+  // A member still answering this branch has not started on the request. An acknowledgement now
+  // would promise work that is waiting, and the request may yet join that run or the next one;
+  // the reply opens when its own run is about to start.
+  const [busy] = await db
+    .select({ id: channelJobs.id })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.memberId, job.memberId),
+        eq(channelJobs.writerHeld, true),
+        isNull(channelJobs.isolatedAt),
+        sameBranch(job.threadId),
+      ),
+    )
+    .limit(1);
+  if (busy) return;
 
   const [requester] = await db
     .select({ userId: channelMembers.userId })

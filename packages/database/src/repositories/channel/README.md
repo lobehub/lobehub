@@ -164,7 +164,8 @@ at most five public messages its topic has not seen (`recentContext`): those aft
 the topic accepted, minus the reply it published; a new topic gets the latest five. Older public
 history is read on demand through `lobe-channel.readMessages` / `readMessage` in Native runs, or
 `lh channel history` / `lh channel message` in external runtimes. A Thread can read the main prefix
-through its root plus its own messages; the frozen request cutoff excludes later arrivals. Reads
+through its root plus its own messages; the frozen request cutoff excludes later arrivals,
+except requests merged into the run (see [One reply for a queue](#one-reply-for-a-queue)). Reads
 include published Agent answers, including when continuing a private topic. Existing private
 Agent transcripts stay in their ordinary topic and are never exposed through these tools.
 
@@ -206,6 +207,39 @@ the primary's published reply id in `manifest.primaryReplyMessageId`, read by
 Branches opened while their root is pending inherit its eventual responders, preserving explicit
 invitations. Their unmentioned replies stay pending until then, including replies sent with the
 all-candidate fallback. Stopping a reply still fences it; root completion never revives it.
+
+## One reply for a queue
+
+Requests that queue up behind a busy member in one branch are answered together, in one reply,
+not one run each (`merge.ts`). Two moments take them in, and both keep message order by moving
+only the leading run of the queue:
+
+- **At claim.** The queue head takes in the queued requests behind it in its branch. Its manifest
+  lists them all in `requestMessageIds` (oldest first, `requestMessageId` first) and its cutoff
+  moves to the last one; `input` returns each request after its explicit quote.
+- **Mid-run (steer).** A running Native run that accepted its input takes in plain-text requests
+  (no attachments, no quote) right before its next LLM call: `ChannelExecutionRepository.steer`
+  merges them under the channel lock and writes them into the run's topic as one steer user
+  message in the same lock, so a failed write leaves them queued. External CLI runs are never
+  steered; their queue joins the next claim.
+
+A taken-in job settles as `merged`; it never runs or publishes, and the job that took it in
+carries the outcome. No column records the link: that job's `manifest.requestMessageIds` lists the
+request, and the member has one job per message, so the public view derives `mergedIntoJobId`
+from it. A request from an Agent, relayed from another Channel or
+carrying a receipt never merges, nor does a job deferred behind another member's answer
+(`awaiting_primary`), nor one behind an earlier undecided routing decision: they stop the run of
+the queue that is taken in. People other than the head's requester are read as input under the
+head's execution identity, only if they could run the Agent themselves; a shared Agent's run takes
+in only its own visitor's requests. An owed request makes the whole reply owed (`wake` is cleared),
+so it no longer ends in silence. A run that fails or retires its reservation gives its merged
+requests back to the queue; a stopped run keeps them, as stopping a reply stops what it answers.
+
+While a member is still answering a branch, a newly queued request there posts no opening
+acknowledgement: the reply opens when its own run is about to start, if it is not merged first.
+
+A queued job stuck for more than three days on a device or a person (`STUCK_BLOCKS`) is cancelled
+as `expired` at its next claim attempt; the recovery sweep keeps attempting stuck heads.
 
 ## Access and runtime integration
 

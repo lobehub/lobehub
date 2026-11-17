@@ -139,6 +139,51 @@ describe('server-side steer queue in the step loop', () => {
     });
   });
 
+  describe('injectQueuedFollowUp — a Channel run', () => {
+    const channelRun = stateOf({
+      origin: { agentId: 'agt-1', topicId: 'tpc-1', trigger: 'channel' },
+      status: 'running',
+    });
+    const createDeps = (channel?: { messageId: string }, composer?: { messageId: string }) =>
+      ({
+        delegate: {
+          injectChannelSteer: vi.fn().mockResolvedValue(channel),
+          injectQueuedFollowUp: vi.fn().mockResolvedValue(composer),
+        },
+        userId: 'user-1',
+      }) as any;
+
+    it('takes the requests queued behind it in its Channel first', async () => {
+      const deps = createDeps({ messageId: 'msg-channel' });
+
+      await expect(injectQueuedFollowUp(deps, 'op-1', 2, channelRun)).resolves.toEqual({
+        messageId: 'msg-channel',
+      });
+      expect(deps.delegate.injectChannelSteer).toHaveBeenCalledWith({
+        operationId: 'op-1',
+        state: channelRun,
+      });
+      expect(steerQueueLength).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the composer queue when nothing joined, even after a failure', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps(undefined, { messageId: 'msg-composer' });
+      deps.delegate.injectChannelSteer.mockRejectedValue(new Error('db down'));
+
+      await expect(injectQueuedFollowUp(deps, 'op-1', 2, channelRun)).resolves.toEqual({
+        messageId: 'msg-composer',
+      });
+    });
+
+    it('never asks for Channel requests on another run', async () => {
+      const deps = createDeps({ messageId: 'msg-channel' });
+
+      await injectQueuedFollowUp(deps, 'op-1', 2, stateOf({ status: 'running' }));
+      expect(deps.delegate.injectChannelSteer).not.toHaveBeenCalled();
+    });
+  });
+
   describe('injectQueuedFollowUp — a running sub-agent’s steer queue', () => {
     const createDeps = (injected?: { messageId: string }) =>
       ({

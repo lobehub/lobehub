@@ -347,6 +347,24 @@ export async function injectQueuedFollowUp(
   state: AgentState,
   options?: { lastRead?: boolean },
 ): Promise<{ messageId: string } | undefined> {
+  // A Channel run's follow-ups are the requests queued behind it in its Channel.
+  if (state.origin?.trigger === 'channel' && deps.delegate.injectChannelSteer) {
+    try {
+      const injected = await deps.delegate.injectChannelSteer({ operationId, state });
+      if (injected) {
+        log(
+          '[%s][%d] Joined queued Channel requests into the run as %s',
+          operationId,
+          stepIndex,
+          injected.messageId,
+        );
+        return injected;
+      }
+    } catch (error) {
+      log('[%s][%d] Joining queued Channel requests failed: %O', operationId, stepIndex, error);
+    }
+  }
+
   // A sub-agent has no composer of its own; its queue holds the steer
   // instructions its parent sent while it was running.
   const topLevelScope = steerQueueScopeOf(state, deps.userId);
