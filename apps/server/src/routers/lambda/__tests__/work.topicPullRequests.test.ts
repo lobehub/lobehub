@@ -112,6 +112,31 @@ describe('workRouter — topic PR links honour conversation access', () => {
     expect(mocks.listTopicsByPullRequest).toHaveBeenCalledWith('a/b#1');
   });
 
+  it('bounds concurrent permission checks while returning every visible conversation in order', async () => {
+    const topics = Array.from({ length: 21 }, (_, index) => ({
+      agentId: `agent-${index}`,
+      groupId: null,
+      sessionId: null,
+      title: `Topic ${index}`,
+      topicId: `topic-${index}`,
+    }));
+    mocks.listTopicsByPullRequest.mockResolvedValue(topics);
+    let active = 0;
+    let peak = 0;
+    mocks.assertCanViewTopicTargets.mockImplementation(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      active -= 1;
+      return [];
+    });
+
+    const result = await caller().lookupPullRequest({ url: 'https://github.com/a/b/pull/1' });
+
+    expect(result.data.map((topic) => topic.topicId)).toEqual(topics.map((topic) => topic.topicId));
+    expect(peak).toBeLessThanOrEqual(10);
+  });
+
   it('rejects links to GitHub issues before looking up associations', async () => {
     await expect(
       caller().lookupPullRequest({ url: 'https://github.com/a/b/issues/1' }),

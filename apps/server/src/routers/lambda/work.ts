@@ -7,6 +7,7 @@ import {
   type WorkVersionCumulativeUsage,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -353,7 +354,9 @@ export const workRouter = router({
     };
     const visible = ctx.workspaceId
       ? (
-          await Promise.all(topics.map(async (topic) => ((await canView(topic)) ? [topic] : [])))
+          await pMap(topics, async (topic) => ((await canView(topic)) ? [topic] : []), {
+            concurrency: 10,
+          })
         ).flat()
       : topics;
 
