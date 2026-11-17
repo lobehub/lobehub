@@ -5168,7 +5168,11 @@ When I am ___, I need ___
   'subscriptionAccounts.columns.status': 'Status',
   'subscriptionAccounts.empty.desc':
     'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
+  'subscriptionAccounts.empty.privateDesc':
+    'No private accounts here. Accounts you sign in to on your devices start here, visible only to you.',
   'subscriptionAccounts.empty.title': 'No subscription accounts yet',
+  'subscriptionAccounts.empty.workspaceDesc':
+    "No accounts are shared with this workspace yet. Share one from the Private tab so teammates' agents can use it.",
   'subscriptionAccounts.filter.all': 'All',
   'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
   'subscriptionAccounts.meter.session': '5-hour',
@@ -5210,17 +5214,20 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.todayDay': 'Today',
   'subscriptionAccounts.calendar.tomorrow': 'Tomorrow {{time}}',
   'subscriptionAccounts.calendar.tomorrowDay': 'Tomorrow',
+  'subscriptionAccounts.tabs.private': 'Private',
+  'subscriptionAccounts.tabs.workspace': 'Workspace',
   'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
   'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
-  'subscriptionAccounts.visibility.private': 'Private',
   'subscriptionAccounts.visibility.privateAction': 'Make private',
   'subscriptionAccounts.visibility.privateConfirm.desc':
     "Only you will see it. Other members' agents stop drawing on its quota.",
   'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
+  'subscriptionAccounts.visibility.privateDone': 'Made private. It now lists under Private.',
   'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
   'subscriptionAccounts.visibility.publicConfirm.desc':
     'Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.',
   'subscriptionAccounts.visibility.publicConfirm.title': 'Share this account with the workspace?',
+  'subscriptionAccounts.visibility.publicDone': 'Shared. It now lists under Workspace.',
   'tab.subscriptionAccounts': 'Subscription Accounts',
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',

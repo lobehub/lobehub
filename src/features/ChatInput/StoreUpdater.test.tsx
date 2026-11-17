@@ -68,41 +68,81 @@ beforeEach(() => {
 });
 
 describe('ChatInput StoreUpdater', () => {
-  it('keeps follow-up Send disabled during uploads and restores it without disabling Stop', () => {
+  it('shows a queued follow-up as a loading Send beside a static Stop', () => {
     const onStop = vi.fn();
     const send = vi.fn();
     const store = createStore();
     store.setState({ handleSendButton: send, handleStop: onStop });
-    const composer = (isUploading: boolean) => (
+    render(
       <Provider createStore={() => store}>
         <StoreUpdater
           leftActions={[]}
           rightActions={[]}
           sendButtonProps={getConversationSendButtonProps(
-            { disabled: isUploading, generating: true, onStop, showSendWhileGenerating: true },
-            { disabled: false, shape: 'round' },
-            isUploading,
+            { disabled: false, generating: true, onStop, showSendWhileGenerating: true },
+            { shape: 'round' },
           )}
         />
         <SendButton />
-      </Provider>
+      </Provider>,
     );
-    const { rerender } = render(composer(true));
-    const [stopButton, sendButton] = screen.getAllByRole('button');
 
+    act(() => store.setState({ uploadQueuedSend: { draftKey: undefined, unsubscribe: vi.fn() } }));
+    const stopButton = screen.getByTestId('chat-input-stop');
+    const sendButton = screen.getByTestId('chat-input-send-pending');
+
+    // Stop draws its square only — no spinning arc around it.
+    expect(stopButton.querySelectorAll('svg')).toHaveLength(1);
+    expect(stopButton.querySelector('circle')).toBeNull();
     expect(stopButton).not.toBeDisabled();
-    expect(sendButton).toBeDisabled();
+    expect(sendButton).toHaveAttribute('aria-busy', 'true');
     fireEvent.click(sendButton);
     expect(send).not.toHaveBeenCalled();
     fireEvent.click(stopButton);
     expect(onStop).toHaveBeenCalledOnce();
 
-    rerender(composer(false));
-    const [restoredStop, restoredSend] = screen.getAllByRole('button');
-    expect(restoredStop).not.toBeDisabled();
+    act(() => store.setState({ uploadQueuedSend: undefined }));
+    expect(screen.queryByTestId('chat-input-send-pending')).toBeNull();
+    const [, restoredSend] = screen.getAllByRole('button');
     expect(restoredSend).not.toBeDisabled();
     fireEvent.click(restoredSend);
     expect(send).toHaveBeenCalledOnce();
+  });
+
+  it('drops a send queued for uploads as soon as the conversation switches', () => {
+    const store = createStore();
+    const renderAt = (draftKey: string) => (
+      <Provider createStore={() => store}>
+        <StoreUpdater draftKey={draftKey} leftActions={[]} rightActions={[]} />
+      </Provider>
+    );
+    const { rerender } = render(renderAt('tpc_a'));
+    const unsubscribe = vi.fn();
+    act(() => store.setState({ uploadQueuedSend: { draftKey: 'tpc_a', unsubscribe } }));
+
+    rerender(renderAt('tpc_b'));
+    // Coming back before the uploads settle must not revive it.
+    rerender(renderAt('tpc_a'));
+
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
+  });
+
+  it('shows Send as loading instead of Stop while the sent message is being created', () => {
+    const store = createStore();
+    render(
+      <Provider createStore={() => store}>
+        <StoreUpdater
+          leftActions={[]}
+          rightActions={[]}
+          sendButtonProps={{ generating: false, loading: true, onStop: vi.fn() }}
+        />
+        <SendButton />
+      </Provider>,
+    );
+
+    expect(screen.queryByTestId('chat-input-stop')).toBeNull();
+    expect(screen.getByTestId('chat-input-send-pending')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('keeps canRecordVoiceMessage in sync when the prop changes', () => {

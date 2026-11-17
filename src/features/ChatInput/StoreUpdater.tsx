@@ -1,7 +1,7 @@
 'use client';
 
 import { type ForwardedRef } from 'react';
-import { memo, useImperativeHandle, useLayoutEffect } from 'react';
+import { memo, useEffect, useImperativeHandle, useLayoutEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { type ChatInputEditor } from './hooks/useChatInputEditor';
@@ -34,6 +34,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     allowExpand,
     slashPlacement,
     getMessages,
+    queueSendWhileUploading,
     resolveSendBlocked,
     topicId,
     uploadContextKey,
@@ -54,6 +55,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // it post-paint would flash the previous topic's draft for one frame.
     useLayoutEffect(() => {
       if (draftKey !== undefined && storeApi.getState().draftKey !== draftKey) {
+        // A send queued in the conversation being left must not fire if the user
+        // comes back before its uploads settle: drop it on the first switch.
+        storeApi.getState().cancelUploadQueuedSend();
         storeApi.setState({ draftKey });
       }
     }, [draftKey, storeApi]);
@@ -68,6 +72,10 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
+    useStoreUpdater('queueSendWhileUploading', queueSendWhileUploading);
+    // A send queued for uploads watches the global file store; an unmounted
+    // composer has nothing left to send it from.
+    useEffect(() => () => storeApi.getState().cancelUploadQueuedSend(), [storeApi]);
     useStoreUpdater('onSend', onSend);
     useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);

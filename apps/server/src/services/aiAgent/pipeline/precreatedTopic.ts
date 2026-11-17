@@ -5,7 +5,7 @@ import { TRPCError } from '@trpc/server';
 import type { TopicRepository } from '@/database/repositories/topic';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { AgentService } from '@/server/services/agent';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import { resolveRunAgentConfig } from './resolveRunAgentConfig';
 import { resolveNewTopicSnapshot } from './turnSetup';
@@ -77,7 +77,7 @@ export const createGroupAgentTopic = async (
     newTopic,
   }: Pick<ExecGroupAgentParams, 'agentId' | 'groupId' | 'message' | 'newTopic'>,
 ): Promise<string> => {
-  const fallbackTitleSource = markdownToTxt(message);
+  const fallbackTitleSource = toTitleText(message);
   const topicTitle =
     newTopic?.title ||
     fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');

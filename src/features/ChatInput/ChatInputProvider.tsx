@@ -33,6 +33,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     allowExpand = true,
     slashPlacement,
     getMessages,
+    queueSendWhileUploading,
     resolveSendBlocked,
     topicId,
     uploadContextKey,
@@ -77,6 +78,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           leftActions={leftActions}
           mentionItems={mentionItems}
           mobile={mobile}
+          queueSendWhileUploading={queueSendWhileUploading}
           resolveSendBlocked={resolveSendBlocked}
           rightActions={rightActions}
           sendButtonProps={sendButtonProps}

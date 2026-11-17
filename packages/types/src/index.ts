@@ -103,6 +103,7 @@ export * from './inboundWebhook';
 export * from './oauthApp';
 export * from './openai/chat';
 export * from './openai/plugin';
+export * from './ownedWorktree';
 export * from './subscription';
 export * from './trace';
 export * from './understanding';

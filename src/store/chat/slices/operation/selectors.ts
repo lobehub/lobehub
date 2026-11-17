@@ -497,6 +497,32 @@ const isInputVisiblyLoadingByContext =
     return isSteerHandoffPending(context)(s);
   };
 
+/**
+ * Whether a sent message is still on its way to the agent in a specific context.
+ *
+ * Use when:
+ * - The composer decides between a loading Send and Stop. While `sendMessage`
+ *   creates the message (and, for a new conversation, its topic) no run exists
+ *   yet, so the send is shown as pending rather than as a run to stop.
+ *
+ * Returns:
+ * - `true` while a `sendMessage` op runs with no AI runtime op running beside it.
+ *   `sendMessage` completes right as it hands off to its runtime op, so the two
+ *   only overlap for that hand-off.
+ */
+const isSendDispatchPendingByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+
+    const running = getOperationsByContext(context)(s).filter(isRunningOperation);
+
+    return (
+      running.some((op) => op.type === 'sendMessage') &&
+      !running.some((op) => AI_RUNTIME_OPERATION_TYPES.includes(op.type))
+    );
+  };
+
 // === Backward Compatibility ===
 
 /**
@@ -1087,6 +1113,7 @@ export const operationSelectors = {
   isAgentRuntimeVisiblyRunningByContext,
   isInputLoadingByContext,
   isInputVisiblyLoadingByContext,
+  isSendDispatchPendingByContext,
   isAnyMessageLoading,
   isContinuing,
   isInSearchWorkflow,

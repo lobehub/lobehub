@@ -563,6 +563,86 @@ describe('useFileStore:chat', () => {
     ]);
   });
 
+  // Regression: pasting the same image twice showed two cards and uploaded it twice, but
+  // the server kept one file, so the message said [Image #1] [Image #2] with one image.
+  describe('uploadChatFiles with an image already in the draft', () => {
+    const gif = (name = 'image.gif') => new File(['same-pixels'], name, { type: 'image/gif' });
+
+    beforeEach(() => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      useStore.setState({ chatUploadFileListByContext: {} });
+    });
+
+    it('does not add or upload the same image again', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toEqual([
+        expect.objectContaining({
+          contentHash: expect.any(String),
+          repastedAt: expect.any(Number),
+        }),
+      ]);
+    });
+
+    it('keeps one card for the same image pasted twice at once', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif('a.gif'), gif('b.gif')], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toHaveLength(1);
+    });
+
+    it('still uploads images where hashing is unavailable (insecure context)', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+      vi.spyOn(crypto.subtle, 'digest').mockRejectedValue(new TypeError('no subtle'));
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(1);
+      expect(uploadList()).toEqual([expect.objectContaining({ contentHash: undefined })]);
+    });
+
+    it('uploads the image again when its earlier upload failed', async () => {
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi
+        .spyOn(result.current, 'uploadWithProgress')
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ id: 'file-1', url: 'url-1' } as any);
+
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+      await act(async () => {
+        await result.current.uploadChatFiles(CONTEXT_KEY, [gif()], AGENT_ID);
+      });
+
+      expect(uploadWithProgress).toHaveBeenCalledTimes(2);
+      expect(uploadList()).toHaveLength(2);
+    });
+  });
+
   describe('uploadChatFiles as an agent-share visitor', () => {
     const SHARE_ID = 'share-1';
 

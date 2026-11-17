@@ -10,6 +10,7 @@ import { Flexbox, toast } from '@lobehub/ui';
 import i18next from 'i18next';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   getBusinessChatInputSendAreaPrefix,
@@ -56,7 +57,12 @@ import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
 import { useRestoreServerQueue } from './useRestoreServerQueue';
-import { getContextWindow, getConversationSendButtonProps, toChatInputMessages } from './utils';
+import {
+  getContextWindow,
+  getConversationSendButtonProps,
+  partitionSendableUploads,
+  toChatInputMessages,
+} from './utils';
 import {
   canSendVoiceMessage,
   isVoiceMessageTranscribed,
@@ -204,6 +210,7 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
+    const { t } = useTranslation('chat');
     // ConversationStore state
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -267,6 +274,9 @@ const ChatInput = memo<ChatInputProps>(
     const isInputQueueBlocked = useChatStore((s) =>
       operationSelectors.isInputLoadingByContext(context)(s),
     );
+    const isSendDispatchPending = useChatStore((s) =>
+      operationSelectors.isSendDispatchPendingByContext(context)(s),
+    );
 
     const pendingInterventions = usePendingInterventions();
     const hasPendingInterventions = pendingInterventions.length > 0;
@@ -278,7 +288,6 @@ const ChatInput = memo<ChatInputProps>(
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList(contextKey));
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
-    const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles(contextKey));
 
     // Queue state
     const hasQueuedMessages = useChatStore(
@@ -303,8 +312,9 @@ const ChatInput = memo<ChatInputProps>(
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
-    const disabled =
-      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+    // Uploads in flight do not block: the send is queued until they settle (see
+    // `queueSendWhileUploading`).
+    const disabled = isInputEmpty || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
 
     // `disabled` above lags the editor: `inputMessage` mirrors content through
     // the editor's debounced onChange, so a fast type→Enter arrives while the
@@ -318,7 +328,6 @@ const ChatInput = memo<ChatInputProps>(
       const { context: liveContext, editor } = storeApi.getState();
       const liveContextKey = messageMapKey(liveContext);
       const fileStore = useFileStore.getState();
-      if (fileChatSelectors.isUploadingFiles(liveContextKey)(fileStore)) return true;
       if (customDisabled !== undefined) return customDisabled;
 
       if (
@@ -345,11 +354,25 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
-        const currentFileList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
+        const uploadList = fileChatSelectors.chatUploadFileList(contextKey)(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(contextKey)(fileStore);
         const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
+        // The composer queues a send until its uploads settle; reaching here with one
+        // still in flight means the send came from elsewhere, which cannot wait.
         if (currentIsUploading) return;
+
+        // A failed or cancelled upload has no file to attach. It is left out of the
+        // message (its [Image #N] is pruned with it, so the numbers still match the
+        // images sent) and stays in the composer to retry or remove.
+        const { failed: failedUploads, sendable: currentFileList } =
+          partitionSendableUploads(uploadList);
+        // Said only once the send is settled (sent without them, or nothing left to
+        // send), never ahead of a return that sends nothing for another reason.
+        const notifyFailedUploads = () => {
+          if (failedUploads.length === 0) return;
+          toast.warning(t('input.uploadFailedNotSent', { count: failedUploads.length }));
+        };
 
         // Onboarding-style surfaces opt out of message queuing — pressing Enter
         // while the agent is streaming should be a no-op rather than enqueue.
@@ -357,8 +380,11 @@ const ChatInput = memo<ChatInputProps>(
 
         // Get content before clearing
         const message = getMarkdownContent();
-        if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
+        if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0) {
+          // Only failed uploads were attached: the queued send ends with nothing sent.
+          notifyFailedUploads();
           return;
+        }
 
         // A rejected preflight has no persisted message to recover from. Keep
         // the composer and attachments intact until the target is usable.
@@ -375,12 +401,17 @@ const ChatInput = memo<ChatInputProps>(
           return;
         }
 
+        notifyFailedUploads();
+
         // Capture editor JSON state before clearing for rich text rendering
         const editorData = getEditorData();
 
         const clearComposer = () => {
           clearContent();
-          fileStore.clearChatUploadFileList(contextKey);
+          fileStore.clearChatUploadFileList(
+            contextKey,
+            currentFileList.map((file) => file.id),
+          );
           fileStore.clearChatContextSelections(contextKey);
         };
 
@@ -446,13 +477,20 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked, t],
     );
 
     const sendButtonProps: SendButtonProps = getConversationSendButtonProps(
-      { disabled, generating: showStopButton, onStop: stopGenerating, showSendWhileGenerating },
+      {
+        disabled,
+        // While the message is still being created there is no run to stop yet:
+        // Send shows as loading, and Stop takes over once the run starts.
+        generating: showStopButton && !isSendDispatchPending,
+        loading: isSendDispatchPending,
+        onStop: stopGenerating,
+        showSendWhileGenerating: showSendWhileGenerating && !isSendDispatchPending,
+      },
       customSendButtonProps,
-      isUploadingFiles,
     );
 
     const handleVoiceMessageSend = useCallback(
@@ -548,6 +586,7 @@ const ChatInput = memo<ChatInputProps>(
 
     return (
       <ChatInputProvider
+        queueSendWhileUploading
         agentId={agentId}
         allowExpand={allowExpand}
         canRecordVoiceMessage={canRecordVoiceMessage}

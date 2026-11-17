@@ -8,6 +8,7 @@ import * as find from './find';
 import * as inFlight from './inFlight';
 import * as list from './list';
 import * as memoryExtractor from './memoryExtractor';
+import * as ownedWorktree from './ownedWorktree';
 import * as runningOperation from './runningOperation';
 import * as scheduledRun from './scheduledRun';
 import * as shareVisitor from './shareVisitor';
@@ -15,6 +16,7 @@ import * as taskCallback from './taskCallback';
 import * as trash from './trash';
 import * as update from './update';
 
+export type { OwnedWorktreeTopicRow } from './ownedWorktree';
 export { getTopicDeviceId } from './runningOperation';
 export { hasLiveTaskCallbackReservation } from './taskCallback';
 export type {
@@ -138,6 +140,12 @@ export class TopicModel {
   queryRecent = this.withContext(find.queryRecent);
   getCronTopicsGroupedByCronJob = this.withContext(find.getCronTopicsGroupedByCronJob);
   countInFlightInDirectory = this.withContext(inFlight.countInFlightInDirectory);
+  findOwnedWorktreeTopics = this.withContext(ownedWorktree.findOwnedWorktreeTopics);
+  findPendingOwnedWorktreeTopics = this.withContext(ownedWorktree.findPendingOwnedWorktreeTopics);
+  findOwnersOfWorktree = this.withContext(ownedWorktree.findOwnersOfWorktree);
+  findWaitingCleanupTopicsUnder = this.withContext(ownedWorktree.findWaitingCleanupTopicsUnder);
+  countLiveTopicsUsingWorktree = this.withContext(ownedWorktree.countLiveTopicsUsingWorktree);
+  updateOwnedWorktree = this.withContext(ownedWorktree.updateOwnedWorktree);
 
   // **************** Agent Share (visitor-scoped) *************** //
 

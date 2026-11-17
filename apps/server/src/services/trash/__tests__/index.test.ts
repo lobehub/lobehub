@@ -27,6 +27,10 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { TrashService } from '../index';
 
+// Trashing a topic starts the cleanup of the worktree the app created for it.
+const scheduleWorktreeCleanup = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/worktreeCleanup', () => ({ scheduleWorktreeCleanup }));
+
 // Lets a test land a concurrent purge between a restore handler's reads and its
 // write: the handlers check the owning agent right before restoring, inside the
 // restore transaction (the hook receives that transaction).
@@ -157,12 +161,76 @@ describe('TrashService', () => {
       expect(outcome.failed).toEqual([{ code: 'notFound', id: root.id }]);
     });
 
+    it('keeps a topic in the bin while its worktree cleanup waits for an offline device', async () => {
+      const WT = '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill';
+      const pending = (at: string) => ({
+        ownedWorktrees: [
+          {
+            branch: 'lobehub/quiet-hill',
+            cleanup: { at, state: 'pending' as const, trigger: 'trashed' as const },
+            createdAt: 'y',
+            deviceId: 'dev-1',
+            path: WT,
+            sourcePath: '/code/repo',
+          },
+        ],
+      });
+      const topic = await topicModel.create({ title: 'Worktree topic' });
+      const [root] = await service.trashTopics([topic.id]);
+      await serverDB
+        .update(topics)
+        .set({ metadata: pending(new Date().toISOString()) })
+        .where(eq(topics.id, topic.id));
+
+      // Purging now would lose the only record of the folder to delete.
+      expect(await service.purge([root.id])).toEqual({ blocked: [root.id], purged: 0 });
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(1);
+
+      // A device gone for longer than the hold no longer keeps it.
+      await serverDB
+        .update(topics)
+        .set({ metadata: pending(new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()) })
+        .where(eq(topics.id, topic.id));
+      expect(await service.purge([root.id])).toEqual({ blocked: [], purged: 1 });
+    });
+
+    it("holds an agent's purge while one of its topics still has a worktree cleanup waiting", async () => {
+      const agent = await agentModel.create({ title: 'Bot' });
+      const topic = await topicModel.create({ agentId: agent.id, title: 'Worktree topic' });
+      const root = await service.trashAgent(agent.id);
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            ownedWorktrees: [
+              {
+                cleanup: { at: new Date().toISOString(), state: 'pending', trigger: 'trashed' },
+                createdAt: 'y',
+                deviceId: 'dev-1',
+                path: '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill',
+                sourcePath: '/code/repo',
+              },
+            ],
+          },
+        })
+        .where(eq(topics.id, topic.id));
+
+      expect(await service.purge([root!.id])).toEqual({ blocked: [root!.id], purged: 0 });
+      expect(await serverDB.select().from(topics).where(eq(topics.id, topic.id))).toHaveLength(1);
+    });
+
     it('bulk sweeps become one restorable root per topic', async () => {
       const agent = await agentModel.create({ title: 'Bot' });
       await topicModel.create({ agentId: agent.id, title: 'a' });
       await topicModel.create({ agentId: agent.id, title: 'b' });
       const roots = await service.trashTopicsByAgent(agent.id);
       expect(roots).toHaveLength(2);
+      expect(scheduleWorktreeCleanup).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          topicIds: expect.arrayContaining(roots.map((root) => root.resourceId)),
+          trigger: 'trashed',
+        }),
+      );
       expect((await topicModel.query({ agentId: agent.id })).items).toHaveLength(0);
       expect((await service.list()).items).toHaveLength(2);
     });

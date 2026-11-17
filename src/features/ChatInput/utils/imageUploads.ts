@@ -3,6 +3,10 @@ import type { UploadFileItem } from '@/types/files/upload';
 export const isImageUpload = (item: Pick<UploadFileItem, 'file'>): boolean =>
   item.file.type.startsWith('image');
 
+/** Key a composer card renders under: the preview URL outlives the id change on upload. */
+export const getChatInputImageKey = (item: Pick<UploadFileItem, 'id' | 'previewUrl'>) =>
+  item.previewUrl ?? item.id;
+
 /** A failed or cancelled upload is not sent with the message, so it takes no number. */
 const isSendableImageUpload = (item: Pick<UploadFileItem, 'file' | 'status'>): boolean =>
   isImageUpload(item) && item.status !== 'error' && item.status !== 'cancelled';

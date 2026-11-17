@@ -350,8 +350,26 @@ export interface GitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** See `cleanupOwnedWorktree`; mirrors `OwnedWorktreeCleanupResult` in `@lobechat/types`. */
+export interface GitOwnedWorktreeCleanupResult {
+  branch?: string;
+  dirtyFiles?: number;
+  error?: string;
+  outcome: 'dirty' | 'error' | 'locked' | 'refused' | 'removed';
+  /** With `dirty`: submodules whose commits no remote holds (they would go with the worktree). */
+  unpushedSubmodules?: number;
+}
+
+/** See `restoreOwnedWorktree`; mirrors `OwnedWorktreeRestoreResult` in `@lobechat/types`. */
+export interface GitOwnedWorktreeRestoreResult {
+  error?: string;
+  outcome: 'branchMissing' | 'error' | 'refused' | 'restored';
+}
+
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt written into the worktree (see `ownedWorktree.ts`). */
+  ownerToken?: string;
   /** Echo of the start point the worktree's branch was cut from; see {@link GitCheckoutResult.startPoint}. */
   startPoint?: string;
   success: boolean;

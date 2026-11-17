@@ -9,6 +9,8 @@ import type {
   GitDeleteBranchResult,
   GitFileRevertResult,
   GitLinkedPullRequestResult,
+  GitOwnedWorktreeCleanupResult,
+  GitOwnedWorktreeRestoreResult,
   GitPullRequestAction,
   GitPullRequestActionResult,
   GitPullRequestActivity,
@@ -203,12 +205,48 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async addGitWorktree(payload: {
     branch: string;
+    ownerToken?: string;
     path: string;
     startPoint?: string;
     worktreePath: string;
   }): Promise<GitAddWorktreeResult> {
     const { addGitWorktree: runAddGitWorktree } = await loadGit();
     return runAddGitWorktree(payload);
+  }
+
+  /**
+   * Remove a worktree the app created for a conversation (archived or trashed),
+   * or with `discard` the one the user chose to drop with its changes. The
+   * guards run in `local-file-shell`; the root is this machine's own.
+   */
+  @IpcMethod()
+  async cleanupOwnedWorktree(payload: {
+    discard?: boolean;
+    ownerToken?: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeCleanupResult> {
+    const { cleanupOwnedWorktree } = await loadGit();
+    const { discard, ownerToken, sourcePath, worktreePath } = payload;
+    return cleanupOwnedWorktree({
+      discard: discard === true,
+      ownerToken,
+      sourcePath,
+      worktreePath,
+    });
+  }
+
+  /** Check a cleaned-up worktree out again at its path, for a restored conversation. */
+  @IpcMethod()
+  async restoreOwnedWorktree(payload: {
+    branch: string;
+    ownerToken?: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeRestoreResult> {
+    const { restoreOwnedWorktree } = await loadGit();
+    const { branch, ownerToken, sourcePath, worktreePath } = payload;
+    return restoreOwnedWorktree({ branch, ownerToken, sourcePath, worktreePath });
   }
 
   @IpcMethod()

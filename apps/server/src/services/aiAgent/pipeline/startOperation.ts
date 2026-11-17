@@ -251,6 +251,9 @@ export const startOperation = async (
             // actual chokepoint) via `isShareBlockedDataToolCall` — see
             // `shareGate/dispatch.ts`.
             allowReadMemory: shareGate.shareConfig.allowReadMemory,
+            // Re-applied at dispatch by the device-builtin and device-only MCP
+            // gates, so they decide exactly as the assembled tool set did.
+            canUseDevice: shareGate.canUseDevice,
             // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
             // outside `toolManifestMap` (e.g. `activateSkill`, which queries
             // builtin/DB skills by name) can enforce the same allowlist.

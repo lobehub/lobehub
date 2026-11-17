@@ -1,5 +1,7 @@
 export * from './branches';
 export * from './info';
+export * from './ownedWorktree';
+export * from './ownerMarker';
 export * from './pullRequest';
 export * from './repoType';
 export * from './sync';
