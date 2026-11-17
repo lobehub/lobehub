@@ -14,6 +14,9 @@ import type { IngestAck, IngestSink } from './BatchIngester';
  * The CLI authenticates using the `LOBEHUB_JWT` env var (operation-scoped JWT
  * injected by the server before spawning the sandbox / desktop process).
  */
+const withoutBackgroundTasks = (events: AgentStreamEvent[]) =>
+  events.filter((event) => event.type !== 'background_task');
+
 export class TrpcIngestSink implements IngestSink {
   /**
    * Cleared once the server refused a batch for carrying `background_task`
@@ -60,9 +63,10 @@ export class TrpcIngestSink implements IngestSink {
   }
 
   async ingest(events: AgentStreamEvent[]): Promise<IngestAck> {
-    const sendable = this.sendBackgroundTasks
-      ? events
-      : events.filter((event) => event.type !== 'background_task');
+    const sendable = this.sendBackgroundTasks ? events : withoutBackgroundTasks(events);
+    // Filtering emptied the batch, and an older server refuses an empty one:
+    // nothing is left to deliver, so it counts as delivered.
+    if (sendable.length === 0 && events.length > 0) return { accepted: true };
     try {
       return await this.send(sendable);
     } catch (error) {
@@ -70,7 +74,8 @@ export class TrpcIngestSink implements IngestSink {
       const hasTasks = sendable.some((event) => event.type === 'background_task');
       if (code !== 'BAD_REQUEST' || !hasTasks) throw error;
       this.sendBackgroundTasks = false;
-      return this.send(sendable.filter((event) => event.type !== 'background_task'));
+      const rest = withoutBackgroundTasks(sendable);
+      return rest.length > 0 ? this.send(rest) : { accepted: true };
     }
   }
 

@@ -107,4 +107,23 @@ describe('heterogeneous completion delivery', () => {
     await expect(sink.ingest([chunk] as any)).rejects.toBe(badRequest);
     expect(ingestMutate).toHaveBeenCalledTimes(1);
   });
+
+  it('sends nothing for a batch of only background tasks once the server refused them', async () => {
+    const { ingestMutate, sink } = setup();
+    const badRequest = Object.assign(new Error('Invalid input'), { data: { code: 'BAD_REQUEST' } });
+    ingestMutate.mockRejectedValueOnce(badRequest);
+    const task = {
+      data: {},
+      operationId: 'owned-op',
+      stepIndex: 0,
+      timestamp: 1,
+      type: 'background_task',
+    };
+
+    // The refused batch held only tasks: dropping them leaves nothing to send.
+    await expect(sink.ingest([task] as any)).resolves.toEqual({ accepted: true });
+    await expect(sink.ingest([task, task] as any)).resolves.toEqual({ accepted: true });
+
+    expect(ingestMutate).toHaveBeenCalledTimes(1);
+  });
 });
