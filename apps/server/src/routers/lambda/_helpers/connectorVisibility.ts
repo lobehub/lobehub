@@ -50,7 +50,8 @@ export const assertPrivateConnectorTarget = async (
  * - Only the creator decides: making it private takes it away from every
  *   other member, making it shared hands the creator's credentials to them.
  * - A Composio account runs as the member who linked it, so only that member
- *   makes it private. A row can hold someone else's account (a teammate's
+ *   makes it private; likewise every OAuth account (`link.userId`) the row holds
+ *   must be the caller's own. A row can hold someone else's account (a teammate's
  *   legacy connection migrated into a row by whoever opened it first, an
  *   owner's reconnect): making it private would keep that account to the
  *   creator and take it from its own linker and the rest of the workspace.
@@ -99,6 +100,21 @@ export const resolveVisibilityChange = async (
       code: 'FORBIDDEN',
       message:
         'This connection was authorized by another member. Reconnect it with your own account to make it private',
+    });
+  }
+  // An OAuth account runs as the member who authorized it (`link.userId`):
+  // made private, a teammate's account would serve only the creator's private
+  // agents, and the teammate could no longer see or remove it
+  if (
+    requested === 'private' &&
+    (await ctx.connectorModel.getLinkModel().listByConnectorIds([target.id])).some(
+      (link) => link.userId !== ctx.userId,
+    )
+  ) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message:
+        'This connector holds an account another member authorized. Remove that account, or reconnect with your own, to make it private',
     });
   }
   // A mounted row serves its agent: made private, a shared agent's runs (or a

@@ -64,6 +64,8 @@ const member = () => callerFor({ workspaceId: 'ws-1', workspaceRole: 'member' })
 
 describe('connectorRouter visibility', () => {
   let connectorModelMock: any;
+  /** The OAuth accounts a connector row holds, as `ConnectorLinkModel` lists them. */
+  const linksOf = vi.fn();
   let agentModelMock: any;
 
   beforeEach(() => {
@@ -75,8 +77,10 @@ describe('connectorRouter visibility', () => {
       createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'created' } }),
       findById: vi.fn(),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
+      getLinkModel: () => ({ listByConnectorIds: linksOf }),
       update: vi.fn(),
     };
+    linksOf.mockReset().mockResolvedValue([]);
     agentModelMock = {
       existsOwnedById: vi.fn().mockResolvedValue(true),
       getAgentVisibility: vi.fn().mockResolvedValue('private'),
@@ -356,6 +360,35 @@ describe('connectorRouter visibility', () => {
       connectorModelMock.findById.mockResolvedValue(
         row({ metadata: { mountedByAgentId: 'agt-mine' } }),
       );
+
+      await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
+
+      expect(connectorModelMock.update).toHaveBeenCalledWith(
+        CONNECTOR_ID,
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
+    it('refuses to make private a connector holding an account a teammate authorized', async () => {
+      // Regression: only Composio's linker was checked, so a creator could make
+      // private a shared OAuth connector a teammate had authorized and run the
+      // teammate's token from their own private agent.
+      connectorModelMock.findById.mockResolvedValue(row());
+      linksOf.mockResolvedValue([
+        { id: 'lnk_me', userId: 'me' },
+        { id: 'lnk_mate', userId: 'mate' },
+      ]);
+
+      await expect(
+        member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(linksOf).toHaveBeenCalledWith([CONNECTOR_ID]);
+      expect(connectorModelMock.update).not.toHaveBeenCalled();
+    });
+
+    it('makes private a connector whose accounts are all the creator’s own', async () => {
+      connectorModelMock.findById.mockResolvedValue(row());
+      linksOf.mockResolvedValue([{ id: 'lnk_me', userId: 'me' }]);
 
       await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
 
