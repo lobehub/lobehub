@@ -33,6 +33,7 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 const { default: RunRoutes } = await import('./runs.route');
+const { default: ImRoutes } = await import('./im.route');
 const { RunEventSchema, RunSchema } = await import('../types/run.type');
 
 const USER = 'runs-integration-user';
@@ -389,5 +390,36 @@ describe('runs: ownership', () => {
       expect((await json(await request(`/${id}`))).status).toBe('waiting_for_human');
     },
     TIMEOUT * 2,
+  );
+});
+
+describe('runs: ids from other endpoints', () => {
+  it(
+    'reads the operationId returned by POST /im/messages as a run',
+    async () => {
+      const app = new Hono();
+      app.use('*', async (c, next) => {
+        c.set('userId' as never, USER as never);
+        await next();
+      });
+      app.route('/im', ImRoutes);
+      app.route('/runs', RunRoutes);
+
+      const sent = await app.request('/im/messages', {
+        body: JSON.stringify({ agentId, content: 'How is the weather in Hangzhou?' }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      expect(sent.status).toBe(200);
+      const { operationId, topicId } = await json(sent);
+      expect(operationId).toBeTruthy();
+
+      const res = await app.request(`/runs/${operationId}`);
+      expect(res.status).toBe(200);
+      const run = await json(res);
+      expect(run).toMatchObject({ agentId, id: operationId, topicId });
+      expect(() => RunSchema.parse(run)).not.toThrow();
+    },
+    TIMEOUT,
   );
 });
