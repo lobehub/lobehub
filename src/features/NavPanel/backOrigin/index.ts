@@ -34,6 +34,7 @@ export interface BackEntry {
   /** `history.state.idx` of that location on web; unknown on desktop tabs. */
   historyIndex?: number;
   location: string;
+  locationKey?: string;
 }
 
 type Stacks = Readonly<Record<string, readonly BackEntry[]>>;
@@ -47,9 +48,9 @@ const MAX_STACK = 50;
  * in order, each holding the latest location seen inside it.
  */
 let stacks: Stacks = {};
-// React Router gives each browser entry its own key, even when a new entry
-// reuses an index after navigating back.
-const browserStacks = new Map<string, readonly BackEntry[]>();
+// Keep the most recently observed entry at each index. A replace changes
+// its location key without moving the index or clearing forward entries.
+const browserStacks = new Map<number, readonly BackEntry[]>();
 const listeners = new Set<Listener>();
 
 const subscribe = (listener: Listener) => {
@@ -112,12 +113,18 @@ export const recordBackLocation = (
   owner: string,
   location: string,
   historyIndex?: number,
+  locationKey?: string,
 ): void => {
   const stack = stacks[owner] ?? [];
   const top = stack.at(-1);
-  if (top?.location === location && top.historyIndex === historyIndex) return;
+  if (
+    top?.location === location &&
+    top.historyIndex === historyIndex &&
+    top.locationKey === locationKey
+  )
+    return;
 
-  const entry: BackEntry = { historyIndex, location };
+  const entry: BackEntry = { historyIndex, location, locationKey };
   const scope = resolveBackScope(location);
   if (!scope) return setStack(owner, [entry]);
 
@@ -138,9 +145,11 @@ export const createBackOriginRecorder = () => {
     const sourceOwner = lastOwner;
     lastOwner = owner;
 
-    const browserKey = owner === MAIN_OWNER && historyIndex !== undefined ? locationKey : undefined;
-    const previous = browserKey === undefined ? undefined : browserStacks.get(browserKey);
-    if (previous?.at(-1)?.location === location) {
+    const browserIndex =
+      owner === MAIN_OWNER && locationKey !== undefined ? historyIndex : undefined;
+    const previous = browserIndex === undefined ? undefined : browserStacks.get(browserIndex);
+    const entry = previous?.at(-1);
+    if (previous && entry?.location === location && entry.locationKey === locationKey) {
       if (previous !== stacks[owner]) setStack(owner, previous);
       return;
     }
@@ -150,10 +159,10 @@ export const createBackOriginRecorder = () => {
       setStack(owner, source);
       return;
     }
-    recordBackLocation(owner, location, historyIndex);
-    if (browserKey === undefined) return;
+    recordBackLocation(owner, location, historyIndex, locationKey);
+    if (browserIndex === undefined) return;
 
-    browserStacks.set(browserKey, stacks[owner]);
+    browserStacks.set(browserIndex, stacks[owner]);
     if (browserStacks.size > MAX_STACK) {
       const oldest = browserStacks.keys().next();
       if (!oldest.done) browserStacks.delete(oldest.value);
@@ -174,16 +183,21 @@ export const getBackOrigin = (owner: string, pathname: string): string | undefin
   selectOrigin(stacks, owner, pathname)?.location;
 
 /**
- * How many browser history steps lead back to `origin`, or `undefined` when it
- * is not an earlier entry of the current history (desktop tabs, a `replace`
- * into the agent, a reload that lost the index).
+ * Walk back only when the recorded index still identifies the saved origin.
+ * Otherwise the button uses the literal saved URL.
  */
 export const historyDeltaTo = (
   origin: BackEntry,
   currentIndex: number | undefined,
 ): number | undefined => {
-  if (origin.historyIndex === undefined || currentIndex === undefined) return undefined;
-  const delta = origin.historyIndex - currentIndex;
+  const { historyIndex, location, locationKey } = origin;
+  if (historyIndex === undefined || currentIndex === undefined || locationKey === undefined)
+    return undefined;
+
+  const entry = browserStacks.get(historyIndex)?.at(-1);
+  if (entry?.locationKey !== locationKey || entry.location !== location) return undefined;
+
+  const delta = historyIndex - currentIndex;
   return delta < 0 ? delta : undefined;
 };
 
