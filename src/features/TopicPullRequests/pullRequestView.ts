@@ -3,6 +3,7 @@ import type {
   DeviceGitPullRequestCiStatus,
   DeviceGitPullRequestDetail,
   TopicPullRequestItem,
+  TopicPullRequestLinkSource,
 } from '@lobechat/types';
 
 import type { PullRequestState } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
@@ -24,9 +25,13 @@ export interface TopicPullRequestView {
   mergedAt?: string | null;
   number: number;
   repoFullName: string;
+  /** How the topic came to it; see {@link TopicPullRequestLinkSource}. */
+  source: TopicPullRequestLinkSource;
   state: PullRequestState;
   title: string;
   url: string;
+  /** The app can vouch it belongs to the topic; merge / close stay locked otherwise. */
+  vouched: boolean;
 }
 
 /** Device detail for a number, with whether this session confirmed it. */
@@ -65,7 +70,10 @@ export const resolvePullRequestView = (
     identifier: item.identifier,
     number: item.number,
     repoFullName: item.repoFullName,
+    // Persisted lists from before these fields existed read as the strongest kind.
+    source: item.source ?? 'created',
     url: fallbackUrl(item),
+    vouched: item.vouched ?? true,
   };
 
   const sameRepo = !!device && isSameRepository(device.detail, item.repoFullName);

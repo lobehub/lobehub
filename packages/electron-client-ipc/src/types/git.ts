@@ -23,6 +23,10 @@ export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknow
 
 export interface GitLinkedPullRequest {
   ciStatus?: GitPullRequestCiStatus;
+  /** The PR's head branch on GitHub */
+  headRefName?: string;
+  /** `owner/repo` of the PR's head branch — not the PR's own repo for a fork PR */
+  headRepoFullName?: string;
   isDraft?: boolean;
   mergeable?: string;
   mergedAt?: string | null;
@@ -41,6 +45,8 @@ export interface GitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
+  /** `owner/repo` of the GitHub remote the branch publishes to, when it is one */
+  remoteRepoFullName?: string;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
   status: GitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found */

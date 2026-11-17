@@ -59,13 +59,51 @@ export const useSidebarPullRequests = (params: {
     [params.topicId],
   );
 
+  const topicId = params.topicId;
+  const dismissPullRequest = useCallback(
+    async (view: TopicPullRequestView) => {
+      if (!topicId) return;
+      await workService.setTopicPullRequestDismissed({
+        dismissed: true,
+        identifier: view.identifier,
+        topicId,
+      });
+      await refresh();
+    },
+    [refresh, topicId],
+  );
+  /** Link a PR by URL; resolves to its `owner/repo#n`, or throws on a bad URL. */
+  const linkPullRequest = useCallback(
+    async (url: string) => {
+      if (!topicId) return undefined;
+      const { identifier } = await workService.linkTopicPullRequest({
+        source: 'manual',
+        topicId,
+        url,
+      });
+      await refresh();
+      return identifier;
+    },
+    [refresh, topicId],
+  );
+
   if (!linked.enabled) {
-    return { ...legacy, pickPullRequest: undefined, probes: [], pullRequests: undefined };
+    return {
+      ...legacy,
+      dismissPullRequest: undefined,
+      linkPullRequest: undefined,
+      pickPullRequest: undefined,
+      probes: [],
+      pullRequests: undefined,
+    };
   }
 
   return {
     confirmError: undefined,
-    confirmed: !!selected?.confirmed,
+    // Mutations need a confirmed read AND a PR the app can vouch for.
+    confirmed: !!selected?.confirmed && !!selected?.vouched,
+    dismissPullRequest,
+    linkPullRequest,
     onRetryConfirm: () => void refresh(),
     /** Open a listed PR: in the PR tab when the pane can read it, else on GitHub. */
     pickPullRequest: (view: TopicPullRequestView) => {
