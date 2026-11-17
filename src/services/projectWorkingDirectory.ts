@@ -10,6 +10,10 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.createProjectTopic.mutate(input);
   associateTopic = (input: Parameters<Client['associateTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.associateTopic.mutate(input);
+  associateTopics = (input: Parameters<Client['associateTopics']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.associateTopics.mutate(input);
+  listMovableTopics = (input: Parameters<Client['listMovableTopics']['query']>[0]) =>
+    lambdaClient.projectWorkingDirectory.listMovableTopics.query(input);
   listEnvironments = (projectId?: string) =>
     lambdaClient.projectWorkingDirectory.listEnvironments.query({ projectId });
   saveEnvironment = (input: Parameters<Client['saveEnvironment']['mutate']>[0]) =>
