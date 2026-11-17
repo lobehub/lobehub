@@ -10,57 +10,25 @@ import pc from 'picocolors';
 import type { TrpcClient } from '../api/client';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson } from '../utils/format';
-import { log } from '../utils/logger';
 import {
   curlUsage,
-  describeError,
   printDeliveryTable,
   printWebhookDetails,
   printWebhookTable,
-  targetOf,
   titleOf,
 } from './webhook/format';
 import type { WebhookSettingsOptions } from './webhook/input';
-import { assertWebhookId, buildCreateInput, buildUpdateInput } from './webhook/input';
-
-type JsonOption = { json?: string | boolean };
-
-const KINDS = ['generic', 'mcp_events'] as const;
-
-function fail(error: unknown): never {
-  log.error((error as Error)?.message ?? String(error));
-  process.exit(1);
-}
-
-/** Run an action, turning a local or TRPC error into a CLI error and exit code 1. */
-const guarded =
-  <A extends unknown[]>(fn: (...args: A) => Promise<void>) =>
-  async (...args: A) => {
-    try {
-      await fn(...args);
-    } catch (error) {
-      fail(error);
-    }
-  };
-
-const jsonFields = (options: JsonOption) =>
-  typeof options.json === 'string' ? options.json : undefined;
-
-async function getWebhook(client: TrpcClient, id: string): Promise<InboundWebhookItem> {
-  assertWebhookId(id);
-  return client.inboundWebhook.get.query({ id });
-}
+import { buildCreateInput, buildUpdateInput } from './webhook/input';
+import type { JsonOption } from './webhook/shared';
+import { getInboundWebhook, guarded, jsonFields, requireGeneric, targetOf } from './webhook/shared';
 
 /**
- * Changing what a webhook runs, its key and test calls belong to custom webhooks. An MCP Events
- * subscription is made by its agent in a conversation; here it can only be viewed, checked and
- * deleted. The server rejects the rest too; this says why, and what works instead.
+ * A custom webhook. The same table holds MCP Events subscriptions, which are automations: those
+ * are refused here with the `lh automation` command that handles them.
  */
-function requireGeneric(item: InboundWebhookItem, command: string) {
-  if (item.kind === 'generic') return;
-  throw new Error(
-    `"lh webhook ${command}" works on custom webhooks only. ${item.id} is an MCP Events subscription, made by its agent in a conversation: view it, rename it (lh webhook edit ${item.id} --name <name>), check it (lh webhook check ${item.id}), or delete it to stop it (lh webhook delete ${item.id}).`,
-  );
+async function getWebhook(client: TrpcClient, id: string, command: string) {
+  const item = await getInboundWebhook(client, id, 'webhook');
+  return { item, source: requireGeneric(item, command) };
 }
 
 function printKey(item: InboundWebhookItem, secret: string) {
@@ -75,7 +43,10 @@ function printKey(item: InboundWebhookItem, secret: string) {
 
 function addSettingsOptions(command: Command) {
   return command
-    .option('--name <name>', 'Display name')
+    .option(
+      '--name <name>',
+      'Display name; the identifier the agent knows the webhook by is made from it on create and never changes',
+    )
     .option('--instructions <text>', 'What the agent should do with each call')
     .option(
       '--topic-mode <mode>',
@@ -95,28 +66,23 @@ export function registerWebhookCommand(program: Command) {
     .command('webhook')
     .alias('webhooks')
     .description(
-      'Manage inbound webhooks: custom webhook URLs that wake an agent, and MCP Events subscriptions',
+      'Manage custom webhooks: URLs any system calls to wake an agent (MCP Events subscriptions are under lh automation)',
     );
 
   // ── list ──────────────────────────────────────────────
 
   webhook
     .command('list')
-    .description('List webhooks and MCP Events subscriptions')
+    .description('List custom webhooks')
     .option('--agent <agentId>', 'Only this agent')
-    .option('--kind <kind>', `Only this kind: ${KINDS.join(' or ')}`)
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
-      guarded(async (options: JsonOption & { agent?: string; kind?: string }) => {
-        if (options.kind && !(KINDS as readonly string[]).includes(options.kind))
-          throw new Error(
-            `Invalid --kind "${options.kind}". Expected one of: ${KINDS.join(', ')}.`,
-          );
+      guarded(async (options: JsonOption & { agent?: string }) => {
         const client = await getTrpcClient();
-        const all: InboundWebhookItem[] = await client.inboundWebhook.list.query(
-          options.agent ? { agentId: options.agent } : undefined,
-        );
-        const items = options.kind ? all.filter((item) => item.kind === options.kind) : all;
+        const items: InboundWebhookItem[] = await client.inboundWebhook.list.query({
+          kind: 'generic',
+          ...(options.agent && { agentId: options.agent }),
+        });
 
         if (options.json !== undefined) return outputJson(items, jsonFields(options));
         if (items.length === 0) {
@@ -131,13 +97,15 @@ export function registerWebhookCommand(program: Command) {
 
   webhook
     .command('view <id>')
-    .description('Show a webhook: settings, URL, how to call it, last error')
+    .description(
+      'Show a custom webhook: name, identifier, settings, URL, how to call it, last error',
+    )
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       guarded(async (id: string, options: JsonOption) => {
-        const item = await getWebhook(await getTrpcClient(), id);
+        const { item, source } = await getWebhook(await getTrpcClient(), id, 'view');
         if (options.json !== undefined) return outputJson(item, jsonFields(options));
-        printWebhookDetails(item);
+        printWebhookDetails(item, source);
       }),
     );
 
@@ -162,6 +130,9 @@ export function registerWebhookCommand(program: Command) {
         console.log(
           `${pc.green('✓')} Created webhook ${pc.bold(titleOf(item))} ${pc.dim(`(${item.id})`)}`,
         );
+        console.log(
+          `${pc.dim('Identifier'.padEnd(12))}${item.identifier} ${pc.dim('(how the agent knows it; fixed)')}`,
+        );
         printKey(item, secret);
         if (item.source.delivery) console.log(`Each run's answer is posted to ${targetOf(item)}.`);
         if (item.endpoint) {
@@ -178,10 +149,10 @@ export function registerWebhookCommand(program: Command) {
     webhook
       .command('edit <id>')
       .description(
-        'Change what a custom webhook runs and where, or rename an MCP Events subscription',
+        'Change a custom webhook: its name (the identifier stays), what it runs and where results go',
       ),
   )
-    .option('--no-name', 'Clear the name')
+    .option('--no-name', 'Clear the name (the webhook then shows its identifier)')
     .option('--no-instructions', 'Clear the instructions')
     .option('--no-topic', 'Forget the picked shared topic (the webhook uses its own)')
     .option('--no-auto-approve', 'Wait for approval as your tool settings say')
@@ -190,8 +161,8 @@ export function registerWebhookCommand(program: Command) {
     .action(
       guarded(async (id: string, options: WebhookSettingsOptions & JsonOption) => {
         const client = await getTrpcClient();
-        const current = await getWebhook(client, id);
-        const changes = buildUpdateInput(current, options);
+        const { source } = await getWebhook(client, id, 'edit');
+        const changes = buildUpdateInput(source, options);
         const item: InboundWebhookItem = await client.inboundWebhook.update.mutate({
           id,
           ...changes,
@@ -199,7 +170,10 @@ export function registerWebhookCommand(program: Command) {
 
         if (options.json !== undefined) return outputJson(item, jsonFields(options));
         console.log(`${pc.green('✓')} Updated webhook ${pc.bold(titleOf(item))}`);
-        console.log(`${pc.dim('Target'.padEnd(8))}${targetOf(item)}`);
+        console.log(
+          `${pc.dim('Identifier'.padEnd(12))}${item.identifier} ${pc.dim('(unchanged)')}`,
+        );
+        console.log(`${pc.dim('Target'.padEnd(12))}${targetOf(item)}`);
       }),
     );
 
@@ -208,7 +182,7 @@ export function registerWebhookCommand(program: Command) {
   const setPaused = (paused: boolean) =>
     guarded(async (id: string, options: JsonOption) => {
       const client = await getTrpcClient();
-      requireGeneric(await getWebhook(client, id), paused ? 'pause' : 'resume');
+      await getWebhook(client, id, paused ? 'pause' : 'resume');
       const item: InboundWebhookItem = await client.inboundWebhook.update.mutate({ id, paused });
 
       if (options.json !== undefined) return outputJson(item, jsonFields(options));
@@ -241,8 +215,7 @@ export function registerWebhookCommand(program: Command) {
     .action(
       guarded(async (id: string, options: JsonOption & { yes?: boolean }) => {
         const client = await getTrpcClient();
-        const current = await getWebhook(client, id);
-        requireGeneric(current, 'rotate-key');
+        const { item: current } = await getWebhook(client, id, 'rotate-key');
 
         if (!options.yes) {
           const confirmed = await confirm(
@@ -271,8 +244,7 @@ export function registerWebhookCommand(program: Command) {
     .action(
       guarded(async (id: string, options: JsonOption) => {
         const client = await getTrpcClient();
-        const current = await getWebhook(client, id);
-        requireGeneric(current, 'test');
+        const { item: current } = await getWebhook(client, id, 'test');
         if (current.status === 'paused')
           throw new Error(`The webhook is paused. Resume it first: lh webhook resume ${id}`);
 
@@ -293,18 +265,18 @@ export function registerWebhookCommand(program: Command) {
 
   webhook
     .command('calls <id>')
-    .description('List the calls a webhook received, newest first')
+    .description('List the calls a custom webhook received, newest first')
     .option('-L, --limit <n>', 'Maximum number of calls', '20')
     .option('--all', 'List every recorded call')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(
       guarded(async (id: string, options: JsonOption & { all?: boolean; limit: string }) => {
-        assertWebhookId(id);
         const limit = options.all ? Infinity : Number.parseInt(options.limit, 10);
         if (!options.all && (!Number.isInteger(limit) || limit < 1))
           throw new Error(`Invalid --limit "${options.limit}". Expected a positive number.`);
 
         const client = await getTrpcClient();
+        await getWebhook(client, id, 'calls');
         const calls: InboundWebhookDeliveryItem[] = [];
         let cursor: { createdAt: string; id: string } | undefined;
         let more = false;
@@ -334,49 +306,21 @@ export function registerWebhookCommand(program: Command) {
       }),
     );
 
-  // ── check ─────────────────────────────────────────────
-
-  webhook
-    .command('check <id>')
-    .description('Check an MCP Events subscription with its server now, renewing or recovering it')
-    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(
-      guarded(async (id: string, options: JsonOption) => {
-        const client = await getTrpcClient();
-        const current = await getWebhook(client, id);
-        if (current.kind !== 'mcp_events')
-          throw new Error(
-            `"lh webhook check" works on MCP Events subscriptions only. ${id} is a custom webhook: send it a test call with: lh webhook test ${id}`,
-          );
-
-        const item: InboundWebhookItem = await client.inboundWebhook.check.mutate({ id });
-        if (options.json !== undefined) return outputJson(item, jsonFields(options));
-        if (item.status === 'active' && !item.lastError) {
-          console.log(`${pc.green('✓')} ${titleOf(item)}: the subscription is working.`);
-          return;
-        }
-        console.log(`${pc.yellow('!')} ${titleOf(item)}: ${item.status}`);
-        if (item.lastError) console.log(describeError(item.lastError));
-      }),
-    );
-
   // ── delete ────────────────────────────────────────────
 
   webhook
     .command('delete <id>')
-    .description('Delete a webhook; an MCP Events subscription is also ended on its MCP server')
+    .description('Delete a custom webhook: its URL stops working at once')
     .option('--yes', 'Skip confirmation prompt')
     .action(
       guarded(async (id: string, options: { yes?: boolean }) => {
         const client = await getTrpcClient();
-        const current = await getWebhook(client, id);
+        const { item: current } = await getWebhook(client, id, 'delete');
         const agent = current.agent?.title || 'the agent';
 
         if (!options.yes) {
           const confirmed = await confirm(
-            current.kind === 'generic'
-              ? `Delete webhook ${titleOf(current)}? Its URL stops working at once and calls no longer wake ${agent}. This cannot be undone.`
-              : `Delete the ${titleOf(current)} subscription? This also ends it on the MCP server, so ${agent} no longer runs on these events. To get them again, ask the agent to subscribe in a conversation.`,
+            `Delete webhook ${titleOf(current)}? Its URL stops working at once and calls no longer wake ${agent}. This cannot be undone.`,
           );
           if (!confirmed) {
             console.log('Cancelled.');
@@ -385,11 +329,7 @@ export function registerWebhookCommand(program: Command) {
         }
 
         await client.inboundWebhook.delete.mutate({ id });
-        console.log(
-          current.kind === 'generic'
-            ? `${pc.green('✓')} Deleted webhook ${pc.bold(titleOf(current))}`
-            : `${pc.green('✓')} Deleted ${pc.bold(titleOf(current))} and ended the subscription on its MCP server`,
-        );
+        console.log(`${pc.green('✓')} Deleted webhook ${pc.bold(titleOf(current))}`);
       }),
     );
 }

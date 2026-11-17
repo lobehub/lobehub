@@ -1,6 +1,6 @@
 'use client';
 
-import type { InboundWebhookItem } from '@lobechat/types';
+import { agentDisplayName, type InboundWebhookItem } from '@lobechat/types';
 import {
   ActionIcon,
   Button,
@@ -31,11 +31,14 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import {
   AutomationStatusReason,
   AutomationStatusTag,
 } from '@/features/Automations/AutomationStatus';
 import ChannelTarget from '@/features/Automations/ChannelTarget';
+import { openRenameAutomationModal } from '@/features/Automations/RenameAutomationModal';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
 import DeliveryLog from './DeliveryLog';
@@ -71,6 +74,11 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
   },
+  agentLink: {
+    alignSelf: 'flex-start',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorLink },
+  },
   meta: { fontSize: '12px', color: cssVar.colorTextSecondary },
   root: {
     paddingBlock: '16px',
@@ -91,6 +99,8 @@ interface WebhookItemProps {
   item: InboundWebhookItem;
   onChange: (item: InboundWebhookItem) => void;
   onRemoved: (id: string) => void;
+  /** Name the agent it wakes, on a list of every agent's webhooks. */
+  showAgent?: boolean;
 }
 
 /**
@@ -99,7 +109,7 @@ interface WebhookItemProps {
  * everyone else sees it read-only, without the URL.
  */
 const WebhookItem = memo<WebhookItemProps>(
-  ({ agentId, defaultSection, item, onChange, onRemoved }) => {
+  ({ agentId, defaultSection, item, onChange, onRemoved, showAgent }) => {
     const { t } = useTranslation('agent');
     const [section, setSection] = useState<Section | undefined>(defaultSection);
     const [pendingActive, setPendingActive] = useState<boolean>();
@@ -182,8 +192,38 @@ const WebhookItem = memo<WebhookItemProps>(
         title: t('webhook.delete.title'),
       });
 
+    // The name is for people: renaming leaves the identifier the Agent knows it by.
+    const rename = () =>
+      openRenameAutomationModal({
+        currentName: item.name ?? '',
+        fallback: t('webhook.defaultName'),
+        onSubmit: async (next) => {
+          try {
+            onChange(await inboundWebhookService.update(item.id, { name: next }));
+            toast.success(t('webhook.renamed'));
+            return undefined;
+          } catch {
+            return t('webhook.updateFailed');
+          }
+        },
+        title: t('webhook.actions.rename'),
+      });
+
     // What the webhook runs is its creator's to change; others who manage it can stop or delete it.
+    // One that posts to a Channel keeps what it runs as the CLI or chat set it; only its name
+    // changes here.
     const menu: DropdownItem[] = [
+      ...(item.canConfigure && readOnly
+        ? ([
+            {
+              icon: <Icon icon={PencilIcon} />,
+              key: 'rename',
+              label: t('webhook.actions.rename'),
+              onClick: rename,
+            },
+            { type: 'divider' },
+          ] satisfies DropdownItem[])
+        : []),
       ...(canConfigure
         ? ([
             {
@@ -211,6 +251,8 @@ const WebhookItem = memo<WebhookItemProps>(
     ];
 
     const meta = [
+      // What the Agent knows it by; fixed, unlike the name above.
+      t('webhook.identifier', { identifier: item.identifier }),
       source?.topicMode === 'reuse' && source.topicId
         ? item.topic
           ? t('webhook.topic.continues', {
@@ -259,6 +301,25 @@ const WebhookItem = memo<WebhookItemProps>(
             </>
           )}
         </Flexbox>
+
+        {showAgent && item.agent && (
+          <WorkspaceLink to={`/agent/${item.agent.id}/webhook`} {...stylex.props(styles.agentLink)}>
+            <Flexbox horizontal align={'center'} gap={6}>
+              <AgentAvatar
+                agentId={item.agent.id}
+                avatar={item.agent.avatar}
+                background={item.agent.backgroundColor ?? undefined}
+                name={agentDisplayName(item.agent, t('webhook.untitledAgent'))}
+                size={18}
+              />
+              <span>
+                {t('webhook.wakes', {
+                  agent: agentDisplayName(item.agent, t('webhook.untitledAgent')),
+                })}
+              </span>
+            </Flexbox>
+          </WorkspaceLink>
+        )}
 
         <AutomationStatusReason item={item} />
 

@@ -6,7 +6,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
-import type { ListWebhooksArgs, ListWebhooksState } from '../../types';
+import type { ListWebhooksState } from '../../types';
 import ManageLink from '../components/ManageLink';
 import ToolError from '../components/ToolError';
 import WebhookCard from '../components/WebhookCard';
@@ -21,11 +21,11 @@ const styles = stylex.create({
   },
 });
 
-/** The agent's webhooks, one card each; a custom webhook offers a new key to its creator. */
+/** The agent's custom webhooks, one card each, offering a new key to their creator. */
 const ListWebhooksRender = ({
   pluginError,
   pluginState,
-}: BuiltinRenderProps<ListWebhooksArgs, ListWebhooksState>) => {
+}: BuiltinRenderProps<unknown, ListWebhooksState>) => {
   const { t } = useTranslation('plugin');
   const error = getToolError(pluginState, pluginError);
   if (error) return <ToolError error={error} />;

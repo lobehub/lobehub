@@ -1,36 +1,19 @@
 import type {
+  GenericWebhookSource,
   InboundWebhookDeliveryItem,
-  InboundWebhookError,
   InboundWebhookItem,
 } from '@lobechat/types';
 import pc from 'picocolors';
 
-import { formatTimestamp, printTable, timeAgo, timeUntil, truncate } from '../../utils/format';
-
-/** What each `lastError` means, in the words the Web's automation list uses. */
-const ERROR_TEXT: Record<InboundWebhookError, string> = {
-  access_revoked:
-    'Access was revoked; the subscription ended. Delete it and ask the agent to resubscribe.',
-  auth: "The connector's authorization has expired. Reconnect the connector.",
-  challenge_failed: "The connector could not verify LobeHub's callback address.",
-  channel_unavailable:
-    'Run results could not be posted to the Channel: the agent or the creator left it, the agent is muted, or the Channel was archived or deleted.',
-  connection_refused: 'The connector could not connect to LobeHub to deliver events.',
-  delivery_suspended:
-    'The connector had paused delivery after repeated failures and was asked to resume. This clears when the next event arrives.',
-  event_unavailable: 'The connector no longer offers this event, so the subscription ended.',
-  http_4xx: "LobeHub rejected the connector's deliveries.",
-  http_5xx: "LobeHub failed while receiving the connector's deliveries.",
-  insufficient_budget: 'Not enough credits to run the agent. Later calls run once you top up.',
-  server_unreachable: "Could not reach the connector's server.",
-  timeout: 'The connector timed out delivering events to LobeHub.',
-  tls_error: 'The connector could not open a secure connection to LobeHub.',
-  unknown: 'An error was reported without details.',
-  wake_cap: 'Calls arrived too often, so some runs in the last 10 minutes were skipped.',
-};
-
-export const describeError = (error: InboundWebhookError) =>
-  `${ERROR_TEXT[error] ?? 'An error was reported.'} (${error})`;
+import { formatTimestamp, printTable, truncate } from '../../utils/format';
+import {
+  agentOf,
+  describeError,
+  detailLine as line,
+  lastDeliveryOf,
+  statusText,
+  targetOf,
+} from './shared';
 
 const DELIVERY_REASON_TEXT: Record<string, string> = {
   agent_start_failed: "The agent couldn't start; it will be retried",
@@ -50,72 +33,25 @@ const DELIVERY_STATUS_TEXT: Record<InboundWebhookDeliveryItem['status'], string>
   processed: 'Ran',
 };
 
-export const kindLabel = (item: Pick<InboundWebhookItem, 'kind'>) =>
-  item.kind === 'generic' ? 'webhook' : 'mcp event';
-
-export const statusText = (status: InboundWebhookItem['status']) => {
-  switch (status) {
-    case 'active': {
-      return pc.green(status);
-    }
-    case 'paused': {
-      return pc.yellow(status);
-    }
-    case 'error': {
-      return pc.red(status);
-    }
-    default: {
-      return pc.dim(status);
-    }
-  }
-};
-
-/** A generic webhook's name, or an MCP subscription's event and connector. */
-export const titleOf = (item: InboundWebhookItem) => {
-  if (item.source.kind === 'generic') return item.name || 'Webhook';
-  const event = item.name || item.source.eventName;
-  return item.connector ? `${item.connector.name} · ${event}` : event;
-};
-
-export const agentOf = (item: InboundWebhookItem) =>
-  item.agent ? item.agent.title || item.agent.id : '-';
-
-/** Where results go: "Channel X · Thread Y" when posted to a Channel, else the topic mode. */
-export const targetOf = (item: InboundWebhookItem) => {
-  const delivery = item.source.delivery;
-  if (delivery) {
-    const channel = item.channel?.title || delivery.channelId;
-    const threadId = item.channel?.threadId ?? delivery.threadId;
-    if (!threadId) return `Channel ${channel}`;
-    return `Channel ${channel} · Thread ${item.channel?.threadTitle || threadId}`;
-  }
-  if (item.source.kind === 'generic') {
-    if (item.source.topicMode === 'new') return 'New topic per call';
-    const topic = item.topic?.title || item.source.topicId;
-    return topic ? `One shared topic (${topic})` : 'One shared topic';
-  }
-  return item.topic ? `Topic ${item.topic.title || item.topic.id}` : '-';
-};
-
-export const lastCallOf = (item: InboundWebhookItem) =>
-  item.lastDeliveryAt ? timeAgo(item.lastDeliveryAt) : 'never';
+/** A custom webhook's display name; without one, the identifier the agent knows it by. */
+export const titleOf = (item: InboundWebhookItem) => item.name || item.identifier;
 
 export function printWebhookTable(items: InboundWebhookItem[]) {
   printTable(
     items.map((item) => [
       item.id,
-      kindLabel(item),
-      truncate(titleOf(item), 36),
+      truncate(titleOf(item), 32),
+      truncate(item.identifier, 28),
       truncate(agentOf(item), 24),
       statusText(item.status),
       truncate(targetOf(item), 40),
-      lastCallOf(item),
+      lastDeliveryOf(item),
     ]),
-    ['ID', 'KIND', 'NAME / EVENT', 'AGENT', 'STATUS', 'TARGET', 'LAST CALL'],
+    ['ID', 'NAME', 'IDENTIFIER', 'AGENT', 'STATUS', 'TARGET', 'LAST CALL'],
   );
 }
 
-/** How a system calls a generic webhook; `<key>` stands in for the key, which is never stored here. */
+/** How a system calls a custom webhook; `<key>` stands in for the key, which is never stored here. */
 export const curlUsage = (endpoint: string) =>
   [
     `curl -X POST ${endpoint} \\`,
@@ -130,29 +66,18 @@ const USAGE_NOTES = [
   'Send an Idempotency-Key header so a retried call runs once.',
 ];
 
-const line = (label: string, value: string) => console.log(`${pc.dim(label.padEnd(14))}${value}`);
-
-export function printWebhookDetails(item: InboundWebhookItem) {
+/** `source` is the item's own, already narrowed to a custom webhook by `requireGeneric`. */
+export function printWebhookDetails(item: InboundWebhookItem, source: GenericWebhookSource) {
   console.log(pc.bold(titleOf(item)));
   line('ID', item.id);
-  line('Kind', `${kindLabel(item)} (${item.kind})`);
+  line('Name', item.name || pc.dim('(none: shows the identifier)'));
+  line('Identifier', `${item.identifier} ${pc.dim('(how the agent knows it; fixed)')}`);
   line('Status', statusText(item.status));
   line('Agent', item.agent ? `${item.agent.title || '-'} (${item.agent.id})` : '-');
-
-  const { source } = item;
-  if (source.kind === 'generic') {
-    line('Topic mode', source.topicMode === 'new' ? 'New topic per call' : 'One shared topic');
-    if (source.topicMode === 'reuse')
-      line('Shared topic', item.topic?.title || source.topicId || '(made on the first call)');
-    line('Auto-approve', source.autoApprove ? 'on: tools run without waiting for approval' : 'off');
-  } else {
-    if (item.connector) line('Connector', `${item.connector.name} (${item.connector.identifier})`);
-    line('Event', source.eventName);
-    if (Object.keys(source.arguments).length > 0)
-      line('Arguments', JSON.stringify(source.arguments));
-    if (item.topic) line('Topic', `${item.topic.title || '-'} (${item.topic.id})`);
-    line('Expires', item.expiresAt ? timeUntil(item.expiresAt) : 'never');
-  }
+  line('Topic mode', source.topicMode === 'new' ? 'New topic per call' : 'One shared topic');
+  if (source.topicMode === 'reuse')
+    line('Shared topic', item.topic?.title || source.topicId || '(made on the first call)');
+  line('Auto-approve', source.autoApprove ? 'on: tools run without waiting for approval' : 'off');
   if (source.delivery) {
     line('Posts to', targetOf(item));
     if (!item.channel) line('', pc.dim('(you cannot see this Channel)'));
@@ -162,26 +87,24 @@ export function printWebhookDetails(item: InboundWebhookItem) {
   if (item.lastError) line('Last error', pc.red(describeError(item.lastError)));
   line('Created', formatTimestamp(item.createdAt));
   if (!item.canManage) line('Access', pc.dim('view only'));
-  else if (source.kind === 'generic' && !item.canConfigure)
+  else if (!item.canConfigure)
     line('Access', pc.dim('pause, resume or delete only: only its creator changes what it runs'));
 
-  if (source.kind === 'generic') {
-    console.log();
-    if (!item.endpoint) {
-      line('URL', pc.dim('(hidden: you cannot see this agent)'));
-      return;
-    }
-    line('URL', item.endpoint);
-    console.log();
-    console.log(pc.bold('Call it'));
-    console.log(curlUsage(item.endpoint));
-    for (const note of USAGE_NOTES) console.log(pc.dim(`- ${note}`));
-    console.log(
-      pc.dim(
-        `- The key is shown only when the webhook is created or given a new key. Lost it? Run: lh webhook rotate-key ${item.id}`,
-      ),
-    );
+  console.log();
+  if (!item.endpoint) {
+    line('URL', pc.dim('(hidden: you cannot see this agent)'));
+    return;
   }
+  line('URL', item.endpoint);
+  console.log();
+  console.log(pc.bold('Call it'));
+  console.log(curlUsage(item.endpoint));
+  for (const note of USAGE_NOTES) console.log(pc.dim(`- ${note}`));
+  console.log(
+    pc.dim(
+      `- The key is shown only when the webhook is created or given a new key. Lost it? Run: lh webhook rotate-key ${item.id}`,
+    ),
+  );
 }
 
 export function printDeliveryTable(items: InboundWebhookDeliveryItem[]) {

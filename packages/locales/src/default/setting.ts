@@ -5209,25 +5209,28 @@ When I am ___, I need ___
   'taskLabels.usage': '{{count}} tasks',
   'taskLabels.actions.more': 'More actions',
   'tab.automations': 'Automations',
-  'settingsSearch.tabKeywords.automations':
-    'automations, events, event subscriptions, triggers, webhooks',
+  'webhooks.empty.desc':
+    'Open an agent and go to Agent Profile → Webhook to create one. Every agent’s webhooks are listed here.',
+  'webhooks.empty.title': 'No webhooks yet',
+  'webhooks.desc':
+    'URLs any outside system can call to run an agent with what it sent. Each call uses credits. To create one, open an agent and go to Agent Profile → Webhook.',
+  'automations.actions.more': 'More actions',
+  'settingsSearch.tabKeywords.webhooks': 'webhooks, webhook url, callback, http trigger',
+  'tab.webhooks': 'Webhooks',
+  'settingsSearch.tabKeywords.automations': 'automations, events, event subscriptions, triggers',
   'automations.desc':
-    'Connector events your agents subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events your agents subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.descWorkspace':
-    'Connector events the agents in this workspace subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
+    'Connector events the agents in this workspace subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
   'automations.descAgent':
-    'Connector events this agent subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Custom webhooks are on the Webhook tab.',
+    'Connector events this agent subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.columns.subscription': 'Subscription',
   'automations.columns.status': 'Status',
   'automations.columns.target': 'Agent & topic',
   'automations.columns.topic': 'Topic',
   'automations.columns.lastDelivery': 'Last event',
   'automations.source.moreArgs': '{{text}} +{{count}}',
-  'automations.source.webhook': 'Webhook',
-  'automations.source.topicMode.new': 'New topic per call',
-  'automations.source.topicMode.reuse': 'One shared topic',
   'automations.untitledTopic': 'Untitled topic',
-  'automations.target.webhookCalls': 'Calls and topics',
   'automations.error.channel_unavailable':
     "Couldn't post the last result to the Channel: the Agent or its creator is no longer a member, or the Channel was archived.",
   'automations.target.channel': 'Posts to {{channel}}',
@@ -5286,8 +5289,6 @@ When I am ___, I need ___
   'automations.delete.title': 'Delete this subscription?',
   'automations.delete.content':
     '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
-  'automations.delete.contentWebhook':
-    'The URL of "{{name}}" stops working at once, and calls to it no longer run "{{agent}}". This cannot be undone.',
   'automations.delete.ok': 'Delete',
   'automations.delete.cancel': 'Cancel',
   'automations.delete.failed': "Couldn't delete the subscription. Try again",

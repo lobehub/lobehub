@@ -3,7 +3,7 @@ import type {
   InboundWebhookChannelDelivery,
   InboundWebhookStatus,
 } from '@lobechat/types';
-import { isInboundWebhookOfKind } from '@lobechat/types';
+import { genericWebhookIdentifierFromName, isInboundWebhookOfKind } from '@lobechat/types';
 
 import type { InboundWebhookView, InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
@@ -120,6 +120,8 @@ export async function createGenericWebhook(
     config: {
       autoApprove,
       ...(delivery && { delivery }),
+      // Fixed from here on: renaming the webhook for people leaves what the Agent knows it as.
+      identifier: genericWebhookIdentifierFromName(input.name),
       topicMode,
       ...(topicId && { topicId }),
     },
@@ -173,6 +175,7 @@ export async function updateGenericWebhook(
     config = {
       autoApprove,
       ...(delivery && { delivery }),
+      ...(row.config.identifier && { identifier: row.config.identifier }),
       topicMode,
       ...(topicId && { topicId }),
     };

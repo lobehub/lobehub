@@ -196,17 +196,7 @@ describe('useAutomationRowActions rename', () => {
     expect(onChecked).not.toHaveBeenCalled();
   });
 
-  it('offers no rename to others, or for a webhook that posts to a Channel', () => {
+  it('offers no rename to anyone but its creator', () => {
     expect(setup(row({ canConfigure: false } as never)).hook.result.current.canRename).toBe(false);
-    const channelWebhook = row({
-      canConfigure: true,
-      source: {
-        autoApprove: true,
-        delivery: { channelId: 'chn_1' },
-        kind: 'generic',
-        topicMode: 'new',
-      },
-    } as never);
-    expect(setup(channelWebhook).hook.result.current.canRename).toBe(false);
   });
 });

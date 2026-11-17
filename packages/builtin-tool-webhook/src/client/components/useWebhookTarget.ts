@@ -8,8 +8,7 @@ const WEBHOOK_TARGET_SWR_KEY = 'lobe-webhook-target';
 
 /**
  * The webhook an update or delete names, read from the server rather than from the model's
- * arguments, so the approval card says what it really is (its name, and whether it is an MCP
- * Events subscription that will also end on its server).
+ * arguments, so the approval card names the webhook it really acts on.
  */
 export const useWebhookTarget = (webhookId: string | undefined) =>
   useClientDataSWR<InboundWebhookItem>(

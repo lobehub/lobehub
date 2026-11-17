@@ -1,7 +1,7 @@
 import type {
+  GenericWebhookSource,
   GenericWebhookTopicMode,
   InboundWebhookChannelDelivery,
-  InboundWebhookItem,
 } from '@lobechat/types';
 
 /** `--no-<flag>` makes commander store `false`; that clears the field. */
@@ -25,14 +25,6 @@ export interface WebhookSettingsInput {
 }
 
 const TOPIC_MODES: GenericWebhookTopicMode[] = ['new', 'reuse'];
-
-const UUID_RE = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
-
-/** Webhook ids are uuids; anything else would come back as an unreadable validation error. */
-export function assertWebhookId(id: string) {
-  if (!UUID_RE.test(id))
-    throw new Error(`"${id}" is not a webhook id. Find the id with: lh webhook list`);
-}
 
 export const AUTO_APPROVE_REQUIRED =
   'Posting to a Channel needs --auto-approve: nobody can approve a tool call in a Channel, so those runs use tools without waiting for approval. Add --auto-approve to accept that.';
@@ -94,26 +86,14 @@ export function buildCreateInput(agentId: string, options: WebhookSettingsOption
 /**
  * Turn `lh webhook edit` flags into the settings part of an `inboundWebhook.update` input. Only
  * the flags given change; `--no-name`, `--no-instructions`, `--no-topic` and `--no-channel` clear.
- * The current row settles what the flags leave open: a `--thread` alone stays in the current
+ * The current settings settle what the flags leave open: a `--thread` alone stays in the current
  * Channel, and auto-approval is checked against the delivery the webhook will have afterwards.
+ * Renaming never changes the identifier the agent knows the webhook by.
  */
 export function buildUpdateInput(
-  item: InboundWebhookItem,
+  current: GenericWebhookSource,
   options: WebhookSettingsOptions,
 ): WebhookSettingsInput {
-  if (item.source.kind !== 'generic') {
-    // An MCP Events subscription is set up in its conversation; only its name changes here.
-    const { autoApprove, channel, instructions, name, thread, topic, topicMode } = options;
-    if ([autoApprove, channel, instructions, thread, topic, topicMode].some((v) => v !== undefined))
-      throw new Error(
-        `${item.id} is an MCP Events subscription: only its name can be changed here (--name, or --no-name to show its event). To change what it follows, ask its agent to subscribe again.`,
-      );
-    if (name === undefined)
-      throw new Error('Nothing to change. Pass --name <name>; see: lh webhook edit --help');
-    return { name: name || null };
-  }
-  const current = item.source;
-
   let delivery: InboundWebhookChannelDelivery | null | undefined;
   if (options.channel === false) {
     if (options.thread) throw new Error('--thread cannot be combined with --no-channel.');

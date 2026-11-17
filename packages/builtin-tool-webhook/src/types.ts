@@ -2,13 +2,11 @@ import type {
   GenericWebhookTopicMode,
   InboundWebhookDeliveryItem,
   InboundWebhookError,
-  InboundWebhookKind,
 } from '@lobechat/types';
 
 export const WebhookIdentifier = 'lobe-webhook';
 
 export const WebhookApiName = {
-  checkWebhook: 'checkWebhook',
   createWebhook: 'createWebhook',
   deleteWebhook: 'deleteWebhook',
   listWebhookCalls: 'listWebhookCalls',
@@ -25,15 +23,18 @@ export const WebhookApiName = {
  */
 export type WebhookDeliverTo = 'channel' | 'thread' | 'topic';
 
-/** One webhook of the current agent, as the model and the result card see it. Never a key. */
+/**
+ * One custom webhook of the current agent, as the model and the result card see it. Never a key.
+ * MCP Events subscriptions are not webhooks here: the MCP Events tool manages them.
+ */
 export interface WebhookSummary {
   /** The agent it runs; always the current agent for rows the tool returns. */
   agentId: string | null;
-  /** Custom webhooks: the runs it starts approve tools without asking. */
-  autoApprove?: boolean;
+  /** The runs it starts approve tools without asking. */
+  autoApprove: boolean;
   /** Whether the current user may change what it runs, test it and issue its key. */
   canConfigure: boolean;
-  /** Whether the current user may pause, check or delete it. */
+  /** Whether the current user may pause or delete it. */
   canManage: boolean;
   createdAt: string;
   /** The Channel (or Thread) each run's answer is posted to; null when it stays in a Topic. */
@@ -43,32 +44,25 @@ export interface WebhookSummary {
     threadId: string | null;
     threadTitle: string | null;
   } | null;
-  /** Custom webhooks: the fixed URL callers POST to (the key travels in a header, never here). */
+  /** The fixed URL callers POST to (the key travels in a header, never here). */
   endpoint: string | null;
-  /** MCP Events subscriptions: the connector event that wakes the agent. */
-  event?: {
-    arguments: Record<string, unknown>;
-    connector: { identifier: string; name: string } | null;
-    name: string;
-  };
-  /** MCP Events subscriptions: when the server's grant ends; null = never. */
-  expiresAt: string | null;
   id: string;
+  /**
+   * How the agent knows it, fixed for its life: made from the name at creation and carried by
+   * every wake message as `<webhookEvent identifier=…>`. Renaming never changes it.
+   */
+  identifier: string;
   instructions: string | null;
-  kind: InboundWebhookKind;
   lastDeliveryAt: string | null;
   lastError: InboundWebhookError | null;
+  /** What people call it; free to rename. */
   name: string | null;
   status: 'active' | 'error' | 'paused' | 'terminated';
-  /** Custom webhooks: `new` = a new Topic per call, `reuse` = one shared Topic. */
-  topicMode?: GenericWebhookTopicMode;
+  /** `new` = a new Topic per call, `reuse` = one shared Topic. */
+  topicMode: GenericWebhookTopicMode;
 }
 
 // ── listWebhooks (never)
-export interface ListWebhooksArgs {
-  /** Omit for both custom webhooks and MCP Events subscriptions. */
-  kind?: InboundWebhookKind;
-}
 export interface ListWebhooksState {
   webhooks: WebhookSummary[];
 }
@@ -82,7 +76,7 @@ export interface CreateWebhookArgs {
   topicMode?: GenericWebhookTopicMode;
 }
 
-/** createWebhook / updateWebhook / checkWebhook */
+/** createWebhook / updateWebhook */
 export interface WebhookState {
   webhook: WebhookSummary;
 }
@@ -131,7 +125,7 @@ export interface ListWebhookCallsState {
 // ── deleteWebhook (required)
 export interface DeleteWebhookState {
   deleted: true;
-  kind: InboundWebhookKind;
+  identifier: string;
   name: string | null;
   webhookId: string;
 }
@@ -141,10 +135,9 @@ export type WebhookToolErrorCode =
   | 'bad_request' // the change was refused (invalid settings, Channel membership, …)
   | 'disabled' // webhooks are not enabled for this user
   | 'forbidden' // only the creator (or a workspace admin, to pause/delete) may do this
-  | 'not_found' // no such webhook of this agent
+  | 'not_found' // no such custom webhook of this agent (an MCP Events subscription id included)
   | 'not_in_channel' // a Channel destination outside a Channel run (or a Thread outside a Thread)
-  | 'rate_limited' // too many webhooks, or checked too recently
-  | 'unsupported_kind' // the action does not apply to this kind of webhook
+  | 'rate_limited' // too many webhooks
   | 'unknown';
 export interface WebhookToolErrorState {
   error: { code: WebhookToolErrorCode; message: string };
@@ -157,6 +150,5 @@ export const WEBHOOK_TOOL_ERROR_CODES: readonly WebhookToolErrorCode[] = [
   'not_found',
   'not_in_channel',
   'rate_limited',
-  'unsupported_kind',
   'unknown',
 ];

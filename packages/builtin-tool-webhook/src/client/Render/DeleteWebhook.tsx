@@ -8,7 +8,7 @@ import type { DeleteWebhookState, WebhookIdArgs } from '../../types';
 import ToolError from '../components/ToolError';
 import { getToolError } from '../toolError';
 
-/** Confirms what was removed: a webhook no longer takes calls; a subscription has ended. */
+/** Confirms the webhook is gone: its URL no longer takes calls. */
 const DeleteWebhookRender = ({
   pluginError,
   pluginState,
@@ -20,11 +20,7 @@ const DeleteWebhookRender = ({
 
   return (
     <Text style={{ fontSize: 13 }} type={'secondary'}>
-      {t(
-        pluginState.kind === 'mcp_events'
-          ? 'builtins.lobe-webhook.render.deletedSubscription'
-          : 'builtins.lobe-webhook.render.deletedWebhook',
-      )}
+      {t('builtins.lobe-webhook.render.deletedWebhook')}
     </Text>
   );
 };

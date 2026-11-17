@@ -4,6 +4,7 @@ import type {
   InboundWebhookDeliveryPage,
   InboundWebhookItem,
   InboundWebhookItemWithSecret,
+  InboundWebhookKind,
 } from '@lobechat/types';
 
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
@@ -185,8 +186,10 @@ export class InboundWebhookManager {
     return guard(async () => asGeneric(row));
   }
 
-  list(input: { agentId?: string } = {}): Promise<InboundWebhookItem[]> {
-    return guard(async () => this.items(await this.model.query({ agentId: input.agentId })));
+  list(input: { agentId?: string; kind?: InboundWebhookKind } = {}): Promise<InboundWebhookItem[]> {
+    return guard(async () =>
+      this.items(await this.model.query({ agentId: input.agentId, kind: input.kind })),
+    );
   }
 
   get(id: string): Promise<InboundWebhookItem> {

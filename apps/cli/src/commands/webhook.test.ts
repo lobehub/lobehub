@@ -47,6 +47,7 @@ const generic = (overrides: Partial<InboundWebhookItem> = {}): InboundWebhookIte
   endpoint: `https://app.test/webhooks/inbound/${ID}`,
   expiresAt: null,
   id: ID,
+  identifier: 'ci-alerts',
   instructions: 'Summarize the failure',
   kind: 'generic',
   lastDeliveryAt: null,
@@ -71,6 +72,7 @@ const mcpEvents = (overrides: Partial<InboundWebhookItem> = {}): InboundWebhookI
   endpoint: null,
   expiresAt: null,
   id: MCP_ID,
+  identifier: 'issue.opened',
   instructions: null,
   kind: 'mcp_events',
   name: null,
@@ -117,7 +119,7 @@ describe('webhook command', () => {
   const errors = () => errorSpy.mock.calls.map((call) => String(call[0])).join('\n');
 
   describe('list', () => {
-    it('prints a row per webhook with kind, agent, status and target', async () => {
+    it('lists custom webhooks only, with name, identifier, agent, status and target', async () => {
       mockTrpcClient.inboundWebhook.list.query.mockResolvedValue([
         generic({
           channel: {
@@ -135,35 +137,39 @@ describe('webhook command', () => {
             topicMode: 'new',
           },
         }),
-        mcpEvents({ status: 'error' }),
+        generic({ id: MCP_ID, identifier: 'webhook', name: null }),
       ]);
 
       await run('list');
 
-      expect(mockTrpcClient.inboundWebhook.list.query).toHaveBeenCalledWith(undefined);
+      expect(mockTrpcClient.inboundWebhook.list.query).toHaveBeenCalledWith({ kind: 'generic' });
       const text = output();
-      expect(text).toContain('NAME / EVENT');
+      expect(text).toContain('IDENTIFIER');
+      expect(text).not.toContain('KIND');
       expect(text).toContain('CI alerts');
+      expect(text).toContain('ci-alerts');
       expect(text).toContain('Channel Eng · Thread Deploys');
       expect(text).toContain('3m ago');
-      expect(text).toContain('GitHub · issue.opened');
-      expect(text).toContain('Topic Issue triage');
       expect(text).toContain('never');
     });
 
-    it('filters by agent on the server and by kind locally', async () => {
-      mockTrpcClient.inboundWebhook.list.query.mockResolvedValue([generic(), mcpEvents()]);
+    it('asks the server for one agent', async () => {
+      mockTrpcClient.inboundWebhook.list.query.mockResolvedValue([generic()]);
 
-      await run('list', '--agent', 'agt_1', '--kind', 'mcp_events', '--json', 'id,kind');
+      await run('list', '--agent', 'agt_1', '--json', 'id,identifier');
 
-      expect(mockTrpcClient.inboundWebhook.list.query).toHaveBeenCalledWith({ agentId: 'agt_1' });
-      expect(JSON.parse(consoleSpy.mock.calls[0][0])).toEqual([{ id: MCP_ID, kind: 'mcp_events' }]);
+      expect(mockTrpcClient.inboundWebhook.list.query).toHaveBeenCalledWith({
+        agentId: 'agt_1',
+        kind: 'generic',
+      });
+      expect(JSON.parse(consoleSpy.mock.calls[0][0])).toEqual([
+        { id: ID, identifier: 'ci-alerts' },
+      ]);
     });
 
-    it('rejects an unknown kind before calling the server', async () => {
-      await expect(run('list', '--kind', 'cron')).rejects.toThrow('exit:1');
+    it('no longer takes --kind: automations have their own group', async () => {
+      await expect(run('list', '--kind', 'mcp_events')).rejects.toThrow();
 
-      expect(errors()).toContain('Invalid --kind "cron"');
       expect(mockTrpcClient.inboundWebhook.list.query).not.toHaveBeenCalled();
     });
 
@@ -197,15 +203,28 @@ describe('webhook command', () => {
       expect(text).toContain(`lh webhook rotate-key ${ID}`);
     });
 
-    it('shows an MCP Events subscription without a URL', async () => {
+    it('shows the fixed identifier next to the name, and the identifier when unnamed', async () => {
+      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(generic());
+      await run('view', ID);
+      expect(output()).toMatch(/Name\s+CI alerts/);
+      expect(output()).toMatch(/Identifier\s+ci-alerts \(how the agent knows it; fixed\)/);
+
+      consoleSpy.mockClear();
+      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(generic({ name: null }));
+      await run('view', ID);
+      expect(output().split('\n')[0]).toBe('ci-alerts');
+    });
+
+    it('refuses an MCP Events subscription with a pointer to lh automation', async () => {
       mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
 
-      await run('view', MCP_ID);
+      await expect(run('view', MCP_ID)).rejects.toThrow('exit:1');
 
-      const text = output();
-      expect(text).toContain('issue.opened');
-      expect(text).toContain('{"repo":"lobehub/lobehub"}');
-      expect(text).not.toContain('curl');
+      expect(errors()).toContain(
+        `${MCP_ID} is an automation (MCP Events subscription), not a custom webhook`,
+      );
+      expect(errors()).toContain(`lh automation view ${MCP_ID}`);
+      expect(output()).not.toContain('issue.opened');
     });
 
     it('rejects an id that is not a uuid without calling the server', async () => {
@@ -252,6 +271,7 @@ describe('webhook command', () => {
       });
       const text = output();
       expect(text.split(SECRET)).toHaveLength(2);
+      expect(text).toMatch(/Identifier\s+ci-alerts/);
       expect(text).toContain("won't be shown again");
       expect(text).toContain(`https://app.test/webhooks/inbound/${ID}`);
     });
@@ -441,21 +461,25 @@ describe('webhook command', () => {
       expect(errors()).toContain('Nothing to change');
     });
 
-    it('renames an MCP Events subscription, and nothing else about it', async () => {
-      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
-      mockTrpcClient.inboundWebhook.update.mutate.mockResolvedValue(mcpEvents());
+    it('renames without touching the identifier', async () => {
+      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(generic());
+      mockTrpcClient.inboundWebhook.update.mutate.mockResolvedValue(generic({ name: 'Deploys' }));
 
-      await run('edit', MCP_ID, '--name', 'Web bugs');
+      await run('edit', ID, '--name', 'Deploys');
+
       expect(mockTrpcClient.inboundWebhook.update.mutate).toHaveBeenCalledWith({
-        id: MCP_ID,
-        name: 'Web bugs',
+        id: ID,
+        name: 'Deploys',
       });
+      expect(output()).toMatch(/Identifier\s+ci-alerts \(unchanged\)/);
+    });
 
-      mockTrpcClient.inboundWebhook.update.mutate.mockClear();
-      await expect(run('edit', MCP_ID, '--name', 'x', '--instructions', 'y')).rejects.toThrow(
-        'exit:1',
-      );
-      expect(errors()).toContain('only its name can be changed');
+    it('refuses an MCP Events subscription, pointing at lh automation rename', async () => {
+      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
+
+      await expect(run('edit', MCP_ID, '--name', 'Web bugs')).rejects.toThrow('exit:1');
+
+      expect(errors()).toContain(`lh automation rename ${MCP_ID} <name>`);
       expect(mockTrpcClient.inboundWebhook.update.mutate).not.toHaveBeenCalled();
     });
   });
@@ -484,7 +508,8 @@ describe('webhook command', () => {
 
       await expect(run(command, MCP_ID)).rejects.toThrow('exit:1');
 
-      expect(errors()).toContain(`"lh webhook ${command}" works on custom webhooks only`);
+      expect(errors()).toContain('is an automation (MCP Events subscription)');
+      expect(errors()).toContain(`lh automation view ${MCP_ID}`);
       expect(mockTrpcClient.inboundWebhook.update.mutate).not.toHaveBeenCalled();
     });
   });
@@ -531,8 +556,9 @@ describe('webhook command', () => {
     it('refuses an MCP Events subscription before asking', async () => {
       mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
 
-      await expect(run('rotate-key', MCP_ID, '--yes')).rejects.toThrow('exit:1');
+      await expect(run('rotate-key', MCP_ID)).rejects.toThrow('exit:1');
 
+      expect(errors()).toContain('is an automation');
       expect(mockConfirm).not.toHaveBeenCalled();
       expect(mockTrpcClient.inboundWebhook.rotateToken.mutate).not.toHaveBeenCalled();
     });
@@ -579,6 +605,7 @@ describe('webhook command', () => {
 
       await expect(run('test', MCP_ID)).rejects.toThrow('exit:1');
 
+      expect(errors()).toContain('is an automation');
       expect(mockTrpcClient.inboundWebhook.sendTest.mutate).not.toHaveBeenCalled();
     });
   });
@@ -598,6 +625,19 @@ describe('webhook command', () => {
     const page = (from: number, count: number, next?: boolean) => ({
       items: Array.from({ length: count }, (_, i) => call(from + i)),
       ...(next && { nextCursor: { createdAt: `2026-11-17T09:00:0${from}.000000Z`, id: ID } }),
+    });
+
+    beforeEach(() => {
+      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(generic());
+    });
+
+    it('refuses an MCP Events subscription', async () => {
+      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
+
+      await expect(run('calls', MCP_ID)).rejects.toThrow('exit:1');
+
+      expect(errors()).toContain('is an automation');
+      expect(mockTrpcClient.inboundWebhook.listDeliveries.query).not.toHaveBeenCalled();
     });
 
     it('shows the first page and says when more exist', async () => {
@@ -655,47 +695,10 @@ describe('webhook command', () => {
     });
   });
 
-  describe('check', () => {
-    it('checks an MCP Events subscription', async () => {
-      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
-      mockTrpcClient.inboundWebhook.check.mutate.mockResolvedValue(mcpEvents());
+  it('has no check command: checking belongs to lh automation', async () => {
+    await expect(run('check', MCP_ID)).rejects.toThrow();
 
-      await run('check', MCP_ID);
-
-      expect(mockTrpcClient.inboundWebhook.check.mutate).toHaveBeenCalledWith({ id: MCP_ID });
-      expect(output()).toContain('the subscription is working');
-    });
-
-    it('reports a problem the check found', async () => {
-      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
-      mockTrpcClient.inboundWebhook.check.mutate.mockResolvedValue(
-        mcpEvents({ lastError: 'auth', status: 'error' }),
-      );
-
-      await run('check', MCP_ID);
-
-      expect(output()).toContain('authorization has expired');
-    });
-
-    it('refuses a custom webhook', async () => {
-      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(generic());
-
-      await expect(run('check', ID)).rejects.toThrow('exit:1');
-
-      expect(errors()).toContain(`lh webhook test ${ID}`);
-      expect(mockTrpcClient.inboundWebhook.check.mutate).not.toHaveBeenCalled();
-    });
-
-    it('surfaces the rate limit from the server', async () => {
-      mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
-      mockTrpcClient.inboundWebhook.check.mutate.mockRejectedValue(
-        new Error('Wait 30 seconds before checking again.'),
-      );
-
-      await expect(run('check', MCP_ID)).rejects.toThrow('exit:1');
-
-      expect(errorSpy).toHaveBeenCalledWith('Wait 30 seconds before checking again.');
-    });
+    expect(mockTrpcClient.inboundWebhook.check.mutate).not.toHaveBeenCalled();
   });
 
   describe('delete', () => {
@@ -709,16 +712,14 @@ describe('webhook command', () => {
       expect(mockTrpcClient.inboundWebhook.delete.mutate).toHaveBeenCalledWith({ id: ID });
     });
 
-    it('says deleting an MCP Events subscription ends it on the MCP server', async () => {
+    it('refuses an MCP Events subscription before asking', async () => {
       mockTrpcClient.inboundWebhook.get.query.mockResolvedValue(mcpEvents());
-      mockConfirm.mockResolvedValue(true);
 
-      await run('delete', MCP_ID);
+      await expect(run('delete', MCP_ID)).rejects.toThrow('exit:1');
 
-      expect(mockConfirm).toHaveBeenCalledWith(
-        expect.stringContaining('ends it on the MCP server'),
-      );
-      expect(output()).toContain('ended the subscription on its MCP server');
+      expect(errors()).toContain(`lh automation delete ${MCP_ID}`);
+      expect(mockConfirm).not.toHaveBeenCalled();
+      expect(mockTrpcClient.inboundWebhook.delete.mutate).not.toHaveBeenCalled();
     });
 
     it('does nothing when declined', async () => {

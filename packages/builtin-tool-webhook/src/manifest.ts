@@ -5,7 +5,7 @@ import { WebhookApiName, WebhookIdentifier } from './types';
 
 const webhookId = {
   description:
-    "Id of one of this agent's webhooks, from listWebhooks (webhooks[].id) or createWebhook (webhook.id).",
+    "Id of one of this agent's custom webhooks, from listWebhooks (webhooks[].id) or createWebhook (webhook.id). Not an MCP Events subscription id.",
   type: 'string',
 } as const;
 
@@ -27,7 +27,8 @@ const settings = {
     type: 'string',
   },
   name: {
-    description: 'Short name the user recognizes the webhook by, e.g. the system that calls it.',
+    description:
+      'Display name people recognize the webhook by, e.g. the system that calls it; it can be renamed any time. On create, the fixed identifier is made from it (lowercase words joined by dashes, `webhook` when it has none) and never changes afterwards.',
     type: 'string',
   },
   topicMode: {
@@ -46,25 +47,15 @@ export const WebhookManifest: BuiltinToolManifest = {
     avatar: '🪝',
     title: 'Webhooks',
     description:
-      "Manage this agent's inbound webhooks: create a URL other systems call to run the agent, change, test, pause or delete it, read its calls, and check or end MCP Events subscriptions.",
+      "Manage this agent's custom webhooks: create a URL other systems call to run the agent, change, test, pause or delete it, and read its calls.",
   },
   api: [
     {
       name: WebhookApiName.listWebhooks,
       humanIntervention: 'never',
       description:
-        "List this agent's webhooks: custom webhooks (kind generic) and MCP Events subscriptions (kind mcp_events), with status, URL and settings. Never includes keys.",
-      parameters: {
-        type: 'object',
-        properties: {
-          kind: {
-            description:
-              "Optional filter: 'generic' for custom webhooks, 'mcp_events' for MCP Events subscriptions. Omit for both.",
-            enum: ['generic', 'mcp_events'],
-            type: 'string',
-          },
-        },
-      },
+        "List this agent's custom webhooks with status, URL, settings, display name and fixed identifier. Never includes keys or MCP Events subscriptions.",
+      parameters: { type: 'object', properties: {} },
     },
     {
       name: WebhookApiName.createWebhook,
@@ -80,7 +71,7 @@ export const WebhookManifest: BuiltinToolManifest = {
       name: WebhookApiName.updateWebhook,
       humanIntervention: 'required',
       description:
-        'Change a custom webhook of this agent: name, instructions, topic mode, auto-approve, pause or resume, or where its answers are posted. Only the fields given change. For an MCP Events subscription only `name` (how lists show it) can change.',
+        'Change a custom webhook of this agent: display name, instructions, topic mode, auto-approve, pause or resume, or where its answers are posted. Only the fields given change. Renaming never changes its identifier.',
       parameters: {
         type: 'object',
         required: ['webhookId'],
@@ -113,7 +104,7 @@ export const WebhookManifest: BuiltinToolManifest = {
       name: WebhookApiName.listWebhookCalls,
       humanIntervention: 'never',
       description:
-        'List the calls a webhook received, newest first: when, a preview of what was sent, and whether it ran the agent (and in which topic) or why not.',
+        'List the calls a custom webhook received, newest first: when, a preview of what was sent, and whether it ran the agent (and in which topic) or why not.',
       parameters: {
         type: 'object',
         required: ['webhookId'],
@@ -130,21 +121,10 @@ export const WebhookManifest: BuiltinToolManifest = {
       },
     },
     {
-      name: WebhookApiName.checkWebhook,
-      humanIntervention: 'never',
-      description:
-        'Ask the MCP server whether an MCP Events subscription (kind mcp_events) still delivers, renewing or recovering it. Not for custom webhooks.',
-      parameters: {
-        type: 'object',
-        required: ['webhookId'],
-        properties: { webhookId },
-      },
-    },
-    {
       name: WebhookApiName.deleteWebhook,
       humanIntervention: 'required',
       description:
-        'Delete a webhook of this agent for good. A custom webhook stops accepting calls; an MCP Events subscription is also ended on its MCP server.',
+        'Delete a custom webhook of this agent for good: its URL refuses calls and its key stops working.',
       parameters: {
         type: 'object',
         required: ['webhookId'],

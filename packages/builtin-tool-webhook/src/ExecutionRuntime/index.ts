@@ -4,6 +4,7 @@ import type {
   InboundWebhookChannelDelivery,
   InboundWebhookDeliveryPage,
   InboundWebhookItem,
+  InboundWebhookKind,
 } from '@lobechat/types';
 
 import type {
@@ -11,7 +12,6 @@ import type {
   DeleteWebhookState,
   ListWebhookCallsArgs,
   ListWebhookCallsState,
-  ListWebhooksArgs,
   ListWebhooksState,
   SendTestWebhookState,
   UpdateWebhookArgs,
@@ -37,14 +37,13 @@ interface WebhookSettings {
  * package has no database or network dependency; the server injects it.
  */
 export interface WebhookManageService {
-  check: (id: string) => Promise<InboundWebhookItem>;
   /** Also returns the key; the runtime drops it before anything reaches the model or the UI. */
   create: (
     input: WebhookSettings & { agentId: string; delivery?: InboundWebhookChannelDelivery },
   ) => Promise<{ item: InboundWebhookItem; secret?: string }>;
   delete: (id: string) => Promise<unknown>;
   get: (id: string) => Promise<InboundWebhookItem>;
-  list: (input: { agentId: string }) => Promise<InboundWebhookItem[]>;
+  list: (input: { agentId: string; kind: InboundWebhookKind }) => Promise<InboundWebhookItem[]>;
   listDeliveries: (
     id: string,
     cursor?: { createdAt: string; id: string },
@@ -85,10 +84,18 @@ const ERROR_CODES = new Set<WebhookToolErrorCode>(WEBHOOK_TOOL_ERROR_CODES);
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
 const notFound = () =>
-  new WebhookToolError('not_found', 'No webhook with this id belongs to this agent.');
+  new WebhookToolError('not_found', 'No custom webhook with this id belongs to this agent.');
+
+/** A custom webhook's row, narrowed so its settings can be read. */
+type GenericWebhookItem = InboundWebhookItem & {
+  source: Extract<InboundWebhookItem['source'], { kind: 'generic' }>;
+};
+
+const isGeneric = (item: InboundWebhookItem): item is GenericWebhookItem =>
+  item.source.kind === 'generic';
 
 /** The row as the model and the result card see it: settings and state, never a key. */
-export const toWebhookSummary = (item: InboundWebhookItem): WebhookSummary => {
+export const toWebhookSummary = (item: GenericWebhookItem): WebhookSummary => {
   const delivery = item.source.delivery;
   const deliversTo = item.channel
     ? {
@@ -108,30 +115,20 @@ export const toWebhookSummary = (item: InboundWebhookItem): WebhookSummary => {
 
   return {
     agentId: item.agent?.id ?? null,
+    autoApprove: item.source.autoApprove,
     canConfigure: item.canConfigure,
     canManage: item.canManage,
     createdAt: item.createdAt,
     deliversTo,
     endpoint: item.endpoint,
-    expiresAt: item.expiresAt,
     id: item.id,
+    identifier: item.identifier,
     instructions: item.instructions,
-    kind: item.kind,
     lastDeliveryAt: item.lastDeliveryAt,
     lastError: item.lastError,
     name: item.name,
     status: item.status,
-    ...(item.source.kind === 'generic'
-      ? { autoApprove: item.source.autoApprove, topicMode: item.source.topicMode }
-      : {
-          event: {
-            arguments: item.source.arguments,
-            connector: item.connector
-              ? { identifier: item.connector.identifier, name: item.connector.name }
-              : null,
-            name: item.source.eventName,
-          },
-        }),
+    topicMode: item.source.topicMode,
   };
 };
 
@@ -141,9 +138,10 @@ const definedEntries = <T extends Record<string, unknown>>(value: T): Partial<T>
   ) as Partial<T>;
 
 /**
- * Manages the current agent's inbound webhooks for the agent: custom webhooks end to end, and
- * MCP Events subscriptions (list, check, delete). Every id is checked against the agent first,
- * so a webhook of another agent reads as not found. A key never leaves this class.
+ * Manages the current agent's custom webhooks for the agent, end to end. Every id is checked
+ * against the agent and the kind first, so a webhook of another agent reads as not found, and an
+ * MCP Events subscription (same table, managed by the MCP Events tool) is never touched here.
+ * A key never leaves this class.
  */
 export class WebhookExecutionRuntime {
   constructor(
@@ -170,8 +168,11 @@ export class WebhookExecutionRuntime {
     }
   }
 
-  /** A webhook of the current agent; anything else, including a malformed id, is not found. */
-  private async own(webhookId: string | undefined) {
+  /**
+   * A custom webhook of the current agent; anything else, including a malformed id, is not found.
+   * An MCP Events subscription of this agent is named as such, so the model turns to its tool.
+   */
+  private async own(webhookId: string | undefined): Promise<GenericWebhookItem> {
     if (!webhookId || !UUID.test(webhookId)) throw notFound();
     let item: InboundWebhookItem;
     try {
@@ -181,17 +182,10 @@ export class WebhookExecutionRuntime {
       throw error;
     }
     if (item.agent?.id !== this.scope.agentId) throw notFound();
-    return item;
-  }
-
-  private async ownOfKind(webhookId: string | undefined, kind: InboundWebhookItem['kind']) {
-    const item = await this.own(webhookId);
-    if (item.kind !== kind)
+    if (!isGeneric(item))
       throw new WebhookToolError(
-        'unsupported_kind',
-        kind === 'generic'
-          ? 'This is an MCP Events subscription; only custom webhooks can be changed or tested. Use checkWebhook or deleteWebhook.'
-          : 'Only MCP Events subscriptions can be checked; this is a custom webhook.',
+        'not_found',
+        'This id is an MCP Events subscription, not a custom webhook. Manage it with the MCP Events tool (listSubscriptions, renameSubscription, checkSubscription, unsubscribeEvent).',
       );
     return item;
   }
@@ -243,13 +237,19 @@ export class WebhookExecutionRuntime {
     return true;
   }
 
-  listWebhooks = (args: ListWebhooksArgs = {}) =>
+  /** What the manager returns for a custom webhook is one; anything else is a server fault. */
+  private summary(item: InboundWebhookItem) {
+    if (!isGeneric(item)) throw new Error('The webhook manager returned a non-webhook row.');
+    return toWebhookSummary(item);
+  }
+
+  listWebhooks = () =>
     this.result(async (): Promise<ListWebhooksState> => {
-      const items = await this.service.list({ agentId: this.scope.agentId });
+      const items = await this.service.list({ agentId: this.scope.agentId, kind: 'generic' });
       return {
         webhooks: items
           .filter((item) => item.agent?.id === this.scope.agentId)
-          .filter((item) => !args.kind || item.kind === args.kind)
+          .filter(isGeneric)
           .map(toWebhookSummary),
       };
     });
@@ -269,23 +269,12 @@ export class WebhookExecutionRuntime {
         }),
         ...(delivery && { delivery }),
       });
-      return { webhook: toWebhookSummary(item) };
+      return { webhook: this.summary(item) };
     });
 
   updateWebhook = (args: UpdateWebhookArgs) =>
     this.result(async (): Promise<WebhookState> => {
-      const target = await this.own(args.webhookId);
-      // An MCP Events subscription is set up in its conversation; only its name changes here.
-      if (target.kind === 'mcp_events') {
-        const { name, webhookId: _id, ...rest } = args;
-        if (Object.values(rest).some((value) => value !== undefined) || name === undefined)
-          throw new WebhookToolError(
-            'unsupported_kind',
-            'Only the name of an MCP Events subscription can be changed. To change what it follows, subscribe again with the MCP Events tool and delete this one.',
-          );
-        return { webhook: toWebhookSummary(await this.service.update(target.id, { name })) };
-      }
-      const current = await this.ownOfKind(args.webhookId, 'generic');
+      const current = await this.own(args.webhookId);
       const delivery = await this.resolveDelivery(args.deliverTo, 'update');
       const autoApprove = this.resolveAutoApprove(args.autoApprove, delivery);
       if (autoApprove === false && delivery === undefined && current.source.delivery)
@@ -303,12 +292,12 @@ export class WebhookExecutionRuntime {
       });
       if (Object.keys(changes).length === 0)
         throw new WebhookToolError('bad_request', 'Nothing to change: pass at least one setting.');
-      return { webhook: toWebhookSummary(await this.service.update(current.id, changes)) };
+      return { webhook: this.summary(await this.service.update(current.id, changes)) };
     });
 
   sendTestWebhook = (args: WebhookIdArgs) =>
     this.result(async (): Promise<SendTestWebhookState> => {
-      const item = await this.ownOfKind(args.webhookId, 'generic');
+      const item = await this.own(args.webhookId);
       const { accepted, error, status } = await this.service.sendTest(item.id);
       return { accepted, ...(error && { error }), status, webhookId: item.id };
     });
@@ -328,16 +317,15 @@ export class WebhookExecutionRuntime {
       };
     });
 
-  checkWebhook = (args: WebhookIdArgs) =>
-    this.result(async (): Promise<WebhookState> => {
-      const item = await this.ownOfKind(args.webhookId, 'mcp_events');
-      return { webhook: toWebhookSummary(await this.service.check(item.id)) };
-    });
-
   deleteWebhook = (args: WebhookIdArgs) =>
     this.result(async (): Promise<DeleteWebhookState> => {
       const item = await this.own(args.webhookId);
       await this.service.delete(item.id);
-      return { deleted: true, kind: item.kind, name: item.name, webhookId: item.id };
+      return {
+        deleted: true,
+        identifier: item.identifier,
+        name: item.name,
+        webhookId: item.id,
+      };
     });
 }

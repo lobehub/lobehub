@@ -34,8 +34,11 @@ export default {
   'builtins.lobe-mcp-events.apiName.listEventTypes': 'List connector events',
   'builtins.lobe-mcp-events.apiName.subscribeEvent': 'Subscribe to event',
   'builtins.lobe-mcp-events.apiName.listSubscriptions': 'List subscriptions in this topic',
+  'builtins.lobe-mcp-events.apiName.renameSubscription': 'Rename subscription',
+  'builtins.lobe-mcp-events.apiName.checkSubscription': 'Check subscription',
   'builtins.lobe-mcp-events.apiName.unsubscribeEvent': 'Unsubscribe',
   'builtins.lobe-mcp-events.inspector.failed': 'Failed',
+  'builtins.lobe-mcp-events.inspector.listAgentSubscriptions': "List this agent's subscriptions",
   'builtins.lobe-mcp-events.intervention.filter': 'Filter',
   'builtins.lobe-mcp-events.intervention.instructions': 'When it fires',
   'builtins.lobe-mcp-events.intervention.costTitle': 'Runs the agent on every event',
@@ -50,6 +53,10 @@ export default {
   'builtins.lobe-mcp-events.render.expiresAt': 'Valid until {{time}}, renewed automatically',
   'builtins.lobe-mcp-events.render.manage': 'Manage in Automations',
   'builtins.lobe-mcp-events.render.listEmpty': 'No subscriptions in this topic.',
+  'builtins.lobe-mcp-events.render.listAgentEmpty':
+    "You haven't subscribed this agent to any events yet.",
+  'builtins.lobe-mcp-events.render.inTopic': 'Runs in {{topic}}',
+  'builtins.lobe-mcp-events.render.untitledTopic': 'an untitled topic',
   'builtins.lobe-mcp-events.render.eventTypesEmpty':
     "None of this agent's connectors offer events.",
   'builtins.lobe-mcp-events.render.notSubscribable': 'No webhook delivery',
@@ -73,7 +80,9 @@ export default {
     "The connector couldn't reach LobeHub's callback address",
   'builtins.lobe-mcp-events.error.limit_reached':
     'Subscription limit reached. Delete one in Settings › Automations first',
-  'builtins.lobe-mcp-events.error.not_found': 'This topic has no such subscription',
+  'builtins.lobe-mcp-events.error.not_found': 'This agent has no such subscription of yours',
+  'builtins.lobe-mcp-events.error.rate_limited':
+    'Checked moments ago. Wait 30 seconds, then check again',
   'builtins.lobe-mcp-events.error.unknown': "The subscription request didn't finish",
   'builtins.lobe-webhook.title': 'Webhooks',
   'builtins.lobe-webhook.apiName.listWebhooks': "List this agent's webhooks",
@@ -81,20 +90,18 @@ export default {
   'builtins.lobe-webhook.apiName.updateWebhook': 'Update webhook',
   'builtins.lobe-webhook.apiName.sendTestWebhook': 'Send test call',
   'builtins.lobe-webhook.apiName.listWebhookCalls': 'List webhook calls',
-  'builtins.lobe-webhook.apiName.checkWebhook': 'Check subscription',
   'builtins.lobe-webhook.apiName.deleteWebhook': 'Delete webhook',
   'builtins.lobe-webhook.inspector.failed': 'Failed',
   'builtins.lobe-webhook.render.manage': 'Manage on the Webhook page',
   'builtins.lobe-webhook.render.listEmpty': 'This agent has no webhooks yet.',
-  'builtins.lobe-webhook.render.kindMcpEvents': 'MCP Events',
+  'builtins.lobe-webhook.render.identifier':
+    'Identifier: what the agent knows this webhook by. Renaming never changes it.',
   'builtins.lobe-webhook.render.aChannel': 'a Channel',
   'builtins.lobe-webhook.render.aThread': 'a Thread',
   'builtins.lobe-webhook.render.deliversToChannel': 'Answers posted to #{{channel}}',
   'builtins.lobe-webhook.render.deliversToThread': 'Answers posted to {{thread}} in #{{channel}}',
   'builtins.lobe-webhook.render.deletedWebhook':
     'Deleted. Calls to its URL are refused from now on.',
-  'builtins.lobe-webhook.render.deletedSubscription':
-    'Deleted. The subscription was ended on the MCP server, and its events no longer run the agent.',
   'builtins.lobe-webhook.render.testSent':
     'Test call accepted. The agent is running it; see it under the webhook calls.',
   'builtins.lobe-webhook.render.testPaused':
@@ -135,10 +142,6 @@ export default {
   'builtins.lobe-webhook.intervention.deleteTitle': "This can't be undone",
   'builtins.lobe-webhook.intervention.deleteWebhookDesc':
     "Calls to this webhook's URL will be refused, and its key stops working.",
-  'builtins.lobe-webhook.intervention.deleteSubscriptionDesc':
-    'The subscription is ended on its MCP server, and its events stop running the agent.',
-  'builtins.lobe-webhook.intervention.deleteDesc':
-    'A custom webhook stops accepting calls; an MCP Events subscription is also ended on its MCP server.',
   'builtins.lobe-webhook.error.bad_request': "The change wasn't accepted",
   'builtins.lobe-webhook.error.disabled': 'Webhooks are turned off for this account',
   'builtins.lobe-webhook.error.forbidden': 'Only the member who created this webhook can do that',
@@ -147,8 +150,6 @@ export default {
     'Answers can only be posted to the Channel or Thread this conversation is in',
   'builtins.lobe-webhook.error.rate_limited':
     'Too many requests. Wait a moment, or delete a webhook you no longer use',
-  'builtins.lobe-webhook.error.unsupported_kind':
-    "That action doesn't apply to this kind of webhook",
   'builtins.lobe-webhook.error.unknown': "The webhook request didn't finish",
 
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',

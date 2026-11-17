@@ -19,7 +19,7 @@ const NAME_MAX = 100;
 
 interface RenameContentProps {
   currentName: string;
-  /** What an empty name falls back to (the event, or "Webhook"); shown as the placeholder. */
+  /** What an empty name falls back to (the event, or a webhook's default name); the placeholder. */
   fallback: string;
   /** Save the name (null clears it). Return an error to show inline and keep the dialog open. */
   onSubmit: (name: string | null) => Promise<string | undefined>;
@@ -88,13 +88,19 @@ const RenameContent = memo<RenameContentProps>(({ currentName, fallback, onSubmi
 
 RenameContent.displayName = 'AutomationRenameContent';
 
-/** The name lists show for an automation; clearing it shows the event (or "Webhook") again. */
-export const openRenameAutomationModal = (options: RenameContentProps): ModalInstance =>
+/**
+ * The name people see for an automation or a webhook; clearing it shows the fallback again. What
+ * the agent knows it by (its event, or a webhook's identifier) never changes here.
+ */
+export const openRenameAutomationModal = ({
+  title,
+  ...options
+}: RenameContentProps & { title?: string }): ModalInstance =>
   createModal({
     content: <RenameContent {...options} />,
     footer: null,
     maskClosable: true,
     styles: { header: { borderBottom: 'none' } },
-    title: t('automations.rename.title', { ns: 'setting' }),
+    title: title ?? t('automations.rename.title', { ns: 'setting' }),
     width: 'min(90vw, 480px)',
   });

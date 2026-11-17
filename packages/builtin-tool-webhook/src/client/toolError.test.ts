@@ -33,15 +33,13 @@ describe('issuing a key from the card', () => {
   const generic = {
     canConfigure: true,
     endpoint: 'https://x/api/webhooks/inbound/1',
-    kind: 'generic',
   } as const;
 
   it('is offered for a custom webhook the user configures', () => {
     expect(canIssueKey(generic)).toBe(true);
   });
 
-  it('is not offered for subscriptions, rows of other creators or rows without a URL', () => {
-    expect(canIssueKey({ ...generic, kind: 'mcp_events' })).toBe(false);
+  it('is not offered for rows of other creators or rows without a URL', () => {
     expect(canIssueKey({ ...generic, canConfigure: false })).toBe(false);
     expect(canIssueKey({ ...generic, endpoint: null })).toBe(false);
   });

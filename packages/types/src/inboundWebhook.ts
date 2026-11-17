@@ -92,6 +92,28 @@ export interface McpEventsWebhookState {
 export const GENERIC_WEBHOOK_TOPIC_MODES = ['new', 'reuse'] as const;
 export type GenericWebhookTopicMode = (typeof GENERIC_WEBHOOK_TOPIC_MODES)[number];
 
+/** A generic webhook's fixed identifier: lowercase letters, digits and dashes. */
+export const GENERIC_WEBHOOK_IDENTIFIER_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
+/** What a webhook is known as when its name gives no identifier, and before identifiers existed. */
+export const GENERIC_WEBHOOK_DEFAULT_IDENTIFIER = 'webhook';
+
+/**
+ * The identifier a webhook gets from its name at creation: lowercase ASCII words joined by
+ * dashes, at most 48 characters; a name with none (e.g. all CJK) gives `webhook`.
+ */
+export const genericWebhookIdentifierFromName = (name: string | null | undefined): string => {
+  const slug = (name ?? '')
+    .normalize('NFKD')
+    // Accents come apart into combining marks; drop them so `é` reads as `e`.
+    .replaceAll(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .slice(0, 48)
+    .replaceAll(/-+$/g, '');
+  return slug || GENERIC_WEBHOOK_DEFAULT_IDENTIFIER;
+};
+
 /** Longest caller-supplied thread key (`?thread=` / `X-Thread-Key`). */
 export const GENERIC_WEBHOOK_THREAD_KEY_MAX = 200;
 
@@ -104,6 +126,12 @@ export interface GenericWebhookConfig {
    * Configured from the CLI and agent tools; the Web shows it read-only.
    */
   delivery?: InboundWebhookChannelDelivery;
+  /**
+   * How the Agent knows this webhook (`<webhookEvent identifier=…>`), made from the name when it
+   * is created and never changed after, so renaming it for people does not change what the
+   * Agent's instructions refer to. Absent on webhooks made before it existed: `webhook`.
+   */
+  identifier?: string;
   /**
    * `reuse` only: an existing Topic of the agent, picked by the creator, that every call without a
    * thread continues. Absent: a Topic of the webhook's own, made on the first call. Kept in the
@@ -186,6 +214,11 @@ export interface InboundWebhookItem {
   /** mcp_events：server 授予的到期时间；null = 永不过期 */
   expiresAt: string | null;
   id: string;
+  /**
+   * How the Agent knows it, fixed for the row's life: a custom webhook's identifier, or an MCP
+   * Events subscription's event. `name` is for people and can change freely.
+   */
+  identifier: string;
   instructions: string | null;
   kind: InboundWebhookKind;
   lastDeliveryAt: string | null;
@@ -243,6 +276,7 @@ export const GenericWebhookConfigSchema = z
   .object({
     autoApprove: z.boolean(),
     delivery: InboundWebhookChannelDeliverySchema.optional(),
+    identifier: z.string().regex(GENERIC_WEBHOOK_IDENTIFIER_PATTERN).optional(),
     topicMode: z.enum(GENERIC_WEBHOOK_TOPIC_MODES),
     topicId: z.string().min(1).optional(),
   })

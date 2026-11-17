@@ -224,9 +224,6 @@ describe('MCP event subscription service scope', () => {
     await expect(service().listSubscriptions(args)).rejects.toMatchObject({
       code: 'feature_disabled',
     });
-    await expect(
-      service().unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
-    ).rejects.toMatchObject({ code: 'feature_disabled' });
     expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.subscribe).not.toHaveBeenCalled();
   });
@@ -309,18 +306,6 @@ describe('MCP event subscription service scope', () => {
     expect(first).not.toBe(second);
   });
 
-  it.each([{ topicId: 'other-topic' }, { agentId: 'other-agent' }, { userId: 'other-user' }])(
-    'cannot unsubscribe a row outside this topic/agent/creator: %j',
-    async (patch) => {
-      mocks.rows.set('webhook', row(patch));
-      await expect(
-        service().unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
-      ).rejects.toMatchObject({ code: 'not_found' });
-      expect(mocks.rows.has('webhook')).toBe(true);
-      expect(mocks.remove).not.toHaveBeenCalled();
-    },
-  );
-
   it('lists only subscriptions attached to the current agent and topic', async () => {
     for (const entry of [
       row(),
@@ -332,22 +317,6 @@ describe('MCP event subscription service scope', () => {
     const result = await service().listSubscriptions(args);
     expect(result.subscriptions.map((subscription) => subscription.id)).toEqual(['webhook']);
     expect(result.subscriptions[0]).not.toHaveProperty('secret');
-  });
-
-  it('removes an owned subscription and records workspace deletion audit', async () => {
-    mocks.rows.set('webhook', row({ workspaceId: 'workspace' }));
-    expect(
-      await service('workspace').unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
-    ).toEqual({ removed: true, subscriptionId: 'webhook' });
-    expect(mocks.rows.size).toBe(0);
-    expect(mocks.audit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'webhook.deleted',
-        resourceType: 'webhook',
-        workspaceId: 'workspace',
-        metadata: { direction: 'inbound', kind: 'mcp_events' },
-      }),
-    );
   });
 });
 

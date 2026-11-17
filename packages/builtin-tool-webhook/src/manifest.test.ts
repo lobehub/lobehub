@@ -19,7 +19,6 @@ describe('webhook tool manifest', () => {
       WebhookManifest.api.map((entry) => [entry.name, entry.humanIntervention]),
     );
     expect(approval).toEqual({
-      checkWebhook: 'never',
       createWebhook: 'required',
       deleteWebhook: 'required',
       listWebhookCalls: 'never',
@@ -63,5 +62,19 @@ describe('webhook tool manifest', () => {
     expect(WebhookManifest.systemRole).toContain('never see');
     expect(WebhookManifest.systemRole).toContain('never ask the user to paste');
     expect(WebhookManifest.systemRole).toContain('lh webhook rotate-key');
+  });
+
+  it('manages custom webhooks only: no kind filter, no subscription check', () => {
+    expect(WebhookManifest.api.map((entry) => entry.name)).not.toContain('checkWebhook');
+    expect(api(WebhookApiName.listWebhooks).parameters.properties).toEqual({});
+    expect(WebhookManifest.systemRole).toContain('MCP Events tool');
+  });
+
+  it('tells the model the name is for people and the identifier is fixed', () => {
+    expect(WebhookManifest.systemRole).toContain('identifier is fixed');
+    expect(WebhookManifest.systemRole).toContain('<webhookEvent identifier=');
+    expect(api(WebhookApiName.createWebhook).parameters.properties.name.description).toContain(
+      'identifier',
+    );
   });
 });

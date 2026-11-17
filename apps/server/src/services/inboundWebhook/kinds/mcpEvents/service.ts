@@ -6,7 +6,6 @@ import type {
   McpEventSubscriptionSummary,
   SubscribeEventArgs,
   SubscribeEventState,
-  UnsubscribeEventState,
 } from '@lobechat/builtin-tool-mcp-events';
 import { isInboundWebhookOfKind } from '@lobechat/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
@@ -323,33 +322,5 @@ export class McpEventsService {
         concurrency: 5,
       }),
     };
-  }
-
-  async unsubscribeEvent(input: {
-    agentId: string;
-    topicId: string;
-    subscriptionId: string;
-  }): Promise<UnsubscribeEventState> {
-    const { model } = await this.context(input.agentId, input.topicId);
-    const row = await model.findById(input.subscriptionId);
-    // A topic-bound runtime must not manage another topic's triggers or another member's credentials.
-    if (
-      !row ||
-      row.topicId !== input.topicId ||
-      row.agentId !== input.agentId ||
-      row.userId !== this.userId
-    )
-      throw new McpEventsServiceError('not_found', 'Subscription not found in this topic.');
-    await removeInboundWebhook(this.db, row);
-    if (this.workspaceId)
-      await new WorkspaceAuditLogModel(this.db).create({
-        action: 'webhook.deleted',
-        metadata: { direction: 'inbound', kind: row.kind },
-        resourceId: row.id,
-        resourceType: 'webhook',
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      });
-    return { removed: true, subscriptionId: row.id };
   }
 }

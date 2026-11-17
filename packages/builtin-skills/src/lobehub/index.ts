@@ -6,6 +6,7 @@ import { LobeHubIdentifier, LobeHubManifest } from './manifest';
 import agent from './references/agent';
 import agentGroup from './references/agent-group';
 import { artifact } from './references/artifact';
+import automation from './references/automation';
 import bot from './references/bot';
 import botDiscord from './references/bot-discord';
 import botFeishu from './references/bot-feishu';
@@ -45,6 +46,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/agent': agent,
     'references/agent-group': agentGroup,
     'references/artifact': artifact,
+    'references/automation': automation,
     'references/bot': bot,
     'references/bot/discord': botDiscord,
     'references/bot/feishu': botFeishu,

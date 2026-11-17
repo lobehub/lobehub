@@ -156,7 +156,10 @@ Manage legacy 1.0 plugins (user_installed_plugins) Alias: plugin.
 Manage MCP connectors (user connectors and their synced tools) Alias: mcp.
 .TP
 .B webhook
-Manage inbound webhooks: custom webhook URLs that wake an agent, and MCP Events subscriptions Alias: webhooks.
+Manage custom webhooks: URLs any system calls to wake an agent (MCP Events subscriptions are under lh automation) Alias: webhooks.
+.TP
+.B automation
+Manage automations: MCP Events subscriptions that run an agent on a connector event (an agent creates them in a conversation) Alias: automations.
 .TP
 .B workspace
 Manage workspaces and the workspace scope commands run under Alias: ws.

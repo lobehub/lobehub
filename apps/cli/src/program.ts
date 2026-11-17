@@ -6,6 +6,7 @@ import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerAgentSignalCommand } from './commands/agent-signal';
 import { registerArtifactCommand } from './commands/artifact';
+import { registerAutomationCommand } from './commands/automation';
 import { registerBotCommand } from './commands/bot';
 import { registerChannelCommand } from './commands/channel';
 import { registerCompletionCommand } from './commands/completion';
@@ -125,6 +126,7 @@ export function createProgram() {
   registerLegacyPluginCommand(program);
   registerConnectorCommand(program);
   registerWebhookCommand(program);
+  registerAutomationCommand(program);
   registerWorkspaceCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);

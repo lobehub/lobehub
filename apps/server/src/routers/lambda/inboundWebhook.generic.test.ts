@@ -151,6 +151,21 @@ describe('generic webhook management', () => {
     );
   });
 
+  it('keeps the identifier the Agent knows it by when people rename it', async () => {
+    const { item } = await caller().create({ agentId, name: 'CI alerts' });
+    expect(item).toMatchObject({ identifier: 'ci-alerts', name: 'CI alerts' });
+    const renamed = await caller().update({ id: item.id, name: '夜间构建' });
+    expect(renamed).toMatchObject({ identifier: 'ci-alerts', name: '夜间构建' });
+    const moved = await caller().update({ autoApprove: true, id: item.id, topicMode: 'reuse' });
+    expect(moved.identifier).toBe('ci-alerts');
+  });
+
+  it('lists one kind when asked', async () => {
+    const { item } = await caller().create({ agentId });
+    expect((await caller().list({ kind: 'generic' })).map((row) => row.id)).toEqual([item.id]);
+    expect(await caller().list({ kind: 'mcp_events' })).toEqual([]);
+  });
+
   it('refuses to create while the feature is off, or for an agent the caller cannot edit', async () => {
     boundary.enabled.mockResolvedValueOnce(false);
     await expect(caller().create({ agentId })).rejects.toMatchObject({ code: 'NOT_FOUND' });

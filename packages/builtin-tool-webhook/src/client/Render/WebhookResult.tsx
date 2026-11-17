@@ -10,7 +10,7 @@ import WebhookCard from '../components/WebhookCard';
 import { getToolError } from '../toolError';
 
 /**
- * The webhook a call created, changed or checked. Right after creating one, the card is where the
+ * The webhook a call created or changed. Right after creating one, the card is where the
  * user issues its first key: the agent never sees it.
  */
 const WebhookResultRender = ({

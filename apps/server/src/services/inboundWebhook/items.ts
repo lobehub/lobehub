@@ -1,4 +1,5 @@
 import type { InboundWebhookItem } from '@lobechat/types';
+import { GENERIC_WEBHOOK_DEFAULT_IDENTIFIER } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
@@ -226,6 +227,10 @@ export async function inboundWebhookItems(
           endpoint: row.kind === 'generic' && agentRow ? genericWebhookEndpoint(row.id) : null,
           expiresAt: kind.expiresAt?.(row) ?? null,
           id: row.id,
+          identifier:
+            row.kind === 'generic'
+              ? (row.config.identifier ?? GENERIC_WEBHOOK_DEFAULT_IDENTIFIER)
+              : row.config.eventName,
           instructions: agentRow ? row.instructions : null,
           kind: row.kind,
           lastDeliveryAt: row.lastDeliveryAt?.toISOString() ?? null,

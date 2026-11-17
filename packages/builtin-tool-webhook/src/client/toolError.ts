@@ -46,8 +46,8 @@ export const toolErrorDetails = ({ code, message }: WebhookToolError) =>
   [message?.trim(), `(${code})`].filter(Boolean).join('\n');
 
 /**
- * Whether the card may offer to issue a key: a custom webhook with a URL that the current user
+ * Whether the card may offer to issue a key: a webhook with a URL that the current user
  * configures. Others cannot get its key (only its creator can), so they are not offered one.
  */
-export const canIssueKey = (webhook: Pick<WebhookSummary, 'canConfigure' | 'endpoint' | 'kind'>) =>
-  webhook.kind === 'generic' && webhook.canConfigure && !!webhook.endpoint;
+export const canIssueKey = (webhook: Pick<WebhookSummary, 'canConfigure' | 'endpoint'>) =>
+  webhook.canConfigure && !!webhook.endpoint;

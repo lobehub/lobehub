@@ -26,7 +26,7 @@ describe('getToolError', () => {
   });
 
   it('reads an unrecognised code as unknown', () => {
-    expect(getToolError({ error: { code: 'rate_limited' } }, undefined)).toEqual({
+    expect(getToolError({ error: { code: 'ECONNRESET' } }, undefined)).toEqual({
       code: 'unknown',
       message: undefined,
     });

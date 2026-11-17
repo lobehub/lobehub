@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   construct: vi.fn(),
   create: vi.fn(),
   get: vi.fn(),
+  list: vi.fn(),
 }));
 vi.mock('@/server/services/inboundWebhook/manage', () => ({
   InboundWebhookManager: class {
@@ -21,6 +22,7 @@ vi.mock('@/server/services/inboundWebhook/manage', () => ({
     }
     create = mocks.create;
     get = mocks.get;
+    list = mocks.list;
   },
 }));
 vi.mock('@/server/services/inboundWebhook/channelDelivery', () => ({
@@ -49,6 +51,7 @@ const item = {
   endpoint: 'https://app.example.com/hook',
   expiresAt: null,
   id: ID,
+  identifier: 'webhook',
   instructions: null,
   kind: 'generic',
   lastDeliveryAt: null,
@@ -118,5 +121,23 @@ describe('webhook tool server runtime', () => {
     expect(result.state.error.code).toBe('not_in_channel');
     expect(mocks.channelOriginOfRun).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('lists only custom webhooks: MCP Events subscriptions belong to their own tool', async () => {
+    mocks.list.mockResolvedValue([
+      item,
+      {
+        ...item,
+        id: 'sub',
+        kind: 'mcp_events',
+        source: { arguments: {}, eventName: 'e', kind: 'mcp_events' },
+      },
+    ]);
+    const runtime = webhookRuntime.factory(context);
+    const result = await runtime.listWebhooks();
+    expect(mocks.list).toHaveBeenCalledWith({ agentId: 'agent', kind: 'generic' });
+    expect(result.state.webhooks).toEqual([
+      expect.objectContaining({ id: ID, identifier: 'webhook' }),
+    ]);
   });
 });

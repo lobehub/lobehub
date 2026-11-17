@@ -21,6 +21,7 @@ const item = (overrides: Partial<InboundWebhookItem> = {}): InboundWebhookItem =
   endpoint: `https://app.example.com/api/webhooks/inbound/${ID}`,
   expiresAt: null,
   id: ID,
+  identifier: 'alerts',
   instructions: 'Triage the alert',
   kind: 'generic',
   lastDeliveryAt: null,
@@ -42,13 +43,13 @@ const subscription = item({
     name: 'Linear',
   },
   endpoint: null,
+  identifier: 'issue.created',
   kind: 'mcp_events',
   source: { arguments: { team: 'ENG' }, eventName: 'issue.created', kind: 'mcp_events' },
 });
 
 const setup = (origin?: WebhookChannelOrigin) => {
   const service = {
-    check: vi.fn(async () => subscription),
     create: vi.fn(async () => ({ item: item(), secret: SECRET })),
     delete: vi.fn(async () => ({ success: true })),
     get: vi.fn(async (id: string) => {
@@ -84,35 +85,39 @@ describe('webhook tool: keys', () => {
 });
 
 describe('webhook tool: agent scope', () => {
-  it('lists only the current agent, ignoring a model-supplied agent', async () => {
+  it('lists only custom webhooks of the current agent, ignoring a model-supplied agent', async () => {
     const { runtime, service } = setup();
     service.list.mockResolvedValue([
       item(),
       item({ agent: { ...item().agent!, id: 'agent-other' }, id: OTHER_ID }),
+      // The manager is asked for custom webhooks only; a subscription that slips through is dropped.
       subscription,
     ]);
-    const result = await runtime.listWebhooks({ agentId: 'agent-other' } as never);
-    expect(service.list).toHaveBeenCalledWith({ agentId: AGENT });
-    expect(result.state.webhooks.map((row: { id: string }) => row.id)).toEqual([ID, ID]);
-
-    const generic = await runtime.listWebhooks({ kind: 'mcp_events' });
-    expect(generic.state.webhooks).toEqual([
-      expect.objectContaining({
-        event: {
-          arguments: { team: 'ENG' },
-          connector: { identifier: 'linear', name: 'Linear' },
-          name: 'issue.created',
-        },
-        kind: 'mcp_events',
-      }),
+    const result = await runtime.listWebhooks({
+      agentId: 'agent-other',
+      kind: 'mcp_events',
+    } as never);
+    expect(service.list).toHaveBeenCalledWith({ agentId: AGENT, kind: 'generic' });
+    expect(result.state.webhooks).toEqual([
+      expect.objectContaining({ id: ID, identifier: 'alerts', name: 'Alerts', topicMode: 'new' }),
     ]);
+    expect(result.content).toContain('"identifier":"alerts"');
+    expect(result.state.webhooks[0]).not.toHaveProperty('kind');
+    expect(result.state.webhooks[0]).not.toHaveProperty('event');
+  });
+
+  it('keeps the fixed identifier when only the name changes', async () => {
+    const { runtime, service } = setup();
+    service.update.mockResolvedValue(item({ name: 'Pager alerts' }));
+    const result = await runtime.updateWebhook({ name: 'Pager alerts', webhookId: ID });
+    expect(service.update).toHaveBeenCalledWith(ID, { name: 'Pager alerts' });
+    expect(result.state.webhook).toMatchObject({ identifier: 'alerts', name: 'Pager alerts' });
   });
 
   it.each([
     ['updateWebhook', { name: 'x' }],
     ['sendTestWebhook', {}],
     ['listWebhookCalls', {}],
-    ['checkWebhook', {}],
     ['deleteWebhook', {}],
   ] as const)('treats a webhook of another agent as not found in %s', async (api, extra) => {
     const { runtime, service } = setup();
@@ -124,7 +129,6 @@ describe('webhook tool: agent scope', () => {
     expect(service.update).not.toHaveBeenCalled();
     expect(service.sendTest).not.toHaveBeenCalled();
     expect(service.listDeliveries).not.toHaveBeenCalled();
-    expect(service.check).not.toHaveBeenCalled();
     expect(service.delete).not.toHaveBeenCalled();
   });
 
@@ -135,30 +139,36 @@ describe('webhook tool: agent scope', () => {
     expect(service.get).not.toHaveBeenCalled();
   });
 
-  it('keeps each action to the kinds it applies to', async () => {
+  it.each([
+    ['updateWebhook', { name: 'Web bugs' }],
+    ['sendTestWebhook', {}],
+    ['listWebhookCalls', {}],
+    ['deleteWebhook', {}],
+  ] as const)(
+    'never touches an MCP Events subscription of this agent in %s, pointing to its tool',
+    async (api, extra) => {
+      const { runtime, service } = setup();
+      service.get.mockResolvedValue(subscription);
+      const result = await (runtime[api] as (args: object) => Promise<any>)({
+        webhookId: ID,
+        ...extra,
+      });
+      expect(result).toMatchObject({ state: { error: { code: 'not_found' } }, success: false });
+      expect(result.content).toContain('MCP Events tool');
+      expect(service.update).not.toHaveBeenCalled();
+      expect(service.sendTest).not.toHaveBeenCalled();
+      expect(service.listDeliveries).not.toHaveBeenCalled();
+      expect(service.delete).not.toHaveBeenCalled();
+    },
+  );
+
+  it('deletes a custom webhook, naming it by name and identifier', async () => {
     const { runtime, service } = setup();
-    service.get.mockResolvedValue(subscription);
-    // A subscription can be renamed, and nothing else about it changes here.
-    service.update.mockResolvedValue(subscription);
-    expect((await runtime.updateWebhook({ name: 'Web bugs', webhookId: ID })).success).toBe(true);
-    expect(service.update).toHaveBeenCalledWith(ID, { name: 'Web bugs' });
-    expect(
-      (await runtime.updateWebhook({ name: 'x', paused: true, webhookId: ID })).state.error.code,
-    ).toBe('unsupported_kind');
-    expect((await runtime.sendTestWebhook({ webhookId: ID })).state.error.code).toBe(
-      'unsupported_kind',
-    );
-    expect((await runtime.checkWebhook({ webhookId: ID })).success).toBe(true);
     expect(await runtime.deleteWebhook({ webhookId: ID })).toMatchObject({
-      state: { deleted: true, kind: 'mcp_events', webhookId: ID },
+      state: { deleted: true, identifier: 'alerts', name: 'Alerts', webhookId: ID },
       success: true,
     });
-
-    service.get.mockResolvedValue(item());
-    expect((await runtime.checkWebhook({ webhookId: ID })).state.error.code).toBe(
-      'unsupported_kind',
-    );
-    expect(service.check).toHaveBeenCalledTimes(1);
+    expect(service.delete).toHaveBeenCalledWith(ID);
   });
 });
 
@@ -306,6 +316,7 @@ describe('webhook tool: results and errors', () => {
     service.get.mockRejectedValue(
       Object.assign(new Error('Webhook not found.'), { code: 'not_found' }),
     );
-    expect((await runtime.checkWebhook({ webhookId: ID })).state.error.code).toBe('not_found');
+    expect((await runtime.deleteWebhook({ webhookId: ID })).state.error.code).toBe('not_found');
+    expect(service.delete).not.toHaveBeenCalled();
   });
 });

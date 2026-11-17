@@ -3,7 +3,11 @@ import type {
   InboundWebhookItem,
   InboundWebhookItemWithSecret,
 } from '@lobechat/types';
-import { GENERIC_WEBHOOK_TOPIC_MODES, InboundWebhookChannelDeliverySchema } from '@lobechat/types';
+import {
+  GENERIC_WEBHOOK_TOPIC_MODES,
+  INBOUND_WEBHOOK_KINDS,
+  InboundWebhookChannelDeliverySchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -100,9 +104,17 @@ export const inboundWebhookRouter = router({
       run(() => ctx.webhooks.listDeliveries(input.id, input.cursor)),
     ),
   list: procedure
-    .input(z.object({ agentId: z.string().min(1).optional() }).optional())
+    .input(
+      z
+        .object({
+          agentId: z.string().min(1).optional(),
+          /** Custom webhooks and MCP Events subscriptions are listed apart. */
+          kind: z.enum(INBOUND_WEBHOOK_KINDS).optional(),
+        })
+        .optional(),
+    )
     .query(({ ctx, input }): Promise<InboundWebhookItem[]> =>
-      run(() => ctx.webhooks.list({ agentId: input?.agentId })),
+      run(() => ctx.webhooks.list({ agentId: input?.agentId, kind: input?.kind })),
     ),
   /** Issue a new key, shown this once; the old key stops working at once and the URL stays. */
   rotateToken: writeProcedure

@@ -3,7 +3,7 @@
 import { Center, CopyButton, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { BellRingIcon, WebhookIcon } from 'lucide-react';
+import { WebhookIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -41,6 +41,7 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
   },
+  identifier: { fontFamily: cssVar.fontFamilyCode },
   meta: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
 });
 
@@ -66,25 +67,19 @@ interface WebhookCardProps {
 }
 
 /**
- * One webhook as the conversation shows it: what it is and whether it runs, the URL callers use,
- * where its answers go, and its task. Status reads the same as the Webhook page and Automations
- * because all three resolve it through `AutomationStatus`.
+ * One custom webhook as the conversation shows it: its name and the fixed identifier the agent
+ * knows it by, whether it runs, the URL callers use, where its answers go, and its task. Status
+ * reads the same as the Webhook page and Automations because all three resolve it through
+ * `AutomationStatus`.
  */
 const WebhookCard = ({ keyAction, webhook }: WebhookCardProps) => {
   const { t } = useTranslation('plugin');
   const { t: tAgent } = useTranslation('agent');
   const deliveryLabel = useDeliveryLabel();
-  const generic = webhook.kind === 'generic';
-  const name =
-    webhook.name?.trim() ||
-    (generic
-      ? tAgent('webhook.defaultName')
-      : (webhook.event?.name ?? tAgent('webhook.defaultName')));
+  const name = webhook.name?.trim() || tAgent('webhook.defaultName');
 
   const meta = [
-    generic
-      ? tAgent(webhook.topicMode === 'reuse' ? 'webhook.topicMode.reuse' : 'webhook.topicMode.new')
-      : [webhook.event?.connector?.name, webhook.event?.name].filter(Boolean).join(' · '),
+    tAgent(webhook.topicMode === 'reuse' ? 'webhook.topicMode.reuse' : 'webhook.topicMode.new'),
     deliveryLabel(webhook.deliversTo),
   ]
     .filter(Boolean)
@@ -94,7 +89,7 @@ const WebhookCard = ({ keyAction, webhook }: WebhookCardProps) => {
     <Flexbox gap={8}>
       <Flexbox horizontal align={'center'} gap={10} style={{ minWidth: 0 }}>
         <Center {...stylex.props(styles.iconTile)}>
-          <Icon icon={generic ? WebhookIcon : BellRingIcon} size={16} />
+          <Icon icon={WebhookIcon} size={16} />
         </Center>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }} wrap={'wrap'}>
@@ -102,10 +97,17 @@ const WebhookCard = ({ keyAction, webhook }: WebhookCardProps) => {
               {name}
             </Text>
             <AutomationStatusTag item={webhook} />
-            {!generic && <Tag>{t('builtins.lobe-webhook.render.kindMcpEvents')}</Tag>}
             {webhook.autoApprove && <Tag color={'warning'}>{tAgent('webhook.autoApproveTag')}</Tag>}
           </Flexbox>
-          {meta && <span {...stylex.props(styles.meta)}>{meta}</span>}
+          <span {...stylex.props(styles.meta)}>
+            <span
+              title={t('builtins.lobe-webhook.render.identifier')}
+              {...stylex.props(styles.identifier)}
+            >
+              {webhook.identifier}
+            </span>
+            {meta && ` · ${meta}`}
+          </span>
         </Flexbox>
       </Flexbox>
 

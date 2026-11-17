@@ -22,18 +22,6 @@ const item = (patch: Partial<InboundWebhookItem>) =>
 afterEach(cleanup);
 
 describe('TopicCell', () => {
-  it("links a webhook to its calls, which name each run's topic, instead of a blank", () => {
-    render(
-      <TopicCell
-        item={item({ source: { autoApprove: false, kind: 'generic', topicMode: 'new' } } as never)}
-      />,
-    );
-    expect(screen.getByRole('link', { name: 'automations.target.webhookCalls' })).toHaveAttribute(
-      'href',
-      '/agent/agt_1/webhook',
-    );
-  });
-
   it('links an event subscription to its topic', () => {
     render(
       <TopicCell
@@ -80,10 +68,10 @@ describe('TopicCell', () => {
         item={item({
           channel: null,
           source: {
-            autoApprove: true,
+            arguments: {},
             delivery: { channelId: 'chn_private' },
-            kind: 'generic',
-            topicMode: 'new',
+            eventName: 'issue.created',
+            kind: 'mcp_events',
           },
         } as never)}
       />,
