@@ -1,19 +1,10 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  SearchBar,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Icon, SearchBar, Text, Tooltip } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, RefreshCw, Store } from 'lucide-react';
+import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +14,7 @@ import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/Impor
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
 import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
+import { usePermission } from '@/hooks/usePermission';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
@@ -115,27 +107,30 @@ const LeftPanel = memo<LeftPanelProps>(
     }, []);
 
     const isConnectorView = viewMode === 'connector';
+    const { allowed: canCreate } = usePermission('create_content');
     // Adding a workspace connector follows the same member policy as editing one.
     const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
     const addConnectorTitle = t('connector.add.title', {
       defaultValue: 'Add Custom Connector',
       ns: 'tool',
     });
-    const isConnectorPage = page && isConnectorView;
-
-    if (isConnectorPage) {
+    if (page) {
       const addItems = [
-        {
-          desc:
-            canAddConnector || isPolicyPending
-              ? t('connectorMarket.add.customDesc')
-              : t('tools.connectorFeedback.manageOnly'),
-          disabled: !canAddConnector,
-          icon: <Icon icon={Grid2x2Plus} />,
-          key: 'custom',
-          label: t('connectorMarket.add.custom'),
-          onClick: () => setShowAddConnector(true),
-        },
+        ...(isConnectorView
+          ? [
+              {
+                desc:
+                  canAddConnector || isPolicyPending
+                    ? t('connectorMarket.add.customDesc')
+                    : t('tools.connectorFeedback.manageOnly'),
+                disabled: !canAddConnector,
+                icon: <Icon icon={Grid2x2Plus} />,
+                key: 'custom',
+                label: t('connectorMarket.add.custom'),
+                onClick: () => setShowAddConnector(true),
+              },
+            ]
+          : []),
         {
           desc: t('connectorMarket.add.browseStoreDesc'),
           icon: <Icon icon={Store} />,
@@ -143,36 +138,59 @@ const LeftPanel = memo<LeftPanelProps>(
           label: t('connectorMarket.add.browseStore'),
           onClick: handleOpenStore,
         },
+        ...(!isConnectorView
+          ? [
+              {
+                desc: t('tab.importFromGithub.desc'),
+                disabled: !canCreate,
+                icon: <Icon icon={GithubIcon} />,
+                key: 'importGithub',
+                label: t('tab.importFromGithub'),
+                onClick: () => openImportFromGithubModal(),
+              },
+              {
+                desc: t('tab.importFromUrl.desc'),
+                disabled: !canCreate,
+                icon: <Icon icon={Link} />,
+                key: 'importUrl',
+                label: t('tab.importFromUrl'),
+                onClick: () => openImportFromUrlModal(),
+              },
+              {
+                desc: t('tab.uploadZip.desc'),
+                disabled: !canCreate,
+                icon: <Icon icon={FileArchive} />,
+                key: 'uploadZip',
+                label: t('tab.uploadZip'),
+                onClick: () => openUploadSkillModal(),
+              },
+            ]
+          : []),
       ];
+      const searchPlaceholder = t(
+        isConnectorView ? 'connectorMarket.search.placeholder' : 'skillView.search.placeholder',
+      );
 
-      const renderHeader = (reload: () => void) => (
+      const renderHeader = () => (
         <>
           <div {...stylex.props(styles.pageHeader)}>
             <Flexbox gap={4} style={{ minWidth: 0 }}>
-              <h1 {...stylex.props(styles.pageTitle)}>{t('skillView.connectors')}</h1>
-              <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+              <h1 {...stylex.props(styles.pageTitle)}>
+                {t(isConnectorView ? 'skillView.connectors' : 'skillView.skills')}
+              </h1>
+              <Text type={'secondary'}>
+                {t(isConnectorView ? 'skillView.connectorsDesc' : 'skillView.skillsDesc')}
+              </Text>
             </Flexbox>
             <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
               <SearchBar
                 allowClear
-                aria-label={t('connectorMarket.search.placeholder')}
+                aria-label={searchPlaceholder}
                 className={stylex.props(styles.pageSearch).className}
-                placeholder={t('connectorMarket.search.placeholder')}
+                placeholder={searchPlaceholder}
                 value={keyword}
                 variant={'outlined'}
                 onInputChange={setKeyword}
-              />
-              <ActionIcon
-                aria-label={t('connectorMarket.refresh')}
-                icon={RefreshCw}
-                title={t('connectorMarket.refresh')}
-                onClick={reload}
-              />
-              <ActionIcon
-                aria-label={t('skillStore.title')}
-                icon={Store}
-                title={t('skillStore.title')}
-                onClick={handleOpenStore}
               />
               <DropdownMenu items={addItems} placement={'bottomRight'}>
                 <Button
@@ -186,7 +204,7 @@ const LeftPanel = memo<LeftPanelProps>(
               </DropdownMenu>
             </Flexbox>
           </div>
-          <ConnectorManagePolicy variant={'page'} />
+          {isConnectorView && <ConnectorManagePolicy variant={'page'} />}
         </>
       );
 

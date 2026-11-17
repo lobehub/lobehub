@@ -1974,7 +1974,13 @@ When I am ___, I need ___
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
+  'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
+  'skillView.empty.search': 'No skills match “{{keyword}}”',
+  'skillView.empty.title': 'No skills yet',
+  'skillView.search.placeholder': 'Search skills',
   'skillView.skills': 'Skills',
+  'skillView.skillsDesc':
+    'Give your agents task-specific skills. Open a skill to see its instructions and resources.',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':

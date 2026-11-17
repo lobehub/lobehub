@@ -2,7 +2,7 @@ import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobech
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
-import { pluginSelectors } from '@/store/tool/selectors';
+import { agentSkillsSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import type { ToolDetailType } from './SkillDetail';
@@ -18,6 +18,12 @@ export const useToolDisplayName = (identifier: string, type: ToolDetailType): st
   const builtinTitle = useToolStore((s) =>
     type === 'builtin'
       ? s.builtinTools.find((tool) => tool.identifier === identifier)?.title
+      : s.builtinSkills.find((skill) => skill.identifier === identifier)?.name,
+  );
+  const skillName = useToolStore((s) =>
+    type === 'agent-skill'
+      ? (agentSkillsSelectors.getAgentSkills(s).find((skill) => skill.id === identifier)?.name ??
+        agentSkillsSelectors.getAgentSkillDetail(identifier)(s)?.name)
       : undefined,
   );
   const connectorName = useToolStore((s) =>
@@ -29,9 +35,9 @@ export const useToolDisplayName = (identifier: string, type: ToolDetailType): st
     type === 'plugin' ? pluginSelectors.getPluginMetaById(identifier)(s)?.title : undefined,
   );
 
-  const brand = getComposioAppByIdentifier(identifier) ?? getLobehubSkillProviderById(identifier);
-  if (brand) return brand.label;
-  if (type === 'builtin')
+  if (type === 'agent-skill') return skillName || identifier;
+  if (type === 'builtin' || type === 'builtin-skill')
     return t(`tools.builtins.${identifier}.title`, { defaultValue: builtinTitle || identifier });
-  return pluginTitle || connectorName || identifier;
+  const brand = getComposioAppByIdentifier(identifier) ?? getLobehubSkillProviderById(identifier);
+  return brand?.label || pluginTitle || connectorName || identifier;
 };

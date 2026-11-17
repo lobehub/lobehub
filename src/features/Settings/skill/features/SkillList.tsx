@@ -96,8 +96,8 @@ interface SkillListProps {
   onClearKeyword?: () => void;
   onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
-  /** Page header above the groups; receives the list's refetch for its Refresh action. */
-  renderHeader?: (reload: () => void) => React.ReactNode;
+  /** Page header above the groups. */
+  renderHeader?: () => React.ReactNode;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
 }
@@ -162,7 +162,9 @@ const SkillList = memo<SkillListProps>(
     const agentSkillsSWR = useFetchAgentSkills(true);
     const builtinToolsSWR = useFetchUninstalledBuiltinTools(true);
     const skillsError =
-      lobehubSkillsSWR.error ?? composioSWR.error ?? agentSkillsSWR.error ?? builtinToolsSWR.error;
+      viewMode === 'skill'
+        ? (agentSkillsSWR.error ?? builtinToolsSWR.error)
+        : (lobehubSkillsSWR.error ?? composioSWR.error ?? builtinToolsSWR.error);
     const reloadSkills = () => {
       void lobehubSkillsSWR.mutate();
       void composioSWR.mutate();
@@ -218,16 +220,18 @@ const SkillList = memo<SkillListProps>(
     const customMCPs = installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
 
     const hasAnySkills =
-      builtinSkills.length > 0 ||
-      integrations.length > 0 ||
-      marketAgentSkills.length > 0 ||
-      userAgentSkills.length > 0 ||
-      communityMCPs.length > 0 ||
-      marketplaceConnectors.length > 0 ||
-      customMCPs.length > 0 ||
-      agentBoundConnectors.length > 0;
+      viewMode === 'skill'
+        ? builtinSkills.length > 0 || marketAgentSkills.length > 0 || userAgentSkills.length > 0
+        : builtinSkills.length > 0 ||
+          integrations.length > 0 ||
+          marketAgentSkills.length > 0 ||
+          userAgentSkills.length > 0 ||
+          communityMCPs.length > 0 ||
+          marketplaceConnectors.length > 0 ||
+          customMCPs.length > 0 ||
+          agentBoundConnectors.length > 0;
 
-    const header = isPage ? renderHeader?.(reloadSkills) : undefined;
+    const header = isPage ? renderHeader?.() : undefined;
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
     // empty (error gated ahead of empty).
@@ -247,7 +251,13 @@ const SkillList = memo<SkillListProps>(
         <>
           {header}
           <Center className={stylex.props(styles.container).className} paddingBlock={48}>
-            <Empty description={t('tab.skillDesc')} icon={SkillsIcon} title={t('tab.skillEmpty')} />
+            <Empty
+              icon={SkillsIcon}
+              title={t(viewMode === 'skill' ? 'skillView.empty.title' : 'tab.skillEmpty')}
+              description={t(
+                viewMode === 'skill' ? 'skillView.empty.description' : 'tab.skillDesc',
+              )}
+            />
           </Center>
         </>
       );
@@ -453,46 +463,92 @@ const SkillList = memo<SkillListProps>(
     const toggleSection = toggle(setCollapsed);
     const toggleExpanded = toggle(setExpanded);
 
-    // ── Connectors page: grouped two-column catalog ──────────────────────────
-    if (isPage && isConnectorView) {
+    // Page catalogs share the layout, but keep their own sources and search fields.
+    if (isPage) {
       // Installed groups what is already added (enabled built-ins, connected
       // OAuth apps), so the type groups below read as what is left to add.
       const isConnected = (item: IntegrationItem) => isIntegrationConnected(item, connectionState);
       const builtins = partitionByInstalled(builtinToolItems, isConnected);
       const oauth = partitionByInstalled(communitySkillItems, isConnected);
 
-      const sections = [
-        {
-          items: [...builtins.installed, ...oauth.installed].map(renderIntegration),
-          key: 'installed',
-          label: t('connectorMarket.section.installed'),
-        },
-        {
-          items: builtins.available.map(renderIntegration),
-          key: 'builtinTools',
-          label: t('skillGroup.builtinTools', 'Built-in Tools'),
-        },
-        {
-          items: oauth.available.map(renderIntegration),
-          key: 'communityConnectors',
-          label: t('skillGroup.communityConnectors', 'OAuth Connectors'),
-        },
-        {
-          items: renderCommunityMCPs(),
-          key: 'communityTools',
-          label: t('skillGroup.communityTools', 'Community Tools'),
-        },
-        {
-          items: renderCustomConnectors(),
-          key: 'customConnectors',
-          label: t('skillGroup.customConnectors', 'Custom Connectors'),
-        },
-        {
-          items: renderAgentConnectors(),
-          key: 'agentConnectors',
-          label: t('skillGroup.agentConnectors', 'Agent Connectors'),
-        },
-      ].filter((section) => section.items.length > 0);
+      const sections = (
+        isConnectorView
+          ? [
+              {
+                items: [...builtins.installed, ...oauth.installed].map(renderIntegration),
+                key: 'installed',
+                label: t('connectorMarket.section.installed'),
+              },
+              {
+                items: builtins.available.map(renderIntegration),
+                key: 'builtinTools',
+                label: t('skillGroup.builtinTools', 'Built-in Tools'),
+              },
+              {
+                items: oauth.available.map(renderIntegration),
+                key: 'communityConnectors',
+                label: t('skillGroup.communityConnectors', 'OAuth Connectors'),
+              },
+              {
+                items: renderCommunityMCPs(),
+                key: 'communityTools',
+                label: t('skillGroup.communityTools', 'Community Tools'),
+              },
+              {
+                items: renderCustomConnectors(),
+                key: 'customConnectors',
+                label: t('skillGroup.customConnectors', 'Custom Connectors'),
+              },
+              {
+                items: renderAgentConnectors(),
+                key: 'agentConnectors',
+                label: t('skillGroup.agentConnectors', 'Agent Connectors'),
+              },
+            ]
+          : [
+              {
+                items: builtinSkills
+                  .filter((skill) =>
+                    match(
+                      t(`tools.builtins.${skill.identifier}.title`, { defaultValue: skill.name }),
+                      skill.identifier,
+                      t(`tools.builtins.${skill.identifier}.description`, {
+                        defaultValue: skill.description,
+                      }),
+                    ),
+                  )
+                  .map((skill) => (
+                    <AgentSkillItem
+                      key={skill.identifier}
+                      skill={skill}
+                      onSelect={
+                        onSelect ? () => onSelect(skill.identifier, 'builtin-skill') : undefined
+                      }
+                    />
+                  )),
+                key: 'builtinSkills',
+                label: t('skillGroup.builtinSkills'),
+              },
+              {
+                items: renderAgentSkills(
+                  marketAgentSkills.filter((skill) =>
+                    match(skill.name, skill.identifier, skill.description),
+                  ),
+                ),
+                key: 'communitySkills',
+                label: t('skillGroup.communitySkills'),
+              },
+              {
+                items: renderAgentSkills(
+                  userAgentSkills.filter((skill) =>
+                    match(skill.name, skill.identifier, skill.description),
+                  ),
+                ),
+                key: 'customSkills',
+                label: t('skillGroup.customSkills'),
+              },
+            ]
+      ).filter((section) => section.items.length > 0);
 
       return (
         <>
@@ -503,12 +559,15 @@ const SkillList = memo<SkillListProps>(
               <Empty
                 description={t('connectorMarket.empty.searchDesc')}
                 icon={SearchX}
-                title={t('connectorMarket.empty.search', { keyword: keyword?.trim() })}
                 action={
                   onClearKeyword && (
                     <Button onClick={onClearKeyword}>{t('connectorMarket.empty.clear')}</Button>
                   )
                 }
+                title={t(
+                  isConnectorView ? 'connectorMarket.empty.search' : 'skillView.empty.search',
+                  { keyword: keyword?.trim() },
+                )}
               />
             </Center>
           ) : (
