@@ -179,6 +179,27 @@ describe('createBitable', () => {
     expect(result.issues?.[0].error).toContain('addBitableRecords');
   });
 
+  it('matches seed-record keys to columns whose names were trimmed', async () => {
+    const api = createApi();
+
+    const result = await createBitable(
+      api,
+      {
+        fields: [{ name: ' 任务 ', type: 'text' }],
+        name: '待办',
+        platform: 'feishu',
+        records: [{ ' 任务 ': '写周报' }],
+      },
+      'feishu',
+    );
+
+    expect(api.createBitableTable.mock.calls[0][1].fields[0].field_name).toBe('任务');
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith('bascnABC', 'tblNew', [
+      { 任务: '写周报' },
+    ]);
+    expect(result.issues).toBeUndefined();
+  });
+
   it('splits more than 500 rows into several batch requests', async () => {
     const api = createApi();
     const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 1 }, (_, i) => ({

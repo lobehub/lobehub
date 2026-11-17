@@ -334,6 +334,41 @@ describe('LarkApiClient bitable', () => {
     );
   });
 
+  it('listBitableFields follows page_token until every column is collected', async () => {
+    fetchMock
+      .mockResolvedValueOnce(tokenResponse())
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 0,
+          data: {
+            has_more: true,
+            items: [{ field_id: 'fld1', field_name: '任务', type: 1 }],
+            page_token: 'p2',
+          },
+          msg: 'ok',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          code: 0,
+          data: {
+            has_more: false,
+            items: [{ field_id: 'fld101', field_name: '第101列', type: 2 }],
+          },
+          msg: 'ok',
+        }),
+      );
+
+    const api = new LarkApiClient('cli_app', 'secret', 'feishu');
+    await expect(api.listBitableFields('bascnABC', 'tbl1')).resolves.toEqual([
+      { fieldId: 'fld1', fieldName: '任务', type: 1 },
+      { fieldId: 'fld101', fieldName: '第101列', type: 2 },
+    ]);
+    expect(fetchMock.mock.calls[2][0]).toBe(
+      'https://open.feishu.cn/open-apis/bitable/v1/apps/bascnABC/tables/tbl1/fields?page_size=100&page_token=p2',
+    );
+  });
+
   it('addDriveCollaborator adds an open_id member to the bitable without notifying', async () => {
     fetchMock
       .mockResolvedValueOnce(tokenResponse())

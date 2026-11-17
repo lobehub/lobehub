@@ -208,11 +208,14 @@ export const toBitableRecords = (
       throw new Error(`Record #${index + 1} must be an object keyed by column name`);
     }
     const fields: Record<string, unknown> = {};
-    for (const [column, value] of Object.entries(record)) {
+    for (const [key, value] of Object.entries(record)) {
+      // Column names are created trimmed, so a key with stray whitespace
+      // still matches; an exact name wins for hand-built tables.
+      const column = columnTypes.has(key) ? key : key.trim();
       const typeCode = columnTypes.get(column);
       if (typeCode === undefined) {
         throw new Error(
-          `Record #${index + 1} has unknown column "${column}". Columns are: ${[...columnTypes.keys()].join(', ')}`,
+          `Record #${index + 1} has unknown column "${key}". Columns are: ${[...columnTypes.keys()].join(', ')}`,
         );
       }
       if (value === null || value === undefined || value === '') continue;

@@ -434,8 +434,8 @@ export class LarkApiClient {
   }
 
   /**
-   * First page (up to 100) of a table's columns: name, numeric type and the
-   * type-specific `property` (select options and the like).
+   * Every column of a table (all pages — a table can hold up to 300): name,
+   * numeric type and field id.
    *
    * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/list
    */
@@ -443,16 +443,26 @@ export class LarkApiClient {
     appToken: string,
     tableId: string,
   ): Promise<Array<{ fieldId: string; fieldName: string; type: number }>> {
-    const data = await this.call(
-      'GET',
-      `/bitable/v1/apps/${appToken}/tables/${tableId}/fields?page_size=100`,
-      {},
-    );
-    return (data.data?.items ?? []).map((item: any) => ({
-      fieldId: item.field_id,
-      fieldName: item.field_name,
-      type: item.type,
-    }));
+    const fields: Array<{ fieldId: string; fieldName: string; type: number }> = [];
+    const seenTokens = new Set<string>();
+    let pageToken: string | undefined;
+    do {
+      const query = new URLSearchParams({ page_size: '100' });
+      if (pageToken) query.set('page_token', pageToken);
+      const data = await this.call(
+        'GET',
+        `/bitable/v1/apps/${appToken}/tables/${tableId}/fields?${query.toString()}`,
+        {},
+      );
+      for (const item of data.data?.items ?? []) {
+        fields.push({ fieldId: item.field_id, fieldName: item.field_name, type: item.type });
+      }
+      const next: string | undefined = data.data?.has_more ? data.data?.page_token : undefined;
+      // Guard against a server echoing the same token forever.
+      pageToken = next && !seenTokens.has(next) ? next : undefined;
+      if (pageToken) seenTokens.add(pageToken);
+    } while (pageToken);
+    return fields;
   }
 
   /**
