@@ -24,6 +24,23 @@ const pluginProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
  * Legacy `user_installed_plugins` rows. Current clients install MCP servers as
  * connectors (`connector.create`) and only read, update and remove rows here.
  */
+/**
+ * `customParams.composio` (a Composio account and the member it runs as) is
+ * server-owned: only the Composio connect flow writes it. Every member reads
+ * the workspace's account ids from the projection, so a client-written block
+ * could forge a "legacy" mirror of a teammate's private connection under any
+ * identifier and run it. A create drops the client's block; an update keeps
+ * the stored one.
+ */
+const withServerComposio = (
+  clientParams: unknown,
+  stored?: { composio?: unknown } | null,
+): Record<string, unknown> | undefined => {
+  if (!clientParams || typeof clientParams !== 'object') return clientParams as undefined;
+  const { composio: _client, ...rest } = clientParams as Record<string, unknown>;
+  return stored?.composio === undefined ? rest : { ...rest, composio: stored.composio };
+};
+
 export const pluginRouter = router({
   /**
    * @deprecated Kept unchanged for released clients that still install MCPs as
@@ -48,7 +65,7 @@ export const pluginRouter = router({
       // if not exist, we should create the plugin
       if (!result) {
         const data = await ctx.pluginModel.create({
-          customParams: input.customParams,
+          customParams: withServerComposio(input.customParams),
           identifier: input.identifier,
           manifest: input.manifest,
           settings: input.settings,
@@ -82,7 +99,7 @@ export const pluginRouter = router({
       recordLegacyPluginWrite('createPlugin', input.type, ctx.clientMetadata);
 
       const data = await ctx.pluginModel.create({
-        customParams: input.customParams,
+        customParams: withServerComposio(input.customParams),
         identifier: input.identifier,
         manifest: input.manifest,
         type: input.type,
@@ -124,7 +141,10 @@ export const pluginRouter = router({
       assertWorkspaceRowManageable(ctx, target.userId, 'plugin');
 
       return ctx.pluginModel.update(input.id, {
-        customParams: input.customParams,
+        customParams:
+          input.customParams === undefined
+            ? undefined
+            : withServerComposio(input.customParams, target.customParams),
         manifest: input.manifest,
         settings: input.settings,
       });
