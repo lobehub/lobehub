@@ -71,10 +71,12 @@ describe('linkOwnBranchPullRequest', () => {
 
     await run();
 
+    // Open PRs only: an all-state list may put a newer closed PR first.
     expect(mocks.getLinkedPullRequest).toHaveBeenCalledWith({
       branch: 'lobehub/feat-x',
       deviceId: 'dev-1',
       path: '/wt',
+      state: 'open',
     });
     expect(mocks.linkTopicPullRequest).toHaveBeenCalledWith({
       headRefName: 'lobehub/feat-x',

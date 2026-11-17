@@ -251,6 +251,18 @@ describe('getLinkedPullRequest', () => {
     ).toBe('alice/widgets');
   });
 
+  it('lists only open PRs when asked, so a newer closed PR cannot hide the open one', async () => {
+    mockShell({ branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x', prList: [] });
+
+    await getLinkedPullRequest({ branch: 'feat/x', path: '/repo', state: 'open' });
+
+    expect(childProcessMocks.execFileAsync).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining(['--head', 'feat/x', '--state', 'open']),
+      expect.anything(),
+    );
+  });
+
   it('names no remote repository for a non-GitHub remote', async () => {
     mockShell({
       branchRef: 'sha1\torigin\trefs/remotes/origin/feat/x',

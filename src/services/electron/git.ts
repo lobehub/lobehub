@@ -49,6 +49,7 @@ class ElectronGitService {
     branch: string;
     path: string;
     pullRequestNumber?: number;
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPullRequestResult> {
     return this.ipc.git.getLinkedPullRequest(params);
   }

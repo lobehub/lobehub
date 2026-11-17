@@ -236,8 +236,10 @@ export const getLinkedPullRequest = async (payload: {
   branch: string;
   path: string;
   pullRequestNumber?: number;
+  /** `open` lists only open PRs (discovery); default `all` also refreshes merged / closed ones. */
+  state?: 'all' | 'open';
 }): Promise<GitLinkedPullRequestResult> => {
-  const { path: dirPath, branch, pullRequestNumber } = payload;
+  const { path: dirPath, branch, pullRequestNumber, state = 'all' } = payload;
   if (!branch && pullRequestNumber === undefined) return { pullRequest: null, status: 'ok' };
 
   const viewPullRequest = async (number: number): Promise<GithubPullRequestPayload> => {
@@ -283,7 +285,7 @@ export const getLinkedPullRequest = async (payload: {
         '--head',
         localUpstream?.branch ?? branch,
         '--state',
-        'all',
+        state,
         '--limit',
         '5',
         '--json',

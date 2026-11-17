@@ -41,7 +41,14 @@ export const linkOwnBranchPullRequest = async (
     const { deviceId } = resolveTopicGitTransport(agentId);
     if (!canReadTopicGitTransport({ deviceId })) return;
 
-    const lookup = await gitService.getLinkedPullRequest({ branch: git.ownBranch, deviceId, path });
+    // Open PRs only: an all-state list returns the newest first, which may be a
+    // closed / merged PR hiding the open one this lookup is for.
+    const lookup = await gitService.getLinkedPullRequest({
+      branch: git.ownBranch,
+      deviceId,
+      path,
+      state: 'open',
+    });
     const pr = lookup?.pullRequestStatus === 'ok' ? lookup.pullRequest : null;
     if (!pr || pr.state.toLowerCase() !== 'open') return;
 

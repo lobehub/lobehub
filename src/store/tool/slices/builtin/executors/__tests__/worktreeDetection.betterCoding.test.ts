@@ -178,4 +178,29 @@ describe('recordGitCommandEffects — Better Coding Experience', () => {
       { branch: 'feat/quiet', ownBranch: 'feat/quiet' },
     );
   });
+
+  it('owns a branch only when the flag guarantees creation, not a create-or-reset', async () => {
+    for (const command of [
+      'git switch -q -C feat/x feat/x',
+      'git checkout -q -B feat/x',
+      'git worktree add -B feat/x /tmp/wt',
+    ]) {
+      chatMocks.updateTopicMetadata.mockClear();
+      chatMocks.topics = { t1: topic() };
+      await recordGitCommandEffects({ command, resultContent: '', toolCallId: 'c', topicId: 't1' });
+      const git = chatMocks.updateTopicMetadata.mock.calls[0]?.[1].workingDirectoryConfig.git;
+      expect(git?.ownBranch).toBeUndefined();
+    }
+
+    chatMocks.updateTopicMetadata.mockClear();
+    await recordGitCommandEffects({
+      command: 'git checkout -q -b feat/new',
+      resultContent: '',
+      toolCallId: 'c',
+      topicId: 't1',
+    });
+    expect(
+      chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git.ownBranch,
+    ).toBe('feat/new');
+  });
 });

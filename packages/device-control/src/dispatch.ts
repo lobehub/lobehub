@@ -375,7 +375,12 @@ export const executeDeviceRpc = async (
 
     case 'getLinkedPullRequest': {
       return getLinkedPullRequest(
-        params as { branch: string; path: string; pullRequestNumber?: number },
+        params as {
+          branch: string;
+          path: string;
+          pullRequestNumber?: number;
+          state?: 'all' | 'open';
+        },
       );
     }
 

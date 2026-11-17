@@ -298,11 +298,14 @@ class GitService {
     deviceId,
     path,
     pullRequestNumber,
+    state,
   }: {
     branch: string;
     deviceId?: string;
     path: string;
     pullRequestNumber?: number;
+    /** `open`: discovery of a branch's open PR; default lists every state. */
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
       ? await lambdaClient.device.gitLinkedPullRequest.query({
@@ -310,8 +313,14 @@ class GitService {
           deviceId,
           path,
           pullRequestNumber,
+          ...(state ? { state } : {}),
         })
-      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
+      : await electronGitService.getLinkedPullRequest({
+          branch,
+          path,
+          pullRequestNumber,
+          ...(state ? { state } : {}),
+        });
     if (!pr) return undefined;
     return {
       extraCount: pr.extraCount,

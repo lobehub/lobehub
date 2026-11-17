@@ -43,6 +43,11 @@ import {
 /** Flags on `git worktree add` that consume the following token as their value. */
 const VALUE_FLAGS = new Set(['-b', '-B', '--reason']);
 const BRANCH_VALUE_FLAGS = new Set(['-b', '-B']);
+/**
+ * Branch flags that can only CREATE: `-C` / `-B` / `--force-create` also reset an
+ * existing branch, so a successful run with them proves nothing about who made it.
+ */
+const CREATE_ONLY_BRANCH_FLAGS = new Set(['-b', '-c', '--create', '--orphan']);
 const BRANCH_SWITCH_VALUE_FLAGS = new Set([
   '-b',
   '-B',
@@ -106,6 +111,8 @@ const CC_SESSION_ENTER_MARKER = 'The session is now working in the worktree';
 
 interface WorktreeAddParseResult {
   branch?: string;
+  /** `-b` named {@link branch}: git refuses it when the branch exists, so it is new. */
+  createdBranch?: boolean;
   /** Resolved absolute path, present only when the command yielded a trustworthy literal. */
   path?: string;
   /** Positional commit-ish (often the checked-out branch) — hint for the device lookup. */
@@ -308,7 +315,7 @@ const parseGitBranchSwitchTokens = (
     const branchFlag = getOptionValue(git.args, i, [...BRANCH_SWITCH_VALUE_FLAGS], env);
     if (branchFlag.value) {
       branch = normalizeBranch(branchFlag.value);
-      created = true;
+      created = CREATE_ONLY_BRANCH_FLAGS.has(stripQuotes(token).split('=')[0]);
       break;
     }
     if (branchFlag.skipNext) {
@@ -682,12 +689,14 @@ const parseGitWorktreeAddTokens = (
 
   // Positionals after `add`: first is the worktree path, second the commit-ish.
   let branch: string | undefined;
+  let createdBranch = false;
   let path: string | undefined;
   let ref: string | undefined;
   for (; i < tokens.length; i += 1) {
     const token = tokens[i];
     if (BRANCH_VALUE_FLAGS.has(token)) {
       branch = resolveToken(tokens[i + 1] ?? '', env) || branch;
+      createdBranch = CREATE_ONLY_BRANCH_FLAGS.has(token);
       i += 1; // skip this flag's value
       continue;
     }
@@ -710,6 +719,7 @@ const parseGitWorktreeAddTokens = (
 
   return {
     ...(branch ? { branch } : {}),
+    ...(branch && createdBranch ? { createdBranch: true } : {}),
     ...(ref ? { ref } : {}),
     ...(isLiteralPath(path) ? { path: resolveWorktreePath(path, baseCwd) } : {}),
   };
@@ -988,7 +998,10 @@ export const recordGitCommandEffects = async (params: {
     const created =
       parseCreatedBranch(resultContent) ??
       (branchSwitch && 'created' in branchSwitch ? branchSwitch.branch : undefined) ??
-      parseWorktreeAddInfo(command, source)?.branch;
+      (() => {
+        const worktreeAdd = parseWorktreeAddInfo(command, source);
+        return worktreeAdd?.createdBranch ? worktreeAdd.branch : undefined;
+      })();
     nextConfig = applyOwnBranchToConfig(nextConfig, created);
   }
 

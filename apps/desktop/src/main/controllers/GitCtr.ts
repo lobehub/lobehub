@@ -63,6 +63,7 @@ export default class GitController extends ControllerModule {
     branch: string;
     path: string;
     pullRequestNumber?: number;
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPullRequestResult> {
     const { getLinkedPullRequest: computeLinkedPullRequest } = await loadGit();
     return computeLinkedPullRequest(payload);
