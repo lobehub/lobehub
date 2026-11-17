@@ -66,11 +66,30 @@ export const buildCodexShellEnvSetArgs = (key: string, value: string): string[] 
  * `-c` overrides that forward the non-secret LobeHub run context present in
  * `env` into Codex's shell commands. Never includes `LOBEHUB_JWT`.
  */
-export const buildCodexLobeHubContextArgs = (env: Record<string, string | undefined>): string[] =>
-  CODEX_LOBEHUB_CONTEXT_ENV_KEYS.flatMap((key) => {
+export const buildCodexLobeHubContextArgs = (env: Record<string, string | undefined>): string[] => [
+  ...CODEX_LOBEHUB_CONTEXT_ENV_KEYS.flatMap((key) => {
     const value = env[key];
     return value ? buildCodexShellEnvSetArgs(key, value) : [];
-  });
+  }),
+  ...buildCodexScmCredentialArgs(env),
+];
+
+export const SCM_CREDENTIAL_MARKER_ENV = 'LOBEHUB_SCM_CREDENTIAL';
+export const SCM_JWT_FILE_ENV = 'LOBEHUB_SCM_JWT_FILE';
+
+const SCM_CREDENTIAL_ENV_PATTERN =
+  /^(?:GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)|GIT_(?:AUTHOR|COMMITTER)_(?:NAME|EMAIL)|GIT_TERMINAL_PROMPT|GCM_INTERACTIVE|GH_CONFIG_DIR|LOBEHUB_SCM_JWT_FILE)$/;
+
+// Without these a Codex shell under `inherit = "core"` loses the reset of the
+// device's github.com helpers and git answers with the device owner's login.
+const buildCodexScmCredentialArgs = (env: Record<string, string | undefined>): string[] => {
+  if (env[SCM_CREDENTIAL_MARKER_ENV] !== '1') return [];
+  return Object.entries(env).flatMap(([key, value]) =>
+    value !== undefined && SCM_CREDENTIAL_ENV_PATTERN.test(key)
+      ? buildCodexShellEnvSetArgs(key, value)
+      : [],
+  );
+};
 
 export interface CodexJwtFile {
   /** `-c` override exposing the file path as `LOBEHUB_JWT_FILE` in Codex's shell. */

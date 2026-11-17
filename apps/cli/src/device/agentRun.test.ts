@@ -21,7 +21,10 @@ const { identityMock, hasLoginMock } = vi.hoisted(() => ({
   identityMock: vi.fn(),
 }));
 
+const { ensureGhShimMock } = vi.hoisted(() => ({ ensureGhShimMock: vi.fn() }));
+
 vi.mock('node:child_process', () => ({ spawn: spawnMock }));
+vi.mock('../scm/ghShim', () => ({ ensureGhShim: ensureGhShimMock }));
 // The device's own Claude Code login, read for account routing.
 vi.mock('@lobechat/heterogeneous-agents/quota-sampler', () => ({
   hasClaudeCodeLogin: hasLoginMock,
@@ -529,5 +532,86 @@ describe('spawnHeteroAgentRun Claude Code account routing', () => {
     child.emit('spawn');
 
     expect(await pending).toEqual({ status: 'accepted' });
+  });
+});
+
+describe('spawnHeteroAgentRun with a requester credential', () => {
+  beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue(asDirectory);
+    ensureGhShimMock.mockReset().mockResolvedValue('/shim/bin/gh');
+  });
+
+  afterEach(() => {
+    spawnMock.mockReset();
+    vi.unstubAllEnvs();
+  });
+
+  const scmCredential = { gitEmail: '42+arvinxx@users.noreply.github.com', gitName: 'Arvin Xu' };
+
+  it('spawns with git and gh wired to the requester and the device tokens dropped', async () => {
+    vi.stubEnv('GH_TOKEN', 'gho_device');
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ack = spawnHeteroAgentRun({ ...baseParams, operationId: 'op-scm', scmCredential });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    child.emit('spawn');
+    await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+    const { env } = spawnMock.mock.calls[0][2];
+    const helperIndex = Object.keys(env)
+      .filter((key) => key.startsWith('GIT_CONFIG_VALUE_'))
+      .find((key) => env[key].includes('git credential'));
+    expect(helperIndex && env[helperIndex]).toMatch(/^!'.+' git credential$/);
+    expect(env).toMatchObject({
+      GIT_AUTHOR_NAME: 'Arvin Xu',
+      GIT_COMMITTER_EMAIL: '42+arvinxx@users.noreply.github.com',
+      LOBEHUB_SCM_CREDENTIAL: '1',
+    });
+    expect(env).not.toHaveProperty('GH_TOKEN');
+    const [shimDir, invocation] = ensureGhShimMock.mock.calls[0];
+    expect(shimDir).toContain('op-scm');
+    expect(env.PATH.startsWith(shimDir)).toBe(true);
+    expect(invocation).toMatch(/' git credential$/);
+  });
+
+  it('refuses the run rather than spawn without isolation when the gh shim cannot be written', async () => {
+    ensureGhShimMock.mockRejectedValue(new Error('EACCES'));
+
+    await expect(
+      spawnHeteroAgentRun({ ...baseParams, operationId: 'op-scm', scmCredential }),
+    ).resolves.toMatchObject({ status: 'rejected' });
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('still isolates a run whose token grants the credential when the gateway dropped the identity', async () => {
+    const payload = Buffer.from(
+      JSON.stringify({ capabilities: ['hetero:ingest', 'scm:github-credential'] }),
+    ).toString('base64url');
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ack = spawnHeteroAgentRun({
+      ...baseParams,
+      jwt: `e30.${payload}.sig`,
+      operationId: 'op-scm',
+    });
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    child.emit('spawn');
+    await ack;
+
+    const { env } = spawnMock.mock.calls[0][2];
+    expect(env.LOBEHUB_SCM_CREDENTIAL).toBe('1');
+    expect(env).not.toHaveProperty('GIT_AUTHOR_NAME');
+  });
+
+  it('leaves the spawn env untouched without a requester credential', () => {
+    spawnMock.mockReturnValue(makeFakeChild());
+
+    void spawnHeteroAgentRun(baseParams);
+
+    const { env } = spawnMock.mock.calls[0][2];
+    expect(env).not.toHaveProperty('LOBEHUB_SCM_CREDENTIAL');
+    expect(ensureGhShimMock).not.toHaveBeenCalled();
   });
 });

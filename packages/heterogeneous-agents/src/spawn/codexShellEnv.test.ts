@@ -114,3 +114,46 @@ describe('createCodexJwtFile', () => {
     }
   });
 });
+
+describe('buildCodexLobeHubContextArgs with a requester credential', () => {
+  const scmEnv = {
+    GH_CONFIG_DIR: '/home/u/.lobehub/scm/op-1/gh-config',
+    GIT_AUTHOR_EMAIL: '42+arvinxx@users.noreply.github.com',
+    GIT_AUTHOR_NAME: 'Arvin Xu',
+    GIT_COMMITTER_EMAIL: '42+arvinxx@users.noreply.github.com',
+    GIT_COMMITTER_NAME: 'Arvin Xu',
+    GIT_CONFIG_COUNT: '2',
+    GIT_CONFIG_KEY_0: 'credential.https://github.com.helper',
+    GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
+    GIT_CONFIG_VALUE_0: '',
+    GIT_CONFIG_VALUE_1: "!'/usr/bin/node' '/opt/lh/index.js' git credential",
+    GIT_TERMINAL_PROMPT: '0',
+    LOBEHUB_SCM_CREDENTIAL: '1',
+  };
+
+  const setEntries = (args: string[]) =>
+    args
+      .filter((arg) => arg !== '-c')
+      .map((arg) => arg.replace('shell_environment_policy.set.', ''));
+
+  it('forwards the git wiring into Codex shells, keeping the empty helper reset', () => {
+    const entries = setEntries(buildCodexLobeHubContextArgs(scmEnv));
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        'GIT_CONFIG_COUNT="2"',
+        'GIT_CONFIG_VALUE_0=""',
+        `GIT_CONFIG_VALUE_1=${toTomlBasicString("!'/usr/bin/node' '/opt/lh/index.js' git credential")}`,
+        'GIT_AUTHOR_NAME="Arvin Xu"',
+        'GIT_TERMINAL_PROMPT="0"',
+        'GH_CONFIG_DIR="/home/u/.lobehub/scm/op-1/gh-config"',
+      ]),
+    );
+  });
+
+  it('leaves git config alone for a run without a requester credential', () => {
+    const { LOBEHUB_SCM_CREDENTIAL: _marker, ...plain } = scmEnv;
+
+    expect(setEntries(buildCodexLobeHubContextArgs(plain))).toEqual([]);
+  });
+});

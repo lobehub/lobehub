@@ -814,6 +814,7 @@ describe('connect command', () => {
         type: 'system_info_request',
       });
       expect(lastSentSystemInfoResponse.result.systemInfo.supportedTools).toEqual([
+        'scm-credential',
         'lobe-computer-use',
       ]);
 
@@ -833,7 +834,9 @@ describe('connect command', () => {
         requestId: 'r',
         type: 'system_info_request',
       });
-      expect(lastSentSystemInfoResponse.result.systemInfo).not.toHaveProperty('supportedTools');
+      expect(lastSentSystemInfoResponse.result.systemInfo.supportedTools).toEqual([
+        'scm-credential',
+      ]);
 
       await clientEventHandlers['tool_call_request']?.(computerUseCall);
       expect(executeToolCall).not.toHaveBeenCalled();
@@ -894,6 +897,7 @@ describe('connect command', () => {
           type: 'system_info_request',
         });
         expect(lastSentSystemInfoResponse.result.systemInfo.supportedTools).toEqual([
+          'scm-credential',
           'lobe-browser',
         ]);
 
@@ -921,7 +925,9 @@ describe('connect command', () => {
           requestId: 'r',
           type: 'system_info_request',
         });
-        expect(lastSentSystemInfoResponse.result.systemInfo).not.toHaveProperty('supportedTools');
+        expect(lastSentSystemInfoResponse.result.systemInfo.supportedTools).toEqual([
+          'scm-credential',
+        ]);
 
         await clientEventHandlers['tool_call_request']?.(navigateCall);
         expect(executeToolCall).not.toHaveBeenCalled();

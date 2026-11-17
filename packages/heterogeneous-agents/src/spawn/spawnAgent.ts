@@ -29,6 +29,8 @@ import {
   buildCodexLobeHubContextArgs,
   type CodexJwtFile,
   createCodexJwtFile,
+  SCM_CREDENTIAL_MARKER_ENV,
+  SCM_JWT_FILE_ENV,
 } from './codexShellEnv';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
@@ -528,10 +530,15 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   // not from its own process env, so a user's `inherit = "core"` strips the
   // run context `lh` needs. Forward it as `shell_environment_policy.set.*`
   // overrides; the JWT travels as a 0600 file path, never in argv.
+  // A run isolated to its requester's GitHub credential reads the token for
+  // `lh git credential` from this file too: only the file follows renewals, so
+  // a push late in a long Claude Code run would otherwise use an expired token.
+  const scmCredential = childEnv[SCM_CREDENTIAL_MARKER_ENV] === '1';
   const codexJwtFile: CodexJwtFile | undefined =
-    options.agentType === 'codex' && childEnv.LOBEHUB_JWT
+    (options.agentType === 'codex' || scmCredential) && childEnv.LOBEHUB_JWT
       ? await createCodexJwtFile(childEnv.LOBEHUB_JWT)
       : undefined;
+  if (scmCredential && codexJwtFile) childEnv[SCM_JWT_FILE_ENV] = codexJwtFile.path;
   try {
     return await spawnCliAgent(options, command, cwd, inputPlan, childEnv, codexJwtFile);
   } catch (error) {

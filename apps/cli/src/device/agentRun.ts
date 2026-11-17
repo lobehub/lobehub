@@ -15,6 +15,8 @@ import type { ClaudeCodeAccountRouting } from '@lobechat/heterogeneous-agents/qu
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
 
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
+import type { RunScmCredential } from '../scm/runEnv';
+import { jwtGrantsScmCredential, prepareRunScmCredentialEnv } from '../scm/runEnv';
 import { registerAgentRun } from './agentRunRegistry';
 
 export interface SpawnHeteroAgentRunParams {
@@ -36,12 +38,15 @@ export interface SpawnHeteroAgentRunParams {
   /** System context used only by the automatic retry without native resume. */
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
+  scmCredential?: RunScmCredential;
   serverUrl: string;
   systemContext?: string;
   topicId: string;
   /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
   workspaceId?: string;
 }
+
+type ApplyScmEnv = (env: NodeJS.ProcessEnv) => NodeJS.ProcessEnv;
 
 export interface AgentRunAckResult {
   reason?: string;
@@ -72,7 +77,26 @@ export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
   logger?: SpawnHeteroAgentRunLogger,
 ): Promise<AgentRunAckResult> {
-  if (!params.claudeAccountRouting) return startHeteroAgentRun(params, {}, logger);
+  const scmCredential =
+    params.scmCredential ?? (jwtGrantsScmCredential(params.jwt) ? {} : undefined);
+  if (!scmCredential) return routeHeteroAgentRun(params, undefined, logger);
+
+  return prepareRunScmCredentialEnv(params.operationId, scmCredential).then(
+    (applyScmEnv) => routeHeteroAgentRun(params, applyScmEnv, logger),
+    (err: unknown) => {
+      const reason = `Could not isolate GitHub credentials for this run: ${err instanceof Error ? err.message : String(err)}`;
+      logger?.error?.(`hetero exec rejected (op=${params.operationId}): ${reason}`);
+      return { reason, status: 'rejected' as const };
+    },
+  );
+}
+
+function routeHeteroAgentRun(
+  params: SpawnHeteroAgentRunParams,
+  applyScmEnv: ApplyScmEnv | undefined,
+  logger?: SpawnHeteroAgentRunLogger,
+): Promise<AgentRunAckResult> {
+  if (!params.claudeAccountRouting) return startHeteroAgentRun(params, {}, applyScmEnv, logger);
 
   // A plain CLI device holds one Claude Code login (the one `claude` uses
   // here), so routing either confirms it or rejects a run pinned elsewhere.
@@ -81,7 +105,9 @@ export function spawnHeteroAgentRun(
     inheritedEnv,
     listLogins: () => listDefaultClaudeLogin(inheritedEnv),
   }).then((account) => {
-    if (account.kind === 'spawn') return startHeteroAgentRun(params, account.env, logger);
+    if (account.kind === 'spawn') {
+      return startHeteroAgentRun(params, account.env, applyScmEnv, logger);
+    }
     logger?.error?.(`hetero exec rejected (op=${params.operationId}): ${account.reason}`);
     return { reason: account.reason, status: 'rejected' as const };
   });
@@ -90,6 +116,7 @@ export function spawnHeteroAgentRun(
 function startHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
   accountEnv: Record<string, string>,
+  applyScmEnv: ApplyScmEnv | undefined,
   logger?: SpawnHeteroAgentRunLogger,
 ): Promise<AgentRunAckResult> {
   const {
@@ -151,6 +178,21 @@ function startHeteroAgentRun(
   // A connector can itself be started inside another agent run. Its ambient
   // identity (and JWT file) belongs to that ancestor, not this dispatched run.
   const childEnv = stripInheritedRunIdentity(process.env);
+  const spawnEnv: NodeJS.ProcessEnv = {
+    ...childEnv,
+    ...(params.agentId ? { LOBEHUB_AGENT_ID: params.agentId } : {}),
+    ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
+    [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
+    LOBEHUB_JWT: jwt,
+    LOBEHUB_OPERATION_ID: operationId,
+    LOBEHUB_SERVER: serverUrl,
+    LOBEHUB_TOPIC_ID: topicId,
+    ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
+    ...accountEnv,
+    ...(agentType === 'claude-code'
+      ? buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)
+      : {}),
+  };
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;
@@ -164,21 +206,7 @@ function startHeteroAgentRun(
     const child = spawn(process.execPath, [...process.execArgv, ...cliArgs], {
       cwd: spawnCwd,
       detached: true,
-      env: {
-        ...childEnv,
-        ...(params.agentId ? { LOBEHUB_AGENT_ID: params.agentId } : {}),
-        ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
-        [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
-        LOBEHUB_JWT: jwt,
-        LOBEHUB_OPERATION_ID: operationId,
-        LOBEHUB_SERVER: serverUrl,
-        LOBEHUB_TOPIC_ID: topicId,
-        ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
-        ...accountEnv,
-        ...(agentType === 'claude-code'
-          ? buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)
-          : {}),
-      },
+      env: applyScmEnv ? applyScmEnv(spawnEnv) : spawnEnv,
       stdio: ['pipe', 'inherit', 'inherit'],
       windowsHide: true,
     });

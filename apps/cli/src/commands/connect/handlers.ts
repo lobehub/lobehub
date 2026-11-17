@@ -228,6 +228,7 @@ export function bindGatewayClientHandlers(
             prompt: request.prompt,
             resumeFallbackSystemContext: request.resumeFallbackSystemContext,
             resumeSessionId: request.resumeSessionId,
+            scmCredential: request.scmCredential,
             serverUrl: getAuth().serverUrl,
             systemContext: request.systemContext,
             topicId: request.topicId,
