@@ -29,6 +29,7 @@ import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import { traceHeteroStage } from '../sendTracing';
 import { forDeviceRuntime } from './codexCollaboration';
+import { recordHeteroDeviceRoute } from './deviceRoute';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
@@ -389,6 +390,16 @@ export const dispatchToCliDevice = async (
         heteroType,
       }),
     );
+    // A background sub-agent outlives its parent's marker; keep the route
+    // where a later Stop can still find it.
+    if (dispatchDeviceId) {
+      await recordHeteroDeviceRoute(deps, operationId, {
+        deviceId: dispatchDeviceId,
+        deviceUserId: deps.userId,
+        deviceWorkspaceId: dispatchWorkspaceId,
+        heteroType,
+      });
+    }
     log(
       'execAgent: patch runningOperation device info=%s deviceId=%s heteroType=%s op=%s',
       patched,
