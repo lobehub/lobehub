@@ -6,7 +6,10 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
-import { getRememberedSandboxDirectory } from './rememberedSandboxDirectory';
+import {
+  getRememberedSandboxDirectory,
+  getRememberedSandboxRepository,
+} from './rememberedSandboxDirectory';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
 import {
   isPersistentSelection,
@@ -54,7 +57,12 @@ export const useSandboxModeSelect = (
 
     // Remembered only once the conversation has moved: a failed write leaves
     // it where it was, and new conversations must not start elsewhere.
-    if (onDrive) await setSelection(temporarySelection(selection));
+    // Leaving the drive, the conversation starts from the repository the
+    // agent's last temporary sandbox used, or none.
+    if (onDrive) {
+      const remembered = getRememberedSandboxRepository({ userId, workspaceId }, agentId);
+      await setSelection(remembered ?? temporarySelection(selection));
+    }
     setPrefersTemporarySandbox({ userId, workspaceId }, agentId, true);
   }, [agentId, driveStatus, onDrive, selection, setSelection, userId, workspaceId]);
 

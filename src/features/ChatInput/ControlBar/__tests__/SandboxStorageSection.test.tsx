@@ -21,6 +21,10 @@ const state = vi.hoisted(() => {
     notify: () => {
       for (const listener of listeners) listener();
     },
+    // The execution-environment menu: usable, and the agent moved to the
+    // temporary sandbox there.
+    inMenu: false,
+    temporary: false,
     topicId: null as string | null,
     userId: 'user-a' as string | undefined,
     topics: {} as Record<string, Record<string, unknown>>,
@@ -77,15 +81,17 @@ vi.mock('@/store/user', () => ({
 // covered by their own tests; here the member cannot use that menu, so the
 // folder chip is the only place the sandbox is chosen.
 vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
-  useChatInputResourceAccess: () => ({ canConfigureResource: true, canUseResource: false }),
+  useChatInputResourceAccess: () => ({ canConfigureResource: true, canUseResource: state.inMenu }),
 }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
-    canDisplayExecutionTarget: false,
-    canSelectExecutionTarget: false,
+    canDisplayExecutionTarget: state.inMenu,
+    canSelectExecutionTarget: state.inMenu,
   }),
 }));
-vi.mock('../temporarySandboxPreference', () => ({ usePrefersTemporarySandbox: () => false }));
+vi.mock('../temporarySandboxPreference', () => ({
+  usePrefersTemporarySandbox: () => state.temporary,
+}));
 vi.mock('../useFollowSandboxModePreference', () => ({ useFollowSandboxModePreference: () => {} }));
 vi.mock('@/services/sandboxStorage', () => ({
   sandboxStorageService: { getEntitlement: vi.fn() },
@@ -106,7 +112,13 @@ vi.mock('../SandboxDrivePicker', () => ({
     value: SandboxSelection;
   }) => (
     <div>
-      <span data-testid="chip">{value.workingDirectory ?? 'temporary'}</span>
+      <span data-testid="chip">
+        {value.workingDirectory ??
+          (value.environmentId ? `repo:${value.environmentId}` : 'temporary')}
+      </span>
+      <button onClick={() => onChange({ environmentId: 'env_repo' }).catch(() => {})}>
+        pick-repo
+      </button>
       {/* The real picker catches a failed save and says so. */}
       <button onClick={() => onChange({ workingDirectory: 'projects/demo' }).catch(() => {})}>
         pick-folder
@@ -117,6 +129,8 @@ vi.mock('../SandboxDrivePicker', () => ({
 }));
 
 beforeEach(() => {
+  state.inMenu = false;
+  state.temporary = false;
   state.topicId = null;
   state.userId = 'user-a';
   state.topics = {};
@@ -178,15 +192,17 @@ describe('SandboxStorageSection — T-14158', () => {
     });
   });
 
-  it('goes back to the root after the temporary sandbox is picked on purpose', async () => {
+  // Using the temporary sandbox once does not erase the persistent sandbox's
+  // folder: the next conversation on the drive still starts there.
+  it('keeps the folder after a temporary sandbox is used once', async () => {
     render(<SandboxStorageSection agentId={AGENT} />);
     await act(async () => fireEvent.click(screen.getByText('pick-folder')));
-    send('topic-1');
+    await send('topic-1');
 
     await act(async () => fireEvent.click(screen.getByText('pick-temporary')));
 
     openNewConversation();
-    expect(screen.getByTestId('chip').textContent).toBe('.');
+    expect(screen.getByTestId('chip').textContent).toBe('projects/demo');
   });
 
   it('does not remember a pick that failed to save', async () => {
@@ -200,5 +216,38 @@ describe('SandboxStorageSection — T-14158', () => {
 
     openNewConversation();
     expect(screen.getByTestId('chip').textContent).toBe('.');
+  });
+
+  describe('in the temporary sandbox', () => {
+    beforeEach(() => {
+      state.inMenu = true;
+      state.temporary = true;
+    });
+
+    it('starts the next new conversation from the repository the last one used', async () => {
+      render(<SandboxStorageSection agentId={AGENT} />);
+      expect(screen.getByTestId('chip').textContent).toBe('temporary');
+      await send('topic-1');
+
+      await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+
+      openNewConversation();
+      expect(screen.getByTestId('chip').textContent).toBe('repo:env_repo');
+      await send('topic-2');
+      expect(state.topics['topic-2']).toMatchObject({
+        sandboxEnvironmentId: 'env_repo',
+        sandboxSeeded: true,
+      });
+    });
+
+    it('starts the next new conversation without a repository when the last one used none', async () => {
+      render(<SandboxStorageSection agentId={AGENT} />);
+      await send('topic-1');
+      await act(async () => fireEvent.click(screen.getByText('pick-repo')));
+      await act(async () => fireEvent.click(screen.getByText('pick-temporary')));
+
+      openNewConversation();
+      expect(screen.getByTestId('chip').textContent).toBe('temporary');
+    });
   });
 });

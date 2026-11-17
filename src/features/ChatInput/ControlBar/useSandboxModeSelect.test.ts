@@ -138,6 +138,19 @@ describe('useSandboxModeSelect', () => {
     });
   });
 
+  // Leaving the drive, a conversation starts from the repository the agent's
+  // last temporary sandbox used.
+  it('moves a conversation off the drive onto the remembered repository', async () => {
+    state.topicId = 'topic-1';
+    state.selection = { workingDirectory: 'notes' } satisfies SandboxSelection;
+    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_repo' });
+
+    const { result } = renderMode();
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env_repo' });
+  });
+
   it('remembers nothing without a drive service', async () => {
     state.driveStatus = 'hidden';
 

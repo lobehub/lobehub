@@ -11,7 +11,10 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
-import { getRememberedSandboxDirectory } from './rememberedSandboxDirectory';
+import {
+  getRememberedSandboxDirectory,
+  getRememberedSandboxRepository,
+} from './rememberedSandboxDirectory';
 
 /**
  * Give a conversation that does not exist yet the plan's default place to
@@ -67,4 +70,33 @@ export const useSeedDefaultSelection = (
       ),
     );
   }, [agentId, entitled, hasTopic, userId, workspaceId]);
+};
+
+/**
+ * The temporary sandbox's counterpart: a conversation that does not exist yet,
+ * for an agent whose new conversations start in the temporary sandbox, starts
+ * from the repository the agent's last temporary sandbox used — or from none,
+ * which is the temporary sandbox's own default and needs nothing filled in.
+ *
+ * Filled in as a default rather than a pick, the same as the folder: a pick
+ * stays, and a project conversation is still given its project's checkout.
+ */
+export const useSeedTemporaryRepository = (
+  agentId: string,
+  { enabled, hasTopic }: { enabled: boolean; hasTopic: boolean },
+) => {
+  const workspaceId = useActiveWorkspaceId();
+  const userId = useUserStore(userProfileSelectors.userId);
+
+  useEffect(() => {
+    if (!enabled || hasTopic) return;
+    const pending = getPendingSandboxSelection(agentId);
+    if (pending && !isSeededSandboxSelection(pending)) return;
+
+    const environmentId = getRememberedSandboxRepository(
+      { userId, workspaceId },
+      agentId,
+    )?.environmentId;
+    if (environmentId) seedPendingSandboxSelection(agentId, { environmentId });
+  }, [agentId, enabled, hasTopic, userId, workspaceId]);
 };
