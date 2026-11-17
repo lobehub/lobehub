@@ -8713,6 +8713,10 @@ export type DeleteApiV1MessagesByIdErrors = {
      */
     403: ApiError;
     /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
      * Internal server error
      */
     500: ApiError;

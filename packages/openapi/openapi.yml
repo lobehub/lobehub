@@ -19943,6 +19943,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
           description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
         "500":
           content:
             application/json:
