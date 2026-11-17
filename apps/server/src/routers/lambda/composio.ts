@@ -486,7 +486,19 @@ export const composioRouter = router({
 
   getComposioPlugins: composioDbProcedure.query(async ({ ctx }) => {
     const allPlugins = await ctx.pluginModel.query();
-    return allPlugins.filter((plugin) => plugin.customParams?.composio);
+    return allPlugins.flatMap((plugin) => {
+      const composio = plugin.customParams?.composio;
+      if (!composio) return [];
+      // The projection is workspace-wide, but a pending hosted OAuth link is a
+      // live capability of whoever started it: a teammate redeeming it would
+      // bind their own provider account to that connection (a private one
+      // included). Only its linker gets the link; outside a workspace every row
+      // is the caller's own.
+      if (!composio.redirectUrl || !ctx.workspaceId || composio.linkedByUserId === ctx.userId)
+        return [plugin];
+      const { redirectUrl: _redirectUrl, ...rest } = composio;
+      return [{ ...plugin, customParams: { ...plugin.customParams, composio: rest } }];
+    });
   }),
 
   getConnection: composioProcedure
