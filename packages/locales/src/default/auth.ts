@@ -77,6 +77,8 @@ export default {
   'apikey.scopes.groups.knowledge': 'Knowledge',
   'apikey.scopes.groups.mcp': 'MCP servers',
   'apikey.scopes.groups.model': 'Models',
+  'apikey.scopes.groups.oauthApp': 'OAuth apps',
+  'apikey.scopes.groups.trash': 'Trash',
   'apikey.scopes.groups.usage': 'Usage',
   'apikey.scopes.groups.user': 'User',
   'apikey.scopes.groups.workspace': 'Workspace',

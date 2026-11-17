@@ -3,6 +3,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, lte, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
+import { registerAgentInterventionLiveActivity } from '@/business/server/notification/liveActivity';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { PushLiveActivityModel, PushTokenModel } from '@/database/models/pushToken';
@@ -24,6 +25,8 @@ import type {
   ImSendResult,
   ImSyncQuery,
   ImSyncResult,
+  LiveActivityRegisterRequest,
+  LiveActivityRegistration,
   PushTokenRegisterRequest,
   PushTokenRegistration,
 } from '../types/im.type';
@@ -332,6 +335,41 @@ export class ImRestService extends BaseService {
       platform: input.platform,
     });
     return { deviceId: row.deviceId, platform: row.platform };
+  }
+
+  /**
+   * Register or rotate the ActivityKit update token of one intervention Live
+   * Activity. Unlike device registration this follows the run's scope, so a
+   * workspace credential may register for a workspace run. The device must be
+   * one the caller registered, and the run must be visible in the request's
+   * scope; the token store (Cloud) re-checks ownership by `activityKey`.
+   */
+  async registerLiveActivity(
+    deviceId: string,
+    input: LiveActivityRegisterRequest,
+  ): ServiceResult<LiveActivityRegistration> {
+    const [device] = await this.db
+      .select({ id: pushTokens.id })
+      .from(pushTokens)
+      .where(and(eq(pushTokens.userId, this.userId), eq(pushTokens.deviceId, deviceId)))
+      .limit(1);
+    if (!device) throw this.createNotFoundError('Device is not registered for push');
+
+    const [operation] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(eq(agentOperations.id, input.operationId), this.buildWorkspaceWhere(agentOperations)),
+      )
+      .limit(1);
+    if (!operation) throw this.createNotFoundError('Run not found');
+
+    return registerAgentInterventionLiveActivity({
+      ...input,
+      deviceId,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
   }
 
   /**

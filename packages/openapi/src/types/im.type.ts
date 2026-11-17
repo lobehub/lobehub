@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { registerAgentInterventionLiveActivity } from '@/business/server/notification/liveActivity';
+
 import { dateTimeSchema } from './common.type';
 
 /**
@@ -150,6 +152,19 @@ export const PushTokenUnregisterQuerySchema = z.object({
 });
 export type PushTokenUnregisterQuery = z.infer<typeof PushTokenUnregisterQuerySchema>;
 
+export const LiveActivityRegisterRequestSchema = z.object({
+  /** ActivityKit's local activity id, kept for diagnostics and token rotation. */
+  activityId: z.string().min(1).max(200),
+  /** Durable intervention identity the activity tracks. */
+  activityKey: z.string().min(1).max(200),
+  apnsEnvironment: z.enum(['sandbox', 'production']),
+  /** The agent run whose intervention the activity shows. */
+  operationId: z.string().min(1).max(200),
+  /** ActivityKit update push token. */
+  pushToken: z.string().min(1).max(512),
+});
+export type LiveActivityRegisterRequest = z.infer<typeof LiveActivityRegisterRequestSchema>;
+
 // ==================== Response Schemas ====================
 
 type ShapeOf<T> = Record<keyof T, z.ZodType>;
@@ -235,3 +250,35 @@ export const PushTokenRegistrationSchema = z
   } satisfies ShapeOf<PushTokenRegistration>)
   .strict()
   .meta({ id: 'PushTokenRegistration' });
+
+/** Derived, not imported: the Cloud overlay of this module only re-exports its functions. */
+export type LiveActivityRegistration = Awaited<
+  ReturnType<typeof registerAgentInterventionLiveActivity>
+>;
+
+export const LiveActivityRegistrationSchema = z
+  .object({
+    /**
+     * Current state of the intervention, so a token registered late can end
+     * its activity at once. `unavailable` when the deployment has no Live
+     * Activity support.
+     */
+    interventionStatus: z.enum([
+      'approved',
+      'cancelled',
+      'mixed',
+      'pending',
+      'rejected',
+      'resolving',
+      'resolved',
+      'session_ended',
+      'skipped',
+      'stopped',
+      'timed_out',
+      'unavailable',
+    ] satisfies LiveActivityRegistration['interventionStatus'][]),
+    /** `true` once no part of the intervention is still waiting on the user. */
+    interventionTerminal: z.boolean(),
+  } satisfies ShapeOf<LiveActivityRegistration>)
+  .strict()
+  .meta({ id: 'LiveActivityRegistration' });

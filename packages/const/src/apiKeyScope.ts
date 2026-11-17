@@ -51,6 +51,23 @@ export const API_KEY_SCOPES = [
   'knowledge:write',
   'mcp:read',
   'mcp:write',
+  /**
+   * OAuth applications on the public REST API (`/api/v1/oauth-apps`): list and
+   * read them, and — with write — create, edit, enable/disable, delete and
+   * rotate their client secret. Writes inside a workspace also need the
+   * issuer's admin role. The tRPC `oauthApp` namespace stays blocked.
+   */
+  'oauth_app:read',
+  'oauth_app:write',
+  /**
+   * The recycle bin on the public REST API (`/api/v1/trash`): list and count
+   * deleted items, and — with write — restore, purge or empty them. Purging is
+   * permanent and reaches every resource type, so it is its own domain rather
+   * than riding on each resource's write scope. The tRPC `trash` namespace
+   * stays blocked.
+   */
+  'trash:read',
+  'trash:write',
   'usage:read',
   'workspace:read',
   'workspace:write',

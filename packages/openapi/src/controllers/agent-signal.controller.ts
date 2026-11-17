@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { BaseController } from '../common/base.controller';
 import { AgentSignalRestService } from '../services/agent-signal.service';
 import type {
+  AgentSignalReceiptIdParam,
   EmitSourceEventRequest,
   ListReceiptsQuery,
   TriggerSourceEventRequest,
@@ -46,6 +47,17 @@ export class AgentSignalController extends BaseController {
       const query = this.getQuery<ListReceiptsQuery>(c);
       const service = await this.service(c);
       return this.success(c, await service.listReceipts(query), 'Signal receipts retrieved');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** POST /api/v1/signals/receipts/:id/rollback */
+  async rollbackReceipt(c: Context): Promise<Response> {
+    try {
+      const { id } = this.getParams<AgentSignalReceiptIdParam>(c);
+      const service = await this.service(c);
+      return this.success(c, await service.rollbackReceipt(id), 'Receipt rollback finished');
     } catch (error) {
       return this.handleError(c, error);
     }
