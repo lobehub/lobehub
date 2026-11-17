@@ -8,7 +8,6 @@ import {
   getCanvasPublishRuntimeUrl,
   isCanvasPublishEnabled,
   publishArtboardSite,
-  unpublishCanvasSite,
 } from '@/business/server/canvasPublish';
 import { FileModel } from '@/database/models/file';
 import { WorkModel } from '@/database/models/work';
@@ -25,7 +24,10 @@ import {
   type ArtboardPublishImage,
   buildArtboardPublishBundle,
 } from './bundle';
+import { type ArtboardShareOwner, unpublishArtboardWork } from './offline';
 import { buildArtboardPublishSnapshot, hashArtboardSnapshot } from './snapshot';
+
+export { unpublishArtboardWork } from './offline';
 
 export interface ArtboardPublishDeps {
   loadArtboard: (id: string) => Promise<ArtboardItem>;
@@ -42,20 +44,13 @@ export interface ArtboardPublishState {
   publishedUrl: string | null;
 }
 
-interface Owner {
-  db: LobeChatDatabase;
-  userId: string;
-  workspaceId?: string;
-}
-
 const precondition = (message: string) => new TRPCError({ code: 'PRECONDITION_FAILED', message });
 
-export const unpublishArtboardWork = async (owner: Owner, work: ArtboardWork) => {
-  const deploymentId = work.metadata?.artboardPublish?.deploymentId;
-  if (deploymentId) await unpublishCanvasSite({ ...owner, deploymentId });
-};
-
-const createDefaultDeps = ({ db, userId, workspaceId }: Owner): ArtboardPublishDeps => {
+const createDefaultDeps = ({
+  db,
+  userId,
+  workspaceId,
+}: ArtboardShareOwner): ArtboardPublishDeps => {
   const workModel = new WorkModel(db, userId, workspaceId);
   const runtimeUrls = new Map<number, Promise<string | undefined>>();
   const runtimeUrl = (major: number) => {

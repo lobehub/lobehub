@@ -24,6 +24,7 @@ import {
   clearArtboardPublish,
   findArtboardIdsByDeploymentIds,
   findArtboardWork,
+  findArtboardWorkByWorkId,
   recordArtboardPublish,
   registerArtboardWork,
 } from './artboard';
@@ -111,6 +112,8 @@ export class WorkModel {
     registerArtboardWork(this.ctx, params);
 
   findArtboardWork = (artboardId: string) => findArtboardWork(this.ctx, artboardId);
+
+  findArtboardWorkByWorkId = (workId: string) => findArtboardWorkByWorkId(this.ctx, workId);
 
   recordArtboardPublish = (
     artboardId: string,

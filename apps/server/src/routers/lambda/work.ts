@@ -15,6 +15,7 @@ import { MessageModel } from '@/database/models/message';
 import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { unpublishArtboardWork } from '@/server/services/artboard/publish/offline';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
 import { deleteCanvas } from '@/server/services/canvas/delete';
 import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
@@ -235,6 +236,13 @@ export const workRouter = router({
         });
         return;
       }
+
+      const artboardWork = await ctx.workModel.findArtboardWorkByWorkId(input.id);
+      if (artboardWork?.userId === ctx.userId)
+        await unpublishArtboardWork(
+          { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          artboardWork,
+        );
 
       await ctx.workModel.deleteWork(input);
     }),

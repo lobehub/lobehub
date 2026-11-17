@@ -86,6 +86,18 @@ export const findArtboardWork = async (
   return (row as ArtboardWork | undefined) ?? null;
 };
 
+export const findArtboardWorkByWorkId = async (
+  ctx: WorkContext,
+  workId: string,
+): Promise<ArtboardWork | null> => {
+  const [row] = await ctx.db
+    .select()
+    .from(works)
+    .where(and(workOwnership(ctx), eq(works.id, workId), eq(works.resourceType, 'artboard')))
+    .limit(1);
+  return (row as ArtboardWork | undefined) ?? null;
+};
+
 export const recordArtboardPublish = async (
   ctx: WorkContext,
   artboardId: string,
