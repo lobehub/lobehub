@@ -6,7 +6,20 @@ import {
   channelMessageReceipt,
   channelMessageVia,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, gt, isNull, lt, lte, notInArray, or } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+} from 'drizzle-orm';
 
 import type {
   ChannelJobItem,
@@ -94,7 +107,13 @@ export const readManifestMessages = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   manifest: ChannelInputManifest,
-  options: { beforeSequence?: number; limit?: number; messageId?: string } = {},
+  options: {
+    beforeSequence?: number;
+    excludeIds?: string[];
+    limit?: number;
+    messageId?: string;
+    messageIds?: string[];
+  } = {},
 ): Promise<ChannelContextMessage[]> => {
   const scope = and(
     manifestScope(channelId, manifest),
@@ -102,6 +121,8 @@ export const readManifestMessages = async (
       ? undefined
       : lt(channelMessages.sequence, options.beforeSequence),
     options.messageId ? eq(channelMessages.id, options.messageId) : undefined,
+    options.messageIds ? inArray(channelMessages.id, options.messageIds) : undefined,
+    options.excludeIds?.length ? notInArray(channelMessages.id, options.excludeIds) : undefined,
   );
   const query = db
     .select({
@@ -156,4 +177,20 @@ export const readManifestMessages = async (
       ...(via && { via }),
     };
   });
+};
+
+/** Requests of a manifest by id, oldest first, each after the message it explicitly quotes. */
+export const readRequests = async (
+  db: LobeChatDatabase | Transaction,
+  channelId: string,
+  manifest: ChannelInputManifest,
+  messageIds: string[],
+): Promise<ChannelContextMessage[]> => {
+  const requests = await readManifestMessages(db, channelId, manifest, { messageIds });
+  const quoteIds = [
+    ...new Set(requests.flatMap(({ replyToId }) => (replyToId ? [replyToId] : []))),
+  ].filter((id) => !messageIds.includes(id));
+  if (!quoteIds.length) return requests;
+  const quoted = await readManifestMessages(db, channelId, manifest, { messageIds: quoteIds });
+  return [...quoted, ...requests];
 };

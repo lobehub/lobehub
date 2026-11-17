@@ -76,6 +76,7 @@ export type {
 } from './claim';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
+export type { ChannelSteer } from './execution';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
 export { removeAgentFromProjectChannels } from './membership';

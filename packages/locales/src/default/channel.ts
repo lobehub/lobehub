@@ -166,6 +166,7 @@ export default {
   'status.working': 'Working…',
   'status.completed': 'Replied',
   'status.failed': 'Reply failed',
+  'status.merged': 'Answered together',
   'status.cancelled': 'Stopped',
   'status.silent': 'Stayed quiet',
   'blocked.awaiting_primary': 'Waiting for another Agent to reply first',

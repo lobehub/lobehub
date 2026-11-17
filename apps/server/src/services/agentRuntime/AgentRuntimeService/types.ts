@@ -168,6 +168,16 @@ export interface AgentRuntimeDelegate {
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
+   * A Channel run reached the same decision point: take the requests queued behind it in its
+   * Channel branch into the run as a steer user message, so its one published reply answers
+   * them too. Resolves to `undefined` when nothing joined; the requests then wait for the
+   * member's next claim, which merges them into one run.
+   */
+  injectChannelSteer?: (params: {
+    operationId: string;
+    state: AgentState;
+  }) => Promise<{ messageId: string } | undefined>;
+  /**
    * The run reached a decision point right before its next LLM call: take the
    * follow-ups the user queued behind it into the run as a steer user message
    * (merged, access re-checked, persisted where a composer send would anchor

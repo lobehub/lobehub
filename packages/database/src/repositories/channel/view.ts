@@ -219,6 +219,7 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
 const publicJobColumns = {
   id: channelJobs.id,
   memberId: channelJobs.memberId,
+  mergedIntoJobId: channelJobs.mergedIntoJobId,
   messageId: channelJobs.messageId,
   requesterMemberId: channelJobs.requesterMemberId,
   threadId: channelJobs.threadId,

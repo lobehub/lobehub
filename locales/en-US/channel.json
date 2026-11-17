@@ -270,6 +270,7 @@
   "status.completed": "Replied",
   "status.failed": "Reply failed",
   "status.idle": "Idle",
+  "status.merged": "Answered together",
   "status.paused": "Paused",
   "status.preparing": "Preparing…",
   "status.running": "Replying…",

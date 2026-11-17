@@ -62,6 +62,7 @@ import type {
   ExecGroupMemberResult,
   GroupActionMemberBridgeParams,
 } from '@/server/services/agentRuntime/types';
+import { injectChannelSteer } from '@/server/services/channel/steer';
 import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
@@ -200,6 +201,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
+        injectChannelSteer: this.injectChannelSteer,
         injectQueuedFollowUp: this.injectQueuedFollowUp,
         runDeferredInit: this.runDeferredInit,
         startQueuedFollowUp: this.startQueuedFollowUp,
@@ -801,6 +803,13 @@ export class AiAgentService {
       { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
       params,
     );
+
+  /**
+   * `AgentRuntimeDelegate.injectChannelSteer` implementation — see `injectChannelSteer` in
+   * `@/server/services/channel/steer`.
+   */
+  injectChannelSteer = async (params: { operationId: string; state: AgentState }) =>
+    injectChannelSteer({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }, params);
 
   startQueuedFollowUp = async (params: { operationId: string; scope: SteerQueueScope }) =>
     startQueuedFollowUp(

@@ -1,6 +1,7 @@
 import type {
   AgentOperationStatus,
   ChannelContextMessage,
+  ChannelInputManifest,
   ChannelJobStatus,
 } from '@lobechat/types';
 import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
@@ -19,7 +20,8 @@ import type { ChannelClaim, ChannelClaimOptions } from './claim';
 import { claimJob } from './claim';
 import { appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
-import { countManifestMessages, readManifestMessages } from './manifest';
+import { countManifestMessages, readManifestMessages, readRequests } from './manifest';
+import { manifestRequestIds, mergeQueuedRequests, requeueMerged } from './merge';
 import type { ChannelOpeningDecision } from './opening';
 import { applyOpening, findOpeningCandidate, findOpeningReply } from './opening';
 import type { ChannelRoutingDecision } from './routing';
@@ -100,6 +102,18 @@ const REVOKED_LEASE_PREFIX = 'revoked:';
 /** Unseen public messages a run receives ahead of its request; see `recentContext`. */
 export const RECENT_CONTEXT_LIMIT = 5;
 
+/** What a running Native run reads when queued requests join it; see `steer`. */
+export interface ChannelSteer {
+  channelId: string;
+  /** Public messages that arrived with the requests, oldest first. */
+  context: ChannelContextMessage[];
+  jobId: string;
+  manifest: ChannelInputManifest;
+  /** Messages between the run's previous cutoff and the requests that `context` leaves out. */
+  omitted: number;
+  requests: ChannelContextMessage[];
+}
+
 /**
  * Channel writes made by the system rather than by a person: the dispatcher, native
  * completion callbacks, device receipts and reconcile. Mutations lock the channel row
@@ -175,6 +189,7 @@ export class ChannelExecutionRepository {
           writerHeld: false,
         })
         .where(eq(channelJobs.id, job.id));
+      if (!job.publicationRevoked) await requeueMerged(tx, channelId, job.id);
       await audit(tx, channelId, 'reservation_retired', job.id, { status });
       return true;
     });
@@ -260,7 +275,8 @@ export class ChannelExecutionRepository {
     );
 
   /**
-   * The triggering request and its explicit quote; see `recentContext` for the rest. Reads
+   * The requests the run answers, oldest first, each after its explicit quote; see
+   * `recentContext` for the rest. Several when queued requests merged into the run. Reads
    * without the channel lock, since nothing at or before the cutoff changes after the claim.
    */
   input = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
@@ -276,15 +292,7 @@ export class ChannelExecutionRepository {
       );
     if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
 
-    const request = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: job.manifest.requestMessageId,
-    });
-    const replyToId = request[0]?.replyToId;
-    if (!replyToId) return request;
-    const quoted = await readManifestMessages(this.db, channelId, job.manifest, {
-      messageId: replyToId,
-    });
-    return [...quoted, ...request];
+    return readRequests(this.db, channelId, job.manifest, manifestRequestIds(job.manifest));
   };
 
   /**
@@ -372,9 +380,12 @@ export class ChannelExecutionRepository {
     // The topic wrote its reply, and the acknowledgement it opened with, itself.
     const opening = seen ? await findOpeningReply(this.db, channelId, seen.id) : undefined;
     const ownIds = [seen?.publishedMessageId, opening?.id].filter((id): id is string => !!id);
+    // Requests merged into the run come as requests, not as context.
+    const requestIds = manifestRequestIds(job.manifest);
     // Extra rows absorb the topic's own messages.
     const recent = await readManifestMessages(this.db, channelId, job.manifest, {
       beforeSequence: job.manifest.cutoffSequence,
+      excludeIds: requestIds,
       limit: RECENT_CONTEXT_LIMIT + ownIds.length,
     });
     const messages = recent
@@ -383,10 +394,90 @@ export class ChannelExecutionRepository {
     const unseen = await countManifestMessages(this.db, channelId, job.manifest, {
       afterSequence: seenThrough,
       beforeSequence: job.manifest.cutoffSequence,
-      excludeIds: ownIds,
+      excludeIds: [...ownIds, ...requestIds],
     });
 
     return { messages, omitted: Math.max(0, unseen - messages.length) };
+  };
+
+  /**
+   * Takes the member's queued requests in this branch into its running Native run, right before
+   * the run's next step, so one reply answers them instead of one run each after it. Only
+   * plain-text requests join a running turn; see {@link mergeQueuedRequests} for which and in
+   * what order. `join` writes what the run reads next into its conversation while the channel
+   * lock is held, so a failed write leaves the requests queued instead of lost. Returns what
+   * `join` returned; undefined when nothing joined.
+   */
+  steer = async <T>(
+    operationId: string,
+    options: Pick<ChannelClaimOptions, 'serverDefaultAgentConfig'> & {
+      join: (steer: ChannelSteer) => Promise<T>;
+    },
+  ): Promise<T | undefined> => {
+    const [row] = await this.db
+      .select({ channelId: channelJobs.channelId })
+      .from(channelJobs)
+      .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.status, 'running')));
+    if (!row) return;
+
+    return withChannelLock(this.db, row.channelId, async (tx, channel) => {
+      if (channel.isDeleted || channel.status !== 'active') return;
+      const [job] = await tx
+        .select()
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channel.id),
+            eq(channelJobs.operationId, operationId),
+            eq(channelJobs.status, 'running'),
+            eq(channelJobs.writerHeld, true),
+            eq(channelJobs.publicationRevoked, false),
+            isNotNull(channelJobs.acceptedAt),
+            isNull(channelJobs.isolatedAt),
+            isNull(channelJobs.draft),
+          ),
+        );
+      if (!job?.manifest || job.executionConfig?.runtime !== 'native') return;
+      const [member] = await tx
+        .select()
+        .from(channelMembers)
+        .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
+      if (!member) return;
+
+      const merged = await mergeQueuedRequests(tx, channel, member, job, {
+        plainTextOnly: true,
+        serverDefaultAgentConfig: options.serverDefaultAgentConfig,
+      });
+      if (!merged) return;
+      const { manifest, messageIds, previousCutoff } = merged;
+      const excludeIds = manifestRequestIds(manifest);
+      const [requests, recent, unseen] = await Promise.all([
+        readManifestMessages(tx, channel.id, manifest, { messageIds }),
+        readManifestMessages(tx, channel.id, manifest, {
+          beforeSequence: manifest.cutoffSequence,
+          excludeIds,
+          limit: RECENT_CONTEXT_LIMIT,
+        }),
+        countManifestMessages(tx, channel.id, manifest, {
+          afterSequence: previousCutoff,
+          beforeSequence: manifest.cutoffSequence,
+          excludeIds,
+        }),
+      ]);
+      const context = recent.filter(({ sequence }) => sequence > previousCutoff);
+      await audit(tx, channel.id, 'run_steered', job.id, {
+        cutoff: manifest.cutoffSequence,
+        requests: messageIds,
+      });
+      return options.join({
+        channelId: channel.id,
+        context,
+        jobId: job.id,
+        manifest,
+        omitted: Math.max(0, unseen - context.length),
+        requests,
+      });
+    });
   };
 
   /**
@@ -620,6 +711,7 @@ export class ChannelExecutionRepository {
         stopping ? 'interrupted' : 'error',
         stopping ? undefined : failure.message,
       );
+      if (!stopping && isOpenJob(job)) await requeueMerged(tx, channelId, job.id);
       await audit(tx, channelId, 'execution_failed', job.id, {
         message: failure.message,
       });
@@ -644,6 +736,7 @@ export class ChannelExecutionRepository {
         })
         .where(eq(channelJobs.id, job.id));
       await advanceOperation(tx, job, 'abandoned', message);
+      if (isOpenJob(job)) await requeueMerged(tx, channelId, job.id);
       await audit(tx, channelId, 'execution_unknown', job.id, { message });
     });
 

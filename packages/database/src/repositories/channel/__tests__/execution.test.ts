@@ -224,14 +224,43 @@ describe('ChannelExecutionRepository', () => {
 
     expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: 'member_busy' });
-    expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
-    expect(await execution.claim(channel.id, nextJob.id, lease)).toBeNull();
-    expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: 'member_busy' });
+    // The head takes the request queued behind it in: one run answers both, in one reply.
+    const claim = await execution.claim(channel.id, job.id, lease);
+    expect(claim?.job.manifest).toMatchObject({
+      cutoffSequence: next.sequence,
+      requestMessageId: job.messageId,
+      requestMessageIds: [job.messageId, next.id],
+    });
+    expect(await jobById(nextJob.id)).toMatchObject({
+      blockedCode: null,
+      mergedIntoJobId: job.id,
+      status: 'merged',
+    });
+    expect((await execution.input(channel.id, job.id)).map(({ id }) => id)).toEqual([
+      job.messageId,
+      next.id,
+    ]);
 
+    // A request sent while it runs waits for the writer.
+    const third = await asMember.send(channel.id, {
+      content: 'Third',
+      mentions: [agent.id],
+      requestKey: 'req-3',
+      routing: 'decision',
+    });
+    const [thirdJob] = await jobsOf(db, third.id);
+    expect(await execution.claim(channel.id, thirdJob.id, lease)).toBeNull();
+    expect(await jobById(thirdJob.id)).toMatchObject({ blockedCode: 'member_busy' });
+
+    // A run that never started gives back what it took in; the queue resumes in order.
     expect(await execution.retireReservation(channel.id, job.id)).toBe(true);
     expect(await jobById(job.id)).toMatchObject({ status: 'failed', writerHeld: false });
-    expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();
+    expect(await jobById(nextJob.id)).toMatchObject({ mergedIntoJobId: null, status: 'queued' });
+    expect(await execution.claim(channel.id, thirdJob.id, lease)).toBeNull();
+    const retaken = await execution.claim(channel.id, nextJob.id, lease);
+    expect(retaken?.job.manifest?.requestMessageIds).toEqual([next.id, third.id]);
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: null });
+    expect(await jobById(thirdJob.id)).toMatchObject({ mergedIntoJobId: nextJob.id });
   });
 
   /** A team channel with one Agent and a Thread per root title, each under a person's message. */
@@ -276,11 +305,12 @@ describe('ChannelExecutionRepository', () => {
     const { heads } = await execution.candidates(channel.id);
     expect(heads.map((job) => job.id).sort()).toEqual([a1.id, b1.id, main.id].sort());
 
+    // Each branch's head takes its own branch's queue in, never another branch's.
     expect(await execution.claim(channel.id, a1.id, lease)).not.toBeNull();
-    expect(await execution.claim(channel.id, a2.id, lease)).toBeNull();
-    expect(await jobById(a2.id)).toMatchObject({ blockedCode: 'member_busy' });
+    expect(await jobById(a2.id)).toMatchObject({ mergedIntoJobId: a1.id, status: 'merged' });
     expect(await execution.claim(channel.id, b1.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, main.id, lease)).not.toBeNull();
+    expect(await jobById(b1.id)).toMatchObject({ status: 'running' });
 
     expect(await execution.retireReservation(channel.id, a1.id)).toBe(true);
     expect(await execution.claim(channel.id, a2.id, lease)).not.toBeNull();

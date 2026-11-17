@@ -16,6 +16,7 @@ import { createNanoId } from '../../utils/idGenerator';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
+import { mergeQueuedRequests, sameBranch } from './merge';
 import type { ChannelTopicScope } from './topic';
 import { continuationTopic, resolveTopic } from './topic';
 import { audit } from './transaction';
@@ -66,10 +67,6 @@ export interface ChannelClaim {
   /** Ordinary Agent topic, reused when safe; also the operation's `topicId`. */
   topic: TopicItem;
 }
-
-/** Jobs in the same conversation branch: one Thread, or the main timeline. */
-export const sameBranch = (threadId: string | null) =>
-  threadId ? eq(channelJobs.threadId, threadId) : isNull(channelJobs.threadId);
 
 /**
  * Records why a queued job cannot start; clients read the code, never the text. A job waiting
@@ -202,6 +199,9 @@ const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
   'workspace_changed',
 ]);
 
+/** How long a job may wait on a {@link STUCK_BLOCKS} block before it is cancelled. */
+export const STUCK_JOB_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
 /** The job of the member a deferred follow-up waits for, on the same message. */
 const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string) => {
   const [primary] = await tx
@@ -254,6 +254,16 @@ export const claimJob = async (
       ),
     );
   if (!job) return null;
+
+  // A job stuck on a device or a person for days answers a conversation that has moved on.
+  if (
+    job.blockedCode &&
+    STUCK_BLOCKS.has(job.blockedCode) &&
+    Date.now() - job.createdAt.getTime() > STUCK_JOB_TTL_MS
+  ) {
+    await cancel(tx, job, 'expired');
+    return null;
+  }
 
   // Archiving stops the work it covers; a job queued against it must never start.
   if (channel.status === 'archived') {
@@ -512,7 +522,14 @@ export const claimJob = async (
     })
     .where(eq(channelJobs.id, job.id))
     .returning();
-  const claimed = { job: updated, topic };
+  // The requests queued behind it in this branch are answered by this run, in one reply.
+  const merged = await mergeQueuedRequests(tx, channel, member, updated, {
+    serverDefaultAgentConfig: options.serverDefaultAgentConfig,
+  });
+  const [current] = merged
+    ? await tx.select().from(channelJobs).where(eq(channelJobs.id, job.id))
+    : [updated];
+  const claimed = { job: current, topic };
 
   await audit(tx, channel.id, 'run_claimed', job.id, {
     cutoff: claimed.job.manifest!.cutoffSequence,
