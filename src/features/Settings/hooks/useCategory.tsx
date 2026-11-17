@@ -310,6 +310,12 @@ export const useCategory = () => {
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
       },
+      // Outbound events for the API Key's integrations, so it sits beside it.
+      (showApiKeyManage || isDevMode) && {
+        icon: WebhookIcon,
+        key: SettingsTabs.Webhook,
+        label: t('tab.webhook'),
+      },
       enableOAuthApps && {
         icon: AppWindowIcon,
         key: SettingsTabs.OAuthApps,

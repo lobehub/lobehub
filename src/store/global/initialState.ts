@@ -113,6 +113,7 @@ export enum SettingsTabs {
   TTS = 'tts',
   Usage = 'usage',
   Webhooks = 'webhooks',
+  Webhook = 'webhook',
 }
 
 /**

@@ -238,6 +238,19 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/webhook'),
+        'Desktop > Workspace > Settings > Webhook',
+      ),
+      handle: {
+        meta: createWorkspaceSettingsRouteMeta(
+          WorkspaceSettingsTabs.Webhook,
+          createSurfaceSkeleton('list'),
+        ),
+      },
+      path: 'webhook',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/automations'),
         'Desktop > Workspace > Settings > Automations',
       ),

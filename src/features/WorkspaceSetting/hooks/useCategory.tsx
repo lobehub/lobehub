@@ -357,6 +357,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.APIKey,
               label: tAuth('tab.apikey'),
             },
+            // Same member-level gate as API keys: webhooks carry the events a
+            // member's API integrations react to.
+            canCreateContent && {
+              icon: WebhookIcon,
+              key: WorkspaceSettingsTabs.Webhook,
+              label: t('tab.webhook'),
+            },
             enableOAuthApps && {
               icon: AppWindowIcon,
               key: WorkspaceSettingsTabs.OAuthApps,

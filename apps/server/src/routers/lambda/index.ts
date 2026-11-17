@@ -1,6 +1,9 @@
 /**
  * This file contains the root router of Lobe Chat tRPC-backend
  */
+// Model writes announce domain events; this routes them to developer webhooks.
+import '@/server/services/developerWebhook/register';
+
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { artifactShareRouter } from '@/business/server/lambda-routers/artifactShare';
 import { fileShareRouter } from '@/business/server/lambda-routers/fileShare';
@@ -60,6 +63,7 @@ import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { contactRouter } from './contact';
 import { dashboardRouter } from './dashboard';
+import { developerWebhookRouter } from './developerWebhook';
 import { deviceRouter } from './device';
 import { deviceMetricRouter } from './deviceMetric';
 import { documentRouter } from './document';
@@ -173,6 +177,7 @@ export const lambdaRouter = router({
   config: configRouter,
   connector: connectorRouter,
   dashboard: dashboardRouter,
+  developerWebhook: developerWebhookRouter,
   device: deviceRouter,
   deviceMetric: deviceMetricRouter,
   document: documentRouter,

@@ -179,3 +179,52 @@ export interface WebhookEventEnvelope<
   /** Workspace the event happened in; `null` for a personal space. */
   workspaceId: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Settings page (tRPC) shapes
+// ---------------------------------------------------------------------------
+
+/** An endpoint as the settings page reads it; the signing secret is never part of it. */
+export interface WebhookEndpointItem {
+  /** Deliveries that exhausted their retries since the last success. */
+  consecutiveFailures: number;
+  createdAt: Date;
+  description: string | null;
+  disabledReason: WebhookDisabledReason | null;
+  enabled: boolean;
+  events: WebhookEventType[];
+  id: string;
+  lastDeliveryAt: Date | null;
+  /** Last characters of the secret, so the owner can tell secrets apart. */
+  secretHint: string;
+  updatedAt: Date;
+  url: string;
+}
+
+/** An endpoint with its plaintext secret: returned only by create and rotate. */
+export type WebhookEndpointWithSecretItem = WebhookEndpointItem & { secret: string };
+
+export interface WebhookDeliveryItem {
+  attempts: number;
+  createdAt: Date;
+  deliveredAt: Date | null;
+  durationMs: number | null;
+  endpointId: string;
+  error: string | null;
+  eventId: string;
+  eventType: WebhookDeliveryEventType;
+  id: string;
+  nextAttemptAt: Date | null;
+  redeliveryOf: string | null;
+  responseStatus: number | null;
+  status: WebhookDeliveryStatus;
+}
+
+export interface CreateDeveloperWebhookParams {
+  description?: string | null;
+  enabled?: boolean;
+  events: WebhookEventType[];
+  url: string;
+}
+
+export type UpdateDeveloperWebhookParams = Partial<CreateDeveloperWebhookParams>;

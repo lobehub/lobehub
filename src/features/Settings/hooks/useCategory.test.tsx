@@ -142,6 +142,9 @@ describe('settings useCategory', () => {
     const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
 
     expect(keys.filter((key) => key === SettingsTabs.APIKey)).toHaveLength(1);
+    // Webhooks follow the API Key gate and sit right after it.
+    expect(keys.filter((key) => key === SettingsTabs.Webhook)).toHaveLength(1);
+    expect(keys.indexOf(SettingsTabs.Webhook)).toBe(keys.indexOf(SettingsTabs.APIKey) + 1);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {
