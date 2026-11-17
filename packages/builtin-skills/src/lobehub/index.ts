@@ -33,6 +33,7 @@ import search from './references/search';
 import skill from './references/skill';
 import topic from './references/topic';
 import trace from './references/trace';
+import webhook from './references/webhook';
 import workspace from './references/workspace';
 
 export { LobeHubIdentifier };
@@ -71,6 +72,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/skill': skill,
     'references/topic': topic,
     'references/trace': trace,
+    'references/webhook': webhook,
     'references/workspace': workspace,
   }),
 };

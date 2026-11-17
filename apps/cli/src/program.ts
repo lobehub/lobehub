@@ -47,6 +47,7 @@ import { registerTopicCommand } from './commands/topic';
 import { registerTraceCommand } from './commands/trace';
 import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
+import { registerWebhookCommand } from './commands/webhook';
 import { registerWidgetCommand } from './commands/widget';
 import { registerWorkspaceCommand } from './commands/workspace';
 import { CLI_DISPLAY_NAME, CLI_PRIMARY_BIN, CLI_PRODUCT_NAME } from './constants/identity';
@@ -123,6 +124,7 @@ export function createProgram() {
   registerWidgetCommand(program);
   registerLegacyPluginCommand(program);
   registerConnectorCommand(program);
+  registerWebhookCommand(program);
   registerWorkspaceCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);

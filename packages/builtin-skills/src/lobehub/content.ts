@@ -65,6 +65,7 @@ run commands.
 | \`lh model\` | AI model management | \`references/model\` |
 | \`lh provider\` | AI provider management | \`references/provider\` |
 | \`lh connector\` / \`lh mcp\` | MCP connectors: add an MCP server (URL or stdio), sync its tools, refresh, remove | \`references/connector\` |
+| \`lh webhook\` | Inbound webhooks that wake an agent: custom webhook URLs (create, edit, pause, test, new key, calls, post results to a Channel) and MCP Events subscriptions (view, check, delete) | \`references/webhook\` |
 | \`lh legacy-plugin\` | Legacy 1.0 plugin management | \`references/plugin\` |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |

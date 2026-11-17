@@ -71,6 +71,7 @@ apps/cli/src/
 │   ├── trace/                # Inspect and replay recorded agent execution traces
 │   ├── update.ts             # Self-update to the latest published version
 │   ├── user.ts               # User account & settings
+│   ├── webhook.ts            # Inbound webhooks + MCP Events subscriptions (helpers in webhook/)
 │   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
@@ -129,6 +130,7 @@ apps/cli/src/
 | `lh session-group` | -     | Manage agent session groups                                                        |
 | `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                              |
 | `lh user`          | -     | Manage user account and settings                                                   |
+| `lh webhook`       | -     | Inbound webhooks (alias `webhooks`): create, edit, pause, test, calls, check       |
 | `lh whoami`        | -     | Current user info (including the resolved workspace scope)                         |
 | `lh usage`         | -     | Monthly/daily usage statistics                                                     |
 | `lh man`           | -     | Show a manual page for the CLI or a subcommand                                     |
@@ -368,3 +370,4 @@ See `references/` for each command group:
 - **Skills & Plugins**: `references/skills-plugins.md` (skill, plugin)
 - **Models & Providers**: `references/models-providers.md` (model, provider)
 - **Search & Config**: `references/search-config.md` (search, whoami, usage, workspace)
+- **Webhooks**: `references/webhook.md` (inbound webhooks, MCP Events subscriptions, Channel delivery)
