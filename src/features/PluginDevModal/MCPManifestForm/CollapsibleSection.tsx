@@ -1,7 +1,7 @@
 import { createStaticStyles, cx } from '@lobehub/ui';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
@@ -10,16 +10,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     align-items: center;
 
+    width: 100%;
     /* Same block padding as a Form.Field, so the row sits one field-gap from its neighbours */
     padding-block: var(--lobe-form-item-padding-block, ${cssVar.padding});
+    padding-inline: 0;
+    border: none;
     border-radius: ${cssVar.borderRadius};
 
+    font: inherit;
     color: ${cssVar.colorTextTertiary};
+    text-align: start;
+
+    background: transparent;
 
     transition: all ${cssVar.motionDurationMid} ease;
 
     &:hover {
       color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
     }
   `,
 
@@ -51,6 +63,8 @@ const CollapsibleSection = ({
 }: CollapsibleSectionProps) => {
   const [innerExpanded, setInnerExpanded] = useState(defaultExpanded);
   const isExpanded = expanded ?? innerExpanded;
+  const triggerId = useId();
+  const panelId = useId();
 
   const toggle = () => {
     setInnerExpanded(!isExpanded);
@@ -59,11 +73,27 @@ const CollapsibleSection = ({
 
   return (
     <div>
-      <div className={cx(styles.header)} onClick={toggle}>
-        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      {/* A real button so keyboard users can reach the fields kept collapsed here */}
+      <button
+        aria-controls={isExpanded ? panelId : undefined}
+        aria-expanded={isExpanded}
+        className={cx(styles.header)}
+        id={triggerId}
+        type="button"
+        onClick={toggle}
+      >
+        {isExpanded ? (
+          <ChevronDown aria-hidden size={16} />
+        ) : (
+          <ChevronRight aria-hidden size={16} />
+        )}
         <span className={styles.title}>{title}</span>
-      </div>
-      {isExpanded && <div>{children}</div>}
+      </button>
+      {isExpanded && (
+        <div aria-labelledby={triggerId} id={panelId} role="region">
+          {children}
+        </div>
+      )}
     </div>
   );
 };
