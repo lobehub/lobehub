@@ -8,19 +8,24 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { selectors, useChatInputStore } from '../store';
+import { PendingSendButton, StopButton } from './StateButton';
 
 const SendButton = memo(() => {
   const { t } = useTranslation('setting');
-  const sendMenu = useChatInputStore((s) => s.sendMenu);
   const shape = useChatInputStore((s) => s.sendButtonProps?.shape);
   const size = useChatInputStore((s) => s.sendButtonProps?.size);
-  const { generating, disabled, showSendWhileGenerating } = useChatInputStore(
-    selectors.sendButtonProps,
-    isEqual,
-  );
+  const {
+    generating,
+    disabled,
+    loading: dispatching,
+    showSendWhileGenerating,
+  } = useChatInputStore(selectors.sendButtonProps, isEqual);
   const [send, handleStop] = useChatInputStore((s) => [s.handleSendButton, s.handleStop]);
-  // Market agents/skills picked from the @ menu install before the send commits.
+  // A send that is committed but not yet sent shows as a loading Send: Market
+  // agents/skills picked from the @ menu are installing, or uploads are settling.
   const installing = useChatInputStore((s) => s.installingMarketMentions);
+  const queuedForUploads = useChatInputStore(selectors.isSendQueuedForUploads);
+  const queued = installing || queuedForUploads;
 
   // Workspace viewer doesn't have `message:create` → backend would 403.
   // OR the permission gate into the existing disabled prop so the button
@@ -33,33 +38,31 @@ const SendButton = memo(() => {
   const viewOnly = !canUseResource;
   const canSend = canCreate && !viewOnly;
 
-  // Stop keeps its spinner so the running state stays visible; Send sits beside
-  // it for the follow-up the user typed (Enter sends too).
-  const button =
-    generating && showSendWhileGenerating ? (
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Send generating shape={shape} size={size} onStop={() => handleStop()} />
-        <Send
-          disabled={disabled || !canSend}
-          loading={installing}
-          shape={shape}
-          size={size}
-          onClick={canSend ? () => send() : undefined}
-        />
-      </Flexbox>
+  // Only a pending send spins, inside Send itself. A running turn shows a static
+  // Stop; the run is indicated once, by RunningIndicator beside the model selector.
+  // Send sits beside Stop for the follow-up the user typed (Enter sends too).
+  const renderSend = (pending: boolean) =>
+    pending ? (
+      <PendingSendButton shape={shape} size={size} />
     ) : (
       <Send
         disabled={disabled || !canSend}
-        generating={generating}
-        loading={installing}
-        menu={canSend ? (sendMenu as any) : undefined}
-        placement={'topRight'}
         shape={shape}
         size={size}
-        trigger={['hover']}
-        onClick={generating || !canSend ? undefined : () => send()}
-        onStop={() => handleStop()}
+        onClick={canSend ? () => send() : undefined}
       />
+    );
+  const stop = <StopButton shape={shape} size={size} onStop={() => handleStop()} />;
+  const button =
+    generating && showSendWhileGenerating ? (
+      <Flexbox horizontal align={'center'} gap={8}>
+        {stop}
+        {renderSend(queued)}
+      </Flexbox>
+    ) : generating ? (
+      stop
+    ) : (
+      renderSend(queued || !!dispatching)
     );
 
   if (!canCreate) return <Tooltip title={reason}>{button}</Tooltip>;

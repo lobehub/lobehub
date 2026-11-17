@@ -6,9 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installMarketMentions, MarketMentionInstallError } from '@/services/mentionMarketInstall';
 import { useAgentStore } from '@/store/agent';
+import { useFileStore } from '@/store/file';
 import { systemAgentSelectors } from '@/store/user/selectors';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import { getDraft, saveDraft } from '../draftStorage';
+import { SYNC_IMAGE_REF_TAGS_COMMAND } from '../InputEditor/ImageRefTag/ImageRefTagPlugin';
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
 
@@ -466,5 +469,109 @@ describe('ChatInput store actions', () => {
       expect(editor.cleanDocument).not.toHaveBeenCalled();
       expect(getInputHistory()).toEqual([]);
     });
+  });
+});
+
+describe('sending while uploads are in flight', () => {
+  const KEY = 'main_agt_a_tpc_1';
+  const upload = (id: string, status: UploadFileItem['status']) =>
+    ({
+      file: { name: `${id}.png`, type: 'image/png' },
+      id,
+      previewUrl: `blob:${id}`,
+      status,
+    }) as unknown as UploadFileItem;
+  const setUploads = (files: UploadFileItem[]) =>
+    useFileStore.setState({ chatUploadFileListByContext: { [KEY]: files } });
+
+  beforeEach(() => {
+    localStorage.clear();
+    setUploads([]);
+  });
+
+  it('queues the send until every upload settles, then sends with the settled numbering', () => {
+    const editor = createHelloEditor();
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      draftKey: KEY,
+      editor: editor as unknown as IEditor,
+      onSend,
+      queueSendWhileUploading: true,
+    });
+    setUploads([upload('a', 'uploading'), upload('b', 'uploading')]);
+
+    store.getState().handleSendButton();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(selectors.isSendQueuedForUploads(store.getState())).toBe(true);
+
+    // A second press while queued neither sends nor queues twice.
+    store.getState().handleSendButton();
+    setUploads([upload('a', 'error'), upload('b', 'uploading')]);
+    expect(onSend).not.toHaveBeenCalled();
+
+    setUploads([upload('a', 'error'), upload('b', 'success')]);
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(selectors.isSendQueuedForUploads(store.getState())).toBe(false);
+    // The failed image takes no number, so the one that uploaded is [Image #1].
+    const syncPayload = editor.dispatchCommand.mock.calls.find(
+      ([command]) => command === SYNC_IMAGE_REF_TAGS_COMMAND,
+    )?.[1];
+    expect([...syncPayload.refs.values()]).toEqual([{ fileId: 'b', number: 1, src: 'blob:b' }]);
+  });
+
+  it('drops a queued send once the composer shows another conversation', () => {
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      draftKey: KEY,
+      editor: createHelloEditor() as unknown as IEditor,
+      onSend,
+      queueSendWhileUploading: true,
+    });
+    setUploads([upload('a', 'uploading')]);
+
+    store.getState().handleSendButton();
+    store.setState({ draftKey: 'main_agt_a_tpc_2' });
+    // The conversation now on screen has nothing queued.
+    expect(selectors.isSendQueuedForUploads(store.getState())).toBe(false);
+
+    setUploads([upload('a', 'success')]);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
+  });
+
+  it('stops watching the uploads once the queued send is cancelled', () => {
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      draftKey: KEY,
+      editor: createHelloEditor() as unknown as IEditor,
+      onSend,
+      queueSendWhileUploading: true,
+    });
+    setUploads([upload('a', 'uploading')]);
+
+    store.getState().handleSendButton();
+    store.getState().cancelUploadQueuedSend();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
+
+    setUploads([upload('a', 'success')]);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('leaves the upload gate to hosts that do not opt in', () => {
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      editor: createHelloEditor() as unknown as IEditor,
+      onSend,
+    });
+    setUploads([upload('a', 'uploading')]);
+
+    store.getState().handleSendButton();
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
   });
 });

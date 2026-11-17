@@ -1072,7 +1072,12 @@ export default {
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
   'input.sendWithEnter': 'Press <key/> to send',
+  'input.running': 'Agent is running',
   'input.stop': 'Stop',
+  'input.uploadFailedNotSent_one':
+    '{{count}} attachment failed to upload and was not sent. It stays in the input to retry or remove.',
+  'input.uploadFailedNotSent_other':
+    '{{count}} attachments failed to upload and were not sent. They stay in the input to retry or remove.',
   'input.warp': 'New Line',
   'input.warpWithKey': 'Press <key/> to insert a line break',
   'inputQueue.delete': 'Delete',
