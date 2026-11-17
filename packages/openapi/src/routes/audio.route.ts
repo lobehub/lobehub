@@ -105,7 +105,7 @@ app.post(
       '`provider` (default `openai`) is a LobeHub extension. Billing follows the provider configuration, like the in-app voice input. ' +
       'The transcript is always returned as JSON `{ text }`, whatever `response_format` asks of the provider.',
     envelope: false,
-    errors: [400, 404, 413],
+    errors: [400, 404, 413, 502],
     operationId: 'audio.createTranscription',
     requestBody: {
       content: {

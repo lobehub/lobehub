@@ -20,6 +20,29 @@ import {
   TranscriptionFieldsSchema,
 } from '../types/generation.type';
 
+/**
+ * A provider failure (bad key, quota, upstream outage) reaches us as a tRPC
+ * INTERNAL_SERVER_ERROR without a message, its model-runtime payload
+ * (`{ errorType, error }`) in `cause`. Answer 502 with the provider's reason
+ * instead of an empty 500.
+ */
+const toTranscriptionProviderError = (error: unknown): unknown => {
+  if (!(error instanceof Error) || error.name !== 'TRPCError') return error;
+  const cause = (error as Error & { cause?: unknown }).cause as
+    { error?: { message?: unknown }; errorType?: unknown; message?: unknown } | undefined;
+  if (typeof cause?.errorType !== 'string') return error;
+
+  const reason =
+    (typeof cause.error?.message === 'string' && cause.error.message) ||
+    (typeof cause.message === 'string' && cause.message) ||
+    cause.errorType;
+  return new ApiException(
+    502,
+    'upstream_error',
+    `Transcription provider error (${cause.errorType}): ${reason}`,
+  );
+};
+
 const validationError = (message: string, path: string) =>
   new ApiException(400, 'validation_error', `Invalid request: ${path} ${message}`, [
     { message, path },
@@ -204,7 +227,7 @@ export class AudioController extends BaseController {
 
       return c.json({ text: result.text });
     } catch (error) {
-      return this.handleError(c, error);
+      return this.handleError(c, toTranscriptionProviderError(error));
     }
   }
 
