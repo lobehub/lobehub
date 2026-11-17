@@ -62,7 +62,7 @@ const createDeps = () =>
         return { agentId: 'agt_lobe', id, metadata: { openedBy: { topicId: 'tpc_parent' } } };
       return undefined;
     }),
-    interrupt: vi.fn().mockResolvedValue(undefined),
+    interrupt: vi.fn().mockResolvedValue({ success: true }),
     issueWorktreeReceipt: vi.fn(() => ({ nonce: 'nonce-child', token: 'token-child' })),
     listDescendants: vi.fn().mockResolvedValue([]),
     listOpened: vi.fn().mockResolvedValue([]),
@@ -583,6 +583,50 @@ describe('SubTopicService — view access', () => {
 
     await expect(new SubTopicService(deps).stop('tpc_cross')).rejects.toThrow('FORBIDDEN');
     expect(deps.interrupt).not.toHaveBeenCalled();
+  });
+});
+
+describe('SubTopicService.retire — runs', () => {
+  const descendants = [
+    { id: 'tpc_same', openedBy: { topicId: 'tpc_parent' }, trigger: 'sub_topic' },
+  ] as any;
+
+  it('checks edit access on every topic before cancelling any run', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue(descendants);
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'archive', mode: 'all', topicId: 'tpc_parent' }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanEditTopics).toHaveBeenCalledWith(['tpc_parent', 'tpc_same']);
+    expect(deps.interrupt).not.toHaveBeenCalled();
+    expect(deps.archiveTopic).not.toHaveBeenCalled();
+  });
+
+  it('retires nothing when a run could not be confirmed stopped', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue(descendants);
+    deps.findLiveRunIds.mockImplementation(async (id: string) =>
+      id === 'tpc_same' ? ['op_device'] : [],
+    );
+    deps.interrupt.mockResolvedValue({ success: false });
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'trash', mode: 'all', topicId: 'tpc_parent' }),
+    ).rejects.toThrow(/could not be confirmed stopped/);
+    expect(deps.trashTopic).not.toHaveBeenCalled();
+  });
+
+  it('says so when stop could not confirm the cancellation', async () => {
+    const deps = createDeps();
+    deps.findLiveRunIds.mockResolvedValue(['op_device']);
+    deps.interrupt.mockResolvedValue({ success: false });
+
+    await expect(new SubTopicService(deps).stop('tpc_cross')).rejects.toThrow(
+      /could not be confirmed stopped/,
+    );
   });
 });
 

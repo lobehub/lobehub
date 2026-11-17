@@ -129,7 +129,12 @@ export interface SubTopicDeps {
   findLatestRunStatus: (topicId: string) => Promise<AgentOperationStatus | null>;
   findLiveRunIds: (topicId: string) => Promise<string[]>;
   findTopic: (topicId: string) => Promise<TopicRow | null | undefined>;
-  interrupt: (operationId: string) => Promise<unknown>;
+  /**
+   * Cancel a run. `success: false` means the cancellation was not confirmed
+   * (e.g. a device-hosted agent whose process may still be running) and the
+   * run stays live so the stop can be retried.
+   */
+  interrupt: (operationId: string) => Promise<{ success: boolean }>;
   /** A server-signed creation receipt for a worktree about to be made; none without a server secret. */
   issueWorktreeReceipt: () => { nonce: string; token: string } | undefined;
   listDescendants: (topicId: string) => Promise<OpenedTopicItem[]>;
@@ -540,9 +545,33 @@ export class SubTopicService {
     await this.requireTopic(topicId);
     // Stopping a run changes the conversation: `use`, as for any other edit.
     await this.deps.assertCanEditTopics([topicId]);
-    const runIds = await this.deps.findLiveRunIds(topicId);
-    for (const operationId of runIds) await this.deps.interrupt(operationId);
-    return { stopped: runIds.length, topicId };
+    const stopped = await this.interruptAll([topicId]);
+    return { stopped, topicId };
+  }
+
+  /**
+   * Cancel every live run of `topicIds`. Throws when a cancellation is not
+   * confirmed — the run stays live for a retry — so nothing that depends on
+   * the runs having ended (retiring their topics) goes ahead on a run that may
+   * still be going. Returns how many runs were stopped.
+   */
+  private async interruptAll(topicIds: string[]): Promise<number> {
+    let stopped = 0;
+    let unconfirmed = 0;
+    for (const topicId of topicIds) {
+      for (const operationId of await this.deps.findLiveRunIds(topicId)) {
+        const result = await this.deps.interrupt(operationId);
+        if (result.success) stopped += 1;
+        else unconfirmed += 1;
+      }
+    }
+    if (unconfirmed > 0) {
+      throw new SubTopicError(
+        'CONFLICT',
+        `${unconfirmed} run(s) could not be confirmed stopped (a device may still be running them), so nothing else was changed. Try again once the device is reachable.`,
+      );
+    }
+    return stopped;
   }
 
   /**
@@ -569,13 +598,12 @@ export class SubTopicService {
 
     if (params.mode === 'all') {
       const descendants = retirableDescendants(root.id, await this.deps.listDescendants(root.id));
+      // Every topic this touches is edited — stopped, then archived or
+      // trashed: check them all before the first run is cancelled.
+      await this.deps.assertCanEditTopics([root.id, ...descendants.map((item) => item.id)]);
       // Ask each one for its live runs rather than trusting a status field: a
       // server-run turn never writes `topics.status`.
-      for (const item of descendants) {
-        for (const operationId of await this.deps.findLiveRunIds(item.id)) {
-          await this.deps.interrupt(operationId);
-        }
-      }
+      await this.interruptAll(descendants.map((item) => item.id));
       // Deepest first, so a failure part-way never leaves a child under a retired parent.
       for (const item of [...descendants].reverse()) await retireOne(item.id);
       await retireOne(root.id);
