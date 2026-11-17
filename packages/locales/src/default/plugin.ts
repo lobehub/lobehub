@@ -1,4 +1,5 @@
 export default {
+  'builtins.lobe-local-system.runCommand.authorizeGitHub': 'Authorize GitHub',
   'mcpApp.panel.opened': 'Shown in the side panel',
   'mcpApp.panel.view': 'View',
   'mcpApp.panel.unavailable': 'Open the app from its message to continue.',

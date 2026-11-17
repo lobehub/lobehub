@@ -2,11 +2,12 @@
 
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Highlighter } from '@lobehub/ui';
+import { Block, Button, Flexbox, Highlighter } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { getRunCommandDisplayCommand } from '../../utils/runCommand';
+import { findGitHubAuthorizeLink, getRunCommandDisplayCommand } from '../../utils/runCommand';
 import AnsiOutput from './AnsiOutput';
 
 const styles = stylex.create({
@@ -25,6 +26,8 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandArgs, RunCommandState>>(
     const output = pluginState?.stdout || pluginState?.output || content;
     const stderr = pluginState?.stderr;
     const command = getRunCommandDisplayCommand(args?.command);
+    const authorizeLink = findGitHubAuthorizeLink(stderr, output);
+    const { t } = useTranslation('plugin');
 
     return (
       <Flexbox className={stylex.props(styles.container).className} gap={8}>
@@ -41,6 +44,11 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandArgs, RunCommandState>>(
           {output && <AnsiOutput text={output} />}
           {stderr?.trim() && <AnsiOutput text={stderr} />}
         </Block>
+        {authorizeLink && (
+          <Button href={authorizeLink} size={'small'} target={'_blank'} type={'primary'}>
+            {t('builtins.lobe-local-system.runCommand.authorizeGitHub')}
+          </Button>
+        )}
       </Flexbox>
     );
   },

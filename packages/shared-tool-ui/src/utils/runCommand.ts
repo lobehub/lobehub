@@ -27,3 +27,13 @@ export const getRunCommandDisplayCommand = (command?: string) => {
 
   return stripOuterShellQuotes(match[1]) || trimmed;
 };
+
+const GITHUB_AUTHORIZE_LINK = /https?:\/\/\S+\/api\/webhooks\/github\/authorize\S*/;
+
+export const findGitHubAuthorizeLink = (...texts: (string | undefined)[]) => {
+  for (const text of texts) {
+    const match = text?.match(GITHUB_AUTHORIZE_LINK);
+    if (match) return match[0];
+  }
+  return undefined;
+};

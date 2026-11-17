@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildGithubInstallHref } from './installHref';
+import { buildGithubAuthorizeHref, buildGithubInstallHref } from './installHref';
 
 const INSTALL_PATH = '/api/webhooks/github/install';
 const ORIGIN = 'https://app.lobehub.com';
@@ -56,5 +56,23 @@ describe('buildGithubInstallHref', () => {
     const url = new URL(href!);
     expect(url.searchParams.get('workspaceId')).toBe('ws_123');
     expect(url.searchParams.get('returnTo')).toBe('/acme/settings/integrations/github');
+  });
+});
+
+describe('buildGithubAuthorizeHref', () => {
+  const AUTHORIZE_PATH = '/api/webhooks/github/authorize';
+
+  it('points at the server authorize route and returns to the workspace page', () => {
+    const url = new URL(
+      buildGithubAuthorizeHref(AUTHORIZE_PATH, { appOrigin: ORIGIN, workspaceSlug: 'acme' })!,
+    );
+
+    expect(url.origin).toBe(ORIGIN);
+    expect(url.pathname).toBe(AUTHORIZE_PATH);
+    expect(url.searchParams.get('returnTo')).toBe('/acme/settings/integrations/github');
+  });
+
+  it('returns undefined until the app origin is known', () => {
+    expect(buildGithubAuthorizeHref(AUTHORIZE_PATH, { workspaceSlug: null })).toBe(undefined);
   });
 });

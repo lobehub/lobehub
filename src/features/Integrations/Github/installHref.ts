@@ -23,6 +23,18 @@ interface GithubInstallHrefParams {
  * installation to the installer's personal scope, and without the mirrored
  * `returnTo` the user lands back on the personal surface.
  */
+export const buildGithubAuthorizeHref = (
+  authorizePath: string,
+  { appOrigin, workspaceSlug }: Omit<GithubInstallHrefParams, 'workspaceId'>,
+): string | undefined => {
+  if (!appOrigin) return undefined;
+
+  const query = new URLSearchParams({
+    returnTo: workspaceSlug ? `/${workspaceSlug}${GITHUB_RETURN_TO}` : GITHUB_RETURN_TO,
+  });
+  return `${urlJoin(integrationInstallOrigin(appOrigin), authorizePath)}?${query}`;
+};
+
 export const buildGithubInstallHref = (
   installPath: string,
   { appOrigin, workspaceId, workspaceSlug }: GithubInstallHrefParams,
