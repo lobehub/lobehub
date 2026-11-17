@@ -6,10 +6,8 @@ export interface NotifyChannelDirectMessageParams {
   actorUserId: string;
   channelId: string;
   messageId: string;
-  /** The other person of the conversation. */
+  /** The other person of the conversation; its Channel says which scope it is in. */
   recipientUserId: string;
-  /** The workspace the conversation is in; absent for the personal space. */
-  workspaceId?: string;
 }
 
 export const notifyChannelDirectMessage = (

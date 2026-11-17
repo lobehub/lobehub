@@ -50,7 +50,7 @@ describe('notifyChannelDirectMessages', () => {
     );
   });
 
-  it('pings a fellow member in a workspace, naming the workspace', async () => {
+  it('pings a fellow member in a workspace too', async () => {
     notifyChannelDirectMessages(
       dbReturning([conversation]),
       { userId: 'opener', workspaceId: 'workspace' },
@@ -59,7 +59,7 @@ describe('notifyChannelDirectMessages', () => {
     await runScheduled();
 
     expect(notifyChannelDirectMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ recipientUserId: 'peer', workspaceId: 'workspace' }),
+      expect.objectContaining({ actorUserId: 'opener', recipientUserId: 'peer' }),
     );
   });
 

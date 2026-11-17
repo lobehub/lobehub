@@ -21,7 +21,7 @@ export const notifyChannelDirectMessages = (
   context: { userId: string; workspaceId?: string },
   message: SentMessage,
 ) => {
-  const { userId, workspaceId } = context;
+  const { userId } = context;
 
   after(async () => {
     try {
@@ -45,7 +45,6 @@ export const notifyChannelDirectMessages = (
         channelId: message.channelId,
         messageId: message.id,
         recipientUserId,
-        workspaceId,
       });
     } catch (error) {
       console.error('[channel] Failed to send direct message notification', {
