@@ -1,5 +1,4 @@
 import { createServer } from 'node:http';
-import { setTimeout as delay } from 'node:timers/promises';
 
 export type OAuthMcpVariant = 'idtoken' | 'userinfo' | 'none';
 
@@ -7,7 +6,7 @@ export type OAuthMcpVariant = 'idtoken' | 'userinfo' | 'none';
 export const startOAuthMcpServer = async (
   variant: OAuthMcpVariant = 'idtoken',
   port = 0,
-  options: { collidingTool?: boolean; refreshDelayMs?: number } = {},
+  options: { beforeRefreshResponse?: () => Promise<void>; collidingTool?: boolean } = {},
 ) => {
   const requests: {
     authorization: string | null;
@@ -80,7 +79,7 @@ export const startOAuthMcpServer = async (
         const refresh = form.get('refresh_token');
         if (refresh) {
           refreshes.push(refresh);
-          if (options.refreshDelayMs) await delay(options.refreshDelayMs);
+          await options.beforeRefreshResponse?.();
         }
         const account = (refresh ?? form.get('code') ?? 'alice')
           .replace(/^refresh-/, '')

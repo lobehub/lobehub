@@ -61,7 +61,10 @@ afterEach(async () => {
 
 describe('OAuth account routing over real HTTP and database', () => {
   it('persists one rotation across concurrent connector and account callers after the run timeout', async () => {
-    const fixture = await startOAuthMcpServer('none', 0, { refreshDelayMs: 6_000 });
+    const refreshResponse = Promise.withResolvers<void>();
+    const fixture = await startOAuthMcpServer('none', 0, {
+      beforeRefreshResponse: () => refreshResponse.promise,
+    });
     try {
       await db.insert(users).values({ id: 'account-e2e' });
       const created = await model.create({
@@ -90,14 +93,15 @@ describe('OAuth account routing over real HTTP and database', () => {
         refreshState: { status: 'pending' },
       });
 
-      const snapshots = await Promise.all(
-        Array.from({ length: 10 }, (_, index) => {
-          const worker = new ConnectorModel(db, 'account-e2e', undefined, vault);
-          return index % 2
-            ? ensureFreshConnectorToken(original, worker)
-            : ensureFreshLinkToken(original, account, worker);
-        }),
-      );
+      const concurrent = Array.from({ length: 10 }, (_, index) => {
+        const worker = new ConnectorModel(db, 'account-e2e', undefined, vault);
+        return index % 2
+          ? ensureFreshConnectorToken(original, worker)
+          : ensureFreshLinkToken(original, account, worker);
+      });
+      expect(fixture.refreshes).toHaveLength(1);
+      refreshResponse.resolve();
+      const snapshots = await Promise.all(concurrent);
       expect(
         snapshots.every(
           (item) =>
@@ -111,6 +115,7 @@ describe('OAuth account routing over real HTTP and database', () => {
         refreshToken: 'refresh-alice-1',
       });
     } finally {
+      refreshResponse.resolve();
       await fixture.close();
     }
   }, 20_000);
