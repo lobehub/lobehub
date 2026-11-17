@@ -150,6 +150,20 @@ describe('WindowsMenu', () => {
       expect(fileMenu.id).toBe('app-0');
       expect(newTab.id).toBe('app-0-1');
     });
+
+    it('reopens the last closed tab from File > Reopen Closed Tab (Ctrl+Shift+T)', () => {
+      windowsMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const reopenItem = fileMenu.submenu.find((item: any) => item.accelerator === 'Ctrl+Shift+T');
+
+      expect(reopenItem).toBeDefined();
+      reopenItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('reopenClosedTab');
+    });
   });
 
   describe('buildContextMenu', () => {

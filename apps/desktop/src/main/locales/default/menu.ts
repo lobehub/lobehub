@@ -54,6 +54,7 @@ const menu = {
   'file.newWindow': 'New Window',
   'file.preferences': 'Preferences',
   'file.quit': 'Quit',
+  'file.reopenClosedTab': 'Reopen Closed Tab',
   'file.title': 'File',
   'help.about': 'About',
   'help.githubRepo': 'GitHub Repository',

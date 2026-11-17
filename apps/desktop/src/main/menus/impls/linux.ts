@@ -84,6 +84,15 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: (_item, targetWindow) => this.openNewWindow(targetWindow),
             label: t('file.newWindow'),
           },
+          {
+            accelerator: 'Ctrl+Shift+T',
+            click: () => {
+              const mainWindow = this.app.browserManager.getMainWindow();
+              mainWindow.show();
+              mainWindow.broadcast('reopenClosedTab');
+            },
+            label: t('file.reopenClosedTab'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Ctrl+A',
