@@ -2245,7 +2245,7 @@ export type RunEvent = {
     stepIndex: number;
     timestamp: number;
     data: {
-        status: 'waiting_for_human' | 'waiting_for_tool_results' | 'waiting_for_async_tool';
+        status: 'waiting_for_human' | 'waiting_for_tool_results';
     };
     type: 'run.waiting';
 } | {
@@ -13282,6 +13282,9 @@ export type PatchApiV1RolesByIdPermissionsResponse = PatchApiV1RolesByIdPermissi
 export type PostApiV1RunsData = {
     body: {
         agentId?: string;
+        /**
+         * How tool calls that need a person are handled. `headless` (default, as on `/responses` and `/im/messages`): never wait — tools that normally ask for approval run without asking, and calls that always need a person (questions to the user, commands caught by the security audit) are refused so the agent carries on. `auto-run`: the same, except those always-ask calls park the run as `waiting_for_human`. `manual`: every tool that asks for approval parks the run until it is resolved through `/runs/{id}/interventions`. `allow-list`: like `manual`, and every tool not in `allowList` asks.
+         */
         approvalMode?: 'headless' | 'manual' | 'allow-list' | 'auto-run';
         allowList?: Array<string>;
         fileIds?: Array<string>;

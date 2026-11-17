@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   interruptTask: vi.fn(),
   loadAgentState: vi.fn(),
   mergeMetadata: vi.fn(),
+  queueFollowUp: vi.fn(),
+  resumeParkedClientTools: vi.fn(),
   startComposerRun: vi.fn(),
   stopPendingApprovalBatch: vi.fn(),
 }));
@@ -45,7 +47,7 @@ vi.mock('@/server/services/aiAgent/topicStartReservation', () => ({
 }));
 vi.mock('@/server/services/aiAgent/steerQueue/followUps', () => ({
   listFollowUps: vi.fn(),
-  queueFollowUp: vi.fn(),
+  queueFollowUp: mocks.queueFollowUp,
   removeFollowUp: vi.fn(),
 }));
 vi.mock('@/server/services/agentRuntime', () => ({ AgentRuntimeService: class {} }));
@@ -62,9 +64,20 @@ vi.mock('@/database/models/message', () => ({
     findToolMessageIdByToolCallId = mocks.findToolMessageIdByToolCallId;
   },
 }));
-vi.mock('./client-tool-resume.responses', () => ({ resumeParkedClientTools: vi.fn() }));
+vi.mock('./client-tool-resume.responses', () => ({
+  ClientToolResumeError: class extends Error {
+    constructor(
+      message: string,
+      readonly reason = 'mismatch',
+    ) {
+      super(message);
+    }
+  },
+  resumeParkedClientTools: mocks.resumeParkedClientTools,
+}));
 
 const { RunRestService, toRunStatus } = await import('./run.service');
+const { ClientToolResumeError } = await import('./client-tool-resume.responses');
 
 const baseRow = {
   agentId: 'agt-1',
@@ -315,5 +328,52 @@ describe('RunRestService.cancelRun', () => {
     ).cancelRun('op-1');
     expect(result).toEqual({ cancelled: false, id: 'op-1', status: 'completed' });
     expect(mocks.interruptTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('RunRestService.submitToolResults', () => {
+  const body = { results: [{ callId: 'call-1', output: '42' }] };
+
+  it.each([
+    ['already_submitted', 'ConflictError'],
+    ['mismatch', 'ValidationError'],
+  ] as const)('answers a %s resume error as %s, not a 500', async (reason, name) => {
+    mocks.resumeParkedClientTools.mockRejectedValue(new ClientToolResumeError('nope', reason));
+    await expect(
+      new RunRestService(fakeDb([baseRow]), 'user-1').submitToolResults('op-1', body),
+    ).rejects.toMatchObject({ name });
+  });
+
+  it('resumes only this run, in the background', async () => {
+    mocks.resumeParkedClientTools.mockResolvedValue({ callIds: ['call-1'], operationId: 'op-1' });
+    const result = await new RunRestService(fakeDb([baseRow]), 'user-1').submitToolResults(
+      'op-1',
+      body,
+    );
+    expect(result).toEqual({ callIds: ['call-1'], id: 'op-1', state: 'resumed' });
+    expect(mocks.resumeParkedClientTools).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-1', resumeInBackground: true, topicId: 'tpc-1' }),
+    );
+  });
+});
+
+describe('RunRestService.queueMessage', () => {
+  it('queues only behind this run', async () => {
+    mocks.queueFollowUp.mockResolvedValue({ id: 'm1', length: 1, queued: true, state: 'queued' });
+    await new RunRestService(fakeDb([baseRow]), 'user-1').queueMessage('op-1', { content: 'more' });
+    expect(mocks.queueFollowUp).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        behindOperationId: 'op-1',
+        scope: { threadId: null, topicId: 'tpc-1', userId: 'user-1' },
+      }),
+    );
+  });
+
+  it('answers 409 when the run is no longer the one taking messages', async () => {
+    mocks.queueFollowUp.mockResolvedValue({ queued: false, reason: 'idle' });
+    await expect(
+      new RunRestService(fakeDb([baseRow]), 'user-1').queueMessage('op-1', { content: 'more' }),
+    ).rejects.toMatchObject({ name: 'ConflictError' });
   });
 });

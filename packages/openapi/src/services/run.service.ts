@@ -1,6 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import type { ChatToolPayload } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import type { AgentOperationStatus, ChatToolPayload } from '@lobechat/types';
+import { isAgentOperationSettled, RequestTrigger } from '@lobechat/types';
 import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -53,7 +53,7 @@ import type {
   SubmitRunToolResultsResult,
 } from '../types/run.type';
 import { TERMINAL_RUN_STATUSES } from '../types/run.type';
-import { resumeParkedClientTools } from './client-tool-resume.responses';
+import { ClientToolResumeError, resumeParkedClientTools } from './client-tool-resume.responses';
 
 /** Function tools the API caller supplied and runs itself (`lobe-client-fn____<name>`). */
 const CALLER_TOOL_IDENTIFIER = 'lobe-client-fn';
@@ -100,16 +100,15 @@ export const pendingCallerToolCallsOf = (
         .map(toRunToolCall)
     : [];
 
-const SETTLED_OPERATION_STATUSES = new Set(['abandoned', 'done', 'error', 'interrupted']);
-
 /**
  * Public status of a run: the settled database row wins; while it is in
  * flight the live runtime state is fresher than the row.
  */
-export const toRunStatus = (rowStatus: string, state?: AgentState | null): RunStatus => {
-  const status = SETTLED_OPERATION_STATUSES.has(rowStatus)
-    ? rowStatus
-    : (state?.status ?? rowStatus);
+export const toRunStatus = (
+  rowStatus: AgentOperationStatus,
+  state?: AgentState | null,
+): RunStatus => {
+  const status = isAgentOperationSettled(rowStatus) ? rowStatus : (state?.status ?? rowStatus);
   switch (status) {
     case 'idle': {
       return 'queued';
@@ -348,6 +347,11 @@ export class RunRestService extends BaseService {
       throw this.createBusinessError(result.error || 'The agent could not start the run');
     }
 
+    this.log('info', 'Run started', {
+      group: !!supervisorId,
+      operationId: result.operationId,
+      topicId: result.topicId,
+    });
     return {
       id: result.operationId,
       scheduledAt: null,
@@ -467,7 +471,14 @@ export class RunRestService extends BaseService {
     const aiAgentService = this.aiAgentService();
     const batch = state?.pendingApprovalBatch;
     const toolMessageIds = Object.values(state?.pendingToolMessageIds ?? {});
-    if (status === 'waiting_for_human' && batch && row.topicId && toolMessageIds.length > 0) {
+    const parkedOnApproval =
+      status === 'waiting_for_human' && !!batch && !!row.topicId && toolMessageIds.length > 0;
+    this.log('info', 'Cancelling run', {
+      operationId: id,
+      path: parkedOnApproval ? 'stopPendingApproval' : 'interrupt',
+      status,
+    });
+    if (parkedOnApproval) {
       // A parked run has no loop left to observe an interrupt flag: settle its
       // pending tool rows and end it, as the app's "stop" on an approval does.
       await stopPendingApprovalBatch(
@@ -478,7 +489,7 @@ export class RunRestService extends BaseService {
           userId: this.userId,
           workspaceId: this.workspaceId,
         },
-        { batchId: batch.id, operationId: id, toolMessageIds, topicId: row.topicId },
+        { batchId: batch!.id, operationId: id, toolMessageIds, topicId: row.topicId! },
       );
     } else {
       const result = await aiAgentService.interruptTask({
@@ -603,6 +614,11 @@ export class RunRestService extends BaseService {
     await new AgentOperationModel(this.db, this.userId, this.workspaceId).mergeMetadata(id, {
       [CONTINUED_BY_METADATA_KEY]: continuation.operationId,
     });
+    this.log('info', 'Intervention resolved', {
+      action: body.action,
+      continuedByRunId: continuation.operationId,
+      operationId: id,
+    });
 
     return { continuedByRunId: continuation.operationId, interventionId };
   }
@@ -618,23 +634,39 @@ export class RunRestService extends BaseService {
       this.createConflictError('The run is not waiting for results of your tools');
     if (!row.topicId) throw notWaiting();
 
-    const resumed = await resumeParkedClientTools({
-      agentRuntimeService: new AgentRuntimeService(this.db, this.userId, {
+    let resumed: Awaited<ReturnType<typeof resumeParkedClientTools>>;
+    try {
+      resumed = await resumeParkedClientTools({
+        agentRuntimeService: new AgentRuntimeService(this.db, this.userId, {
+          workspaceId: this.workspaceId,
+        }),
+        db: this.db,
+        operationId: id,
+        outputs: body.results.map(({ callId, output }) => ({
+          call_id: callId,
+          output,
+          type: 'function_call_output' as const,
+        })),
+        resumeInBackground: true,
+        topicId: row.topicId,
+        userId: row.userId,
         workspaceId: this.workspaceId,
-      }),
-      db: this.db,
-      operationId: id,
-      outputs: body.results.map(({ callId, output }) => ({
-        call_id: callId,
-        output,
-        type: 'function_call_output' as const,
-      })),
-      resumeInBackground: true,
-      topicId: row.topicId,
-      userId: row.userId,
-      workspaceId: this.workspaceId,
-    });
+      });
+    } catch (error) {
+      // The caller sent results that do not answer the pending calls, or a
+      // retry after another delivery already resumed the run.
+      if (error instanceof ClientToolResumeError) {
+        throw error.reason === 'already_submitted'
+          ? this.createConflictError(error.message)
+          : this.createValidationError(error.message);
+      }
+      throw error;
+    }
     if (!resumed) throw notWaiting();
+    this.log('info', 'Tool results accepted', {
+      held: !!resumed.held,
+      operationId: id,
+    });
 
     return { callIds: resumed.callIds, id, state: resumed.held ? 'held' : 'resumed' };
   }
@@ -674,6 +706,8 @@ export class RunRestService extends BaseService {
           prompt: body.content,
           trigger: RequestTrigger.Api,
         },
+        // Only behind this run: another live run in the conversation is not it.
+        behindOperationId: id,
         scope,
       },
     );
@@ -681,7 +715,7 @@ export class RunRestService extends BaseService {
     if (!result.queued) {
       throw result.reason === 'idle'
         ? this.createConflictError(
-            'The run is not running anymore; start a new run in its conversation instead.',
+            'The run is not running anymore, or another run now drives its conversation; start a new run instead.',
           )
         : this.createConflictError(
             result.reason === 'full'

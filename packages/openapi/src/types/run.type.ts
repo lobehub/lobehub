@@ -140,15 +140,10 @@ export const CreateRunRequestSchema = z
   .object({
     /** The agent to run; with `groupId`, the member that must belong to the group. */
     agentId: z.string().min(1).optional(),
-    /**
-     * How tool calls that need a person are handled. `headless` (default):
-     * never wait — such calls are refused and the agent carries on. `manual`:
-     * park as `waiting_for_human` until each one is resolved through
-     * `/runs/{id}/interventions`. `allow-list`: like `manual`, but every tool
-     * not in `allowList` asks for approval. `auto-run`: run tools that would
-     * ask for approval without asking; questions to the user still park.
-     */
-    approvalMode: z.enum(['headless', 'manual', 'allow-list', 'auto-run']).optional(),
+    approvalMode: z.enum(['headless', 'manual', 'allow-list', 'auto-run']).optional().meta({
+      description:
+        'How tool calls that need a person are handled. `headless` (default, as on `/responses` and `/im/messages`): never wait — tools that normally ask for approval run without asking, and calls that always need a person (questions to the user, commands caught by the security audit) are refused so the agent carries on. `auto-run`: the same, except those always-ask calls park the run as `waiting_for_human`. `manual`: every tool that asks for approval parks the run until it is resolved through `/runs/{id}/interventions`. `allow-list`: like `manual`, and every tool not in `allowList` asks.',
+    }),
     /** Tools that run without approval in `allow-list` mode, as `<identifier>/<apiName>`. */
     allowList: z.array(z.string().min(1)).max(200).optional(),
     /** Already-uploaded files to attach to the input. */
@@ -440,8 +435,9 @@ export const RunEventSchema = z
     event('tool_results.required', { toolCalls: z.array(RunToolCallSchema) }),
     /** A step failed; `run.failed` follows when the run gives up. */
     event('run.error', { error: RunErrorSchema }),
+    /** The run waits on you: resolve its interventions, or post your tools' results. */
     event('run.waiting', {
-      status: z.enum(['waiting_for_human', 'waiting_for_tool_results', 'waiting_for_async_tool']),
+      status: z.enum(['waiting_for_human', 'waiting_for_tool_results']),
     }),
     event('run.completed', {
       result: z

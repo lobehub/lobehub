@@ -67,6 +67,16 @@ describe('BaseController.handleError', () => {
     await expect(response.json()).resolves.toMatchObject({ code: 'not_found' });
   });
 
+  it('answers 503 when a shared service reports its store unavailable', async () => {
+    // The steer queue throws this when Redis cannot be read: the outcome is
+    // unknown and the client must retry, which a 500 would not tell it.
+    const error = Object.assign(new Error('Queue unavailable'), {
+      code: 'SERVICE_UNAVAILABLE',
+      name: 'TRPCError',
+    });
+    expect((await requestThrown(error)).status).toBe(503);
+  });
+
   it('keeps the code and details an ApiException carries', async () => {
     const response = await requestThrown(
       new ApiException(403, 'workspace_mismatch', 'wrong workspace', [

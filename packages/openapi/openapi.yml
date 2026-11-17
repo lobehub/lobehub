@@ -7686,7 +7686,6 @@ components:
                   enum:
                     - waiting_for_human
                     - waiting_for_tool_results
-                    - waiting_for_async_tool
               required:
                 - status
               additionalProperties: false
@@ -37145,6 +37144,17 @@ paths:
                   type: string
                   minLength: 1
                 approvalMode:
+                  description: "How tool calls that need a person are handled. `headless`
+                    (default, as on `/responses` and `/im/messages`): never wait
+                    — tools that normally ask for approval run without asking,
+                    and calls that always need a person (questions to the user,
+                    commands caught by the security audit) are refused so the
+                    agent carries on. `auto-run`: the same, except those
+                    always-ask calls park the run as `waiting_for_human`.
+                    `manual`: every tool that asks for approval parks the run
+                    until it is resolved through `/runs/{id}/interventions`.
+                    `allow-list`: like `manual`, and every tool not in
+                    `allowList` asks."
                   type: string
                   enum:
                     - headless

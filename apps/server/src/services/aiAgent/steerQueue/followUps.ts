@@ -32,6 +32,11 @@ export interface FollowUpQueueContext {
 
 export interface QueueFollowUpParams {
   audit?: QueuedFollowUp['audit'];
+  /**
+   * Queue only behind this run. When the newest own live run on the surface
+   * is another one, nothing is stored and the result is `idle`.
+   */
+  behindOperationId?: string;
   composer?: QueuedFollowUp['composer'];
   /** Client-minted entry id; a retry with the same id appends at most once. */
   id?: string;
@@ -80,6 +85,9 @@ export const queueFollowUp = async (
   // user types behind the newest one (the list is newest first); an older
   // run that ends later leaves entries bound to a live run alone.
   const [behindOperationId] = liveRuns;
+  if (params.behindOperationId && params.behindOperationId !== behindOperationId) {
+    return { queued: false, reason: 'idle' };
+  }
 
   // Resolved now, while the sending run is still in flight to vouch for it:
   // the follow-up usually starts after that run has settled.

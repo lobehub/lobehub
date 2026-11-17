@@ -161,4 +161,76 @@ describe('runEventStream', () => {
       }),
     ]);
   });
+
+  it('keeps following a run parked on server-side async tools until it finishes', async () => {
+    let ended = false;
+    const journal = {
+      getStreamHistoryPage: vi
+        .fn()
+        .mockResolvedValueOnce({
+          available: true,
+          events: [ev('agent_runtime_init', {}, '1-0')],
+          hasMore: false,
+          nextCursor: '1-0',
+        })
+        .mockResolvedValue({ available: true, events: [], hasMore: false, nextCursor: '3-0' }),
+      readEventsOnce: vi
+        .fn()
+        .mockResolvedValueOnce({ events: [], lastEventId: '1-0' })
+        .mockImplementationOnce(async () => {
+          ended = true;
+          return {
+            events: [
+              ev('step_start', { llmCalls: 1 }, '2-0', 1),
+              ev('agent_runtime_end', {}, '3-0', 1),
+            ],
+            lastEventId: '3-0',
+          };
+        }),
+    };
+    // Parked on a sub-agent until the journal says the run ended.
+    const readRun = vi.fn(async () =>
+      ended
+        ? { interventions: [], run: { result: null, status: 'completed' } as any }
+        : { interventions: [], run: { status: 'waiting_for_async_tool' } as any },
+    );
+
+    const events = await collect(
+      runEventStream({ journal, pollMs: 1, readRun, runId: 'op-1', statusCheckMs: 0 }),
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      'run.started',
+      'step.started',
+      'run.completed',
+    ]);
+    // Caught up after the first page, it follows with blocking reads from the last id.
+    expect(journal.getStreamHistoryPage).toHaveBeenCalledTimes(1);
+    expect(journal.readEventsOnce).toHaveBeenNthCalledWith(1, 'op-1', '1-0', expect.any(Number));
+  });
+
+  it('does not read the run while events keep arriving', async () => {
+    const journal = {
+      getStreamHistoryPage: vi
+        .fn()
+        .mockResolvedValueOnce({
+          available: true,
+          events: [ev('agent_runtime_init', {}, '1-0'), ev('step_start', {}, '2-0')],
+          hasMore: true,
+          nextCursor: '2-0',
+        })
+        .mockResolvedValueOnce({
+          available: true,
+          events: [ev('agent_runtime_end', {}, '3-0')],
+          hasMore: false,
+          nextCursor: '3-0',
+        }),
+    };
+    const readRun = vi.fn().mockResolvedValue({ interventions: [], run: { status: 'cancelled' } });
+
+    await collect(runEventStream({ journal, readRun, runId: 'op-1' }));
+
+    // Once, for the end event — never as a poll in between.
+    expect(readRun).toHaveBeenCalledTimes(1);
+  });
 });

@@ -16,23 +16,34 @@ export interface RunEventJournal {
     cursor?: string,
     limit?: number,
   ) => Promise<StreamHistoryPage>;
+  /**
+   * One bounded wait for events after `lastEventId` (Redis `XREAD BLOCK`), so
+   * a followed run costs one blocking read per wake-up instead of a poll.
+   */
+  readEventsOnce?: (
+    operationId: string,
+    lastEventId?: string,
+    blockMs?: number,
+  ) => Promise<{ events: StreamEvent[]; lastEventId: string }>;
 }
 
 export interface RunEventStreamOptions {
   /** Resume after this journal id; `0` (default) replays from the start. */
   after?: string;
+  /** How long one blocking journal read waits for new events. */
+  followBlockMs?: number;
   /** Emit a heartbeat after this long without events. */
   heartbeatMs?: number;
   journal: RunEventJournal;
   /** Close the stream after this long; the client reconnects with `Last-Event-ID`. */
   maxDurationMs?: number;
-  /** Delay between journal reads while nothing new has arrived. */
+  /** Delay between journal reads when the journal cannot block. */
   pollMs?: number;
   /** Current public state of the run, read when the journal ends or goes quiet. */
   readRun: () => Promise<RunSnapshot>;
   runId: string;
   signal?: AbortSignal;
-  /** Re-check the run's status after this long without events. */
+  /** Read the run's status after this long without events. */
   statusCheckMs?: number;
 }
 
@@ -151,7 +162,9 @@ export const mapJournalEvent = (event: StreamEvent, runId: string): RunEvent[] =
 
 /**
  * The events that close a run's stream, from its current public state: why it
- * stopped, plus what it waits on. `undefined` while it is still running.
+ * stopped, plus what it waits on. `undefined` while it is still going — which
+ * includes `waiting_for_async_tool`: the server's own tools resume it under
+ * the same id, so the stream keeps following it.
  */
 export const closingEventsOf = (
   { interventions, run }: RunSnapshot,
@@ -199,9 +212,6 @@ export const closingEventsOf = (
         { ...base, data: { status: 'waiting_for_tool_results' }, type: 'run.waiting' },
       ];
     }
-    case 'waiting_for_async_tool': {
-      return [{ ...base, data: { status: 'waiting_for_async_tool' }, type: 'run.waiting' }];
-    }
     default: {
       return undefined;
     }
@@ -217,6 +227,7 @@ export const closingEventsOf = (
  */
 export async function* runEventStream({
   after = '0',
+  followBlockMs = 5000,
   heartbeatMs = 15_000,
   journal,
   maxDurationMs = 5 * 60_000,
@@ -228,27 +239,44 @@ export async function* runEventStream({
 }: RunEventStreamOptions): AsyncGenerator<RunEvent | null> {
   const deadline = Date.now() + maxDurationMs;
   let cursor = after;
-  let lastActivity = Date.now();
+  let lastEvent = Date.now();
+  let lastHeartbeat = Date.now();
   // Zero: the first quiet read checks the run at once (it may be long over).
   let lastStatusCheck = 0;
   let lastStepIndex = 0;
+  // Replay pages the journal until it is caught up; following it then blocks.
+  let replaying = true;
 
-  const closeFromRun = async (id: string | null) => {
-    return closingEventsOf(await readRun(), {
+  const closeFromRun = async (id: string | null) =>
+    closingEventsOf(await readRun(), {
       id,
       runId,
       stepIndex: lastStepIndex,
       timestamp: Date.now(),
     });
+
+  /** The next batch after the cursor, and whether the journal still exists. */
+  const read = async (): Promise<{ available: boolean; events: StreamEvent[]; more: boolean }> => {
+    if (!replaying && journal.readEventsOnce) {
+      const block = Math.max(0, Math.min(followBlockMs, deadline - Date.now()));
+      const { events } = await journal.readEventsOnce(runId, cursor, block);
+      return { available: true, events, more: false };
+    }
+    const page = await journal.getStreamHistoryPage(runId, cursor, PAGE_SIZE);
+    if (page.available && !page.hasMore) replaying = false;
+    return { available: page.available, events: page.events, more: page.hasMore };
   };
 
   while (!signal?.aborted && Date.now() < deadline) {
-    const page = await journal.getStreamHistoryPage(runId, cursor, PAGE_SIZE);
+    const startedAt = Date.now();
+    const batch = await read();
 
-    if (page.available && page.events.length > 0) {
-      lastActivity = Date.now();
-      for (const event of page.events) {
+    if (batch.events.length > 0) {
+      lastEvent = Date.now();
+      lastHeartbeat = lastEvent;
+      for (const event of batch.events) {
         lastStepIndex = event.stepIndex ?? lastStepIndex;
+        if (event.id) cursor = event.id;
         if (event.type === 'agent_runtime_end') {
           // The end of the operation: say why, from its settled state. A
           // state not settled yet keeps the stream open for the status check.
@@ -264,15 +292,15 @@ export async function* runEventStream({
           if (STREAM_CLOSING_EVENTS.includes(mapped.type)) return;
         }
       }
-      cursor = page.nextCursor;
-      if (page.hasMore) continue;
+      if (batch.more) continue;
     }
 
-    // Quiet (or the journal is gone, e.g. expired): the run itself decides.
-    // Only a run that has stopped closes the stream; one that has not started
-    // writing its journal yet keeps it open.
-    if (Date.now() - lastStatusCheck >= statusCheckMs) {
-      lastStatusCheck = Date.now();
+    // Quiet for a while (or the journal is gone, e.g. expired): the run itself
+    // decides. Only a run that has stopped closes the stream; one that has not
+    // started writing its journal yet keeps it open.
+    const now = Date.now();
+    if (now - Math.max(lastEvent, lastStatusCheck) >= statusCheckMs || lastStatusCheck === 0) {
+      lastStatusCheck = now;
       const closing = await closeFromRun(null);
       if (closing) {
         // Read once more: events published just before the run settled.
@@ -281,14 +309,19 @@ export async function* runEventStream({
           yield* closing;
           return;
         }
+        replaying = true;
         continue;
       }
     }
 
-    if (Date.now() - lastActivity >= heartbeatMs) {
-      lastActivity = Date.now();
+    if (Date.now() - lastHeartbeat >= heartbeatMs) {
+      lastHeartbeat = Date.now();
       yield null;
     }
-    await sleep(pollMs, signal);
+    // A read that returned at once with nothing (no blocking journal, or no
+    // journal yet) waits before the next one.
+    if (batch.events.length === 0 && Date.now() - startedAt < pollMs) {
+      await sleep(pollMs - (Date.now() - startedAt), signal);
+    }
   }
 }

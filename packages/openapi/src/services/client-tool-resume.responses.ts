@@ -16,7 +16,11 @@ import type { FunctionCallOutputItem, OutputItem } from '../types/responses.type
  * left without one. Surfaces as a failed response rather than a silent re-run.
  */
 export class ClientToolResumeError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    /** `already_submitted`: a retry after another delivery claimed the park. */
+    readonly reason: 'already_submitted' | 'mismatch' = 'mismatch',
+  ) {
     super(message);
     this.name = 'ClientToolResumeError';
   }
@@ -138,7 +142,10 @@ export const resumeParkedClientTools = async ({
   // Claim before writing: only one delivery may record results, so a racing
   // retry cannot add duplicate rows or replace the outputs the run resumes on.
   if (!(await operationModel.tryResumeFromAsyncTool(operationId)))
-    throw new ClientToolResumeError('These function call outputs were already submitted.');
+    throw new ClientToolResumeError(
+      'These function call outputs were already submitted.',
+      'already_submitted',
+    );
 
   const callIds = callerCalls.map((tool) => tool.id);
   try {
