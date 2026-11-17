@@ -282,6 +282,13 @@ export const channelRouter = router({
       data: await ctx.channelService.repository.markRead(input.channelId, input.sequence),
       success: true,
     })),
+  /** Pins or unpins the conversation atop the caller's own list. */
+  setPinned: channelProcedure
+    .input(z.object({ channelId, pinned: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
+      success: true,
+    })),
   remove: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
     await ctx.channelService.remove(input.channelId);
     return { success: true };

@@ -559,6 +559,11 @@ export interface ChannelListItem {
    * the only entry of `memberAvatars`; null otherwise.
    */
   peerUserId?: string | null;
+  /**
+   * When the caller pinned the conversation atop their own list, null when not pinned; set by the
+   * Channel list. Personal: other members never see it.
+   */
+  pinnedAt?: Date | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   /**
