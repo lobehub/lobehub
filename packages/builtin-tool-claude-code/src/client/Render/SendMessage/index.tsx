@@ -4,7 +4,7 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CircleCheckBig, SendHorizontal } from 'lucide-react';
+import { CircleCheckBig } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,15 +30,18 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   container: { paddingBlock: '4px' },
-  header: { paddingInline: '4px', color: cssVar.colorTextSecondary },
   status: { paddingInline: '4px' },
 });
 
+/**
+ * Unfolded body of a message to a subagent. The inspector header above it
+ * already reads "Message subagent: <summary>", so the card shows only what
+ * the header cannot: the full message and whether it was delivered.
+ */
 const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }) => {
   const { t } = useTranslation('plugin');
 
   const body = args?.message ?? args?.content;
-  const summary = args?.summary?.trim();
 
   const result = parseResult(content);
   // The tool's own confirmation embeds the opaque recipient id ("… to <id> at
@@ -48,18 +51,6 @@ const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }
 
   return (
     <Flexbox className={stylex.props(styles.container).className} gap={8}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={stylex.props(styles.header).className}
-        gap={8}
-      >
-        <Icon icon={SendHorizontal} size={'small'} />
-        <Text ellipsis strong>
-          {summary || t('builtins.lobe-claude-code.sendMessage.title')}
-        </Text>
-      </Flexbox>
-
       {body && (
         <Flexbox className={stylex.props(styles.bodyBox).className}>
           <Markdown style={{ maxHeight: 240, overflow: 'auto' }} variant={'chat'}>
@@ -77,7 +68,7 @@ const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }
         >
           <Icon icon={CircleCheckBig} size={'small'} style={{ color: cssVar.colorSuccess }} />
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
-            {t('builtins.lobe-claude-code.sendMessage.queued')}
+            {t('builtins.lobe-claude-code.sendMessage.sent')}
           </Text>
         </Flexbox>
       )}

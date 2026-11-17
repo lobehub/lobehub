@@ -1,5 +1,32 @@
 import type { ExternalSignalContext } from '../types';
 
+type TaskCompletion = Pick<
+  ExternalSignalContext,
+  'sourceToolCallId' | 'sourceToolName' | 'taskStatus' | 'taskSummary'
+>;
+
+/** How a task ended, as reported by CC's `system/task_notification`. */
+export interface TaskEnding {
+  /** Raw `task_notification.status`: `completed`, `failed`, `killed`, `stopped`. */
+  status?: unknown;
+  /** Raw `task_notification.summary`, e.g. `Agent "Review" finished`. */
+  summary?: unknown;
+}
+
+/** CC reports a user- or agent-cancelled task as `killed` or `stopped`. */
+const normalizeTaskStatus = (status: unknown): ExternalSignalContext['taskStatus'] => {
+  switch (status) {
+    case 'completed':
+    case 'failed': {
+      return status;
+    }
+    case 'killed':
+    case 'stopped': {
+      return 'stopped';
+    }
+  }
+};
+
 interface ActiveTask {
   callbackCount: number;
   shouldSignalCompletion: boolean;
@@ -38,7 +65,7 @@ export class ClaudeCodeTaskSignals {
    * Lets the renderer keep the summary inside the same AssistantGroup as
    * the preceding callbacks instead of letting it spawn a separate group.
    */
-  private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
+  private pendingTaskCompletion: TaskCompletion | undefined;
 
   constructor(private readonly signalBackgroundTaskCompletion: boolean) {}
 
@@ -76,7 +103,7 @@ export class ClaudeCodeTaskSignals {
     }
   }
 
-  end(taskId: string): void {
+  end(taskId: string, ending: TaskEnding = {}): void {
     // Capture lineage BEFORE deleting so the next turn (the post-task summary,
     // after CC re-invokes the LLM with a synthesized task-ended notification)
     // can be tagged with `task-completion`. Last-task-wins if multiple tasks end
@@ -93,11 +120,23 @@ export class ClaudeCodeTaskSignals {
     // normal main chain. Tagging that turn `task-completion` mis-anchors it and
     // drops it from the rendered chain — so leave it untagged. A background
     // task (`shouldSignalCompletion`) wakes the LLM even with no callbacks.
-    const ending = this.activeTasks.get(taskId);
-    if (ending && (ending.callbackCount > 0 || ending.shouldSignalCompletion)) {
+    //
+    // The status and summary let the notice say which task ended and how
+    // (`Agent "Review" finished`), mirroring CC's own notification: a
+    // `SendMessage`-resumed subagent has no title in its call arguments, so
+    // the summary is the only place that still names it.
+    const task = this.activeTasks.get(taskId);
+    if (task && (task.callbackCount > 0 || task.shouldSignalCompletion)) {
+      const taskStatus = normalizeTaskStatus(ending.status);
+      const taskSummary =
+        typeof ending.summary === 'string' && ending.summary.trim()
+          ? ending.summary.trim()
+          : undefined;
       this.pendingTaskCompletion = {
-        sourceToolCallId: ending.toolUseId,
-        sourceToolName: ending.sourceToolName,
+        sourceToolCallId: task.toolUseId,
+        sourceToolName: task.sourceToolName,
+        ...(taskStatus && { taskStatus }),
+        ...(taskSummary && { taskSummary }),
       };
     }
     this.activeTasks.delete(taskId);

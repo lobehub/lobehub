@@ -11,6 +11,7 @@ const COMMAND_KEYS = ['command', 'cmd', 'script'];
 const QUERY_KEYS = ['query', 'q', 'pattern', 'keywords'];
 const PATH_KEYS = ['file_path', 'filePath', 'path', 'filename', 'file'];
 const URL_KEYS = ['url', 'urls'];
+const SUMMARY_KEYS = ['summary'];
 
 const basename = (path: string): string => {
   const trimmed = path.replace(/[/\\]+$/, '');
@@ -65,6 +66,12 @@ export const extractToolKeyword = (args?: Record<string, unknown>): string | und
 
   const url = pickString(args, URL_KEYS);
   if (url) return extractUrlKeyword(url);
+
+  // A model-written recap of a longer payload, e.g. Claude Code `SendMessage`'s
+  // `summary` of the message it sends a subagent. Last, so tools that also
+  // carry a path, query or command keep their sharper keyword.
+  const summary = pickString(args, SUMMARY_KEYS);
+  if (summary) return summary;
 
   return undefined;
 };
