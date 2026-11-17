@@ -197,7 +197,10 @@ describe('a running swarm', () => {
     });
     const service = new GoalService(serverDB, userId);
 
-    await service.tick(goalId);
+    // Waiting, not idle: the claiming advance already resolved the lanes, so a
+    // tick that fell through to the coordinator would pause the goal.
+    const waiting = await service.tick(goalId);
+    expect(waiting.outcome).toBe('waiting_external');
 
     const after = await service.graph(goalId);
     expect(after.nodes.filter((node) => node.title.startsWith('Promote lane'))).toHaveLength(0);

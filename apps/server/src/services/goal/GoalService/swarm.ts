@@ -75,18 +75,34 @@ const setSwarm = async (
     });
   });
 
-/** Lane runs that are still going at the deadline are stopped; their work stays on disk. */
-const stopLaneRuns = async (ctx: GoalServiceContext, laneNodes: GoalGraphNode[]) => {
+/**
+ * Lane runs that are still going at the deadline are stopped; their work stays
+ * on disk. Returns the runs that refused to stop: `cancelTopic` rejects on
+ * purpose when the owning device does not confirm the interruption, and
+ * committing the wrap-up anyway would resolve the lanes, so nothing would ever
+ * retry them and they would keep running past the deadline.
+ */
+const stopLaneRuns = async (
+  ctx: GoalServiceContext,
+  laneNodes: GoalGraphNode[],
+): Promise<string[]> => {
+  const stuck: string[] = [];
   for (const node of laneNodes) {
     if (!node.taskId) continue;
     const runs = await ctx.taskTopicModel.findByTaskId(node.taskId).catch(() => []);
     for (const run of runs) {
       if (run.status !== 'running' || !run.topicId) continue;
-      await ctx.taskService.cancelTopic(run.topicId).catch((error) => {
-        console.error('[GoalService.swarm] failed to stop a lane run:', error);
-      });
+      const stopped = await ctx.taskService.cancelTopic(run.topicId).then(
+        () => true,
+        (error) => {
+          console.error('[GoalService.swarm] failed to stop a lane run:', error);
+          return false;
+        },
+      );
+      if (!stopped) stuck.push(run.topicId);
     }
   }
+  return stuck;
 };
 
 /** How long a claimed wrap-up waits for its promotion Task before it is rebuilt. */
@@ -117,25 +133,32 @@ const claimWrapUp = async (
     return true;
   });
 
+/**
+ * Why `materializePromote` came back without a node id: there is nothing to
+ * promote, or the graph model refused the node and the claim should be retried.
+ */
+type PromoteMiss = 'nothing' | 'retry';
+
 /** Creates the claimed wrap-up's promotion Task, at most once per claim. */
 const materializePromote = async (
   ctx: GoalServiceContext,
   graph: GoalGraphSnapshot,
   wrapUp: NonNullable<GoalSwarm['wrapUp']>,
-): Promise<string | undefined> => {
+): Promise<PromoteMiss | string> => {
   if (wrapUp.promoteNodeId) return wrapUp.promoteNodeId;
   const swarm = graph.goal.config!.swarm!;
   const laneKey = wrapUp.championLane;
   const problem = graph.nodes.find((node) => node.kind === 'problem');
-  if (!laneKey || !problem) return undefined;
+  if (!laneKey || !problem) return 'nothing';
   const promote = await ctx.coordinatorGraph.createNode(graph.goal.id, {
     description: buildPromoteInstruction(swarm, laneKey),
     kind: 'task',
     title: `Promote lane ${laneKey} (score ${wrapUp.championScore})`,
   });
   // The graph model answers `undefined` when the goal is gone or the node is
-  // rejected; leave the wrap-up claimed so the next tick retries the promotion.
-  if (!promote) return undefined;
+  // rejected; leave the wrap-up claimed so the next tick retries the promotion
+  // instead of recording a promotion that never got a Task.
+  if (!promote) return 'retry';
   await ctx.coordinatorGraph.createEdge(graph.goal.id, problem.id, promote.id, 'decomposes');
   await setSwarm(ctx, graph.goal.id, (current) => ({
     ...current,
@@ -157,7 +180,15 @@ const wrapUp = async (
   const laneNodes = swarm.lanes.flatMap(
     (lane) => graph.nodes.find((node) => node.id === lane.taskNodeId) ?? [],
   );
-  await stopLaneRuns(ctx, laneNodes);
+  // The deadline stays on the goal until the claim is written, so an advance
+  // that cannot stop a lane here comes straight back to this branch.
+  const stuck = await stopLaneRuns(ctx, laneNodes);
+  if (stuck.length)
+    return {
+      goalId: graph.goal.id,
+      message: `Swarm deadline reached; ${stuck.length} lane run(s) still running, retrying the wrap-up`,
+      outcome: 'waiting_external',
+    };
   for (const node of laneNodes)
     await ctx.coordinatorGraph.updateNodeStatus(
       graph.goal.id,
@@ -224,9 +255,23 @@ export const advanceSwarm = async (
       // materialized (the advance that claimed died halfway).
       const claimedAt = Date.parse(wrapUp.startedAt);
       const fresh = Number.isFinite(claimedAt) && Date.now() - claimedAt < PROMOTE_NODE_RETRY_MS;
-      if (fresh) return undefined;
+      // Waiting is not the same as having nothing to do: the claiming advance
+      // already resolved every lane Task, so handing the tick to the ordinary
+      // coordinator would find no frontier and pause the goal.
+      if (fresh)
+        return {
+          goalId: graph.goal.id,
+          message: `Swarm wrap-up claimed; waiting for its promotion Task`,
+          outcome: 'waiting_external',
+        };
       const created = await materializePromote(ctx, graph, wrapUp);
-      if (created)
+      if (created === 'retry')
+        return {
+          goalId: graph.goal.id,
+          message: `Swarm wrap-up could not create its promotion Task; retrying`,
+          outcome: 'waiting_external',
+        };
+      if (created !== 'nothing')
         return {
           goalId: graph.goal.id,
           message: `Swarm deadline reached; promoting lane ${wrapUp.championLane} (score ${wrapUp.championScore})`,
