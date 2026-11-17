@@ -86,6 +86,7 @@ export default {
   'tab.openInSplitView': 'Open in Split View',
   'tab.overflow': '{{count}} more tabs',
   'tab.pin': 'Pin Tab',
+  'tab.reopenClosedTab': 'Reopen Closed Tab',
   'tab.resizeSplitView': 'Resize Split View',
   'tab.running': 'Agent is running',
   'tab.unpin': 'Unpin Tab',
