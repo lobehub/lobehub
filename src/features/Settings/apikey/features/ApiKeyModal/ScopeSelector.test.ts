@@ -33,4 +33,15 @@ describe('toggleScopeSelection', () => {
       'agent:read',
     ]);
   });
+
+  it('reads the widget before it may run or publish it, and drops the run with the read', () => {
+    expect(sorted(toggleScopeSelection([], 'widget:publish', true))).toEqual([
+      'widget:publish',
+      'widget:read',
+    ]);
+    expect(toggleScopeSelection(['widget:publish', 'widget:read'], 'widget:read', false)).toEqual(
+      [],
+    );
+    expect(toggleScopeSelection([], 'artifact:publish', true)).toEqual(['artifact:publish']);
+  });
 });

@@ -20,6 +20,17 @@ describe('isValidApiKeyScope', () => {
     expect(isValidApiKeyScope('')).toBe(false);
     expect(isValidApiKeyScope('billing:read')).toBe(false);
   });
+
+  it('keeps running and publishing widgets apart from editing them', () => {
+    expect(hasApiKeyScope(['widget:write'], 'widget:read')).toBe(true);
+    expect(hasApiKeyScope(['widget:write'], 'widget:publish')).toBe(false);
+    expect(hasApiKeyScope(['widget:publish'], 'widget:write')).toBe(false);
+    expect(hasApiKeyScope(['project:write'], 'project:read')).toBe(true);
+    expect(hasApiKeyScope(['dashboard:write'], 'dashboard:read')).toBe(true);
+    expect(hasApiKeyScope(['agent:write'], 'project:write')).toBe(false);
+    expect(isValidApiKeyScope('artifact:publish')).toBe(true);
+    expect(hasApiKeyScope(['file:write'], 'artifact:publish')).toBe(false);
+  });
 });
 
 describe('isFullAccessApiKey', () => {
