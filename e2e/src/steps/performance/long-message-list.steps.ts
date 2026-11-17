@@ -3,8 +3,8 @@
  *
  * Seeds a topic of 500 / 1000 messages, opens it, then wheels to the oldest
  * message and back while sampling animation frames and row mounts in the page.
- * Every measurement is written to `reports/perf/` so CI keeps a receipt even
- * when the budget passes.
+ * Every measurement is written to `reports/perf/`, so a run leaves a receipt
+ * even when the budget passes. Run it locally with `bun run test:perf`.
  */
 import * as fs from 'node:fs';
 import path from 'node:path';
@@ -54,7 +54,6 @@ interface LongListReceipt {
   firstReadableMs: number | null;
   lastMessageId: string;
   passes: ScrollPassReceipt[];
-  runner: 'ci' | 'local';
   size: LongListSize;
   violations: string[];
 }
@@ -105,7 +104,6 @@ Given(
       firstReadableMs: null,
       lastMessageId: rows.lastMessageId,
       passes: [],
-      runner: process.env.CI ? 'ci' : 'local',
       size,
       violations: [],
     } satisfies LongListReceipt;

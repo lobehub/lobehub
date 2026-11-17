@@ -70,8 +70,7 @@ jobs:
             .github/scripts/mergeAllowBuilds.test.mjs \
             .github/scripts/testCheckout.test.mjs \
             .github/scripts/desktopRelease*.test.mjs \
-            .github/scripts/desktop-core-gate.test.mjs \
-            .github/scripts/render-budget-summary.test.cjs
+            .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env

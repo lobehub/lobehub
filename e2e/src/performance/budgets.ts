@@ -21,10 +21,9 @@
  * readable 1.5-1.8 s after the warm-up, worst gap 50-200 ms, long-frame share
  * 0-2.2%), so their ceilings only catch a list that got far slower than any
  * baseline.
- * CI runs on GitHub-hosted `ubuntu-latest` (selected by `CI`) and gets its own
- * timing ceilings. Its first receipts (2026-11-13, PR #22937) measured first
- * readable 1.9-2.1 s, worst gap 33-100 ms and long-frame share 0-2.5%; the
- * ceilings leave room for a slower shared runner, not for a lost virtualizer.
+ *
+ * This is a local tool (`bun run test:perf`), not a CI gate: the functional
+ * suite skips `@perf`, so it costs no GitHub Actions time.
  */
 export interface LongListTimingBudget {
   firstReadableMs: number;
@@ -41,17 +40,12 @@ export type LongListSize = 500 | 1000;
 /** The same for both sizes: what is mounted must not grow with topic length. */
 const countBudget: LongListCountBudget = { maxMountedRows: 12, rowMountsPerMessage: 1.2 };
 
-const localTimingBudget: Record<LongListSize, LongListTimingBudget> = {
+const timingBudget: Record<LongListSize, LongListTimingBudget> = {
   500: { firstReadableMs: 3500, scroll: { longFrameShare: 0.05, maxGapMs: 400 } },
   1000: { firstReadableMs: 3500, scroll: { longFrameShare: 0.05, maxGapMs: 400 } },
 };
 
-const ciTimingBudget: Record<LongListSize, LongListTimingBudget> = {
-  500: { firstReadableMs: 5000, scroll: { longFrameShare: 0.08, maxGapMs: 400 } },
-  1000: { firstReadableMs: 5000, scroll: { longFrameShare: 0.08, maxGapMs: 400 } },
-};
-
 export const getLongListBudget = (size: LongListSize) => ({
   counts: countBudget,
-  timing: (process.env.CI ? ciTimingBudget : localTimingBudget)[size],
+  timing: timingBudget[size],
 });
