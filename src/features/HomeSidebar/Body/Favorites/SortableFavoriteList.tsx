@@ -41,6 +41,7 @@ import {
 } from '../sortableRow';
 import FavoriteItem from './FavoriteItem';
 import FavoriteItemIcon from './FavoriteItemIcon';
+import { useRefreshOnTaskLeave } from './useRefreshOnTaskLeave';
 
 const styles = stylex.create({
   overlay: {
@@ -86,6 +87,7 @@ SortableFavoriteItem.displayName = 'SortableFavoriteItem';
 const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => {
   const { t } = useTranslation('common');
   const reorderFavorites = useHomeStore((s) => s.reorderFavorites);
+  useRefreshOnTaskLeave();
   const { pathname } = useActiveLocation();
   const currentPath = toFavoritePath(pathname, useActiveWorkspaceSlug());
 

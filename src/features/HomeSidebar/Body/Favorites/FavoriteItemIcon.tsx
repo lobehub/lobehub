@@ -13,15 +13,20 @@ const ICON_SIZE = 14;
 
 /**
  * Leading icon of a favorite row. A task wears its status, the way Recents
- * shows it: the loaded task detail wins so a change made on the page shows at
- * once, the listed status covers tasks that were never opened, and a task with
- * neither (deleted, moved) keeps the plain type icon.
+ * shows it: the open task detail wins so a change made on the page shows at
+ * once, the listed status covers every other task (the list refreshes when a
+ * favorited task's page closes), and a task with neither (deleted, moved)
+ * keeps the plain type icon.
  */
 const FavoriteItemIcon = memo<{ item: FavoriteItem }>(({ item }) => {
   const isTask = item.type === 'task';
-  const liveStatus = useTaskStore((s) =>
-    isTask ? taskDetailSelectors.taskDetailById(item.targetId)(s)?.status : undefined,
-  );
+  // Only the detail open right now is kept in sync; a cached one left behind
+  // after the page closed could be older than the refreshed list.
+  const liveStatus = useTaskStore((s) => {
+    if (!isTask) return undefined;
+    const detail = taskDetailSelectors.activeTaskDetail(s);
+    return detail?.id === item.targetId ? detail.status : undefined;
+  });
   const status = (liveStatus ?? item.status) as TaskStatus | undefined;
 
   if (isTask && status) {

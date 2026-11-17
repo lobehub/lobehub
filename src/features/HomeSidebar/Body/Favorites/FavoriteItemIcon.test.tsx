@@ -8,14 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FavoriteItemIcon from './FavoriteItemIcon';
 
 const state = vi.hoisted(() => ({
-  details: {} as Record<string, { status: string }>,
+  activeDetail: undefined as { id: string; status: string } | undefined,
 }));
 
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/task/selectors', () => ({
-  taskDetailSelectors: { taskDetailById: (ref: string) => () => state.details[ref] },
+  taskDetailSelectors: { activeTaskDetail: () => state.activeDetail },
 }));
 vi.mock('@/features/AgentTasks/features/TaskStatusIcon', () => ({
   default: ({ status }: { status: string }) => <span data-testid="status">{status}</span>,
@@ -39,7 +39,7 @@ const task = (status?: FavoriteItem['status']): FavoriteItem => ({
 
 describe('FavoriteItemIcon', () => {
   beforeEach(() => {
-    state.details = {};
+    state.activeDetail = undefined;
   });
 
   afterEach(cleanup);
@@ -50,11 +50,18 @@ describe('FavoriteItemIcon', () => {
     expect(screen.getByTestId('status').textContent).toBe('paused');
   });
 
-  it('prefers the loaded task detail, so a change on the page shows at once', () => {
-    state.details.task_1 = { status: 'completed' };
+  it('prefers the open task detail, so a change on the page shows at once', () => {
+    state.activeDetail = { id: 'task_1', status: 'completed' };
     render(<FavoriteItemIcon item={task('paused')} />);
 
     expect(screen.getByTestId('status').textContent).toBe('completed');
+  });
+
+  it('ignores the detail of another open task', () => {
+    state.activeDetail = { id: 'task_2', status: 'completed' };
+    render(<FavoriteItemIcon item={task('paused')} />);
+
+    expect(screen.getByTestId('status').textContent).toBe('paused');
   });
 
   it('marks a running task with the live running glyph', () => {
