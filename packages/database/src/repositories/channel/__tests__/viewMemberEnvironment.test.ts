@@ -33,6 +33,35 @@ describe('Channel member environment', () => {
     expect(members.find((m) => !m.agentId)?.environment).toBeNull();
   });
 
+  it("never names another principal's device that shares the id", async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Coder');
+    await db.insert(devices).values([
+      {
+        deviceId: 'device-shared-id',
+        friendlyName: 'Someone else',
+        identitySource: 'fallback',
+        userId: fixture.memberId,
+      },
+    ]);
+    await db
+      .update(channelMembers)
+      .set({ config: { deviceId: 'device-shared-id', deviceOwnerId: fixture.ownerId } })
+      .where(eq(channelMembers.id, agent.id));
+
+    const hidden = (await asMember.detail(channel.id)).members.find((m) => m.id === agent.id);
+    expect(hidden?.environment?.deviceName).toBeNull();
+
+    await db.insert(devices).values({
+      deviceId: 'device-shared-id',
+      friendlyName: 'Owner laptop',
+      identitySource: 'fallback',
+      userId: fixture.ownerId,
+    });
+    const own = (await asMember.detail(channel.id)).members.find((m) => m.id === agent.id);
+    expect(own?.environment?.deviceName).toBe('Owner laptop');
+  });
+
   it('has no environment when the Channel sets none', async () => {
     const { asMember, channel } = await fixture.createTeamChannel();
     const agent = await fixture.addAgent(channel.id, 'Coder');
