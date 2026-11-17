@@ -17,13 +17,6 @@ import { gitChipStyles } from './gitChipStyles';
 
 const styles = stylex.create({
   extra: { color: 'inherit', fontVariantNumeric: 'tabular-nums', opacity: 0.65 },
-  source: {
-    display: 'inline-flex',
-    gap: '4px',
-    alignItems: 'center',
-    fontSize: '12px',
-    color: cssVar.colorTextTertiary,
-  },
 });
 
 interface TopicPullRequestChipProps {
@@ -48,25 +41,17 @@ const TopicPullRequestChip = memo<TopicPullRequestChipProps>(({ deviceId, path, 
     () =>
       views.map((view) => {
         const visual = PR_STATE_VISUAL[getPullRequestState(view)];
-        const source =
-          view.source === 'created'
-            ? undefined
-            : tChat(`workingPanel.overview.pr.source.${view.source}` as const);
         return {
-          extra:
-            source || !view.vouched ? (
-              <span {...stylex.props(styles.source)}>
-                {!view.vouched && (
-                  <Icon
-                    aria-label={tChat('workingPanel.overview.pr.unvouched')}
-                    color={cssVar.colorWarning}
-                    icon={TriangleAlertIcon}
-                    size={12}
-                  />
-                )}
-                {source}
-              </span>
-            ) : undefined,
+          // How the PR was linked is kept, not shown; only a PR the app cannot
+          // vouch for is flagged, since its merge / close stay locked.
+          extra: view.vouched ? undefined : (
+            <Icon
+              aria-label={tChat('workingPanel.overview.pr.unvouched')}
+              color={cssVar.colorWarning}
+              icon={TriangleAlertIcon}
+              size={12}
+            />
+          ),
           icon: <Icon color={visual.color} icon={visual.icon} size={14} />,
           key: view.identifier,
           label: `#${view.number} ${view.title}`,

@@ -309,16 +309,6 @@ const Overview = memo<OverviewProps>(
             pullRequest={toLinkedPullRequest(view)}
             tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
             unvouched={!view.vouched}
-            sourceDescription={
-              view.source === 'created'
-                ? undefined
-                : t(`workingPanel.overview.pr.source.${view.source}` as const)
-            }
-            sourceLabel={
-              view.source === 'created'
-                ? undefined
-                : t(`workingPanel.overview.pr.sourceTag.${view.source}` as const)
-            }
             onClick={() => onOpenPullRequest?.(view)}
             onDismiss={
               onDismissPullRequest &&
