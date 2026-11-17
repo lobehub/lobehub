@@ -176,14 +176,18 @@ describe('useUserSkillsManagement', () => {
     expect(mocks.update).toHaveBeenCalledOnce();
   });
 
-  it('retains the draft and clears busy state after failure, then permits retry', async () => {
-    mocks.update.mockRejectedValueOnce(new Error('Network error'));
+  it.each([
+    new Error('Network error'),
+    { message: 'Forbidden', data: { httpStatus: 403 } },
+    undefined,
+  ])('retains the draft and failure details, then permits retry: %j', async (error) => {
+    mocks.update.mockRejectedValueOnce(error);
     const { result } = renderHook(() => useUserSkillsManagement('agent-a', items, true));
     act(() => result.current.setSelected(['review'], true));
     await act(async () => {
       expect(await result.current.save()).toBe(false);
     });
-    expect(result.current.saveFailed).toBe(true);
+    expect(result.current.saveFailure).toEqual({ error });
     expect(result.current.saving).toBe(false);
     expect(result.current.isSelected('review')).toBe(true);
     expect(result.current.dirty).toBe(true);
@@ -191,7 +195,21 @@ describe('useUserSkillsManagement', () => {
     await act(async () => {
       expect(await result.current.save()).toBe(true);
     });
-    expect(result.current.saveFailed).toBe(false);
+    expect(result.current.saveFailure).toBeUndefined();
+  });
+
+  it('keeps the original save failure when refreshing confirmed config also fails', async () => {
+    const error = new Error('Save failed');
+    mocks.update.mockRejectedValueOnce(error);
+    mocks.refresh.mockRejectedValueOnce(new Error('Refresh failed'));
+    const { result } = renderHook(() => useUserSkillsManagement('agent-a', items, true));
+    act(() => result.current.setSelected(['review'], true));
+    await act(async () => {
+      expect(await result.current.save()).toBe(false);
+    });
+    expect(result.current.saveFailure?.error).toBe(error);
+    expect(result.current.saving).toBe(false);
+    expect(result.current.isSelected('review')).toBe(true);
   });
 
   it('does not re-enable a skill uninstalled while the editor is open', async () => {

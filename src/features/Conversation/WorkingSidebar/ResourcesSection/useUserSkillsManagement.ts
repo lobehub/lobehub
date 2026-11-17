@@ -39,7 +39,7 @@ export const useUserSkillsManagement = (
   const [changes, setChanges] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [saveFailure, setSaveFailure] = useState<{ error: unknown }>();
   const savingRef = useRef(false);
   const isSelected = (id: string) => changes[id] ?? baseline[id] ?? false;
   const filteredItems = filterSkillItems(items, query);
@@ -69,7 +69,7 @@ export const useUserSkillsManagement = (
     if (!config) return false;
     savingRef.current = true;
     setSaving(true);
-    setSaveFailed(false);
+    setSaveFailure(undefined);
     try {
       await state.updateAgentConfigById(
         agentId,
@@ -77,8 +77,8 @@ export const useUserSkillsManagement = (
         { rethrow: true, showErrorMessage: false },
       );
       return true;
-    } catch {
-      setSaveFailed(true);
+    } catch (error) {
+      setSaveFailure({ error });
       // Config writes are optimistic. Restore the confirmed config after failure,
       // while keeping this editor's draft intact for Retry or Cancel.
       try {
@@ -99,7 +99,7 @@ export const useUserSkillsManagement = (
     isSelected,
     query,
     save,
-    saveFailed,
+    saveFailure,
     saving,
     selectedCount: items.filter(({ id }) => isSelected(id)).length,
     setQuery,

@@ -5,7 +5,9 @@ import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
+import AsyncError from '@/components/AsyncError';
 import { type SkillListItem, SkillsSearchBar } from '@/features/SkillsList';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 
 import { useCanManageUserSkills } from './useCanManageUserSkills';
 import { useUserSkillsManagement } from './useUserSkillsManagement';
@@ -100,8 +102,14 @@ export const UserSkillsManagement = ({ agentId, items, onClose }: UserSkillsMana
         />
       )}
       {!canEdit && <Alert title={t('workingPanel.skills.manage.noPermission')} type="warning" />}
-      {selection.saveFailed && (
-        <Alert title={t('workingPanel.skills.manage.saveFailed')} type="error" />
+      {selection.saveFailure && (
+        <AsyncError
+          align="start"
+          details={normalizeAsyncError(selection.saveFailure.error).rawMessage}
+          error={selection.saveFailure.error}
+          title={t('workingPanel.skills.manage.saveFailed')}
+          variant="inline"
+        />
       )}
       <Flexbox gap={8} {...stylex.props(styles.footer)}>
         <Text fontSize={12} type="secondary">
