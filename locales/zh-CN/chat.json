@@ -3713,6 +3713,8 @@
   "workingPanel.overview.keptWorktree.keep": "保留",
   "workingPanel.overview.keptWorktree.keepFailed": "无法保留 worktree",
   "workingPanel.overview.keptWorktree.keptToast": "worktree 已保留，之后不会再自动清理",
+  "workingPanel.overview.keptWorktree.removed": "worktree 已清理 · 分支 {{branch}} 已保留",
+  "workingPanel.overview.keptWorktree.removedHint": "话题归档或移入回收站时已删除这个 worktree。发送消息时会在原路径重新检出该分支。",
   "workingPanel.overview.keptWorktree.title_one": "worktree 已保留：{{count}} 个未提交的文件",
   "workingPanel.overview.keptWorktree.title_other": "worktree 已保留：{{count}} 个未提交的文件",
   "workingPanel.overview.outputs": "产物",

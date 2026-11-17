@@ -56,7 +56,7 @@ import ProgressSection from '../ProgressSection';
 import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
 import { BackgroundTasksSection } from './BackgroundTasks';
 import DeviceStatusSection from './DeviceStatusSection';
-import KeptWorktreeRows from './KeptWorktreeRows';
+import KeptWorktreeRows, { RemovedWorktreeRow, useTopicWorktrees } from './KeptWorktreeRows';
 import {
   collectChangeStats,
   isLinkedWorktreeCheckout,
@@ -134,7 +134,15 @@ const Overview = memo<OverviewProps>(
       getAllWorkSummaries(dbMessageSelectors.activeDbMessages(s), threadId),
     );
 
-    const gitPath = active && repoType ? workingDirectory : undefined;
+    const topicWorktrees = useTopicWorktrees({
+      metadata: topicMetadata,
+      status: topicStatus,
+      topicId: topicId ?? undefined,
+      workingDirectory,
+    });
+    // A worktree the cleanup removed has no folder left to read git from.
+    const worktreeRemoved = !!topicWorktrees.removed;
+    const gitPath = active && repoType && !worktreeRemoved ? workingDirectory : undefined;
     const isGithub = repoType === 'github';
     const {
       data: branchData,
@@ -451,11 +459,15 @@ const Overview = memo<OverviewProps>(
             <Flexbox className={sectionStyles.section}>
               {/* A worktree the archive cleanup kept for its uncommitted work. */}
               <KeptWorktreeRows
-                metadata={topicMetadata}
-                status={topicStatus}
+                entries={topicWorktrees.entries}
                 topicId={topicId ?? undefined}
+                onChange={topicWorktrees.mutate}
               />
-              {workspaceSection}
+              {topicWorktrees.removed ? (
+                <RemovedWorktreeRow entry={topicWorktrees.removed} />
+              ) : (
+                workspaceSection
+              )}
               {/* Outside the git rows: a dev server runs in plain folders too. */}
               {tunnelsEnabled && deviceId && (
                 <PortSwitcher

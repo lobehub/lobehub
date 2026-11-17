@@ -3938,6 +3938,9 @@ export default {
   'workingPanel.overview.keptWorktree.keepFailed': 'Could not keep the worktree',
   'workingPanel.overview.keptWorktree.keptToast':
     "Worktree kept. It won't be cleaned up automatically.",
+  'workingPanel.overview.keptWorktree.removed': 'Worktree cleaned up · branch {{branch}} kept',
+  'workingPanel.overview.keptWorktree.removedHint':
+    'It was removed when this topic was archived or moved to the recycle bin. Sending a message checks the branch out again at the same path.',
   'workingPanel.overview.keptWorktree.title_one': 'Worktree kept: {{count}} uncommitted file',
   'workingPanel.overview.keptWorktree.title_other': 'Worktree kept: {{count}} uncommitted files',
   'workingPanel.overview.outputs': 'Outputs',

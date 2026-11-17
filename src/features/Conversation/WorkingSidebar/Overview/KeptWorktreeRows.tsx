@@ -3,7 +3,7 @@
 import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
 import { resolveOwnedWorktrees } from '@lobechat/types';
 import { Button, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
-import { TriangleAlertIcon } from 'lucide-react';
+import { GitBranchIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +11,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { discardOwnedWorktree, keepOwnedWorktree } from '@/services/ownedWorktree';
 import { topicService } from '@/services/topic';
 
+import { findRemovedWorktree } from './overviewData';
 import { OverviewRow } from './OverviewRow';
 
 /** States in flight on the server: refresh until they settle. */
@@ -35,10 +36,33 @@ export const useOwnedWorktrees = (
     },
   );
 
-interface KeptWorktreeRowsProps {
-  /** The topic row as the list has it; only a topic that owns a worktree is read. */
+/**
+ * What the Overview shows for the topic's app-created worktrees: the ones it
+ * owns (`entries`), and — when the cleanup already removed the folder the
+ * topic points at — that record, so the git rows stop reading a folder that is
+ * gone. Only a topic that owns a worktree is read.
+ */
+export const useTopicWorktrees = ({
+  metadata,
+  status,
+  topicId,
+  workingDirectory,
+}: {
   metadata?: ChatTopicMetadata | null;
   status?: string | null;
+  topicId?: string;
+  workingDirectory?: string;
+}) => {
+  const ownsWorktree = resolveOwnedWorktrees(metadata).length > 0;
+  const { data, mutate } = useOwnedWorktrees(topicId, status, ownsWorktree);
+  const entries = data ?? [];
+  const removed = findRemovedWorktree(entries, workingDirectory);
+  return { entries, mutate, removed };
+};
+
+interface KeptWorktreeRowsProps {
+  entries: OwnedWorktree[];
+  onChange: () => Promise<unknown>;
   topicId?: string;
 }
 
@@ -47,14 +71,13 @@ interface KeptWorktreeRowsProps {
  * never asks; the choice is offered here instead: discard the work and delete
  * the worktree (its branch's commits are kept), or keep it for good.
  */
-const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ metadata, status, topicId }) => {
+const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topicId }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
-  const ownsWorktree = resolveOwnedWorktrees(metadata).length > 0;
-  const { data, mutate } = useOwnedWorktrees(topicId, status, ownsWorktree);
+  const mutate = onChange;
   const [busy, setBusy] = useState<string>();
 
-  const kept = (data ?? []).filter((entry) => entry.cleanup?.state === 'keptDirty');
+  const kept = entries.filter((entry) => entry.cleanup?.state === 'keptDirty');
 
   const handleDiscard = useCallback(
     (entry: OwnedWorktree) => {
@@ -159,3 +182,21 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ metadata, status, topicI
 KeptWorktreeRows.displayName = 'KeptWorktreeRows';
 
 export default KeptWorktreeRows;
+
+/**
+ * The topic's worktree was cleaned up (archived or trashed): its folder is gone,
+ * its branch is kept, and the next message checks it out again at the same path.
+ */
+export const RemovedWorktreeRow = memo<{ entry: OwnedWorktree }>(({ entry }) => {
+  const { t } = useTranslation('chat');
+  return (
+    <OverviewRow
+      icon={GitBranchIcon}
+      iconSize={14}
+      title={t('workingPanel.overview.keptWorktree.removedHint')}
+      value={t('workingPanel.overview.keptWorktree.removed', { branch: entry.branch ?? '' })}
+    />
+  );
+});
+
+RemovedWorktreeRow.displayName = 'RemovedWorktreeRow';

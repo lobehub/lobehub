@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectChangeStats,
+  findRemovedWorktree,
   getStatusDeviceId,
   isLinkedWorktreeCheckout,
   shouldShowCiLabel,
@@ -107,5 +108,25 @@ describe('shouldShowGitSkeleton', () => {
 
   it('never shows the skeleton once loading settles', () => {
     expect(shouldShowGitSkeleton({ hasData: false, loading: false })).toBe(false);
+  });
+});
+
+describe('findRemovedWorktree', () => {
+  const WT = '/Users/me/.lobehub/worktrees/repo-1a2b3c4d/quiet-hill';
+  const entry = (state?: 'keptDirty' | 'removed') => ({
+    ...(state && { cleanup: { at: 'x', state } }),
+    createdAt: 'y',
+    path: WT,
+    sourcePath: '/code/repo',
+  });
+
+  it('finds the removed worktree the topic points at, however the path ends', () => {
+    expect(findRemovedWorktree([entry('removed')], `${WT}/`)?.path).toBe(WT);
+  });
+
+  it('ignores worktrees still on disk and other folders', () => {
+    expect(findRemovedWorktree([entry('keptDirty'), entry()], WT)).toBeUndefined();
+    expect(findRemovedWorktree([entry('removed')], '/code/repo')).toBeUndefined();
+    expect(findRemovedWorktree([entry('removed')], undefined)).toBeUndefined();
   });
 });

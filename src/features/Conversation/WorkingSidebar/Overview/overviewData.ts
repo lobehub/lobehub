@@ -3,6 +3,7 @@ import type {
   DeviceExecutionTarget,
   DeviceGitPullRequestCiStatus,
   DeviceGitWorktreeListItem,
+  OwnedWorktree,
 } from '@lobechat/types';
 
 import { normalizeDisplayPath } from '@/features/ChatInput/ControlBar/worktreeHelpers';
@@ -86,3 +87,19 @@ export const shouldShowGitSkeleton = ({
   hasData: boolean;
   loading: boolean;
 }): boolean => loading && !hasData;
+
+/**
+ * The app-created worktree the cleanup already removed, when it is the folder
+ * the topic points at: the Overview then says so instead of reading git from a
+ * folder that no longer exists (which would show its last, stale changes).
+ */
+export const findRemovedWorktree = (
+  entries: OwnedWorktree[],
+  workingDirectory: string | undefined,
+): OwnedWorktree | undefined => {
+  if (!workingDirectory) return;
+  const target = normalizeDisplayPath(workingDirectory);
+  return entries.find(
+    (entry) => entry.cleanup?.state === 'removed' && normalizeDisplayPath(entry.path) === target,
+  );
+};
