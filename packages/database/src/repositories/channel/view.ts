@@ -34,7 +34,7 @@ import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
 
-const publicMessageColumns = {
+export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
   senderAgentAvatar: agents.avatar,
   senderAgentName: agents.name,
@@ -53,7 +53,7 @@ type MessageRow = typeof channelMessages.$inferSelect & {
   senderUsername: string | null;
 };
 
-const publicMessage = (row: MessageRow, fileIds: string[]) => {
+export const publicMessage = (row: MessageRow, fileIds: string[]) => {
   const {
     senderAgentAvatar,
     senderAgentName,
