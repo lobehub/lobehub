@@ -258,6 +258,7 @@ describe('Channel relay source', () => {
     const state = await setup();
     const { operationId } = await state.run();
     expect(await state.history.relaySource(operationId, { allowBotRun: true })).toEqual({
+      channelRun: expect.objectContaining({ channelId: state.channel.id }),
       origin: { channelId: state.channel.id, threadId: null },
       requestVia: undefined,
       self: { agentId: expect.any(String), name: 'Reader' },

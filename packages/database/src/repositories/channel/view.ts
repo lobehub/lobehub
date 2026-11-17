@@ -29,6 +29,7 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
@@ -62,7 +63,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
     senderUsername,
     ...message
   } = row;
-  const isAgent = message.routingStatus === 'reply';
+  const isAgent = isAgentAuthored(message);
   return {
     ...message,
     fileIds,
@@ -73,7 +74,13 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
     editedAt: channelMessageEditedAt(message.metadata),
-    receipt: isAgent ? null : (channelMessageReceipt(message.metadata) ?? null),
+    // On an Agent's message, the exchange between Agents it reports from.
+    receipt: (() => {
+      const receipt = channelMessageReceipt(message.metadata);
+      if (!receipt) return null;
+      const { agent, ...rest } = receipt;
+      return { ...rest, agent: agent && { ...agent, avatar: null as string | null } };
+    })(),
     via: isAgent
       ? null
       : (() => {
@@ -84,15 +91,17 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
 };
 
 /**
- * Avatars of the Agents named in `via`, which usually are not members of this Channel. An Agent
- * deleted since keeps the name the message recorded, without an avatar.
+ * Avatars of the Agents named in `via` or in a report's `receipt.agent`, which usually are not
+ * members of this Channel. An Agent deleted since keeps the name the message recorded, without
+ * an avatar.
  */
 const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   const ids = [
     ...new Set(
       rows.flatMap((row) => {
         const via = row.routingStatus === 'reply' ? undefined : channelMessageVia(row.metadata);
-        return via ? [via.agentId] : [];
+        const reported = channelMessageReceipt(row.metadata)?.agent;
+        return [...(via ? [via.agentId] : []), ...(reported ? [reported.agentId] : [])];
       }),
     ),
   ];
@@ -104,13 +113,28 @@ const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
   return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
 };
 
-const withRelayAvatar = <T extends { via?: { agentId: string; avatar: string | null } | null }>(
+type AvatarAgent = { agentId: string; avatar: string | null };
+const withRelayAvatar = <
+  T extends {
+    receipt?: { agent?: AvatarAgent } | null;
+    via?: AvatarAgent | null;
+  },
+>(
   message: T,
   avatars: Map<string, string | null>,
-): T =>
-  message.via
-    ? { ...message, via: { ...message.via, avatar: avatars.get(message.via.agentId) ?? null } }
-    : message;
+): T => {
+  const avatarOf = <A extends AvatarAgent>(agent: A): A => ({
+    ...agent,
+    avatar: avatars.get(agent.agentId) ?? null,
+  });
+  return {
+    ...message,
+    ...(message.via && { via: avatarOf(message.via) }),
+    ...(message.receipt?.agent && {
+      receipt: { ...message.receipt, agent: avatarOf(message.receipt.agent) },
+    }),
+  };
+};
 
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
 /**

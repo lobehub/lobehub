@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -230,6 +230,24 @@ chosen Agents (`ChannelMessagingService`).
   wakes cannot relay again: one hop each way. The receipt is best-effort: a relaying Agent,
   Channel or branch that is gone, or a requester who left, gets none. It is keyed by the reply id,
   so a repeated completion posts it once.
+- **One Agent is asked between the two Agents.** The relay above is only for several Agents
+  addressed together in a group. A Channel run addressing one Agent never relays, whichever
+  Channel it named or none: a relayed request lands in a group or the person's conversation as
+  the person, and its receipt occupies the channel they use to talk to their Agent. The Agent is
+  located through the requester's Channels, its own conversation first (`findAgent`). A bot run
+  has no Channel for the conclusion to come back to, so it still relays.
+  `askAgent` instead opens the conversation between the two Agents (`channels.agentPairKey`, one
+  per pair, person and scope), giving each Agent the environment it has where the person already
+  talks to it. The asking Agent writes the request itself (`channel_messages.agent_id` on a
+  request); the person is the owner member, the requester and the execution identity, and only
+  watches. The request is not a relay and carries no `via`: `metadata.exchange` keeps the origin
+  and `hops`. When the other Agent's reply is published,
+  `ChannelExecutionRepository.deliverAnswerToAsker` queues the asking Agent on that reply in the
+  same conversation; that run's `currentRun().exchange` names the origin. Its own reply answers a
+  reply, so it wakes no one, and `reportAgentExchange` posts it where the asking began as the
+  Agent's own message (`postAgentMessage`, with `metadata.receipt` linking back and naming the
+  answering Agent in `receipt.agent`; the timeline shows a "Messages from <Agent>" line above it). Asking again
+  from that run continues the exchange (`hops + 1`) up to three asks; the answering Agent's run (`requestByAgent`) cannot pass the question on. `deliverRelayReceipt` skips Agent-written requests.
 - **External runtimes.** `lh channel list` and `lh channel send` call the same service through
   `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
   the `channel:message` capability that every Channel dispatch is minted alongside
