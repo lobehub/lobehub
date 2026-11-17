@@ -85,6 +85,7 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
+  stopClaudeCodeTask,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
@@ -166,7 +167,16 @@ import {
   createLiveCliAdapter,
   writeCliPrompt,
 } from './heterogeneousAgentLiveInput';
-import type { AgentSession, CliTraceSession, SendPromptParams } from './heterogeneousAgentSession';
+import type {
+  AgentSession,
+  CancelSessionParams,
+  CliTraceSession,
+  GetSessionInfoParams,
+  SendPromptParams,
+  StopBackgroundTaskParams,
+  StopSessionParams,
+  SubmitInterventionParams,
+} from './heterogeneousAgentSession';
 import {
   claudeProfileDirOf,
   closeActiveAcpSessions,
@@ -314,30 +324,6 @@ export interface HeteroTranscriptReplayOutcome {
 interface BrowserRunBinding {
   agentId?: string;
   topicId?: string;
-}
-
-interface CancelSessionParams {
-  sessionId: string;
-}
-
-interface SubmitInterventionParams {
-  cancelled?: boolean;
-  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
-  cancelReason?: 'timeout' | 'user_cancelled';
-  /** Operation id stamped on the request the renderer is responding to. */
-  operationId: string;
-  /** Structured user answer; ignored when `cancelled` is true. */
-  result?: unknown;
-  /** Correlation key carried on the original `agent_intervention_request`. */
-  toolCallId: string;
-}
-
-interface StopSessionParams {
-  sessionId: string;
-}
-
-interface GetSessionInfoParams {
-  sessionId: string;
 }
 
 /**
@@ -3182,6 +3168,20 @@ export default class HeterogeneousAgentCtr {
     if (!(await forcedExit)) {
       throw new Error(`Session ${params.sessionId} did not exit after SIGKILL`);
     }
+  }
+
+  /**
+   * Stop one background task of a Claude Code run whose input is still open:
+   * the SDK session, or a CLI spawned with live input (Steer); a one-shot CLI
+   * closed its stdin. Resolves once CC accepted the request; its `stopped`
+   * report, the proof, reaches the renderer through the run's own stream.
+   */
+  async stopBackgroundTask({ sessionId, taskId }: StopBackgroundTaskParams): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session?.sdkSession) return session.sdkSession.stopTask(taskId);
+    const live = session?.liveInput;
+    if (!live) throw new Error('This run cannot stop a single background task');
+    await stopClaudeCodeTask((request) => live.sendControlRequest(request), taskId);
   }
 
   /**

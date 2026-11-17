@@ -137,7 +137,7 @@ describe('ClaudeCodeLiveInput', () => {
 
     live.observe(
       line({
-        patch: { status: 'killed' },
+        patch: { status: 'completed' },
         subtype: 'task_updated',
         task_id: 't-1',
         type: 'system',
@@ -147,6 +147,46 @@ describe('ClaudeCodeLiveInput', () => {
     vi.advanceTimersByTime(999);
     expect(live.isOpen).toBe(true);
     vi.advanceTimersByTime(1);
+    expect(live.isOpen).toBe(false);
+  });
+
+  // Recorded from claude 2.1.308: a stopped task reports `task_updated(killed)`
+  // then `task_notification(stopped)`, and no turn follows.
+  it.each([
+    ['killed patch', { patch: { status: 'killed' }, subtype: 'task_updated' }],
+    ['stopped notification', { status: 'stopped', subtype: 'task_notification' }],
+  ])('closes at once when the last task is stopped between turns (%s)', (_, event) => {
+    vi.useFakeTimers();
+    const { live } = setup({ wakeUpGraceMs: 30_000 });
+    live.send(userLine('first'), 'u-1');
+    live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
+    live.observe(line({ subtype: 'task_started', task_id: 't-1', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+
+    live.observe(line({ ...event, task_id: 't-1', type: 'system' }));
+    expect(live.isOpen).toBe(false);
+  });
+
+  it('keeps stdin for the other task, or the open turn, when one task is stopped', () => {
+    const { live } = setup();
+    live.send(userLine('first'), 'u-1');
+    live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
+    live.observe(line({ subtype: 'task_started', task_id: 't-1', type: 'system' }));
+    live.observe(line({ subtype: 'task_started', task_id: 't-2', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+
+    live.observe(
+      line({ status: 'stopped', subtype: 'task_notification', task_id: 't-1', type: 'system' }),
+    );
+    expect(live.isOpen).toBe(true);
+
+    // Stopped mid-turn: that turn's own result decides.
+    live.observe(line({ subtype: 'init', type: 'system' }));
+    live.observe(
+      line({ status: 'stopped', subtype: 'task_notification', task_id: 't-2', type: 'system' }),
+    );
+    expect(live.isOpen).toBe(true);
+    live.observe(line({ subtype: 'success', type: 'result' }));
     expect(live.isOpen).toBe(false);
   });
 

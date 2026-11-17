@@ -255,6 +255,8 @@ export class ClaudeAgentSdkSession {
   /** Steered messages Claude Code has not replayed yet; input stays open for them. */
   private readonly unconsumed = new Set<string>();
   private taskNotificationPending = false;
+  /** A turn is under way: its own `result` will decide about the input. */
+  private turnOpen = true;
 
   constructor(private readonly options: ClaudeAgentSdkSessionOptions) {
     this.pipeline = new AgentStreamPipeline({
@@ -322,6 +324,18 @@ export class ClaudeAgentSdkSession {
       this.closeInput = true;
       this.queryHandle = undefined;
     }
+  }
+
+  /**
+   * Stop one background task of the live session. CC answers with a
+   * `task_notification` of status `stopped`, which is the only proof the stop
+   * took: resolving here means the request was accepted, nothing more.
+   *
+   * @throws When no query is running any more.
+   */
+  async stopTask(taskId: string): Promise<void> {
+    if (!this.queryHandle) throw new Error('The Claude Code session is no longer running');
+    await this.queryHandle.stopTask(taskId);
   }
 
   /**
@@ -410,8 +424,33 @@ export class ClaudeAgentSdkSession {
     await this.options.onEvents(events);
 
     if (this.pipeline.sessionId) this.options.onSessionId(this.pipeline.sessionId);
+    this.trackTurn(message);
     this.maybeCloseInputAfterResult(message);
+    this.maybeCloseInputAfterStop(message);
     this.emitStatus(this.resolveRuntimeState());
+  }
+
+  private trackTurn(message: SDKMessage): void {
+    if (message.type === 'result') this.turnOpen = false;
+    else if (
+      message.type === 'assistant' ||
+      (message.type === 'system' && message.subtype === 'init')
+    ) {
+      this.turnOpen = true;
+    }
+  }
+
+  /**
+   * Claude Code wakes the model for a task that ended on its own, not for one
+   * that was stopped: no `result` follows a `stopped` notification. Between
+   * turns, the last task being stopped is therefore what ends the session.
+   */
+  private maybeCloseInputAfterStop(message: SDKMessage): void {
+    if (message.type !== 'system' || message.subtype !== 'task_notification') return;
+    if (message.status !== 'stopped' || this.turnOpen) return;
+    // A steered message still waiting to be read starts the next turn.
+    if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
+    if (this.activeTasks.size === 0 && !this.taskNotificationPending) this.closeInput = true;
   }
 
   private async flushPipeline(): Promise<void> {
@@ -461,11 +500,17 @@ export class ClaudeAgentSdkSession {
     }
 
     if (message.subtype === 'task_notification') {
-      this.taskNotificationPending = true;
+      // A stopped task wakes no follow-up turn (see `maybeCloseInputAfterStop`).
+      if (message.status !== 'stopped') this.taskNotificationPending = true;
       this.activeTasks.delete(message.task_id);
     }
   }
 
+  /**
+   * Close the input once nothing can still need it. It stays open while a task
+   * lives: stopping one is a control request written to it, and with the input
+   * closed Claude Code never reads the request.
+   */
   private maybeCloseInputAfterResult(message: SDKMessage): void {
     if (message.type !== 'result') return;
     const notificationTurn = message.origin?.kind === 'task-notification';
@@ -475,10 +520,9 @@ export class ClaudeAgentSdkSession {
     // it still has to be read and answered.
     if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
 
-    if (notificationTurn) {
-      this.closeInput = true;
-      return;
-    }
+    // A resumed session first reports the previous run's leftover tasks and
+    // ends that pass with an empty result, before this run's own turn.
+    if (notificationTurn && message.num_turns === 0) return;
 
     if (this.activeTasks.size === 0 && !this.taskNotificationPending) {
       this.closeInput = true;

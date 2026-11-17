@@ -825,3 +825,33 @@ export const sendPromptWithAcpSession = async (
     });
   }
 };
+
+export interface CancelSessionParams {
+  sessionId: string;
+}
+
+export interface SubmitInterventionParams {
+  cancelled?: boolean;
+  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
+  cancelReason?: 'timeout' | 'user_cancelled';
+  /** Operation id stamped on the request the renderer is responding to. */
+  operationId: string;
+  /** Structured user answer; ignored when `cancelled` is true. */
+  result?: unknown;
+  /** Correlation key carried on the original `agent_intervention_request`. */
+  toolCallId: string;
+}
+
+export interface StopSessionParams {
+  sessionId: string;
+}
+
+export interface GetSessionInfoParams {
+  sessionId: string;
+}
+
+export interface StopBackgroundTaskParams {
+  sessionId: string;
+  /** Claude Code `task_id` of the background task to stop. */
+  taskId: string;
+}
