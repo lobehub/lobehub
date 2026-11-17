@@ -1,5 +1,6 @@
 import type { LobeToolManifest } from '@lobechat/context-engine';
 
+import type { RunConnectorsTarget } from '@/services/runConnectors';
 import type { ToolStoreState } from '@/store/tool/initialState';
 import { toolSelectors } from '@/store/tool/selectors/tool';
 
@@ -8,10 +9,12 @@ import { toolSelectors } from '@/store/tool/selectors/tool';
 export const buildRunManifestMap = (
   toolState: ToolStoreState,
   enabledManifests: LobeToolManifest[],
+  /** The conversation: its connector rows are the ones discoverable. */
+  run: RunConnectorsTarget = {},
 ): Record<string, LobeToolManifest> => {
   const map: Record<string, LobeToolManifest> = {};
 
-  for (const { identifier } of toolSelectors.availableToolsForDiscovery(toolState)) {
+  for (const { identifier } of toolSelectors.availableToolsForDiscovery(toolState, run)) {
     const manifest = toolSelectors.getManifestById(identifier)(toolState);
     if (manifest) map[identifier] = manifest as LobeToolManifest;
   }

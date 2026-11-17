@@ -246,7 +246,7 @@ export const contextEngineering = async ({
   if (isLobeToolsEnabled) {
     const toolState = getToolStoreState();
     const availableTools = toolSelectors
-      .availableToolsForDiscovery(toolState)
+      .availableToolsForDiscovery(toolState, { agentId, topicId })
       .filter((tool) => !enabledToolSet.has(tool.identifier));
 
     if (availableTools.length > 0) {

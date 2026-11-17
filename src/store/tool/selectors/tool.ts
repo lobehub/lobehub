@@ -15,7 +15,11 @@ import {
   isToolAvailableInCurrentEnv,
 } from '@/helpers/toolAvailability';
 import { buildClientConnectorManifests } from '@/helpers/toolEngineering/buildClientConnectorManifests';
-import { getAllRunConnectors } from '@/services/runConnectors';
+import {
+  getAllRunConnectors,
+  getRunConnectors,
+  type RunConnectorsTarget,
+} from '@/services/runConnectors';
 import { type MetaData } from '@/types/meta';
 import { type LobeToolMeta } from '@/types/tool/tool';
 
@@ -166,7 +170,17 @@ export interface AvailableToolForDiscovery {
  * 5. MCP connectors chat can run (custom, finished marketplace installs) that no
  *    entry above already lists — stdio ones only on desktop
  */
-const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscovery[] => {
+const availableToolsForDiscovery = (
+  s: ToolStoreState,
+  /**
+   * The conversation the run belongs to: its connector rows are the ones the
+   * server listed for it (`connector.listForRun`). Without that listing only
+   * the caller's shared rows are discoverable — whether a conversation may run
+   * a private or personal row is the server's call, so none is offered on a
+   * guess.
+   */
+  run: RunConnectorsTarget = {},
+): AvailableToolForDiscovery[] => {
   // Build exclusion sets for deduplication
   const builtinSkillIds = new Set((s.builtinSkills || []).map((skill) => skill.identifier));
   const agentSkillIds = new Set(
@@ -245,8 +259,17 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
   //    Each row is its own tool set (a private or personal row under its own
   //    prefix), so a manifest is runnable by the row it was built from, and
   //    deduplicated against the other sources by the connector it serves.
+  const listedForRun = run.agentId ? getRunConnectors(run) : undefined;
+  const runRows = listedForRun
+    ? connectorSelectors.executableMcpConnectors({
+        connectors: listedForRun,
+        installedPlugins: s.installedPlugins,
+      })
+    : connectorSelectors
+        .executableMcpConnectors(s)
+        .filter((connector) => connector.visibility !== 'private');
   const runnableHere = new Set(
-    [...connectorSelectors.executableMcpConnectors(s), ...getAllRunConnectors()]
+    runRows
       .filter((connector) => isDesktop || connector.mcpConnectionType !== 'stdio')
       .map((connector) => connector.id),
   );

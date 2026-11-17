@@ -1,9 +1,16 @@
 import { type ToolManifest } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { type ToolStoreState } from '../initialState';
 import { initialState } from '../initialState';
 import { toolSelectors } from './tool';
+
+// The conversation's server listing (`connector.listForRun`)
+const runListing = vi.hoisted(() => ({ rows: undefined as unknown[] | undefined }));
+vi.mock('@/services/runConnectors', () => ({
+  getAllRunConnectors: () => runListing.rows ?? [],
+  getRunConnectors: () => runListing.rows,
+}));
 
 // Mock builtin skill for testing
 const mockBuiltinSkill = {
@@ -284,9 +291,37 @@ describe('MCP connectors in tool discovery', () => {
       }),
     ]);
 
-    expect(toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier)).toEqual(
+    const shared = s.connectors[0];
+    const mine = s.connectors[1];
+    // The conversation's server listing names the rows it may run
+    runListing.rows = [mine, shared];
+    const run = { agentId: 'agt-private', topicId: 'tpc-own' };
+
+    expect(toolSelectors.availableToolsForDiscovery(s, run).map((tool) => tool.identifier)).toEqual(
       expect.arrayContaining(['notes-mcp', 'notes-mcp-3f9a1c2e']),
     );
+  });
+
+  it("offers no private row a conversation's listing leaves out, nor any without a listing", () => {
+    // Regression: discovery merged every listed conversation's rows, so a
+    // public agent's chat advertised a private agent's connectors.
+    const s = state([
+      marketplace('notes-mcp', { id: 'c-shared', metadata: {}, sourceType: 'custom' }),
+      marketplace('notes-mcp', {
+        id: '3f9a1c2e-mine',
+        metadata: {},
+        sourceType: 'custom',
+        visibility: 'private',
+      }),
+    ]);
+    runListing.rows = [s.connectors[0]];
+    const ids = (run = {}) =>
+      toolSelectors.availableToolsForDiscovery(s, run).map((tool) => tool.identifier);
+
+    expect(ids({ agentId: 'agt-public', topicId: 'tpc-1' })).not.toContain('notes-mcp-3f9a1c2e');
+    runListing.rows = undefined;
+    expect(ids()).toContain('notes-mcp');
+    expect(ids()).not.toContain('notes-mcp-3f9a1c2e');
   });
 
   it("reads a connector-only identifier's manifest from its connector", () => {

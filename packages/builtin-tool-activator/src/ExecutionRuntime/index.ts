@@ -31,7 +31,11 @@ export interface ActivatorRuntimeService {
    */
   explainNotFound?: (identifier: string) => string | undefined;
   getActivatedToolIds: () => string[];
-  getToolManifests: (identifiers: string[]) => Promise<ToolManifestInfo[]>;
+  /**
+   * `run` is the conversation the activation runs in: what is discoverable
+   * (a private agent's own connectors among it) depends on it.
+   */
+  getToolManifests: (identifiers: string[], run?: ActivatorRun) => Promise<ToolManifestInfo[]>;
   /**
    * Full list of discoverable tool manifests for this run, when the host can
    * provide it. Two uses, both about requests the identifier-keyed
@@ -48,8 +52,14 @@ export interface ActivatorRuntimeService {
    * Scoping to discoverable tools stays the host's responsibility, same as
    * `getToolManifests`.
    */
-  listToolManifests?: () => Promise<ToolManifestInfo[]>;
+  listToolManifests?: (run?: ActivatorRun) => Promise<ToolManifestInfo[]>;
   markActivated: (identifiers: string[]) => void;
+}
+
+/** The conversation an activation runs in. */
+export interface ActivatorRun {
+  agentId?: string;
+  topicId?: string;
 }
 
 export interface ActivatorExecutionRuntimeOptions {
@@ -206,7 +216,10 @@ export class ActivatorExecutionRuntime {
     return this.service.activateSkill(args);
   }
 
-  async activateTools(args: ActivateToolsParams): Promise<BuiltinServerRuntimeOutput> {
+  async activateTools(
+    args: ActivateToolsParams,
+    run?: ActivatorRun,
+  ): Promise<BuiltinServerRuntimeOutput> {
     const { identifiers } = args;
 
     if (!identifiers || identifiers.length === 0) {
@@ -244,6 +257,7 @@ export class ActivatorExecutionRuntime {
           const prefix = id.slice(0, separatorIndex);
           return prefix !== id ? [id, prefix] : [id];
         }),
+        run,
       );
       const unresolved = identifiers.filter(
         (id) => resolveActivationIdentifier(id, discoveryManifests) === undefined,
@@ -253,7 +267,7 @@ export class ActivatorExecutionRuntime {
         needsDiscoveryList(unresolved) &&
         typeof this.service.listToolManifests === 'function'
       ) {
-        discoveryManifests = await this.service.listToolManifests();
+        discoveryManifests = await this.service.listToolManifests(run);
       }
       // Deduplicate after resolution: two wire names of the same plugin
       // (`lobe-web-browsing____search`, `…____crawlSinglePage`) both resolve
@@ -277,7 +291,7 @@ export class ActivatorExecutionRuntime {
       }
 
       // Fetch manifests for tools to activate
-      const manifests = await this.service.getToolManifests(toActivate);
+      const manifests = await this.service.getToolManifests(toActivate, run);
 
       const foundIdentifiers = new Set(manifests.map((m) => m.identifier));
       const notFoundAsTools = toActivate.filter((id) => !foundIdentifiers.has(id));

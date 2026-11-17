@@ -299,7 +299,10 @@ export class StreamingExecutorActionImpl {
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
     const toolManifestMap = disableTools
       ? Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]))
-      : buildRunManifestMap(getToolStoreState(), enabledManifests);
+      : buildRunManifestMap(getToolStoreState(), enabledManifests, {
+          agentId: agentId || undefined,
+          topicId: topicId ?? undefined,
+        });
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {
