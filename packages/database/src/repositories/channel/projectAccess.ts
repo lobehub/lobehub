@@ -1,13 +1,15 @@
-import { and, eq, exists, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, notExists, sql } from 'drizzle-orm';
 
 import type { ChannelItem } from '../../schemas';
 import { channelMembers, channels, projects, workspaceMembers } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { ChannelError } from './error';
 import { requireWorkspaceMember } from './people';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
+import { readChannelView } from './view';
 
 /**
  * A workspace project's group Channels are open to everyone who can read the project: they find
@@ -51,6 +53,113 @@ export const openProjectChannelWhere = (
         ),
       )
     : undefined;
+
+/** Open project Channels of this scope, minus the ones an admin removed the caller from. */
+export const openChannelWhere = (
+  db: LobeChatDatabase | Transaction,
+  userId: string,
+  workspaceId: string | null,
+) => {
+  const open = openProjectChannelWhere(db, userId, workspaceId);
+  if (!open) return sql`false`;
+  return and(
+    open,
+    notExists(
+      db
+        .select({ id: channelMembers.id })
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, channels.id),
+            eq(channelMembers.userId, userId),
+            eq(channelMembers.status, 'removed'),
+          ),
+        ),
+    ),
+  );
+};
+
+/** Trashed and archived open Channels stay with their members: newcomers neither read nor join. */
+const activeOpenWhere = (
+  db: LobeChatDatabase | Transaction,
+  userId: string,
+  workspaceId: string | null,
+) =>
+  and(
+    openChannelWhere(db, userId, workspaceId),
+    notTrashed(channels.isDeleted),
+    eq(channels.status, 'active'),
+  );
+
+export const findOpenChannel = async (
+  tx: Transaction,
+  userId: string,
+  workspaceId: string | null,
+  channelId: string,
+) => {
+  const [channel] = await tx
+    .select()
+    .from(channels)
+    .where(and(eq(channels.id, channelId), activeOpenWhere(tx, userId, workspaceId)))
+    .limit(1);
+  return channel;
+};
+
+/** Active open project Channels the caller has not joined, so the project can list them. */
+export const listUnjoinedOpenChannels = async (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId: string | null,
+) =>
+  workspaceId
+    ? db
+        .select()
+        .from(channels)
+        .where(
+          and(
+            activeOpenWhere(db, userId, workspaceId),
+            notExists(
+              db
+                .select({ id: channelMembers.id })
+                .from(channelMembers)
+                .where(
+                  and(
+                    eq(channelMembers.channelId, channels.id),
+                    eq(channelMembers.userId, userId),
+                    eq(channelMembers.status, 'active'),
+                  ),
+                ),
+            ),
+          ),
+        )
+    : [];
+
+/**
+ * An active open project Channel read by someone who has not joined: read-only, no member
+ * actions.
+ */
+export const readOpenChannel = async (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId: string | null,
+  channelId: string,
+  options?: Parameters<typeof readChannelView>[2],
+) =>
+  db.transaction(async (tx) => {
+    const channel = await findOpenChannel(tx, userId, workspaceId, channelId);
+    if (!channel) throw new ChannelError('NOT_FOUND', 'Channel not found');
+    const view = await readChannelView(tx, channelId, options, userId);
+    return {
+      channel: { ...channel, canDelete: false },
+      joined: false,
+      ...view,
+      jobs: view.jobs.map(({ requesterMemberId: _, topicId, topicOwnerId, ...job }) => ({
+        ...job,
+        canStop: false,
+        ...(topicId && topicOwnerId === userId ? { topicId } : {}),
+      })),
+    };
+  });
 
 /**
  * Makes the caller an active member of an open project Channel. They have seen it before joining,
