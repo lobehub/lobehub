@@ -1,9 +1,6 @@
-import {
-  AgentManagementManifest,
-  resolveAgentManagementManifest,
-} from '@lobechat/builtin-tool-agent-management';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import type { LobeToolManifest } from '@lobechat/context-engine';
@@ -252,29 +249,29 @@ describe('resolveDiscoveryPool', () => {
   });
 
   describe('context-aware builtin manifests', () => {
-    const agentManagement = {
-      identifier: AgentManagementManifest.identifier,
-      manifest: AgentManagementManifest,
-      resolveManifest: resolveAgentManagementManifest,
+    const lobeAgent = {
+      identifier: LobeAgentManifest.identifier,
+      manifest: LobeAgentManifest,
+      resolveManifest: resolveLobeAgentManifest,
     };
     const apiNames = (m?: LobeToolManifest) => m?.api.map((api) => api.name);
 
-    it('resolves a discoverable builtin for the run, so a sub-agent cannot activate callAgent', () => {
+    it('resolves a discoverable builtin for the run, so a sub-agent cannot activate callSubAgent', () => {
       const pool = resolveDiscoveryPool(
-        request({ builtinTools: [agentManagement], manifestContext: { isSubAgent: true } }),
+        request({ builtinTools: [lobeAgent], manifestContext: { isSubAgent: true } }),
       );
 
-      const discovered = pool.manifestMap[AgentManagementManifest.identifier];
-      expect(apiNames(discovered)).not.toContain('callAgent');
-      expect(apiNames(discovered)).toContain('getAgentDetail');
-      expect(discovered.systemRole).toContain('Dispatching work to other agents is not available');
+      const discovered = pool.manifestMap[LobeAgentManifest.identifier];
+      expect(apiNames(discovered)).not.toContain('callSubAgent');
+      expect(apiNames(discovered)).toContain('createPlan');
+      expect(discovered.systemRole).not.toContain('callSubAgent');
     });
 
-    it('keeps callAgent discoverable in a top-level run', () => {
+    it('keeps callSubAgent discoverable in a top-level run', () => {
       const pool = resolveDiscoveryPool(
-        request({ builtinTools: [agentManagement], manifestContext: { isSubAgent: false } }),
+        request({ builtinTools: [lobeAgent], manifestContext: { isSubAgent: false } }),
       );
-      expect(apiNames(pool.manifestMap[AgentManagementManifest.identifier])).toContain('callAgent');
+      expect(apiNames(pool.manifestMap[LobeAgentManifest.identifier])).toContain('callSubAgent');
     });
 
     it('drops a builtin whose resolver opts out of the run', () => {

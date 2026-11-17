@@ -2,31 +2,21 @@
  * Agent Management Executor
  *
  * Handles all agent management tool calls for creating, updating,
- * deleting, searching, and calling AI agents.
+ * deleting and searching AI agents.
  * Delegates to AgentManagerRuntime for actual implementation.
  */
 import { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
-import {
-  BaseExecutor,
-  type BuiltinToolContext,
-  type BuiltinToolResult,
-  type ConversationContext,
-} from '@lobechat/types';
+import { withLegacyCallAgentNote } from '@lobechat/builtin-tool-lobe-agent';
+import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
+import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
-import { getAgentStoreState, useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/dispatch/nonHeteroSubAgentDispatcher';
-import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import {
   AgentManagementApiName,
   AgentManagementIdentifier,
   type CallAgentParams,
-  type CallAgentState,
   type CreateAgentParams,
   type DeleteAgentParams,
   type DuplicateAgentParams,
@@ -108,164 +98,40 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     return runtime.searchMarketTools(params);
   };
 
-  // ==================== Execution ====================
+  // ==================== Execution (retired) ====================
 
+  /**
+   * Retired: handing work to another agent is `lobe-agent.callSubAgent` with
+   * `agentId`. Kept as an alias for calls from old prompts and cached tool
+   * lists — it forwards there and every result asks the model to switch.
+   *
+   * In a group, members answer through `lobe-group-management.speak`; the old
+   * group branch (an after-turn `triggerSpeak`) is not kept.
+   */
   callAgent = async (
     params: CallAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const { agentId, instruction, skipCallSupervisor = false } = params;
-
-    // Background delivery wakes the caller through the server runtime, which
-    // this runtime does not have.
-    if (params.runInBackground) {
+    if (ctx.groupId) {
       return {
-        content:
-          'Background agent calls (runInBackground) are not supported in this runtime. Call callAgent again without runInBackground to wait for the reply.',
+        content: withLegacyCallAgentNote(
+          'callAgent is not available in group conversations. To have a member respond, use the group-management `speak` tool.',
+        ),
         success: false,
       };
     }
 
-    // Execute as synchronous speak
-    // Two modes: Group vs Agents
+    const result = await lobeAgentExecutor.callSubAgent(
+      {
+        agentId: params.agentId,
+        description: '',
+        instruction: params.instruction,
+        runInBackground: params.runInBackground,
+      },
+      ctx,
+    );
 
-    // Mode 1: Group environment - use group orchestration
-    if (ctx.groupId && ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      // Register afterCompletion callback to trigger group orchestration
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerSpeak({
-          agentId,
-          instruction,
-          skipCallSupervisor,
-          supervisorAgentId: ctx.agentId!,
-        }),
-      );
-
-      return {
-        content: `Triggered agent "${agentId}" to respond.`,
-        state: {
-          agentId,
-          instruction,
-          mode: 'speak',
-          skipCallSupervisor,
-        } as CallAgentState,
-        stop: true,
-        success: true,
-      };
-    }
-
-    // Mode 2: Agents mode (non-group) - execute directly with subAgentId
-    if (ctx.registerAfterCompletion) {
-      // Pre-load target agent config if not already loaded (before registerAfterCompletion)
-      // This ensures we fail fast with a clear error message if agent doesn't exist
-      const targetAgentExists = useAgentStore.getState().agentMap[agentId];
-      if (!targetAgentExists) {
-        try {
-          const config = await agentService.getAgentConfigById(agentId);
-          if (!config) {
-            return {
-              content: `Agent "${agentId}" not found in your workspace. Please check the agent ID and try again.`,
-              success: false,
-            };
-          }
-          useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
-        } catch (error) {
-          console.error('[callAgent] Failed to load agent config:', error);
-          return {
-            content: `Failed to load agent "${agentId}": ${(error as Error).message}`,
-            success: false,
-          };
-        }
-      }
-
-      // Register afterCompletion to execute the agent.
-      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent ().
-      ctx.registerAfterCompletion(async () => {
-        const get = useChatStore.getState;
-
-        const conversationContext: ConversationContext = {
-          agentId: ctx.agentId || '',
-          topicId: ctx.topicId || null,
-        };
-
-        // Get current messages for client-mode runner (gateway loads from DB).
-        const chatKey = messageMapKey(conversationContext);
-        const messages = dbMessageSelectors.getDbMessagesByKey(chatKey)(get());
-
-        if (messages.length === 0) {
-          console.error('[callAgent] No messages found in current conversation');
-          return;
-        }
-
-        // Inject a virtual instruction message so the sub-agent has clear direction.
-        // Only used by the client runner; gateway mode sends `instruction` as a real
-        // user message via dispatchNonHeteroSubAgent.
-        const now = Date.now();
-        const messagesWithInstruction = instruction
-          ? [
-              ...messages,
-              {
-                content: `<speaker name="Supervisor" />\n${instruction}`,
-                createdAt: now,
-                id: `virtual_speak_instruction_${now}`,
-                role: 'user' as const,
-                updatedAt: now,
-              },
-            ]
-          : messages;
-
-        const parentAgentConfig = conversationContext.agentId
-          ? agentSelectors.getAgentConfigById(conversationContext.agentId)(getAgentStoreState())
-          : undefined;
-
-        try {
-          await dispatchNonHeteroSubAgent(
-            {
-              kind: 'callAgent',
-              targetAgentId: agentId,
-              instruction,
-              parentMessageId: ctx.messageId,
-            },
-            {
-              conversationContext,
-              heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
-              isGatewayMode: get().isGatewayModeEnabled(),
-              messages: messagesWithInstruction,
-            },
-            get(),
-          );
-        } catch (error) {
-          console.error('[callAgent] dispatchNonHeteroSubAgent failed:', error);
-          throw error;
-        }
-      });
-
-      return {
-        content: `Called agent "${agentId}" to respond.`,
-        state: {
-          agentId,
-          instruction,
-          mode: 'speak',
-          skipCallSupervisor,
-        } as CallAgentState,
-        stop: true,
-        success: true,
-      };
-    }
-
-    // Fallback if registerAfterCompletion not available
-    console.warn('[callAgent] registerAfterCompletion not available in context');
-    return {
-      content: `Called agent "${agentId}" but execution may not complete properly.`,
-      state: {
-        agentId,
-        instruction,
-        mode: 'speak',
-        skipCallSupervisor,
-      } as CallAgentState,
-      stop: true,
-      success: false,
-    };
+    return { ...result, content: withLegacyCallAgentNote(result.content ?? '') };
   };
 }
 

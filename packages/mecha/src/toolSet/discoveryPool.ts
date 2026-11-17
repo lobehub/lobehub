@@ -88,7 +88,7 @@ export interface DiscoveryPoolRequest {
    * Runtime context for context-aware builtin manifests — the same one the
    * tools engine resolved the enabled set with. A discoverable builtin is
    * activated mid-run from THIS map, so it must be trimmed for the run too
-   * (e.g. agent-management drops `callAgent` inside a sub-agent run).
+   * (e.g. lobe-agent drops `callSubAgent` inside a sub-agent run).
    */
   manifestContext?: BuiltinToolResolveContext;
   /** The page agent edits the open page through the conversation sandbox. */
