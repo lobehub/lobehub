@@ -163,8 +163,9 @@ export type ChannelThreadMetadata = Record<string, unknown>;
 export type ChannelMessageMetadata = Record<string, unknown>;
 
 /**
- * The Agent that wrote a request on its requester's behalf (`lobe-channel.sendMessage`). The
- * person stays the sender and execution identity; this only says who relayed it.
+ * The Agent that wrote a message on its requester's behalf (`lobe-channel.sendMessage` /
+ * `messagePerson`). The person stays the sender and execution identity; this only says who
+ * relayed it.
  */
 export interface ChannelMessageVia {
   agentId: string;
@@ -456,6 +457,39 @@ export interface ChannelSentMessage {
   channelTitle: string;
   messageId: string;
   /** Link to the Channel the message was posted in, for the reply that mentions it. */
+  url: string;
+}
+
+/** People the run's requester can message one-on-one in the run's scope. */
+export interface ChannelListPeopleParams {
+  limit?: number;
+  /** Case-insensitive part of the person's display name or @handle. */
+  query?: string;
+}
+
+export interface ChannelPerson {
+  name: string;
+  userId: string;
+  username: string | null;
+}
+
+export interface ChannelPeoplePage {
+  /** More people matched than were returned; narrow with `query`. */
+  hasMore: boolean;
+  people: ChannelPerson[];
+}
+
+/** A message for one person, posted in the requester's conversation with them. */
+export interface ChannelMessagePersonParams {
+  content: string;
+  userId: string;
+}
+
+export interface ChannelSentPersonMessage {
+  channelId: string;
+  messageId: string;
+  person: ChannelPerson;
+  /** Link to the requester's conversation with the person. */
   url: string;
 }
 

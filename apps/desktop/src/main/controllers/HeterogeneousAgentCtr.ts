@@ -204,6 +204,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async stopBackgroundTask(...args: Parameters<Implementation['stopBackgroundTask']>) {
+    return (await this.getImplementation()).stopBackgroundTask(...args);
+  }
+
+  @IpcMethod()
   async stopSession(...args: Parameters<Implementation['stopSession']>) {
     return (await this.getImplementation()).stopSession(...args);
   }

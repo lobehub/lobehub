@@ -1,3 +1,6 @@
+// Built-in control commands register themselves when the steer loop loads.
+import './heteroStopTask';
+
 import type {
   AgentContentBlock,
   AgentPromptInput,

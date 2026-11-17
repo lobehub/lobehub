@@ -14,6 +14,7 @@ import {
 import { steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
+  type DeferredMessagePatch,
   type OperationStatusResult,
   type StartExecutionParams,
   type StartExecutionResult,
@@ -24,6 +25,7 @@ import {
   STEP_LOCK_HEARTBEAT_MS,
   STEP_LOCK_TTL_SECONDS,
 } from './constants';
+import { publishDeferredMessagePatch } from './executeStep/messagePatch';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -38,6 +40,7 @@ export type OperationControlDeps = Pick<
   | 'delegate'
   | 'endExpiredClientLlmWait'
   | 'messageModel'
+  | 'queryUiMessages'
   | 'queueService'
   | 'serverDB'
   | 'streamManager'
@@ -416,11 +419,17 @@ export async function controlCompletedToolResult(
 export async function scheduleContinuation(
   deps: OperationControlDeps,
   continuation: AgentStepContinuation,
+  /** The handing-back step's patch; published first, since no entry read here will. */
+  deferredMessagePatch?: DeferredMessagePatch,
 ): Promise<void> {
   if (!deps.queueService) {
     throw new Error(
       `Cannot schedule continuation for ${continuation.operationId}: no queue service`,
     );
+  }
+
+  if (deferredMessagePatch) {
+    await publishDeferredMessagePatch(deps, continuation.operationId, deferredMessagePatch);
   }
 
   // The steps this invocation inlined are still only in memory — the

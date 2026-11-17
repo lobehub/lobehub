@@ -33,6 +33,8 @@ import {
   getMachineDefaultTarget,
   groupExecutionTargetDevices,
 } from '@/features/ExecutionTargetPicker';
+import { getPrivateDeviceBlock } from '@/features/HeterogeneousAgent/ExecutionEnvironment/heteroTargetSelection';
+import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   isHeterogeneousSandboxExecutionAvailable,
@@ -197,7 +199,7 @@ interface HeteroDeviceSwitcherProps {
 }
 
 const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'setting']);
   const [open, setOpen] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
   const { canUseResource } = useChatInputResourceAccess();
@@ -207,6 +209,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const topicId = useTopicId();
   const agentWorkspaceId = useAgentStore((s) => s.agentMap[agentId]?.workspaceId);
   const isWorkspaceAgent = Boolean(agentWorkspaceId);
+  const agentVisibility = useAgentStore((s) => s.agentMap[agentId]?.visibility);
+  // The stored (shared) policy, not the effective one: the effective config
+  // drops the policy for a private Agent's owner, for whom it is dormant.
+  const sharedSelectionPolicy = useAgentStore(
+    (s) => s.agentMap[agentId]?.agencyConfig?.executionTargetSelectionPolicy,
+  );
+  const { canManageAgent } = useAgentManagementAccess(agentId);
 
   // Shared config merged with the caller's per-agent override —
   // the hook eagerly fetches the `workspaceUserSettings` bucket on mount so
@@ -516,6 +525,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   );
   const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(otherDevices);
   const privateDevices = isWorkspaceAgent ? privateWorkspace : [];
+  // A manager's pick on a published fixed Agent writes the shared contract,
+  // which the server only accepts with a public device
+  // (`FixedAgentRequiresPublicWorkspaceDevice`): say so on the rows rather
+  // than after a failed save. A private Agent's owner may pick any of them —
+  // its policy is dormant until publication.
+  const privateDeviceBlockedReason =
+    getPrivateDeviceBlock({
+      canManageAgent,
+      isWorkspaceAgent,
+      selectionPolicy: sharedSelectionPolicy,
+      visibility: agentVisibility,
+    }) === 'fixed'
+      ? t('setting:settingAgent.devicePolicy.privateDeviceFixed')
+      : undefined;
   const workspaceDevices = isWorkspaceAgent ? workspace : [];
   const personalOnlyDevices = isWorkspaceAgent ? [] : personal;
   // Workspace agents always render the Private / Workspace group split (even
@@ -638,9 +661,16 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const hasDeviceSection =
     privateDevices.length + workspaceDevices.length + personalOnlyDevices.length > 0;
   const showSectionLabels = isDesktop || hasDeviceSection;
-  const renderDeviceRow = (d: DeviceListItem, { thisComputer = false } = {}) => (
+  const renderDeviceRow = (
+    d: DeviceListItem,
+    {
+      blockedReason,
+      thisComputer = false,
+    }: { blockedReason?: string; thisComputer?: boolean } = {},
+  ) => (
     <DeviceOptionRow
       active={isActive('device', d.deviceId)}
+      blockedReason={blockedReason}
       device={d}
       key={d.deviceId}
       // Users pick a machine, not a transport: this one is "This computer".
@@ -858,7 +888,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           devices={privateDevices}
           kind={'private'}
           label={t('heteroAgent.executionTarget.personalGroup')}
-          renderDevice={renderDeviceRow}
+          renderDevice={(d) => renderDeviceRow(d, { blockedReason: privateDeviceBlockedReason })}
         />
       ) : null}
       {showDeviceGroups && workspaceDevices.length > 0 ? (

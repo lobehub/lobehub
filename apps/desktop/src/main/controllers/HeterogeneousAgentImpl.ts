@@ -85,6 +85,7 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
+  stopClaudeCodeTask,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
@@ -161,12 +162,17 @@ import { createLogger } from '@/utils/logger';
 
 import BrowserControlCtr from './BrowserControlCtr';
 import { sendPromptWithCodexAppServer } from './codexAppServer';
-import {
-  completeLiveCliRuntime,
-  createLiveCliAdapter,
-  writeCliPrompt,
-} from './heterogeneousAgentLiveInput';
-import type { AgentSession, CliTraceSession, SendPromptParams } from './heterogeneousAgentSession';
+import { createLiveCliAdapter, endLiveCliRun, writeCliPrompt } from './heterogeneousAgentLiveInput';
+import type {
+  AgentSession,
+  CancelSessionParams,
+  CliTraceSession,
+  GetSessionInfoParams,
+  SendPromptParams,
+  StopBackgroundTaskParams,
+  StopSessionParams,
+  SubmitInterventionParams,
+} from './heterogeneousAgentSession';
 import {
   claudeProfileDirOf,
   closeActiveAcpSessions,
@@ -314,30 +320,6 @@ export interface HeteroTranscriptReplayOutcome {
 interface BrowserRunBinding {
   agentId?: string;
   topicId?: string;
-}
-
-interface CancelSessionParams {
-  sessionId: string;
-}
-
-interface SubmitInterventionParams {
-  cancelled?: boolean;
-  /** When set, signals user-cancelled or timeout — the bridge resolves with isError. */
-  cancelReason?: 'timeout' | 'user_cancelled';
-  /** Operation id stamped on the request the renderer is responding to. */
-  operationId: string;
-  /** Structured user answer; ignored when `cancelled` is true. */
-  result?: unknown;
-  /** Correlation key carried on the original `agent_intervention_request`. */
-  toolCallId: string;
-}
-
-interface StopSessionParams {
-  sessionId: string;
-}
-
-interface GetSessionInfoParams {
-  sessionId: string;
 }
 
 /**
@@ -1676,7 +1658,6 @@ export default class HeterogeneousAgentCtr {
             }
           },
         },
-        liveInput: params.liveSteer,
         mcpConfigPath: intervention?.tmpConfigPath,
         promptInput,
         resumeSessionId: session.agentSessionId,
@@ -1973,7 +1954,8 @@ export default class HeterogeneousAgentCtr {
       },
       onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
       operationId: params.operationId,
-      replayUserMessages: params.liveSteer,
+      // Like the CLI, in every Follow-up mode: a steer is confirmed by its replay.
+      replayUserMessages: true,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,
       stdinPayload: input.stdin,
@@ -2380,7 +2362,7 @@ export default class HeterogeneousAgentCtr {
       reject(new Error(typeof sessionError === 'string' ? sessionError : sessionError.message));
     });
 
-    // In stdin mode, write the prepared payload; close stdin unless the session stays live.
+    // In stdin mode, write the prepared payload; close stdin unless live (Claude Code always is).
     if (useStdin && spawnPlan.stdinPayload !== undefined && proc.stdin) {
       void this.writeCliTraceFile(traceSession, 'stdin.txt', spawnPlan.stdinPayload);
       const live = !!spawnPlan.liveInput;
@@ -2420,9 +2402,11 @@ export default class HeterogeneousAgentCtr {
       uploadImage: this.uploadResultImage,
     });
     let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
+    let sawError = false;
 
     const broadcastStreamEvents = (events: AgentStreamEvent[]) => {
       for (const event of events) {
+        if (event.type === 'error') sawError = true;
         this.broadcast('heteroAgentEvent', {
           event,
           sessionId: session.sessionId,
@@ -2568,10 +2552,10 @@ export default class HeterogeneousAgentCtr {
 
           const liveInput = session.liveInput;
           session.liveInput = undefined;
-          if (code === 0) {
-            const exit = { cancelledByUs: false, code, signal };
-            broadcastStreamEvents(pipeline.validateCompletion());
-            broadcastStreamEvents(completeLiveCliRuntime(pipeline, liveInput, exit));
+          if (code === 0) broadcastStreamEvents(pipeline.validateCompletion());
+          const liveEnd = endLiveCliRun(pipeline, liveInput, { code, sawError, signal });
+          if (code === 0 || liveEnd.length > 0) {
+            broadcastStreamEvents(liveEnd);
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
           } else {
@@ -3171,6 +3155,7 @@ export default class HeterogeneousAgentCtr {
     }
     const proc = session.process;
     const gracefulExit = this.waitForProcessExit(proc, 2000);
+    session.liveInput?.close();
     this.killProcessTree(proc, 'SIGINT');
 
     if (await gracefulExit) return;
@@ -3182,6 +3167,20 @@ export default class HeterogeneousAgentCtr {
     if (!(await forcedExit)) {
       throw new Error(`Session ${params.sessionId} did not exit after SIGKILL`);
     }
+  }
+
+  /**
+   * Stop one background task of a Claude Code run, whose input (SDK stream or
+   * CLI stdin) stays open in every Follow-up mode until the run winds down.
+   * Resolves once CC accepted the request; its `stopped` report, the proof,
+   * reaches the renderer through the run's own stream.
+   */
+  async stopBackgroundTask({ sessionId, taskId }: StopBackgroundTaskParams): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (session?.sdkSession) return session.sdkSession.stopTask(taskId);
+    const live = session?.liveInput;
+    if (!live) throw new Error('This run cannot stop a single background task');
+    await stopClaudeCodeTask((request) => live.sendControlRequest(request), taskId);
   }
 
   /**
@@ -3228,6 +3227,7 @@ export default class HeterogeneousAgentCtr {
     if (session.process && !session.process.killed) {
       session.cancelledByUs = true;
       const proc = session.process;
+      session.liveInput?.close();
       this.killProcessTree(proc, 'SIGTERM');
       setTimeout(() => {
         if (session.process === proc && !proc.killed) {

@@ -54,8 +54,6 @@ class HeterogeneousAgentService {
     /** Workspace the run belongs to — recovery is workspace-scoped. */
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
-    /** Keep the run able to take messages while it runs (Follow-up behavior: Steer). */
-    liveSteer?: boolean;
     operationId: string;
     prompt: string;
     /**
@@ -92,6 +90,11 @@ class HeterogeneousAgentService {
 
   async cancelSession(sessionId: string) {
     return this.ipc.heterogeneousAgent.cancelSession({ sessionId });
+  }
+
+  /** Stop one background task of a local Claude Code SDK run. */
+  async stopBackgroundTask(sessionId: string, taskId: string) {
+    return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
   }
 
   async stopSession(sessionId: string) {
