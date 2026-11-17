@@ -97,6 +97,8 @@ export interface ServerMessagesEngineParams {
   agentDocuments?: AgentContextDocument[];
   /** Agent-document change notes keyed by the user message each belongs to */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /** Documents deleted or disabled since earlier turns read them */
+  revokedDocumentIds?: string[];
   /** Immutable expertise captured when the operation started. */
   expertise?: ExpertiseContextSnapshot;
   /** Whether to inject the operation expertise snapshot. */

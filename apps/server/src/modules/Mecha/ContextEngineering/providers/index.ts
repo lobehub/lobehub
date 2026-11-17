@@ -21,6 +21,7 @@ import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
@@ -44,6 +45,7 @@ import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 import { type AgentDocumentIndexTurn, resolveServerAgentDocumentIndex } from './agentDocumentIndex';
+import { revokedAgentDocumentRefs } from './revokedAgentDocuments';
 
 export interface ServerContextFactSource {
   ctx: RuntimeExecutorContext;
@@ -146,6 +148,16 @@ export const createServerContextFactProviders = ({
         documentAccessScope,
       ).getDocumentById(documentId, agentId);
       return doc ? { content: doc.content, title: doc.title } : null;
+    },
+
+    findRevokedAgentDocumentIds: async (agentId, documentIds) => {
+      const bindings = await new AgentDocumentModel(
+        db,
+        userId,
+        workspaceId,
+        documentAccessScope,
+      ).listBindingStatesByRefs(agentId, documentIds);
+      return revokedAgentDocumentRefs(documentIds, bindings);
     },
 
     findTopic: async (topicId) => {

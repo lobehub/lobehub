@@ -566,3 +566,69 @@ describe('which tool counts as reaching the sandbox', () => {
     expect(resolveSandboxPersistence).not.toHaveBeenCalled();
   });
 });
+
+describe('gatherContextFacts — revoked document reads', () => {
+  const readKnowledge = (fileIds: string[]) =>
+    ({
+      content: 'rule body',
+      createdAt: 0,
+      id: 't',
+      plugin: {
+        apiName: 'readKnowledge',
+        arguments: JSON.stringify({ fileIds }),
+        identifier: 'lobe-knowledge-base',
+      },
+      role: 'tool',
+      updatedAt: 0,
+    }) as never;
+
+  it('asks the host only about documents the history read', async () => {
+    const findRevokedAgentDocumentIds = vi.fn(async () => ['docs_b', 'docs_a']);
+    const facts = await gatherContextFacts(
+      request({ messages: [message('hi'), readKnowledge(['docs_a', 'docs_b'])] }),
+      { findRevokedAgentDocumentIds },
+    );
+
+    expect(findRevokedAgentDocumentIds).toHaveBeenCalledWith('agt_1', ['docs_a', 'docs_b']);
+    // Sorted so the filtered prefix is stable whatever order the host returns.
+    expect(facts.revokedDocumentIds).toEqual(['docs_a', 'docs_b']);
+  });
+
+  it('skips the lookup without a document read, for a share visitor, or without an agent', async () => {
+    const findRevokedAgentDocumentIds = vi.fn(async () => ['docs_a']);
+
+    const noRead = await gatherContextFacts(request({ messages: [message('hi')] }), {
+      findRevokedAgentDocumentIds,
+    });
+    const visitor = await gatherContextFacts(
+      request({
+        messages: [readKnowledge(['docs_a'])],
+        shareVisitor: { agentId: 'agt_1', visitorUserId: 'u_2' },
+      }),
+      { findRevokedAgentDocumentIds },
+    );
+    const noAgent = await gatherContextFacts(
+      request({ agentId: undefined, messages: [readKnowledge(['docs_a'])] }),
+      { findRevokedAgentDocumentIds },
+    );
+
+    expect(findRevokedAgentDocumentIds).not.toHaveBeenCalled();
+    expect(noRead.revokedDocumentIds).toBeUndefined();
+    expect(visitor.revokedDocumentIds).toBeUndefined();
+    expect(noAgent.revokedDocumentIds).toBeUndefined();
+  });
+
+  it('leaves the fact out when nothing is revoked or the lookup fails', async () => {
+    const none = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
+      findRevokedAgentDocumentIds: async () => [],
+    });
+    const failed = await gatherContextFacts(request({ messages: [readKnowledge(['docs_a'])] }), {
+      findRevokedAgentDocumentIds: async () => {
+        throw new Error('db down');
+      },
+    });
+
+    expect(none.revokedDocumentIds).toBeUndefined();
+    expect(failed.revokedDocumentIds).toBeUndefined();
+  });
+});

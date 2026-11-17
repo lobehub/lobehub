@@ -50,6 +50,7 @@ export const toContextSnapshot = ({
   planTodo,
   projectInstructions,
   provider,
+  revokedDocumentIds,
   skillsConfig,
   systemRole,
   toolDiscoveryConfig,
@@ -68,6 +69,7 @@ export const toContextSnapshot = ({
     identity: agentIdentity,
     inputTemplate,
     knowledge: { fileContents: knowledge?.fileContents, knowledgeBases: knowledge?.knowledgeBases },
+    revokedDocumentIds,
     systemRole,
   },
   // Server-side file access URLs resolve to stable file-proxy URLs in production.

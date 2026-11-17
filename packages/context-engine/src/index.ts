@@ -53,6 +53,7 @@ export type { PlaceholderValue, PlaceholderValueMap } from './processors';
 export {
   buildPlaceholderGenerators,
   cacheEconomicsForProvider,
+  collectDocumentReadIds,
   formatPlaceholderValues,
   getSlicedMessages,
   GroupMessageFlattenProcessor,

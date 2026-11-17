@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from 'drizzle-orm';
 
 import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../../schemas';
+import { isUuid } from '../../../utils/uuid';
 import { deriveAgentDocumentFields } from '../deriveFields';
 import { parseLoadRules } from '../policy';
 import {
@@ -255,6 +256,68 @@ export async function findByDocumentIds(
       loadRules: parseLoadRules(item),
     };
   });
+}
+
+/**
+ * Every binding of `agentId` matching the given references, deleted ones included.
+ *
+ * Use when:
+ * - Deciding whether a historical document read in a conversation still refers to a live
+ *   binding, so a deleted or disabled document's old content can be withheld from the model.
+ *
+ * Expects:
+ * - `refs` mixes `documents.id` values (`docs_*`) and `agent_documents.id` UUIDs; any other
+ *   value is ignored, so a malformed id never reaches the UUID column.
+ *
+ * Returns:
+ * - The matching rows' identity, soft-delete marker and owner access bitmask.
+ */
+export async function listBindingStatesByRefs(
+  ctx: AgentDocumentContext,
+  agentId: string,
+  refs: string[],
+): Promise<{ accessSelf: number; deletedAt: Date | null; documentId: string; id: string }[]> {
+  const bindingIds = [...new Set(refs.filter(isUuid))];
+  const documentIds = [...new Set(refs.filter((ref) => !isUuid(ref) && ref.length > 0))];
+  if (bindingIds.length === 0 && documentIds.length === 0) return [];
+
+  const matchesRef = or(
+    ...(documentIds.length > 0 ? [inArray(agentDocuments.documentId, documentIds)] : []),
+    ...(bindingIds.length > 0 ? [inArray(agentDocuments.id, bindingIds)] : []),
+  );
+
+  return ctx.db
+    .select({
+      accessSelf: agentDocuments.accessSelf,
+      deletedAt: agentDocuments.deletedAt,
+      documentId: agentDocuments.documentId,
+      id: agentDocuments.id,
+    })
+    .from(agentDocuments)
+    .where(and(agentDocOwnership(ctx), eq(agentDocuments.agentId, agentId), matchesRef));
+}
+
+/**
+ * Whether a backing document was an agent document whose every binding is now soft-deleted.
+ *
+ * Use when:
+ * - A generic document read (e.g. the knowledge-base `readKnowledge` tool on a `docs_*` id)
+ *   must not resurrect a document the user deleted from every agent, while documents that
+ *   were never agent documents stay readable.
+ *
+ * Returns:
+ * - `true` only when at least one binding exists and all of them are deleted.
+ */
+export async function isDeletedFromAllAgents(
+  ctx: AgentDocumentContext,
+  documentId: string,
+): Promise<boolean> {
+  const bindings = await ctx.db
+    .select({ deletedAt: agentDocuments.deletedAt })
+    .from(agentDocuments)
+    .where(and(agentDocOwnership(ctx), eq(agentDocuments.documentId, documentId)));
+
+  return bindings.length > 0 && bindings.every((binding) => binding.deletedAt !== null);
 }
 
 export async function listByDocumentIds(

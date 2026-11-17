@@ -9,6 +9,7 @@ import {
 import { and, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -289,6 +290,14 @@ export class KnowledgeBaseSearchService {
     return this.readScopedContents(ids);
   }
 
+  private async isDeletedAgentDocument(documentId: string): Promise<boolean> {
+    return new AgentDocumentModel(
+      this.serverDB,
+      this.userId,
+      this.workspaceId,
+    ).isDeletedFromAllAgents(documentId);
+  }
+
   private async readScopedContents(ids: string[]): Promise<FileContentResult[]> {
     return pMap(
       ids,
@@ -297,7 +306,9 @@ export class KnowledgeBaseSearchService {
         // KB inline documents (custom/document) have no S3 file.
         if (id.startsWith('docs_')) {
           const doc = await this.documentModel.findById(id);
-          if (!doc) {
+          // A document deleted from every agent it was bound to keeps its row for
+          // recovery; reading it here would hand the removed content straight back.
+          if (!doc || (await this.isDeletedAgentDocument(id))) {
             return {
               content: '',
               error: 'Document not found',

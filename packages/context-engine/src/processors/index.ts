@@ -33,6 +33,12 @@ export {
 } from './PlaceholderVariables';
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export {
+  collectDocumentReadIds,
+  formatRevokedDocumentResult,
+  RevokedDocumentResultFilter,
+  type RevokedDocumentResultFilterConfig,
+} from './RevokedDocumentResultFilter';
+export {
   cacheEconomicsForProvider,
   type StaleToolResultTrimConfig,
   StaleToolResultTrimProcessor,

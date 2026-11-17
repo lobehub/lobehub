@@ -56,6 +56,8 @@ export interface ContextAgentSnapshot {
   inputTemplate?: string;
   /** Files and knowledge bases attached to the agent. */
   knowledge?: KnowledgeConfig;
+  /** Documents deleted or disabled since earlier turns read them. */
+  revokedDocumentIds?: string[];
   systemRole?: string;
 }
 

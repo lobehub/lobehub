@@ -308,6 +308,12 @@ export interface MessagesEngineParams {
    * snapshot (see `resolveAgentDocumentIndex`).
    */
   agentDocumentChanges?: AgentDocumentChangesByMessage;
+  /**
+   * Document ids whose agent-document binding is no longer live (deleted,
+   * disabled, or unbound from this agent). Historical `readKnowledge` /
+   * `readDocument` results referencing them are withheld from the model.
+   */
+  revokedDocumentIds?: string[];
 
   // ========== Skills ==========
   /** Skills configuration */

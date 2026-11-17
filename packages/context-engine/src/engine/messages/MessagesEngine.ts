@@ -21,6 +21,7 @@ import {
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
+  RevokedDocumentResultFilter,
   StaleToolResultTrimProcessor,
   SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
@@ -201,6 +202,7 @@ export class MessagesEngine {
       agentGroup,
       agentDocuments,
       agentDocumentChanges,
+      revokedDocumentIds,
       planTodo,
       userMemory,
       initialContext,
@@ -602,6 +604,11 @@ export class MessagesEngine {
         injectedManifests: injectedToolManifests,
         injectedSkills: injectedActivatedSkills,
       }),
+      // Revoked document reads — withholds historical readKnowledge /
+      // readDocument bodies of documents deleted or disabled since they were
+      // read, so a removed standing rule stops steering the agent. Same
+      // pipeline position constraints as ActivationResultTrimProcessor.
+      new RevokedDocumentResultFilter({ revokedDocumentIds }),
       // Stale tool-result trimming — replaces the bodies of superseded tool
       // results (file reads later overwritten, stale browser snapshots, old
       // command output) with short placeholders. Rules are monotone so the

@@ -25,6 +25,7 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentManagementContext,
+  collectDocumentReadIds,
   type DocumentReferenceItem,
   type GroupAgentBuilderContext,
   type PlanTodoConfig,
@@ -147,6 +148,30 @@ const gatherDocumentReferences = async (
       { inlineEarlierTurns: !request.enabledToolIds.includes(AgentDocumentsIdentifier) },
     ),
   );
+};
+
+/**
+ * Documents that earlier turns read and that have since been deleted or
+ * disabled. Injection already follows the live bindings; this covers the
+ * read results persisted in the conversation. Looked up only when the history
+ * holds a document read, and never for a share visitor (who never reads the
+ * creator's documents through the tool).
+ */
+const gatherRevokedDocumentIds = async (
+  request: ContextFactRequest,
+  providers: ContextFactProviders,
+  agentId: string | undefined,
+): Promise<string[] | undefined> => {
+  const { findRevokedAgentDocumentIds } = providers;
+  if (request.shareVisitor || !agentId || !findRevokedAgentDocumentIds) return undefined;
+  const documentIds = collectDocumentReadIds(request.messages);
+  if (documentIds.length === 0) return undefined;
+
+  return attempt('revokedDocumentIds', async () => {
+    const revoked = await findRevokedAgentDocumentIds(agentId, documentIds);
+    const ids = revoked ? [...revoked] : [];
+    return ids.length > 0 ? ids.sort() : undefined;
+  });
 };
 
 /**
@@ -525,6 +550,7 @@ export const gatherContextFacts = async (
     () => gatherGroupAgentBuilderContext(request, providers),
     () => gatherOnboardingContext(request, providers),
     () => gatherPlanTodo(request, providers),
+    () => gatherRevokedDocumentIds(request, providers, request.agentId),
     () =>
       attempt('sandboxFiles', () =>
         sandboxEnabled && request.topicId
@@ -556,6 +582,7 @@ export const gatherContextFacts = async (
     groupAgentBuilderContext,
     onboardingContext,
     planTodo,
+    revokedDocumentIds,
     sandboxFiles,
     sandboxPersistence,
     topic,
@@ -567,6 +594,7 @@ export const gatherContextFacts = async (
   return {
     agentDocumentChanges,
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
+    revokedDocumentIds,
     step: {
       agentAccountContext,
       agentBuilderContext,

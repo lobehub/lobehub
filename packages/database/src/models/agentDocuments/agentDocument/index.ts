@@ -373,6 +373,14 @@ export class AgentDocumentModel {
     return queries.listByDocumentIds(this.ctx, agentId, documentIds, options);
   }
 
+  async listBindingStatesByRefs(agentId: string, refs: string[]) {
+    return queries.listBindingStatesByRefs(this.ctx, agentId, refs);
+  }
+
+  async isDeletedFromAllAgents(documentId: string): Promise<boolean> {
+    return queries.isDeletedFromAllAgents(this.ctx, documentId);
+  }
+
   async hasByAgent(agentId: string): Promise<boolean> {
     return queries.hasByAgent(this.ctx, agentId);
   }

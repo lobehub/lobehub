@@ -136,6 +136,16 @@ export interface ContextFactProviders {
     agentId: string,
     documentId: string,
   ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
+  /**
+   * Of the given document ids (`documents.id` or `agent_documents.id`) that
+   * earlier turns read, those whose binding to `agentId` is no longer live:
+   * every binding is deleted or lost read access. Ids never bound to the agent
+   * (knowledge-base documents, uploads) are not revoked.
+   */
+  findRevokedAgentDocumentIds?: (
+    agentId: string,
+    documentIds: string[],
+  ) => Promise<Iterable<string> | undefined>;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */
@@ -206,6 +216,8 @@ export interface ContextFactProviders {
 export interface GatheredContextFacts {
   agentDocumentChanges?: AgentDocumentChangesByMessage;
   agentDocuments?: AgentContextDocument[];
+  /** Document ids whose earlier reads must no longer reach the model. */
+  revokedDocumentIds?: string[];
   step: ContextStepSnapshot & { agentManagementContext?: AgentManagementContext };
   variables: ContextVariables;
 }
