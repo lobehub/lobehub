@@ -220,8 +220,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
   };
 
   const followLabelOf = (row: RowKey) => {
-    if (row === DEFAULT_AGENT_ROW || row === ASR_ROW || row === FILE_EMBEDDING_ROW)
-      return t('serviceModel.systemRecommended');
+    if (row === DEFAULT_AGENT_ROW || row === ASR_ROW) return t('serviceModel.systemRecommended');
     const tier = TIERS.find(({ key }) => SERVICE_MODEL_TIER_SLOTS[key].includes(row));
     return tier ? t(`serviceModel.tier.${tier.key}.title`) : t('serviceModel.systemRecommended');
   };
@@ -403,6 +402,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
   // card with its picker on top and the tasks that follow it in a lighter
   // 「高级」 under it. File embedding and voice follow no tier, so each is a
   // card of its own.
+  const fileEmbeddingState = rowState(FILE_EMBEDDING_ROW);
   const groups: FormGroupItem[] = [
     ...tiers.map(({ key, modelKind, rows }, index): FormGroupItem => {
       const title = t(`serviceModel.tier.${key}.title`);
@@ -441,21 +441,30 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
     {
       children: (
         <>
+          {/* Same picker as a tier: it names the deployment default it falls back to. */}
           <Form.Field label={t('serviceModel.tierPicker')}>
-            <SlotRow
-              canDisable={false}
+            <TierRow
               disabled={!canManage}
-              followLabel={followLabelOf(FILE_EMBEDDING_ROW)}
-              followModel={followModelOf(FILE_EMBEDDING_ROW)}
               modelKind={'embedding'}
-              state={rowState(FILE_EMBEDDING_ROW)}
+              recommended={followModelOf(FILE_EMBEDDING_ROW)!}
               title={t(`systemAgent.${FILE_EMBEDDING_ROW}.title`)}
-              onChange={(choice) => writeSlot(FILE_EMBEDDING_ROW, choice)}
+              value={fileEmbeddingState.kind === 'custom' ? fileEmbeddingState.value : undefined}
+              onChange={(value) =>
+                writeSlot(
+                  FILE_EMBEDDING_ROW,
+                  value ? { kind: 'custom', value } : { kind: 'follow' },
+                )
+              }
             />
           </Form.Field>
-          <span {...stylex.props(styles.sectionDesc, styles.note)}>
-            {t(`systemAgent.${FILE_EMBEDDING_ROW}.reindexHint`)}
-          </span>
+          <Flexbox gap={4} {...stylex.props(styles.note)}>
+            <span {...stylex.props(styles.sectionDesc)}>
+              {t(`systemAgent.${FILE_EMBEDDING_ROW}.precedence`)}
+            </span>
+            <span {...stylex.props(styles.sectionDesc)}>
+              {t(`systemAgent.${FILE_EMBEDDING_ROW}.reindexHint`)}
+            </span>
+          </Flexbox>
         </>
       ),
       collapsible: false,

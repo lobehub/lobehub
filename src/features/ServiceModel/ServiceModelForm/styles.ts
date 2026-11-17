@@ -22,9 +22,8 @@ export const styles = stylex.create({
   advanced: {
     paddingBlockEnd: 16,
   },
-  /** A note under a card's picker, closed by the next card's divider like 「高级」. */
+  /** Notes under a card's picker, closed by the next card's divider like 「高级」. */
   note: {
-    display: 'block',
     paddingBlockEnd: 16,
   },
   /** Compact rows: the picker is 32px, so 40 leaves 4px above and below. */
