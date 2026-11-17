@@ -214,8 +214,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async respondPermission(...args: Parameters<Implementation['respondPermission']>) {
-    return (await this.getImplementation()).respondPermission(...args);
+  async setPermissionMode(...args: Parameters<Implementation['setPermissionMode']>) {
+    return (await this.getImplementation()).setPermissionMode(...args);
   }
 
   @IpcMethod()

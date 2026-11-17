@@ -3,7 +3,10 @@ import type {
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
-import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
+import type {
+  HeteroPermissionMode,
+  ServerDefaultHeterogeneousModelDescriptor,
+} from '@lobechat/types';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -41,6 +44,12 @@ export interface HeterogeneousAgentBuildPlanParams {
    * field append `--mcp-config <path>`; others ignore it.
    */
   mcpConfigPath?: string;
+  /**
+   * (Claude Code) Better Coding Experience permission mode, set only when the
+   * host can answer prompts (an AskUserBridge and live stdin). Absent: every
+   * action is allowed.
+   */
+  permissionMode?: HeteroPermissionMode;
   promptInput: AgentPromptInput;
   resumeSessionId?: string;
 }
