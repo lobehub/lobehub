@@ -13,7 +13,7 @@ import { submitWorktreeTurn } from '../submitWorktreeTurn';
 
 vi.mock('../precreatedTopic', () => ({
   resolvePrecreatedTopicSnapshot: async () => ({
-    agentConfig: {},
+    agentConfig: { agencyConfig: { executionTarget: 'auto' } },
     snapshot: { model: 'test-model', provider: 'test-provider' },
   }),
 }));
@@ -75,6 +75,16 @@ describe('submitWorktreeTurn', () => {
       topic: { id: input.topicId },
     });
     expect((await topicModel.findById(input.topicId))?.metadata?.scheduledRun).toEqual(run);
+  });
+
+  it('persists the selected worktree device as explicit for later turns of an auto agent', async () => {
+    const input = request();
+    await submitWorktreeTurn(deps, input);
+
+    expect((await topicModel.findById(input.topicId))?.metadata).toMatchObject({
+      boundDeviceId: input.worktree.deviceId,
+      deviceBindingPinned: true,
+    });
   });
 
   it('rolls back the topic when the first message cannot be inserted', async () => {

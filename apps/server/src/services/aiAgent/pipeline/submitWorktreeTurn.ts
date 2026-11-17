@@ -148,7 +148,12 @@ export const submitWorktreeTurn = async (
       {
         ...snapshot,
         agentId,
-        metadata: { ...snapshot.metadata, boundDeviceId: worktree.deviceId, scheduledRun },
+        metadata: {
+          ...snapshot.metadata,
+          boundDeviceId: worktree.deviceId,
+          deviceBindingPinned: true,
+          scheduledRun,
+        },
         projectId,
         projectWorkingDirectoryId: directory?.id,
         status: 'scheduled',
