@@ -41,6 +41,11 @@ export const RedisKeyNamespace = {
    */
   BOT_WAKE: 'bot-wake',
   /**
+   * Replay bookkeeping for bot messages parked while their topic was busy: how many times each
+   * parked message reached a run, so one that keeps coming back stops looping.
+   */
+  BOT_DEFERRED: 'bot-deferred',
+  /**
    * Short-lived reply routes an IM platform hands out with an inbound message
    * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
    * can use them even when another one received the message.
@@ -123,6 +128,15 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot deferred-replay scope — see {@link RedisKeyNamespace.BOT_DEFERRED}. */
+  botDeferred: {
+    /**
+     * Times one parked message (by its origin platform id) was replayed into a run.
+     * Full key: bot-deferred:replays:v1:{applicationId}:{threadId}:{messageId}
+     */
+    replays: (applicationId: string, threadId: string, messageId: string): string =>
+      `replays:v1:${applicationId}:${threadId}:${messageId}`,
   },
   /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
   botReply: {
@@ -368,6 +382,7 @@ export const RedisKeyScopeNamespace = {
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botDeferred: RedisKeyNamespace.BOT_DEFERRED,
   botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
