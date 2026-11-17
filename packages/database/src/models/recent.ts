@@ -53,7 +53,7 @@ const SYSTEM_TOPIC_TRIGGERS = [
   'task',
   'document',
   'goal_supervision',
-  'sub_session',
+  'sub_topic',
   'webhook',
 ];
 

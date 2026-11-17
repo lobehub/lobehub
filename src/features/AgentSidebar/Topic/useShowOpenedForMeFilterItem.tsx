@@ -13,7 +13,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 import { useTopicListScope } from './TopicListScope';
 
 /**
- * "Show sessions others opened for me": sub-sessions another conversation
+ * "Show topics others opened for me": sub-topics another conversation
  * opened for this agent live under their opener and stay out of this agent's
  * own list unless this is on. Only an agent's own list (not a group or a
  * project) under Better Coding Experience; stored on this device per agent.

@@ -94,8 +94,8 @@ describe('AgentSenderMessageProcessor', () => {
   });
 });
 
-describe('AgentSenderMessageProcessor — sub-session reports', () => {
-  it('marks a sub-session report and points at sending to the sub-session', async () => {
+describe('AgentSenderMessageProcessor — sub-topic reports', () => {
+  it('marks a sub-topic report and points at sending to the sub-topic', async () => {
     const processor = new AgentSenderMessageProcessor({ canRunLhCommand: true });
     const result = await processor.process({
       initialState: { messages: [] },
@@ -103,10 +103,10 @@ describe('AgentSenderMessageProcessor — sub-session reports', () => {
       messages: [
         {
           content: 'Fixed in commit abc.',
-          id: 'subsession-cb-op1',
+          id: 'subtopic-cb-op1',
           metadata: {
             agentSender: { agentId: 'agt_codex', hop: 2, topicId: 'tpc_child' },
-            subSessionCallback: {
+            subTopicCallback: {
               agentId: 'agt_codex',
               operationId: 'op1',
               reason: 'done',
@@ -122,9 +122,9 @@ describe('AgentSenderMessageProcessor — sub-session reports', () => {
 
     const content = result.messages[0].content as string;
     expect(content).toContain(
-      '<sub_session_result topic_id="tpc_child" agent_id="agt_codex" title="Fix &quot;flaky&quot; test" status="done">',
+      '<sub_topic_result topic_id="tpc_child" agent_id="agt_codex" title="Fix &quot;flaky&quot; test" status="done">',
     );
-    expect(content).toContain('`lh session send tpc_child`');
+    expect(content).toContain('`lh topic send tpc_child`');
     expect(content).not.toContain('lh message reply');
     expect(content.endsWith('Fixed in commit abc.')).toBe(true);
   });

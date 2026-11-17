@@ -30,11 +30,11 @@ const userStoreStateMock = vi.hoisted(() => ({
   topicSortBy: 'updatedAt',
 }));
 
-// The sub-session hierarchy is covered by its own tests; here it is off.
-vi.mock('../SubSession/context', () => ({
-  SubSessionTreeProvider: ({ children }: { children: ReactNode }) => children,
+// The sub-topic hierarchy is covered by its own tests; here it is off.
+vi.mock('../SubTopic/context', () => ({
+  SubTopicTreeProvider: ({ children }: { children: ReactNode }) => children,
   useNestedTopicIds: () => undefined,
-  useSubSessionTree: () => null,
+  useSubTopicTree: () => null,
 }));
 
 vi.mock('./TopicListSkeleton', () => ({

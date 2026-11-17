@@ -15,7 +15,7 @@ const openedBy = (topicId: string, extra: Record<string, unknown> = {}) => ({
   openedBy: { agentId: 'agent-a', at: '2026-11-17T00:00:00.000Z', topicId, ...extra },
 });
 
-describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
+describe('TopicModel - sub-topics (metadata.openedBy)', () => {
   beforeEach(async () => {
     await serverDB.delete(users);
     await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -30,14 +30,14 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
         agentId: 'agent-a',
         id: 'child-same',
         metadata: openedBy('parent'),
-        trigger: 'sub_session',
+        trigger: 'sub_topic',
         userId,
       },
       {
         agentId: 'agent-b',
         id: 'child-cross',
         metadata: openedBy('parent'),
-        trigger: 'sub_session',
+        trigger: 'sub_topic',
         userId,
       },
       {
@@ -51,7 +51,7 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
         agentId: 'agent-b',
         id: 'grandchild',
         metadata: openedBy('child-cross', { agentId: 'agent-b' }),
-        trigger: 'sub_session',
+        trigger: 'sub_topic',
         userId,
       },
       {
@@ -66,16 +66,16 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
         id: 'archived-child',
         metadata: openedBy('parent'),
         status: 'completed',
-        trigger: 'sub_session',
+        trigger: 'sub_topic',
         userId,
       },
-      // Same jsonb shape but an unrelated trigger: never a sub-session.
+      // Same jsonb shape but an unrelated trigger: never a sub-topic.
       { agentId: 'agent-a', id: 'chat-row', metadata: openedBy('parent'), userId },
       {
         agentId: 'agent-other',
         id: 'foreign',
         metadata: openedBy('parent'),
-        trigger: 'sub_session',
+        trigger: 'sub_topic',
         userId: otherUserId,
       },
     ]);
@@ -85,7 +85,7 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
     await serverDB.delete(users);
   });
 
-  it('lists the direct, live sub-sessions of an opener, whatever their agent', async () => {
+  it('lists the direct, live sub-topics of an opener, whatever their agent', async () => {
     const rows = await topicModel.listOpenedTopics({
       excludeStatuses: ['completed', 'archived'],
       openerTopicIds: ['parent'],
@@ -110,7 +110,7 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
     ]);
   });
 
-  it('detaches sub-sessions and turns a sub_session trigger back into a normal topic', async () => {
+  it('detaches sub-topics and turns a sub_topic trigger back into a normal topic', async () => {
     const changed = await topicModel.detachOpenedTopics(['child-cross', 'child-task']);
     expect(changed.map((row) => row.id).sort()).toEqual(['child-cross', 'child-task']);
 
@@ -126,8 +126,8 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
     expect(rows.map((row) => row.id).sort()).toEqual(['archived-child', 'child-same']);
   });
 
-  it('hides sub-sessions from the target agent list but falls back to the top level once the opener is gone', async () => {
-    const excludeTriggers = ['task', 'sub_session'];
+  it('hides sub-topics from the target agent list but falls back to the top level once the opener is gone', async () => {
+    const excludeTriggers = ['task', 'sub_topic'];
 
     const before = await topicModel.query({ agentId: 'agent-b', excludeTriggers });
     expect(before.items.map((row: any) => row.id)).toEqual([]);
@@ -144,7 +144,7 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
 
     const result = await topicModel.query({
       agentId: 'agent-a',
-      excludeTriggers: ['sub_session'],
+      excludeTriggers: ['sub_topic'],
     });
     expect(result.items.map((row: any) => row.id).sort()).toEqual([
       'archived-child',
@@ -154,19 +154,19 @@ describe('TopicModel - sub-sessions (metadata.openedBy)', () => {
     ]);
   });
 
-  it('treats an archived opener as gone, so its sub-session does not disappear', async () => {
+  it('treats an archived opener as gone, so its sub-topic does not disappear', async () => {
     await serverDB.update(topics).set({ status: 'completed' }).where(eq(topics.id, 'parent'));
 
     const result = await topicModel.query({
       agentId: 'agent-b',
-      excludeTriggers: ['task', 'sub_session'],
+      excludeTriggers: ['task', 'sub_topic'],
     });
     expect(result.items.map((row: any) => row.id)).toEqual(['child-cross']);
   });
 
-  it('reports a sub-session that is itself one of the openers asked about', async () => {
+  it('reports a sub-topic that is itself one of the openers asked about', async () => {
     // The open conversation is pinned into the sidebar page, so it is both a list row
-    // (an opener) and a sub-session of another row.
+    // (an opener) and a sub-topic of another row.
     const rows = await topicModel.listOpenedTopics({
       includeDescendants: true,
       openerTopicIds: ['parent', 'child-cross'],

@@ -27,19 +27,17 @@ describe('feature-gated builtin tools', () => {
 });
 
 describe('Labs-gated builtin tools', () => {
-  it('drops lobe-session unless Better Coding Experience is on', () => {
-    expect(getLabDisabledToolIds(undefined)).toContain('lobe-session');
-    expect(getLabDisabledToolIds({ enableBetterCodingExperience: false })).toContain(
-      'lobe-session',
-    );
+  it('drops lobe-topic unless Better Coding Experience is on', () => {
+    expect(getLabDisabledToolIds(undefined)).toContain('lobe-topic');
+    expect(getLabDisabledToolIds({ enableBetterCodingExperience: false })).toContain('lobe-topic');
     expect(getLabDisabledToolIds({ enableBetterCodingExperience: true })).not.toContain(
-      'lobe-session',
+      'lobe-topic',
     );
   });
 
-  it('lists lobe-session only with the lab on, and leaves ungated tools alone', () => {
-    expect(isToolEnabledByLab('lobe-session', {})).toBe(false);
-    expect(isToolEnabledByLab('lobe-session', { enableBetterCodingExperience: true })).toBe(true);
+  it('lists lobe-topic only with the lab on, and leaves ungated tools alone', () => {
+    expect(isToolEnabledByLab('lobe-topic', {})).toBe(false);
+    expect(isToolEnabledByLab('lobe-topic', { enableBetterCodingExperience: true })).toBe(true);
     expect(isToolEnabledByLab('lobe-task', undefined)).toBe(true);
   });
 });

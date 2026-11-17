@@ -68,7 +68,7 @@ import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow
 import PortSwitcher from './PortSwitcher';
 import PullRequestRow from './PullRequestRow';
 import { sectionStyles } from './sectionStyles';
-import SubSessionSection from './SubSessionSection';
+import SubTopicSection from './SubTopicSection';
 import { TerminalRow } from './TerminalRow';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -565,7 +565,7 @@ const Overview = memo<OverviewProps>(
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}
         {topicId && <ThreadListSection topicId={topicId} />}
-        {topicId && <SubSessionSection agentId={agentId} topicId={topicId} />}
+        {topicId && <SubTopicSection agentId={agentId} topicId={topicId} />}
 
         <Flexbox className={sectionStyles.section}>
           {hasWorkspace && (

@@ -43,7 +43,7 @@ interface CreatePendingParams {
   callbackMessageId: string;
   /** The receipt's id: the finished run's operation, or another id unique per result. */
   operationId: string;
-  /** Absent for results that are not tasks (sub-sessions, background sub-agents). */
+  /** Absent for results that are not tasks (sub-topics, background sub-agents). */
   taskId?: string;
   taskTopicId?: string;
 }

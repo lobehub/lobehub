@@ -75,7 +75,7 @@ describe('buildNewTopicMetadata — project directory', () => {
   });
 });
 
-describe('sub-session link (metadata.openedBy)', () => {
+describe('sub-topic link (metadata.openedBy)', () => {
   it('records the opener read through the caller scope', async () => {
     const findById = vi.fn().mockResolvedValue({ agentId: 'agt_parent', id: 'tpc_parent' });
 

@@ -90,7 +90,7 @@ describe('deliverBackgroundSubAgentResults', () => {
       ],
       topicId: 'topic-1',
     });
-    // Woken through the channel finished tasks and sub-sessions share.
+    // Woken through the channel finished tasks and sub-topics share.
     expect(deps.queueWakeup).toHaveBeenCalledTimes(1);
     expect(deps.queueWakeup).toHaveBeenCalledWith({
       agentId: 'agent-1',

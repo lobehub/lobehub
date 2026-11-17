@@ -43,7 +43,6 @@ import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
-import { SessionManifest } from '@lobechat/builtin-tool-session';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import {
@@ -52,6 +51,7 @@ import {
   SkillsManifest,
 } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
+import { TopicToolManifest } from '@lobechat/builtin-tool-topic';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
 import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { VideoGenerationManifest } from '@lobechat/builtin-tool-video-generation';
@@ -80,7 +80,7 @@ export const defaultToolIds = [
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
   // Only while Labs → Better Coding Experience is on (see `LAB_GATED_TOOLS`).
-  SessionManifest.identifier,
+  TopicToolManifest.identifier,
   LobeAgentManifest.identifier,
   CanvasManifest.identifier,
 ];
@@ -593,8 +593,8 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    identifier: SessionManifest.identifier,
-    manifest: SessionManifest,
+    identifier: TopicToolManifest.identifier,
+    manifest: TopicToolManifest,
     type: 'builtin',
   },
   {

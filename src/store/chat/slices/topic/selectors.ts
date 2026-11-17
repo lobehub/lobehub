@@ -52,13 +52,13 @@ const currentTopics = (s: ChatStoreState): ChatTopic[] | undefined => currentTop
 const currentTopicsWithoutSystemTriggers = (s: ChatStoreState): ChatTopic[] | undefined => {
   const topics = currentTopics(s);
   if (!topics) return undefined;
-  // Sub-sessions reach the list only when the server means them to: orphans of
+  // Sub-topics reach the list only when the server means them to: orphans of
   // a deleted opener, or the agent's "show sessions others opened for me"
   // filter. Rows nested under a visible opener are hidden by the hierarchy.
   return topics.filter(
     (topic) =>
       !topic.trigger ||
-      topic.trigger === TopicTrigger.SubSession ||
+      topic.trigger === TopicTrigger.SubTopic ||
       !MAIN_SIDEBAR_EXCLUDE_TRIGGERS.includes(topic.trigger),
   );
 };
@@ -492,7 +492,7 @@ const groupedTopicsForSidebar =
     localDeviceIds?: readonly string[],
     /** Project directories, so byDevice can place a topic by its directory's device. */
     directories?: ReadonlyArray<TopicDeviceDirectory>,
-    /** Rows drawn nested under another row (sub-sessions), left out of the groups. */
+    /** Rows drawn nested under another row (sub-topics), left out of the groups. */
     nestedTopicIds?: ReadonlySet<string>,
   ) =>
   (s: ChatStoreState): GroupedTopic[] => {

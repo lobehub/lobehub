@@ -10,6 +10,7 @@ const { client, mockGetTrpcClient, mockResolveLocalDeviceId } = vi.hoisted(() =>
     agentSteerQueue: { append: { mutate: vi.fn() } },
     aiAgent: { execAgent: { mutate: vi.fn() } },
     device: { listDevices: { query: vi.fn() } },
+    subTopic: { open: { mutate: vi.fn() } },
     topic: { getTopicDetail: { query: vi.fn() } },
   },
   mockGetTrpcClient: vi.fn(),
@@ -28,6 +29,14 @@ const run = async (...args: string[]) => {
   await program.parseAsync(['node', 'lh', ...args]);
 };
 
+const labOff = () =>
+  Object.assign(
+    new Error(
+      'Sub-topics are part of Labs → Better Coding Experience, which is off for this account.',
+    ),
+    { data: { code: 'FORBIDDEN' } },
+  );
+
 const errorLogged = () =>
   vi
     .mocked(log.error)
@@ -43,6 +52,8 @@ describe('sending into a new conversation', () => {
     vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-sender');
     vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc-here');
     mockGetTrpcClient.mockResolvedValue(client);
+    // Better Coding Experience off by default: no sub-topics, the plain new conversation.
+    client.subTopic.open.mutate.mockRejectedValue(labOff());
     client.aiAgent.execAgent.mutate.mockResolvedValue({
       operationId: 'op-new',
       success: true,
@@ -76,7 +87,7 @@ describe('sending into a new conversation', () => {
 
     expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith({
       agentId: 'agt-self',
-      // Run from inside a conversation: the new one is its sub-session.
+      // Run from inside a conversation: the new one is its sub-topic.
       openedByTopicId: 'tpc-here',
       prompt: 'Draft the release notes',
       sourceOperationId: 'op-sender',
@@ -209,6 +220,66 @@ describe('sending into a new conversation', () => {
 
       expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
       expect(exit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('as a sub-topic (Better Coding Experience)', () => {
+    beforeEach(() => {
+      client.subTopic.open.mutate.mockResolvedValue({
+        agentId: 'agt-codex',
+        branch: 'lobehub/202611181200-brave-river',
+        operationId: 'op-child',
+        topicId: 'tpc-child',
+      });
+    });
+
+    it('opens a sub-topic of this conversation, working where --where says', async () => {
+      await run(
+        'topic',
+        'send',
+        '--new',
+        '-c',
+        'Fix the flaky test',
+        '--agent-id',
+        'agt-codex',
+        '--where',
+        'new-worktree',
+        '--base-branch',
+        'canary',
+        '--json',
+      );
+
+      expect(client.subTopic.open.mutate).toHaveBeenCalledWith({
+        agentId: 'agt-codex',
+        baseBranch: 'canary',
+        openerTopicId: 'tpc-here',
+        prompt: 'Fix the flaky test',
+        sourceOperationId: 'op-sender',
+        workspace: 'new-worktree',
+      });
+      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
+      expect(JSON.parse(logged[0])).toMatchObject({
+        branch: 'lobehub/202611181200-brave-river',
+        delivery: 'created',
+        topicId: 'tpc-child',
+      });
+    });
+
+    it('refuses --where while the lab is off instead of dropping it', async () => {
+      client.subTopic.open.mutate.mockRejectedValue(labOff());
+
+      await run('topic', 'send', '--new', '-c', 'x', '--where', 'new-worktree');
+
+      expect(errorLogged()).toMatch(/Better Coding Experience/);
+      expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
+      expect(exit).toHaveBeenCalledWith(1);
+    });
+
+    it('rejects an unknown --where', async () => {
+      await run('topic', 'send', '--new', '-c', 'x', '--where', 'elsewhere');
+
+      expect(errorLogged()).toMatch(/--where must be one of/);
+      expect(client.subTopic.open.mutate).not.toHaveBeenCalled();
     });
   });
 });

@@ -38,7 +38,6 @@ import { registerProviderCommand } from './commands/provider';
 import { registerReadCommand } from './commands/read';
 import { registerRecallCommand } from './commands/recall';
 import { registerSearchCommand } from './commands/search';
-import { registerSessionCommand } from './commands/session';
 import { registerSessionGroupCommand } from './commands/session-group';
 import { registerSkillCommand } from './commands/skill';
 import { registerStatusCommand } from './commands/status';
@@ -113,7 +112,6 @@ export function createProgram() {
   registerTaskCommand(program);
   registerThreadCommand(program);
   registerTopicCommand(program);
-  registerSessionCommand(program);
   registerTraceCommand(program);
   registerMessageCommand(program);
   registerModelCommand(program);

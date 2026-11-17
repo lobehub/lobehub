@@ -343,7 +343,7 @@ export const ExecAgentFieldsSchema = z.object({
   /**
    * The conversation this new topic is opened from (`lh topic send --new`
    * passes its own `LOBEHUB_TOPIC_ID`): the topic records it as
-   * `metadata.openedBy` and lists under it as a sub-session.
+   * `metadata.openedBy` and lists under it as a sub-topic.
    */
   openedByTopicId: z.string().optional(),
   /**

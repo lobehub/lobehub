@@ -91,7 +91,7 @@ describe('CompletionLifecycle — topic run settled', () => {
     expect(onTopicRunSettled).not.toHaveBeenCalled();
   });
 
-  it('hands the handler what a sub-session receipt needs', async () => {
+  it('hands the handler what a sub-topic receipt needs', async () => {
     const lifecycle = new CompletionLifecycle({} as any, 'user-1', undefined, {
       onTopicRunSettled,
     });

@@ -546,7 +546,7 @@ export interface SystemStatus {
    */
   topicPageSize?: number;
   /**
-   * Agents whose topic list also shows the sub-sessions other conversations
+   * Agents whose topic list also shows the sub-topics other conversations
    * opened for them (Better Coding Experience), which it hides by default.
    * Device-local and per agent, like `topicOnlyMineByAgent`.
    */

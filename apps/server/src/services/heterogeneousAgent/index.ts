@@ -181,7 +181,7 @@ export interface HeterogeneousAgentServiceOptions {
   agentOperationModel?: AgentOperationModel;
   /**
    * A finished run settled its topic (never on a cancel): report it to the
-   * topic that opened it, when it is a sub-session. Supplied by the caller for
+   * topic that opened it, when it is a sub-topic. Supplied by the caller for
    * the same reason as `startQueuedFollowUp`.
    */
   onTopicRunSettled?: TopicRunSettledHandler;

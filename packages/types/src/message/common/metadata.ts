@@ -816,11 +816,11 @@ export interface MessageMetadata {
   subAgentCallback?: MessageSubAgentCallback;
   subAgentId?: string;
   /**
-   * Present on a user message that reports a finished sub-session turn back to
+   * Present on a user message that reports a finished sub-topic turn back to
    * the conversation that opened it. Its sender (`agentSender`) is the
-   * sub-session's agent and links back to the sub-session.
+   * sub-topic's agent and links back to the sub-topic.
    */
-  subSessionCallback?: MessageSubSessionCallback;
+  subTopicCallback?: MessageSubTopicCallback;
   /**
    * Task-callback card pointer (for role='taskCallback' messages). Identifies
    * the task whose handoff result was delivered back into this conversation and
@@ -910,13 +910,13 @@ export interface MessageSubAgentCallback {
  * The handoff summary itself lives in the message `content`; this
  * pointer drives the card header (identifier + outcome) and the jump link.
  */
-export interface MessageSubSessionCallback {
-  /** The sub-session's agent. */
+export interface MessageSubTopicCallback {
+  /** The sub-topic's agent. */
   agentId: string;
-  /** The sub-session turn that finished. */
+  /** The sub-topic turn that finished. */
   operationId: string;
   reason: 'done' | 'error';
-  /** The sub-session's title at report time. */
+  /** The sub-topic's title at report time. */
   title?: string;
   topicId: string;
 }

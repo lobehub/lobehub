@@ -131,7 +131,7 @@ export const discoverTools = async (
   const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(deps.userId).catch(
     () => undefined,
   );
-  // Lab-gated tools (e.g. lobe-session) leave the pool while the user's Labs
+  // Lab-gated tools (e.g. lobe-topic) leave the pool while the user's Labs
   // switch is off; a preference read failure keeps them out.
   const lab = (await ctx.runFacts.userPreference().catch(() => undefined))?.lab;
   const disabledPluginIds = [

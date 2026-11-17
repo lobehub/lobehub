@@ -36,7 +36,7 @@ export class ResultWakeChannel {
 
   /**
    * The one wake-up channel every "a result arrived for this conversation"
-   * path shares — finished tasks, sub-session turns and background
+   * path shares — finished tasks, sub-topic turns and background
    * sub-agents. The caller has already written its result onto the
    * conversation's main line (`callbackMessageId`); this queues a receipt and
    * starts a single run that reads every result that landed, so results that

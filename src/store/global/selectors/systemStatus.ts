@@ -133,7 +133,7 @@ const topicOnlyMine =
   (s: GlobalState): boolean =>
     !!ownerId && !!s.status.topicOnlyMineByAgent?.[ownerId];
 
-/** Whether the agent's topic list also shows the sub-sessions others opened for it. */
+/** Whether the agent's topic list also shows the sub-topics others opened for it. */
 const topicShowOpenedForMe =
   (ownerId: string | undefined) =>
   (s: GlobalState): boolean =>

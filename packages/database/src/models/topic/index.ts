@@ -150,7 +150,7 @@ export class TopicModel {
   countLiveTopicsUsingWorktree = this.withContext(ownedWorktree.countLiveTopicsUsingWorktree);
   updateOwnedWorktree = this.withContext(ownedWorktree.updateOwnedWorktree);
 
-  // **************** Sub-sessions (metadata.openedBy) *************** //
+  // **************** Sub-topics (metadata.openedBy) *************** //
 
   listOpenedTopics = this.withContext(openedBy.listOpenedTopics);
   listOpenedDescendants = this.withContext(openedBy.listOpenedDescendants);

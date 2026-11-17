@@ -176,7 +176,7 @@ export const createAgentToolsEngine = (
     disabledPluginIds: [
       ...agentSelectors.currentAgentDisabledPlugins(agentState),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
-      // Lab-gated tools (e.g. lobe-session) leave the pool while their Labs switch is off.
+      // Lab-gated tools (e.g. lobe-topic) leave the pool while their Labs switch is off.
       ...getLabDisabledToolIds(useUserStore.getState().preference?.lab),
     ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),

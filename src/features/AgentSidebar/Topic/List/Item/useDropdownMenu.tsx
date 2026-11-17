@@ -37,7 +37,7 @@ import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { useFavoriteMenuItem } from '@/features/Favorites';
 import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
-import { useRetireTopicWithSubSessions } from '@/features/SubSessionRetire/useRetireTopic';
+import { useRetireTopicWithSubTopics } from '@/features/SubTopicRetire/useRetireTopic';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
@@ -138,14 +138,14 @@ export const useTopicItemDropdownMenu = ({
     s.updateTopicTitle,
   ]);
 
-  const retireWithSubSessions = useRetireTopicWithSubSessions();
+  const retireWithSubTopics = useRetireTopicWithSubTopics();
   const isCompleted = status === 'completed';
   const toggleCompleted = useCallback(async () => {
     if (!id) return;
     if (isCompleted) await unmarkTopicCompleted(id);
-    // A topic with sub-sessions asks what happens to them (Better Coding Experience).
+    // A topic with sub-topics asks what happens to them (Better Coding Experience).
     else if (!scope)
-      return retireWithSubSessions({
+      return retireWithSubTopics({
         action: 'archive',
         proceed: () => markTopicCompleted(id),
         title,
@@ -162,7 +162,7 @@ export const useTopicItemDropdownMenu = ({
     isCompleted,
     markTopicCompleted,
     unmarkTopicCompleted,
-    retireWithSubSessions,
+    retireWithSubTopics,
     title,
     scope,
     routeTopicIdRef,
@@ -413,10 +413,10 @@ export const useTopicItemDropdownMenu = ({
               },
               topicIds: [id],
             });
-          // A topic with sub-sessions asks what happens to them first.
+          // A topic with sub-topics asks what happens to them first.
           void (scope
             ? confirmRemove()
-            : retireWithSubSessions({
+            : retireWithSubTopics({
                 action: 'trash',
                 proceed: confirmRemove,
                 title,
@@ -449,7 +449,7 @@ export const useTopicItemDropdownMenu = ({
     favoriteMenuItem,
     favoriteTopic,
     toggleCompleted,
-    retireWithSubSessions,
+    retireWithSubTopics,
     removeTopic,
     updateTopicTitle,
     openTopicInNewWindow,

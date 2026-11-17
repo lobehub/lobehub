@@ -20,7 +20,7 @@ const log = debug('lobe-server:ai-agent:background-sub-agent');
  * sender is the sub-agent (`metadata.subAgentCallback`) — the chat shows the
  * sub-agent speaking, the model reads it wrapped as `<sub_agent_result>` — and
  * the parent agent then runs off that history, woken through the wake-up
- * channel finished tasks and sub-sessions share
+ * channel finished tasks and sub-topics share
  * (`TaskResultBridgeService.queueWakeup`), so results that land together wake
  * it once.
  *
@@ -176,7 +176,7 @@ export interface BackgroundResultsWake {
 
 export interface BackgroundResultsWakeDeps {
   execAgent: (params: InternalExecAgentParams) => Promise<ExecAgentResult>;
-  /** Better Coding Experience: results share the wake-up channel of tasks and sub-sessions. */
+  /** Better Coding Experience: results share the wake-up channel of tasks and sub-topics. */
   isChannelEnabled: () => Promise<boolean>;
   queueWakeup: (params: Omit<BackgroundResultsWake, 'resultCount'>) => Promise<void>;
   resolveInterventionConfig: () => Promise<UserInterventionConfig>;
@@ -184,7 +184,7 @@ export interface BackgroundResultsWakeDeps {
 
 /**
  * Wake the parent for its background results. Under Better Coding Experience
- * they go through the wake-up channel finished tasks and sub-sessions share, so
+ * they go through the wake-up channel finished tasks and sub-topics share, so
  * results that land together wake it once; otherwise the parent is woken
  * directly, exactly as background results always were. Throws when the wake
  * cannot start, so the caller hands its claims back.

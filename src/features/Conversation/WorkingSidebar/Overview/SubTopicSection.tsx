@@ -1,0 +1,52 @@
+'use client';
+
+import { Flexbox } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import {
+  isInFlight,
+  type SubTopicNode,
+} from '@/features/AgentSidebar/Topic/SubTopic/buildSubTopicTree';
+import SubTopicItem from '@/features/AgentSidebar/Topic/SubTopic/SubTopicItem';
+import { useChatStore } from '@/store/chat';
+import { subTopicSelectors } from '@/store/chat/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+
+import { sectionStyles } from './sectionStyles';
+
+/**
+ * The conversations this one opened (Better Coding Experience), beside its
+ * sub-agents: each with its state, opening on its own agent's route.
+ */
+const SubTopicSection = memo<{ agentId?: string; topicId: string }>(({ agentId, topicId }) => {
+  const { t } = useTranslation('topic');
+  const enabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+  const openers = useMemo(() => [topicId], [topicId]);
+  const useFetchSubTopics = useChatStore((s) => s.useFetchSubTopics);
+  const nodes = useChatStore(subTopicSelectors.treeOf(openers), isEqual) as SubTopicNode[];
+  useFetchSubTopics(enabled, openers, nodes.some(isInFlight));
+
+  if (!enabled || nodes.length === 0) return null;
+
+  return (
+    <Flexbox className={sectionStyles.section} data-testid="overview-sub-topics">
+      <Flexbox className={sectionStyles.sectionHeader}>
+        <span className={sectionStyles.sectionTitle}>
+          {t('subTopic.sectionTitle', { count: nodes.length })}
+        </span>
+      </Flexbox>
+      <Flexbox gap={1}>
+        {nodes.map((node) => (
+          <SubTopicItem key={node.id} node={node} openerAgentId={agentId} />
+        ))}
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+SubTopicSection.displayName = 'SubTopicSection';
+
+export default SubTopicSection;

@@ -14,7 +14,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import AllTopicsDrawer from '../AllTopicsDrawer';
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
-import { SubSessionTreeProvider } from '../SubSession/context';
+import { SubTopicTreeProvider } from '../SubTopic/context';
 import ByAgentMode from '../TopicListContent/ByAgentMode';
 import ByDeviceMode from '../TopicListContent/ByDeviceMode';
 import ByProjectMode from '../TopicListContent/ByProjectMode';
@@ -48,7 +48,7 @@ const TopicList = memo(() => {
   if (isUndefinedTopics) return <TopicListSkeleton />;
 
   return (
-    <SubSessionTreeProvider>
+    <SubTopicTreeProvider>
       {topicLength === 0 && (
         <EmptyNavItem
           disabled={!canCreateTopic}
@@ -73,7 +73,7 @@ const TopicList = memo(() => {
         <ByTimeMode />
       )}
       <AllTopicsDrawer open={allTopicsDrawerOpen} onClose={closeAllTopicsDrawer} />
-    </SubSessionTreeProvider>
+    </SubTopicTreeProvider>
   );
 });
 

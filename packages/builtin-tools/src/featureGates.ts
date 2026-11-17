@@ -1,5 +1,5 @@
 import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
-import { SessionIdentifier } from '@lobechat/builtin-tool-session';
+import { TopicToolIdentifier } from '@lobechat/builtin-tool-topic';
 import type { IFeatureFlagsState, UserLab } from '@lobechat/types';
 
 /** Builtin tools that exist only while a runtime feature flag is on for the user. */
@@ -31,7 +31,7 @@ export const isToolEnabledByFeatureFlags = (
 
 /** Builtin tools that exist only while the user turned a Labs switch on. */
 export const LAB_GATED_TOOLS: Record<string, keyof UserLab> = {
-  [SessionIdentifier]: 'enableBetterCodingExperience',
+  [TopicToolIdentifier]: 'enableBetterCodingExperience',
 };
 
 /** Identifiers to drop from a run's tool pool for the user's Labs; fails closed like flags. */

@@ -200,7 +200,7 @@ export class AgentRuntimeService {
           settledOperationId: settled.operationId,
           topicId: settled.topicId,
         });
-        await this.delegate.onSubSessionTurnSettled?.(settled);
+        await this.delegate.onSubTopicTurnSettled?.(settled);
       },
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);

@@ -8,13 +8,13 @@ import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import type { TopicModelContext } from './context';
 
 /**
- * The triggers a topic opened by another topic can carry: a sub-session
- * (`lobe-session.startSession` / `lh session start`), a task run started from a
- * conversation, or a `lh topic send --new`. Sub-session queries filter on these
+ * The triggers a topic opened by another topic can carry: a sub-topic
+ * (`lobe-topic.openTopic` / `lh topic send --new` from a conversation), a task run started from a
+ * conversation, or a `lh topic send --new`. Sub-topic queries filter on these
  * first so `topics_trigger_idx` / the ownership index narrow the rows before
  * the unindexed jsonb comparison runs.
  */
-export const OPENED_BY_TRIGGERS = ['sub_session', 'task', 'cli'] as const;
+export const OPENED_BY_TRIGGERS = ['sub_topic', 'task', 'cli'] as const;
 
 /** How many generations below the openers are walked; deeper ones stay where they are. */
 const MAX_OPENED_BY_DEPTH = 4;
@@ -32,7 +32,7 @@ export interface OpenedTopicItem {
   openedBy: TopicOpenedBy;
   runStartedAt: Date | null;
   status: ChatTopicStatus | null;
-  /** The task a task-run sub-session belongs to (`metadata.taskId`). */
+  /** The task a task-run sub-topic belongs to (`metadata.taskId`). */
   taskId: string | null;
   title: string | null;
   trigger: string | null;
@@ -40,16 +40,16 @@ export interface OpenedTopicItem {
 }
 
 export interface ListOpenedTopicsParams {
-  /** Statuses that hide a sub-session (and stop the walk below it). */
+  /** Statuses that hide a sub-topic (and stop the walk below it). */
   excludeStatuses?: ChatTopicStatus[];
-  /** Also walk the sub-sessions of the sub-sessions found, so deeper ones can attach to a visible ancestor. */
+  /** Also walk the sub-topics of the sub-topics found, so deeper ones can attach to a visible ancestor. */
   includeDescendants?: boolean;
   openerTopicIds: string[];
 }
 
 /**
  * The live (not detached, not trashed) topics opened by any of `openerTopicIds`,
- * newest activity first. With `includeDescendants`, their own sub-sessions come
+ * newest activity first. With `includeDescendants`, their own sub-topics come
  * along too (bounded depth), so a list can attach a grandchild to the topmost
  * opener it shows.
  */
@@ -67,7 +67,7 @@ export const listOpenedTopics = async (
       : undefined;
   const runStartedAt = topicRunStartedAtColumn(ctx.db);
 
-  // The latest top-level run decides what a sub-session is doing: server runs
+  // The latest top-level run decides what a sub-topic is doing: server runs
   // keep `topics.status` as it was and only write the operation row.
   const latestRunStatus = ctx.db
     .select({ value: agentOperations.status })
@@ -78,7 +78,7 @@ export const listOpenedTopics = async (
 
   const result: OpenedTopicItem[] = [];
   // A row that is an opener itself (a list row) can still be another opener's
-  // sub-session: it is reported, it just is not walked twice.
+  // sub-topic: it is reported, it just is not walked twice.
   const included = new Set<string>();
   const walked = new Set<string>(openers);
   let frontier = openers;
@@ -132,7 +132,7 @@ export const listOpenedTopics = async (
 
 /**
  * Every live descendant of `rootTopicId` (children, grandchildren, …), for
- * cascading archive / trash. Detached sub-sessions are not descendants.
+ * cascading archive / trash. Detached sub-topics are not descendants.
  */
 export const listOpenedDescendants = async (
   ctx: TopicModelContext,
@@ -146,8 +146,8 @@ export const listOpenedDescendants = async (
   });
 
 /**
- * Move sub-sessions to the top level: stamp `openedBy.detachedAt`, and turn a
- * `sub_session` trigger back into an ordinary conversation so the topic shows
+ * Move sub-topics to the top level: stamp `openedBy.detachedAt`, and turn a
+ * `sub_topic` trigger back into an ordinary conversation so the topic shows
  * up in its own agent's list. Task runs keep their trigger — they belong to
  * their task. Returns the rows that changed.
  */
@@ -162,7 +162,7 @@ export const detachOpenedTopics = async (
     .update(topics)
     .set({
       metadata: sql`jsonb_set(${topics.metadata}, '{openedBy,detachedAt}', to_jsonb(${detachedAt}::text), true)`,
-      trigger: sql`CASE WHEN ${topics.trigger} = 'sub_session' THEN NULL ELSE ${topics.trigger} END`,
+      trigger: sql`CASE WHEN ${topics.trigger} = 'sub_topic' THEN NULL ELSE ${topics.trigger} END`,
     })
     .where(
       and(
@@ -178,8 +178,8 @@ export const detachOpenedTopics = async (
 };
 
 /**
- * A `sub_session` row whose opener is gone — deleted, in the recycle bin, or
- * archived (by a path that did not ask what to do with its sub-sessions):
+ * A `sub_topic` row whose opener is gone — deleted, in the recycle bin, or
+ * archived (by a path that did not ask what to do with its sub-topics):
  * nothing lists it under that opener any more, so the target agent's own list
  * shows it at the top level instead of hiding it.
  *
@@ -187,7 +187,7 @@ export const detachOpenedTopics = async (
  * subquery a bare `${topics.metadata}` renders unqualified and would resolve
  * against the inner alias.
  */
-export const orphanSubSessionCondition = (ctx: TopicModelContext) => {
+export const orphanSubTopicCondition = (ctx: TopicModelContext) => {
   const opener = alias(topics, 'opened_by_opener');
   const outerOpenedBy = sql`${sql.identifier('topics')}.${sql.identifier('metadata')} -> 'openedBy' ->> 'topicId'`;
   const liveOpener = ctx.db
@@ -201,5 +201,5 @@ export const orphanSubSessionCondition = (ctx: TopicModelContext) => {
       ),
     );
 
-  return and(eq(topics.trigger, 'sub_session'), notExists(liveOpener));
+  return and(eq(topics.trigger, 'sub_topic'), notExists(liveOpener));
 };

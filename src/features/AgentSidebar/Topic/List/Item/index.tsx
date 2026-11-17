@@ -53,8 +53,8 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 import { useTopicHoverPrefetch } from '../../hooks/topicHoverPrefetch/useTopicHoverPrefetch';
 import { markSidebarTopicActivation } from '../../hooks/useScrollActiveTopicIntoView';
 import { useTopicNavigation } from '../../hooks/useTopicNavigation';
-import SubSessionChildren from '../../SubSession/SubSessionChildren';
-import SubSessionToggle from '../../SubSession/SubSessionToggle';
+import SubTopicChildren from '../../SubTopic/SubTopicChildren';
+import SubTopicToggle from '../../SubTopic/SubTopicToggle';
 import ThreadList from '../../TopicListContent/ThreadList';
 import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
@@ -637,7 +637,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
             <>
               {scopedTopic && !suppressAgentAvatar && ownIconNode}
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
-              {id && <SubSessionToggle topicId={id} />}
+              {id && <SubTopicToggle topicId={id} />}
               {/* Gated on the SAME boolean that draws the running ring: both say
                   "this row is visibly running", and a row that stopped spinning
                   must not keep counting. The server `runStartedAt` fallback only
@@ -684,7 +684,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
         ) : (
           navItem
         )}
-        {id && <SubSessionChildren openerAgentId={activeAgentId} topicId={id} />}
+        {id && <SubTopicChildren openerAgentId={activeAgentId} topicId={id} />}
         {isMobileSurface() && showThreadList && id && (
           <Suspense
             fallback={

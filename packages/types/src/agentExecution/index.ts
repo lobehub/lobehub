@@ -372,7 +372,7 @@ export interface ExecAgentParams {
   /** Override the agent's default model */
   model?: string;
   /**
-   * The conversation this NEW topic is opened from — it becomes a sub-session
+   * The conversation this NEW topic is opened from — it becomes a sub-topic
    * (`metadata.openedBy`). Resolved through the caller's own topic scope: an
    * unknown or foreign topic records no link. Ignored when the run continues
    * an existing topic.

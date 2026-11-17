@@ -25,7 +25,7 @@ import { type ChatPluginAction } from './slices/plugin/actions';
 import { chatPlugin } from './slices/plugin/actions';
 import { type ChatPortalAction } from './slices/portal/action';
 import { ChatPortalActionImpl } from './slices/portal/action';
-import { type ChatSubSessionAction, ChatSubSessionActionImpl } from './slices/subSession/action';
+import { type ChatSubTopicAction, ChatSubTopicActionImpl } from './slices/subTopic/action';
 import { type ChatThreadAction } from './slices/thread/action';
 import { ChatThreadActionImpl } from './slices/thread/action';
 import { type ChatTopicAction } from './slices/topic/action';
@@ -40,7 +40,7 @@ import { VoiceMessageActionImpl } from './slices/voiceMessage/action';
 export type ChatStoreAction = ChatMessageAction &
   ChatForwardAction &
   ChatThreadAction &
-  ChatSubSessionAction &
+  ChatSubTopicAction &
   ChatAgentRunAction &
   ChatTopicAction &
   ChatTopicShareAction &
@@ -82,7 +82,7 @@ const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
       chatMessage(...params),
       new ChatForwardActionImpl(...params),
       new ChatThreadActionImpl(...params),
-      new ChatSubSessionActionImpl(...params),
+      new ChatSubTopicActionImpl(...params),
       chatAgentRun(...params),
       new ChatTopicActionImpl(...params),
       new ChatTopicShareActionImpl(...params),

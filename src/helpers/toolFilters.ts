@@ -21,7 +21,7 @@ import { useUserStore } from '@/store/user';
 export const shouldEnableTool = (toolId: string): boolean => {
   // Feature-flagged tools (e.g. builtin-dashboard) are not listed or offered while off.
   if (!isToolEnabledByFeatureFlags(toolId, getServerConfigStoreState()?.featureFlags)) return false;
-  // Lab-gated tools (e.g. lobe-session) are not listed or offered while their Labs switch is off.
+  // Lab-gated tools (e.g. lobe-topic) are not listed or offered while their Labs switch is off.
   if (!isToolEnabledByLab(toolId, useUserStore.getState().preference?.lab)) return false;
 
   // These executors call Electron IPC and cannot run in a plain web client.

@@ -207,7 +207,7 @@ describe('getSidebarTopicListParams', () => {
   });
 });
 
-describe('sub-sessions opened for this agent', () => {
+describe('sub-topics opened for this agent', () => {
   beforeEach(() => {
     userStateMock.betterCoding = false;
     globalStateMock.topicShowOpenedForMeByAgent = {};
@@ -221,12 +221,12 @@ describe('sub-sessions opened for this agent', () => {
       topicGroupMode: 'byTime' as const,
     };
 
-    expect(deriveSidebarTopicListQuery(base).excludeTriggers).toContain('sub_session');
+    expect(deriveSidebarTopicListQuery(base).excludeTriggers).toContain('sub_topic');
     expect(
-      deriveSidebarTopicListQuery({ ...base, showSubSessionTopics: true }).excludeTriggers,
+      deriveSidebarTopicListQuery({ ...base, showSubTopicTopics: true }).excludeTriggers,
     ).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME);
-    expect(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME).not.toContain('sub_session');
-    // A group's list never holds sub-sessions: it keeps the list it always asked for.
+    expect(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME).not.toContain('sub_topic');
+    // A group's list never holds sub-topics: it keeps the list it always asked for.
     expect(deriveSidebarTopicListQuery({ ...base, isGroupSession: true }).excludeTriggers).toEqual(
       MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
     );
@@ -235,17 +235,17 @@ describe('sub-sessions opened for this agent', () => {
   it('asks the route loader for the same rows: hidden only under the lab with the filter off', () => {
     // Lab off: no hierarchy to show them under their opener, so they are plain rows.
     expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
-      'sub_session',
+      'sub_topic',
     );
 
     userStateMock.betterCoding = true;
     expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).toContain(
-      'sub_session',
+      'sub_topic',
     );
 
     globalStateMock.topicShowOpenedForMeByAgent = { 'agent-1': true };
     expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
-      'sub_session',
+      'sub_topic',
     );
   });
 });

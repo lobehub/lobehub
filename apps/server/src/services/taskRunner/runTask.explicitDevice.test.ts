@@ -350,7 +350,7 @@ describe('TaskRunnerService.runTask explicit device', () => {
     expect(execParams().deviceId).toBeUndefined();
   });
 
-  describe('sub-session link', () => {
+  describe('sub-topic link', () => {
     const withOrigin = (taskModel: ReturnType<typeof setupTask>) => {
       const task = {
         assigneeAgentId: 'agt_codex',

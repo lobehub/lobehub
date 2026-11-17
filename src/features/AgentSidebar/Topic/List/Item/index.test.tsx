@@ -42,9 +42,9 @@ const topicMetaCardMock = vi.hoisted(() => ({
 
 // Assertions key on the raw lucide displayName, which the real Icon does not
 // expose in the DOM.
-// The sub-session hierarchy has its own tests; these rows render without it.
-vi.mock('../../SubSession/SubSessionToggle', () => ({ default: () => null }));
-vi.mock('../../SubSession/SubSessionChildren', () => ({ default: () => null }));
+// The sub-topic hierarchy has its own tests; these rows render without it.
+vi.mock('../../SubTopic/SubTopicToggle', () => ({ default: () => null }));
+vi.mock('../../SubTopic/SubTopicChildren', () => ({ default: () => null }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),

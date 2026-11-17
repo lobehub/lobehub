@@ -47,10 +47,10 @@ import { notebookRuntime } from './notebook';
 import { pageAgentRuntime } from './pageAgent';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
-import { sessionRuntime } from './session';
 import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
+import { subTopicRuntime } from './subTopic';
 import { taskRuntime } from './task';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
@@ -97,7 +97,7 @@ registerRuntimes([
   browserRuntime,
   remoteDeviceRuntime,
   briefRuntime,
-  sessionRuntime,
+  subTopicRuntime,
   taskRuntime,
   userInteractionRuntime,
   credsRuntime,

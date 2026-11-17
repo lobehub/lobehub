@@ -10,7 +10,7 @@ import { useProjectDirectories, useProjectDirectoryStore } from '@/store/project
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
-import { useNestedTopicIds } from '../SubSession/context';
+import { useNestedTopicIds } from '../SubTopic/context';
 import { useScopedSidebarTopics } from '../useScopedTopics';
 import { useAgentTopicGroupMode } from './useAgentTopicGroupMode';
 

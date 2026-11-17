@@ -182,10 +182,10 @@ export interface AgentRuntimeDelegate {
   }) => Promise<{ messageId: string } | undefined>;
   /**
    * A topic's own run settled: report it to the topic that opened it (a
-   * sub-session's receipt) and wake the topic for results that arrived while
-   * it ran. See `onSubSessionTurnSettled`. Never throws.
+   * sub-topic's receipt) and wake the topic for results that arrived while
+   * it ran. See `onSubTopicTurnSettled`. Never throws.
    */
-  onSubSessionTurnSettled?: TopicRunSettledHandler;
+  onSubTopicTurnSettled?: TopicRunSettledHandler;
   /** Run the init an operation was created without (see `DeferredInitRunner`). */
   runDeferredInit?: DeferredInitRunner;
   /**

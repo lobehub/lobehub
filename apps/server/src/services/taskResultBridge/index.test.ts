@@ -471,7 +471,7 @@ describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
 
   it('queues a non-task result and wakes the conversation once for everything pending', async () => {
     claimPending.mockResolvedValue([
-      { callbackMessageId: 'sub-1', id: 'sub-session-a' },
+      { callbackMessageId: 'sub-1', id: 'sub-topic-a' },
       { callbackMessageId: 'task-cb', id: 'op-task', taskId: 'task-1' },
     ]);
 
@@ -479,13 +479,13 @@ describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
       agentId: 'agent-parent',
       callbackMessageId: 'sub-1',
       originTopicId: 'topic-parent',
-      receiptId: 'sub-session-a',
+      receiptId: 'sub-topic-a',
     });
 
     expect(createPending).toHaveBeenCalledWith({
       agentId: 'agent-parent',
       callbackMessageId: 'sub-1',
-      operationId: 'sub-session-a',
+      operationId: 'sub-topic-a',
     });
     expect(execAgent).toHaveBeenCalledTimes(1);
     expect(execAgent.mock.calls[0][0]).toMatchObject({
@@ -496,7 +496,7 @@ describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
       suppressUserMessage: true,
       trigger: RequestTrigger.TaskCallback,
     });
-    expect(attachCreatorOperation).toHaveBeenCalledWith(['sub-session-a', 'op-task'], 'op-wake');
+    expect(attachCreatorOperation).toHaveBeenCalledWith(['sub-topic-a', 'op-task'], 'op-wake');
   });
 
   it('wakes the conversation directly when no Redis is configured', async () => {
@@ -506,7 +506,7 @@ describe('TaskResultBridgeService.queueWakeup (shared wake-up channel)', () => {
       agentId: 'agent-parent',
       callbackMessageId: 'sub-1',
       originTopicId: 'topic-parent',
-      receiptId: 'sub-session-a',
+      receiptId: 'sub-topic-a',
     });
 
     expect(createPending).not.toHaveBeenCalled();

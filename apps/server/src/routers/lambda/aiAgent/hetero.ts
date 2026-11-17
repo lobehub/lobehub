@@ -495,11 +495,11 @@ export const heteroRouter = router({
         userId: ctx.userId,
       });
       const heteroService = new HeterogeneousAgentService(ctx.serverDB, ctx.userId, {
-        // A sub-session's finished turn reports to the topic that opened it.
+        // A sub-topic's finished turn reports to the topic that opened it.
         onTopicRunSettled: (settled) =>
           new AiAgentService(ctx.serverDB, ctx.userId, {
             workspaceId: wsId,
-          }).onSubSessionTurnSettled(settled),
+          }).onSubTopicTurnSettled(settled),
         // Follow-ups queued behind the run start as its next turn through the
         // composer pipeline, under the run owner and its workspace.
         startQueuedFollowUp: (params) =>

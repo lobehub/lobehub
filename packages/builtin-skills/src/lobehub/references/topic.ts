@@ -11,6 +11,20 @@ Manage conversation topics (chat sessions).
 - \`lh topic edit <id> [-t <title>] [--favorite] [--no-favorite]\` - Update topic
 - \`lh topic delete <ids...> [--yes]\` - Delete one or more topics
 - \`lh topic recent [-L <limit>]\` - List recently accessed topics
+- \`lh topic send <id> -c <message>\` - Send a message to a topic and have its agent act on it (queued behind a running turn)
+- \`lh topic send --new -c <message> [--agent-id <id>] [--where inherit|new-worktree|none] [--base-branch <branch>]\` - Open a new topic; run from inside a conversation it is a sub-topic of it
+- \`lh topic list --opened-by-me [--parent-topic-id <id>]\` - List the sub-topics this conversation opened, with their state
+- \`lh topic stop <id>\` - Stop a topic's current turn
+- \`lh topic archive <id> [--all]\` - Archive a topic; \`--all\` also stops and archives its sub-topics
+
+## Sub-topics and other ways to hand work off
+
+Pick by what you need back:
+
+- The result inside this turn → do it yourself, or with your own sub-agents.
+- An independent conversation running in parallel that you and the user can follow up on → a sub-topic (\`lh topic send --new -c <message>\` from inside a conversation; Labs → Better Coding Experience). It stays on this device; \`--where\` picks the directory: \`inherit\` (default, shares uncommitted files), \`new-worktree\` (a fresh branch and worktree), \`none\`. Each finished turn reports back as a \`<sub_topic_result>\` message and wakes the parent — do not poll; continue it with \`lh topic send <id> -c <message>\`.
+- Work tracked on the task board, on a schedule or with verification → \`lh task\` (each run gets its own topic, on the device and directory configured on the task).
+- Group conversations and Channels keep their own collaboration.
 
 ## Threads
 

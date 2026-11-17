@@ -3,7 +3,7 @@ import useSWR from 'swr';
 import { scmKeys } from '@/libs/swr/keys';
 import { scmService } from '@/services/scm';
 import { useChatStore } from '@/store/chat';
-import { subSessionSelectors, topicSelectors } from '@/store/chat/selectors';
+import { subTopicSelectors, topicSelectors } from '@/store/chat/selectors';
 import { hasLocalTopicRun } from '@/store/chat/slices/topic/topicDetail';
 import { useServerConfigStore } from '@/store/serverConfig';
 
@@ -38,11 +38,9 @@ export const useFetchActiveTopicDetail = () => {
     () => scmService.hasWakeTarget(activeTopicId!),
     { shouldRetryOnError: false },
   );
-  // A finished sub-session's receipt wakes this topic from the server too.
-  const opensSubSessions = useChatStore((s) =>
-    subSessionSelectors.hasSubSessions(s.activeTopicId)(s),
-  );
-  const watchRuns = idle && (!!wakeable || opensSubSessions);
+  // A finished sub-topic's receipt wakes this topic from the server too.
+  const opensSubTopics = useChatStore((s) => subTopicSelectors.hasSubTopics(s.activeTopicId)(s));
+  const watchRuns = idle && (!!wakeable || opensSubTopics);
 
   // Revalidate on entry even when a persisted row exists: SCM wakeability does
   // not describe runs already active on the server after a reload. Only SCM

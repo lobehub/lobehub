@@ -116,11 +116,11 @@ describe('background runs in the active topic', () => {
     },
   );
 
-  it('keeps watching for runs a sub-session receipt starts from the server', async () => {
+  it('keeps watching for runs a sub-topic receipt starts from the server', async () => {
     vi.useFakeTimers();
     vi.mocked(scmService.hasWakeTarget).mockResolvedValue(false);
     useChatStore.setState({
-      subSessionTreeMap: {
+      subTopicTreeMap: {
         [context.topicId]: [{ id: 'topic-child', openedBy: { topicId: context.topicId } } as any],
       },
     });
@@ -135,7 +135,7 @@ describe('background runs in the active topic', () => {
       });
       expect(vi.mocked(topicService.getTopicDetail).mock.calls.length).toBeGreaterThan(reads);
     } finally {
-      useChatStore.setState({ subSessionTreeMap: {} });
+      useChatStore.setState({ subTopicTreeMap: {} });
     }
   });
 

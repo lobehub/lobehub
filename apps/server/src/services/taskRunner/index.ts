@@ -442,7 +442,7 @@ export class TaskRunnerService {
         ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
         ...(maxSteps ? { maxSteps } : {}),
         // A run started from a conversation (`runTask` in a chat) is a
-        // sub-session of it: the new topic records the creator topic as its
+        // sub-topic of it: the new topic records the creator topic as its
         // opener, so the creator's sidebar lists it underneath.
         ...(!continueTopicId &&
           (task.context as TaskContext | undefined)?.origin?.topicId && {

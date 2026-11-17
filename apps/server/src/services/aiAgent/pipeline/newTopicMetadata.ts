@@ -13,7 +13,7 @@ export interface NewTopicMetadataInput {
   /** The bound device was chosen explicitly for this conversation, not auto-picked. */
   deviceBindingPinned?: boolean;
   editingAgentId?: string;
-  /** The topic this one was opened from (a sub-session); see `resolveTopicOpenedBy`. */
+  /** The topic this one was opened from (a sub-topic); see `resolveTopicOpenedBy`. */
   openedBy?: TopicOpenedBy;
   /** Working directory the topic is born in; overrides the client-supplied one. */
   projectDirectory?: { path: string };

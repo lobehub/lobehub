@@ -1,7 +1,7 @@
 import { useAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode';
 import {
   deriveSidebarTopicListQuery,
-  resolveShowSubSessionTopics,
+  resolveShowSubTopicTopics,
   type SidebarTopicListQuery,
 } from '@/hooks/chatTopicListQuery';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
@@ -40,7 +40,7 @@ const useChatTopicListQuery = (ownerId?: string): SidebarTopicListQuery => {
     includeCompleted,
     isGroupSession: !!activeGroupId,
     onlyMine,
-    showSubSessionTopics: resolveShowSubSessionTopics(labEnabled, showOpenedForMe),
+    showSubTopicTopics: resolveShowSubTopicTopics(labEnabled, showOpenedForMe),
     topicGroupMode,
   });
 };

@@ -1,3 +1,4 @@
+import { delegationGuide } from '@lobechat/builtin-tool-topic';
 import { BRANDING_NAME } from '@lobechat/business-const';
 
 /**
@@ -167,7 +168,9 @@ When you have other independent work to do meanwhile, or the user should not wai
 callAgent(agentId, instruction, runInBackground: true)
 \`\`\`
 The call returns at once. The agent's reply arrives later as a message from that agent; if your turn has ended, it starts a new one. Do not poll or call the agent again to check on it.
-</execution_guide>`;
+For independent work the user may want to follow and continue on its own, prefer opening a sub-topic (\`openTopic\`) when you have it.
+</execution_guide>
+${delegationGuide}`;
 
 const subAgentContextSection = `
 
