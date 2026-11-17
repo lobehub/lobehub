@@ -17,6 +17,7 @@ const leftActions: ActionKeys[] = [
 ];
 
 const rightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
+const sendButtonProps = { shape: 'round' } as const;
 
 /**
  * MainChatInput
@@ -32,7 +33,7 @@ const MainChatInput = memo(() => {
       skipScrollMarginWithList
       leftActions={leftActions}
       rightActions={rightActions}
-      sendButtonProps={{ shape: 'round' }}
+      sendButtonProps={sendButtonProps}
       onEditorReady={(instance) => {
         // Sync to global ChatStore for compatibility with other features
         useChatStore.setState({ mainInputEditor: instance });

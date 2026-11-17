@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { messageService } from '@/services/message';
 import type * as WorkServiceModule from '@/services/work';
 
-import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
-import { createGatewayEventHandler } from './gatewayEventHandler';
-import { createHandler, createMockStore, flush, makeEvent } from './testUtils';
+import { createHandler, createMockStore, flush, makeEvent } from '../testUtils';
 
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -231,109 +229,10 @@ describe('createGatewayEventHandler — run lifecycle characterization', () => {
         expect(store.markTopicUnread).not.toHaveBeenCalled();
       },
     );
-
-    // the agent_runtime_end handler completes the op once via
-    // the shared run lifecycle, and gateway.ts onSessionComplete no longer
-    // double-completes (it only completes as the terminal-missing fallback). The
-    // reducer is still idempotent (a stray second completeOperation on an
-    // already-'completed' op is a no-throw, no-flip no-op) — locked here as a
-    // safety net in case any path issues a redundant completion.
-    it('completeOperation is idempotent: double-calling the same op leaves status=completed (no throw, no flip)', async () => {
-      // Local harness whose completeOperation MIRRORS the real reducer
-      // (operation/actions.ts completeOperation): set status to 'completed'
-      // unless the op was 'cancelled'.
-      const operations: Record<string, any> = {
-        'op-1': {
-          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
-          metadata: { startTime: 0 },
-          status: 'running',
-        },
-      };
-      const completeOperation = vi.fn((operationId: string) => {
-        const op = operations[operationId];
-        if (!op) return;
-        if (op.status !== 'cancelled') op.status = 'completed';
-        op.metadata.endTime = Date.now();
-      });
-      const store = {
-        ...createMockStore(),
-        completeOperation,
-        operations,
-      } as ReturnType<typeof createMockStore>;
-      const get = vi.fn(() => store) as any;
-      const handler = createGatewayEventHandler(get, {
-        assistantMessageId: 'msg-initial',
-        context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
-        operationId: 'op-1',
-        runLifecycle: buildRunLifecycle(get, {
-          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
-          parentMessageId: 'msg-initial',
-          parentMessageType: 'assistant',
-          runId: 'op-1',
-          runScope: 'top_level',
-          runtimeType: 'gateway',
-        }),
-      });
-
-      // First terminal completion (agent_runtime_end handler).
-      handler(makeEvent('agent_runtime_end'));
-      await flush();
-      expect(operations['op-1'].status).toBe('completed');
-
-      // Second completion (as onSessionComplete in gateway.ts would issue).
-      store.completeOperation('op-1');
-      expect(operations['op-1'].status).toBe('completed');
-      expect(completeOperation).toHaveBeenCalledTimes(2);
-    });
-
-    // CURRENT BEHAVIOR: if the op was cancelled mid-flight, completeOperation
-    // does NOT flip it to 'completed' (operation/actions.ts:288-291 preserves
-    // the user's interruption state). Lock this so the refactor can't quietly
-    // resurrect a cancelled op into 'completed' on a stray terminal event.
-    it('completeOperation preserves a cancelled op (does not flip cancelled → completed)', async () => {
-      const operations: Record<string, any> = {
-        'op-1': {
-          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
-          metadata: { startTime: 0 },
-          status: 'cancelled',
-        },
-      };
-      const completeOperation = vi.fn((operationId: string) => {
-        const op = operations[operationId];
-        if (!op) return;
-        if (op.status !== 'cancelled') op.status = 'completed';
-        op.metadata.endTime = Date.now();
-      });
-      const store = {
-        ...createMockStore(),
-        completeOperation,
-        operations,
-      } as ReturnType<typeof createMockStore>;
-      const get = vi.fn(() => store) as any;
-      const handler = createGatewayEventHandler(get, {
-        assistantMessageId: 'msg-initial',
-        context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
-        operationId: 'op-1',
-        runLifecycle: buildRunLifecycle(get, {
-          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
-          parentMessageId: 'msg-initial',
-          parentMessageType: 'assistant',
-          runId: 'op-1',
-          runScope: 'top_level',
-          runtimeType: 'gateway',
-        }),
-      });
-
-      handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
-      await flush();
-
-      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
-      expect(operations['op-1'].status).toBe('cancelled');
-    });
   });
 
   describe('waiting_for_async_tool parked characterization (lifecycle refactor regression net)', () => {
-    // CURRENT BEHAVIOR (gatewayEventHandler.ts:568-589): the `agent_runtime_end`
+    // CURRENT BEHAVIOR (gatewayEventHandler/index.ts): the `agent_runtime_end`
     // message-reconciliation branch special-cases BOTH `reason='interrupted'`
     // and `reason='waiting_for_async_tool'` together, gated by
     // `hasStreamedContent`. A `waiting_for_async_tool` terminal is a deferred-

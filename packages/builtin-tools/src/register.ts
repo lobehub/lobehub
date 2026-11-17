@@ -192,6 +192,12 @@ import {
   WebOnboardingRenders,
 } from '@lobechat/builtin-tool-web-onboarding/client';
 import {
+  WebhookIdentifier,
+  WebhookInspectors,
+  WebhookInterventions,
+  WebhookRenders,
+} from '@lobechat/builtin-tool-webhook/client';
+import {
   createEditLocalFileInspector,
   createReadLocalFileInspector,
   createRunCommandInspector,
@@ -314,6 +320,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [BrowserManifest.identifier]: BrowserRenders as Record<string, BuiltinRender>,
     [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
     [McpEventsIdentifier]: McpEventsRenders,
+    [WebhookIdentifier]: WebhookRenders,
     [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
     [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
     [NotebookIdentifier]: NotebookRenders,
@@ -401,6 +408,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [BrowserManifest.identifier]: BrowserInspectors as Record<string, BuiltinInspector>,
     [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
     [McpEventsIdentifier]: McpEventsInspectors,
+    [WebhookIdentifier]: WebhookInspectors,
     [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
     [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,
     [PageAgentManifest.identifier]: PageAgentInspectors as Record<string, BuiltinInspector>,
@@ -513,6 +521,7 @@ export const registerBuiltinToolSurfaces = (): void => {
     [LobeAgentManifest.identifier]: LobeAgentInterventions as Record<string, BuiltinIntervention>,
     [LocalSystemIdentifier]: LocalSystemInterventions as Record<string, BuiltinIntervention>,
     [McpEventsIdentifier]: McpEventsInterventions,
+    [WebhookIdentifier]: WebhookInterventions,
     [MemoryManifest.identifier]: MemoryInterventions as Record<string, BuiltinIntervention>,
     [MessageManifest.identifier]: MessageInterventions as Record<string, BuiltinIntervention>,
     [DashboardManifest.identifier]: DashboardInterventions as Record<string, BuiltinIntervention>,

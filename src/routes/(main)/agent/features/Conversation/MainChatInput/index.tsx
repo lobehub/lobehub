@@ -11,7 +11,6 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import AgentConfigError from './AgentConfigError';
-import { useAddUserMessageShortcut } from './useAddUserMessageShortcut';
 
 const contextWindowRightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
 const promptTransformRightActions: ActionKeys[] = [
@@ -20,6 +19,7 @@ const promptTransformRightActions: ActionKeys[] = [
   'voiceMessage',
   'contextWindow',
 ];
+const sendButtonProps = { shape: 'round' } as const;
 
 /**
  * MainChatInput
@@ -30,8 +30,6 @@ const promptTransformRightActions: ActionKeys[] = [
  * Only adds MessageFromUrl for desktop mode.
  */
 const MainChatInput = memo(() => {
-  useAddUserMessageShortcut();
-
   const agentId = useConversationStore(contextSelectors.agentId);
   const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
@@ -53,7 +51,7 @@ const MainChatInput = memo(() => {
         isConfigLoading={isAgentConfigLoading}
         leftActions={leftActions}
         rightActions={rightActions}
-        sendButtonProps={{ shape: 'round' }}
+        sendButtonProps={sendButtonProps}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features
           useChatStore.setState({ mainInputEditor: instance });

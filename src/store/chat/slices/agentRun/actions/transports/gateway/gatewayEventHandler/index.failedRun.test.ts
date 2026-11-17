@@ -6,7 +6,7 @@ import { messageService } from '@/services/message';
 import * as agentSignalBridge from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
 
-import { createGatewayEventHandler } from './gatewayEventHandler';
+import { createGatewayEventHandler } from './index';
 
 vi.mock('@/store/tool/slices/builtin/executors', () => ({
   getExecutor: vi.fn(() => ({})),

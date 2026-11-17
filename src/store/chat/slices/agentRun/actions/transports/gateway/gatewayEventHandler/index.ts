@@ -36,18 +36,20 @@ import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { applyMessagePatch } from './messagePatch';
+import { applyMessagePatch } from '../messagePatch';
 import {
   findTerminalAssistantError,
   isCompletedRuntimeEnd,
   resolveRuntimeEndStatus,
-} from './runtimeEndReason';
-import { applyStepMetrics } from './stepMetrics';
-import { resolveStepSideEvent } from './stepSideEvent';
-import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
+} from '../runtimeEndReason';
+import { applyStepMetrics } from '../stepMetrics';
+import { resolveStepSideEvent } from '../stepSideEvent';
+import { insertStreamStartSeeds, streamStartOperationMetadata } from '../streamStartSeed';
+import type { RuntimeEndData } from './runtimeEndMessages';
+import { reconcileRuntimeEndMessages } from './runtimeEndMessages';
 
 // Lazy-loaded to break the import cycle:
-//   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
+//   gateway.ts → gatewayEventHandler/index.ts → executors/index.ts (which pulls in
 //   tool client barrels that import `@/store/chat/store`) → chat store
 //   creation → `new GatewayActionImpl(...)` while gateway.ts is still
 //   mid-evaluation, so the class binding is undefined.
@@ -83,12 +85,15 @@ const fetchAndReplaceMessages = async (
      */
     skipWorks?: boolean;
     snapshotGeneration?: { current: number };
+    /** Checked after the read: a newer operation took the conversation, so keep its list. */
+    isSuperseded?: () => boolean;
   },
 ): Promise<UIChatMessage[] | undefined> => {
   const skipWorks = options?.skipWorks;
   const snapshotGeneration = options?.snapshotGeneration;
   const started = snapshotGeneration?.current;
   const messages = await readConversationMessages(skipWorks ? { ...context, skipWorks } : context);
+  if (options?.isSuperseded?.()) return undefined;
   if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
   if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
@@ -359,6 +364,8 @@ export const createGatewayEventHandler = (
   let lastTextSnapshotSeq = 0;
   let lastReasoningSnapshotSeq = 0;
   let lastMessagePatchRevision = 0;
+  // Set even when the step_start read fails, so Stop can tell which step it landed in.
+  let lastStepStartRevision = 0;
   const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
@@ -417,7 +424,7 @@ export const createGatewayEventHandler = (
   // otherwise last-write-wins the older list over the next step.
   const snapshotGeneration = { current: 0 };
 
-  const refreshMessagesFromDb = (options?: { skipWorks?: boolean }) =>
+  const refreshMessagesFromDb = (options?: { isSuperseded?: () => boolean; skipWorks?: boolean }) =>
     fetchAndReplaceMessages(get, context, { ...options, snapshotGeneration });
 
   const applyPushedSnapshot = (
@@ -1023,6 +1030,7 @@ export const createGatewayEventHandler = (
           uiMessages?: UIChatMessage[];
         };
 
+        if (typeof data?.messageRevision === 'number') lastStepStartRevision = data.messageRevision;
         if (
           typeof data?.messageRevision === 'number' &&
           data.messageRevision !== lastMessagePatchRevision
@@ -1204,14 +1212,7 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as
-            | {
-                messagePatchMode?: boolean;
-                messageRevision?: number;
-                reason?: string;
-                uiMessages?: UIChatMessage[];
-              }
-            | undefined;
+          const data = event.data as RuntimeEndData | undefined;
 
           void emitAgentSignal({
             payload: {
@@ -1231,61 +1232,25 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
-          // The terminal snapshot, when the server pushed one — the reconciled
-          // Source of Truth for this run's final assistant text.
-          let terminalMessages: UIChatMessage[] | undefined;
-
           // Reconcile messages FIRST so the terminal run lifecycle's notification
           // (afterRunComplete) can read the final assistant content from the store.
-          //
-          // Terminal step has no later step_start to carry SoT — server
-          // pushes the canonical snapshot directly on this event. Fall back
-          // to a DB refetch only if the snapshot is absent (older server
-          // builds, or push-event delivery edge cases).
-          const isSuperseded = operationSelectors.hasNewerConversationOperation(
-            operationId,
-            context,
-          )(get());
-          if (Array.isArray(data?.uiMessages)) {
-            terminalMessages = data.uiMessages;
-            // `visible_output_end` lets a follow-up start before this terminal
-            // event arrives. Once that happens, this run's snapshot is no longer
-            // the conversation SoT: replacing the list would erase the newer
-            // turn's optimistic rows until refresh. Keep terminalMessages for
-            // this run's notification, but do not mutate its successor's store.
-            if (!isSuperseded) {
-              applyPushedSnapshot(data.uiMessages, {
-                action: 'gateway/agent_runtime_end',
-              });
-            }
-          } else if (data?.reason === 'interrupted' && hasStreamedContent) {
-            // MID-stream cancel. `interruptOperation` publishes this event as
-            // soon as it saves `interrupted`, while the in-flight step persists
-            // the partial text only when it returns afterwards. Any DB read here
-            // (the patch-mode refetch too: a Stop lands mid-step, so its revision
-            // is ahead of the last patch) sees the empty placeholder and wipes
-            // the streamed text, and nothing repairs it: the socket closes on
-            // this frame. Keep what was streamed — the server persists the same.
-            // Without streamed content, the optimistic `tmp_*` rows are all we
-            // have and still need the refetch below.
-          } else if (data?.messagePatchMode) {
-            if (
-              typeof data.messageRevision === 'number' &&
-              data.messageRevision !== lastMessagePatchRevision
-            ) {
-              terminalMessages = await refreshMessagesFromDb();
-              if (terminalMessages) lastMessagePatchRevision = data.messageRevision;
-            } else {
-              terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
-            }
-          } else if (data?.reason === 'waiting_for_async_tool' && hasStreamedContent) {
-            // Deferred-tool pause. The server's
-            // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
-            // for it (as for `interrupted`) so the in-memory streamed content
-            // is preserved here instead of racing the executor's DB write.
-          } else if (!isSuperseded) {
-            await refreshMessagesFromDb().catch(console.error);
-          }
+          // Ownership is checked again after each read: Stop lets a new send
+          // start while the read is in flight.
+          const isSuperseded = () =>
+            operationSelectors.hasNewerConversationOperation(operationId, context)(get());
+          const settled = await reconcileRuntimeEndMessages({
+            applySnapshot: (messages) =>
+              applyPushedSnapshot(messages, { action: 'gateway/agent_runtime_end' }),
+            currentMessages: () => get().dbMessagesMap[messageMapKey(context)] ?? [],
+            data,
+            hasStreamedContent,
+            isSuperseded: isSuperseded(),
+            lastMessagePatchRevision,
+            lastStepStartRevision,
+            refresh: () => refreshMessagesFromDb({ isSuperseded }),
+          });
+          lastMessagePatchRevision = settled.lastMessagePatchRevision;
+          const { terminalMessages } = settled;
 
           if (runtimeType === 'gateway' && shouldRefreshWorkViews) {
             await workService

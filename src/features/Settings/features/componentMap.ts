@@ -95,6 +95,9 @@ export const componentMap = {
   [SettingsTabs.Automations]: dynamic(() => import('../automations'), {
     loading: loading('Settings > Automations'),
   }),
+  [SettingsTabs.Webhooks]: dynamic(() => import('../webhooks'), {
+    loading: loading('Settings > Webhooks'),
+  }),
   [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
     loading: loading('Settings > Tools'),
   }),

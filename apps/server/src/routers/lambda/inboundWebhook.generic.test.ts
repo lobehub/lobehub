@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
+import { ChannelRepository } from '@/database/repositories/channel';
 import { agents, signals, topics, users, workspaceAuditLogs, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import type * as AppEnvModule from '@/envs/app';
@@ -148,6 +149,45 @@ describe('generic webhook management', () => {
     expect(JSON.stringify(await caller().update({ id: item.id, name: 'CI 2' }))).not.toContain(
       secret,
     );
+  });
+
+  it('keeps the identifier the Agent knows it by when people rename it', async () => {
+    const { item } = await caller().create({ agentId, name: 'CI alerts' });
+    expect(item).toMatchObject({ identifier: 'ci-alerts', name: 'CI alerts' });
+    const renamed = await caller().update({ id: item.id, name: '夜间构建' });
+    expect(renamed).toMatchObject({ identifier: 'ci-alerts', name: '夜间构建' });
+    const moved = await caller().update({ autoApprove: true, id: item.id, topicMode: 'reuse' });
+    expect(moved.identifier).toBe('ci-alerts');
+  });
+
+  it("never gives two of an agent's webhooks the same identifier", async () => {
+    const first = await caller().create({ agentId, name: '告警' });
+    const second = await caller().create({ agentId, name: '通知' });
+    const third = await caller().create({ agentId, name: 'CI alerts' });
+    const fourth = await caller().create({ agentId, name: 'CI  Alerts!' });
+    expect([first, second, third, fourth].map(({ item }) => item.identifier)).toEqual([
+      'webhook',
+      'webhook-2',
+      'ci-alerts',
+      'ci-alerts-2',
+    ]);
+  });
+
+  it('gives webhooks created at the same moment different identifiers', async () => {
+    const created = await Promise.all(
+      Array.from({ length: 3 }, () => caller().create({ agentId, name: 'CI alerts' })),
+    );
+    expect(created.map(({ item }) => item.identifier).sort()).toEqual([
+      'ci-alerts',
+      'ci-alerts-2',
+      'ci-alerts-3',
+    ]);
+  });
+
+  it('lists one kind when asked', async () => {
+    const { item } = await caller().create({ agentId });
+    expect((await caller().list({ kind: 'generic' })).map((row) => row.id)).toEqual([item.id]);
+    expect(await caller().list({ kind: 'mcp_events' })).toEqual([]);
   });
 
   it('refuses to create while the feature is off, or for an agent the caller cannot edit', async () => {
@@ -447,5 +487,74 @@ describe('generic webhook management', () => {
     const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.item.id });
     expect(first.nextCursor?.createdAt).toMatch(/\.\d{6}Z$/);
     expect([...first.items, ...second.items].map((item) => item.preview)).toHaveLength(21);
+  });
+});
+
+describe('Channel delivery (CLI and agent tools; read-only on the Web)', () => {
+  const directChannel = async () => {
+    const { channel } = await new ChannelRepository(db, creator).create({
+      agentConfig: {},
+      agentId,
+      title: 'Nightly',
+    });
+    const root = await new ChannelRepository(db, creator).send(channel.id, {
+      content: 'Build status for the nightly run',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const thread = await new ChannelRepository(db, creator).createThread(channel.id, {
+      rootMessageId: root.id,
+    });
+    return { channelId: channel.id, threadId: thread.id };
+  };
+
+  it('needs auto-approval: nobody can approve a tool call in the Channel', async () => {
+    const { channelId } = await directChannel();
+    await expect(caller().create({ agentId, delivery: { channelId } })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    const { item } = await caller().create({
+      agentId,
+      autoApprove: true,
+      delivery: { channelId },
+    });
+    // Turning auto-approval off while it still posts to the Channel is refused too.
+    await expect(caller().update({ autoApprove: false, id: item.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    const cleared = await caller().update({ autoApprove: false, delivery: null, id: item.id });
+    expect(cleared).toMatchObject({ channel: null, source: { autoApprove: false } });
+    expect(cleared.source).not.toHaveProperty('delivery');
+  });
+
+  it('names the Channel and Thread it posts to for members, and hides them from others', async () => {
+    const { channelId, threadId } = await directChannel();
+    const { item } = await caller().create({
+      agentId,
+      autoApprove: true,
+      delivery: { channelId, threadId },
+    });
+    expect(item.channel).toEqual({
+      id: channelId,
+      projectId: null,
+      threadId,
+      threadTitle: 'Build status for the nightly run',
+      title: 'Nightly',
+    });
+    expect(item.source).toMatchObject({ delivery: { channelId, threadId } });
+  });
+
+  it('refuses a Channel the creator is not in, or a Thread of another Channel', async () => {
+    const { channelId } = await directChannel();
+    await expect(
+      caller(colleague).create({ agentId, autoApprove: true, delivery: { channelId } }),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/BAD_REQUEST|NOT_FOUND|FORBIDDEN/) });
+    await expect(
+      caller().create({
+        agentId,
+        autoApprove: true,
+        delivery: { channelId, threadId: 'cht_elsewhere' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Thread not found in that Channel.' });
   });
 });

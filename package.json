@@ -285,6 +285,7 @@
     "@lobechat/builtin-tool-video-generation": "workspace:*",
     "@lobechat/builtin-tool-web-browsing": "workspace:*",
     "@lobechat/builtin-tool-web-onboarding": "workspace:*",
+    "@lobechat/builtin-tool-webhook": "workspace:*",
     "@lobechat/builtin-tools": "workspace:*",
     "@lobechat/business-config": "workspace:*",
     "@lobechat/business-const": "workspace:*",

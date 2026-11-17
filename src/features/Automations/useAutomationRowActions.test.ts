@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   check: vi.fn(),
   confirmModal: vi.fn(),
   delete: vi.fn(),
+  openRename: vi.fn(),
+  update: vi.fn(),
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
@@ -21,8 +23,10 @@ vi.mock('react-i18next', () => ({
 vi.mock('@lobehub/ui', () => ({ confirmModal: mocks.confirmModal, toast: mocks.toast }));
 
 vi.mock('@/services/inboundWebhook', () => ({
-  inboundWebhookService: { check: mocks.check, delete: mocks.delete },
+  inboundWebhookService: { check: mocks.check, delete: mocks.delete, update: mocks.update },
 }));
+
+vi.mock('./RenameAutomationModal', () => ({ openRenameAutomationModal: mocks.openRename }));
 
 const row = (patch: Partial<InboundWebhookItem> = {}): InboundWebhookItem => ({
   agent: { avatar: null, backgroundColor: null, id: 'agt_1', title: 'Release bot' },
@@ -159,5 +163,40 @@ describe('useAutomationRowActions delete', () => {
     await expect(config.onOk()).resolves.toBeUndefined();
     expect(mocks.toast.info).toHaveBeenCalledWith('automations.delete.alreadyGone');
     expect(onRemoved).toHaveBeenCalledWith('wh_1');
+  });
+});
+
+describe('useAutomationRowActions rename', () => {
+  type RenameOptions = {
+    fallback: string;
+    onSubmit: (name: string | null) => Promise<string | undefined>;
+  };
+
+  it("renames the creator's subscription, with the event as the fallback name", async () => {
+    const renamed = row({ name: 'Web bugs' });
+    mocks.update.mockResolvedValue(renamed);
+    const { hook, onChecked } = setup(row({ canConfigure: true } as never));
+    expect(hook.result.current.canRename).toBe(true);
+
+    act(() => hook.result.current.rename());
+    const options = mocks.openRename.mock.calls[0][0] as RenameOptions;
+    expect(options.fallback).toBe('check_run.failed');
+
+    await expect(options.onSubmit('Web bugs')).resolves.toBeUndefined();
+    expect(mocks.update).toHaveBeenCalledWith('wh_1', { name: 'Web bugs' });
+    expect(onChecked).toHaveBeenCalledWith(renamed);
+  });
+
+  it('keeps the dialog open with a message when the rename fails', async () => {
+    mocks.update.mockRejectedValue(new Error('boom'));
+    const { hook, onChecked } = setup(row({ canConfigure: true } as never));
+    act(() => hook.result.current.rename());
+    const options = mocks.openRename.mock.calls[0][0] as RenameOptions;
+    await expect(options.onSubmit('x')).resolves.toBe('automations.rename.failed');
+    expect(onChecked).not.toHaveBeenCalled();
+  });
+
+  it('offers no rename to anyone but its creator', () => {
+    expect(setup(row({ canConfigure: false } as never)).hook.result.current.canRename).toBe(false);
   });
 });

@@ -157,3 +157,15 @@ Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled
 Use the shared form's `autoSubmitOnTimeout` result for countdown wording. Provider-owned option IDs suppress inferred answers, so those cards must say they close unanswered instead of promising option 1. Keep the legacy fallback wording only where the form actually submits fallback answers. Do not infer the policy from a renderer's provider name.
 
 Enforcement: `packages/shared-tool-ui/src/AskUserQuestion/useAskUserForm.test.ts` checks the exposed policy together with actual timeout submission and non-submission. Verify both countdown messages on the rendered cards. Source: real Codex question-card acceptance (2026-11-17), where the footer promised option 1 despite the hook correctly refusing to select it.
+
+## LOBE-UX-022 — Check icon–label optical alignment, not only bounding boxes
+
+For an icon beside a text label, equal CSS centerlines do not prove visual centering: the font's visible glyphs can sit above the line-box center. Inspect a tight rendered crop, including the hover background, before declaring alignment fixed. Use the shared component's flex alignment first and inspect its line height, font metrics, and SVG viewBox before changing it. Do not compensate with per-instance pixel translations or relative positioning; resolve an established typography or icon issue at its owning layer instead.
+
+Enforcement: visual review of the actual icon and localized label at the target scale, alongside the row's computed geometry; reject unexplained positioning offsets in icon–label alignment changes. Source: user corrections on the Agent profile return row: geometry checks missed the perceived misalignment, and a subsequent 1px icon translation was correctly rejected as a hack.
+
+## LOBE-UX-023 — Keep page editor modes outside the writing surface
+
+On a dedicated instruction-editing page, place view-mode switches alongside the page title, not in an extra toolbar row inside the input boundary. The editor's boundary should identify where to type without becoming the page's strongest visual element on focus. Use the neutral outlined surface; do not turn its entire perimeter into a primary-colored focus frame. Preserve the editor caret and the mode buttons' keyboard focus indicators.
+
+Enforcement: `EditorCanvas/index.test.tsx` checks that both mode controls remain outside the outlined input surface. Inspect the page at rest and while editing. Source: user correction on the Agent instruction editor: moving mode switches into the frame wasted a writing row, and a black focus border was too prominent.

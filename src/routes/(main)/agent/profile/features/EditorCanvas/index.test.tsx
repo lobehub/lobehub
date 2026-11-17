@@ -366,12 +366,25 @@ describe('Agent profile EditorCanvas', () => {
     expect(onWrapperClick).not.toHaveBeenCalled();
   });
 
-  it('moves the prompt description into the title tooltip', () => {
+  it('keeps editor controls without repeating the instruction page heading and help', () => {
     render(<EditorCanvas />);
 
+    expect(screen.queryByText('settingAgent.prompt.title')).not.toBeInTheDocument();
     expect(screen.queryByText('settingAgent.prompt.desc')).not.toBeInTheDocument();
-    expect(screen.getByTestId('prompt-description-tooltip')).toHaveAccessibleName(
-      'settingAgent.prompt.desc',
+    expect(screen.queryByTestId('prompt-description-tooltip')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }),
+    ).toBeInTheDocument();
+    const inputSurface = screen.getByTestId('profile-editor').closest('[data-variant="outlined"]');
+    expect(inputSurface).toBeInTheDocument();
+    expect(inputSurface).not.toContainElement(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.visual' }),
+    );
+    expect(inputSurface).not.toContainElement(
+      screen.getByRole('button', { name: 'settingAgent.prompt.mode.source' }),
     );
   });
 

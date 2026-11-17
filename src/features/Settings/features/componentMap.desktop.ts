@@ -33,6 +33,7 @@ import Storage from '../storage';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
 import Trash from '../trash';
+import Webhooks from '../webhooks';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,
@@ -64,6 +65,7 @@ export const componentMap = {
   [SettingsTabs.Skill]: Skill,
   [SettingsTabs.Connector]: Connector,
   [SettingsTabs.Automations]: Automations,
+  [SettingsTabs.Webhooks]: Webhooks,
   [SettingsTabs.Tools]: Tools,
 
   [SettingsTabs.Plans]: Plans,

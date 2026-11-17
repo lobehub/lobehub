@@ -1,19 +1,7 @@
 import type { McpEventsToolErrorCode } from '../types';
+import { MCP_EVENTS_TOOL_ERROR_CODES } from '../types';
 
-const ERROR_CODES = new Set<McpEventsToolErrorCode>([
-  'callback_unreachable',
-  'channel_unsupported',
-  'connector_not_found',
-  'delivery_unsupported',
-  'events_unsupported',
-  'feature_disabled',
-  'forbidden',
-  'invalid_arguments',
-  'limit_reached',
-  'not_found',
-  'public_url_required',
-  'unknown',
-]);
+const ERROR_CODES = new Set<McpEventsToolErrorCode>(MCP_EVENTS_TOOL_ERROR_CODES);
 
 export interface McpEventsToolError {
   code: McpEventsToolErrorCode;

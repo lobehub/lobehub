@@ -111,6 +111,7 @@ export const mcpEventsKind: InboundWebhookKindHandler<'mcp_events'> = {
   signalSource: 'mcp-events',
   source: (row) => ({
     arguments: row.config.arguments,
+    ...(row.config.delivery && { delivery: row.config.delivery }),
     eventName: row.config.eventName,
     kind: 'mcp_events',
   }),
