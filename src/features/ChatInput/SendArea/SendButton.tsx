@@ -11,7 +11,6 @@ import { selectors, useChatInputStore } from '../store';
 
 const SendButton = memo(() => {
   const { t } = useTranslation('setting');
-  const sendMenu = useChatInputStore((s) => s.sendMenu);
   const shape = useChatInputStore((s) => s.sendButtonProps?.shape);
   const size = useChatInputStore((s) => s.sendButtonProps?.size);
   const { generating, disabled, showSendWhileGenerating } = useChatInputStore(
@@ -52,11 +51,8 @@ const SendButton = memo(() => {
         disabled={disabled || !canSend}
         generating={generating}
         loading={installing}
-        menu={canSend ? (sendMenu as any) : undefined}
-        placement={'topRight'}
         shape={shape}
         size={size}
-        trigger={['hover']}
         onClick={generating || !canSend ? undefined : () => send()}
         onStop={() => handleStop()}
       />

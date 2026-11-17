@@ -189,7 +189,6 @@ export const getConversationSendButtonProps = (
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;
-  showSendMenu: boolean;
   /** Show Send beside Stop so a typed follow-up can be queued by click. */
   showSendWhileGenerating: boolean;
   showStopButton: boolean;
@@ -220,7 +219,6 @@ export const getConversationChatInputUiState = ({
   const followUp = !disableFollowUpVariant && isInputLoading && isInputEmpty;
   return {
     placeholderVariant: followUp ? 'followUp' : 'default',
-    showSendMenu: !isInputLoading,
     showSendWhileGenerating: isInputLoading && !isInputEmpty && !disableQueue,
     showStopButton: isInputLoading,
   };

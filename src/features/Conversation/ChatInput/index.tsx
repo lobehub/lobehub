@@ -6,7 +6,7 @@ import {
   type ChatInputActionsProps,
   type ChatInputProps as EditorChatInputProps,
 } from '@lobehub/editor/react';
-import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
+import { Flexbox, toast } from '@lobehub/ui';
 import i18next from 'i18next';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -164,10 +164,6 @@ export interface ChatInputProps {
    */
   sendButtonProps?: Partial<SendButtonProps>;
   /**
-   * Send menu configuration (for send options like Enter/Cmd+Enter, Add AI/User message)
-   */
-  sendMenu?: { items: DropdownItem[] };
-  /**
    * Whether to show the control bar (Local/Cloud/Auto Approve)
    */
   showControlBar?: boolean;
@@ -202,7 +198,6 @@ const ChatInput = memo<ChatInputProps>(
     mentionItems,
     notices,
     controlBarSlot,
-    sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
     showControlBar = true,
@@ -303,7 +298,7 @@ const ChatInput = memo<ChatInputProps>(
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const { placeholderVariant, showSendMenu, showSendWhileGenerating, showStopButton } =
+    const { placeholderVariant, showSendWhileGenerating, showStopButton } =
       useConversationChatInputUiState({ disableFollowUpVariant, disableQueue, isInputEmpty });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
@@ -338,7 +333,6 @@ const ChatInput = memo<ChatInputProps>(
         fileChatSelectors.chatContextSelections(liveContextKey)(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
     }, [customDisabled, disableQueue, disableSend, storeApi]);
-    const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
@@ -455,16 +449,11 @@ const ChatInput = memo<ChatInputProps>(
       [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
     );
 
-    const sendButtonProps: SendButtonProps = {
-      ...getConversationSendButtonProps(
-        { disabled, generating: showStopButton, onStop: stopGenerating, showSendWhileGenerating },
-        customSendButtonProps,
-        isUploadingFiles,
-      ),
-      ...(shouldUsePlainSendButton
-        ? { shape: customSendButtonProps?.shape ?? 'round' }
-        : undefined),
-    };
+    const sendButtonProps: SendButtonProps = getConversationSendButtonProps(
+      { disabled, generating: showStopButton, onStop: stopGenerating, showSendWhileGenerating },
+      customSendButtonProps,
+      isUploadingFiles,
+    );
 
     const handleVoiceMessageSend = useCallback(
       (recording: VoiceMessageRecording) => {
@@ -572,7 +561,6 @@ const ChatInput = memo<ChatInputProps>(
         resolveSendBlocked={resolveSendBlocked}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
-        sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
         topicId={topicId}
         chatInputEditorRef={(instance) => {

@@ -1,4 +1,3 @@
-import { type DropdownItem } from '@lobehub/ui';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type PropsWithChildren, useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,25 +43,6 @@ vi.mock('./VoiceMessage/useVoiceMessageCapability', async (importOriginal) => ({
 vi.mock('./VoiceMessage/useVoiceMessageRecorder', () => ({
   useVoiceMessageRecorder: () => voiceRecorder,
 }));
-
-interface TestHarnessProps {
-  onSendMenuChange: (menu: { items: DropdownItem[] } | undefined) => void;
-  sendMenu?: { items: DropdownItem[] };
-}
-
-const Probe = ({
-  onSendMenuChange,
-}: {
-  onSendMenuChange: TestHarnessProps['onSendMenuChange'];
-}) => {
-  const sendMenu = useChatInputStore((s) => s.sendMenu);
-
-  useEffect(() => {
-    onSendMenuChange(sendMenu);
-  }, [onSendMenuChange, sendMenu]);
-
-  return null;
-};
 
 const VoiceCapabilityProbe = ({ onChange }: { onChange: (value?: boolean) => void }) => {
   const canRecordVoiceMessage = useChatInputStore((s) => s.canRecordVoiceMessage);
@@ -123,36 +103,6 @@ describe('ChatInput StoreUpdater', () => {
     expect(restoredSend).not.toBeDisabled();
     fireEvent.click(restoredSend);
     expect(send).toHaveBeenCalledOnce();
-  });
-
-  it('clears sendMenu when the prop becomes undefined', () => {
-    const initialSendMenu = { items: [{ key: 'test', label: 'Test' }] } satisfies {
-      items: DropdownItem[];
-    };
-    const onSendMenuChange = vi.fn();
-
-    const { rerender } = render(
-      <TestHarness>
-        <StoreUpdater
-          leftActions={[]}
-          rightActions={[]}
-          sendMenu={initialSendMenu}
-          onSend={() => {}}
-        />
-        <Probe onSendMenuChange={onSendMenuChange} />
-      </TestHarness>,
-    );
-
-    expect(onSendMenuChange).toHaveBeenLastCalledWith(initialSendMenu);
-
-    rerender(
-      <TestHarness>
-        <StoreUpdater leftActions={[]} rightActions={[]} sendMenu={undefined} onSend={() => {}} />
-        <Probe onSendMenuChange={onSendMenuChange} />
-      </TestHarness>,
-    );
-
-    expect(onSendMenuChange).toHaveBeenLastCalledWith(undefined);
   });
 
   it('keeps canRecordVoiceMessage in sync when the prop changes', () => {

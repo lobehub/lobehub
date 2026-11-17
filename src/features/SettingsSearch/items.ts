@@ -637,6 +637,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Hotkey,
   },
   {
+    anchor: 'hotkey-send-message',
+    descKey: 'hotkey.sendMessage.desc',
+    keywords: ['send', 'enter', 'cmd enter', 'ctrl enter', 'newline', 'line break', 'shortcut'],
+    labelKey: 'hotkey.sendMessage.title',
+    tab: SettingsTabs.Hotkey,
+  },
+  {
     anchor: 'hotkey-conversation',
     keywords: ['shortcut', 'keyboard', 'chat'],
     labelKey: 'hotkey.group.conversation',
