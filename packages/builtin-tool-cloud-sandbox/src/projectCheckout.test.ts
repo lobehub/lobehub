@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectCheckoutDirectory } from './projectCheckout';
+import { projectCheckoutDirectory, repositoryCheckoutDirectory } from './projectCheckout';
 import { isSafeSandboxCwd } from './workspace';
 
 describe('projectCheckoutDirectory', () => {
@@ -27,5 +27,19 @@ describe('projectCheckoutDirectory', () => {
 
   it('stays a usable working directory', () => {
     expect(isSafeSandboxCwd(projectCheckoutDirectory('proj_1', ENV_ID))).toBe(true);
+  });
+});
+
+describe('repositoryCheckoutDirectory', () => {
+  it('keeps one folder per environment, apart from project checkouts', () => {
+    expect(repositoryCheckoutDirectory('env-a')).toBe('repositories/env-a');
+    expect(repositoryCheckoutDirectory('env-a')).not.toBe(repositoryCheckoutDirectory('env-b'));
+  });
+
+  it('turns anything but an id character into a plain one, so no segment escapes', () => {
+    const folder = repositoryCheckoutDirectory('../..');
+
+    expect(folder).toBe('repositories/_____');
+    expect(isSafeSandboxCwd(folder)).toBe(true);
   });
 });

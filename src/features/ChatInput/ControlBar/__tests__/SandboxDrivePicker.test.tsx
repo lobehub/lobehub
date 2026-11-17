@@ -57,7 +57,10 @@ vi.mock('../SandboxDriveMenu', () => ({
     <div data-testid="drive-folders">{selectedPath}</div>
   ),
 }));
-vi.mock('../SandboxRepositoryMenu', () => ({ default: () => null }));
+vi.mock('../SandboxRepositoryMenu', () => ({
+  default: ({ none }: { none?: { active: boolean } }) =>
+    none ? <div data-testid="repository-menu">{none.active ? 'none-active' : 'none'}</div> : null,
+}));
 
 const renderPicker = (
   value: SandboxSelection,
@@ -67,13 +70,15 @@ const renderPicker = (
 // T-14161: the sandbox kind is picked in the execution-environment menu, so
 // this menu only asks what is left for that kind.
 describe('SandboxDrivePicker', () => {
-  it('lists the drive folders directly on the persistent sandbox', () => {
+  it('lists the drive folders directly on the persistent sandbox, a repository beneath', () => {
     renderPicker({ workingDirectory: 'notes' });
 
     expect(screen.getByTestId('drive-folders').textContent).toBe('notes');
     expect(screen.queryByText('sandboxStorage.ephemeral', { selector: 'div *' })).toBeNull();
     expect(screen.queryByTestId('sandbox-drive-row')).toBeNull();
-    expect(screen.queryByTestId('sandbox-repository-row')).toBeNull();
+    // A repository is checked out in a folder of its own on the drive.
+    expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
+    expect(screen.queryByTestId('repository-menu')).toBeNull();
   });
 
   it('keeps the repository entry in a project, whose checkout persists', () => {
@@ -83,14 +88,23 @@ describe('SandboxDrivePicker', () => {
     expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
   });
 
-  it('offers the temporary folder and repositories on the temporary sandbox', () => {
+  // The temporary sandbox's folder is always a fresh empty one: nothing to
+  // pick there, only whether a repository is cloned into it.
+  it('asks only for a repository on the temporary sandbox', () => {
     renderPicker({});
 
     expect(screen.queryByTestId('drive-folders')).toBeNull();
     expect(screen.queryByTestId('sandbox-drive-row')).toBeNull();
-    expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
-    // The chip and the row both name it.
-    expect(screen.getAllByText('sandboxStorage.ephemeral')).toHaveLength(2);
+    expect(screen.queryByTestId('sandbox-repository-row')).toBeNull();
+    expect(screen.queryByText('sandboxStorage.ephemeral')).toBeNull();
+    expect(screen.getByTestId('repository-menu').textContent).toBe('none-active');
+    expect(screen.getByText('sandboxEnvironment.none')).toBeInTheDocument();
+  });
+
+  it('marks the picked repository rather than none on the temporary sandbox', () => {
+    renderPicker({ environmentId: 'env-1' });
+
+    expect(screen.getByTestId('repository-menu').textContent).toBe('none');
   });
 
   // A member of a workspace agent whose author fixed the target sees the

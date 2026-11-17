@@ -2173,6 +2173,7 @@
   "sandboxEnvironment.loadFailed": "Couldn't load environments",
   "sandboxEnvironment.loading": "Loading environment…",
   "sandboxEnvironment.missing": "Environment unavailable",
+  "sandboxEnvironment.none": "No repository",
   "sandboxEnvironment.retry": "Retry",
   "sandboxEnvironment.saveFailed": "Could not change the environment. Try again.",
   "sandboxEnvironment.title": "Repository",

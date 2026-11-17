@@ -108,18 +108,20 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * Where a cloud-sandbox run works, offered the way the device picker offers
  * folders: the chip names the place. Which sandbox it is — temporary, or
  * persistent on the drive — is picked in the execution-environment menu, so
- * the menu here is the drive's folders on the persistent sandbox, and the
- * temporary folder or a repository checkout on the temporary one.
+ * the menu here is the drive's folders (and a repository, checked out in a
+ * folder of its own on the drive) on the persistent sandbox, and only the
+ * repository to clone, or none, on the temporary one — whose folder is always
+ * a fresh empty one, nothing to pick.
  *
  * Nothing picked is the temporary sandbox; picking a folder on the drive is
  * the choice to keep files. A pick that can no longer be honoured — the
  * folder was deleted — is said on the chip itself, before the next message
  * runs somewhere the person did not choose.
  *
- * A repository is the third kind of place, one level down: temporary, a folder
- * or a repository, one at a time. A checkout only lands in an empty folder, so
- * offering it beside a folder that holds files would let a pick silently do
- * nothing.
+ * A folder and a repository are one choice, not two: a checkout only lands in
+ * an empty folder, so offering it beside a folder that holds files would let a
+ * pick silently do nothing. Where the execution-environment menu cannot be
+ * used, this menu keeps all three places in one list.
  *
  * A conversation from before environments became initializers may still be
  * bound to an environment directory; it is shown by name until another pick
@@ -133,6 +135,12 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     const navigate = useWorkspaceAwareNavigate();
     const persistent = isPersistentSelection(value);
     const onRepository = !!value.environmentId;
+    // The persistent sandbox: the conversation keeps its files on the drive.
+    const onDrive = ENABLE_BUSINESS_FEATURES && entitled && persistent && modeInEnvironmentMenu;
+    // The temporary sandbox, picked in the execution-environment menu: its
+    // folder is always a fresh empty one, so the only question left is whether
+    // a repository is cloned into it.
+    const repositoryOnly = modeInEnvironmentMenu && !onDrive;
 
     const {
       data: environmentList,
@@ -207,6 +215,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       try {
         await onChange(
           repositorySelection(environment, {
+            persistent: onDrive,
             projectId,
             published:
               environments.find((item) => item.id === environment.id)?.visibility === 'public',
@@ -258,8 +267,6 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           : undefined;
     const currentIcon = value.instanceId ? PackageIcon : FolderIcon;
     const showFolder = persistent && !onRepository;
-    // The persistent sandbox: the conversation keeps its files on the drive.
-    const onDrive = ENABLE_BUSINESS_FEATURES && entitled && persistent && modeInEnvironmentMenu;
 
     const fallbackMessage = fallback ? t(`sandboxDrive.fallback.${fallback}`) : undefined;
     const chipIcon = fallback ? (
@@ -268,6 +275,8 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       <RepositoryAvatar size={14} url={repository && repositorySlug(repository)} />
     ) : persistent ? (
       <Icon icon={currentIcon} size={14} />
+    ) : repositoryOnly ? (
+      <Github size={14} />
     ) : (
       <Icon icon={TimerIcon} size={14} />
     );
@@ -285,7 +294,9 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         ? repositoryLabel
         : persistent
           ? currentLabel
-          : t('sandboxStorage.ephemeral');
+          : repositoryOnly
+            ? t('sandboxEnvironment.none')
+            : t('sandboxStorage.ephemeral');
 
     const driveMenu = (
       <SandboxDriveMenu
@@ -300,29 +311,29 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       />
     );
 
+    const repositoryMenuProps = {
+      environments,
+      failed: !!environmentsError,
+      loaded: !!environmentList,
+      onAdd: addRepository,
+      onClose: () => setOpen(false),
+      onManage: () => {
+        setOpen(false);
+        navigate('/settings/environments');
+      },
+      onPick: pickRepository,
+      onRetry: () => void refreshEnvironments(),
+      selectedId: value.environmentId,
+    };
+
     const repositoryRow = (
       <Popover
         arrow={false}
         closeDelay={150}
+        content={<SandboxRepositoryMenu {...repositoryMenuProps} />}
         placement={'rightBottom'}
         styles={SUBMENU_STYLES}
         trigger={['hover', 'click']}
-        content={
-          <SandboxRepositoryMenu
-            environments={environments}
-            failed={!!environmentsError}
-            loaded={!!environmentList}
-            selectedId={value.environmentId}
-            onAdd={addRepository}
-            onClose={() => setOpen(false)}
-            onPick={pickRepository}
-            onRetry={() => void refreshEnvironments()}
-            onManage={() => {
-              setOpen(false);
-              navigate('/settings/environments');
-            }}
-          />
-        }
       >
         <div data-testid={'sandbox-repository-row'}>
           <OptionRow
@@ -356,14 +367,21 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
 
     // The execution-environment menu already said which sandbox this is, so the
     // menu here only asks the question left: on the persistent sandbox, which
-    // folder of the drive; on the temporary one, an empty folder or a checkout.
-    // A project's repository is checked out in the project's own folder, which
-    // persists, so it is offered on the persistent side too.
+    // folder of the drive — or a repository, checked out in a folder of its own
+    // there; on the temporary one, whether to clone a repository at all.
     const content = onDrive ? (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
         {notice}
         {driveMenu}
-        {projectId && repositoryRow}
+        {repositoryRow}
+      </Flexbox>
+    ) : repositoryOnly ? (
+      <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
+        {notice}
+        <SandboxRepositoryMenu
+          {...repositoryMenuProps}
+          none={{ active: !onRepository, onPick: () => void select({}) }}
+        />
       </Flexbox>
     ) : (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
@@ -389,8 +407,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         />
 
         {/* No environment menu to switch sandboxes in: the drive stays a row here. */}
-        {!modeInEnvironmentMenu &&
-          ENABLE_BUSINESS_FEATURES &&
+        {ENABLE_BUSINESS_FEATURES &&
           (entitled ? (
             <Popover
               arrow={false}

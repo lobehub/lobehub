@@ -2173,6 +2173,7 @@
   "sandboxEnvironment.loadFailed": "无法加载环境列表",
   "sandboxEnvironment.loading": "正在加载环境…",
   "sandboxEnvironment.missing": "环境不可用",
+  "sandboxEnvironment.none": "不使用仓库",
   "sandboxEnvironment.retry": "重试",
   "sandboxEnvironment.saveFailed": "无法更改环境，请重试。",
   "sandboxEnvironment.title": "代码仓库",

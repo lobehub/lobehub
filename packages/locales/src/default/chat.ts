@@ -4425,6 +4425,7 @@ export default {
   'you': 'You',
   'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxDrive.openStorage': 'Sandbox Storage',
+  'sandboxEnvironment.none': 'No repository',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
   'sandboxDrive.pickerTitle': 'Work location',
