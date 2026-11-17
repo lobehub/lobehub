@@ -301,7 +301,7 @@ export class KnowledgeBaseSearchService {
             this.serverDB,
             this.userId,
             this.workspaceId,
-          ).listDeletedFromAllAgents(docIds)
+          ).listRevokedFromAllAgents(docIds)
         : [],
     );
 

@@ -17,7 +17,7 @@ vi.mock('@/database/models/asyncTask', () => ({ AsyncTaskModel: vi.fn() }));
 // documents never were.
 vi.mock('@/database/models/agentDocuments', () => ({
   AgentDocumentModel: vi.fn(function () {
-    return { listDeletedFromAllAgents: async () => [] };
+    return { listRevokedFromAllAgents: async () => [] };
   }),
 }));
 vi.mock('@/database/models/chunk', () => ({ ChunkModel: vi.fn() }));

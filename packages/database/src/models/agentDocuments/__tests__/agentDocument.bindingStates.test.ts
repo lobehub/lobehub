@@ -57,18 +57,28 @@ describe('AgentDocumentModel binding states', () => {
   it('reports documents deleted from every agent they were bound to, in one batch', async () => {
     const doc = await model.create(agentId, 'rules.md', 'rules');
     const other = await model.create(agentId, 'other.md', 'other');
-    expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
+    expect(await model.listRevokedFromAllAgents([doc.documentId])).toEqual([]);
 
     const copy = await model.associate({ agentId: secondAgentId, documentId: doc.documentId });
     await model.delete(doc.id);
     // Still live on the second agent.
-    expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
+    expect(await model.listRevokedFromAllAgents([doc.documentId])).toEqual([]);
 
     await model.delete(copy.id);
     await model.delete(other.id);
     expect(
-      (await model.listDeletedFromAllAgents([doc.documentId, other.documentId, doc.id])).sort(),
+      (await model.listRevokedFromAllAgents([doc.documentId, other.documentId, doc.id])).sort(),
     ).toEqual([doc.documentId, other.documentId].sort());
+  });
+
+  it('treats a document disabled on every agent like a deleted one', async () => {
+    const doc = await model.create(agentId, 'disabled.md', 'disabled');
+    await serverDB
+      .update(agentDocuments)
+      .set({ accessSelf: 0, policyLoad: 'disabled' })
+      .where(eq(agentDocuments.id, doc.id));
+
+    expect(await model.listRevokedFromAllAgents([doc.documentId])).toEqual([doc.documentId]);
   });
 
   it('keeps a deleted agent document that is still a knowledge-base page', async () => {
@@ -81,7 +91,7 @@ describe('AgentDocumentModel binding states', () => {
     await model.delete(doc.id);
 
     expect(await model.listKnowledgeBaseMemberIds([doc.documentId])).toEqual([doc.documentId]);
-    expect(await model.listDeletedFromAllAgents([doc.documentId])).toEqual([]);
+    expect(await model.listRevokedFromAllAgents([doc.documentId])).toEqual([]);
   });
 
   it('reports which documents still exist, regardless of owner', async () => {
@@ -107,7 +117,7 @@ describe('AgentDocumentModel binding states', () => {
       })
       .returning();
 
-    expect(await model.listDeletedFromAllAgents([doc.id])).toEqual([]);
+    expect(await model.listRevokedFromAllAgents([doc.id])).toEqual([]);
     expect(
       await serverDB.select().from(agentDocuments).where(eq(agentDocuments.documentId, doc.id)),
     ).toEqual([]);

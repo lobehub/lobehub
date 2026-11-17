@@ -377,8 +377,8 @@ export class AgentDocumentModel {
     return queries.listBindingStatesByRefs(this.ctx, agentId, refs);
   }
 
-  async listDeletedFromAllAgents(documentIds: string[]): Promise<string[]> {
-    return queries.listDeletedFromAllAgents(this.ctx, documentIds);
+  async listRevokedFromAllAgents(documentIds: string[]): Promise<string[]> {
+    return queries.listRevokedFromAllAgents(this.ctx, documentIds);
   }
 
   async listExistingDocumentIds(documentIds: string[]): Promise<string[]> {

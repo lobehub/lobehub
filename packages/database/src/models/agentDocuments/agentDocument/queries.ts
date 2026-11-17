@@ -8,7 +8,7 @@ import {
 } from '../../../schemas';
 import { isUuid } from '../../../utils/uuid';
 import { deriveAgentDocumentFields } from '../deriveFields';
-import { parseLoadRules } from '../policy';
+import { canReadDocument, parseLoadRules } from '../policy';
 import {
   type AgentDocument,
   type AgentDocumentContextRow,
@@ -360,18 +360,20 @@ export async function listKnowledgeBaseMemberIds(
 }
 
 /**
- * Which backing documents were agent documents whose every binding is now soft-deleted, and
- * that are not knowledge-base items either.
+ * Which backing documents were agent documents that no agent may read any more — every
+ * binding is soft-deleted or lost read access (disabled) — and that are not knowledge-base
+ * items either.
  *
  * Use when:
  * - A generic document read (e.g. the knowledge-base `readKnowledge` tool on `docs_*` ids)
- *   must not resurrect a document the user deleted from every agent, while documents that were
- *   never agent documents, or that are still knowledge-base pages, stay readable.
+ *   must not resurrect a document the user deleted or disabled on every agent, while
+ *   documents that were never agent documents, or that are still knowledge-base pages, stay
+ *   readable.
  *
  * Returns:
  * - The matching subset of `documentIds`, resolved with a constant number of queries.
  */
-export async function listDeletedFromAllAgents(
+export async function listRevokedFromAllAgents(
   ctx: AgentDocumentContext,
   documentIds: string[],
 ): Promise<string[]> {
@@ -379,11 +381,17 @@ export async function listDeletedFromAllAgents(
   if (ids.length === 0) return [];
 
   const bindings = await ctx.db
-    .select({ deletedAt: agentDocuments.deletedAt, documentId: agentDocuments.documentId })
+    .select({
+      accessSelf: agentDocuments.accessSelf,
+      deletedAt: agentDocuments.deletedAt,
+      documentId: agentDocuments.documentId,
+    })
     .from(agentDocuments)
     .where(and(agentDocOwnership(ctx), inArray(agentDocuments.documentId, ids)));
 
-  const live = new Set(bindings.filter((row) => !row.deletedAt).map((row) => row.documentId));
+  const live = new Set(
+    bindings.filter((row) => !row.deletedAt && canReadDocument(row)).map((row) => row.documentId),
+  );
   const candidates = [
     ...new Set(bindings.map((row) => row.documentId).filter((id) => !live.has(id))),
   ];
