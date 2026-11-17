@@ -38,7 +38,8 @@ export const linkOwnBranchPullRequest = async (
 
     const path = getWorkingDirEffectivePath(config);
     if (!path) return;
-    const { deviceId } = resolveTopicGitTransport(agentId);
+    // The device the topic is bound to, where its runs (and this worktree) live.
+    const { deviceId } = resolveTopicGitTransport(agentId, topic?.metadata?.boundDeviceId);
     if (!canReadTopicGitTransport({ deviceId })) return;
 
     // Open PRs only: an all-state list returns the newest first, which may be a

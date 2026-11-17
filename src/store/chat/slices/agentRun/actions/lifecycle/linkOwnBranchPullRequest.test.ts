@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   getLinkedPullRequest: vi.fn(),
   linkTopicPullRequest: vi.fn(),
   refreshTopicPullRequests: vi.fn(),
+  resolveTopicGitTransport: vi.fn((_agentId: string, _topicDeviceId?: string) => ({
+    deviceId: 'dev-1',
+  })),
   topic: undefined as any,
 }));
 
@@ -20,7 +23,7 @@ vi.mock('@/services/work', () => ({
 }));
 vi.mock('@/store/chat/utils/topicWorkingDirGit', () => ({
   canReadTopicGitTransport: () => true,
-  resolveTopicGitTransport: () => ({ deviceId: 'dev-1' }),
+  resolveTopicGitTransport: mocks.resolveTopicGitTransport,
 }));
 vi.mock('../../../topic/selectors', () => ({
   topicSelectors: { getTopicById: () => () => mocks.topic },
@@ -118,5 +121,14 @@ describe('linkOwnBranchPullRequest', () => {
     await run();
 
     expect(mocks.linkTopicPullRequest).not.toHaveBeenCalled();
+  });
+
+  it("routes the lookup through the topic's bound device", async () => {
+    mocks.topic = { metadata: { ...topicOn(OWN).metadata, boundDeviceId: 'dev-topic' } };
+    mocks.getLinkedPullRequest.mockResolvedValue(lookup());
+
+    await run();
+
+    expect(mocks.resolveTopicGitTransport).toHaveBeenCalledWith('a1', 'dev-topic');
   });
 });
