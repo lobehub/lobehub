@@ -28,7 +28,7 @@ export default {
   'settings.directoryListDescription':
     'Device folders this project works in. Agents read and change files in them on that device.',
   'settings.environmentDescription':
-    'Keep repository sources together in an environment, then add a folder on your device to start working.',
+    'Link environments configured in Settings → Environments, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
   'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
@@ -315,6 +315,13 @@ export default {
   'environment.add.noPublished':
     'No published environments to add. A shared project only uses published environments.',
   'environment.add.title': 'Add environment',
+  'environment.create': 'New environment',
+  'environment.link': 'Link environment',
+  'environment.unlink': 'Unlink from project',
+  'environment.unlinkConfirm.desc':
+    "The environment stays in Settings → Environments. This project's folders that use it are kept, but can't run conversations until it is linked again.",
+  'environment.unlinkConfirm.title': 'Unlink "{{name}}" from this project?',
+  'environment.unlinkFailed': "Couldn't unlink the environment from this project",
   'environment.privateInShared': 'Private',
   'environment.privateInSharedTooltip':
     "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",

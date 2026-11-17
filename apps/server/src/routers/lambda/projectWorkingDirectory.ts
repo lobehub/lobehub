@@ -188,6 +188,13 @@ export const projectWorkingDirectoryRouter = router({
       data: await ctx.projectModel.attachEnvironment(input.projectId, input.environmentId),
       success: true,
     })),
+  /** Unlink an environment from the project; the environment itself is kept. */
+  detachEnvironment: write
+    .input(z.object({ projectId: z.string(), environmentId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.projectModel.detachEnvironment(input.projectId, input.environmentId),
+      success: true,
+    })),
   /**
    * Link a GitHub repository to the project: the caller's environment for it,
    * made when they have none, attached in the same request — the project
