@@ -20,7 +20,11 @@ const axis = (index: number) => Array.from({ length: DIM }, (_, i) => (i === ind
 // PGlite has no ParadeDB: run the keyword half of memory search on plain ILIKE.
 vi.hoisted(() => vi.stubEnv('FTS_SEARCH_PROVIDER', 'pg_like'));
 
-const holder = vi.hoisted(() => ({ serverDB: undefined as unknown }));
+const holder = vi.hoisted(() => ({
+  /** What the embedding provider rejects with, when set. */
+  embeddingsFail: undefined as unknown,
+  serverDB: undefined as unknown,
+}));
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: async () => holder.serverDB,
@@ -30,6 +34,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: async () => ({
     // Texts mentioning "coffee" land on axis 0, anything else on axis 1.
     embeddings: async ({ input }: { input: string | string[] }) => {
+      if (holder.embeddingsFail) throw holder.embeddingsFail;
       const texts = Array.isArray(input) ? input : [input];
       return texts.map((text) => axis(/coffee/i.test(text) ? 0 : 1));
     },
@@ -136,6 +141,7 @@ const createIdentity = async (key: string = KEYS.write) => {
 };
 
 beforeEach(async () => {
+  holder.embeddingsFail = undefined;
   workflow.triggerProcessUsers.mockReset().mockResolvedValue({ workflowRunId: 'wfr_1' });
   for (const table of [
     userMemoriesActivities,
@@ -256,6 +262,20 @@ describe('POST /memories/{category}', () => {
       await call('/memories/search', { body: { queries: ['coffee'] }, key: KEYS.read }),
     );
     expect(found.data.identities.map((item: { id: string }) => item.id)).toContain(data.id);
+  });
+
+  it('answers 500 with a generic code and hides the raw write failure', async () => {
+    // The shared write procedures report failures as `{ success: false, message }`
+    // where the message is raw provider / database text; the REST layer must log it
+    // and answer a generic `internal_error` instead.
+    holder.embeddingsFail = new Error('embedding provider rejected: sk-lh-internal-7f3a');
+    const res = await call('/memories/identities', { body: identityBody, key: KEYS.write });
+
+    expect(res.status).toBe(500);
+    const body = await json(res);
+    expect(body.code).toBe('internal_error');
+    expect(JSON.stringify(body)).not.toContain('sk-lh-internal-7f3a');
+    await expect(serverDB.select().from(userMemoriesIdentities)).resolves.toHaveLength(0);
   });
 
   it('answers 401 without a key', async () => {
