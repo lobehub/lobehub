@@ -1,5 +1,8 @@
+import { isFullAccessApiKey } from '@lobechat/const';
+import type { Context, Next } from 'hono';
 import { Hono } from 'hono';
 
+import { ApiException } from '../common/errors';
 import { example } from '../common/examples';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
@@ -24,12 +27,35 @@ import {
  *
  * API key scopes: `share:read` to read, `share:write` to turn a link on or
  * off — publishing is its own tier, never implied by a resource's write scope.
+ * Publishing an agent or an artifact additionally needs a full-access key: a
+ * shared agent runs visitors' chats on the owner's budget and an artifact
+ * goes live on the workspace's public site, which the tRPC surface keeps from
+ * restricted keys too (`agentShare`, `marketDeployments`).
  */
 const ShareLinkRoutes = new Hono();
 
 const read = requireApiKeyScope('share:read');
 const write = requireApiKeyScope('share:write');
 const tags = ['share-links'];
+
+const FULL_ACCESS_TO_PUBLISH: ReadonlySet<string> = new Set(['agent', 'artifact']);
+
+/** Refuse a restricted key publishing an agent or artifact (see the header). */
+const publishGate = async (c: Context, next: Next) => {
+  const { resourceType } = c.req.valid('json' as never) as { resourceType: string };
+  if (
+    FULL_ACCESS_TO_PUBLISH.has(resourceType) &&
+    c.get('authType') === 'apikey' &&
+    !isFullAccessApiKey(c.get('apiKeyScopes') as string[] | null | undefined)
+  ) {
+    throw new ApiException(
+      403,
+      'insufficient_scope',
+      `insufficient_scope: sharing an ${resourceType} needs a full-access API key`,
+    );
+  }
+  return next();
+};
 
 const SHARE_LINK_EXAMPLE = {
   enabled: true,
@@ -46,7 +72,7 @@ ShareLinkRoutes.post(
   routeDoc({
     data: ShareLinkSchema,
     description:
-      'Turns on the public link of a topic, page or agent — re-enabling keeps an agent link’s id and slug — or publishes an artifact from a message. Calling it again on a shared resource returns the same link.',
+      'Turns on the public link of a topic, page or agent — re-enabling keeps an agent link’s id and slug — or publishes an artifact from a message. Calling it again on a shared resource returns the same link. Agents and artifacts need a full-access API key.',
     errors: [404, 501],
     operationId: 'shareLinks.enable',
     requestExample: example(CreateShareLinkRequestSchema, {
@@ -60,6 +86,7 @@ ShareLinkRoutes.post(
   requireAuth,
   write,
   zValidator('json', CreateShareLinkRequestSchema),
+  publishGate,
   async (c) => new ShareLinkController().createShareLink(c),
 );
 
@@ -68,7 +95,8 @@ ShareLinkRoutes.get(
   '/:resourceType/:resourceId',
   routeDoc({
     data: ShareLinkSchema,
-    description: 'Whether the resource has a public link, and its URL.',
+    description:
+      'Whether the resource has a public link, and its URL. A topic, page or agent the caller does not own (or cannot manage) reads as not shared rather than 404, so the answer never reveals whether someone else shared it.',
     errors: [404, 501],
     responseExample: SHARE_LINK_EXAMPLE,
     summary: 'Get a share link',

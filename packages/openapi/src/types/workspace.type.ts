@@ -43,6 +43,10 @@ export const WorkspaceListQuerySchema = CursorPaginationQuerySchema;
 export type WorkspaceListQuery = z.infer<typeof WorkspaceListQuerySchema>;
 
 export const AuditLogListQuerySchema = CursorPaginationQuerySchema.extend({
+  cursor: z.iso
+    .datetime({ offset: true })
+    .optional()
+    .describe("The previous page's `nextCursor`. Omit for the first page."),
   action: z.string().min(1).max(100).optional().describe('Only this action, e.g. `member.invited`'),
   endDate: dateTimeSchema.optional().describe('Only entries at or before this instant'),
   q: z.string().min(1).max(200).optional().describe('Free-text search over the entries'),
@@ -129,7 +133,7 @@ export const WorkspaceMemberSchema = z
   .object({
     joinedAt: dateTimeSchema,
     responsibilities: z.string().nullable(),
-    role: z.enum(WORKSPACE_ROLES),
+    role: z.enum(WORKSPACE_ROLES).nullable().describe('`null` when no role could be resolved'),
     title: z.string().nullable(),
     user: UserProfileSchema.nullable(),
     userId: z.string(),
@@ -150,7 +154,7 @@ export const WorkspaceInvitationSchema = z
     id: z.string(),
     inviterId: z.string().nullable(),
     reusable: z.boolean(),
-    role: z.enum(ASSIGNABLE_WORKSPACE_ROLES),
+    role: z.enum(ASSIGNABLE_WORKSPACE_ROLES).nullable(),
     status: z.string().describe('`pending`, `accepted`, `revoked` or `expired`'),
     token: z
       .string()

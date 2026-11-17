@@ -24,14 +24,13 @@ import {
  * workspace-bound key). Only the two parties ever see a request; anyone else
  * gets 404 for its id.
  *
- * API key scopes: listing needs `workspace:read`. Starting, accepting,
- * declining or withdrawing a handover is an ownership decision a restricted
- * key never makes (the tRPC surface blocks it the same way), so those need a
- * full-access key.
+ * API key scopes: a full-access key for every route. A handover is an
+ * ownership decision between two people that a restricted key never takes
+ * part in — the tRPC surface blocks `resourceTransferRequest` for restricted
+ * keys the same way.
  */
 const TransferRequestRoutes = new Hono();
 
-const read = requireApiKeyScope('workspace:read');
 const decide = requireApiKeyScope(API_KEY_FULL_ACCESS_SCOPE);
 const tags = ['transfer-requests'];
 
@@ -46,7 +45,7 @@ TransferRequestRoutes.get(
     tags,
   }),
   requireAuth,
-  read,
+  decide,
   zValidator('query', TransferRequestListQuerySchema),
   async (c) => new TransferRequestController().listTransferRequests(c),
 );

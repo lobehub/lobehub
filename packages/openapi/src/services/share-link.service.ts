@@ -141,9 +141,15 @@ export class ShareLinkRestService extends BaseService {
         return this.agentLink(resourceId);
       }
       case 'page': {
-        await pageShareRouter
-          .createCaller(this.ctx)
-          .updateShareSettings({ id: resourceId, permission: 'read', visibility: 'private' });
+        const shares = pageShareRouter.createCaller(this.ctx);
+        // Unsharing a page that was never shared must not create a share record.
+        if (await shares.getShareSettings({ id: resourceId })) {
+          await shares.updateShareSettings({
+            id: resourceId,
+            permission: 'read',
+            visibility: 'private',
+          });
+        }
         return this.pageLink(resourceId);
       }
       case 'artifact': {

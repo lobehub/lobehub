@@ -69,6 +69,8 @@ const AGENT = 'agt_r9share';
 /** `sk-lh-` + 16 lowercase alphanumerics — the format the auth middleware checks. */
 const KEYS = {
   chatOnly: 'sk-lh-r9sharechatonly1',
+  ownerFull: 'sk-lh-r9shareownerfull',
+  strangerFull: 'sk-lh-r9sharestrangful',
   ownerRead: 'sk-lh-r9shareownerread',
   ownerWrite: 'sk-lh-r9shareownerwrit',
   stranger: 'sk-lh-r9sharestranger1',
@@ -131,6 +133,8 @@ beforeEach(async () => {
     .insert(apiKeys)
     .values([
       key(KEYS.ownerWrite, OWNER, ['share:write']),
+      key(KEYS.ownerFull, OWNER, ['*']),
+      key(KEYS.strangerFull, STRANGER, ['*']),
       key(KEYS.ownerRead, OWNER, ['share:read']),
       key(KEYS.chatOnly, OWNER, ['chat:write']),
       key(KEYS.stranger, STRANGER, ['share:write']),
@@ -257,7 +261,7 @@ describe('cloud-only resource types', () => {
         resourceType: 'artifact',
         topicId: TOPIC,
       },
-      key: KEYS.ownerWrite,
+      key: KEYS.ownerFull,
       method: 'POST',
     });
 
@@ -265,10 +269,19 @@ describe('cloud-only resource types', () => {
     expect((await json(res)).code).toBe('feature_unavailable');
   });
 
+  it("needs a full-access key to publish an agent — visitors chat on the owner's budget", async () => {
+    holder.business = true;
+
+    const res = await enable('agent', AGENT, KEYS.ownerWrite);
+
+    expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('insufficient_scope');
+  });
+
   it('enables and pauses an agent link when business features are on', async () => {
     holder.business = true;
 
-    const enabled = await enable('agent', AGENT);
+    const enabled = await enable('agent', AGENT, KEYS.ownerFull);
     expect(enabled.status).toBe(200);
     const link = (await json(enabled)).data;
     expect(link).toMatchObject({ enabled: true, resourceType: 'agent', viewCount: 0 });
@@ -281,9 +294,11 @@ describe('cloud-only resource types', () => {
     // Pausing keeps the share id and URL for a later re-enable.
     expect((await json(paused)).data).toEqual({ ...link, enabled: false });
 
-    expect((await json(await enable('agent', AGENT))).data).toEqual(link);
+    expect((await json(await enable('agent', AGENT, KEYS.ownerFull))).data).toEqual(link);
 
     // Someone else's agent is refused by the agent-share ownership guard.
-    expect((await enable('agent', AGENT, KEYS.stranger)).status).toBe(403);
+    const stranger = await enable('agent', AGENT, KEYS.strangerFull);
+    expect(stranger.status).toBe(403);
+    expect((await json(stranger)).code).toBe('forbidden');
   });
 });

@@ -141,7 +141,7 @@ vi.mock('@/business/server/lambda-routers/workspaceAuditLog', () => ({
           workspaceId: WORKSPACE,
         },
       ],
-      nextCursor: input.cursor ? null : 'cursor_2',
+      nextCursor: input.cursor ? null : '2026-02-01T00:00:00.000Z',
     }),
   })),
 }));
@@ -321,6 +321,8 @@ describe('authentication, scopes and workspace isolation', () => {
   });
 
   it.each([
+    // Invitation tokens are as good as a fresh invitation.
+    ['GET', `/workspaces/${WORKSPACE}/invitations`, undefined],
     ['PATCH', `/workspaces/${WORKSPACE}/members/${MEMBER}`, { role: 'admin' }],
     ['DELETE', `/workspaces/${WORKSPACE}/members/${MEMBER}`, undefined],
     ['POST', `/workspaces/${WORKSPACE}/invitations`, { email: 'new@r9.test' }],
@@ -348,12 +350,16 @@ describe('request validation', () => {
     expect((await json(res)).code).toBe('validation_error');
   });
 
-  it('rejects an out-of-range audit-log page size', async () => {
-    const res = await call(`/workspaces/${WORKSPACE}/audit-logs?limit=500`, {
+  it.each([
+    ['an out-of-range page size', 'limit=500'],
+    ['a cursor that is not an instant', 'cursor=abc'],
+  ])('rejects an audit-log query with %s', async (_label, query) => {
+    const res = await call(`/workspaces/${WORKSPACE}/audit-logs?${query}`, {
       key: KEYS.ownerRead,
     });
 
     expect(res.status).toBe(400);
+    expect(holder.calls).toEqual([]);
   });
 });
 
@@ -496,7 +502,7 @@ describe('audit log', () => {
           userId: OWNER,
         },
       ],
-      nextCursor: 'cursor_2',
+      nextCursor: '2026-02-01T00:00:00.000Z',
     });
     expect(holder.calls.at(-1)).toMatchObject({
       ctx: { workspaceId: WORKSPACE },
@@ -505,9 +511,14 @@ describe('audit log', () => {
     });
 
     const second = await json(
-      await call(`/workspaces/${WORKSPACE}/audit-logs?cursor=cursor_2`, { key: KEYS.ownerRead }),
+      await call(`/workspaces/${WORKSPACE}/audit-logs?cursor=${first.data.nextCursor}`, {
+        key: KEYS.ownerRead,
+      }),
     );
     expect(second.data).toMatchObject({ hasMore: false, nextCursor: null });
-    expect(holder.calls.at(-1)?.input).toMatchObject({ cursor: 'cursor_2', limit: 20 });
+    expect(holder.calls.at(-1)?.input).toMatchObject({
+      cursor: '2026-02-01T00:00:00.000Z',
+      limit: 20,
+    });
   });
 });

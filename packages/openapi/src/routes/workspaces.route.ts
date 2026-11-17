@@ -40,7 +40,8 @@ import {
  * API key scopes: reads need `workspace:read`, workspace settings
  * `workspace:write`. Member and invitation changes are privilege management,
  * which a restricted key never reaches (the same rule the tRPC surface applies
- * to `workspaceMember`), so they need a full-access key.
+ * to `workspaceMember`), so they need a full-access key — and so does listing
+ * invitations, whose tokens are as good as a fresh invitation.
  *
  * Self-hosted (open-source) deployments have no team workspaces and answer
  * every route here with `501 feature_unavailable`.
@@ -202,7 +203,7 @@ WorkspaceRoutes.get(
   businessOnly,
   zValidator('param', WorkspaceIdParamSchema),
   inPathWorkspace,
-  workspaceRead,
+  memberManage,
   zValidator('query', WorkspaceListQuerySchema),
   async (c) => new WorkspaceController().listInvitations(c),
 );

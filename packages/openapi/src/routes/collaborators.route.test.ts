@@ -166,9 +166,10 @@ describe('authentication and API-key scopes', () => {
     expect(res.status).toBe(401);
   });
 
-  it('lets a workspace:read key list but not grant', async () => {
+  it('keeps restricted keys out entirely — reads expose who has access', async () => {
     const list = await call(base, { key: KEYS.ownerRead, workspaceId: WORKSPACE });
-    expect(list.status).toBe(200);
+    expect(list.status).toBe(403);
+    expect((await json(list)).code).toBe('insufficient_scope');
 
     const add = await call(base, {
       body: { accessLevel: 'view', userIds: [MEMBER] },
@@ -335,7 +336,7 @@ describe('collaborator lifecycle', () => {
 describe('general access', () => {
   it('reads the default and sets an explicit level', async () => {
     const before = await call(`${base}/general-access`, {
-      key: KEYS.ownerRead,
+      key: KEYS.ownerFull,
       workspaceId: WORKSPACE,
     });
     expect(before.status).toBe(200);

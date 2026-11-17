@@ -61,7 +61,7 @@ const toWorkspace = (row: WorkspaceRow): Workspace => ({
 interface MemberRow {
   joinedAt: Date | string;
   responsibilities?: string | null;
-  role: string;
+  role: string | null;
   title?: string | null;
   user: {
     avatar: string | null;
@@ -75,7 +75,7 @@ interface MemberRow {
 const toMember = (row: MemberRow): WorkspaceMember => ({
   joinedAt: toIso(row.joinedAt),
   responsibilities: row.responsibilities ?? null,
-  role: asRole(row.role, ['owner', 'admin', 'member', 'viewer'] as const) ?? 'member',
+  role: asRole(row.role, ['owner', 'admin', 'member', 'viewer'] as const),
   title: row.title ?? null,
   user: row.user
     ? {
@@ -108,7 +108,7 @@ const toInvitation = (row: InvitationRow): WorkspaceInvitation => ({
   id: row.id,
   inviterId: row.inviterId,
   reusable: row.reusable,
-  role: asRole(row.role, ['admin', 'member', 'viewer'] as const) ?? 'member',
+  role: asRole(row.role, ['admin', 'member', 'viewer'] as const),
   status: row.status,
   token: row.token,
 });

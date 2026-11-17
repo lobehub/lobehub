@@ -39,9 +39,10 @@ const LABELS: Record<CollaboratorResourceSegment, string> = {
  * use a workspace-bound key). Managing them is the resource creator's or a
  * workspace owner's call, enforced by the shared `resourcePermission` router.
  *
- * API key scopes: reads need `workspace:read`. Granting or revoking access is
- * privilege management, which a restricted key never reaches (as on the tRPC
- * surface), so writes need a full-access key.
+ * API key scopes: a full-access key for every route. Who can reach a resource
+ * (with their emails) and granting or revoking that access is privilege
+ * management, which a restricted key never reaches — the tRPC surface blocks
+ * `resourcePermission` for restricted keys the same way.
  */
 export const createCollaboratorRoutes = (segment: CollaboratorResourceSegment) => {
   const routes = new Hono();
@@ -52,8 +53,8 @@ export const createCollaboratorRoutes = (segment: CollaboratorResourceSegment) =
   const resource = segment.replaceAll(/-(\w)/g, (_, char: string) => char.toUpperCase());
   const op = (method: string) => `${resource}.${method}` as const;
 
-  const read = requireApiKeyScope('workspace:read');
-  const manage = requireApiKeyScope(API_KEY_FULL_ACCESS_SCOPE);
+  const read = requireApiKeyScope(API_KEY_FULL_ACCESS_SCOPE);
+  const manage = read;
 
   routes.get(
     '/',

@@ -142,8 +142,10 @@ describe('authentication and API-key scopes', () => {
     expect(res.status).toBe(401);
   });
 
-  it('lets a workspace:read key list but not start a handover', async () => {
-    expect((await call('/transfer-requests', { key: KEYS.ownerRead })).status).toBe(200);
+  it('keeps restricted keys out entirely — a handover is a decision between people', async () => {
+    const list = await call('/transfer-requests', { key: KEYS.ownerRead });
+    expect(list.status).toBe(403);
+    expect((await json(list)).code).toBe('insufficient_scope');
 
     const res = await requestTransfer(KEYS.ownerRead);
     expect(res.status).toBe(403);

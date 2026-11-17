@@ -56,8 +56,8 @@ const hasMinWorkspaceRole = (role: string | undefined, minRole: string) =>
  * Require at least `minRole` for workspace-scoped requests; personal requests
  * pass through untouched.
  *
- * `workspaceAuthMiddleware` only enforces the admin role for `apikey` auth, so
- * without this an OIDC/session-authenticated member could reach routes whose
+ * `workspaceAuthMiddleware` only checks membership, not role, so without this
+ * a member of any role could reach routes whose
  * models use a workspace-wide (not row-owner) predicate. Mirrors the tRPC
  * `requireWorkspaceRoleWhenScoped` guard so both transports gate identically.
  */
