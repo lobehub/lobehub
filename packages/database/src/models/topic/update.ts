@@ -5,7 +5,21 @@ import { type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
+import { withOwnedWorktreeClaim } from './ownedWorktree';
 import type { TopicMetadataPatch } from './types';
+
+/**
+ * An explicit metadata snapshot replaces the row's metadata, except for
+ * `ownedWorktrees`: that record is server-owned (which worktrees the app made
+ * for the topic, and their cleanup state), so a snapshot built from an older
+ * read must not erase it. The persisted list wins; a snapshot only seeds one
+ * where none exists yet.
+ */
+const replaceMetadataKeepingOwnedWorktrees = (next: ChatTopicMetadata | null | undefined) => {
+  if (!next) return next;
+  const claimed = withOwnedWorktreeClaim(next);
+  return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end`;
+};
 
 export const update = async (ctx: TopicModelContext, id: string, data: Partial<TopicItem>) => {
   /**
@@ -40,7 +54,7 @@ export const update = async (ctx: TopicModelContext, id: string, data: Partial<T
    */
   const metadata =
     data.metadata !== undefined
-      ? data.metadata
+      ? replaceMetadataKeepingOwnedWorktrees(data.metadata)
       : data.status === 'running'
         ? sql`case when ${topics.status} in ('running', 'waitingForHuman') then ${persistedMetadata} else jsonb_set(${persistedMetadata}, '{runStartedAt}', to_jsonb(now())) end`
         : modelChanged
@@ -162,11 +176,15 @@ export const updateMetadata = async (
           }
         : metadata.onboardingSession;
 
-    const mergedMetadata = {
+    const mergedMetadata = withOwnedWorktreeClaim({
       ...existing.metadata,
       ...metadata,
       ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
-    } as ChatTopicMetadata;
+      // Server-owned: a patch never replaces it (see `./ownedWorktree`).
+      ...(existing.metadata?.ownedWorktrees && {
+        ownedWorktrees: existing.metadata.ownedWorktrees,
+      }),
+    } as ChatTopicMetadata);
 
     return tx
       .update(topics)

@@ -54,6 +54,7 @@ const PUBLIC_METHODS = [
   'count',
   'countBySender',
   'countInFlightInDirectory',
+  'countLiveTopicsUsingWorktree',
   'countShareVisitors',
   'countTopicsForMemoryExtractor',
   'create',
@@ -65,7 +66,10 @@ const PUBLIC_METHODS = [
   'findByWebhookThread',
   'findOwnTopicById',
   'findOwnTopicsByIds',
+  'findOwnedWorktreeTopics',
   'findOwnersByIds',
+  'findOwnersOfWorktree',
+  'findPendingOwnedWorktreeTopics',
   'findRecentByBotThread',
   'findRunInitiators',
   'findShareVisitorTopicIds',
@@ -101,6 +105,7 @@ const PUBLIC_METHODS = [
   'update',
   'updateMetadata',
   'updateModelPin',
+  'updateOwnedWorktree',
   'updateRunningOperationAssistantMessage',
 ];
 
