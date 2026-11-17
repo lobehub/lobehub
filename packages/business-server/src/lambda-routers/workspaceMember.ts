@@ -47,6 +47,26 @@ export const workspaceMemberRouter = router({
 
   listInvitations: wsCompatAdminProcedure.query(async (): Promise<WorkspaceInvitationItem[]> => []),
 
+  // Admin or higher. Cloud refuses removing yourself (use `leave`) and the
+  // primary owner (transfer ownership first).
+  remove: wsCompatAdminProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async (): Promise<unknown> => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'Workspace members are a cloud-only feature.',
+      });
+    }),
+
+  revokeInvitation: wsCompatAdminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async (): Promise<unknown> => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'Workspace invitations are a cloud-only feature.',
+      });
+    }),
+
   // A member's workspace title and responsibilities. Cloud lets any member edit
   // their own and Admin or higher edit anyone's; blank clears, omitted keeps.
   updateProfile: wsCompatProcedure
@@ -61,6 +81,16 @@ export const workspaceMemberRouter = router({
       throw new TRPCError({
         code: 'NOT_IMPLEMENTED',
         message: 'Workspace member profiles are a cloud-only feature.',
+      });
+    }),
+
+  // Admin or higher; the owner role only changes through ownership transfer.
+  updateRole: wsCompatAdminProcedure
+    .input(z.object({ role: z.enum(['admin', 'member', 'viewer']), userId: z.string() }))
+    .mutation(async (): Promise<unknown> => {
+      throw new TRPCError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'Workspace members are a cloud-only feature.',
       });
     }),
 });

@@ -5,6 +5,7 @@ import ApiKeysRoutes from './api-keys.route';
 import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
+import { collaboratorRouteEntries } from './collaborators.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -23,11 +24,14 @@ import ProvidersRoutes from './providers.route';
 import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
+import ShareLinkRoutes from './share-links.route';
 import AgentSignalsRoutes from './signals.route';
 import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
+import TransferRequestRoutes from './transfer-requests.route';
 import UsageRoutes from './usage.route';
 import UsersRoutes from './users.route';
+import WorkspaceRoutes from './workspaces.route';
 
 export default {
   'agent-groups': AgentGroupsRoutes,
@@ -60,4 +64,8 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'workspaces': WorkspaceRoutes,
+  'transfer-requests': TransferRequestRoutes,
+  'share-links': ShareLinkRoutes,
+  ...collaboratorRouteEntries,
 };

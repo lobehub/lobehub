@@ -16,6 +16,10 @@ const dateTimeSchema = z.string().meta({ format: 'date-time' });
 export const API_ERROR_CODES = {
   bad_request: { description: 'The request was understood but cannot be processed as sent.' },
   conflict: { description: 'The request conflicts with the current state of the resource.' },
+  feature_unavailable: {
+    description:
+      'The operation needs a capability this deployment does not provide (e.g. team workspaces on a self-hosted instance).',
+  },
   forbidden: { description: 'The caller is authenticated but may not perform this operation.' },
   idempotency_conflict: {
     description:
@@ -67,6 +71,7 @@ const STATUS_TO_CODE: Record<number, ApiErrorCode> = {
   422: 'unprocessable_entity',
   429: 'rate_limited',
   500: 'internal_error',
+  501: 'feature_unavailable',
   502: 'upstream_error',
   503: 'service_unavailable',
 };
