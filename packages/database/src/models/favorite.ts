@@ -9,6 +9,7 @@ import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { tasks, userFavorites } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
 import { normalizeWorkspaceId } from '../utils/workspace';
 
 /** Adding another favorite would exceed {@link FAVORITE_LIMIT}. */
@@ -65,13 +66,14 @@ export class FavoriteModel {
   /**
    * Joins a task favorite to its task, in the same scope the favorite lives
    * in and only while the member can still see it, so the sidebar can show
-   * the task's current status instead of a snapshot. A deleted, moved or
-   * since-hidden task simply has no status.
+   * the task's current status instead of a snapshot. A deleted, trashed,
+   * moved or since-hidden task simply has no status.
    */
   private taskJoin = (): SQL =>
     and(
       eq(userFavorites.type, 'task'),
       eq(tasks.id, userFavorites.targetId),
+      notTrashed(tasks.isDeleted),
       this.workspaceId
         ? and(
             eq(tasks.workspaceId, this.workspaceId),

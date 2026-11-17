@@ -99,6 +99,15 @@ describe('FavoriteModel', () => {
         visibility: 'private',
         workspaceId,
       },
+      {
+        createdByUserId: userId,
+        id: 'task_trashed',
+        identifier: 'T-4',
+        instruction: 'x',
+        isDeleted: true,
+        seq: 4,
+        status: 'running',
+      },
     ]);
     const task = (id: string) => ({
       path: `/task/${id}`,
@@ -112,6 +121,8 @@ describe('FavoriteModel', () => {
     // A task from another scope, or one that no longer exists, has no status to show.
     await personalModel.add(task('task_ws'));
     await personalModel.add(task('task_gone'));
+    // A task in the recycle bin is not a live task either.
+    await personalModel.add(task('task_trashed'));
     await workspaceModel.add(task('task_ws'));
     // Another member's private task stays hidden, status included.
     expect(await workspaceModel.add(task('task_private'))).not.toHaveProperty('status');
@@ -122,6 +133,7 @@ describe('FavoriteModel', () => {
       ['tpc_1', undefined],
       ['task_ws', undefined],
       ['task_gone', undefined],
+      ['task_trashed', undefined],
     ]);
 
     await serverDB.update(tasks).set({ status: 'completed' });
