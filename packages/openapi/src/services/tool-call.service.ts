@@ -58,7 +58,7 @@ export class ToolCallRestService extends BaseService {
       if (code === 'INTERNAL_SERVER_ERROR') {
         // The procedure wraps every unexpected failure — ours included — with
         // its message; keep that in the log, not in the client's body.
-        console.error('[tools.call] tool call failed:', error);
+        console.error(`[tools.call] ${request.identifier}.${request.toolName} failed:`, error);
         throw new ApiException(502, 'upstream_error', 'The tool call failed');
       }
       throw error;
