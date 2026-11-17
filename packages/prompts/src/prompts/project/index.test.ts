@@ -104,7 +104,7 @@ describe('buildProjectContextPrompt', () => {
     expect(prompt).toContain(
       '<working_directory repository="https://github.com/lobehub/lobehub" branch="canary">',
     );
-    expect(prompt).toContain('Your working directory is a checkout of lobehub/lobehub.');
+    expect(prompt).toContain('your working directory is a checkout of lobehub/lobehub.');
     // Before the roster: where the code is matters more than who else works here.
     expect(prompt.indexOf('<working_directory')).toBeLessThan(prompt.indexOf('<members>'));
   });
@@ -119,5 +119,21 @@ describe('buildProjectContextPrompt', () => {
 
     const without = buildProjectContextPrompt({ ...input, currentAgentId: 'agt_coord' });
     expect(without).not.toContain('<working_directory');
+  });
+
+  it('points at the folder a repository is cloned into rather than the directory itself', () => {
+    const prompt = buildProjectContextPrompt({
+      ...input,
+      currentAgentId: 'agt_coord',
+      repository: { name: 'a/b', path: 'frontend', url: 'https://github.com/a/b' },
+    });
+
+    expect(prompt).toContain(
+      '<working_directory repository="https://github.com/a/b" path="frontend">',
+    );
+    expect(prompt).toContain(
+      'the `frontend` folder of your working directory is a checkout of a/b',
+    );
+    expect(prompt).not.toContain('In the cloud sandbox, your working directory is a checkout');
   });
 });

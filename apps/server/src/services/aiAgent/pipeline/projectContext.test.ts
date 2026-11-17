@@ -5,6 +5,7 @@ import {
   buildHeteroProjectContext,
   buildRunProjectContextPrompt,
   resolveSandboxRepository,
+  toCredentialFreeRepositoryUrl,
 } from './projectContext';
 
 const mocks = vi.hoisted(() => ({
@@ -168,5 +169,47 @@ describe('resolveSandboxRepository', () => {
 
     mocks.resolveTopicCheckoutConfiguration.mockRejectedValueOnce(new Error('connection reset'));
     await expect(resolveSandboxRepository(deps, 'tpc-1')).resolves.toBeUndefined();
+  });
+
+  it('never hands a token stored in the source URL to the model', async () => {
+    mocks.resolveTopicCheckoutConfiguration.mockResolvedValue({
+      configuration: {
+        sources: [
+          {
+            kind: 'git',
+            path: './web/',
+            url: 'https://x-access-token:ghs_secret@github.com/a/b.git?t=1#x',
+          },
+        ],
+      },
+      name: 'a/b',
+    });
+
+    const repository = await resolveSandboxRepository(deps, 'tpc-1');
+
+    expect(repository).toEqual({
+      name: 'a/b',
+      path: 'web',
+      ref: undefined,
+      url: 'https://github.com/a/b.git',
+    });
+    expect(JSON.stringify(repository)).not.toContain('ghs_secret');
+  });
+});
+
+describe('toCredentialFreeRepositoryUrl', () => {
+  it('drops userinfo, query and fragment, and reads scp-style remotes', () => {
+    expect(toCredentialFreeRepositoryUrl('https://user:pw@github.com/a/b?x=1#y')).toBe(
+      'https://github.com/a/b',
+    );
+    expect(toCredentialFreeRepositoryUrl('ssh://git@host:2222/a/b.git')).toBe(
+      'ssh://host:2222/a/b.git',
+    );
+    expect(toCredentialFreeRepositoryUrl('git@github.com:a/b.git')).toBe('github.com:a/b.git');
+  });
+
+  it('refuses what it cannot read as a repository URL', () => {
+    expect(toCredentialFreeRepositoryUrl('not a url')).toBeUndefined();
+    expect(toCredentialFreeRepositoryUrl('file:///etc/passwd')).toBeUndefined();
   });
 });

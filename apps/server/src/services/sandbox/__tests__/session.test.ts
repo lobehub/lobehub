@@ -744,12 +744,29 @@ describe('resolveSandboxSessionConfig', () => {
 
 describe('resolveTopicCheckoutConfiguration', () => {
   const checkout = () =>
-    resolveTopicCheckoutConfiguration({ serverDB, topicId: 'topic-1', userId: 'user_1' });
+    resolveTopicCheckoutConfiguration({
+      isShareVisitorRun: false,
+      serverDB,
+      topicId: 'topic-1',
+      userId: 'user_1',
+    });
+  const snapshot = {
+    sources: [{ kind: 'git', ref: 'main', url: 'https://github.com/a/built' }],
+  };
 
   beforeEach(() => {
-    findById.mockReset();
-    findInstanceById.mockReset();
+    findById.mockReset().mockResolvedValue({
+      metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
+    });
+    findInstanceById.mockReset().mockResolvedValue({
+      configurationSnapshot: snapshot,
+      id: INSTANCE_ID,
+      name: 'Built',
+      workingDirectory: 'projects/atlas',
+    });
     getAgentVisibility.mockReset();
+    resolveSandboxStorageClaim.mockReset().mockResolvedValue(CLAIM);
+    mocks.listStorageDirectories.mockReset().mockResolvedValue([]);
     mocks.findEnvironmentById.mockReset().mockResolvedValue({
       configuration: {
         sources: [{ kind: 'git', ref: 'next', url: 'https://github.com/a/edited' }],
@@ -761,36 +778,37 @@ describe('resolveTopicCheckoutConfiguration', () => {
     mocks.TopicModel.mockReset().mockImplementation(function () {
       return { findById };
     });
-    mocks.EnvironmentInstanceModel.mockReset().mockImplementation(function () {
-      return { findById: findInstanceById };
+    mocks.EnvironmentInstanceModel.mockReset().mockImplementation(function (
+      _db: unknown,
+      userId: string,
+    ) {
+      return {
+        findById: async (id: string) => {
+          const row = await findInstanceById(id);
+          return row ? { providerScope: `ws-${userId}`, ...row } : row;
+        },
+        listStorageDirectories: mocks.listStorageDirectories,
+      };
     });
   });
 
-  // An instance keeps the specification it was built from: the run works in
-  // that checkout even after its environment was pointed somewhere else.
-  it('reads a persistent instance from its snapshot, not the edited environment', async () => {
-    findById.mockResolvedValue({
-      metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
-    });
-    findInstanceById.mockResolvedValue({
-      configurationSnapshot: {
-        sources: [{ kind: 'git', ref: 'main', url: 'https://github.com/a/built' }],
-      },
-      id: INSTANCE_ID,
-      name: 'Built',
-    });
-
-    await expect(checkout()).resolves.toEqual({
-      configuration: { sources: [{ kind: 'git', ref: 'main', url: 'https://github.com/a/built' }] },
-      name: 'Built',
-    });
+  // An instance keeps the specification it was built from: a run placed in it
+  // works in that checkout even after its environment was pointed elsewhere.
+  it('reads a persistent run from its instance snapshot, not the edited environment', async () => {
+    await expect(checkout()).resolves.toEqual({ configuration: snapshot, name: 'Built' });
     expect(mocks.findEnvironmentById).not.toHaveBeenCalled();
   });
 
-  it('reads the environment when the instance no longer resolves, as the fallback run does', async () => {
-    findById.mockResolvedValue({
-      metadata: { sandboxEnvironmentId: 'env-1', sandboxInstanceId: INSTANCE_ID },
-    });
+  // The instance row resolves, but the placement rejects it (here: no storage
+  // claim), so the run falls back to a temporary sandbox initialized from the
+  // environment — and that is the checkout it gets.
+  it('reads the environment when the placement rejects a resolvable instance', async () => {
+    resolveSandboxStorageClaim.mockResolvedValue(null);
+
+    await expect(checkout()).resolves.toMatchObject({ name: 'Edited' });
+  });
+
+  it('reads the environment when the instance no longer resolves', async () => {
     findInstanceById.mockResolvedValue(undefined);
 
     await expect(checkout()).resolves.toMatchObject({ name: 'Edited' });

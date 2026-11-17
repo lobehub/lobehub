@@ -25,6 +25,8 @@ export interface ProjectContextTask extends TaskSummary {
  */
 export interface ProjectContextRepository {
   name: string;
+  /** The folder of the working directory it is cloned into; the directory itself when absent. */
+  path?: string;
   /** The branch checked out; the repository's default when absent. */
   ref?: string | null;
   url: string;
@@ -110,9 +112,12 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
 
   if (repository) {
     const branch = repository.ref ? ` branch="${repository.ref}"` : '';
+    const where = repository.path
+      ? `the \`${repository.path}\` folder of your working directory is a checkout of ${repository.name}; run git and code commands inside that folder`
+      : `your working directory is a checkout of ${repository.name}`;
     lines.push(
-      `<working_directory repository="${repository.url}"${branch}>`,
-      `  Your working directory is a checkout of ${repository.name}. Read, search and change its code there with your sandbox tools; it is cloned on your first command, so run one (for example \`ls\` or \`git status\`) instead of asking the user for the code or to switch directories.`,
+      `<working_directory repository="${repository.url}"${branch}${repository.path ? ` path="${repository.path}"` : ''}>`,
+      `  In the cloud sandbox, ${where}. Read, search and change its code there with your sandbox tools; it is cloned on your first command, so run one (for example \`ls\` or \`git status\`) instead of asking the user for the code or to switch directories.`,
       '</working_directory>',
     );
   }

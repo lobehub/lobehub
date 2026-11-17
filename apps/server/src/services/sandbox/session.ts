@@ -192,13 +192,21 @@ interface SandboxSessionConfigInput {
  * Never throws; a failed lookup degrades to the ephemeral sandbox every session
  * uses today.
  */
-const resolvePlacement = async ({
+/** What a persistent placement checks out: the snapshot its instance was built from. */
+interface PlacementCheckout {
+  configuration?: EnvironmentConfiguration | null;
+  name: string;
+}
+
+const resolvePlacementDecision = async ({
   isShareVisitorRun,
   serverDB,
   topicId,
   userId,
   workspaceId,
-}: SandboxSessionConfigInput): Promise<SandboxSessionConfig> => {
+}: SandboxSessionConfigInput): Promise<
+  SandboxSessionConfig & { instanceCheckout?: PlacementCheckout }
+> => {
   // A personal account has one drive, its own; a workspace run starts on the
   // public one until the topic says otherwise.
   const defaultDrive: SandboxDrive = workspaceId ? DEFAULT_SANDBOX_DRIVE : 'personal';
@@ -330,6 +338,7 @@ const resolvePlacement = async ({
         cwd: workingDirectory,
         drive,
         environment: id,
+        instanceCheckout: { configuration: instance.configurationSnapshot, name: instance.name },
         mode: 'persistent',
         ...(specification && { specification }),
         ...(hasLocalCheckout(instance) && { workingDir: SANDBOX_LOCAL_WORK_ROOT }),
@@ -389,6 +398,14 @@ const resolvePlacement = async ({
   }
 };
 
+/** The session's placement alone; see {@link resolvePlacementDecision}. */
+const resolvePlacement = async (
+  input: SandboxSessionConfigInput,
+): Promise<SandboxSessionConfig> => {
+  const { instanceCheckout: _checkout, ...config } = await resolvePlacementDecision(input);
+  return config;
+};
+
 /**
  * The environment a topic picked, or `undefined` when it picked none or one
  * the caller cannot read (deleted, or another member's private one). A
@@ -435,37 +452,22 @@ export const resolveTopicEnvironment = async ({
 };
 
 /**
- * The repository configuration a topic's run checks out, read the way the
- * session resolves it: a topic bound to a persistent instance runs that
+ * The repository configuration a topic's run checks out, decided exactly as
+ * the session decides it: a run placed in a persistent instance works in that
  * instance's snapshot — an instance keeps the specification it was built
- * from, whatever its environment says since — and any other topic is
- * initialized from the environment it picked (see
- * {@link resolveTopicEnvironment}), including one whose instance can no longer
- * be resolved and falls back to a temporary sandbox.
+ * from, whatever its environment says since — and every other run, including
+ * one whose instance was rejected and fell back to a temporary sandbox, is
+ * initialized from the environment the topic picked (see
+ * {@link resolveTopicEnvironment}).
  *
- * Throws on a failed read; callers degrade.
+ * Throws on a failed environment read; callers degrade.
  */
 export const resolveTopicCheckoutConfiguration = async (
   input: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
-    Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>,
-): Promise<{ configuration?: EnvironmentConfiguration | null; name: string } | undefined> => {
-  const { serverDB, topicId, userId, workspaceId } = input;
-  const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(topicId);
-  const instanceId = topic?.metadata?.sandboxInstanceId;
-  if (instanceId) {
-    // The same visibility boundary the placement applies to the instance.
-    const callerAgentVisibility =
-      workspaceId && topic.agentId
-        ? await new AgentModel(serverDB, userId, workspaceId).getAgentVisibility(topic.agentId)
-        : null;
-    const instance = await new EnvironmentInstanceModel(
-      serverDB,
-      userId,
-      workspaceId ?? undefined,
-      callerAgentVisibility,
-    ).findById(instanceId);
-    if (instance) return { configuration: instance.configurationSnapshot, name: instance.name };
-  }
+    Omit<SandboxSessionConfigInput, 'serverDB' | 'topicId'>,
+): Promise<PlacementCheckout | undefined> => {
+  const placement = await resolvePlacementDecision(input);
+  if (placement.mode === 'persistent') return placement.instanceCheckout;
 
   return resolveTopicEnvironment(input);
 };

@@ -20,30 +20,68 @@ export interface ProjectContextDeps {
 }
 
 /**
- * The repository a cloud-sandbox run's working directory is a checkout of: the
- * first git source of what the session checks out — a persistent instance's
- * snapshot, otherwise the environment the topic picked — read the way the
- * sandbox reads it so the run is never told about a checkout it will not get.
- * A project conversation picks its project's repository when it is created.
+ * A repository URL with nothing secret left in it, or `undefined` when it
+ * cannot be read as one. A stored source may carry a token in its userinfo,
+ * query or fragment, and the model context — and every trace of it — must
+ * never receive one.
+ */
+export const toCredentialFreeRepositoryUrl = (value: string): string | undefined => {
+  const raw = value.trim();
+  // An scp-style remote (`git@github.com:owner/repo.git`): the user is a fixed
+  // login name, not a secret, but it is dropped all the same.
+  const scp = /^[^\s/@:]+@([\w.-]+):([^\s?#]+)$/.exec(raw);
+  if (scp) return `${scp[1]}:${scp[2]}`;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return;
+  }
+  if (!['git:', 'http:', 'https:', 'ssh:'].includes(url.protocol) || !url.host) return;
+
+  return `${url.protocol}//${url.host}${url.pathname}`;
+};
+
+/** The folder of the working directory a source is cloned into; `undefined` for the root. */
+const checkoutFolder = (path: string | undefined): string | undefined => {
+  const folder = path
+    ?.trim()
+    .replace(/^\.\/+/, '')
+    .replace(/\/+$/, '');
+  return folder && folder !== '.' ? folder : undefined;
+};
+
+/**
+ * The repository a cloud-sandbox run checks out: the first git source of what
+ * the session checks out — a persistent instance's snapshot, otherwise the
+ * environment the topic picked — decided the way the sandbox decides it, so
+ * the run is never told about a checkout it will not get. A project
+ * conversation picks its project's repository when it is created.
  * Never throws.
  */
 export const resolveSandboxRepository = async (
-  deps: ProjectContextDeps,
+  deps: ProjectContextDeps & { isShareVisitorRun?: boolean },
   topicId: string,
 ): Promise<ProjectContextRepository | undefined> => {
   try {
-    const environment = await resolveTopicCheckoutConfiguration({
+    const checkout = await resolveTopicCheckoutConfiguration({
+      isShareVisitorRun: !!deps.isShareVisitorRun,
       serverDB: deps.db,
       topicId,
       userId: deps.userId,
       workspaceId: deps.workspaceId,
     });
-    const source = environment?.configuration?.sources?.find(
+    const source = checkout?.configuration?.sources?.find(
       (item) => item.kind === 'git' && !!item.url,
     );
-    if (!environment || !source || source.kind !== 'git') return;
+    if (!checkout || !source || source.kind !== 'git') return;
 
-    return { name: environment.name, ref: source.ref, url: source.url };
+    const url = toCredentialFreeRepositoryUrl(source.url);
+    if (!url) return;
+
+    const path = checkoutFolder(source.path);
+    return { name: checkout.name, ref: source.ref, url, ...(path && { path }) };
   } catch (error) {
     log('execAgent: failed to read the repository of topic %s: %O', topicId, error);
     return;
@@ -57,7 +95,7 @@ export const resolveSandboxRepository = async (
  * read leaves the turn without the block rather than failing it.
  */
 export const buildRunProjectContextPrompt = async (
-  deps: ProjectContextDeps,
+  deps: ProjectContextDeps & { isShareVisitorRun?: boolean },
   projectId: string | undefined,
   agentId: string,
   options: {
