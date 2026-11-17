@@ -328,6 +328,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   return (
     <Flexbox style={{ position: 'relative' }}>
       <NavItem
+        titleMarquee
         actions={<Actions dropdownMenu={dropdownMenu} />}
         active={active && !threadId}
         contextMenuItems={dropdownMenu}
