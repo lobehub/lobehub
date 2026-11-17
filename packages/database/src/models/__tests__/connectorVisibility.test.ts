@@ -389,6 +389,32 @@ describe('connector visibility — write paths', () => {
     expect(await model.findScopedByIdentifier('slack', undefined, undefined, 'private')).toBeNull();
   });
 
+  it('counts the private connectors an agent uses, owned or mounted', async () => {
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    expect(await model.countPrivateAgentBindings(privateAgent)).toBe(0);
+
+    // Shared rows, and private rows serving another agent, never count
+    await insertConnector({ agentId: privateAgent, identifier: 'shared-own' });
+    await insertConnector({
+      identifier: 'shared-mount',
+      metadata: { mountedByAgentId: privateAgent },
+    });
+    await insertConnector({ agentId: workspaceAgent, identifier: 'other', visibility: 'private' });
+    expect(await model.countPrivateAgentBindings(privateAgent)).toBe(0);
+
+    await insertConnector({ agentId: privateAgent, identifier: 'notion', visibility: 'private' });
+    await insertConnector({
+      identifier: 'linear',
+      metadata: { mountedByAgentId: privateAgent },
+      visibility: 'private',
+    });
+    expect(await model.countPrivateAgentBindings(privateAgent)).toBe(2);
+    // Personal scope has no private connectors
+    expect(await new ConnectorModel(serverDB, owner).countPrivateAgentBindings(privateAgent)).toBe(
+      0,
+    );
+  });
+
   it('claims a base identifier within one visibility', async () => {
     const model = new ConnectorModel(serverDB, owner, workspaceId);
     const input = {

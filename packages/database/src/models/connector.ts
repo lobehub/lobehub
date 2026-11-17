@@ -23,6 +23,7 @@ import {
 } from './connectorIdentifierClaim';
 import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
 import { deleteIfMetadataContains, updateMetadataIfContains } from './connectorMetadataGuard';
+import { countPrivateConnectorBindings } from './connectorPrivateBindings';
 import {
   connectorAccessScope,
   connectorAgentConfigScope,
@@ -362,6 +363,12 @@ export class ConnectorModel {
   /** See {@link moveToBaseUnlessIdentifierHeld}. */
   moveToBaseUnlessIdentifierHeld = async (id: string, identifier: string) =>
     moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
+
+  /** See {@link countPrivateConnectorBindings}; zero outside a workspace. */
+  countPrivateAgentBindings = async (agentId: string): Promise<number> => {
+    const workspaceId = normalizeWorkspaceId(this.workspaceId);
+    return workspaceId ? countPrivateConnectorBindings(this.db, workspaceId, agentId) : 0;
+  };
 
   /** See {@link queryBaseHolders}. */
   queryBaseHolders = async (
