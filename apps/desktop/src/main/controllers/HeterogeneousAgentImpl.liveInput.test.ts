@@ -33,7 +33,7 @@ const line = (message: Record<string, unknown>) => `${JSON.stringify(message)}\n
 
 /**
  * A local Claude Code CLI run in Queue mode, or with the Better Coding
- * Experience lab off: the renderer passes no `liveSteer`. Its stdin must still
+ * Experience lab off: nothing is steered into it. Its stdin must still
  * stay open, as under `lh hetero exec`.
  */
 const startQueueModeRun = async () => {

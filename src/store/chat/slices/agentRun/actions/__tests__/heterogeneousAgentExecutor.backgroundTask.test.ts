@@ -191,7 +191,6 @@ describe('heterogeneousAgentExecutor background tasks', () => {
         executeHeterogeneousAgent(() => createMockStore(), defaultParams),
       );
 
-      expect(mockSendPrompt.mock.calls[0][0]).not.toHaveProperty('liveSteer');
       expect(stopperDuringRun).toBeDefined();
       mockStopBackgroundTask.mockResolvedValue(undefined);
       await stopperDuringRun!('bys1w0wxo');
@@ -206,7 +205,6 @@ describe('heterogeneousAgentExecutor background tasks', () => {
       executeHeterogeneousAgent(() => createMockStore(), defaultParams),
     );
 
-    expect(mockSendPrompt.mock.calls[0][0]).toMatchObject({ liveSteer: true });
     expect(stopperDuringRun).toBeDefined();
     mockStopBackgroundTask.mockResolvedValue(undefined);
     await stopperDuringRun!('bys1w0wxo');

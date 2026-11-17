@@ -67,13 +67,6 @@ export interface SendPromptParams {
    * Required: producer-side conversion is the V3 contract — by the time events
    * reach the renderer they must already carry the operation they belong to.
    */
-  /**
-   * The renderer writes queued messages into this run while it runs (Follow-up
-   * behavior: Steer). Claude Code's input stays open either way (the CLI always
-   * replays what it reads); this only makes the SDK session replay each message
-   * it reads, which is how a steer is confirmed.
-   */
-  liveSteer?: boolean;
   operationId: string;
   prompt: string;
   /**

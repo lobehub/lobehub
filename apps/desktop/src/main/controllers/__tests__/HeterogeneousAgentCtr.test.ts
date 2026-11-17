@@ -1639,9 +1639,9 @@ describe('HeterogeneousAgentCtr', () => {
           commandPath: 'claude',
           cwd: FAKE_DESKTOP_PATH,
           operationId: 'op-test',
+          replayUserMessages: true,
           stdinPayload: expect.stringContaining('watch ci'),
-          // `Read` on an image echoes base64; without this the SDK path would
-          // persist an `[Image: …]` placeholder instead of a thumbnail.
+          // `Read` on an image echoes base64; without it an `[Image: …]` placeholder is stored.
           uploadImage: expect.any(Function),
         }),
       );

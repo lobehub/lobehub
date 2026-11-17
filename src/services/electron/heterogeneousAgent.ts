@@ -54,11 +54,6 @@ class HeterogeneousAgentService {
     /** Workspace the run belongs to — recovery is workspace-scoped. */
     workspaceId?: string;
     imageList?: Array<{ id: string; url: string }>;
-    /**
-     * Queued messages are written into the run while it runs (Follow-up
-     * behavior: Steer). Claude Code keeps its input open regardless.
-     */
-    liveSteer?: boolean;
     operationId: string;
     prompt: string;
     /**

@@ -2514,7 +2514,6 @@ export const executeHeterogeneousAgent = async (
         ? { replayTranscript: true, replayTranscriptConfigDir, replayTranscriptStartedAt }
         : {}),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
-      ...(localSteer && { liveSteer: true }),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
