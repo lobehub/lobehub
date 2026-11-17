@@ -5,6 +5,7 @@ import type {
   OwnedWorktreeCleanupResult,
   OwnedWorktreeCleanupTrigger,
   OwnedWorktreeRestoreResult,
+  OwnedWorktreeTopicRow,
 } from '@lobechat/types';
 import {
   getTopicWorktreePaths,
@@ -14,7 +15,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
-import { type OwnedWorktreeTopicRow, TopicModel } from '@/database/models/topic';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { deviceGateway as defaultGateway } from '@/server/services/deviceGateway';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
@@ -202,6 +203,12 @@ export class WorktreeCleanupService {
     return this.recordCleanupResult(topicId, entry.path, trigger, result);
   }
 
+  /** Whether a run is going on in this folder: this topic's own, or another live topic's. */
+  private async inUse(topicId: string, path: string) {
+    const [row] = await this.topicModel.findOwnedWorktreeTopics([topicId]);
+    return (!!row && isHeld(row)) || this.inUseElsewhere(topicId, path);
+  }
+
   /** Whether another live topic still works in this folder. */
   private async inUseElsewhere(topicId: string, path: string) {
     return (
@@ -304,6 +311,8 @@ export class WorktreeCleanupService {
       await this.clearCleanup(row.id, entry.path);
       return;
     }
+    // A discard waiting on its device still never runs under a live run.
+    if (trigger === 'discarded' && (await this.inUse(row.id, entry.path))) return;
     const claimed = await this.claim(
       row.id,
       entry.path,
@@ -388,6 +397,9 @@ export class WorktreeCleanupService {
     path: string,
     { local }: { local?: boolean } = {},
   ): Promise<OwnedWorktree | undefined> {
+    // Never under a live run: neither this topic's nor another topic's that
+    // works in the same folder.
+    if (await this.inUse(topicId, path)) return undefined;
     const claimed = await this.claim(
       topicId,
       path,
@@ -418,9 +430,12 @@ export class WorktreeCleanupService {
    *
    * - `running`: a cleanup is deleting it now → `busy`; the caller waits.
    * - `pending`: it never ran → cancelled, the folder is still there.
-   * - `removed`: run the device's `git worktree add <path> <branch>`; with
-   *   `local`, answer `needsLocal` so the desktop runs it over IPC and reports
-   *   its `result`. A branch that is gone sends the topic back to its source.
+   * - `keptDirty`: the folder is intact → live again, `restored`.
+   * - `removed` / `failed`: run the device's `git worktree add <path> <branch>`
+   *   (a no-op for a folder still there; the device first waits out a
+   *   deletion in flight); with `local`, answer `needsLocal` so the desktop
+   *   runs it over IPC and reports its `result`. A branch that is gone sends
+   *   the topic back to its source.
    * - otherwise the folder is there → `restored`.
    */
   async restore(
@@ -444,12 +459,27 @@ export class WorktreeCleanupService {
         });
         return cancelled ? { outcome: 'restored' } : { outcome: 'busy' };
       }
-      if (state !== 'removed') return { outcome: 'restored' };
+      // Kept for its uncommitted work: the folder is intact, and the topic
+      // coming back makes it live again (no longer awaiting a choice).
+      if (state === 'keptDirty') {
+        await this.clearCleanup(topicId, path);
+        return { outcome: 'restored' };
+      }
+      // A failed cleanup may have stopped half-way, or still be deleting after
+      // a timeout: ask the device (it waits for a deletion in flight) instead
+      // of assuming the folder is there.
+      if (state !== 'removed' && state !== 'failed') return { outcome: 'restored' };
     }
 
     let answer = result;
     if (!answer) {
-      if (!entry.branch) answer = { outcome: 'branchMissing' };
+      // Without a branch nothing can be checked out again; a failed cleanup
+      // most likely left the folder, so only a removed one falls back.
+      if (!entry.branch)
+        answer =
+          entry.cleanup?.state === 'failed'
+            ? { outcome: 'restored' }
+            : { outcome: 'branchMissing' };
       else if (local)
         return { branch: entry.branch, outcome: 'needsLocal', ownerToken: entry.ownerToken };
       else if (!entry.deviceId)
@@ -524,4 +554,41 @@ export const scheduleWorktreeCleanup = (
     );
     if (Object.keys(summary.results).length > 0) log('%s cleanup: %o', trigger, summary.results);
   });
+};
+
+const RESTORE_BUSY_WAIT_MS = 120_000;
+const RESTORE_BUSY_POLL_MS = 2000;
+
+/**
+ * Before the server starts a turn on its own (a delegated task reporting back,
+ * a scheduled continuation), bring back the worktree the app created for the
+ * topic if a cleanup removed it — the same step the composer runs before a
+ * send. Waits while a cleanup is still deleting it. Returns the topic as it
+ * now is (a gone branch moves it to its source), or `undefined` when nothing
+ * needed doing.
+ */
+export const restoreOwnedWorktreeBeforeServerRun = async (params: {
+  db: LobeChatDatabase;
+  metadata: ChatTopicMetadata | null | undefined;
+  topicId: string;
+  userId: string;
+  workspaceId?: string;
+}): Promise<{ metadata: ChatTopicMetadata | null | undefined } | undefined> => {
+  const { db, metadata, topicId, userId, workspaceId } = params;
+  const paths = getTopicWorktreePaths(metadata);
+  const entry = resolveOwnedWorktrees(metadata).find((item) => paths.includes(item.path));
+  if (!entry) return;
+
+  const service = new WorktreeCleanupService(db, userId, workspaceId);
+  const deadline = Date.now() + RESTORE_BUSY_WAIT_MS;
+  let result = await service.restore(topicId, entry.path);
+  while (result.outcome === 'busy' && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, RESTORE_BUSY_POLL_MS));
+    result = await service.restore(topicId, entry.path);
+  }
+  log('server-run restore of %s → %o', entry.path, result);
+  if (result.outcome !== 'branchMissing') return;
+  // The topic now continues in its source repository.
+  const [row] = await new TopicModel(db, userId, workspaceId).findOwnedWorktreeTopics([topicId]);
+  return { metadata: row?.metadata };
 };

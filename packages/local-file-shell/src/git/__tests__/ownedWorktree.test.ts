@@ -319,6 +319,37 @@ describe('restoreOwnedWorktree', () => {
     expect(existsSync(path.join(worktree, 'b.txt'))).toBe(true);
   });
 
+  it('waits for a removal still in flight before checking the worktree out again', async () => {
+    let release!: () => void;
+    const slowRemove = new Promise<void>((resolve) => (release = resolve));
+    const cleaning = cleanupOwnedWorktree({
+      // A large worktree: git is still deleting when the restore arrives.
+      gitRemove: async (source, target) => {
+        await slowRemove;
+        git(source, 'worktree', 'remove', '--force', target);
+      },
+      ownerToken: TOKEN,
+      rootDir: root,
+      sourcePath: repo,
+      worktreePath: worktree,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const restoring = restoreOwnedWorktree({
+      branch: BRANCH,
+      ownerToken: TOKEN,
+      rootDir: root,
+      sourcePath: repo,
+      worktreePath: worktree,
+    });
+    release();
+
+    await expect(cleaning).resolves.toMatchObject({ outcome: 'removed' });
+    await expect(restoring).resolves.toEqual({ outcome: 'restored' });
+    // Re-added after the deletion, not swept away by it.
+    expect(existsSync(path.join(worktree, '.git'))).toBe(true);
+    expect(git(worktree, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(BRANCH);
+  });
+
   it('is a no-op when the worktree is already there on its branch', async () => {
     await expect(
       restoreOwnedWorktree({

@@ -223,6 +223,30 @@ const withTimeout = async <T>(work: Promise<T>, ms: number, onTimeout: () => T):
   }
 };
 
+/**
+ * Removals still running on this device, by resolved path. The cleanup's
+ * overall budget can expire while a large delete goes on; until it actually
+ * stops, a restore (or another cleanup) of the same path waits for it rather
+ * than writing into a folder that is still disappearing.
+ */
+const deletionsInFlight = new Map<string, Promise<unknown>>();
+
+const waitForDeletion = async (worktreePath: string) => {
+  const inFlight = deletionsInFlight.get(path.resolve(worktreePath));
+  if (inFlight) await inFlight.catch(() => undefined);
+};
+
+const trackDeletion = async <T>(worktreePath: string, work: () => Promise<T>): Promise<T> => {
+  const key = path.resolve(worktreePath);
+  const running = work();
+  deletionsInFlight.set(key, running);
+  try {
+    return await running;
+  } finally {
+    if (deletionsInFlight.get(key) === running) deletionsInFlight.delete(key);
+  }
+};
+
 export interface CleanupOwnedWorktreeParams {
   /** Delete even with uncommitted work: the user confirmed "Discard and delete". */
   discard?: boolean;
@@ -255,6 +279,7 @@ const runCleanup = async ({
 
   try {
     assertLexicallyInsideRoot(root, worktreePath);
+    await waitForDeletion(worktreePath);
 
     // Gone already (deleted by hand, or a cleanup that finished after its
     // report was lost): only the stale registration is left to drop.
@@ -279,13 +304,15 @@ const runCleanup = async ({
 
     if (!branch) branch = await keepDetachedCommits(sourcePath, worktreePath);
 
-    try {
-      await gitRemove(sourcePath, listed.path);
-    } catch (error) {
-      warn('git worktree remove failed for %s, removing the folder: %O', worktreePath, error);
-      await deleteFolder(worktreePath);
-    }
-    await prune(sourcePath);
+    await trackDeletion(worktreePath, async () => {
+      try {
+        await gitRemove(sourcePath, listed.path);
+      } catch (error) {
+        warn('git worktree remove failed for %s, removing the folder: %O', worktreePath, error);
+        await deleteFolder(worktreePath);
+      }
+      await prune(sourcePath);
+    });
 
     if (existsSync(worktreePath))
       return { branch, error: 'The worktree folder could not be removed', outcome: 'error' };
@@ -357,6 +384,8 @@ export const restoreOwnedWorktree = async ({
 
   try {
     assertLexicallyInsideRoot(root, worktreePath);
+    // A cleanup that timed out may still be deleting this folder.
+    await waitForDeletion(worktreePath);
 
     if (existsSync(worktreePath)) {
       await assertResolvedInsideRoot(root, worktreePath);

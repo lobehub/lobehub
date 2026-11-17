@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { topics, users, workspaces } from '@/database/schemas';
 
-import { STALE_CLAIM_MS, WorktreeCleanupService } from './index';
+import {
+  restoreOwnedWorktreeBeforeServerRun,
+  STALE_CLAIM_MS,
+  WorktreeCleanupService,
+} from './index';
 
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: {} }));
 
@@ -313,6 +317,26 @@ describe('discard / keep', () => {
     expect((await entryOf('t-live-discard'))?.cleanup).toBeUndefined();
   });
 
+  it("refuses to discard under a live run, its own or another topic's in the folder", async () => {
+    await insert(
+      't-run-discard',
+      { ...keptDirty(), runningOperation: { operationId: 'op' } as any },
+      {
+        status: 'running',
+      },
+    );
+    await expect(service().discard('t-run-discard', WT)).resolves.toBeUndefined();
+
+    await insert('t-quiet-discard', keptDirty());
+    await insert(
+      't-neighbour',
+      { workingDirectoryConfig: { git: { activeWorktree: WT }, path: '/code/repo' } },
+      { status: 'active' },
+    );
+    await expect(service().discard('t-quiet-discard', WT)).resolves.toBeUndefined();
+    expect(gateway.cleanupOwnedWorktree).not.toHaveBeenCalled();
+  });
+
   it('keep stops every later automatic cleanup', async () => {
     await insert('t-keep', keptDirty());
     expect((await service().keep('t-keep', WT))?.cleanup?.state).toBe('kept');
@@ -375,6 +399,58 @@ describe('restore', () => {
       reason: 'branchMissing',
       state: 'removed',
     });
+  });
+
+  it('makes a kept-dirty worktree live again when its topic comes back', async () => {
+    await insert(
+      't-kept-back',
+      autoCreated({
+        ownedWorktrees: [
+          {
+            branch: BRANCH,
+            cleanup: { at: 'x', dirtyFiles: 1, state: 'keptDirty', trigger: 'archived' },
+            createdAt: 'y',
+            deviceId: 'dev-1',
+            path: WT,
+            sourcePath: '/code/repo',
+          },
+        ],
+      }),
+      { status: 'active' },
+    );
+    await expect(service().restore('t-kept-back', WT)).resolves.toEqual({ outcome: 'restored' });
+    expect((await entryOf('t-kept-back'))?.cleanup).toBeUndefined();
+    expect(gateway.restoreOwnedWorktree).not.toHaveBeenCalled();
+  });
+
+  it('asks the device after a failed cleanup instead of assuming the folder is there', async () => {
+    const failed = (branch?: string) =>
+      autoCreated({
+        ownedWorktrees: [
+          {
+            ...(branch && { branch }),
+            cleanup: { at: 'x', reason: 'Worktree cleanup timed out', state: 'failed' },
+            createdAt: 'y',
+            deviceId: 'dev-1',
+            path: WT,
+            sourcePath: '/code/repo',
+          },
+        ],
+      });
+    await insert('t-failed', failed(BRANCH), { status: 'active' });
+    gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'restored' });
+    await expect(service().restore('t-failed', WT)).resolves.toEqual({ outcome: 'restored' });
+    expect(gateway.restoreOwnedWorktree).toHaveBeenCalledTimes(1);
+    expect((await entryOf('t-failed'))?.cleanup).toBeUndefined();
+
+    // Without a branch there is nothing to check out, but no reason to give
+    // the worktree up either.
+    await insert('t-failed-nobranch', failed(), { status: 'active' });
+    await expect(service().restore('t-failed-nobranch', WT)).resolves.toEqual({
+      outcome: 'restored',
+    });
+    const [row] = await db.select().from(topics).where(eq(topics.id, 't-failed-nobranch'));
+    expect(row.metadata?.workingDirectoryConfig?.sessionPath).toBe(WT);
   });
 
   it('is a no-op for a worktree that was never removed', async () => {
@@ -556,5 +632,69 @@ describe('review follow-ups', () => {
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
       await db.delete(users).where(eq(users.id, memberId));
     }
+  });
+});
+
+describe('restoreOwnedWorktreeBeforeServerRun', () => {
+  const removed = () =>
+    autoCreated({
+      ownedWorktrees: [
+        {
+          branch: BRANCH,
+          cleanup: { at: 'x', state: 'removed', trigger: 'archived' },
+          createdAt: 'y',
+          deviceId: 'dev-1',
+          path: WT,
+          sourcePath: '/code/repo',
+        },
+      ],
+    });
+
+  it('brings the worktree back before a turn the server starts on its own', async () => {
+    await insert('t-server-run', removed(), { status: 'completed' });
+    gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'restored' });
+    // The default gateway is the module singleton; route it through the mock.
+    const { deviceGateway } = await import('@/server/services/deviceGateway');
+    Object.assign(deviceGateway, gateway);
+
+    const metadata = (await db.select().from(topics).where(eq(topics.id, 't-server-run')))[0]
+      .metadata;
+    await expect(
+      restoreOwnedWorktreeBeforeServerRun({ db, metadata, topicId: 't-server-run', userId }),
+    ).resolves.toBeUndefined();
+    expect(gateway.restoreOwnedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: BRANCH, worktreePath: WT }),
+    );
+    expect((await entryOf('t-server-run'))?.cleanup).toBeUndefined();
+  });
+
+  it('hands back the source-repo directory when the branch is gone', async () => {
+    const { deviceGateway } = await import('@/server/services/deviceGateway');
+    Object.assign(deviceGateway, gateway);
+    await insert('t-server-gone', removed(), { status: 'completed' });
+    gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'branchMissing' });
+    const metadata = (await db.select().from(topics).where(eq(topics.id, 't-server-gone')))[0]
+      .metadata;
+    const next = await restoreOwnedWorktreeBeforeServerRun({
+      db,
+      metadata,
+      topicId: 't-server-gone',
+      userId,
+    });
+    expect(next?.metadata?.workingDirectoryConfig).toEqual({
+      path: '/code/repo',
+      repoType: 'github',
+    });
+  });
+
+  it('does nothing for a topic without an app-created worktree', async () => {
+    await expect(
+      restoreOwnedWorktreeBeforeServerRun({
+        db,
+        metadata: { workingDirectoryConfig: { path: '/code/repo' } },
+        topicId: 'none',
+        userId,
+      }),
+    ).resolves.toBeUndefined();
   });
 });

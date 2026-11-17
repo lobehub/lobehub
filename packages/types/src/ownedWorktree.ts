@@ -1,3 +1,4 @@
+import type { ChatTopicMetadata } from './topic';
 import type { WorkingDirConfig } from './workingDir';
 
 /**
@@ -73,6 +74,15 @@ export interface OwnedWorktreeMetadata {
   boundDeviceId?: string;
   ownedWorktrees?: OwnedWorktree[];
   workingDirectoryConfig?: WorkingDirConfig;
+}
+
+/** A topic as the worktree cleanup reads it (recycle bin included). */
+export interface OwnedWorktreeTopicRow {
+  id: string;
+  isDeleted: boolean | null;
+  metadata: ChatTopicMetadata | null | undefined;
+  status: string | null;
+  userId: string;
 }
 
 /** Topic statuses that mean the run is live or waiting on the user: never clean under them. */

@@ -1,4 +1,4 @@
-import type { ChatTopicMetadata, OwnedWorktree } from '@lobechat/types';
+import type { ChatTopicMetadata, OwnedWorktree, OwnedWorktreeTopicRow } from '@lobechat/types';
 import { claimAutoCreatedWorktree, resolveOwnedWorktrees } from '@lobechat/types';
 import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 
@@ -16,14 +16,7 @@ import { isInFlight } from './inFlight';
  * extracted value, which crashes the pg_search planner (see `./index.ts`).
  */
 
-/** A topic row as the cleanup reads it. */
-export interface OwnedWorktreeTopicRow {
-  id: string;
-  isDeleted: boolean | null;
-  metadata: ChatTopicMetadata | null | undefined;
-  status: string | null;
-  userId: string;
-}
+export type { OwnedWorktreeTopicRow } from '@lobechat/types';
 
 const rowColumns = {
   id: topics.id,
