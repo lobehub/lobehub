@@ -12,9 +12,10 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
-import { useSidebarPinState } from '../../useSidebarPinState';
+import { resolveSidebarRowMarks, useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
 import PrivateLockIcon from '../PrivateLockIcon';
+import { useSidebarRowMarksScope } from '../rowMarksContext';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
@@ -28,8 +29,8 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   const { id, avatar, backgroundColor, description, title, pinned, userId, visibility } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
+  const pinState = useSidebarPinState({ id, pinned, visibility });
+  const { showLock, showPin } = resolveSidebarRowMarks(pinState, useSidebarRowMarksScope());
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -74,19 +75,19 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     [id, openAgentInNewWindow],
   );
 
-  // The lock sits with the pin in the fixed trailing slot so a long title
-  // can't truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
-        <>
-          {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
-            <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
-          )}
-        </>
+      showPin ? (
+        <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [showPin],
+  );
+
+  // The lock leads the title, clear of the trailing slot the row actions
+  // cover on hover (see AgentItem).
+  const navSlots = useMemo(
+    () => (showLock ? { titlePrefix: <PrivateLockIcon size={12} /> } : undefined),
+    [showLock],
   );
 
   // Memoize avatar icon (show loader when updating)
@@ -137,6 +138,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
         extra={pinIcon}
         icon={avatarIcon}
         key={id}
+        slots={navSlots}
         style={style}
         title={titleNode}
         onDoubleClick={handleDoubleClick}

@@ -23,6 +23,7 @@ import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
 import SessionList from '../List';
 import PrivateLockIcon from '../PrivateLockIcon';
+import { SidebarRowMarksContext } from '../rowMarksContext';
 import Actions from './Actions';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
@@ -33,6 +34,8 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
   const isUpdating = useHomeStore((s) => s.groupUpdatingId === id);
   // Public and private folders share one Agents section in a workspace.
   const isPrivateFolder = !!useActiveWorkspaceId() && visibility === 'private';
+
+  const rowMarksScope = useMemo(() => ({ inPrivateFolder: isPrivateFolder }), [isPrivateFolder]);
 
   // Modal management
   const { openConfigGroupModal } = useAgentModal();
@@ -57,8 +60,11 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
     if (isUpdating) {
       return <Spin size="small" style={{ opacity: 0.5 }} />;
     }
+    // A private folder leads with the lock in place of the hash, the same spot
+    // its rows put theirs; the rows themselves then carry none.
+    if (isPrivateFolder) return <PrivateLockIcon />;
     return <Icon icon={HashIcon} style={{ opacity: 0.5 }} />;
-  }, [isUpdating]);
+  }, [isPrivateFolder, isUpdating]);
 
   return (
     <AccordionItem disabled={isUpdating} key={id} value={id}>
@@ -71,8 +77,6 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
                 <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                   {name}
                 </Text>
-                {/* Outside the ellipsis so a long name can't push it out of view. */}
-                {isPrivateFolder && <PrivateLockIcon />}
               </Flexbox>
             </AccordionTrigger>
             <div
@@ -88,12 +92,14 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
         </div>
       </ContextMenuTrigger>
       <AccordionPanel>
-        <SessionList
-          dataSource={items}
-          groupId={id}
-          itemClassName={stylex.props(styles.item).className}
-          visibility={visibility}
-        />
+        <SidebarRowMarksContext value={rowMarksScope}>
+          <SessionList
+            dataSource={items}
+            groupId={id}
+            itemClassName={stylex.props(styles.item).className}
+            visibility={visibility}
+          />
+        </SidebarRowMarksContext>
       </AccordionPanel>
     </AccordionItem>
   );

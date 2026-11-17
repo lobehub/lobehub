@@ -22,8 +22,12 @@ import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
 import SessionList from './List';
+import { SidebarRowMarksContext, type SidebarRowMarksScope } from './rowMarksContext';
 import SortableList from './SortableList';
 import { useWorkspaceAgentSections } from './useWorkspaceAgentSections';
+
+/** Rows under the pinned headers leave the pin to the header. */
+const PINNED_SECTION_SCOPE: SidebarRowMarksScope = { pinnedByHeader: true };
 
 /** Team pins beyond this many fold behind a "show more" row. */
 export const TEAM_PINNED_VISIBLE_LIMIT = 5;
@@ -134,8 +138,11 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
             icon={PinIcon}
             testId={'sidebar-my-pinned-header'}
             title={t('navPanel.myPinned')}
+            tooltip={t('navPanel.myPinnedHint')}
           />
-          <SortableList dataSource={myPinned} onReorder={reorderMyPinned} />
+          <SidebarRowMarksContext value={PINNED_SECTION_SCOPE}>
+            <SortableList dataSource={myPinned} onReorder={reorderMyPinned} />
+          </SidebarRowMarksContext>
         </Flexbox>
       )}
       {teamPinned.length > 0 && (
@@ -146,11 +153,13 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
             title={t('navPanel.teamPinned')}
             tooltip={t('navPanel.teamPinnedHint')}
           />
-          {canManageTeamPins ? (
-            <SortableList dataSource={visibleTeamPinned} onReorder={handleReorderTeamPinned} />
-          ) : (
-            <SessionList dataSource={visibleTeamPinned} />
-          )}
+          <SidebarRowMarksContext value={PINNED_SECTION_SCOPE}>
+            {canManageTeamPins ? (
+              <SortableList dataSource={visibleTeamPinned} onReorder={handleReorderTeamPinned} />
+            ) : (
+              <SessionList dataSource={visibleTeamPinned} />
+            )}
+          </SidebarRowMarksContext>
           {teamOverflow && (
             // Subordinate to the team pins above, so it reads lighter and
             // smaller than an agent row instead of competing with them.
