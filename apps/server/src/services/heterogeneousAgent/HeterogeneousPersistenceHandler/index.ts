@@ -5,6 +5,7 @@ import type {
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
 import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
+import { isPermissionModeReport } from '@lobechat/heterogeneous-agents/claudeCodePermission/shared';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { createNanoId } from '@lobechat/utils';
@@ -349,6 +350,15 @@ export class HeterogeneousPersistenceHandler {
   private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<void> {
     if (isSteerReplay(event)) {
       await this.consumeSteer(state, event.data.uuid);
+      return;
+    }
+    // Claude Code's mode, incl. the switch it makes when a plan is approved:
+    // the topic's next run starts in it, and the composer chip shows it.
+    if (event.type === 'step_complete' && isPermissionModeReport(event.data)) {
+      await this.deps.topicModel.updateMetadata(state.topicId, {
+        heteroPermissionMode: event.data.permissionMode,
+        heteroPermissionModeFallback: event.data.fallback,
+      });
       return;
     }
     await this.reduceAndApply(state, event);
