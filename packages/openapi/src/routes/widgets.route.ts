@@ -1,4 +1,8 @@
+import type { Context, Next } from 'hono';
 import { Hono } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+
+import { hasApiKeyScope } from '@/const/apiKeyScope';
 
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
@@ -52,6 +56,26 @@ const widgetRead = requireApiKeyScope('widget:read');
 const widgetWrite = requireApiKeyScope('widget:write');
 const widgetPublish = requireApiKeyScope('widget:publish');
 
+/**
+ * Placing the new widget on a board (`dashboardId`) is a board write too, so a
+ * restricted key also needs `dashboard:write` for it — `widget:write` alone
+ * must not reshape a board.
+ */
+const boardPlacement = async (c: Context, next: Next) => {
+  const body = (c.req.valid as (target: 'json') => { dashboardId?: string })('json');
+  if (
+    body.dashboardId &&
+    c.get('authType') === 'apikey' &&
+    !hasApiKeyScope(c.get('apiKeyScopes'), 'dashboard:write')
+  ) {
+    throw new HTTPException(403, {
+      cause: { missingScopes: ['dashboard:write'] },
+      message: "insufficient_scope: placing a widget on a dashboard also needs 'dashboard:write'",
+    });
+  }
+  return next();
+};
+
 const FLAG_NOTE = 'Answers 403 while dashboards are not enabled for the caller.';
 
 const controller = () => new WidgetController();
@@ -76,7 +100,7 @@ WidgetRoutes.post(
   '/',
   routeDoc({
     data: WidgetSchema,
-    description: `Creates an empty widget — add its script with a draft. With \`dashboardId\` it is placed on that board in the same transaction. ${FLAG_NOTE}`,
+    description: `Creates an empty widget — add its script with a draft. With \`dashboardId\` it is placed on that board in the same transaction, which a restricted key may only do with \`dashboard:write\` as well. ${FLAG_NOTE}`,
     errors: [400, 404],
     status: 201,
     summary: 'Create a widget',
@@ -85,6 +109,7 @@ WidgetRoutes.post(
   requireAuth,
   widgetWrite,
   zValidator('json', CreateWidgetRequestSchema),
+  boardPlacement,
   async (c) => controller().createWidget(c),
 );
 
@@ -123,7 +148,7 @@ WidgetRoutes.delete(
   '/:id',
   routeDoc({
     data: DeletedResourceSchema,
-    description: `Deletes the widget with its versions and runs, and takes it off every board. ${FLAG_NOTE}`,
+    description: `Moves the widget to the trash, where it can be restored in the app; it stops refreshing and leaves every board. ${FLAG_NOTE}`,
     errors: [400, 404],
     summary: 'Delete a widget',
     tags: TAGS,

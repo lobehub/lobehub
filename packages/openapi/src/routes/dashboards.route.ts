@@ -105,7 +105,7 @@ DashboardRoutes.delete(
   '/:id',
   routeDoc({
     data: DeletedResourceSchema,
-    description: `Deletes the board. The widgets on it stay. ${FLAG_NOTE}`,
+    description: `Moves the board to the trash, where it can be restored in the app. The widgets on it stay. ${FLAG_NOTE}`,
     errors: [400, 404],
     summary: 'Delete a dashboard',
     tags: TAGS,

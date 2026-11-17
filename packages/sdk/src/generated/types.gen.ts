@@ -18373,10 +18373,6 @@ export type PostApiV1ArtifactsErrors = {
      */
     401: ApiError;
     /**
-     * Payment required
-     */
-    402: ApiError;
-    /**
      * Insufficient permission
      */
     403: ApiError;
@@ -18384,10 +18380,6 @@ export type PostApiV1ArtifactsErrors = {
      * Resource not found
      */
     404: ApiError;
-    /**
-     * Resource conflict
-     */
-    409: ApiError;
     /**
      * Payload too large
      */

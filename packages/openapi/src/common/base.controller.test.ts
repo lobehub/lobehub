@@ -67,6 +67,16 @@ describe('BaseController.handleError', () => {
     await expect(response.json()).resolves.toMatchObject({ code: 'not_found' });
   });
 
+  it('maps a tRPC PAYMENT_REQUIRED refusal to 402', async () => {
+    const error = Object.assign(new Error('plan limit reached'), {
+      code: 'PAYMENT_REQUIRED',
+      name: 'TRPCError',
+    });
+    const response = await requestThrown(error);
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({ code: 'payment_required' });
+  });
+
   it('keeps the code and details an ApiException carries', async () => {
     const response = await requestThrown(
       new ApiException(403, 'workspace_mismatch', 'wrong workspace', [

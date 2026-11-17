@@ -95,8 +95,9 @@ export class DashboardRestService extends BaseService {
     return toDashboard((await this.caller.update({ id, value }))!.data);
   }
 
+  /** Moves the board to the trash, as deleting it in the app does; it stays restorable there. */
   async deleteDashboard(id: string): Promise<DeletedResource> {
-    await this.caller.delete({ id });
+    await this.caller.trash({ id });
     return { deleted: true, id };
   }
 

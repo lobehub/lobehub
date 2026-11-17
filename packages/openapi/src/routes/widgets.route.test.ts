@@ -386,7 +386,7 @@ describe('authoring loop: draft → dry run → publish → run', () => {
     expect(cleared.data).toMatchObject({ nextRunAt: null, schedulePattern: null });
   });
 
-  it('answers 404 for an unknown version, and deletes the widget', async () => {
+  it('answers 404 for an unknown version, and moves a deleted widget to the trash', async () => {
     const widget = await createWidget();
 
     const missing = await call(`/widgets/${widget.id}/dry-run`, {
@@ -401,6 +401,10 @@ describe('authoring loop: draft → dry run → publish → run', () => {
     );
     expect(deleted.data).toEqual({ deleted: true, id: widget.id });
     expect((await call(`/widgets/${widget.id}`, { key: KEYS.ownerRead })).status).toBe(404);
+
+    // Into the trash, as in the app — still restorable, not purged.
+    const rows = await serverDB.select().from(widgets);
+    expect(rows.find((row) => row.id === widget.id)?.isDeleted).toBe(true);
   });
 });
 

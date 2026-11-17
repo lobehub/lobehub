@@ -22,8 +22,8 @@ ArtifactRoutes.post(
   routeDoc({
     data: ArtifactDeploymentSchema,
     description:
-      '**Publishes publicly.** Anyone with the returned `publicUrl` can open the page, and it stays up until unpublished. Pass `deploymentId` to publish a new revision of an existing site instead of creating one. Counts against the deployment quota of your plan. Answers 404 on servers without artifact publishing.',
-    errors: [400, 402, 404, 409, 413],
+      '**Publishes publicly.** Anyone with the returned `publicUrl` can open the page, and it stays up until unpublished. Pass `deploymentId` to publish a new revision of an existing site instead of creating one. Counts against the deployment quota of your plan; a publish over quota answers 400. Answers 404 on servers without artifact publishing.',
+    errors: [400, 404, 413],
     operationId: 'artifacts.publish',
     status: 201,
     summary: 'Publish an HTML artifact',

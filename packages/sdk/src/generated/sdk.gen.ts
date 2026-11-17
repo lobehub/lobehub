@@ -2925,7 +2925,7 @@ export class Widgets extends HeyApiClient {
     /**
      * Create a widget
      *
-     * Creates an empty widget — add its script with a draft. With `dashboardId` it is placed on that board in the same transaction. Answers 403 while dashboards are not enabled for the caller.
+     * Creates an empty widget — add its script with a draft. With `dashboardId` it is placed on that board in the same transaction, which a restricted key may only do with `dashboard:write` as well. Answers 403 while dashboards are not enabled for the caller.
      *
      * **API key scopes:** `widget:write`.
      */
@@ -2941,7 +2941,7 @@ export class Widgets extends HeyApiClient {
     /**
      * Delete a widget
      *
-     * Deletes the widget with its versions and runs, and takes it off every board. Answers 403 while dashboards are not enabled for the caller.
+     * Moves the widget to the trash, where it can be restored in the app; it stops refreshing and leaves every board. Answers 403 while dashboards are not enabled for the caller.
      *
      * **API key scopes:** `widget:write`.
      */
@@ -3168,7 +3168,7 @@ export class Dashboards extends HeyApiClient {
     /**
      * Delete a dashboard
      *
-     * Deletes the board. The widgets on it stay. Answers 403 while dashboards are not enabled for the caller.
+     * Moves the board to the trash, where it can be restored in the app. The widgets on it stay. Answers 403 while dashboards are not enabled for the caller.
      *
      * **API key scopes:** `dashboard:write`.
      */
@@ -3263,7 +3263,7 @@ export class Artifacts extends HeyApiClient {
     /**
      * Publish an HTML artifact
      *
-     * **Publishes publicly.** Anyone with the returned `publicUrl` can open the page, and it stays up until unpublished. Pass `deploymentId` to publish a new revision of an existing site instead of creating one. Counts against the deployment quota of your plan. Answers 404 on servers without artifact publishing.
+     * **Publishes publicly.** Anyone with the returned `publicUrl` can open the page, and it stays up until unpublished. Pass `deploymentId` to publish a new revision of an existing site instead of creating one. Counts against the deployment quota of your plan; a publish over quota answers 400. Answers 404 on servers without artifact publishing.
      *
      * **API key scopes:** `artifact:publish`.
      */

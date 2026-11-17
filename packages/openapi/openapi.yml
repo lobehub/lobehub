@@ -45729,8 +45729,9 @@ paths:
       operationId: widgets.create
       description: >-
         Creates an empty widget — add its script with a draft. With
-        `dashboardId` it is placed on that board in the same transaction.
-        Answers 403 while dashboards are not enabled for the caller.
+        `dashboardId` it is placed on that board in the same transaction, which
+        a restricted key may only do with `dashboard:write` as well. Answers 403
+        while dashboards are not enabled for the caller.
 
 
         **API key scopes:** `widget:write`.
@@ -46244,8 +46245,9 @@ paths:
     delete:
       operationId: widgets.delete
       description: >-
-        Deletes the widget with its versions and runs, and takes it off every
-        board. Answers 403 while dashboards are not enabled for the caller.
+        Moves the widget to the trash, where it can be restored in the app; it
+        stops refreshing and leaves every board. Answers 403 while dashboards
+        are not enabled for the caller.
 
 
         **API key scopes:** `widget:write`.
@@ -48924,8 +48926,9 @@ paths:
     delete:
       operationId: dashboards.delete
       description: >-
-        Deletes the board. The widgets on it stay. Answers 403 while dashboards
-        are not enabled for the caller.
+        Moves the board to the trash, where it can be restored in the app. The
+        widgets on it stay. Answers 403 while dashboards are not enabled for the
+        caller.
 
 
         **API key scopes:** `dashboard:write`.
@@ -49584,8 +49587,8 @@ paths:
         **Publishes publicly.** Anyone with the returned `publicUrl` can open
         the page, and it stays up until unpublished. Pass `deploymentId` to
         publish a new revision of an existing site instead of creating one.
-        Counts against the deployment quota of your plan. Answers 404 on servers
-        without artifact publishing.
+        Counts against the deployment quota of your plan; a publish over quota
+        answers 400. Answers 404 on servers without artifact publishing.
 
 
         **API key scopes:** `artifact:publish`.
@@ -49656,21 +49659,6 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
-        "402":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-          description: Payment required
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
-            X-RateLimit-Limit:
-              $ref: "#/components/headers/RateLimitLimit"
-            X-RateLimit-Remaining:
-              $ref: "#/components/headers/RateLimitRemaining"
-            X-RateLimit-Reset:
-              $ref: "#/components/headers/RateLimitReset"
         "403":
           content:
             application/json:
@@ -49692,21 +49680,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
           description: Resource not found
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
-            X-RateLimit-Limit:
-              $ref: "#/components/headers/RateLimitLimit"
-            X-RateLimit-Remaining:
-              $ref: "#/components/headers/RateLimitRemaining"
-            X-RateLimit-Reset:
-              $ref: "#/components/headers/RateLimitReset"
-        "409":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-          description: Resource conflict
           headers:
             X-Request-Id:
               $ref: "#/components/headers/RequestId"

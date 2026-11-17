@@ -145,6 +145,27 @@ describe('authentication, scopes and the feature flag', () => {
     }
   });
 
+  it('needs dashboard:write as well to place a new widget on a board', async () => {
+    const board = await createBoard();
+    const res = await call('/widgets', {
+      body: { dashboardId: board.id, title: 'Sneaky' },
+      key: KEYS.widgetOnly,
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('insufficient_scope');
+    const detail = await json(await call(`/dashboards/${board.id}`, { key: KEYS.ownerRead }));
+    expect(detail.data.items).toEqual([]);
+
+    const placed = await call('/widgets', {
+      body: { dashboardId: board.id, title: 'Placed' },
+      key: KEYS.ownerWrite,
+      method: 'POST',
+    });
+    expect(placed.status).toBe(201);
+  });
+
   it('answers 403 while dashboards are off for the caller', async () => {
     holder.dashboardEnabled = false;
     expect((await call('/dashboards', { key: KEYS.ownerRead })).status).toBe(403);

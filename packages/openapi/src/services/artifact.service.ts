@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import debug from 'debug';
+
 import { marketDeploymentsRouter } from '@/business/server/lambda-routers/marketDeployments';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -32,6 +34,8 @@ interface DeploymentCaller {
   }) => Promise<{ data: DeploymentRecord }>;
 }
 
+const log = debug('lobe-openapi:artifact');
+
 /** Whether this server can publish at all (the cloud router carries the procedure). */
 export const canPublishArtifacts = () =>
   'publishWorkspaceHtml' in (marketDeploymentsRouter._def.procedures as Record<string, unknown>);
@@ -54,6 +58,7 @@ export class ArtifactRestService extends BaseService {
 
   async publish(input: PublishArtifactRequest): Promise<ArtifactDeploymentResponse> {
     if (!canPublishArtifacts()) {
+      log('publish refused: no deployment procedure on this server (user %s)', this.userId);
       throw this.createNotFoundError('Artifact publishing is not available on this server');
     }
 
@@ -68,6 +73,15 @@ export class ArtifactRestService extends BaseService {
         : { kind: 'create' },
       title: input.title,
     });
+
+    log(
+      'published deployment %s revision %d (%s) for user %s workspace %s',
+      data.id,
+      data.latestRevisionNumber,
+      input.deploymentId ? 'revision' : 'create',
+      this.userId,
+      this.ctx.workspaceId ?? '-',
+    );
 
     return {
       id: data.id,

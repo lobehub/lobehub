@@ -66,13 +66,17 @@ export const API_KEY_SCOPES = [
   'widget:read',
   'widget:write',
   'widget:publish',
-  /** Dashboards on the public REST API (`/api/v1/dashboards`): boards and widget layout. */
+  /**
+   * Dashboards on the public REST API (`/api/v1/dashboards`): boards and widget
+   * layout. Reading a board shows the cards on it — each widget's latest output
+   * — as the app does; editing or running those widgets stays `widget:*`.
+   */
   'dashboard:read',
   'dashboard:write',
   /**
    * Publishing an HTML artifact to a public URL (`POST /api/v1/artifacts`).
-   * Its own tier with no read twin: it puts content in front of anyone with
-   * the link.
+   * Its own REST tier with no read twin: it puts content in front of anyone
+   * with the link. The tRPC `market` namespace keeps its `agent:*` rule.
    */
   'artifact:publish',
   'mcp:read',
