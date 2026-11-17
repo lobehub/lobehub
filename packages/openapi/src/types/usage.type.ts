@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { OpenApiUsageQuota, OpenApiUsageSummary } from '@/business/server/openapiUsage';
+import type { OpenApiUsageSummary } from '@/business/server/openapiUsage';
 
 import { dateTimeSchema } from './common.type';
 
@@ -19,7 +19,7 @@ const UsageQuotaSchema = z
     used: z.number(),
     /** `used / limit`, clamped to `0..1`; `null` when `limit` is. */
     usedRatio: z.number().nullable(),
-  } satisfies ShapeOf<OpenApiUsageQuota>)
+  } satisfies ShapeOf<NonNullable<OpenApiUsageSummary['quota']>>)
   .strict();
 
 /**
