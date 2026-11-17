@@ -57,7 +57,10 @@ vi.mock('@/store/global', () => ({
 }));
 
 vi.mock('@/store/global/selectors', () => ({
-  systemStatusSelectors: { topicPageSize: () => mocks.topicPageSize },
+  systemStatusSelectors: {
+    topicPageSize: () => mocks.topicPageSize,
+    topicShowOpenedForMe: () => () => false,
+  },
 }));
 
 vi.mock('@/store/user', () => ({
@@ -65,6 +68,7 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableBetterCodingExperience: () => false },
   preferenceSelectors: { topicIncludeCompleted: () => mocks.topicIncludeCompleted },
 }));
 

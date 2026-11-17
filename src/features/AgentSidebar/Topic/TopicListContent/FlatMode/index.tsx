@@ -18,6 +18,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 import { useScrollActiveTopicIntoView } from '../../hooks/useScrollActiveTopicIntoView';
 import { useNavigateToAgentTopics } from '../../hooks/useTopicNavigation';
 import TopicItem from '../../List/Item';
+import { useNestedTopicIds } from '../../SubSession/context';
 import { useScopedSidebarTopics } from '../../useScopedTopics';
 
 const FlatMode = memo(() => {
@@ -39,7 +40,13 @@ const FlatMode = memo(() => {
     isEqual,
   );
   const scoped = useScopedSidebarTopics(topicPageSize, topicSortBy, 'flat', topicIncludeCompleted);
-  const activeTopicList = scoped.scope ? scoped.topics : agentTopicList;
+  const nestedTopicIds = useNestedTopicIds();
+  const activeTopicList = useMemo(() => {
+    if (scoped.scope) return scoped.topics;
+    // Sub-sessions draw nested under their opener's row instead.
+    if (!nestedTopicIds?.size) return agentTopicList;
+    return agentTopicList?.filter((topic) => !nestedTopicIds.has(topic.id));
+  }, [scoped.scope, scoped.topics, agentTopicList, nestedTopicIds]);
   const activeTopicId = scoped.scope ? scoped.activeTopicId : agentActiveTopicId;
   const renderedTopicIds = useMemo(
     () => activeTopicList?.map((topic) => topic.id).join(':') ?? '',

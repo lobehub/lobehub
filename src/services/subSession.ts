@@ -22,6 +22,8 @@ class SubSessionService {
 
   detach = (topicIds: string[]) => lambdaClient.subSession.detach.mutate({ topicIds });
 
+  describe = (topicId: string) => lambdaClient.subSession.describe.query({ topicId });
+
   start = (params: Parameters<SubSessionRouter['start']['mutate']>[0]) =>
     lambdaClient.subSession.start.mutate(params);
 

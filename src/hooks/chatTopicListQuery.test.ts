@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
+import {
+  MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+  MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
+} from '@/const/topic';
 
 import { deriveSidebarTopicListQuery, getSidebarTopicListParams } from './chatTopicListQuery';
 
@@ -12,8 +15,10 @@ const agentStateMock = vi.hoisted(() => ({
 const globalStateMock = vi.hoisted(() => ({
   topicOnlyMineByAgent: {} as Record<string, boolean>,
   topicPageSize: 20,
+  topicShowOpenedForMeByAgent: {} as Record<string, boolean>,
 }));
 const userStateMock = vi.hoisted(() => ({
+  betterCoding: false,
   topicGroupMode: 'byTime' as string,
   topicIncludeCompleted: false,
 }));
@@ -42,12 +47,17 @@ vi.mock('@/store/global/selectors', () => ({
     topicOnlyMine: (ownerId?: string) => (s: typeof globalStateMock) =>
       !!ownerId && !!s.topicOnlyMineByAgent[ownerId],
     topicPageSize: (s: typeof globalStateMock) => s.topicPageSize,
+    topicShowOpenedForMe: (ownerId?: string) => (s: typeof globalStateMock) =>
+      !!ownerId && !!s.topicShowOpenedForMeByAgent[ownerId],
   },
 }));
 
 vi.mock('@/store/user', () => ({ useUserStore: { getState: () => userStateMock } }));
 
 vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableBetterCodingExperience: (s: typeof userStateMock) => s.betterCoding,
+  },
   preferenceSelectors: {
     topicGroupMode: (s: typeof userStateMock) => s.topicGroupMode,
     topicIncludeCompleted: (s: typeof userStateMock) => s.topicIncludeCompleted,
@@ -194,5 +204,45 @@ describe('getSidebarTopicListParams', () => {
       isInbox: false,
       pageSize: 20,
     });
+  });
+});
+
+describe('sub-sessions opened for this agent', () => {
+  beforeEach(() => {
+    userStateMock.betterCoding = false;
+    globalStateMock.topicShowOpenedForMeByAgent = {};
+  });
+
+  it('hides them by default and lists them when the agent asks to', () => {
+    const base = {
+      includeCompleted: false,
+      isGroupSession: false,
+      onlyMine: false,
+      topicGroupMode: 'byTime' as const,
+    };
+
+    expect(deriveSidebarTopicListQuery(base).excludeTriggers).toContain('sub_session');
+    expect(deriveSidebarTopicListQuery({ ...base, showOpenedForMe: true }).excludeTriggers).toEqual(
+      MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
+    );
+    expect(MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME).not.toContain('sub_session');
+    // A group's list is not one agent's: the filter does not apply there.
+    expect(
+      deriveSidebarTopicListQuery({ ...base, isGroupSession: true, showOpenedForMe: true })
+        .excludeTriggers,
+    ).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS);
+  });
+
+  it('asks the route loader for the same rows, and only under the lab', () => {
+    globalStateMock.topicShowOpenedForMeByAgent = { 'agent-1': true };
+
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).toContain(
+      'sub_session',
+    );
+
+    userStateMock.betterCoding = true;
+    expect(getSidebarTopicListParams({ agentId: 'agent-1' })?.excludeTriggers).not.toContain(
+      'sub_session',
+    );
   });
 });

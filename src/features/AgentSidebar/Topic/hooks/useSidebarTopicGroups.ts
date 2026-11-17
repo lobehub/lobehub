@@ -10,6 +10,7 @@ import { useProjectDirectories, useProjectDirectoryStore } from '@/store/project
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
+import { useNestedTopicIds } from '../SubSession/context';
 import { useScopedSidebarTopics } from '../useScopedTopics';
 import { useAgentTopicGroupMode } from './useAgentTopicGroupMode';
 
@@ -39,6 +40,7 @@ export const useSidebarTopicGroups = () => {
   const directories = useProjectDirectories();
 
   const localDeviceIds = useLocalMachineDeviceIds();
+  const nestedTopicIds = useNestedTopicIds();
   const groupSelector = useMemo(
     () =>
       topicSelectors.groupedTopicsForSidebar(
@@ -48,8 +50,10 @@ export const useSidebarTopicGroups = () => {
         topicIncludeCompleted,
         localDeviceIds,
         needsDirectories ? directories : undefined,
+        nestedTopicIds,
       ),
     [
+      nestedTopicIds,
       topicPageSize,
       topicSortBy,
       topicGroupMode,

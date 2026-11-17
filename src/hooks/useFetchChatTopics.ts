@@ -11,7 +11,7 @@ import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
 /**
  * The one query shape a `topicDataMap` bucket is allowed to hold. The bucket is
@@ -28,12 +28,18 @@ const useChatTopicListQuery = (ownerId?: string): SidebarTopicListQuery => {
   const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const onlyMine = useTopicOnlyMine(ownerId);
   const activeGroupId = useChatStore((s) => s.activeGroupId);
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
+  const labEnabled = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+  const showOpenedForMe = useGlobalStore(
+    systemStatusSelectors.topicShowOpenedForMe(ownerId ?? activeAgentId),
+  );
   const { topicGroupMode } = useAgentTopicGroupMode();
 
   return deriveSidebarTopicListQuery({
     includeCompleted,
     isGroupSession: !!activeGroupId,
     onlyMine,
+    showOpenedForMe: labEnabled && showOpenedForMe,
     topicGroupMode,
   });
 };

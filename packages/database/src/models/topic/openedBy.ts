@@ -30,6 +30,8 @@ export interface OpenedTopicItem {
   openedBy: TopicOpenedBy;
   runStartedAt: Date | null;
   status: ChatTopicStatus | null;
+  /** The task a task-run sub-session belongs to (`metadata.taskId`). */
+  taskId: string | null;
   title: string | null;
   trigger: string | null;
   updatedAt: Date;
@@ -77,6 +79,7 @@ export const listOpenedTopics = async (
         openedBy: sql<TopicOpenedBy>`${topics.metadata} -> 'openedBy'`,
         runStartedAt,
         status: topics.status,
+        taskId: sql<string | null>`${topics.metadata} ->> 'taskId'`,
         title: topics.title,
         trigger: topics.trigger,
         updatedAt: topics.updatedAt,

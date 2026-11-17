@@ -126,6 +126,24 @@ export const readLatestSessionTranscript = async (
   });
 };
 
+/** Name the agents a move sent sub-sessions back to, for the "moved to …" notice. */
+const withAgentTitles = async <T extends { agentId: null | string }>(
+  ctx: CallerCtx,
+  rows: T[],
+): Promise<(T & { agentTitle: null | string })[]> => {
+  const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+  const ids = [...new Set(rows.map((row) => row.agentId).filter(Boolean))] as string[];
+  const titles = new Map<string, null | string>();
+  for (const id of ids) {
+    const fields = await agentModel.getAgentDisplayFields(id).catch(() => undefined);
+    titles.set(id, fields?.title ?? fields?.name ?? null);
+  }
+  return rows.map((row) => ({
+    ...row,
+    agentTitle: row.agentId ? (titles.get(row.agentId) ?? null) : null,
+  }));
+};
+
 /** Map a service refusal onto the tRPC error the caller sees. */
 const run = async <T>(fn: () => Promise<T>): Promise<T> => {
   try {
@@ -147,19 +165,29 @@ export const subSessionRouter = router({
     .use(withScopedPermission('topic:update'))
     .input(z.object({ mode: z.enum(['all', 'self']), topicId: z.string() }))
     .mutation(({ ctx, input }) =>
-      run(() =>
-        createSubSessionService(ctx).retire({
+      run(async () => {
+        const result = await createSubSessionService(ctx).retire({
           action: 'archive',
           mode: input.mode,
           topicId: input.topicId,
-        }),
-      ),
+        });
+        return { ...result, detached: await withAgentTitles(ctx, result.detached) };
+      }),
     ),
 
   detach: subSessionProcedure
     .use(withScopedPermission('topic:update'))
     .input(z.object({ topicIds: z.array(z.string()).min(1).max(100) }))
-    .mutation(({ ctx, input }) => run(() => createSubSessionService(ctx).detach(input.topicIds))),
+    .mutation(({ ctx, input }) =>
+      run(async () => {
+        const result = await createSubSessionService(ctx).detach(input.topicIds);
+        return { detached: await withAgentTitles(ctx, result.detached) };
+      }),
+    ),
+
+  describe: subSessionProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(({ ctx, input }) => run(() => createSubSessionService(ctx).describe(input.topicId))),
 
   get: subSessionProcedure
     .input(z.object({ topicId: z.string() }))
@@ -209,6 +237,7 @@ export const subSessionRouter = router({
         runStartedAt: row.runStartedAt,
         state: toSubSessionState(row.status),
         status: row.status,
+        taskId: row.taskId,
         title: row.title,
         trigger: row.trigger,
         updatedAt: row.updatedAt,
@@ -272,12 +301,13 @@ export const subSessionRouter = router({
     .use(withScopedPermission('topic:delete'))
     .input(z.object({ mode: z.enum(['all', 'self']), topicId: z.string() }))
     .mutation(({ ctx, input }) =>
-      run(() =>
-        createSubSessionService(ctx).retire({
+      run(async () => {
+        const result = await createSubSessionService(ctx).retire({
           action: 'trash',
           mode: input.mode,
           topicId: input.topicId,
-        }),
-      ),
+        });
+        return { ...result, detached: await withAgentTitles(ctx, result.detached) };
+      }),
     ),
 });

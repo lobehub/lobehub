@@ -1,7 +1,10 @@
 import type { TopicQuerySortBy } from '@lobechat/types';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
+import {
+  MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+  MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME,
+} from '@/const/topic';
 import { resolveAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/utils/topicGroupMode';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -12,7 +15,7 @@ import {
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
-import { preferenceSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode } from '@/types/topic';
 
 const EXCLUDE_STATUSES_COMPLETED = ['completed'];
@@ -43,15 +46,21 @@ export const deriveSidebarTopicListQuery = ({
   includeCompleted,
   isGroupSession,
   onlyMine,
+  showOpenedForMe,
   topicGroupMode,
 }: {
   includeCompleted: boolean;
   isGroupSession: boolean;
   onlyMine: boolean;
+  /** Also list the sub-sessions other conversations opened for this agent. */
+  showOpenedForMe?: boolean;
   topicGroupMode: TopicGroupMode;
 }): SidebarTopicListQuery => ({
   excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
-  excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+  excludeTriggers:
+    showOpenedForMe && !isGroupSession
+      ? MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME
+      : MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
   onlyMine: onlyMine || undefined,
   sortBy: !isGroupSession && topicGroupMode === 'byStatus' ? 'status' : undefined,
 });
@@ -99,6 +108,9 @@ export const getSidebarTopicListParams = (session: {
       onlyMine:
         !!getActiveWorkspaceId() &&
         systemStatusSelectors.topicOnlyMine(groupId ?? agentId)(globalState),
+      showOpenedForMe:
+        labPreferSelectors.enableBetterCodingExperience(userState) &&
+        systemStatusSelectors.topicShowOpenedForMe(agentId)(globalState),
       topicGroupMode: getTopicGroupModeForAgent(agentId),
     }),
     agentId,

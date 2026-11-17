@@ -313,6 +313,24 @@ export class SubSessionService {
     throw new SubSessionError('CONFLICT', `Topic ${topic.id} kept starting new turns; try again.`);
   }
 
+  /**
+   * What archiving or trashing `topicId` would touch: its live descendants,
+   * how many of them are running, and its direct sub-sessions (which move to
+   * the top level when only the topic itself goes).
+   */
+  async describe(topicId: string) {
+    await this.requireTopic(topicId);
+    const descendants = await this.deps.listDescendants(topicId);
+    return {
+      descendants: descendants.length,
+      direct: descendants.filter((item) => item.openedBy?.topicId === topicId).length,
+      running: descendants.filter(
+        (item) => item.status === 'running' || item.status === 'waitingForHuman',
+      ).length,
+      topicId,
+    };
+  }
+
   /** Stop the sub-session's current turn. No receipt is sent for a stopped turn. */
   async stop(topicId: string) {
     await this.requireTopic(topicId);

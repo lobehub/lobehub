@@ -1,4 +1,5 @@
 export default {
+  'filter.showOpenedForMe': 'Show sessions others opened for me',
   'reportProblem.attachments.uploadFailed':
     "Couldn't upload the attachments. Your report is still here. Try again.",
   'reportProblem.attachments.invalid': 'Choose a non-empty file with a name under 256 characters.',
@@ -332,6 +333,41 @@ export default {
   'sidebar.collapseAll': 'Collapse all groups',
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',
+  'subSession.anotherAgent': 'another agent',
+  'subSession.backToOpener': 'Back to the conversation that opened this one',
+  'subSession.collapse': 'Hide sub-sessions',
+  'subSession.detach': 'Move to top level',
+  'subSession.expand': 'Show {{count}} sub-sessions',
+  'subSession.moved.agent': '{{name}} ({{count}})',
+  'subSession.moved.separator': ', ',
+  'subSession.moved.title_one': "{{count}} sub-session moved to its agent's list",
+  'subSession.moved.title_other': "{{count}} sub-sessions moved to their agents' lists",
+  'subSession.moved.unnamedAgent': 'Agent',
+  'subSession.openInTask': 'Open in task',
+  'subSession.openedBy': "Opened by {{agent}}'s “{{title}}”",
+  'subSession.retire.archive.all_other': 'Archive all {{count}}',
+  'subSession.retire.archive.description_one':
+    '“{{title}}” has {{count}} sub-session. Archive only this one and it moves to the top level.',
+  'subSession.retire.archive.description_other':
+    '“{{title}}” has {{count}} sub-sessions. Archive only this one and they move to the top level.',
+  'subSession.retire.archive.running_one': '{{count}} is still running; archiving it too stops it.',
+  'subSession.retire.archive.running_other':
+    '{{count}} are still running; archiving them too stops them.',
+  'subSession.retire.archive.self': 'Archive only this one',
+  'subSession.retire.archive.title': 'Archive a topic with sub-sessions',
+  'subSession.retire.trash.all_other': 'Delete all {{count}}',
+  'subSession.retire.trash.description_one':
+    '“{{title}}” has {{count}} sub-session. Delete only this one and it moves to the top level.',
+  'subSession.retire.trash.description_other':
+    '“{{title}}” has {{count}} sub-sessions. Delete only this one and they move to the top level.',
+  'subSession.retire.trash.running_one': '{{count}} is still running; deleting it too stops it.',
+  'subSession.retire.trash.running_other':
+    '{{count}} are still running; deleting them too stops them.',
+  'subSession.retire.trash.self': 'Delete only this one',
+  'subSession.retire.trash.title': 'Delete a topic with sub-sessions',
+  'subSession.sectionTitle': 'Sub-sessions',
+  'subSession.untitled': 'Sub-session',
+  'subSession.untitledConversation': 'Untitled topic',
   'taskManager.agent': 'Task Agent',
   'taskManager.agentSelector.makePrivateConfirm.hint':
     'This agent is private, so the task and its subtasks become private before it is assigned. Members assigned to them are unassigned.',

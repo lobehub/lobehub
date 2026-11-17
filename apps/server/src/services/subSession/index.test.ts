@@ -298,3 +298,21 @@ describe('SubSessionService.detach', () => {
     expect(deps.detachTopics).not.toHaveBeenCalled();
   });
 });
+
+describe('SubSessionService.describe', () => {
+  it('counts what retiring the topic would touch', async () => {
+    const deps = createDeps();
+    deps.listDescendants.mockResolvedValue([
+      { id: 'a', openedBy: { topicId: 'tpc_parent' }, status: 'running' },
+      { id: 'b', openedBy: { topicId: 'tpc_parent' }, status: 'active' },
+      { id: 'c', openedBy: { topicId: 'a' }, status: 'waitingForHuman' },
+    ] as any);
+
+    expect(await new SubSessionService(deps).describe('tpc_parent')).toEqual({
+      descendants: 3,
+      direct: 2,
+      running: 2,
+      topicId: 'tpc_parent',
+    });
+  });
+});

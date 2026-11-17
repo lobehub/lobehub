@@ -45,3 +45,10 @@ export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
   TopicTrigger.SubSession,
   TopicTrigger.Webhook,
 ];
+
+/**
+ * The main sidebar's exclusions when the agent's list asks to show the
+ * sub-sessions other conversations opened for it.
+ */
+export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS_WITH_OPENED_FOR_ME: string[] =
+  MAIN_SIDEBAR_EXCLUDE_TRIGGERS.filter((trigger) => trigger !== TopicTrigger.SubSession);

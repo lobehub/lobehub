@@ -11,6 +11,8 @@ import { type ChatOperationState } from './slices/operation/initialState';
 import { initialOperationState } from './slices/operation/initialState';
 import { type ChatPortalState } from './slices/portal/initialState';
 import { initialChatPortalState } from './slices/portal/initialState';
+import { type ChatSubSessionState } from './slices/subSession/initialState';
+import { initialSubSessionState } from './slices/subSession/initialState';
 import { type ChatThreadState } from './slices/thread/initialState';
 import { initialThreadState } from './slices/thread/initialState';
 import { type ChatTopicState } from './slices/topic/initialState';
@@ -23,6 +25,7 @@ export type ChatStoreState = ChatTopicState &
   ChatAIChatState &
   ChatToolState &
   ChatThreadState &
+  ChatSubSessionState &
   ChatPortalState &
   ChatAIAgentState &
   ChatOperationState &
@@ -34,6 +37,7 @@ export const initialState: ChatStoreState = {
   ...initialTopicState,
   ...initialToolState,
   ...initialThreadState,
+  ...initialSubSessionState,
   ...initialChatPortalState,
   ...initialOperationState,
   ...initialAiAgentState,
