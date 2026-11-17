@@ -97,6 +97,7 @@ export * from './acceptanceReview';
 export * from './acceptanceReviewRound';
 export * from './agentRuntime';
 export * from './artboard';
+export * from './artboardPublish';
 export * from './artboardReadiness';
 export * from './connector';
 export * from './inboundWebhook';

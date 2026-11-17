@@ -51,8 +51,15 @@ export interface CanvasWorkPublishMetadata {
   publishedVersion: number;
 }
 
+export interface ArtboardWorkPublishMetadata {
+  deploymentId: string;
+  publishedRevision: number;
+  snapshotHash: string;
+}
+
 export interface WorkMetadata {
   agentShare?: AgentShareWorkProvenance;
+  artboardPublish?: ArtboardWorkPublishMetadata;
   canvasPublish?: CanvasWorkPublishMetadata;
 }
 
