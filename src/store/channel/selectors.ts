@@ -47,6 +47,9 @@ export const channelSelectors = {
   /** Public Channels the user can join for a search; undefined while loading. */
   joinable: (search: string) => (state: ChannelState) => state.joinableMap[search],
   list: (state: ChannelState) => state.listMap.all,
+  /** A Channel's own row in the list, available before its conversation has loaded. */
+  listed: (channelId: string) => (state: ChannelState) =>
+    state.listMap.all?.find((channel) => channel.id === channelId),
   /** A listed conversation has a reply in progress, which its row shows until it settles. */
   listHasPendingWork: (state: ChannelState) =>
     !!state.listMap.all?.some((channel) => channel.replyJobs?.some(isProgressing)),

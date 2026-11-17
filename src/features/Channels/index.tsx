@@ -44,6 +44,8 @@ function EnabledChannelPage() {
   const view = { channelId: channelId ?? '', threadId: null };
   const sync = channelActions.useFetchDetail(channelId ? view : null);
   const detail = visibleChannelDetail(useChannelStore(channelSelectors.detail(view)), sync.error);
+  // The sidebar row titles the header until the conversation loads.
+  const listed = useChannelStore(channelSelectors.listed(channelId ?? ''));
   const directAgent = detail?.channel.agentId
     ? detail.members.find((member) => member.agentId === detail.channel.agentId)
     : undefined;
@@ -80,11 +82,15 @@ function EnabledChannelPage() {
           ) : (
             <Flexbox horizontal align="center" gap={8}>
               {/* A direct conversation is titled by its Agent's name alone, like an IM chat. */}
-              {!directAgent && <Hash color={cssVar.colorTextDescription} size={16} />}
+              {!(detail ? directAgent : listed?.agentId) && (
+                <Hash color={cssVar.colorTextDescription} size={16} />
+              )}
               <Text ellipsis weight={500}>
-                {detail?.channel.title || t('title')}
+                {(detail?.channel ?? listed)?.title || t('title')}
               </Text>
-              {detail?.channel.status === 'archived' && <Tag size="small">{t('archived')}</Tag>}
+              {(detail?.channel ?? listed)?.status === 'archived' && (
+                <Tag size="small">{t('archived')}</Tag>
+              )}
             </Flexbox>
           )
         }
