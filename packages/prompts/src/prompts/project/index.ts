@@ -18,6 +18,18 @@ export interface ProjectContextTask extends TaskSummary {
   assigneeAgentId?: string | null;
 }
 
+/**
+ * The repository the conversation's working directory is a checkout of. The
+ * cloud sandbox clones it into the working directory on the run's first
+ * command, so until then nothing on disk says it is there.
+ */
+export interface ProjectContextRepository {
+  name: string;
+  /** The branch checked out; the repository's default when absent. */
+  ref?: string | null;
+  url: string;
+}
+
 export interface ProjectContextPromptInput {
   /**
    * Whether the run can message Agents in other Channels (`lobe-channel`, only injected into
@@ -44,6 +56,11 @@ export interface ProjectContextPromptInput {
     name: string;
     status: string;
   };
+  /**
+   * The repository this conversation works in, when the run's working
+   * directory is a checkout of it. Absent when the run works anywhere else.
+   */
+  repository?: ProjectContextRepository | null;
   /** Count of every open task, which may exceed `openTasks`. */
   totalOpenTasks: number;
 }
@@ -78,6 +95,7 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
     members,
     openTasks,
     project,
+    repository,
     totalOpenTasks,
   } = input;
   const isCoordinator = project.coordinatorAgentId === currentAgentId;
@@ -88,6 +106,15 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
   ];
   if (project.description?.trim()) {
     lines.push(`<description>${project.description.trim()}</description>`);
+  }
+
+  if (repository) {
+    const branch = repository.ref ? ` branch="${repository.ref}"` : '';
+    lines.push(
+      `<working_directory repository="${repository.url}"${branch}>`,
+      `  Your working directory is a checkout of ${repository.name}. Read, search and change its code there with your sandbox tools; it is cloned on your first command, so run one (for example \`ls\` or \`git status\`) instead of asking the user for the code or to switch directories.`,
+      '</working_directory>',
+    );
   }
 
   lines.push('<members>');

@@ -1,6 +1,7 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
+import { CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
@@ -748,13 +749,17 @@ export const prepareOperation = async (
   }
 
   // Page-scoped context (the viewed task or goal) and the project the run is in.
-  // Delegation rules name the task tool, so they follow its presence in the final set.
+  // Delegation rules name the task tool, so they follow its presence in the final set;
+  // the repository checkout is in the cloud sandbox, so it follows the sandbox tool.
   const [taskManagerPrompt, goalOverview, projectPrompt] = await Promise.all([
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
     buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
       channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
       coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
+      sandboxTopicId: toolsResult.enabledToolIds?.includes(CloudSandboxIdentifier)
+        ? topicId
+        : undefined,
     }),
   ]);
   if (taskManagerPrompt || goalOverview || projectPrompt) {

@@ -1,9 +1,14 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildHeteroProjectContext, buildRunProjectContextPrompt } from './projectContext';
+import {
+  buildHeteroProjectContext,
+  buildRunProjectContextPrompt,
+  resolveSandboxRepository,
+} from './projectContext';
 
 const mocks = vi.hoisted(() => ({
+  resolveTopicEnvironment: vi.fn(),
   findById: vi.fn(),
   listAgents: vi.fn(),
   listKnowledgeBases: vi.fn(),
@@ -15,6 +20,10 @@ vi.mock('@/database/models/project', () => ({
   ProjectModel: vi.fn().mockImplementation(function () {
     return mocks;
   }),
+}));
+
+vi.mock('@/server/services/sandbox/session', () => ({
+  resolveTopicEnvironment: mocks.resolveTopicEnvironment,
 }));
 
 const deps = { db: {} as never, userId: 'user-1' };
@@ -101,5 +110,63 @@ describe('buildRunProjectContextPrompt', () => {
     expect(context).toContain('Writer (agt-writer): copy');
     expect(context).not.toContain('<coordination_rules>');
     await expect(buildHeteroProjectContext(deps, undefined, 'agt-coord')).resolves.toBe(undefined);
+  });
+
+  it('names the checkout of a sandbox run so the agent reads the code from its first turn', async () => {
+    mocks.resolveTopicEnvironment.mockResolvedValue({
+      configuration: {
+        sources: [{ kind: 'git', ref: 'main', url: 'https://github.com/lobehub/lobehub' }],
+      },
+      name: 'lobehub/lobehub',
+    });
+
+    const prompt = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord', {
+      sandboxTopicId: 'tpc-1',
+    });
+
+    expect(mocks.resolveTopicEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'tpc-1', userId: 'user-1' }),
+    );
+    expect(prompt).toContain(
+      '<working_directory repository="https://github.com/lobehub/lobehub" branch="main">',
+    );
+  });
+
+  it('says nothing about a checkout when the run is not in the sandbox', async () => {
+    const prompt = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord');
+
+    expect(mocks.resolveTopicEnvironment).not.toHaveBeenCalled();
+    expect(prompt).not.toContain('<working_directory');
+  });
+});
+
+describe('resolveSandboxRepository', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('takes the first git source of the environment the topic picked', async () => {
+    mocks.resolveTopicEnvironment.mockResolvedValue({
+      configuration: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
+      name: 'a/b',
+    });
+
+    await expect(resolveSandboxRepository(deps, 'tpc-1')).resolves.toEqual({
+      name: 'a/b',
+      ref: undefined,
+      url: 'https://github.com/a/b',
+    });
+  });
+
+  it('names nothing for no environment, one without a repository, or a failed read', async () => {
+    mocks.resolveTopicEnvironment.mockResolvedValueOnce(undefined);
+    await expect(resolveSandboxRepository(deps, 'tpc-1')).resolves.toBeUndefined();
+
+    mocks.resolveTopicEnvironment.mockResolvedValueOnce({
+      configuration: { bootstrapCommand: 'pnpm i', sources: [] },
+      name: 'setup only',
+    });
+    await expect(resolveSandboxRepository(deps, 'tpc-1')).resolves.toBeUndefined();
+
+    mocks.resolveTopicEnvironment.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(resolveSandboxRepository(deps, 'tpc-1')).resolves.toBeUndefined();
   });
 });

@@ -390,55 +390,63 @@ const resolvePlacement = async ({
 };
 
 /**
- * The topic's environment as an initialization, or `undefined` when it picked
- * none, picked one the caller cannot read (deleted, or another member's
- * private one), or one that asks for nothing.
+ * The environment a topic picked, or `undefined` when it picked none or one
+ * the caller cannot read (deleted, or another member's private one). A
+ * workspace-public agent runs on its caller's session, and a private
+ * environment's variables, setup and checkout are that caller's — so a shared
+ * agent applies published environments only, the same boundary legacy
+ * instances keep.
+ *
+ * What the sandbox initializes from and what the run is told it works in, so
+ * the two never disagree. Throws on a failed read; callers degrade.
  */
-const resolveInitialization = async ({
+export const resolveTopicEnvironment = async ({
   serverDB,
   topicId,
   userId,
   workspaceId,
 }: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
-  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
-  SandboxInitialization | undefined
-> => {
-  try {
-    const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(
-      topicId,
-    );
-    const environmentId = topic?.metadata?.sandboxEnvironmentId;
-    if (!environmentId) return undefined;
+  Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>) => {
+  const topic = await new TopicModel(serverDB, userId, workspaceId ?? undefined).findById(topicId);
+  const environmentId = topic?.metadata?.sandboxEnvironmentId;
+  if (!environmentId) return undefined;
 
-    const environment = await new EnvironmentModel(
-      serverDB,
-      userId,
-      workspaceId ?? undefined,
-    ).findById(environmentId);
-    if (!environment) {
-      log('Ignoring unreadable sandboxEnvironmentId on topic %s: %s', topicId, environmentId);
+  const environment = await new EnvironmentModel(
+    serverDB,
+    userId,
+    workspaceId ?? undefined,
+  ).findById(environmentId);
+  if (!environment) {
+    log('Ignoring unreadable sandboxEnvironmentId on topic %s: %s', topicId, environmentId);
+    return undefined;
+  }
+
+  if (workspaceId && topic.agentId && environment.visibility !== 'public') {
+    const agentVisibility = await new AgentModel(serverDB, userId, workspaceId).getAgentVisibility(
+      topic.agentId,
+    );
+    if (agentVisibility === 'public') {
+      log('Not applying private environment %s for shared agent %s', environmentId, topic.agentId);
       return undefined;
     }
+  }
 
-    // The same boundary legacy instances keep: a workspace-public agent runs
-    // on its caller's session, and a private environment's variables, setup
-    // and checkout are that caller's — so a shared agent applies published
-    // environments only.
-    if (workspaceId && topic.agentId && environment.visibility !== 'public') {
-      const agentVisibility = await new AgentModel(
-        serverDB,
-        userId,
-        workspaceId,
-      ).getAgentVisibility(topic.agentId);
-      if (agentVisibility === 'public') {
-        log(
-          'Not applying private environment %s for shared agent %s',
-          environmentId,
-          topic.agentId,
-        );
-        return undefined;
-      }
-    }
+  return environment;
+};
+
+/**
+ * The topic's environment as an initialization, or `undefined` when it picked
+ * none, picked one the caller cannot read (see {@link resolveTopicEnvironment}),
+ * or one that asks for nothing.
+ */
+const resolveInitialization = async (
+  input: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
+    Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>,
+): Promise<SandboxInitialization | undefined> => {
+  const { serverDB, topicId, userId, workspaceId } = input;
+  try {
+    const environment = await resolveTopicEnvironment(input);
+    if (!environment) return undefined;
 
     const initialization = toSandboxInitialization(environment);
     if (!initialization || initialization.sources.length === 0) return initialization;

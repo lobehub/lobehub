@@ -1,8 +1,10 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ProjectContextRepository } from '@lobechat/prompts';
 import { buildProjectContextPrompt } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { ProjectModel } from '@/database/models/project';
+import { resolveTopicEnvironment } from '@/server/services/sandbox/session';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -18,6 +20,36 @@ export interface ProjectContextDeps {
 }
 
 /**
+ * The repository a cloud-sandbox run's working directory is a checkout of: the
+ * first git source of the environment the topic picked, read the way the
+ * sandbox reads it so the run is never told about a checkout it will not get.
+ * A project conversation picks its project's repository when it is created.
+ * Never throws.
+ */
+export const resolveSandboxRepository = async (
+  deps: ProjectContextDeps,
+  topicId: string,
+): Promise<ProjectContextRepository | undefined> => {
+  try {
+    const environment = await resolveTopicEnvironment({
+      serverDB: deps.db,
+      topicId,
+      userId: deps.userId,
+      workspaceId: deps.workspaceId,
+    });
+    const source = environment?.configuration?.sources?.find(
+      (item) => item.kind === 'git' && !!item.url,
+    );
+    if (!environment || !source || source.kind !== 'git') return;
+
+    return { name: environment.name, ref: source.ref, url: source.url };
+  } catch (error) {
+    log('execAgent: failed to read the repository of topic %s: %O', topicId, error);
+    return;
+  }
+};
+
+/**
  * The project context injected into every turn of a run inside a project.
  * Read live each turn — the coordinator's own systemRole only carries its
  * identity, so renames and membership changes reach it immediately. A failed
@@ -27,17 +59,29 @@ export const buildRunProjectContextPrompt = async (
   deps: ProjectContextDeps,
   projectId: string | undefined,
   agentId: string,
-  options: { channelMessaging?: boolean; coordinationRules?: boolean } = {},
+  options: {
+    channelMessaging?: boolean;
+    coordinationRules?: boolean;
+    /**
+     * The conversation, when the run works in the cloud sandbox: the
+     * repository it checks out is named, so the agent reads the code from its
+     * first turn instead of asking where it is.
+     */
+    sandboxTopicId?: string;
+  } = {},
 ): Promise<string | undefined> => {
   if (!projectId) return;
 
   try {
     const projectModel = new ProjectModel(deps.db, deps.userId, deps.workspaceId);
-    const [project, members, knowledgeBases, tasks] = await Promise.all([
+    const [project, members, knowledgeBases, tasks, repository] = await Promise.all([
       projectModel.findById(projectId),
       projectModel.listAgents(projectId),
       projectModel.listKnowledgeBases(projectId),
       projectModel.listTasks(projectId),
+      options.sandboxTopicId
+        ? resolveSandboxRepository(deps, options.sandboxTopicId)
+        : Promise.resolve(undefined),
     ]);
     if (!project) return;
     const [resolvedProject] = await projectModel.resolveCoordinatorAgents([project]);
@@ -70,6 +114,7 @@ export const buildRunProjectContextPrompt = async (
         status: task.status,
       })),
       project: resolvedProject,
+      repository,
       totalOpenTasks: openTasks.length,
     });
   } catch (error) {
