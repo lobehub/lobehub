@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
-import { TaskRestService } from '../services/task.service';
+import { TASK_LIST_DEFAULT_LIMIT, TaskRestService } from '../services/task.service';
 import type {
   CreateTaskRequest,
   RunTaskRequest,
@@ -23,7 +23,7 @@ export class TaskController extends BaseController {
     try {
       const query = this.getQuery<TaskListQuery>(c);
       const service = await this.service(c);
-      return this.success(c, await service.listTasks(query), 'Task list retrieved successfully');
+      return this.list(c, 'tasks', await service.listTasks(query), query, TASK_LIST_DEFAULT_LIMIT);
     } catch (error) {
       return this.handleError(c, error);
     }

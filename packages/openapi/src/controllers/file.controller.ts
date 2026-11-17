@@ -129,7 +129,7 @@ export class FileController extends BaseController {
 
       const result = await fileService.getFileList(query);
 
-      return this.success(c, result, 'Files retrieved successfully');
+      return this.list(c, 'files', result, query);
     } catch (error) {
       return this.handleError(c, error);
     }

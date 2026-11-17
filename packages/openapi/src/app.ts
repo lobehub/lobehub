@@ -8,10 +8,15 @@ import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { z } from 'zod';
 
+import { errorInitFromException, renderApiError } from './common/errors';
 import { routeDoc } from './common/openapi';
 import { SCALAR_CUSTOM_CSS } from './docs-theme';
 // Import user authentication middleware (supports both OIDC and API Key authentication)
 import { userAuthMiddleware } from './middleware/auth';
+import { idempotencyMiddleware, IDEMPOTENT_REPLAYED_HEADER } from './middleware/idempotency';
+import { openResponsesErrors } from './middleware/open-responses-errors';
+import { RATE_LIMIT_HEADERS, rateLimit } from './middleware/rate-limit';
+import { REQUEST_ID_HEADER, requestIdMiddleware } from './middleware/request-id';
 import { workspaceAuthMiddleware } from './middleware/workspace';
 // Import routes
 import routes from './routes';
@@ -22,23 +27,37 @@ import { dateTimeSchema } from './types/common.type';
 const app = new Hono().basePath('/api/v1');
 
 // Global middleware
-app.use('*', cors());
+app.use('*', requestIdMiddleware);
+app.use(
+  '*',
+  cors({
+    exposeHeaders: [
+      REQUEST_ID_HEADER,
+      IDEMPOTENT_REPLAYED_HEADER,
+      ...Object.values(RATE_LIMIT_HEADERS),
+    ],
+  }),
+);
 app.use('*', logger());
 app.use('*', prettyJSON());
+// OpenResponses routes answer errors in the protocol's own shape.
+app.use('/responses', openResponsesErrors);
+app.use('/responses/*', openResponsesErrors);
 app.use('*', userAuthMiddleware); // User authentication middleware
 app.use('*', workspaceAuthMiddleware);
+// Per-API-key limit (after auth, which identifies the key), then
+// `Idempotency-Key` replay — a replayed response still counts as a request.
+app.use('*', rateLimit());
+app.use('*', idempotencyMiddleware);
 
 // Error handling middleware
 app.onError((error: Error, c) => {
   console.error('Hono Error:', error);
   // Middleware-thrown HTTPExceptions (e.g. auth 401) must keep their status
-  // instead of being flattened to 500, while staying in the same ApiResponse
-  // envelope that BaseController.handleError produces for controller errors.
-  const status = error instanceof HTTPException ? error.status : 500;
-  return c.json(
-    { error: error.message, success: false, timestamp: new Date().toISOString() },
-    status,
-  );
+  // and catalogue code instead of being flattened to 500, in the same
+  // `ApiError` envelope BaseController.handleError produces.
+  if (error instanceof HTTPException) return renderApiError(c, errorInitFromException(error));
+  return renderApiError(c, { message: error.message || 'Internal Server Error', status: 500 });
 });
 
 // Health check endpoint

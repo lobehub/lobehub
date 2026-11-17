@@ -143,6 +143,111 @@ describe('generated OpenAPI document', () => {
   it('references components only, never local $defs', () => {
     expect(JSON.stringify(spec)).not.toContain('#/$defs/');
   });
+
+  it('publishes ApiError with a stable code catalogue and requestId', () => {
+    const schemas = spec.components?.schemas as Record<string, Schema>;
+    const apiError = schemas.ApiError as { properties: Record<string, Schema>; required: string[] };
+
+    expect(apiError.required).toEqual(
+      expect.arrayContaining(['code', 'error', 'message', 'requestId', 'success', 'timestamp']),
+    );
+    expect(apiError.properties.code).toEqual({ $ref: '#/components/schemas/ApiErrorCode' });
+    expect(apiError.properties.details).toBeDefined();
+    expect(schemas.ApiErrorCode.enum).toEqual(
+      expect.arrayContaining([
+        'validation_error',
+        'unauthorized',
+        'forbidden',
+        'not_found',
+        'conflict',
+        'rate_limited',
+        'workspace_mismatch',
+        'insufficient_scope',
+        'internal_error',
+        'idempotency_conflict',
+      ]),
+    );
+  });
+
+  const operations = () =>
+    Object.entries(spec.paths ?? {}).flatMap(([path, item]) =>
+      Object.entries(item as Record<string, any>)
+        .filter(([method]) => HTTP_METHODS.has(method))
+        .map(([method, op]) => ({ key: `${method.toUpperCase()} ${path}`, method, op })),
+    );
+
+  it('documents X-Request-Id on every response', () => {
+    const missing = operations().flatMap(({ key, op }) =>
+      Object.entries(op.responses as Record<string, { headers?: Schema }>)
+        .filter(([, response]) => !response.headers?.['X-Request-Id'])
+        .map(([status]) => `${key} ${status}`),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('declares Idempotency-Key on every authenticated POST and nowhere else', () => {
+    const declares = (op: any) =>
+      (op.parameters ?? []).some(
+        (parameter: Schema) => parameter.$ref === '#/components/parameters/IdempotencyKey',
+      );
+    const posts = operations().filter(({ method }) => method === 'post');
+    expect(posts.length).toBeGreaterThan(0);
+    expect(posts.filter(({ op }) => !declares(op)).map(({ key }) => key)).toEqual([]);
+    expect(
+      operations()
+        .filter(({ method, op }) => method !== 'post' && declares(op))
+        .map(({ key }) => key),
+    ).toEqual([]);
+  });
+
+  it('pairs every 429 with Retry-After and the rate-limit headers', () => {
+    const limited = operations().filter(({ op }) => op.responses['429']);
+    expect(limited.length).toBeGreaterThan(0);
+    for (const { op } of limited) {
+      expect(Object.keys(op.responses['429'].headers)).toEqual(
+        expect.arrayContaining([
+          'Retry-After',
+          'X-RateLimit-Limit',
+          'X-RateLimit-Remaining',
+          'X-RateLimit-Reset',
+        ]),
+      );
+    }
+  });
+
+  it('keeps the public health check out of rate limiting', () => {
+    const health = (spec.paths as Record<string, any>)['/api/v1/health'].get;
+    expect(health.security).toEqual([]);
+    expect(health.responses['429']).toBeUndefined();
+    expect(health.responses['200'].headers['X-RateLimit-Limit']).toBeUndefined();
+  });
+
+  it('marks the legacy page/pageSize/offset query parameters deprecated', () => {
+    const legacy = operations().flatMap(({ key, op }) =>
+      (op.parameters ?? [])
+        .filter(
+          (parameter: Schema) =>
+            parameter.in === 'query' &&
+            ['offset', 'page', 'pageSize'].includes(parameter.name as string),
+        )
+        .map((parameter: Schema) => ({
+          deprecated: parameter.deprecated,
+          key,
+          name: parameter.name,
+        })),
+    );
+    expect(legacy.length).toBeGreaterThan(0);
+    expect(legacy.filter(({ deprecated }) => !deprecated)).toEqual([]);
+  });
+
+  it('keeps the OpenResponses error shape on POST /responses', () => {
+    const op = (spec.paths as Record<string, any>)['/api/v1/responses'].post;
+    const schema = op.responses['400'].content['application/json'].schema;
+    expect(JSON.stringify(schema)).not.toContain('#/components/schemas/ApiError"');
+    expect(Object.keys(resolveRef(spec, schema).properties as Schema)).toEqual(
+      expect.arrayContaining(['error', 'requestId']),
+    );
+  });
 });
 
 describe('route-declared responses', () => {
@@ -171,8 +276,8 @@ describe('route-declared responses', () => {
     const created = (spec.paths?.['/api/v1/things'] as any).post.responses;
     const accepted = (spec.paths?.['/api/v1/things/{id}/runs'] as any).post.responses;
 
-    expect(Object.keys(created)).toEqual(['201', '401', '403', '500']);
-    expect(Object.keys(accepted)).toEqual(['202', '401', '403', '404', '409', '500']);
+    expect(Object.keys(created)).toEqual(['201', '401', '403', '429', '500']);
+    expect(Object.keys(accepted)).toEqual(['202', '401', '403', '404', '409', '429', '500']);
     expect(created['201'].content['application/json'].schema.properties.data).toMatchObject({
       properties: { id: { type: 'string' } },
       required: ['id'],

@@ -33,11 +33,7 @@ export class EvalController extends BaseController {
   async listRuns(c: Context) {
     try {
       const query = this.getQuery<EvalRunListQuery>(c);
-      return this.success(
-        c,
-        await (await this.getService(c)).listRuns(query),
-        'Eval runs retrieved',
-      );
+      return this.list(c, 'runs', await (await this.getService(c)).listRuns(query), query);
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -73,10 +69,11 @@ export class EvalController extends BaseController {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       const query = this.getQuery<EvalRunTopicListQuery>(c);
-      return this.success(
+      return this.list(
         c,
+        'topics',
         await (await this.getService(c)).getRunTopics(id, query),
-        'Eval run topics retrieved',
+        query,
       );
     } catch (error) {
       return this.handleError(c, error);
@@ -95,10 +92,10 @@ export class EvalController extends BaseController {
   async getRunResults(c: Context) {
     try {
       const { id } = this.getParams<{ id: string }>(c);
-      return this.success(
+      return this.list(
         c,
+        'results',
         await (await this.getService(c)).getRunResults(id, this.getQuery<EvalRunTopicListQuery>(c)),
-        'Eval results retrieved',
       );
     } catch (error) {
       return this.handleError(c, error);

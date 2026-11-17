@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { pageInfoShape } from '../helpers/pagination';
 import type { PUBLIC_KNOWLEDGE_BASE_FIELDS, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
@@ -193,6 +194,7 @@ export const KnowledgeBaseListItemSchema = KnowledgeBaseSchema.extend({
 
 export const KnowledgeBaseListResponseSchema = z
   .object({
+    ...pageInfoShape,
     knowledgeBases: z.array(KnowledgeBaseListItemSchema),
     total: z.number().int().min(0),
   })

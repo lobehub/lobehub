@@ -19,7 +19,7 @@ export class ModelController extends BaseController {
 
       const result = await modelService.getModels(query);
 
-      return this.success(c, result, 'Model list retrieved successfully');
+      return this.list(c, 'models', result, query);
     } catch (error) {
       return this.handleError(c, error);
     }

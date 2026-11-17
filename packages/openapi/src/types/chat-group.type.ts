@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { pageInfoShape } from '../helpers/pagination';
 import type { PublicChatGroup, PublicChatGroupMember } from '../helpers/public-fields';
 import type { IPaginationQuery } from './common.type';
 import { dateTimeSchema, PaginationQuerySchema } from './common.type';
@@ -9,6 +10,8 @@ import { dateTimeSchema, PaginationQuerySchema } from './common.type';
 export const CHAT_GROUP_MEMBER_ROLES = ['participant', 'assistant'] as const;
 
 export const ChatGroupListQuerySchema = PaginationQuerySchema.pick({
+  cursor: true,
+  limit: true,
   page: true,
   pageSize: true,
 }).extend({
@@ -100,6 +103,10 @@ export const ChatGroupSchema = z
   .meta({ id: 'ChatGroup' });
 
 export const ChatGroupListSchema = z
-  .object({ chatGroups: z.array(ChatGroupSchema), total: z.number().int().min(0) })
+  .object({
+    ...pageInfoShape,
+    chatGroups: z.array(ChatGroupSchema),
+    total: z.number().int().min(0),
+  })
   .strict()
   .meta({ id: 'ChatGroupList' });

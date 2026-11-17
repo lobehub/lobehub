@@ -44,7 +44,7 @@ export class AgentController extends BaseController {
       const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const agentsList = await agentService.queryAgents(request);
 
-      return this.success(c, agentsList, 'Agent list retrieved successfully');
+      return this.list(c, 'agents', agentsList, request);
     } catch (error) {
       return this.handleError(c, error);
     }

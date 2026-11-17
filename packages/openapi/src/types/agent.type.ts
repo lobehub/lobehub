@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { KNOWLEDGE_BASE_VISIBILITY } from '@/database/schemas';
 
+import { pageInfoShape } from '../helpers/pagination';
 import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
@@ -295,6 +296,6 @@ export const AgentDetailSchema = AgentSchema.extend({
   .meta({ id: 'AgentDetail' });
 
 export const AgentListSchema = z
-  .object({ agents: z.array(AgentSchema), total: z.number().int().min(0) })
+  .object({ ...pageInfoShape, agents: z.array(AgentSchema), total: z.number().int().min(0) })
   .strict()
   .meta({ id: 'AgentList' });

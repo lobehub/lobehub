@@ -51,7 +51,7 @@ export class MessageController extends BaseController {
       const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.getMessages(request);
 
-      return this.success(c, result, 'Message list retrieved successfully');
+      return this.list(c, 'messages', result, request);
     } catch (error) {
       return this.handleError(c, error);
     }

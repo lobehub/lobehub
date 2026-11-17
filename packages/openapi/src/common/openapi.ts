@@ -4,17 +4,7 @@ import { z } from 'zod';
 
 import { dateTimeSchema } from '../types/common.type';
 
-/**
- * The error envelope every handler answers with — `BaseController.error`,
- * `app.onError` and the shared validator all produce exactly this shape.
- */
-export const ApiErrorSchema = z
-  .object({
-    error: z.string(),
-    success: z.literal(false),
-    timestamp: dateTimeSchema,
-  })
-  .strict();
+export { ApiErrorSchema } from './errors';
 
 /** Registered as `components/schemas/ApiError` by `buildSpecDocument`. */
 export const API_ERROR_REF = '#/components/schemas/ApiError';
@@ -46,13 +36,20 @@ const ERROR_DESCRIPTIONS: Record<number, string> = {
 
 /**
  * Raised by every authenticated route regardless of its handler: the auth and
- * workspace middleware answer 401/403, and `BaseController.handleError` turns
- * any unexpected throw into a 500.
+ * workspace middleware answer 401/403, the per-API-key rate limit
+ * (`middleware/rate-limit.ts`, applied to every authenticated route) answers
+ * 429, and `BaseController.handleError` turns any unexpected throw into a 500.
  */
-const AUTHENTICATED_ERRORS = [401, 403, 500] as const;
+const AUTHENTICATED_ERRORS = [401, 403, 429, 500] as const;
 
 export const errorResponse = (status: number) => ({
   content: { 'application/json': { schema: { $ref: API_ERROR_REF } } },
+  description: ERROR_DESCRIPTIONS[status] ?? 'Error',
+});
+
+/** An error response with a route-specific body instead of the shared `ApiError`. */
+const customErrorResponse = (status: number, schema: z.ZodType) => ({
+  content: { 'application/json': { schema: resolver(schema) } },
   description: ERROR_DESCRIPTIONS[status] ?? 'Error',
 });
 
@@ -77,6 +74,8 @@ export interface RouteDocOptions extends Omit<DescribeRouteOptions, 'responses'>
   envelope?: boolean;
   /** Errors this handler can produce beyond the shared authenticated set. */
   errors?: RouteErrorStatus[];
+  /** Error body schema for routes speaking another protocol; defaults to `ApiError`. */
+  errorSchema?: z.ZodType;
   /** Public routes skip the shared authenticated errors (401/403/500). */
   public?: boolean;
   /** The success status the handler answers with. Defaults to 200. */
@@ -95,6 +94,7 @@ export interface RouteDocOptions extends Omit<DescribeRouteOptions, 'responses'>
 export const routeDoc = ({
   data,
   envelope = true,
+  errorSchema,
   errors = [],
   public: isPublic = false,
   status = 200,
@@ -104,6 +104,9 @@ export const routeDoc = ({
   const errorStatuses = new Set<number>([...(isPublic ? [] : AUTHENTICATED_ERRORS), ...errors]);
 
   return describeRoute({
+    // Public routes need no credentials, so they also skip the API-key rate
+    // limit and Idempotency-Key the spec builder adds to authenticated ones.
+    ...(isPublic ? { security: [] } : {}),
     ...rest,
     responses: {
       [status]: {
@@ -114,7 +117,15 @@ export const routeDoc = ({
         description: 'Successful response',
       },
       ...Object.fromEntries(
-        [...errorStatuses].sort().map((code) => [code, errorResponse(code)] as const),
+        [...errorStatuses]
+          .sort()
+          .map(
+            (code) =>
+              [
+                code,
+                errorSchema ? customErrorResponse(code, errorSchema) : errorResponse(code),
+              ] as const,
+          ),
       ),
     },
   });

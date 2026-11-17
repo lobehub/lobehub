@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
-import { GoalRestService } from '../services/goal.service';
+import { GOAL_LIST_DEFAULT_LIMIT, GoalRestService } from '../services/goal.service';
 import type {
   CreateGoalRequest,
   GoalIdParam,
@@ -24,7 +24,7 @@ export class GoalController extends BaseController {
     try {
       const query = this.getQuery<GoalListQuery>(c);
       const service = await this.service(c);
-      return this.success(c, await service.listGoals(query), 'Goal list retrieved successfully');
+      return this.list(c, 'goals', await service.listGoals(query), query, GOAL_LIST_DEFAULT_LIMIT);
     } catch (error) {
       return this.handleError(c, error);
     }
