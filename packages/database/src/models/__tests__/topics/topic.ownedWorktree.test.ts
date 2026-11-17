@@ -114,6 +114,27 @@ describe('ownedWorktrees claim', () => {
   });
 });
 
+describe('legacy claims survive a directory change', () => {
+  // Created before `ownedWorktrees`: only the old markers say the app made it.
+  const legacy = () =>
+    serverDB.insert(topics).values({ id: 't-legacy-move', metadata: autoCreated(), userId });
+  const moved = {
+    workingDirectoryConfig: { git: { activeWorktree: '/elsewhere' }, path: '/code/repo' },
+  };
+
+  it('is resolved before a metadata patch replaces the markers', async () => {
+    await legacy();
+    await model().updateMetadata('t-legacy-move', moved);
+    expect((await readMetadata('t-legacy-move'))?.ownedWorktrees?.map((e) => e.path)).toEqual([WT]);
+  });
+
+  it('is resolved before a metadata snapshot replaces the markers', async () => {
+    await legacy();
+    await model().update('t-legacy-move', { metadata: moved });
+    expect((await readMetadata('t-legacy-move'))?.ownedWorktrees?.map((e) => e.path)).toEqual([WT]);
+  });
+});
+
 describe('updateOwnedWorktree', () => {
   it('backfills a topic that predates the record and writes the new state', async () => {
     // Created before `ownedWorktrees` existed: only the PR B markers are there.
@@ -211,6 +232,12 @@ describe('cleanup lookups', () => {
       },
       { status: 'completed' },
     );
+    expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(2);
+  });
+
+  it('counts a live topic that picked the worktree folder itself as its directory', async () => {
+    await insert('picked-config', { workingDirectoryConfig: { path: WT } });
+    await insert('picked-legacy', { workingDirectory: WT });
     expect(await model().countLiveTopicsUsingWorktree({ excludeIds: ['owner'], path: WT })).toBe(2);
   });
 

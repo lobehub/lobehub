@@ -43,6 +43,19 @@ export const withOwnedWorktreeClaim = <T extends ChatTopicMetadata | null | unde
   metadata: T,
 ): T => (metadata ? (claimAutoCreatedWorktree(metadata) as T) : metadata);
 
+/**
+ * The record a write must carry forward from the row it replaces: the
+ * persisted `ownedWorktrees`, or — for a topic that predates it — the claim
+ * backfilled from its old markers, resolved BEFORE a new working-directory
+ * config replaces (and so erases) those markers.
+ */
+export const carriedOwnedWorktrees = (
+  existing: ChatTopicMetadata | null | undefined,
+): Pick<ChatTopicMetadata, 'ownedWorktrees'> => {
+  const owned = resolveOwnedWorktrees(existing);
+  return owned.length > 0 ? { ownedWorktrees: owned } : {};
+};
+
 /** Topics by id with their owned-worktree data, trashed ones included. */
 export const findOwnedWorktreeTopics = async (
   ctx: TopicModelContext,
@@ -146,6 +159,8 @@ export const countLiveTopicsUsingWorktree = async (
         // Recycle bin included: a trashed topic may still be running there.
         ctx.trashScope(),
         excludeIds.length > 0 ? notInArray(topics.id, excludeIds) : undefined,
+        // Every way a topic can point at the folder: its current worktree, its
+        // CLI start folder, or the folder itself picked as its directory.
         or(
           inArray(
             sql<string>`${topics.metadata} -> 'workingDirectoryConfig' -> 'git' ->> 'activeWorktree'`,
@@ -155,6 +170,8 @@ export const countLiveTopicsUsingWorktree = async (
             sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'sessionPath'`,
             variants,
           ),
+          inArray(sql<string>`${topics.metadata} -> 'workingDirectoryConfig' ->> 'path'`, variants),
+          inArray(sql<string>`${topics.metadata} ->> 'workingDirectory'`, variants),
         ),
       ),
     );

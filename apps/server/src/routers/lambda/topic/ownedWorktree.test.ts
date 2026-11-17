@@ -94,6 +94,12 @@ describe('topic.discardOwnedWorktree authorization', () => {
     expect(discard).toHaveBeenCalledWith(topicId, WT, { local: undefined });
   });
 
+  it('refuses a desktop claiming the IPC jobs of a device that is not its own', async () => {
+    await expect(
+      caller(teammateId).claimLocalWorktreeCleanups({ deviceId: 'device-not-mine' }),
+    ).rejects.toThrow(/machine itself/i);
+  });
+
   it('refuses a device the caller may not operate, even for the creator', async () => {
     const topicId = await seed('device-not-in-this-workspace');
     await expect(caller(creatorId).discardOwnedWorktree({ path: WT, topicId })).rejects.toThrow(

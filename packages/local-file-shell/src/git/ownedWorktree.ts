@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 
 import { createLogger } from '../logger';
 import { isInvalidBranchRef } from './branches';
+import { isValidOwnerToken, readOwnerMarker, writeOwnerMarker } from './ownerMarker';
 import type { GitOwnedWorktreeCleanupResult, GitOwnedWorktreeRestoreResult } from './types';
 import { parseGitWorktreeList } from './worktrees';
 
@@ -113,6 +114,43 @@ const commonGitDir = async (sourcePath: string): Promise<string> => {
 };
 
 /**
+ * Whether this cleanup may act on the worktree: a receipt must match. A
+ * worktree created before receipts existed has none; it may still be cleaned
+ * automatically (only ever when clean, its branch kept), but never discarded.
+ */
+const assertOwner = async (
+  worktreePath: string,
+  ownerToken: string | undefined,
+  discard: boolean,
+) => {
+  const marker = await readOwnerMarker(worktreePath);
+  if (marker) {
+    if (marker !== ownerToken) throw new GuardError('The worktree belongs to another conversation');
+    return;
+  }
+  if (discard)
+    throw new GuardError(
+      'The worktree has no ownership receipt; delete it by hand if it is not needed',
+    );
+};
+
+/**
+ * A detached HEAD whose commits no branch holds would lose them with the
+ * worktree. Give them a branch first (`lobehub/detached-<sha>`) and report it,
+ * so they survive and a restore checks them out again.
+ */
+const keepDetachedCommits = async (sourcePath: string, worktreePath: string) => {
+  const head = (await git(worktreePath, ['rev-parse', 'HEAD'])).trim();
+  const holders = (
+    await git(sourcePath, ['for-each-ref', '--count=1', '--contains', head, 'refs/heads'])
+  ).trim();
+  if (holders) return undefined;
+  const branch = `lobehub/detached-${head.slice(0, 12)}`;
+  await git(sourcePath, ['branch', '--force', branch, head]);
+  return branch;
+};
+
+/**
  * A linked worktree's `.git` is a FILE pointing at
  * `<common git dir>/worktrees/<name>`; anything else (a full clone, a pointer
  * into another repository) is not this repo's worktree.
@@ -190,6 +228,8 @@ export interface CleanupOwnedWorktreeParams {
   discard?: boolean;
   /** Stands in for `git worktree remove`; tests only. Device RPCs never pass it. */
   gitRemove?: (sourcePath: string, worktreePath: string) => Promise<unknown>;
+  /** The creation receipt the claiming topic holds (see `ownerMarker.ts`). */
+  ownerToken?: string;
   /** The worktree root; tests only. Device RPCs never pass it. */
   rootDir?: string;
   sourcePath: string;
@@ -204,6 +244,7 @@ const gitWorktreeRemove = (sourcePath: string, worktreePath: string) =>
 const runCleanup = async ({
   discard,
   gitRemove = gitWorktreeRemove,
+  ownerToken,
   rootDir,
   sourcePath,
   worktreePath,
@@ -226,14 +267,17 @@ const runCleanup = async ({
     const listed = await findLinkedWorktree(sourcePath, worktreePath);
     if (!listed) throw new GuardError('Not a worktree of the source repository');
     await assertGitFilePointsToSource(sourcePath, worktreePath);
+    await assertOwner(worktreePath, ownerToken, !!discard);
 
-    const branch = listed.branch;
+    let branch = listed.branch;
     if (listed.locked) return { branch, outcome: 'locked' };
 
     if (!discard) {
       const dirtyFiles = await countUncommittedFiles(worktreePath);
       if (dirtyFiles > 0) return { branch, dirtyFiles, outcome: 'dirty' };
     }
+
+    if (!branch) branch = await keepDetachedCommits(sourcePath, worktreePath);
 
     try {
       await gitRemove(sourcePath, listed.path);
@@ -285,6 +329,8 @@ const branchExists = async (sourcePath: string, branch: string): Promise<boolean
 
 export interface RestoreOwnedWorktreeParams {
   branch: string;
+  /** Written back as the worktree's creation receipt (see `ownerMarker.ts`). */
+  ownerToken?: string;
   /** The worktree root; tests only. Device RPCs never pass it. */
   rootDir?: string;
   sourcePath: string;
@@ -299,6 +345,7 @@ export interface RestoreOwnedWorktreeParams {
  */
 export const restoreOwnedWorktree = async ({
   branch,
+  ownerToken,
   rootDir,
   sourcePath,
   worktreePath,
@@ -324,6 +371,7 @@ export const restoreOwnedWorktree = async ({
     await prune(sourcePath);
     await mkdir(path.dirname(worktreePath), { recursive: true });
     await git(sourcePath, ['worktree', 'add', worktreePath, branch], 30_000);
+    if (isValidOwnerToken(ownerToken)) await writeOwnerMarker(worktreePath, ownerToken);
     return { outcome: 'restored' };
   } catch (error) {
     if (error instanceof GuardError) return { error: error.message, outcome: 'refused' };

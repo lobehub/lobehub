@@ -80,7 +80,11 @@ describe('drainLocalWorktreeCleanups', () => {
     mocks.claim.mockResolvedValue([
       {
         discard: false,
-        entry: { ...entry(), cleanup: { at: 'x', state: 'running', trigger: 'trashed' } },
+        entry: {
+          ...entry(),
+          cleanup: { at: 'x', state: 'running', trigger: 'trashed' },
+          ownerToken: 'receipt-0123456789abcdef',
+        },
         topicId: 't1',
       },
     ]);
@@ -91,6 +95,7 @@ describe('drainLocalWorktreeCleanups', () => {
     expect(mocks.claim).toHaveBeenCalledWith({ deviceId: 'dev-local' });
     expect(mocks.ipcCleanup).toHaveBeenCalledWith({
       discard: false,
+      ownerToken: 'receipt-0123456789abcdef',
       sourcePath: '/code/repo',
       worktreePath: WT,
     });

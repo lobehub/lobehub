@@ -402,6 +402,53 @@ describe('review follow-ups', () => {
       ...extra,
     });
 
+  it('presents the creation receipt to the device for cleanup and restore', async () => {
+    const receipt = 'receipt-0123456789abcdef';
+    await insert(
+      't-receipt',
+      autoCreated({
+        workingDirectoryConfig: {
+          git: { activeWorktree: WT, autoCreated: true, branch: BRANCH, ownerToken: receipt },
+          path: '/code/repo',
+          sessionPath: WT,
+        },
+      }),
+    );
+    answers({ outcome: 'removed' });
+    await service().retireTopics(['t-receipt'], 'archived');
+    expect(gateway.cleanupOwnedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerToken: receipt }),
+    );
+
+    await db.update(topics).set({ status: 'active' }).where(eq(topics.id, 't-receipt'));
+    gateway.restoreOwnedWorktree.mockResolvedValue({ outcome: 'restored' });
+    await service().restore('t-receipt', WT);
+    expect(gateway.restoreOwnedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerToken: receipt }),
+    );
+  });
+
+  it('only hands the desktop the jobs of topics the caller may act on', async () => {
+    const pending = autoCreated({
+      boundDeviceId: undefined,
+      ownedWorktrees: [
+        {
+          cleanup: { at: 'x', state: 'pending', trigger: 'archived' },
+          createdAt: 'y',
+          path: WT,
+          sourcePath: '/code/repo',
+        },
+      ],
+    });
+    await insert('t-allowed', pending);
+    await insert('t-denied', pending);
+    const claimed = await service().claimLocalCleanups(undefined, {
+      canClaim: async (row) => row.id === 't-allowed',
+    });
+    expect(claimed.map((job) => job.topicId)).toEqual(['t-allowed']);
+    expect((await entryOf('t-denied'))?.cleanup?.state).toBe('pending');
+  });
+
   it('records the branch the device reports, not a stale one from creation', async () => {
     await insert('t-renamed', autoCreated());
     answers({ branch: 'lobehub/renamed', outcome: 'removed' });

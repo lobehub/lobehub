@@ -205,6 +205,7 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async addGitWorktree(payload: {
     branch: string;
+    ownerToken?: string;
     path: string;
     startPoint?: string;
     worktreePath: string;
@@ -221,24 +222,31 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async cleanupOwnedWorktree(payload: {
     discard?: boolean;
+    ownerToken?: string;
     sourcePath: string;
     worktreePath: string;
   }): Promise<GitOwnedWorktreeCleanupResult> {
     const { cleanupOwnedWorktree } = await loadGit();
-    const { discard, sourcePath, worktreePath } = payload;
-    return cleanupOwnedWorktree({ discard: discard === true, sourcePath, worktreePath });
+    const { discard, ownerToken, sourcePath, worktreePath } = payload;
+    return cleanupOwnedWorktree({
+      discard: discard === true,
+      ownerToken,
+      sourcePath,
+      worktreePath,
+    });
   }
 
   /** Check a cleaned-up worktree out again at its path, for a restored conversation. */
   @IpcMethod()
   async restoreOwnedWorktree(payload: {
     branch: string;
+    ownerToken?: string;
     sourcePath: string;
     worktreePath: string;
   }): Promise<GitOwnedWorktreeRestoreResult> {
     const { restoreOwnedWorktree } = await loadGit();
-    const { branch, sourcePath, worktreePath } = payload;
-    return restoreOwnedWorktree({ branch, sourcePath, worktreePath });
+    const { branch, ownerToken, sourcePath, worktreePath } = payload;
+    return restoreOwnedWorktree({ branch, ownerToken, sourcePath, worktreePath });
   }
 
   @IpcMethod()

@@ -133,6 +133,9 @@ const createWorktree = async (
     return fail(t('workingDirectory.deviceOutdated'));
 
   const branch = generateWorktreeBranchName({ exclude: await listBranchNames(target) });
+  // The creation receipt: the device writes it into the worktree, and only a
+  // cleanup presenting it may later remove the folder (`ownedWorktrees`).
+  const ownerToken = crypto.randomUUID();
   const homeDir = target.deviceId
     ? undefined
     : desktopStateSelectors.userHomePath(getElectronStoreState()) || undefined;
@@ -141,6 +144,7 @@ const createWorktree = async (
     const result = await gitService.addGitWorktree({
       branch,
       deviceId: target.deviceId,
+      ownerToken,
       path: target.path,
       sourcePath: target.sourcePath,
       startPoint,
@@ -163,6 +167,8 @@ const createWorktree = async (
           activeWorktree: result.worktreePath,
           autoCreated: true,
           autoCreatedAt: new Date().toISOString(),
+          // Only what the device confirms it recorded.
+          ...(result.ownerToken === ownerToken && { ownerToken }),
           branch,
           isWorktree: true,
         },

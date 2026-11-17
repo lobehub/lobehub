@@ -90,6 +90,13 @@ export interface WorkingDirGitState {
    */
   isWorktree?: boolean;
   /**
+   * The creation receipt the device wrote into {@link activeWorktree} when the
+   * app created it (set with {@link autoCreated}, only once the device echoed
+   * it). A cleanup presents it; the device acts only when it matches, so a
+   * client-written claim on someone else's worktree path is worthless.
+   */
+  ownerToken?: string;
+  /**
    * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
    * whenever the branch changes — a stale remote ref would bind the topic to
    * another branch's PR, which is worse than having none.
@@ -131,6 +138,7 @@ export const dropStaleAutoCreated = <T extends WorkingDirGitState>(
   if (git.activeWorktree !== previousWorktree) {
     delete git.autoCreated;
     delete git.autoCreatedAt;
+    delete git.ownerToken;
   }
   return git;
 };
@@ -197,6 +205,7 @@ export const workingDirConfigSchema = z.object({
         })
         .optional(),
       isWorktree: z.boolean().optional(),
+      ownerToken: z.string().max(128).optional(),
       // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
       // unvalidated — zod strips it, so it would never survive a write.
       upstream: z

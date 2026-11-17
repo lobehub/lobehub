@@ -194,6 +194,8 @@ export async function addGitWorktree(
   params: {
     branch: string;
     deviceId: string;
+    /** Creation receipt the device writes into the worktree (app-created worktrees). */
+    ownerToken?: string;
     path: string;
     /** Fork the worktree's branch from this branch instead of HEAD. */
     startPoint?: string;
@@ -207,6 +209,7 @@ export async function addGitWorktree(
     userId,
     deviceId,
     branch,
+    ownerToken,
     path,
     startPoint,
     worktreePath,
@@ -221,7 +224,13 @@ export async function addGitWorktree(
       { deviceId, timeout, userId, workspaceId },
       {
         method: 'addGitWorktree',
-        params: { branch, path, worktreePath, ...(startPoint ? { startPoint } : {}) },
+        params: {
+          branch,
+          path,
+          worktreePath,
+          ...(ownerToken ? { ownerToken } : {}),
+          ...(startPoint ? { startPoint } : {}),
+        },
       },
     );
 
@@ -252,6 +261,8 @@ export async function cleanupOwnedWorktree(
   params: {
     deviceId: string;
     discard?: boolean;
+    /** The creation receipt the device checks before acting (see local-file-shell). */
+    ownerToken?: string;
     sourcePath: string;
     timeout?: number;
     userId: string;
@@ -263,6 +274,7 @@ export async function cleanupOwnedWorktree(
     userId,
     deviceId,
     discard,
+    ownerToken,
     sourcePath,
     worktreePath,
     workspaceId,
@@ -277,7 +289,12 @@ export async function cleanupOwnedWorktree(
       { deviceId, timeout, userId, workspaceId },
       {
         method: 'cleanupOwnedWorktree',
-        params: { discard: discard === true, sourcePath, worktreePath },
+        params: {
+          discard: discard === true,
+          ...(ownerToken && { ownerToken }),
+          sourcePath,
+          worktreePath,
+        },
       },
     );
     if (!result.success || !result.data) {
@@ -309,6 +326,7 @@ export async function restoreOwnedWorktree(
   params: {
     branch: string;
     deviceId: string;
+    ownerToken?: string;
     sourcePath: string;
     timeout?: number;
     userId: string;
@@ -320,6 +338,7 @@ export async function restoreOwnedWorktree(
     userId,
     deviceId,
     branch,
+    ownerToken,
     sourcePath,
     worktreePath,
     workspaceId,
@@ -331,7 +350,10 @@ export async function restoreOwnedWorktree(
   try {
     const result = await client.invokeRpc<OwnedWorktreeRestoreResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'restoreOwnedWorktree', params: { branch, sourcePath, worktreePath } },
+      {
+        method: 'restoreOwnedWorktree',
+        params: { branch, ...(ownerToken && { ownerToken }), sourcePath, worktreePath },
+      },
     );
     if (!result.success || !result.data) {
       log('restoreOwnedWorktree: failed for deviceId=%s — %s', deviceId, result.error);

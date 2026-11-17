@@ -36,11 +36,19 @@ describe('DeviceGateway owned-worktree RPCs', () => {
     });
 
     await expect(
-      new DeviceGateway().cleanupOwnedWorktree({ ...base, ...paths, discard: true }),
+      new DeviceGateway().cleanupOwnedWorktree({
+        ...base,
+        ...paths,
+        discard: true,
+        ownerToken: 'receipt-0123456789abcdef',
+      }),
     ).resolves.toEqual({ branch: 'lobehub/x', outcome: 'removed' });
     expect(mockClient.invokeRpc).toHaveBeenCalledWith(
       { deviceId: 'device-1', timeout: 100_000, userId: 'user-1', workspaceId: 'ws-1' },
-      { method: 'cleanupOwnedWorktree', params: { discard: true, ...paths } },
+      {
+        method: 'cleanupOwnedWorktree',
+        params: { discard: true, ownerToken: 'receipt-0123456789abcdef', ...paths },
+      },
     );
   });
 

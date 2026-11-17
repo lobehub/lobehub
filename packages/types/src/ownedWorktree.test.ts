@@ -59,6 +59,19 @@ describe('claimAutoCreatedWorktree', () => {
     expect(claimAutoCreatedWorktree(metadata, NOW)).toBe(metadata);
   });
 
+  it('carries the creation receipt into the claim', () => {
+    const claimed = claimAutoCreatedWorktree(
+      {
+        workingDirectoryConfig: {
+          git: { activeWorktree: WT, autoCreated: true, ownerToken: 'receipt-0123456789abcdef' },
+          path: '/code/repo',
+        },
+      },
+      NOW,
+    );
+    expect(claimed.ownedWorktrees?.[0].ownerToken).toBe('receipt-0123456789abcdef');
+  });
+
   it('fills a device id that arrives later', () => {
     const claimed = claimAutoCreatedWorktree(
       {

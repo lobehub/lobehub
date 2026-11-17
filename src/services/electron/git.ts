@@ -168,6 +168,7 @@ class ElectronGitService {
 
   async addGitWorktree(params: {
     branch: string;
+    ownerToken?: string;
     path: string;
     startPoint?: string;
     worktreePath: string;
@@ -177,6 +178,7 @@ class ElectronGitService {
 
   async cleanupOwnedWorktree(params: {
     discard?: boolean;
+    ownerToken?: string;
     sourcePath: string;
     worktreePath: string;
   }): Promise<GitOwnedWorktreeCleanupResult> {
@@ -185,6 +187,7 @@ class ElectronGitService {
 
   async restoreOwnedWorktree(params: {
     branch: string;
+    ownerToken?: string;
     sourcePath: string;
     worktreePath: string;
   }): Promise<GitOwnedWorktreeRestoreResult> {

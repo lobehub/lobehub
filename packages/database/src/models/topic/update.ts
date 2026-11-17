@@ -5,7 +5,7 @@ import { type TopicItem, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { recomputeTopicUsage } from '../topicUsage';
 import type { TopicModelContext } from './context';
-import { withOwnedWorktreeClaim } from './ownedWorktree';
+import { carriedOwnedWorktrees, withOwnedWorktreeClaim } from './ownedWorktree';
 import type { TopicMetadataPatch } from './types';
 
 /**
@@ -15,10 +15,22 @@ import type { TopicMetadataPatch } from './types';
  * read must not erase it. The persisted list wins; a snapshot only seeds one
  * where none exists yet.
  */
-const replaceMetadataKeepingOwnedWorktrees = (next: ChatTopicMetadata | null | undefined) => {
+const replaceMetadataKeepingOwnedWorktrees = (
+  next: ChatTopicMetadata | null | undefined,
+  existing: ChatTopicMetadata | null | undefined,
+) => {
   if (!next) return next;
-  const claimed = withOwnedWorktreeClaim(next);
+  // A legacy topic's claim lives only in the markers this snapshot replaces.
+  const claimed = withOwnedWorktreeClaim({ ...next, ...carriedOwnedWorktrees(existing) });
   return sql`${JSON.stringify(claimed)}::jsonb || case when coalesce(jsonb_exists(${topics.metadata}, 'ownedWorktrees'), false) then jsonb_build_object('ownedWorktrees', ${topics.metadata} -> 'ownedWorktrees') else '{}'::jsonb end`;
+};
+
+const readMetadata = async (ctx: TopicModelContext, id: string) => {
+  const [row] = await ctx.db
+    .select({ metadata: topics.metadata })
+    .from(topics)
+    .where(and(eq(topics.id, id), ctx.ownership()));
+  return row?.metadata;
 };
 
 export const update = async (ctx: TopicModelContext, id: string, data: Partial<TopicItem>) => {
@@ -54,7 +66,7 @@ export const update = async (ctx: TopicModelContext, id: string, data: Partial<T
    */
   const metadata =
     data.metadata !== undefined
-      ? replaceMetadataKeepingOwnedWorktrees(data.metadata)
+      ? replaceMetadataKeepingOwnedWorktrees(data.metadata, await readMetadata(ctx, id))
       : data.status === 'running'
         ? sql`case when ${topics.status} in ('running', 'waitingForHuman') then ${persistedMetadata} else jsonb_set(${persistedMetadata}, '{runStartedAt}', to_jsonb(now())) end`
         : modelChanged
@@ -180,10 +192,9 @@ export const updateMetadata = async (
       ...existing.metadata,
       ...metadata,
       ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
-      // Server-owned: a patch never replaces it (see `./ownedWorktree`).
-      ...(existing.metadata?.ownedWorktrees && {
-        ownedWorktrees: existing.metadata.ownedWorktrees,
-      }),
+      // Server-owned: a patch never replaces it (see `./ownedWorktree`), and a
+      // legacy topic's claim is resolved from its old markers first.
+      ...carriedOwnedWorktrees(existing.metadata),
     } as ChatTopicMetadata);
 
     return tx

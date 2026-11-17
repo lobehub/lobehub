@@ -387,6 +387,26 @@ describe('prepareDraftGitSend — new worktree', () => {
     expect(deviceService.countRunningTopicsInDirectory).not.toHaveBeenCalled();
   });
 
+  it('records the creation receipt only once the device echoes it back', async () => {
+    vi.mocked(gitService.addGitWorktree).mockImplementation(async ({ branch, ownerToken }) => ({
+      ownerToken,
+      success: true,
+      worktreePath: `/Users/me/.lobehub/worktrees/lobehub-0000beef/${branch.split('/').at(-1)}`,
+    }));
+    const recorded = await prepareDraftGitSend(context, { prompts: prompts(), t });
+    const sent = vi.mocked(gitService.addGitWorktree).mock.calls[0][0].ownerToken;
+    expect(sent).toMatch(/^[\w-]{16,}$/);
+    expect(recorded.ok && recorded.newTopicWorkingDirectory?.git?.ownerToken).toBe(sent);
+
+    // A device too old to write it echoes nothing: no receipt is claimed.
+    vi.mocked(gitService.addGitWorktree).mockImplementation(async ({ branch }) => ({
+      success: true,
+      worktreePath: `/Users/me/.lobehub/worktrees/lobehub-0000beef/${branch.split('/').at(-1)}`,
+    }));
+    const older = await prepareDraftGitSend(context, { prompts: prompts(), t });
+    expect(older.ok && older.newTopicWorkingDirectory?.git?.ownerToken).toBeUndefined();
+  });
+
   it('forks from HEAD without a start point when nothing else was picked', async () => {
     await prepareDraftGitSend(context, { prompts: prompts(), t });
 

@@ -360,6 +360,8 @@ export interface GitOwnedWorktreeRestoreResult {
 
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
   /** Echo of the start point the worktree's branch was cut from, when one was requested. */
   startPoint?: string;
   success: boolean;

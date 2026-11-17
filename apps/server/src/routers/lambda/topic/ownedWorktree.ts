@@ -92,6 +92,24 @@ const assertWorktreeDevice = async (ctx: OwnedWorktreeCtx, deviceId: string | un
   );
 };
 
+/**
+ * Running cleanups over IPC is the job of the machine itself: in a workspace,
+ * only its enrolling member's desktop claims a device's jobs.
+ */
+const assertOwnDevice = async (ctx: OwnedWorktreeCtx, deviceId: string | undefined) => {
+  if (!deviceId || !ctx.workspaceId) return;
+  const device = await new DeviceModel(
+    ctx.serverDB,
+    ctx.userId,
+    ctx.workspaceId,
+  ).findWorkspaceDeviceById(deviceId);
+  if (device?.userId !== ctx.userId)
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the machine itself runs its worktree cleanups.',
+    });
+};
+
 /** Destructive or settling actions belong to the topic's creator (or a workspace owner). */
 const assertTopicCreator = (ctx: OwnedWorktreeCtx, topicUserId: string) =>
   assertWorkspaceRowManageable(ctx, topicUserId, 'topic');
@@ -130,8 +148,17 @@ export const ownedWorktreeRouter = router({
   claimLocalWorktreeCleanups: ownedWorktreeProcedure
     .input(z.object({ deviceId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      await assertWorktreeDevice(ctx, input.deviceId);
-      return ctx.worktreeCleanup.claimLocalCleanups(input.deviceId);
+      await assertOwnDevice(ctx, input.deviceId);
+      return ctx.worktreeCleanup.claimLocalCleanups(input.deviceId, {
+        canClaim: async (row) => {
+          try {
+            await assertTopic(ctx, row.id);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      });
     }),
 
   /**

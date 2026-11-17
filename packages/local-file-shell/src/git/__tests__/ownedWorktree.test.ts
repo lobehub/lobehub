@@ -11,6 +11,8 @@ import {
   countUncommittedFiles,
   restoreOwnedWorktree,
 } from '../ownedWorktree';
+import { OWNER_MARKER_FILE, readOwnerMarker, writeOwnerMarker } from '../ownerMarker';
+import { addGitWorktree } from '../worktrees';
 
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -37,6 +39,8 @@ let repo: string;
 let root: string;
 let worktree: string;
 const BRANCH = 'lobehub/quiet-hill';
+/** The creation receipt the app wrote when it made the worktree. */
+const TOKEN = 'owner-token-0123456789abcdef';
 
 const addWorktree = (target: string, branch = BRANCH) =>
   git(repo, 'worktree', 'add', '-b', branch, target);
@@ -48,15 +52,19 @@ beforeEach(async () => {
   worktree = path.join(root, 'repo-1a2b3c4d', 'quiet-hill');
   await mkdir(path.dirname(worktree), { recursive: true });
   addWorktree(worktree);
+  await writeOwnerMarker(worktree, TOKEN);
 });
 
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
 });
 
-const run = (params: { discard?: boolean; worktreePath?: string } = {}) =>
+const run = (
+  params: { discard?: boolean; ownerToken?: string | null; worktreePath?: string } = {},
+) =>
   cleanupOwnedWorktree({
     discard: params.discard,
+    ownerToken: params.ownerToken === null ? undefined : (params.ownerToken ?? TOKEN),
     rootDir: root,
     sourcePath: repo,
     worktreePath: params.worktreePath ?? worktree,
@@ -136,6 +144,7 @@ describe('cleanupOwnedWorktree — clean / dirty', () => {
         gitRemove: async () => {
           throw new Error('fatal: cannot remove worktree');
         },
+        ownerToken: TOKEN,
         rootDir: root,
         sourcePath: repo,
         worktreePath: worktree,
@@ -229,6 +238,64 @@ describe('cleanupOwnedWorktree — path guard', () => {
   });
 });
 
+describe('cleanupOwnedWorktree — creation receipt', () => {
+  it('refuses a topic that claims the path without the receipt the app wrote', async () => {
+    await expect(run({ ownerToken: 'someone-else-0123456789' })).resolves.toMatchObject({
+      outcome: 'refused',
+    });
+    await expect(run({ discard: true, ownerToken: null })).resolves.toMatchObject({
+      outcome: 'refused',
+    });
+    expect(existsSync(worktree)).toBe(true);
+  });
+
+  it('cleans up a worktree from before receipts only automatically, never by discard', async () => {
+    const legacy = path.join(root, 'repo-1a2b3c4d', 'legacy');
+    addWorktree(legacy, 'lobehub/legacy');
+    await writeFile(path.join(legacy, 'scratch.txt'), 'x');
+
+    await expect(
+      run({ discard: true, ownerToken: null, worktreePath: legacy }),
+    ).resolves.toMatchObject({
+      outcome: 'refused',
+    });
+    expect(existsSync(path.join(legacy, 'scratch.txt'))).toBe(true);
+
+    await rm(path.join(legacy, 'scratch.txt'));
+    await expect(run({ ownerToken: null, worktreePath: legacy })).resolves.toMatchObject({
+      outcome: 'removed',
+    });
+  });
+
+  it('writes the receipt when the app creates the worktree', async () => {
+    const created = path.join(root, 'repo-1a2b3c4d', 'created');
+    await expect(
+      addGitWorktree({
+        branch: 'lobehub/created',
+        ownerToken: TOKEN,
+        path: repo,
+        worktreePath: created,
+      }),
+    ).resolves.toMatchObject({ ownerToken: TOKEN, success: true });
+    await expect(readOwnerMarker(created)).resolves.toBe(TOKEN);
+    // Kept in git's admin dir for the worktree, not in its working tree.
+    expect(existsSync(path.join(created, OWNER_MARKER_FILE))).toBe(false);
+    await expect(run({ worktreePath: created })).resolves.toMatchObject({ outcome: 'removed' });
+  });
+
+  it('gives detached-HEAD commits a branch before removing the worktree', async () => {
+    git(worktree, 'checkout', '--detach');
+    await writeFile(path.join(worktree, 'b.txt'), 'only on a detached HEAD\n');
+    git(worktree, 'add', 'b.txt');
+    git(worktree, 'commit', '-m', 'detached work');
+    const head = git(worktree, 'rev-parse', 'HEAD');
+
+    const result = await run();
+    expect(result).toEqual({ branch: `lobehub/detached-${head.slice(0, 12)}`, outcome: 'removed' });
+    expect(git(repo, 'rev-parse', result.branch!)).toBe(head);
+  });
+});
+
 describe('restoreOwnedWorktree', () => {
   it('checks the branch out again at the original path', async () => {
     await writeFile(path.join(worktree, 'b.txt'), 'kept on branch\n');
@@ -240,12 +307,15 @@ describe('restoreOwnedWorktree', () => {
     await expect(
       restoreOwnedWorktree({
         branch: BRANCH,
+        ownerToken: TOKEN,
         rootDir: root,
         sourcePath: repo,
         worktreePath: worktree,
       }),
     ).resolves.toEqual({ outcome: 'restored' });
     expect(git(worktree, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(BRANCH);
+    // The receipt comes back with it, so the next cleanup is still this topic's.
+    await expect(readOwnerMarker(worktree)).resolves.toBe(TOKEN);
     expect(existsSync(path.join(worktree, 'b.txt'))).toBe(true);
   });
 

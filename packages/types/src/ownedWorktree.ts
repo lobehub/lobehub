@@ -55,6 +55,13 @@ export interface OwnedWorktree {
    * desktop. Absent only for a desktop that never registered with the gateway.
    */
   deviceId?: string;
+  /**
+   * The worktree's creation receipt (`WorkingDirGitState.ownerToken`); the
+   * device cleans or restores it only for the matching token. Absent on
+   * worktrees created before receipts: those are only ever cleaned
+   * automatically (clean ones, branch kept), never discarded.
+   */
+  ownerToken?: string;
   /** Absolute path of the worktree folder on that device. */
   path: string;
   /** The repository's main checkout the worktree belongs to. */
@@ -111,6 +118,7 @@ export const claimAutoCreatedWorktree = <T extends OwnedWorktreeMetadata>(
     ...(git.branch && { branch: git.branch }),
     createdAt: git.autoCreatedAt ?? now(),
     ...(metadata.boundDeviceId && { deviceId: metadata.boundDeviceId }),
+    ...(git.ownerToken && { ownerToken: git.ownerToken }),
     path,
     sourcePath: config.path,
   };
@@ -207,6 +215,8 @@ export interface OwnedWorktreeRestoreResult {
   outcome:
     'branchMissing' | 'busy' | 'error' | 'needsLocal' | 'refused' | 'restored' | 'unreachable';
   outdated?: boolean;
+  /** With `needsLocal`: the creation receipt to write back into the re-added worktree. */
+  ownerToken?: string;
 }
 
 /** The device client predates the owned-worktree RPCs. */

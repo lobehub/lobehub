@@ -192,6 +192,7 @@ export class WorktreeCleanupService {
     const result = await this.gateway.cleanupOwnedWorktree({
       deviceId: entry.deviceId,
       discard: trigger === 'discarded',
+      ownerToken: entry.ownerToken,
       sourcePath: entry.sourcePath,
       userId: this.userId,
       workspaceId: this.workspaceId,
@@ -335,7 +336,15 @@ export class WorktreeCleanupService {
    * Claims each before handing it out; the desktop reports every result back
    * with {@link recordCleanupResult}.
    */
-  async claimLocalCleanups(deviceId: string | undefined): Promise<LocalWorktreeCleanup[]> {
+  async claimLocalCleanups(
+    deviceId: string | undefined,
+    {
+      canClaim = async () => true,
+    }: {
+      /** The caller's access to the topic; a job it may not act on is left alone. */
+      canClaim?: (row: OwnedWorktreeTopicRow) => Promise<boolean>;
+    } = {},
+  ): Promise<LocalWorktreeCleanup[]> {
     const claimed: LocalWorktreeCleanup[] = [];
     const rows = [
       ...(deviceId ? await this.topicModel.findPendingOwnedWorktreeTopics(deviceId) : []),
@@ -348,6 +357,7 @@ export class WorktreeCleanupService {
         const id = key(row.id, entry.path);
         if (seen.has(id)) continue;
         seen.add(id);
+        if (!(await canClaim(row))) continue;
         const taken = await this.takePending(row, entry);
         if (taken)
           claimed.push({
@@ -440,13 +450,15 @@ export class WorktreeCleanupService {
     let answer = result;
     if (!answer) {
       if (!entry.branch) answer = { outcome: 'branchMissing' };
-      else if (local) return { branch: entry.branch, outcome: 'needsLocal' };
+      else if (local)
+        return { branch: entry.branch, outcome: 'needsLocal', ownerToken: entry.ownerToken };
       else if (!entry.deviceId)
         return { error: 'Restore it from the desktop app', outcome: 'unreachable' };
       else
         answer = await this.gateway.restoreOwnedWorktree({
           branch: entry.branch,
           deviceId: entry.deviceId,
+          ownerToken: entry.ownerToken,
           sourcePath: entry.sourcePath,
           userId: this.userId,
           workspaceId: this.workspaceId,

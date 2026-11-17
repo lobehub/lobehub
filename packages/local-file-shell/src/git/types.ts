@@ -366,6 +366,8 @@ export interface GitOwnedWorktreeRestoreResult {
 
 export interface GitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt written into the worktree (see `ownedWorktree.ts`). */
+  ownerToken?: string;
   /** Echo of the start point the worktree's branch was cut from; see {@link GitCheckoutResult.startPoint}. */
   startPoint?: string;
   success: boolean;

@@ -332,6 +332,8 @@ export const gitRouter = router({
       z.object({
         branch: z.string(),
         deviceId: z.string(),
+        /** Creation receipt for an app-created worktree (`ownedWorktrees`). */
+        ownerToken: z.string().max(128).optional(),
         path: z.string(),
         /** The repo's main checkout, which keys the folder; `path` may be a linked worktree. */
         sourcePath: z.string().optional(),
@@ -364,6 +366,7 @@ export const gitRouter = router({
       return deviceGateway.addGitWorktree({
         branch: input.branch,
         deviceId: input.deviceId,
+        ownerToken: input.ownerToken,
         path: input.path,
         startPoint: input.startPoint,
         userId: ctx.userId,

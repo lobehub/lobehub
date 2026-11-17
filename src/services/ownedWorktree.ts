@@ -46,6 +46,7 @@ const runLocalCleanup = async (
   try {
     result = await electronGitService.cleanupOwnedWorktree({
       discard: trigger === 'discarded',
+      ownerToken: entry.ownerToken,
       sourcePath: entry.sourcePath,
       worktreePath: entry.path,
     });
@@ -164,6 +165,7 @@ export const restoreOwnedWorktree = async (
   try {
     result = await electronGitService.restoreOwnedWorktree({
       branch: answer.branch ?? entry.branch ?? '',
+      ownerToken: answer.ownerToken ?? entry.ownerToken,
       sourcePath: entry.sourcePath,
       worktreePath: entry.path,
     });
