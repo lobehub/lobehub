@@ -30,6 +30,21 @@ describe('ChannelRepository.send', () => {
     ).toEqual([]);
   });
 
+  it('counts a message as read for its sender, unread for everyone else', async () => {
+    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+    await asOwner.send(channel.id, {
+      content: 'Earlier',
+      requestKey: 'earlier',
+      routing: 'fallback',
+    });
+    await asMember.send(channel.id, { content: 'Hi', requestKey: 'hi', routing: 'fallback' });
+
+    const [forMember] = await asMember.list();
+    expect(forMember.unreadCount).toBe(0);
+    const [forOwner] = await asOwner.list();
+    expect(forOwner.unreadCount).toBe(1);
+  });
+
   it('queues a job per mentioned Agent, on behalf of the sender', async () => {
     const { asMember, channel, member } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');
