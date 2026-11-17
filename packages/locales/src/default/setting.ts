@@ -4748,10 +4748,10 @@ When I am ___, I need ___
     "GitHub isn't set up on this server, so repositories can't be listed.",
   'environments.instances.create': 'New copy',
   'environments.form.description': 'Description',
-  'environments.form.descriptionPlaceholder': 'What this environment is for',
+  'environments.form.descriptionPlaceholder': 'What this repository is for',
   'environments.form.sources': 'Source code',
   'environments.form.sourcesHint':
-    'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
+    'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the repository entry itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',
   'environments.form.refDefault': 'Repository default branch',
   'environments.form.path': 'Folder',
@@ -4881,7 +4881,7 @@ When I am ___, I need ___
   'environments.form.appliesOnBuild':
     'Applied when a copy is created. Existing copies keep the definition they were made with — a rebuild replays that one, so use a new copy to pick this up.',
   'environments.form.appliesOnInit':
-    'Takes effect the next time the environment is applied to a working directory. Folders it was already applied to keep what they have.',
+    'Takes effect the next time the repository is applied to a working directory. Folders it was already applied to keep what they have.',
   'environments.refresh': 'Refresh',
   'environments.emptyPublished': 'Nothing published to this workspace yet',
   'environments.visibility.tabs.workspace': 'Workspace',
