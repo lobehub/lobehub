@@ -392,3 +392,96 @@ describe('queued messages', () => {
     expect(service.removeQueuedMessage).toHaveBeenCalledWith('op-1', 'm1');
   });
 });
+
+/** Every endpoint, with the service method behind it and a valid body. */
+const ENDPOINTS = [
+  {
+    body: { agentId: 'agt-1', input: 'hi' },
+    method: 'POST',
+    path: '/',
+    serviceMethod: 'createRun',
+  },
+  { method: 'GET', path: '/op-1', serviceMethod: 'getRun' },
+  { method: 'GET', path: '/op-1/events', serviceMethod: 'requireRun' },
+  { method: 'POST', path: '/op-1/cancel', serviceMethod: 'cancelRun' },
+  { method: 'GET', path: '/op-1/interventions', serviceMethod: 'listInterventions' },
+  {
+    body: { action: 'approve' },
+    method: 'POST',
+    path: '/op-1/interventions/call-1',
+    serviceMethod: 'resolveIntervention',
+  },
+  {
+    body: { results: [{ callId: 'c1', output: '42' }] },
+    method: 'POST',
+    path: '/op-1/tool-results',
+    serviceMethod: 'submitToolResults',
+  },
+  {
+    body: { content: 'more' },
+    method: 'POST',
+    path: '/op-1/messages',
+    serviceMethod: 'queueMessage',
+  },
+  { method: 'GET', path: '/op-1/messages', serviceMethod: 'listQueuedMessages' },
+  { method: 'DELETE', path: '/op-1/messages/m1', serviceMethod: 'removeQueuedMessage' },
+] as const;
+
+const label = (endpoint: (typeof ENDPOINTS)[number]) => `${endpoint.method} ${endpoint.path}`;
+
+describe('every /runs endpoint', () => {
+  it.each(ENDPOINTS.map((endpoint) => [label(endpoint), endpoint] as const))(
+    '%s answers 401 without credentials',
+    async (_label, { body, method, path, serviceMethod }) => {
+      const res = await request(path, { body, method, scopes: null });
+      expect(res.status).toBe(401);
+      expect(service[serviceMethod]).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(ENDPOINTS.map((endpoint) => [label(endpoint), endpoint] as const))(
+    '%s answers 403 to a key without run scopes',
+    async (_label, { body, method, path, serviceMethod }) => {
+      const res = await request(path, {
+        body,
+        method,
+        scopes: ['agent:write', 'chat:write', 'model:invoke'],
+      });
+      expect(res.status).toBe(403);
+      expect(service[serviceMethod]).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(
+    ENDPOINTS.filter(({ path }) => path !== '/').map(
+      (endpoint) => [label(endpoint), endpoint] as const,
+    ),
+  )(
+    "%s answers 404 for another user's run, or one in another workspace",
+    async (_label, { body, method, path, serviceMethod }) => {
+      service[serviceMethod].mockRejectedValue(notFound());
+      const res = await request(path, { body, method, workspaceId: 'ws-2' });
+      expect(res.status).toBe(404);
+      expect(constructed.at(-1)).toEqual({ userId: 'user-1', workspaceId: 'ws-2' });
+    },
+  );
+
+  it.each([
+    [
+      'GET /op-1/events with an `after` that is not an event id',
+      'GET',
+      '/op-1/events?after=bogus',
+      undefined,
+    ],
+    ['POST /op-1/messages without content', 'POST', '/op-1/messages', {}],
+    [
+      'POST /op-1/tool-results with a result missing its callId',
+      'POST',
+      '/op-1/tool-results',
+      { results: [{ output: 'x' }] },
+    ],
+  ] as const)('%s answers 400', async (_label, method, path, body) => {
+    const res = await request(path, { body, method });
+    expect(res.status).toBe(400);
+  });
+});

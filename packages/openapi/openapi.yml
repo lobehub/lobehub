@@ -37193,6 +37193,14 @@ paths:
   /api/v1/runs/{id}:
     get:
       operationId: runs.get
+      description: >-
+        Status, step count, token usage and cost, the final reply of a completed
+        run, and what a waiting run waits on (`pendingInterventionCount`,
+        `pendingToolCalls`). Accepts the `operationId` returned by
+        `/im/messages` and `/tasks/{id}/runs`.
+
+
+        **API key scopes:** `run:read`.
       summary: Get a run
       tags:
         - runs
@@ -37330,7 +37338,6 @@ paths:
             minLength: 1
           required: true
         - $ref: "#/components/parameters/WorkspaceId"
-      description: "**API key scopes:** `run:read`."
   /api/v1/runs/{id}/events:
     get:
       operationId: runs.events
@@ -38365,6 +38372,12 @@ paths:
               content: Also include issues labelled `regression`.
     get:
       operationId: runs.listQueuedMessages
+      description: >-
+        Your messages queued behind the run that it has not answered yet, oldest
+        first. `delivering` ones were picked up and can no longer be withdrawn.
+
+
+        **API key scopes:** `run:read`.
       summary: List messages queued on a run
       tags:
         - runs
@@ -38517,7 +38530,6 @@ paths:
             minLength: 1
           required: true
         - $ref: "#/components/parameters/WorkspaceId"
-      description: "**API key scopes:** `run:read`."
   /api/v1/runs/{id}/messages/{messageId}:
     delete:
       operationId: runs.removeQueuedMessage

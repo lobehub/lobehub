@@ -2220,6 +2220,8 @@ export class Runs extends HeyApiClient {
     /**
      * Get a run
      *
+     * Status, step count, token usage and cost, the final reply of a completed run, and what a waiting run waits on (`pendingInterventionCount`, `pendingToolCalls`). Accepts the `operationId` returned by `/im/messages` and `/tasks/{id}/runs`.
+     *
      * **API key scopes:** `run:read`.
      */
     public get<ThrowOnError extends boolean = false>(options: Options<GetApiV1RunsByIdData, ThrowOnError>): RequestResult<GetApiV1RunsByIdResponses, GetApiV1RunsByIdErrors, ThrowOnError> {
@@ -2309,6 +2311,8 @@ export class Runs extends HeyApiClient {
     
     /**
      * List messages queued on a run
+     *
+     * Your messages queued behind the run that it has not answered yet, oldest first. `delivering` ones were picked up and can no longer be withdrawn.
      *
      * **API key scopes:** `run:read`.
      */

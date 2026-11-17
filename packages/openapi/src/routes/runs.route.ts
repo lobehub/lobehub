@@ -97,6 +97,8 @@ RunRoutes.get(
   '/:id',
   routeDoc({
     data: RunSchema,
+    description:
+      'Status, step count, token usage and cost, the final reply of a completed run, and what a waiting run waits on (`pendingInterventionCount`, `pendingToolCalls`). Accepts the `operationId` returned by `/im/messages` and `/tasks/{id}/runs`.',
     errors: [404],
     operationId: 'runs.get',
     summary: 'Get a run',
@@ -241,6 +243,8 @@ RunRoutes.get(
   '/:id/messages',
   routeDoc({
     data: RunQueuedMessageListSchema,
+    description:
+      'Your messages queued behind the run that it has not answered yet, oldest first. `delivering` ones were picked up and can no longer be withdrawn.',
     errors: [404, 503],
     operationId: 'runs.listQueuedMessages',
     summary: 'List messages queued on a run',
