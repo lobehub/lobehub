@@ -40,10 +40,7 @@ interface SandboxStorageSectionProps {
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
   const { eligible, status } = useSandboxStorageAccess(agentId);
   const scopeTopicId = useTopicId();
-  const { projectId, selection, setSelection, topicId } = useSandboxPlacement(
-    agentId,
-    scopeTopicId,
-  );
+  const { selection, setSelection, topicId } = useSandboxPlacement(agentId, scopeTopicId);
   // The temporary and persistent sandboxes are picked in the execution
   // environment menu — when this member can use it. A target the author fixed
   // leaves that menu read-only, so the choice stays in this one.
@@ -78,7 +75,6 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     <SandboxDrivePicker
       entitled={status === 'ready'}
       modeInEnvironmentMenu={modeInEnvironmentMenu}
-      projectId={projectId}
       topicId={topicId}
       value={selection}
       onChange={setSelection}

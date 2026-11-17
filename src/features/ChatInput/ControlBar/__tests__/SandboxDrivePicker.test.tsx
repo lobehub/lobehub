@@ -62,16 +62,14 @@ vi.mock('../SandboxRepositoryMenu', () => ({
     none ? <div data-testid="repository-menu">{none.active ? 'none-active' : 'none'}</div> : null,
 }));
 
-const renderPicker = (
-  value: SandboxSelection,
-  props: { modeInEnvironmentMenu?: boolean; projectId?: string } = {},
-) => render(<SandboxDrivePicker entitled value={value} onChange={vi.fn()} {...props} />);
+const renderPicker = (value: SandboxSelection, props: { modeInEnvironmentMenu?: boolean } = {}) =>
+  render(<SandboxDrivePicker entitled value={value} onChange={vi.fn()} {...props} />);
 
 // T-14161: the sandbox kind is picked in the execution-environment menu, so
 // this menu only asks what is left for that kind.
 describe('SandboxDrivePicker', () => {
   // A repository belongs to the temporary sandbox; the persistent one only
-  // asks which folder of the drive to keep — in a project too.
+  // asks which folder of the drive to keep.
   it('lists only the drive folders on the persistent sandbox', () => {
     renderPicker({ workingDirectory: 'notes' });
 
@@ -80,13 +78,6 @@ describe('SandboxDrivePicker', () => {
     expect(screen.queryByTestId('sandbox-drive-row')).toBeNull();
     expect(screen.queryByTestId('sandbox-repository-row')).toBeNull();
     expect(screen.queryByTestId('repository-menu')).toBeNull();
-  });
-
-  it('offers no repository on the persistent sandbox in a project either', () => {
-    renderPicker({ workingDirectory: 'notes' }, { projectId: 'project-1' });
-
-    expect(screen.getByTestId('drive-folders')).toBeInTheDocument();
-    expect(screen.queryByTestId('sandbox-repository-row')).toBeNull();
   });
 
   // The temporary sandbox's folder is always a fresh empty one: nothing to

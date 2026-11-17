@@ -95,8 +95,6 @@ interface SandboxDrivePickerProps {
    */
   modeInEnvironmentMenu?: boolean;
   onChange: (selection: SandboxSelection) => Promise<void>;
-  /** The project the conversation belongs to; its repositories have a checkout there. */
-  projectId?: string;
   topicId?: string;
   /** Where this conversation works today. */
   value: SandboxSelection;
@@ -128,7 +126,7 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * replaces it.
  */
 const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
-  ({ entitled, modeInEnvironmentMenu = true, onChange, projectId, topicId, value }) => {
+  ({ entitled, modeInEnvironmentMenu = true, onChange, topicId, value }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
@@ -213,14 +211,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
 
     const pickRepository = async (environment: SandboxRepositoryOption) => {
       try {
-        await onChange(
-          repositorySelection(environment, {
-            projectId,
-            published:
-              environments.find((item) => item.id === environment.id)?.visibility === 'public',
-            workspace: !!workspaceId,
-          }),
-        );
+        await onChange(repositorySelection(environment));
         void revalidatePlacement();
       } catch {
         // The topic kept its place; said rather than left looking changed.
