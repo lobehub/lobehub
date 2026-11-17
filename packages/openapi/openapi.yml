@@ -22771,6 +22771,28 @@ paths:
                   - success
                   - timestamp
                 additionalProperties: false
+              example:
+                data:
+                  failed:
+                    - error: File not found
+                      fileId: file_missing0000
+                  files:
+                    - file:
+                        createdAt: 2026-01-15T08:30:00.000Z
+                        fileType: application/pdf
+                        id: file_Lw7pD3kXa9Ue
+                        metadata: null
+                        name: architecture.pdf
+                        parentId: null
+                        size: 482133
+                        source: null
+                        updatedAt: 2026-01-15T09:12:00.000Z
+                        url: https://files.example.com/architecture.pdf
+                        visibility: private
+                  success: 1
+                  total: 2
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
           description: Successful response
           headers:
             X-Request-Id:
@@ -22877,6 +22899,10 @@ paths:
                     minLength: 1
               required:
                 - fileIds
+            example:
+              fileIds:
+                - file_Lw7pD3kXa9Ue
+                - file_missing0000
       parameters:
         - $ref: "#/components/parameters/WorkspaceId"
         - $ref: "#/components/parameters/IdempotencyKey"

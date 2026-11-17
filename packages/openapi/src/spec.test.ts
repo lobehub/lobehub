@@ -366,7 +366,12 @@ describe('generated OpenAPI document', () => {
     };
     for (const path of ['/api/v1/agents', '/api/v1/topics', '/api/v1/messages', '/api/v1/files'])
       expect(media(path, 'get').response, path).toMatchObject({ success: true });
-    for (const path of ['/api/v1/agents', '/api/v1/topics', '/api/v1/messages']) {
+    for (const path of [
+      '/api/v1/agents',
+      '/api/v1/topics',
+      '/api/v1/messages',
+      '/api/v1/files/queries',
+    ]) {
       const { request, response } = media(path, 'post');
       expect(request, path).toBeDefined();
       expect(response, path).toMatchObject({ success: true });

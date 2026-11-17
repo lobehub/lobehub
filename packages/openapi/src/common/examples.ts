@@ -180,6 +180,29 @@ export const FILE_LIST_EXAMPLE = {
   totalSize: '482133',
 };
 
+const FILE_EXAMPLE = {
+  createdAt,
+  fileType: 'application/pdf',
+  id: 'file_Lw7pD3kXa9Ue',
+  metadata: null,
+  name: 'architecture.pdf',
+  parentId: null,
+  size: 482_133,
+  source: null,
+  updatedAt,
+  url: 'https://files.example.com/architecture.pdf',
+  visibility: 'private' as const,
+};
+
+export const QUERY_FILES_EXAMPLE = { fileIds: [FILE_EXAMPLE.id, 'file_missing0000'] };
+
+export const QUERY_FILES_RESULT_EXAMPLE = {
+  failed: [{ error: 'File not found', fileId: 'file_missing0000' }],
+  files: [{ file: FILE_EXAMPLE }],
+  success: 1,
+  total: 2,
+};
+
 export const CREATE_RESPONSE_EXAMPLE = {
   input: 'Summarize the open review comments on PR #1234.',
   model: AGENT_EXAMPLE.id,

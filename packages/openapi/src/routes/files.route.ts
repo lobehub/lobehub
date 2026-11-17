@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
-import { FILE_LIST_EXAMPLE } from '../common/examples';
+import {
+  example,
+  FILE_LIST_EXAMPLE,
+  QUERY_FILES_EXAMPLE,
+  QUERY_FILES_RESULT_EXAMPLE,
+} from '../common/examples';
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { FileController } from '../controllers/file.controller';
@@ -404,6 +409,8 @@ app.post(
   routeDoc({
     operationId: 'files.query',
     data: BatchGetFilesResponseSchema,
+    requestExample: example(BatchGetFilesRequestSchema, QUERY_FILES_EXAMPLE),
+    responseExample: QUERY_FILES_RESULT_EXAMPLE,
     summary: 'Get several files',
     tags: ['files'],
   }),
