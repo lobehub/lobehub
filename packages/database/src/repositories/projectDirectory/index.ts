@@ -410,7 +410,10 @@ export class ProjectDirectoryRepository {
             await new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId).list(
               projectId,
             )
-          ).filter((directory) => directory.instanceId && directory.environmentId)
+          )
+            // Only a binding a run can start from: `resolve` refuses disabled
+            // environments and read-only directories at the next turn.
+            .filter((directory) => directory.runnable)
         : [];
       const agentIds = [
         ...new Set(selected.flatMap((topic) => (topic.agentId ? [topic.agentId] : []))),

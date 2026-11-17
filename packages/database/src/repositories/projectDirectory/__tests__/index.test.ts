@@ -872,6 +872,27 @@ describe('ProjectDirectoryRepository.associateTopics', () => {
     });
   });
 
+  it('does not bind a topic to a directory a run cannot start from', async () => {
+    const directory = await repo.bind(base);
+    await db
+      .update(projectWorkingDirectories)
+      .set({ permission: 'readOnly' })
+      .where(eq(projectWorkingDirectories.id, directory.id));
+    await db.insert(topics).values({
+      id: 'read-only',
+      agentId: 'repo-agent',
+      userId,
+      metadata: { workingDirectory: base.path },
+    });
+    const result = await repo.associateTopics(base.projectId, ['read-only']);
+    expect(result).toEqual({
+      movedTopicIds: [],
+      skippedTopics: [{ id: 'read-only', reason: 'needsDirectory' }],
+    });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'read-only'));
+    expect(topic).toMatchObject({ projectId: null, projectWorkingDirectoryId: null });
+  });
+
   it('keeps the worktree and CLI session state of a topic filed at its own location', async () => {
     const directory = await repo.bind(base);
     const workingDirectoryConfig = {
