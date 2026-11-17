@@ -4,6 +4,8 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 
+export type AgentShareDeviceAccess = 'all' | 'allowlist' | 'none';
+
 export interface AgentShareConfig {
   /**
    * Whether the creator may view visitor sessions/topics created against this
@@ -18,6 +20,29 @@ export interface AgentShareConfig {
   allowReadMemory?: boolean;
   /** Visitor trial scenarios, maintained independently of agents.openingQuestions. */
   demoCases?: AgentShareDemoCase[];
+  /**
+   * Which visitors may run on the Agent's configured execution environment
+   * (its bound or auto-selected device), mirroring an IM bot's `devicePolicy`:
+   *
+   * - `none` (default): no visitor reaches a device; device tools are dropped.
+   * - `all`: every signed-in visitor runs on the Agent's device.
+   * - `allowlist`: only visitors whose VERIFIED account email is listed in
+   *   {@link deviceAllowEmails}.
+   *
+   * The visitor never picks the device — it always follows the Agent's own
+   * execution-environment setting. Resolved per run by
+   * `resolveShareVisitorDeviceAccess`. Heterogeneous (Claude Code / Codex)
+   * agents stay unavailable to visitors under every value.
+   */
+  deviceAccess?: AgentShareDeviceAccess;
+  /**
+   * Lower-cased account emails allowed to use the device when
+   * {@link deviceAccess} is `allowlist`; ignored otherwise. Stored as emails
+   * rather than user ids so the creator can authorize someone before they sign
+   * up, and so the settings page never needs a user lookup that would reveal
+   * whether an email has a LobeHub account.
+   */
+  deviceAllowEmails?: string[];
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
   /**

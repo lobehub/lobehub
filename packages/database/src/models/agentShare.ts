@@ -45,6 +45,8 @@ const normalizeAgentShareConfig = (
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
   demoCases: config?.demoCases ?? [],
+  deviceAccess: config?.deviceAccess ?? 'none',
+  deviceAllowEmails: config?.deviceAllowEmails ?? [],
   featuredWorkIds: config?.featuredWorkIds ?? [],
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
   maxTopicsPerVisitor:

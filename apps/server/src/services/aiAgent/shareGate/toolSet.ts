@@ -17,6 +17,7 @@ import {
   SHARE_VISITOR_CHANNEL_BLOCKED_APIS,
 } from './allowlist';
 import { DATA_TOOL_ACCESS_RULES } from './dataToolRules';
+import { isShareDeviceBuiltin } from './deviceAccess';
 import { resolveEffectiveShareToolGrants } from './grants';
 import { stripSubAgentDispatchApis } from './subAgentDispatch';
 import {
@@ -85,8 +86,10 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   // they pass straight through to the owner-picker check unaffected — this
   // allowlist must never decide their fate, in either direction.
   // MCP servers only the creator's machine can reach (stdio / localhost / LAN)
-  // never survive, grant or not: dispatching one tunnels to the creator's
-  // device under the creator's identity. Decided from the manifest's runtime
+  // survive only when the share grants this visitor the device
+  // (`gate.canUseDevice`), and then still need their own tool grant:
+  // dispatching one tunnels to the creator's device under the creator's
+  // identity. Decided from the manifest's runtime
   // `mcpParams` (set for connector manifests by `buildConnectorManifests`),
   // the same field `ToolExecutionService.executeMCPTool` dispatches on — which
   // also refuses these calls for visitor runs as the unbypassable backstop.
@@ -100,7 +103,10 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   );
 
   const isAllowed = (id: string) => {
-    if (deviceOnlyMcpIds.has(id)) return false;
+    if (deviceOnlyMcpIds.has(id) && !gate.canUseDevice) return false;
+    // Device builtins are granted by `shareConfig.deviceAccess` alone — they
+    // are never picked in the tool picker, like an IM bot's device tools.
+    if (isShareDeviceBuiltin(id)) return gate.canUseDevice;
     // Only a Channel run injects this tool; its reads are narrowed below.
     if (isShareVisitorChannelTool(id)) return true;
     if (!hasShareToolGrant(grants, id)) return false;

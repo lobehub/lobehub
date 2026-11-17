@@ -71,7 +71,21 @@ tool does not ship):
   through `deviceGateway` to the creator's own registered physical
   device(s). A visitor executing arbitrary commands or driving a live
   browser session on the CREATOR's own machine is a far larger blast radius
-  than any single data store.
+  than any single data store, so they are never offered through the tool
+  picker. They are granted only by `shareConfig.deviceAccess` (`all`, or
+  `allowlist` matching the visitor's verified email), an explicit creator
+  choice resolved once per gate by `resolveShareVisitorDeviceAccess` into
+  `canUseDevice` and re-applied at dispatch. The same grant admits
+  device-only MCP servers (which still need their own tool grant). The device
+  is always the Agent's configured execution environment; a visitor never
+  picks it, and project directories stay denied. The grant covers the
+  engine's device tools (`DEVICE_TOOL_IDENTIFIERS`, so computer use too)
+  except the `lobe-remote-device` picker: with it the visitor's model could
+  list and activate the creator's other machines, so it stays default-denied
+  even under the grant. Heterogeneous agents
+  (Claude Code / Codex) stay unavailable even with the grant: their dispatch
+  path signs the gateway token for the creator and registers no visitor
+  stream owner, so `setupTurn` rejects them for every share run.
 
 - `lobe-web-onboarding`: reads and WRITES the creator's own onboarding
   `SOUL.md` document and persona.
@@ -92,11 +106,12 @@ tool does not ship):
 
 - Device-only MCP servers (stdio, or an HTTP endpoint on localhost / a
   private network): not builtin identifiers, so the allowlist above never
-  sees them, but a visitor run must still never reach them — the server can
-  only call them by tunneling to the creator's online desktop app (or, with
-  no device gateway, by spawning the binary on the server itself).
-  `applyShareGateToToolSet` drops them regardless of `toolGrants`, and
-  `ToolExecutionService.executeMCPTool` refuses the dispatch.
+  sees them — the server can only call them by tunneling to the creator's
+  online desktop app (or, with no device gateway, by spawning the binary on
+  the server itself), exactly as it would for the creator. Without the
+  share's device grant, `applyShareGateToToolSet` drops them regardless of
+  `toolGrants` and `ToolExecutionService.executeMCPTool` refuses the
+  dispatch; with it, they follow their ordinary `toolGrants` entry.
 
 ## Allowed builtins with general reach
 

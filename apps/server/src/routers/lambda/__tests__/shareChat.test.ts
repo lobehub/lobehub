@@ -413,11 +413,27 @@ describe('shareChatRouter', () => {
           agentId: share.agentId,
           shareGate: {
             agentId: share.agentId,
+            // No `deviceAccess` on this share, so the visitor gets no device.
+            canUseDevice: false,
             shareConfig: share.shareConfig,
             shareId: share.shareId,
             visitorUserId: VISITOR,
           },
         }),
+      );
+    });
+
+    it("grants the Agent's execution environment when the share opens it to all visitors", async () => {
+      mockAccessCheck.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, deviceAccess: 'all' },
+      });
+      const caller = await createCaller();
+
+      await caller.execAgent({ prompt: 'hi', shareId: 'share-1' });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ shareGate: expect.objectContaining({ canUseDevice: true }) }),
       );
     });
 
