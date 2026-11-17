@@ -42,6 +42,7 @@ function expected(): Array<
     ['closeTerminal', 'mutation', 12],
     ['copyAssetForPublish', 'mutation', 15],
     ['copyProjectFiles', 'mutation', 15],
+    ['countRunningTopicsInDirectory', 'query', 12],
     ['createDirectory', 'mutation', 12],
     ['createProjectDirectory', 'mutation', 15],
     ['createProjectFile', 'mutation', 15],

@@ -1,3 +1,6 @@
+import type { WorkingDirConfig } from '@lobechat/types';
+import { normalizeDirectoryPath } from '@lobechat/types';
+
 import type { InternalExecAgentParams } from '../types';
 import { pickSandboxPlacement } from './sandboxPlacement';
 
@@ -14,6 +17,23 @@ export interface NewTopicMetadataInput {
   topicBoundDeviceId?: string;
   webhookThread?: InternalExecAgentParams['webhookThread'];
 }
+
+/**
+ * The worktree the composer created for this topic on its first send
+ * (Better Coding Experience "New worktree"), when it was cut from the project
+ * directory the topic is born in. The project directory still names the
+ * source; the worktree is where the topic runs, so it must survive the
+ * project override below.
+ */
+const preparedProjectWorktree = (
+  supplied: WorkingDirConfig | undefined,
+  projectPath: string,
+): WorkingDirConfig | undefined =>
+  supplied?.git?.autoCreated &&
+  supplied.git.activeWorktree &&
+  normalizeDirectoryPath(supplied.path) === normalizeDirectoryPath(projectPath)
+    ? supplied
+    : undefined;
 
 /**
  * Metadata a NEW topic is written with: cronJobId, taskId, botContext, the
@@ -34,11 +54,19 @@ export const buildNewTopicMetadata = ({
   topicBoundDeviceId,
   webhookThread,
 }: NewTopicMetadataInput) => {
+  const preparedWorktree = projectDirectory
+    ? preparedProjectWorktree(
+        appContext?.initialTopicMetadata?.workingDirectoryConfig,
+        projectDirectory.path,
+      )
+    : undefined;
   const initialTopicMeta = projectDirectory
     ? {
         ...appContext?.initialTopicMetadata,
-        workingDirectory: projectDirectory.path,
-        workingDirectoryConfig: { path: projectDirectory.path },
+        workingDirectory: preparedWorktree?.git?.activeWorktree ?? projectDirectory.path,
+        workingDirectoryConfig: preparedWorktree
+          ? { ...preparedWorktree, path: projectDirectory.path }
+          : { path: projectDirectory.path },
       }
     : appContext?.initialTopicMetadata;
   // Builder conversations are owned by a builtin builder agent and get no

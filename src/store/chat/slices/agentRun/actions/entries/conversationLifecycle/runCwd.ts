@@ -1,8 +1,25 @@
 import { isDesktop } from '@lobechat/const';
-import type { ChatTopic, ConversationContext, WorkingDirConfig } from '@lobechat/types';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
+import type {
+  ChatTopic,
+  ConversationContext,
+  HeterogeneousProviderConfig,
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  WorkingDirConfig,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSessionPath } from '@lobechat/types';
 
+import {
+  resolveAgentWorkingDirectory,
+  resolveAgentWorkingDirectoryConfig,
+  resolveTargetDeviceId,
+} from '@/helpers/agentWorkingDirectory';
+import { resolveExecutionTarget, resolveToolMode } from '@/helpers/executionTarget';
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { deviceService } from '@/services/device';
 import type { PendingNewTopicDirectory } from '@/store/chat/slices/topic/initialState';
+import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
@@ -149,4 +166,125 @@ export const resolveRunCwd = async (params: {
         ? { path: metadata.workingDirectory }
         : params.agentWorkingDirectoryConfig),
   };
+};
+
+/**
+ * Where a send runs: the effective execution target, the machine it lands on,
+ * and the cwd (plus its structured config) for that machine. Moved out of
+ * `sendMessage` as one pipeline stage.
+ */
+export const resolveSendRunCwd = async ({
+  agencyConfig,
+  chatConfig,
+  currentDeviceId,
+  draftWorkingDirectory,
+  existingTopic,
+  heterogeneousProvider,
+  inheritedTopic,
+  isGatewayMode,
+  legacyAgentWorkingDirectory,
+  stagedDirectoryPath,
+  workspaceScoped,
+}: {
+  agencyConfig: LobeAgentAgencyConfig | undefined;
+  chatConfig: LobeAgentChatConfig | undefined;
+  currentDeviceId: string | undefined;
+  /**
+   * The directory the composer prepared for a topic this send creates (a
+   * worktree made just before sending). Outranks the staged project directory
+   * and any handoff source: it is where the user chose to start.
+   */
+  draftWorkingDirectory?: WorkingDirConfig;
+  existingTopic: Pick<ChatTopic, 'metadata'> | undefined;
+  heterogeneousProvider: HeterogeneousProviderConfig | undefined;
+  inheritedTopic: SourceTopicDirectory | undefined;
+  isGatewayMode: boolean;
+  legacyAgentWorkingDirectory: string | undefined;
+  /** A project's staged directory, which a blank conversation runs in. */
+  stagedDirectoryPath: string | undefined;
+  workspaceScoped: boolean | undefined;
+}) => {
+  // Resolve the cwd for every run that lands on a MACHINE — a hetero CLI
+  // (in-process `hetero` runtime) and a NATIVE agent alike, as long as the
+  // effective target routes to a device. The server can only honour a cwd the
+  // client resolved (per-user legacy slot included) if it rides along as the
+  // new topic's initial metadata, and a topic that is born unbound renders
+  // under "No directory" while every later turn re-resolves the agent-level
+  // default. Sandbox/none targets must NOT resolve one: the desktop/home
+  // fallback is a local machine path that doesn't exist in an ephemeral cloud
+  // sandbox and would pollute the topic's metadata. Plain-chat agents have no
+  // execution environment at all, so they stay unbound too.
+  const isHeteroRun = !!heterogeneousProvider;
+  const runEffectiveTarget =
+    isHeteroRun || resolveToolMode(chatConfig) !== 'chat'
+      ? resolveExecutionTarget(agencyConfig, {
+          clientExecutionAvailable: isDesktop,
+          // A web client can't run tools in-process, but its backend may still
+          // route a bound `local` target to the user's machine — where the cwd
+          // does apply.
+          deviceRoutingAvailable: isGatewayMode,
+          isHetero: isHeteroRun,
+          workspaceScoped,
+        })
+      : undefined;
+  const resolvesRunCwd =
+    runEffectiveTarget === 'local' ||
+    runEffectiveTarget === 'device' ||
+    runEffectiveTarget === 'auto';
+  // Same precedence as `useEffectiveWorkingDirectory` (and the server's
+  // `resolveDeviceWorkingDirectoryConfig`), but over the MERGED config — the
+  // agent selector reads the raw shared row internally, which could fall back
+  // to a cwd registered for another member's device.
+  const runCwdDeviceId = resolvesRunCwd
+    ? resolveTargetDeviceId(agencyConfig, currentDeviceId, { workspaceScoped })
+    : undefined;
+  // Desktop/home is the last resort for hetero CLIs ONLY: they always spawn in
+  // some directory, so an unconfigured agent still needs one. A native agent
+  // with nothing configured stays unbound instead — pinning it to `~/Desktop`
+  // would file every desktop conversation under a project the user never
+  // picked.
+  const heteroCwdContext =
+    resolvesRunCwd && isHeteroRun && isDesktop ? globalAgentContextManager.getContext() : undefined;
+  const runCwdParams = resolvesRunCwd
+    ? {
+        agencyConfig,
+        currentDeviceId,
+        deviceDefaultCwd:
+          deviceSelectors.getDeviceDefaultCwd(runCwdDeviceId)(getDeviceStoreState()),
+        fallback: heteroCwdContext?.desktopPath ?? heteroCwdContext?.homePath,
+        legacyAgentWorkingDirectory,
+        // A project's staged directory, not the agent default, is the new topic's cwd.
+        topicWorkingDirectory: stagedDirectoryPath,
+        topicWorkingDirectoryConfig: existingTopic ? undefined : draftWorkingDirectory,
+        workspaceScoped,
+      }
+    : undefined;
+  const agentWorkingDirectory = runCwdParams && resolveAgentWorkingDirectory(runCwdParams);
+  const agentWorkingDirectoryConfig =
+    runCwdParams && resolveAgentWorkingDirectoryConfig(runCwdParams);
+  // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
+  // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
+  // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
+  // sessionId consistent and never drops the conversation context. The active
+  // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
+  // record. The per-cwd session store is a LOCAL CLI trait — remote platform
+  // agents (openclaw / hermes) run through the gateway with no such
+  // constraint, so they (like non-hetero runtimes) keep the effective
+  // (worktree) path.
+  const isLocalCliHetero =
+    !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
+  const resolveWorkingDirPath = isLocalCliHetero
+    ? getWorkingDirSessionPath
+    : getWorkingDirEffectivePath;
+  const { workingDirectory, workingDirectoryConfig } = await resolveRunCwd({
+    agentWorkingDirectory,
+    agentWorkingDirectoryConfig,
+    existingTopic,
+    inheritedTopic:
+      !stagedDirectoryPath && !draftWorkingDirectory && resolvesRunCwd ? inheritedTopic : undefined,
+    resolvePath: resolveWorkingDirPath,
+    runMachine: { deviceId: runCwdDeviceId, target: runEffectiveTarget },
+  });
+
+  return { runCwdDeviceId, runEffectiveTarget, workingDirectory, workingDirectoryConfig };
 };

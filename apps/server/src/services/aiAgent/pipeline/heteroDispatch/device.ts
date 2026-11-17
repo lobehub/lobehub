@@ -1,6 +1,6 @@
 import { claudeCodeAgentEnvPicksLogin } from '@lobechat/heterogeneous-agents/quota';
 import type { ExecAgentResult } from '@lobechat/types';
-import { getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirSessionPath } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -212,11 +212,14 @@ export const dispatchToCliDevice = async (
   // The active worktree is a record the agent may already have deleted:
   // spawning in it would lose the session, or fail the run outright once the
   // directory is gone. The agent is told about it in the system context instead.
-  const deviceCwd = getWorkingDirSourcePath(deviceCwdConfig);
+  // A worktree the app created on the first send is where the session starts
+  // (`getWorkingDirSessionPath`), so it needs no description.
+  const deviceCwd = getWorkingDirSessionPath(deviceCwdConfig);
   const worktreePath = deviceCwdConfig?.git?.activeWorktree;
-  const worktreeContext = worktreePath
-    ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
-    : {};
+  const worktreeContext =
+    worktreePath && worktreePath !== deviceCwd
+      ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
+      : {};
 
   // An unbound topic has no pinned cwd yet: the directory was only
   // recorded at agent level (`workingDirByDevice`) when no topic existed.

@@ -163,4 +163,45 @@ describe('sendVoiceMessage', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(sendMessage).not.toHaveBeenCalled();
   });
+
+  // A new topic's first turn runs the composer's git step first, like a typed send.
+  it('sends into the worktree the git step prepared', async () => {
+    const newTopicWorkingDirectory = { git: { activeWorktree: '/wt/x' }, path: '/repo' };
+    const sendMessage = vi.fn(async (params: SendMessageParams) => {
+      params.onMessageAccepted?.();
+    });
+
+    await sendVoiceMessage(sendMessage, voiceFile, {
+      prepare: async () => ({ newTopicWorkingDirectory, ok: true }),
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ newTopicWorkingDirectory }));
+  });
+
+  it('sends nothing, and keeps the recording retryable, when the git step stops', async () => {
+    const sendMessage = vi.fn();
+
+    await expect(
+      sendVoiceMessage(sendMessage, voiceFile, {
+        prepare: async () => ({ ok: false }),
+        transcribe: async () => 'hello',
+      }),
+    ).rejects.toThrow();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  // A failed transcript is retried; the git step must not have run for it.
+  it('transcribes before the git step, so a failed transcript spends no branch pick', async () => {
+    const prepare = vi.fn(async () => ({ ok: true as const }));
+
+    await expect(
+      sendVoiceMessage(vi.fn(), voiceFile, {
+        prepare,
+        transcribe: async () => {
+          throw new Error('asr down');
+        },
+      }),
+    ).rejects.toThrow('asr down');
+    expect(prepare).not.toHaveBeenCalled();
+  });
 });

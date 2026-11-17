@@ -138,6 +138,13 @@ export interface WorkspaceUserPreference {
    *   nothing reads or writes this key.
    */
   topicOnlyMine?: boolean;
+  /**
+   * Directories (`<deviceId>::<path>`, see `getWorktreeModeKey`) where this
+   * member keeps the composer's "New worktree" switch on, most recent first and
+   * capped. Written only through `workspaceUserSettings.setWorktreeModeDir`,
+   * which applies the cap server-side.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export interface LobeUser {
@@ -411,6 +418,13 @@ export interface UserPreference {
   useCmdEnterToSend?: boolean;
   /** This user's own view over the workspaces they belong to. */
   workspace?: UserWorkspacePreference;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.worktreeModeDirs}.
+   * Written only through `user.setWorktreeModeDir`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals` —
+   * `updatePreference` deep-merges arrays by index, which would scramble it.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export type ReferralStatusString =

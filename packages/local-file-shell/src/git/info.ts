@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 import { createLogger } from '../logger';
+import { isInvalidBranchRef } from './branches';
 import { resolveGitDir } from './repoType';
 import type {
   DeviceGitInfo,
@@ -353,11 +354,25 @@ export const getGitWorkingTreeStatus = async (dirPath: string): Promise<GitWorki
 };
 
 /**
- * Count commits HEAD is ahead/behind its upstream. Does a best-effort `git fetch`
- * first; swallows fetch failures (offline / no creds) and computes against cached
- * refs. Returns `hasUpstream: false` when no upstream is configured.
+ * Count commits a branch is ahead/behind its upstream. Does a best-effort
+ * `git fetch` first; swallows fetch failures (offline / no creds) and computes
+ * against cached refs. Returns `hasUpstream: false` when no upstream is
+ * configured.
+ *
+ * Without `branch` this describes HEAD (`@{u}...HEAD`). With one it describes
+ * that local branch wherever HEAD is (`<branch>@{upstream}...refs/heads/<branch>`)
+ * and echoes the branch back, so a caller can tell an older device — which
+ * ignores the option and counts HEAD — from one that answered for the branch.
  */
-export const getGitAheadBehind = async (dirPath: string): Promise<GitAheadBehind> => {
+export const getGitAheadBehind = async (
+  dirPath: string,
+  options: { branch?: string } = {},
+): Promise<GitAheadBehind> => {
+  const { branch: requested } = options;
+  const echo = requested === undefined ? {} : { branch: requested };
+  const none: GitAheadBehind = { ahead: 0, behind: 0, hasUpstream: false, ...echo };
+  if (requested !== undefined && (!requested.trim() || isInvalidBranchRef(requested))) return none;
+
   try {
     await execFileAsync('git', ['fetch', '--no-tags', '--quiet', 'origin'], {
       cwd: dirPath,
@@ -369,52 +384,66 @@ export const getGitAheadBehind = async (dirPath: string): Promise<GitAheadBehind
   try {
     const { stdout: upstreamOut } = await execFileAsync(
       'git',
-      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+      [
+        'rev-parse',
+        '--abbrev-ref',
+        '--symbolic-full-name',
+        requested ? `${requested}@{upstream}` : '@{u}',
+      ],
       { cwd: dirPath, timeout: 5000 },
     );
     const upstream = upstreamOut.trim();
-    if (!upstream) return { ahead: 0, behind: 0, hasUpstream: false };
+    if (!upstream) return none;
 
     const { stdout } = await execFileAsync(
       'git',
-      ['rev-list', '--left-right', '--count', `${upstream}...HEAD`],
+      [
+        'rev-list',
+        '--left-right',
+        '--count',
+        `${upstream}...${requested ? `refs/heads/${requested}` : 'HEAD'}`,
+      ],
       { cwd: dirPath, timeout: 5000 },
     );
     const [behindStr, aheadStr] = stdout.trim().split(/\s+/);
     const behind = Number.parseInt(behindStr ?? '0', 10) || 0;
     const ahead = Number.parseInt(aheadStr ?? '0', 10) || 0;
 
-    // `git push -u origin HEAD` always targets origin/<current-branch-name>,
-    // which may differ from upstream (the branched-off-canary case).
+    // The push action targets origin/<branch-name> (`git push -u origin HEAD`,
+    // or `… origin <branch>` for a named branch), which may differ from
+    // upstream (the branched-off-canary case).
     let pushTarget: string | undefined;
     let pushTargetExists = false;
-    try {
-      const { stdout: branchOut } = await execFileAsync(
-        'git',
-        ['symbolic-ref', '--short', 'HEAD'],
-        { cwd: dirPath, timeout: 5000 },
-      );
-      const branch = branchOut.trim();
-      if (branch) {
-        pushTarget = `origin/${branch}`;
-        try {
-          await execFileAsync(
-            'git',
-            ['rev-parse', '--verify', '--quiet', `refs/remotes/${pushTarget}`],
-            { cwd: dirPath, timeout: 5000 },
-          );
-          pushTargetExists = true;
-        } catch {
-          pushTargetExists = false;
-        }
+    let branch = requested;
+    if (!branch) {
+      try {
+        const { stdout: branchOut } = await execFileAsync(
+          'git',
+          ['symbolic-ref', '--short', 'HEAD'],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        branch = branchOut.trim() || undefined;
+      } catch {
+        // detached HEAD — leave pushTarget undefined
       }
-    } catch {
-      // detached HEAD — leave pushTarget undefined
+    }
+    if (branch) {
+      pushTarget = `origin/${branch}`;
+      try {
+        await execFileAsync(
+          'git',
+          ['rev-parse', '--verify', '--quiet', `refs/remotes/${pushTarget}`],
+          { cwd: dirPath, timeout: 5000 },
+        );
+        pushTargetExists = true;
+      } catch {
+        pushTargetExists = false;
+      }
     }
 
-    return { ahead, behind, hasUpstream: true, pushTarget, pushTargetExists, upstream };
+    return { ahead, behind, hasUpstream: true, pushTarget, pushTargetExists, upstream, ...echo };
   } catch {
-    return { ahead: 0, behind: 0, hasUpstream: false };
+    return none;
   }
 };
 

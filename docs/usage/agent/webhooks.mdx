@@ -41,13 +41,13 @@ curl -X POST 'https://your-lobehub/api/webhooks/inbound/<id>' \
 
 A successful call returns `202 {"id": "...", "status": "accepted"}` right away; the agent runs in the background. Other answers:
 
-| Status | Meaning                                                     |
-| ------ | ----------------------------------------------------------- |
-| `401`  | The key is missing or wrong, or was replaced by a new one.  |
-| `409`  | The webhook is paused.                                      |
-| `410`  | The webhook was deleted.                                    |
-| `413`  | The body is larger than 256 KB.                             |
-| `415`  | File uploads (`multipart/form-data`) are not supported.     |
+| Status | Meaning                                                                 |
+| ------ | ----------------------------------------------------------------------- |
+| `401`  | The key is missing or wrong, or was replaced by a new one.              |
+| `409`  | The webhook is paused.                                                  |
+| `410`  | The webhook was deleted.                                                |
+| `413`  | The body is larger than 256 KB.                                         |
+| `415`  | File uploads (`multipart/form-data`) are not supported.                 |
 | `429`  | Too many calls this minute in the workspace; retry after `Retry-After`. |
 
 ## Follow what happened

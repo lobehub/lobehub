@@ -10,6 +10,7 @@ import type {
   UserSettings,
   WidgetDryRunGrant,
 } from '@lobechat/types';
+import { applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
@@ -573,6 +574,17 @@ export class UserModel {
         next: next === current ? prev : { ...prev, islandDismissals: next },
         result: next,
       };
+    })) ?? [];
+
+  /**
+   * Personal-mode "New worktree" switch for one directory; returns the stored
+   * list. Same row lock as every other preference writer, and the cap is
+   * applied here (see `applyWorktreeModeDir`).
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    (await this.mutatePreference((prev) => {
+      const worktreeModeDirs = applyWorktreeModeDir(prev.worktreeModeDirs, key, enabled);
+      return { next: { ...prev, worktreeModeDirs }, result: worktreeModeDirs };
     })) ?? [];
 
   /**

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { WORKTREE_BRANCH_PREFIX } from '@lobechat/const';
 import { deriveWorktreePath } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -91,5 +92,33 @@ describe('device.addGitWorktree', () => {
     });
 
     expect(mocks.addGitWorktree.mock.calls[0][0].worktreePath).toBe('/code/lobehub-feat-x');
+  });
+
+  it('forwards the start point to the device', async () => {
+    await caller.addGitWorktree({
+      branch: 'feat/x',
+      deviceId: 'device',
+      path: '/code/lobehub',
+      startPoint: 'canary',
+    });
+
+    expect(mocks.addGitWorktree.mock.calls[0][0]).toMatchObject({ startPoint: 'canary' });
+  });
+
+  // The flag only picks between two server-derived folders: the namespace that
+  // is dropped is the server's constant, never a client string.
+  it('drops the app branch namespace from the folder only when asked', async () => {
+    const branch = `${WORKTREE_BRANCH_PREFIX}/202611170300-quiet-hill`;
+    await caller.addGitWorktree({
+      branch,
+      deviceId: 'device',
+      path: '/code/lobehub',
+      stripBranchPrefix: true,
+    });
+    await caller.addGitWorktree({ branch, deviceId: 'device', path: '/code/lobehub' });
+
+    const [stripped, plain] = mocks.addGitWorktree.mock.calls.map((call) => call[0].worktreePath);
+    expect(stripped).toMatch(/\/lobehub-[\da-f]{8}\/202611170300-quiet-hill$/);
+    expect(plain).toBe(deriveWorktreePath('/code/lobehub', branch, { homeDir: '/Users/me' }));
   });
 });

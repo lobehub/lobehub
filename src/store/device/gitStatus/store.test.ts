@@ -391,4 +391,30 @@ describe('git status replicas', () => {
 
     await waitFor(() => expect(result.current.data).toMatchObject({ ahead: 3 }));
   });
+
+  // The composer counts the branch picked for a new topic, which is not checked
+  // out: its row must never paint HEAD's counts, nor HEAD's its.
+  it('keys a named-branch ahead/behind apart from HEAD and asks the device for that branch', async () => {
+    vi.mocked(gitService.getGitAheadBehind).mockImplementation(async (params: any) =>
+      params.branch
+        ? ({ ahead: 0, behind: 4, branch: params.branch, hasUpstream: true } as any)
+        : ({ ahead: 1, behind: 0, hasUpstream: true } as any),
+    );
+    const { result } = renderHook(
+      () => ({
+        head: useFetchGitAheadBehind('device-1', '/repo'),
+        named: useFetchGitAheadBehind('device-1', '/repo', 'feat'),
+      }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.named.data).toMatchObject({ behind: 4 }));
+    await waitFor(() => expect(result.current.head.data).toMatchObject({ ahead: 1 }));
+    expect(gitService.getGitAheadBehind).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'feat', deviceId: 'device-1', path: '/repo' }),
+    );
+    expect(gitStatusKey({ branch: 'feat', deviceId: 'device-1', path: '/repo' })).not.toBe(
+      gitStatusKey({ deviceId: 'device-1', path: '/repo' }),
+    );
+  });
 });

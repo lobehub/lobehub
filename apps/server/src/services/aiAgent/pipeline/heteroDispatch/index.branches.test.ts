@@ -708,6 +708,38 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
     );
   });
 
+  it('spawns in a worktree the app created on the first send, without describing it', async () => {
+    // Fixed before the first turn, so the CLI session starts — and stays — there.
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/wt/quiet-hill', autoCreated: true, branch: 'lobehub/quiet-hill' },
+      path: '/repo',
+      repoType: 'github' as const,
+      sessionPath: '/wt/quiet-hill',
+    };
+    const { deps, topicModel } = createDeps();
+    topicModel.findById.mockResolvedValue({
+      metadata: {
+        boundDeviceId: 'dev-1',
+        workingDirectory: '/wt/quiet-hill',
+        workingDirectoryConfig,
+      },
+    });
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(dispatched.cwd).toBe('/wt/quiet-hill');
+    expect(dispatched.systemContext ?? '').not.toContain('<active_worktree>');
+  });
+
   it('keeps a timed-out dispatch alive and settles it later as a device timeout', async () => {
     // Whether the run started is unknowable after a timeout: the device may
     // have received it before the ack was lost, and its CLI may already be

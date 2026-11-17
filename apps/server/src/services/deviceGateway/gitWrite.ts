@@ -29,19 +29,33 @@ export async function checkoutGitBranch(
     create?: boolean;
     deviceId: string;
     path: string;
+    /** Cut the new branch from this branch instead of HEAD (needs `create`). */
+    startPoint?: string;
     timeout?: number;
     userId: string;
     workspaceId?: string;
   },
 ): Promise<DeviceGitCheckoutResult> {
-  const { userId, deviceId, branch, create, path, timeout = 30_000, workspaceId } = params;
+  const {
+    userId,
+    deviceId,
+    branch,
+    create,
+    path,
+    startPoint,
+    timeout = 30_000,
+    workspaceId,
+  } = params;
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
     const result = await client.invokeRpc<DeviceGitCheckoutResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'checkoutGitBranch', params: { branch, create, path } },
+      {
+        method: 'checkoutGitBranch',
+        params: { branch, create, path, ...(startPoint ? { startPoint } : {}) },
+      },
     );
 
     if (!result.success || !result.data) {
@@ -178,20 +192,34 @@ export async function addGitWorktree(
     branch: string;
     deviceId: string;
     path: string;
+    /** Fork the worktree's branch from this branch instead of HEAD. */
+    startPoint?: string;
     timeout?: number;
     userId: string;
     workspaceId?: string;
     worktreePath: string;
   },
 ): Promise<DeviceGitAddWorktreeResult> {
-  const { userId, deviceId, branch, path, worktreePath, workspaceId, timeout = 30_000 } = params;
+  const {
+    userId,
+    deviceId,
+    branch,
+    path,
+    startPoint,
+    worktreePath,
+    workspaceId,
+    timeout = 30_000,
+  } = params;
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
     const result = await client.invokeRpc<DeviceGitAddWorktreeResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'addGitWorktree', params: { branch, path, worktreePath } },
+      {
+        method: 'addGitWorktree',
+        params: { branch, path, worktreePath, ...(startPoint ? { startPoint } : {}) },
+      },
     );
 
     if (!result.success || !result.data) {
@@ -213,6 +241,8 @@ export async function addGitWorktree(
 export async function pullGitBranch(
   getClient: DeviceClientGetter,
   params: {
+    /** Sync this branch instead of HEAD. */
+    branch?: string;
     deviceId: string;
     path: string;
     timeout?: number;
@@ -220,14 +250,14 @@ export async function pullGitBranch(
     workspaceId?: string;
   },
 ): Promise<DeviceGitSyncResult> {
-  const { userId, deviceId, path, timeout = 65_000, workspaceId } = params;
+  const { userId, deviceId, branch, path, timeout = 65_000, workspaceId } = params;
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
     const result = await client.invokeRpc<DeviceGitSyncResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'pullGitBranch', params: { path } },
+      { method: 'pullGitBranch', params: { path, ...(branch ? { branch } : {}) } },
     );
 
     if (!result.success || !result.data) {
@@ -249,6 +279,8 @@ export async function pullGitBranch(
 export async function pushGitBranch(
   getClient: DeviceClientGetter,
   params: {
+    /** Sync this branch instead of HEAD. */
+    branch?: string;
     deviceId: string;
     path: string;
     timeout?: number;
@@ -256,14 +288,14 @@ export async function pushGitBranch(
     workspaceId?: string;
   },
 ): Promise<DeviceGitSyncResult> {
-  const { userId, deviceId, path, timeout = 65_000, workspaceId } = params;
+  const { userId, deviceId, branch, path, timeout = 65_000, workspaceId } = params;
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
     const result = await client.invokeRpc<DeviceGitSyncResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'pushGitBranch', params: { path } },
+      { method: 'pushGitBranch', params: { path, ...(branch ? { branch } : {}) } },
     );
 
     if (!result.success || !result.data) {

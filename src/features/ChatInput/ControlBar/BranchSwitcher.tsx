@@ -52,6 +52,9 @@ import { useBranchList } from './useBranchList';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
 
+/** Rows the pick-only list shows before it scrolls (fits the 360px popup). */
+const PICK_LIST_MAX_ROWS = 8;
+
 const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
 
 const styles = stylex.create({
@@ -108,6 +111,9 @@ const styles = stylex.create({
     width: '300px',
     height: '360px',
   },
+  // Pick-only mode has no footer: the popup hugs a short list instead of
+  // leaving the fixed height blank under it.
+  popupFit: { height: 'auto', maxHeight: '360px' },
   refreshButton: {
     cursor: 'pointer',
     display: 'flex',
@@ -188,6 +194,18 @@ interface BranchSwitcherProps {
   path: string;
   /** Dropdown placement — the runtime bar opens upward, embedding panels open downward. */
   placement?: 'topLeft' | 'bottomLeft' | 'bottomRight';
+  /**
+   * Pick-only mode (Better Coding Experience, before a topic's first send): a
+   * click records `onSelect` instead of checking out — the send switches, or
+   * forks a worktree — and the create / rename / delete actions and the
+   * footer are gone. A branch another worktree holds is pickable too; the send
+   * handles it.
+   */
+  selection?: {
+    /** The picked branch, which carries the checkmark. */
+    branch?: string;
+    onSelect: (branch: string) => void;
+  };
   /** The repo the conversation is anchored to (worktrees hang off it). */
   sourcePath: string;
   /** The conversation the switch is recorded on; omitted, the global active topic. */
@@ -209,6 +227,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onExternalRefresh,
     onOptimisticCheckout,
     placement = 'topLeft',
+    selection,
     sourcePath,
     topicId,
     worktrees,
@@ -272,13 +291,14 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     // popup mounts at scrollTop=0, so a checked branch below the fold would read
     // as "nothing selected". Keyed on branches.length so it fires once the async
     // list has painted.
+    const checkedBranch = selection ? selection.branch : currentBranch;
     useEffect(() => {
       if (!open) return;
       const raf = requestAnimationFrame(() => {
         currentRowRef.current?.scrollIntoView({ block: 'nearest' });
       });
       return () => cancelAnimationFrame(raf);
-    }, [open, branches.length, currentBranch]);
+    }, [open, branches.length, checkedBranch]);
 
     const filtered = useMemo(() => {
       const query = search.trim().toLowerCase();
@@ -288,6 +308,11 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
     const handleCheckout = useCallback(
       async (branch: string, create = false) => {
+        if (selection) {
+          selection.onSelect(branch);
+          onOpenChange(false);
+          return;
+        }
         if (busyBranch) return;
         if (!create && branch === currentBranch) {
           onOpenChange(false);
@@ -333,6 +358,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         onOptimisticCheckout,
         onOpenChange,
         path,
+        selection,
         switchWorktree,
         t,
         worktrees,
@@ -440,7 +466,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>
-            <DropdownMenuPopup className={stylex.props(styles.popup).className}>
+            <DropdownMenuPopup
+              className={stylex.props(styles.popup, selection && styles.popupFit).className}
+            >
               <DropdownMenuHeader className={stylex.props(styles.header).className}>
                 <div {...stylex.props(styles.searchBar)}>
                   <Input
@@ -499,9 +527,15 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   // branch, last) undrawn. Remount when the count changes.
                   key={filtered.length}
                   listItemHeight={32}
+                  style={
+                    selection
+                      ? { height: Math.min(filtered.length, PICK_LIST_MAX_ROWS) * 32 + 8 }
+                      : undefined
+                  }
                 >
                   {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
+                    const isChecked = branch.name === checkedBranch;
                     const isBusy = busyBranch === branch.name;
                     // A branch another worktree holds can't be checked out here
                     // (clicking routes into that worktree) and can't be deleted.
@@ -511,7 +545,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                         className={stylex.props(stylex.defaultMarker(), styles.item).className}
                         closeOnClick={false}
                         key={branch.name}
-                        ref={isCurrent ? currentRowRef : undefined}
+                        ref={isChecked ? currentRowRef : undefined}
                         onClick={() => handleCheckout(branch.name)}
                       >
                         <Icon
@@ -523,6 +557,11 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                         />
                         <div {...stylex.props(styles.itemMain)}>
                           <div {...stylex.props(styles.branchLabel)}>{branch.name}</div>
+                          {isCurrent && selection && !isChecked && (
+                            <div {...stylex.props(styles.itemMeta)}>
+                              {t('workingDirectory.branchCheckedOutHere')}
+                            </div>
+                          )}
                           {isCurrent && workingStatus && !workingStatus.clean && (
                             <div {...stylex.props(styles.itemMeta)}>
                               {t('workingDirectory.uncommittedChanges', {
@@ -538,7 +577,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                             </div>
                           )}
                         </div>
-                        {isCurrent && (
+                        {isChecked && (
                           <Icon
                             className={stylex.props(styles.itemCheck).className}
                             icon={CheckIcon}
@@ -556,16 +595,18 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                               <Icon icon={CopyIcon} size={13} />
                             </div>
                           </Tooltip>
-                          <Tooltip title={t('workingDirectory.renameBranchAction')}>
-                            <div
-                              {...stylex.props(styles.rowAction)}
-                              role="button"
-                              onClick={(e) => handleRename(e, branch.name)}
-                            >
-                              <Icon icon={PencilIcon} size={13} />
-                            </div>
-                          </Tooltip>
-                          {!isCurrent && !owner && (
+                          {!selection && (
+                            <Tooltip title={t('workingDirectory.renameBranchAction')}>
+                              <div
+                                {...stylex.props(styles.rowAction)}
+                                role="button"
+                                onClick={(e) => handleRename(e, branch.name)}
+                              >
+                                <Icon icon={PencilIcon} size={13} />
+                              </div>
+                            </Tooltip>
+                          )}
+                          {!selection && !isCurrent && !owner && (
                             <Tooltip title={t('workingDirectory.deleteBranchAction')}>
                               <div
                                 {...stylex.props(styles.rowAction, styles.rowActionDanger)}
@@ -583,21 +624,23 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                 </DropdownMenuScrollViewport>
               )}
 
-              <DropdownMenuFooter className={stylex.props(styles.footer).className}>
-                <DropdownMenuItem
-                  className={stylex.props(styles.item).className}
-                  onClick={openCreateBranch}
-                >
-                  <Icon
-                    className={stylex.props(styles.itemIcon).className}
-                    icon={GitBranchPlusIcon}
-                    size={14}
-                  />
-                  <div {...stylex.props(styles.itemMain)}>
-                    {t('workingDirectory.createBranchAction')}
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuFooter>
+              {!selection && (
+                <DropdownMenuFooter className={stylex.props(styles.footer).className}>
+                  <DropdownMenuItem
+                    className={stylex.props(styles.item).className}
+                    onClick={openCreateBranch}
+                  >
+                    <Icon
+                      className={stylex.props(styles.itemIcon).className}
+                      icon={GitBranchPlusIcon}
+                      size={14}
+                    />
+                    <div {...stylex.props(styles.itemMain)}>
+                      {t('workingDirectory.createBranchAction')}
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuFooter>
+              )}
             </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>
