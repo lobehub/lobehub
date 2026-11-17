@@ -24,6 +24,7 @@ import {
   UpdateTaskRequestSchema,
   UpdateTaskStatusRequestSchema,
 } from '../types/task.type';
+import TaskAdvancedRoutes from './tasks-advanced.route';
 
 /**
  * Task routes.
@@ -169,5 +170,9 @@ TaskRoutes.delete(
   zValidator('param', TaskIdParamSchema),
   async (c) => new TaskController().deleteTask(c),
 );
+
+// Sub-resources: subtasks, dependencies, comments, documents, checkpoint /
+// review / verify configuration and archive.
+TaskRoutes.route('/', TaskAdvancedRoutes);
 
 export default TaskRoutes;

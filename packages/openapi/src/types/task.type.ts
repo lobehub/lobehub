@@ -3,12 +3,14 @@ import type {
   ChatFileItem,
   CheckpointConfig,
   ExecAgentResult,
+  TaskContext,
   TaskDetailActivity,
   TaskDetailActivityAgent,
   TaskDetailActivityAuthor,
   TaskDetailData,
   TaskDetailSubtask,
   TaskDetailWorkspaceNode,
+  TaskExecutionConfig,
   TaskItem,
   TaskLabelRef,
   TaskRunVerifySummary,
@@ -141,6 +143,112 @@ export const TaskLabelRefSchema = z
   .strict()
   .meta({ id: 'TaskLabelRef' });
 
+const CheckpointTaskRefSchema = z.object({ id: z.string(), identifier: z.string() }).strict();
+
+export const CheckpointConfigSchema = z
+  .object({
+    onAgentRequest: z.boolean().optional(),
+    tasks: z
+      .object({
+        afterIds: z.array(z.string()).optional(),
+        afterTasks: z.array(CheckpointTaskRefSchema).optional(),
+        beforeIds: z.array(z.string()).optional(),
+        beforeTasks: z.array(CheckpointTaskRefSchema).optional(),
+      })
+      .strict()
+      .optional(),
+    topic: z
+      .object({ after: z.boolean().optional(), before: z.boolean().optional() })
+      .strict()
+      .optional(),
+  } satisfies Record<keyof CheckpointConfig, z.ZodType>)
+  .strict();
+
+export const TaskVerifyConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    maxIterations: z.number().int().optional(),
+    requirement: z.string().optional(),
+    verifierAgentId: z.string().optional(),
+    verifyCriteriaIds: z.array(z.string()).optional(),
+    verifyRubricId: z.string().optional(),
+  } satisfies Record<keyof TaskVerifyConfig, z.ZodType>)
+  .strict();
+
+/** The judge that scores each run of the task. */
+export const TaskReviewConfigSchema = z
+  .object({
+    autoRetry: z.boolean(),
+    enabled: z.boolean(),
+    judge: z.object({ model: z.string().optional(), provider: z.string().optional() }).strict(),
+    maxIterations: z.number().int(),
+    rubrics: z.array(
+      z
+        .object({
+          config: jsonObjectSchema,
+          extractor: jsonObjectSchema.optional(),
+          id: z.string(),
+          name: z.string(),
+          threshold: z.number().optional(),
+          type: z.string(),
+          weight: z.number(),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+  .meta({ id: 'TaskReviewConfig' });
+
+/** The execution pins every run of the task starts with. */
+const TaskExecutionConfigSchema = z
+  .object({
+    /** Device every run is pinned to. */
+    boundDeviceId: z.string().optional(),
+    /** Repos pre-selected for every run. */
+    repos: z.array(z.string()).optional(),
+    workingDirectory: z.string().optional(),
+    workingDirectoryConfig: z
+      .object({ path: z.string(), repoType: z.string().optional() })
+      .strict()
+      .optional(),
+  } satisfies Record<keyof TaskExecutionConfig, z.ZodType>)
+  .strict();
+
+/**
+ * The task's configuration pockets. `tasks.config` is JSON written by several
+ * releases, so keys beyond the typed pockets may appear on older rows and are
+ * passed through untouched.
+ */
+export const TaskConfigSchema = z
+  .object({
+    checkpoint: CheckpointConfigSchema.optional(),
+    execution: TaskExecutionConfigSchema.optional(),
+    /** Model every run uses instead of the assignee's own; set with `provider`. */
+    model: z.string().optional(),
+    provider: z.string().optional(),
+    review: TaskReviewConfigSchema.optional(),
+    verify: TaskVerifyConfigSchema.optional(),
+  })
+  .catchall(z.unknown())
+  .meta({ id: 'TaskConfig' });
+
+/** Runtime state the scheduler and lifecycle keep on the task; read-only. */
+export const TaskContextSchema = z
+  .object({
+    completion: z
+      .object({
+        /** The running operation that asked to complete its own task. */
+        requestedByOperationId: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+    lifecycle: jsonObjectSchema.optional().describe('Lifecycle audit of the latest runs.'),
+    origin: jsonObjectSchema.optional().describe('Where the task was created from.'),
+    scheduler: jsonObjectSchema.optional().describe('Schedule and heartbeat bookkeeping.'),
+  } satisfies Record<keyof TaskContext, z.ZodType>)
+  .catchall(z.unknown())
+  .meta({ id: 'TaskContext' });
+
 const taskRowShape = {
   accessedAt: dateTimeSchema,
   archivedAt: dateTimeSchema.nullable(),
@@ -148,10 +256,8 @@ const taskRowShape = {
   assigneeUserId: z.string().nullable(),
   automationMode: TaskAutomationModeSchema.nullable(),
   completedAt: dateTimeSchema.nullable(),
-  /** Task configuration pockets (checkpoint, verify, execution, model…), stored as JSON. */
-  config: jsonObjectSchema.nullable(),
-  /** Runtime state pockets (scheduler, lifecycle audit, origin), stored as JSON. */
-  context: jsonObjectSchema.nullable(),
+  config: TaskConfigSchema.nullable(),
+  context: TaskContextSchema.nullable(),
   createdAt: dateTimeSchema,
   createdByAgentId: z.string().nullable(),
   createdByUserId: z.string(),
@@ -233,38 +339,6 @@ const ChatFileItemSchema = z
     size: z.number(),
     url: z.string(),
   } satisfies Record<keyof ChatFileItem, z.ZodType>)
-  .strict();
-
-const CheckpointTaskRefSchema = z.object({ id: z.string(), identifier: z.string() }).strict();
-
-const CheckpointConfigSchema = z
-  .object({
-    onAgentRequest: z.boolean().optional(),
-    tasks: z
-      .object({
-        afterIds: z.array(z.string()).optional(),
-        afterTasks: z.array(CheckpointTaskRefSchema).optional(),
-        beforeIds: z.array(z.string()).optional(),
-        beforeTasks: z.array(CheckpointTaskRefSchema).optional(),
-      })
-      .strict()
-      .optional(),
-    topic: z
-      .object({ after: z.boolean().optional(), before: z.boolean().optional() })
-      .strict()
-      .optional(),
-  } satisfies Record<keyof CheckpointConfig, z.ZodType>)
-  .strict();
-
-const TaskVerifyConfigSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    maxIterations: z.number().int().optional(),
-    requirement: z.string().optional(),
-    verifierAgentId: z.string().optional(),
-    verifyCriteriaIds: z.array(z.string()).optional(),
-    verifyRubricId: z.string().optional(),
-  } satisfies Record<keyof TaskVerifyConfig, z.ZodType>)
   .strict();
 
 const TaskDetailSubtaskSchema: z.ZodType<TaskDetailSubtask> = z
@@ -480,8 +554,7 @@ export const TaskDetailSchema = z
     archivedAt: dateTimeSchema.nullable().optional(),
     automationMode: TaskAutomationModeSchema.nullable().optional(),
     checkpoint: CheckpointConfigSchema.optional(),
-    /** Task configuration pockets, stored as JSON. */
-    config: jsonObjectSchema.optional(),
+    config: TaskConfigSchema.optional(),
     createdAt: dateTimeSchema.optional(),
     createdByUserId: z.string().nullable().optional(),
     dependencies: z

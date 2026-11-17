@@ -1,6 +1,8 @@
 import type { GoalMetricCriteriaState } from '@lobechat/agent-tracing';
 import type {
   AcceptanceStatus,
+  GoalAcceptancePolicy,
+  GoalConfig,
   GoalDecisionAuthority,
   GoalDecisionOption,
   GoalDecisionOptionEffect,
@@ -20,6 +22,8 @@ import type {
   GoalNodeKind,
   GoalNodeStatus,
   GoalNodeWorkVersionRelation,
+  GoalPauseReason,
+  GoalRecoveryPolicy,
   GoalReportState,
   GoalReportStatus,
   GoalReportTrigger,
@@ -263,18 +267,118 @@ const AcceptanceStatusSchema = unionEnum<AcceptanceStatus>()([
   'errored',
 ]);
 
+/** Coordinator-owned runtime state: read it, never send it back as configuration. */
+const coordinatorStateSchema = (description: string) => jsonObjectSchema.describe(description);
+
+/**
+ * The goal's runtime policy. The keys a person or a client sets are typed;
+ * the pockets the coordinator writes for itself (manager turn, rollout,
+ * report receipts, decomposition notes) are documented as JSON because their
+ * shape moves with the coordinator and they are not configuration.
+ */
+export const GoalConfigSchema = z
+  .object({
+    acceptance: z
+      .object({
+        /** Verify criteria that gate terminal acceptance. */
+        criteriaIds: z.array(z.string()).optional(),
+        /** Numeric clauses the measured-acceptance gate reads. */
+        metrics: z
+          .array(
+            z
+              .object({
+                key: z.string(),
+                op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+                target: z.number(),
+                title: z.string().optional(),
+              })
+              .strict(),
+          )
+          .optional(),
+      } satisfies Record<keyof GoalAcceptancePolicy, z.ZodType>)
+      .strict()
+      .optional(),
+    changeRequest: z
+      .object({
+        comment: z.string().optional(),
+        requestedAt: dateTimeSchema,
+        taskId: z.string(),
+      })
+      .strict()
+      .optional()
+      .describe("The owner's latest request for changes."),
+    exploration: z
+      .object({
+        checkpoint: coordinatorStateSchema('Coordinator-owned exploration lease.').optional(),
+        instruction: z.string(),
+        maxExperiments: z.number().int(),
+      })
+      .strict()
+      .optional(),
+    manager: z
+      .object({
+        instruction: z.string().optional(),
+        /** Turn cap of the goal's main Agent. */
+        maxTurns: z.number().int().optional(),
+        openedForHandoff: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+    managerState: coordinatorStateSchema('Coordinator-owned main Agent turn state.').optional(),
+    /** How many of the goal's Tasks may run at once; null uses the default. */
+    maxConcurrentTasks: z.number().int().nullable().optional(),
+    /** The model the goal agent plans with; set together with `provider`. */
+    model: z.string().optional(),
+    objective: coordinatorStateSchema('The score this goal optimises.').optional(),
+    pausedBy: unionEnum<GoalPauseReason>()([
+      'measured_acceptance',
+      'exploration_limit',
+      'exploration_revision_limit',
+      'pattern_break',
+      'release_review',
+      'user',
+    ]).optional(),
+    planningCheckpoint: coordinatorStateSchema('Coordinator-owned decomposition lease.').optional(),
+    planningProtocol: z.literal('lease-v1').optional(),
+    provider: z.string().optional(),
+    quotaRetryWakeAt: dateTimeSchema.optional(),
+    recovery: z
+      .object({
+        maxAttemptsPerTask: z.number().int().optional(),
+        maxStepsPerRun: z.number().int().nullable().optional(),
+        operationLeaseTimeoutMs: z.number().int().optional(),
+      } satisfies Record<keyof GoalRecoveryPolicy, z.ZodType>)
+      .strict()
+      .optional(),
+    report: coordinatorStateSchema('Coordinator-owned wrap-up report receipt.').optional(),
+    rollout: coordinatorStateSchema('Batch rollout policy of a repeated-mould goal.').optional(),
+    rolloutState: coordinatorStateSchema('Coordinator-owned batch progress.').optional(),
+    schedule: z.object({ deadline: dateTimeSchema.nullable().optional() }).strict().optional(),
+    supervision: z
+      .object({ enabled: z.boolean(), maxIncidents: z.number().int().optional() })
+      .strict()
+      .optional(),
+    supervisorState: coordinatorStateSchema(
+      'Supervisor topic and incident ledger; read it typed from `GET /goals/{id}/supervision`.',
+    ).optional(),
+    /** The agent that runs the goal's Tasks when it is not the goal agent. */
+    taskAgentId: z.string().optional(),
+    /** The model the goal's Tasks run on; set together with `taskProvider`. */
+    taskModel: z.string().optional(),
+    taskProvider: z.string().optional(),
+    understanding: coordinatorStateSchema('Coordinator-owned decomposition notes.').optional(),
+  } satisfies Record<keyof GoalConfig, z.ZodType>)
+  .strict()
+  .meta({ id: 'GoalConfig' });
+
 /** A `goals` row exactly as `select()` reads it (soft-delete columns included). */
 export const GoalSchema = z
   .object({
     agentId: z.string().nullable(),
     archivedAt: dateTimeSchema.nullable(),
     completedAt: dateTimeSchema.nullable(),
-    /**
-     * Coordinator-owned runtime policy and state (budget, supervision, manager
-     * and rollout pockets). Its keys move with the coordinator, so it is
-     * documented as an open JSON object rather than pinned here.
-     */
-    config: jsonObjectSchema.nullable(),
+    /** Runtime policy (budget, models, agents, acceptance) and coordinator state. */
+    config: GoalConfigSchema.nullable(),
     createdAt: dateTimeSchema,
     deletedAt: dateTimeSchema.nullable(),
     id: z.string(),

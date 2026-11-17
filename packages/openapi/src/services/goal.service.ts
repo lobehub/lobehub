@@ -29,8 +29,8 @@ export const GOAL_LIST_DEFAULT_LIMIT = 50;
  * is the service's job; this layer only decides who may ask.
  */
 export class GoalRestService extends BaseService {
-  private readonly goalModel: GoalModel;
-  private readonly goalService: GoalService;
+  protected readonly goalModel: GoalModel;
+  protected readonly goalService: GoalService;
 
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
@@ -43,7 +43,7 @@ export class GoalRestService extends BaseService {
    * Workspace scope defers to RBAC (`AGENT_UPDATE` / `AGENT_READ`), which is the
    * same rule the tRPC surface enforces.
    */
-  private async requireGoal(id: string) {
+  protected async requireGoal(id: string) {
     const goal = await this.goalModel.findById(id);
     if (!goal || (!this.workspaceId && goal.userId !== this.userId)) {
       throw this.createNotFoundError('Goal not found');
@@ -64,12 +64,12 @@ export class GoalRestService extends BaseService {
   }
 
   /** The goal plus its whole graph (nodes, edges, roll-up). */
-  async getGoal(id: string): ServiceResult<unknown> {
+  async getGoal(id: string) {
     await this.requireGoal(id);
     return this.goalService.graph(id);
   }
 
-  async getSupervision(id: string): ServiceResult<unknown> {
+  async getSupervision(id: string) {
     await this.requireGoal(id);
     const graph = await this.goalService.graph(id);
     const state = graph.goal.config?.supervisorState;
@@ -83,7 +83,7 @@ export class GoalRestService extends BaseService {
    * Creating a goal means starting it — the coordinator takes over from here so
    * no client has to hold a loop open.
    */
-  async createGoal(input: CreateGoalRequest): ServiceResult<unknown> {
+  async createGoal(input: CreateGoalRequest) {
     const { deadline, ...rest } = input;
     const createInput: CreateGoalGraphInput = {
       ...rest,
@@ -104,7 +104,7 @@ export class GoalRestService extends BaseService {
   }
 
   /** Run the coordinator now and report where it stopped. */
-  async advanceGoal(id: string): ServiceResult<unknown> {
+  async advanceGoal(id: string) {
     await this.requireGoal(id);
     const { result, ticks } = await advanceGoal({
       goalId: id,
@@ -115,12 +115,12 @@ export class GoalRestService extends BaseService {
     return { ...result, ticks };
   }
 
-  async pauseGoal(id: string): ServiceResult<unknown> {
+  async pauseGoal(id: string) {
     await this.requireGoal(id);
     return this.goalService.pause(id);
   }
 
-  async resumeGoal(id: string): ServiceResult<unknown> {
+  async resumeGoal(id: string) {
     await this.requireGoal(id);
     const data = await this.goalService.resume(id);
     await scheduleGoalAdvance({
@@ -133,7 +133,7 @@ export class GoalRestService extends BaseService {
   }
 
   /** Restart every unfinished task node, optionally under a different agent. */
-  async restartGoal(id: string, input: RestartGoalRequest): ServiceResult<unknown> {
+  async restartGoal(id: string, input: RestartGoalRequest) {
     const goal = await this.requireGoal(id);
     // `AGENT_UPDATE` says the member may change goals; it does not say whose.
     // Without this any member could reset a colleague's goal and cancel its
@@ -150,7 +150,7 @@ export class GoalRestService extends BaseService {
   }
 
   /** Update the acceptance requirement and/or the budget in one call. */
-  async updateGoal(id: string, input: UpdateGoalRequest): ServiceResult<unknown> {
+  async updateGoal(id: string, input: UpdateGoalRequest) {
     await this.requireGoal(id);
 
     // Both writes land in one transaction. A budget the goal cannot take (e.g.
