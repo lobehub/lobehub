@@ -1636,7 +1636,7 @@
   "settingAgent.identity.saveFailed": "身份信息保存失败，请重试",
   "settingAgent.identity.saved": "已保存",
   "settingAgent.identity.untitled": "未命名助理",
-  "settingAgent.instruction.desc": "它是谁、该怎么做事。每次回复前它都会先读这一段。",
+  "settingAgent.instruction.description": "设定助理的身份、职责、工作方式和回复风格。这些指令会在每次对话中生效。",
   "settingAgent.instruction.title": "指令",
   "settingAgent.knowledgePage.addFile": "添加文件",
   "settingAgent.knowledgePage.addLibrary": "添加知识库",

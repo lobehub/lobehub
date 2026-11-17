@@ -1409,8 +1409,8 @@ export default {
   'settingAgent.environment.title': 'Environment',
   'settingAgent.environment.desc': 'Where it runs, and what it needs there.',
   'settingAgent.instruction.title': 'Instruction',
-  'settingAgent.instruction.desc':
-    'Who it is and how it should behave. It reads this before every reply.',
+  'settingAgent.instruction.description':
+    'Define the agent’s identity, responsibilities, working methods, and response style. These instructions apply in every conversation.',
   'settingAgent.knowledgePage.title': 'Knowledge Base',
   'settingAgent.knowledgePage.desc': 'The libraries and files it can search when it answers.',
   'settingAgent.knowledgePage.libraries.title': 'Libraries',
