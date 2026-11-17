@@ -89,6 +89,58 @@ const stopLaneRuns = async (ctx: GoalServiceContext, laneNodes: GoalGraphNode[])
   }
 };
 
+/** How long a claimed wrap-up waits for its promotion Task before it is rebuilt. */
+const PROMOTE_NODE_RETRY_MS = 2 * 60_000;
+
+/**
+ * Claims the wrap-up under the goal row lock. Two advances can reach the
+ * deadline together — the deadline wake and a lane-completion wake — and both
+ * read `swarm.wrapUp` as absent; the loser sees the claim and leaves the
+ * promotion to the advance that took it.
+ */
+const claimWrapUp = async (
+  ctx: GoalServiceContext,
+  goalId: string,
+  claim: NonNullable<GoalSwarm['wrapUp']>,
+): Promise<boolean> =>
+  ctx.db.transaction(async (tx) => {
+    const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
+    const goal = await model.lockById(goalId);
+    if (!goal?.config?.swarm || goal.config.swarm.wrapUp) return false;
+    await model.update(goalId, {
+      config: {
+        ...goal.config,
+        schedule: { ...goal.config.schedule, deadline: null },
+        swarm: { ...goal.config.swarm, wrapUp: claim },
+      },
+    });
+    return true;
+  });
+
+/** Creates the claimed wrap-up's promotion Task, at most once per claim. */
+const materializePromote = async (
+  ctx: GoalServiceContext,
+  graph: GoalGraphSnapshot,
+  wrapUp: NonNullable<GoalSwarm['wrapUp']>,
+): Promise<string | undefined> => {
+  if (wrapUp.promoteNodeId) return wrapUp.promoteNodeId;
+  const swarm = graph.goal.config!.swarm!;
+  const laneKey = wrapUp.championLane;
+  const problem = graph.nodes.find((node) => node.kind === 'problem');
+  if (!laneKey || !problem) return undefined;
+  const promote = await ctx.coordinatorGraph.createNode(graph.goal.id, {
+    description: buildPromoteInstruction(swarm, laneKey),
+    kind: 'task',
+    title: `Promote lane ${laneKey} (score ${wrapUp.championScore})`,
+  });
+  await ctx.coordinatorGraph.createEdge(graph.goal.id, problem.id, promote.id, 'decomposes');
+  await setSwarm(ctx, graph.goal.id, (current) => ({
+    ...current,
+    wrapUp: { ...current.wrapUp!, promoteNodeId: promote.id },
+  }));
+  return promote.id;
+};
+
 /**
  * The deadline: stop the lanes, pick the champion from the leaderboard, and
  * queue its promotion. The deadline itself is cleared so the promotion Task
@@ -117,31 +169,20 @@ const wrapUp = async (
   const champion = board?.leader
     ? swarm.lanes.find((lane) => lane.containerId === board.leader)
     : undefined;
-  const problem = graph.nodes.find((node) => node.kind === 'problem');
-  const promote =
-    champion && problem
-      ? await ctx.coordinatorGraph.createNode(graph.goal.id, {
-          description: buildPromoteInstruction(swarm, champion.key),
-          kind: 'task',
-          title: `Promote lane ${champion.key} (score ${board!.best})`,
-        })
-      : undefined;
-  if (promote && problem)
-    await ctx.coordinatorGraph.createEdge(graph.goal.id, problem.id, promote.id, 'decomposes');
-  await setSwarm(
-    ctx,
-    graph.goal.id,
-    (current) => ({
-      ...current,
-      wrapUp: {
-        championLane: champion?.key,
-        championScore: champion ? board!.best : undefined,
-        promoteNodeId: promote?.id,
-        startedAt: new Date().toISOString(),
-      },
-    }),
-    { clearDeadline: true },
-  );
+  const claim = {
+    championLane: champion?.key,
+    championScore: champion ? board!.best : undefined,
+    startedAt: new Date().toISOString(),
+  };
+  if (!(await claimWrapUp(ctx, graph.goal.id, claim))) {
+    log('swarm %s wrap-up already claimed', graph.goal.id);
+    return {
+      goalId: graph.goal.id,
+      message: 'Swarm deadline reached; another advance is already wrapping it up',
+      outcome: 'advanced',
+    };
+  }
+  await materializePromote(ctx, graph, claim);
   log('swarm %s wrapped up, champion %s', graph.goal.id, champion?.key ?? 'none');
   return {
     goalId: graph.goal.id,
@@ -170,12 +211,27 @@ export const advanceSwarm = async (
   if (!swarm || graph.goal.status !== 'running') return undefined;
 
   if (swarm.wrapUp) {
-    const promote = swarm.wrapUp.promoteNodeId
-      ? graph.nodes.find((node) => node.id === swarm.wrapUp!.promoteNodeId)
-      : undefined;
-    if (promote && promote.status !== 'resolved') return undefined;
-    const message = swarm.wrapUp.championLane
-      ? `Lane ${swarm.wrapUp.championLane} promoted with score ${swarm.wrapUp.championScore}`
+    const wrapUp = swarm.wrapUp;
+    if (wrapUp.promoteNodeId) {
+      const promote = graph.nodes.find((node) => node.id === wrapUp.promoteNodeId);
+      if (promote && promote.status !== 'resolved') return undefined;
+    } else if (wrapUp.championLane) {
+      // The claim is written before its promotion Task exists, so a concurrent
+      // advance finishes the job. Wait for it, then finish it here if it never
+      // materialized (the advance that claimed died halfway).
+      const claimedAt = Date.parse(wrapUp.startedAt);
+      const fresh = Number.isFinite(claimedAt) && Date.now() - claimedAt < PROMOTE_NODE_RETRY_MS;
+      if (fresh) return undefined;
+      const created = await materializePromote(ctx, graph, wrapUp);
+      if (created)
+        return {
+          goalId: graph.goal.id,
+          message: `Swarm deadline reached; promoting lane ${wrapUp.championLane} (score ${wrapUp.championScore})`,
+          outcome: 'advanced',
+        };
+    }
+    const message = wrapUp.championLane
+      ? `Lane ${wrapUp.championLane} promoted with score ${wrapUp.championScore}`
       : 'Swarm ended without a valid score';
     await ctx.transitionStatus(graph.goal, 'achieved', message);
     return { goalId: graph.goal.id, message, outcome: 'achieved' };

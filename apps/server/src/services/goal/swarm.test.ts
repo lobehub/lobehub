@@ -172,6 +172,77 @@ describe('a running swarm', () => {
     expect(after.nodes.some((node) => node.title === 'Complete full Goal acceptance')).toBe(false);
   });
 
+  it('leaves a freshly claimed wrap-up to the advance that claimed it', async () => {
+    const graph = await createSwarm({ lanes: 1 });
+    const goalId = graph.goal.id;
+    const [laneA] = graph.goal.config!.swarm!.lanes;
+    await new GoalObjectiveService(serverDB, userId).recordEvaluation(
+      goalId,
+      { score: 17, valid: true },
+      { nodeId: laneA.taskNodeId, taskId: 't_a' },
+    );
+    // What a concurrent advance writes when it takes the claim: champion known,
+    // the promotion Task not queued yet.
+    const repository = new GoalRepository(serverDB, userId);
+    const goal = await repository.findById(goalId);
+    await repository.update(goalId, {
+      config: {
+        ...goal!.config,
+        schedule: { ...goal!.config.schedule, deadline: null },
+        swarm: {
+          ...goal!.config.swarm!,
+          wrapUp: { championLane: 'A', championScore: 17, startedAt: new Date().toISOString() },
+        },
+      },
+    });
+    const service = new GoalService(serverDB, userId);
+
+    await service.tick(goalId);
+
+    const after = await service.graph(goalId);
+    expect(after.nodes.filter((node) => node.title.startsWith('Promote lane'))).toHaveLength(0);
+    expect(after.goal.status).toBe('running');
+  });
+
+  it('rebuilds the promotion Task when the advance that claimed the wrap-up died', async () => {
+    const graph = await createSwarm({ lanes: 1 });
+    const goalId = graph.goal.id;
+    const [laneA] = graph.goal.config!.swarm!.lanes;
+    await new GoalObjectiveService(serverDB, userId).recordEvaluation(
+      goalId,
+      { score: 17, valid: true },
+      { nodeId: laneA.taskNodeId, taskId: 't_a' },
+    );
+    const repository = new GoalRepository(serverDB, userId);
+    const goal = await repository.findById(goalId);
+    await repository.update(goalId, {
+      config: {
+        ...goal!.config,
+        schedule: { ...goal!.config.schedule, deadline: null },
+        swarm: {
+          ...goal!.config.swarm!,
+          wrapUp: {
+            championLane: 'A',
+            championScore: 17,
+            startedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+          },
+        },
+      },
+    });
+    const service = new GoalService(serverDB, userId);
+
+    const resumed = await service.tick(goalId);
+
+    expect(resumed.message).toContain('promoting lane A (score 17)');
+    const after = await service.graph(goalId);
+    const promotes = after.nodes.filter((node) => node.title.startsWith('Promote lane'));
+    expect(promotes).toHaveLength(1);
+    expect(after.goal.config!.swarm!.wrapUp).toMatchObject({
+      championLane: 'A',
+      promoteNodeId: promotes[0].id,
+    });
+  });
+
   it('ends without a promotion when no lane recorded a valid score', async () => {
     const graph = await createSwarm({ lanes: 1 });
     await expireDeadline(graph.goal.id);
