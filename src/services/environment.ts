@@ -46,6 +46,17 @@ class EnvironmentService {
   }) => lambdaClient.environment.createEnvironment.mutate(params);
 
   /**
+   * A repository, named after itself; answered with the environment that
+   * already checks it out when there is one.
+   */
+  createFromRepository = async (params: {
+    name: string;
+    ref?: string;
+    url: string;
+    visibility?: EnvironmentVisibility;
+  }) => lambdaClient.environment.createFromRepository.mutate(params);
+
+  /**
    * Edits the specification. A folder it was already applied to keeps what it
    * has; the change shapes the next working directory it initializes.
    */

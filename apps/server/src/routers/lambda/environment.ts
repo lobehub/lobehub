@@ -12,7 +12,11 @@ import {
   ScmRepositoriesUnavailableError,
 } from '@/server/services/scm/repositories';
 
-import { configurationSchema, newConfigurationSchema } from './_schema/environment';
+import {
+  configurationSchema,
+  environmentSourceSchema,
+  newConfigurationSchema,
+} from './_schema/environment';
 import {
   rethrowDuplicateEnvironmentName,
   rethrowEnvironmentInUse,
@@ -73,6 +77,30 @@ export const environmentProcedures = {
     )
     .mutation(async ({ ctx, input }) =>
       ctx.environmentModel.create(input).catch(rethrowDuplicateEnvironmentName),
+    ),
+
+  /**
+   * A repository, added the way a project adds one: named after it, and
+   * answered with the environment already checking it out when there is one.
+   * Picking a repository is the whole decision — a second entry for the same
+   * checkout, or a name the person has to invent, would only be noise.
+   */
+  createFromRepository: environmentProcedure
+    .input(
+      z.object({
+        name: nameSchema,
+        ref: environmentSourceSchema.shape.ref,
+        url: environmentSourceSchema.shape.url,
+        visibility: visibilitySchema.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.environmentModel.ensureForRepository({
+        defaultBranch: input.ref,
+        name: input.name,
+        repositoryUrl: input.url,
+        visibility: input.visibility,
+      }),
     ),
 
   /** Specifications only. Nothing here needs a sandbox session to answer. */

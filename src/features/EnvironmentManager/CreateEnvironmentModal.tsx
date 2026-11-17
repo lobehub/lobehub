@@ -6,7 +6,6 @@ import {
   confirmModal,
   createModal,
   Flexbox,
-  Input,
   ModalFooter,
   Text,
   useModalContext,
@@ -15,110 +14,78 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import RepositorySource, {
+  repositoryOf,
+  type RepositorySourceValue,
+} from '@/features/Projects/CreateFromGithub/RepositorySource';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
-import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
-import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 /**
- * Naming a new code environment, after picking the repository it checks out.
+ * Adding a code repository: pick one from GitHub, or paste its URL — the same
+ * two controls a project adds a repository with.
  *
- * A dialog rather than a field parked in the page: creating is one action among
- * several this page offers, and an input sitting in the body reads as a setting
- * you are meant to fill in. Everything else about an environment is edited once
- * it exists, where the form can explain what each part does.
- *
- * There is one kind. A folder of files someone hands an agent is a folder on
- * the drive, picked in the directory picker — not an environment.
+ * The repository is the whole decision. It is required, because an entry that
+ * checks nothing out has nothing to set up; and it names the entry, because
+ * the person would only type the repository's name again. Everything else —
+ * branch, setup command, variables — is edited once it exists, where the form
+ * can explain what each part does.
  */
 interface CreateEnvironmentContentProps {
-  /** Called with the new environment once it exists; the caller opens it. */
+  /** Called with the repository's entry once it exists; the caller opens it. */
   onCreated?: (environment: CreatedEnvironment) => void;
   visibility?: EnvironmentVisibility;
 }
 
-const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
+export const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
   ({ onCreated, visibility }) => {
     const { t } = useTranslation('setting');
     const { close } = useModalContext();
+    const navigate = useWorkspaceAwareNavigate();
     const actions = useEnvironmentActions();
 
-    const [name, setName] = useState('');
-    // Tracks whether the name is still the one the repository suggested. A name
-    // the person typed is theirs, and picking a different repository must not
-    // overwrite it; a suggested one is just a default and follows the pick.
-    const [nameIsSuggested, setNameIsSuggested] = useState(true);
-    const [repository, setRepository] = useState<GithubRepositorySelection | undefined>();
+    const [picked, setPicked] = useState<RepositorySourceValue>({ url: '' });
     const [creating, setCreating] = useState(false);
-    // The Enter that confirms an IME candidate reaches `keydown` as an Enter,
-    // so a Chinese name would submit the dialog on the keystroke that picked it.
-    const { compositionProps, isComposingRef } = useIMECompositionEvent();
     const [error, setError] = useState<string | undefined>();
 
-    const trimmed = name.trim();
-
-    const pickRepository = (selection: GithubRepositorySelection | undefined) => {
-      setRepository(selection);
-      setError(undefined);
-      // Naming a thing that does not exist yet is the harder half of this dialog,
-      // so the repository answers it: an environment for a repository is almost
-      // always called after it.
-      if (nameIsSuggested) setName(selection?.repository ?? '');
-    };
+    const repository = repositoryOf(picked);
 
     const create = async () => {
+      if (!repository) return;
       setCreating(true);
       setError(undefined);
       try {
-        const created = await actions.createEnvironment({
-          // The repository is the environment's one source. Every repository
-          // carries the owner GitHub reported for it, so the checkout URL is
-          // built from the pair rather than from whichever owner the list was
-          // filtered by — those differ for a repository reached as a collaborator.
-          configuration: repository
-            ? {
-                kind: 'code',
-                sources: [
-                  {
-                    kind: 'git',
-                    ref: repository.defaultBranch,
-                    url: `https://github.com/${repository.owner}/${repository.repository}`,
-                  },
-                ],
-              }
-            : { kind: 'code' },
-          name: trimmed,
+        const created = await actions.createFromRepository({
+          name: repository.fullName,
+          ref: picked.defaultBranch,
+          url: repository.url,
           // Created into the pool the person is looking at. Opening the dialog
           // from the Private tab and having the result land in the workspace's
           // shared list would be a publication nobody asked for.
           visibility,
         });
         close();
-        // After the dialog, not instead of it: the person sees the environment
-        // land in the list.
+        // After the dialog, not instead of it: the person sees the entry land
+        // in the list — or, for a repository already added, sees that one.
         if (created?.id) onCreated?.(created);
       } catch (cause) {
-        // The one failure the user can act on is a name already taken, and it is
-        // fixed by typing a different one — so it belongs next to the field
-        // rather than in a toast that outlives the dialog.
-        setError(
-          (cause as { message?: string })?.message === 'DUPLICATE_ENVIRONMENT_NAME'
-            ? t('environments.duplicateName')
-            : t('environments.createFailed'),
-        );
+        console.error('Failed to add the repository', cause);
+        setError(t('environments.createFailed'));
       } finally {
         setCreating(false);
       }
     };
 
-    // Created in the workspace's pool, an environment is published from its
-    // first instance on — and an instance keeps whatever a session leaves in its
-    // home directory, credentials included. So creating one there asks the same
+    // Created in the workspace's pool, an entry is published from its first
+    // instance on — and an instance keeps whatever a session leaves in its home
+    // directory, credentials included. So adding one there asks the same
     // question publishing one does, with the same explanation, rather than
     // publishing it silently because of which tab happened to be open.
     const submit = () => {
-      if (!trimmed || creating) return;
+      if (!repository || creating) return;
       if (visibility !== 'public') return void create();
 
       confirmModal({
@@ -131,46 +98,34 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
 
     return (
       <>
-        <Flexbox gap={12} paddingBlock={8} paddingInline={16}>
-          {/* Repository first, name second. The name is the harder question and the
-            repository usually answers it, so asking for the name first makes the
-            person invent something they are about to be handed. */}
-          <GithubRepositoryPicker value={repository} onChange={pickRepository} onLeave={close} />
-
-          <Flexbox gap={6}>
-            <Text fontSize={12} type={'secondary'} weight={500}>
-              {t('environments.nameLabel')}
+        <Flexbox gap={16} padding={16}>
+          <RepositorySource
+            value={picked}
+            onSubmit={submit}
+            onChange={(value) => {
+              setPicked(value);
+              setError(undefined);
+            }}
+            onConnect={() => {
+              close();
+              navigate(GITHUB_RETURN_TO);
+            }}
+          />
+          {error && (
+            <Text fontSize={12} type={'danger'}>
+              {error}
             </Text>
-            <Input
-              autoFocus
-              placeholder={t('environments.namePlaceholder')}
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                setNameIsSuggested(false);
-                setError(undefined);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !isComposingRef.current) void submit();
-              }}
-              {...compositionProps}
-            />
-            {error && (
-              <Text fontSize={12} type={'danger'}>
-                {error}
-              </Text>
-            )}
-          </Flexbox>
+          )}
         </Flexbox>
         <ModalFooter>
           <Button onClick={close}>{t('environments.cancel')}</Button>
           <Button
-            disabled={!trimmed}
+            disabled={!repository}
             loading={creating}
             type={'primary'}
             onClick={() => void submit()}
           >
-            {t('environments.create')}
+            {t('environments.add')}
           </Button>
         </ModalFooter>
       </>
@@ -191,5 +146,5 @@ export const openCreateEnvironmentModal = (
     maskClosable: true,
     styles: { content: { padding: 0 } },
     title,
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 560px)',
   });

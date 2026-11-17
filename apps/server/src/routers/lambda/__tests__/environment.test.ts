@@ -9,6 +9,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 const mockCreate = vi.fn();
 const mockDelete = vi.fn();
+const mockEnsureForRepository = vi.fn();
 const mockFindOwnedById = vi.fn();
 const mockUpdate = vi.fn();
 
@@ -17,6 +18,7 @@ vi.mock('@/database/models/environment', () => ({
     return {
       create: mockCreate,
       delete: mockDelete,
+      ensureForRepository: mockEnsureForRepository,
       findOwnedById: mockFindOwnedById,
       query: vi.fn(async () => []),
       setVisibility: vi.fn(),
@@ -166,6 +168,35 @@ describe('environmentRouter', () => {
       await expect(caller().createEnvironment({ name: 'Data analysis' })).rejects.not.toMatchObject(
         { code: 'CONFLICT' },
       );
+    });
+  });
+
+  describe('createFromRepository', () => {
+    it('adds a repository by its url alone, named after it', async () => {
+      mockEnsureForRepository.mockResolvedValue({ id: 'env-repo', name: 'lobehub/lobe-tts' });
+
+      const created = await caller().createFromRepository({
+        name: 'lobehub/lobe-tts',
+        ref: 'main',
+        url: 'https://github.com/lobehub/lobe-tts',
+        visibility: 'public',
+      });
+
+      expect(created).toEqual({ id: 'env-repo', name: 'lobehub/lobe-tts' });
+      expect(mockEnsureForRepository).toHaveBeenCalledWith({
+        defaultBranch: 'main',
+        name: 'lobehub/lobe-tts',
+        repositoryUrl: 'https://github.com/lobehub/lobe-tts',
+        visibility: 'public',
+      });
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a repository on any host but github', async () => {
+      for (const url of ['https://gitlab.com/a/b', 'http://github.com/a/b', 'http://10.0.0.1/a']) {
+        await expect(caller().createFromRepository({ name: 'a/b', url })).rejects.toThrow();
+      }
+      expect(mockEnsureForRepository).not.toHaveBeenCalled();
     });
   });
 

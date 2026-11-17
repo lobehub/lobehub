@@ -34,6 +34,7 @@ export const useEnvironments = (visibility?: EnvironmentVisibility) => {
  */
 export const useEnvironmentActions = () => ({
   createEnvironment: sandboxActions.createEnvironment,
+  createFromRepository: sandboxActions.createFromRepository,
   removeEnvironment: sandboxActions.removeEnvironment,
   setEnvironmentVisibility: sandboxActions.setEnvironmentVisibility,
   updateEnvironment: sandboxActions.updateEnvironment,

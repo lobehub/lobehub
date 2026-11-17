@@ -3,9 +3,7 @@
 import {
   Button,
   createModal,
-  cssVar as lobeCssVar,
   Flexbox,
-  Input,
   ModalFooter,
   Segmented,
   Text,
@@ -26,8 +24,10 @@ import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
-import { parseGithubRepository } from './CreateFromGithub/githubRepository';
-import RepositoryList from './CreateFromGithub/RepositoryList';
+import RepositorySource, {
+  repositoryOf,
+  type RepositorySourceValue,
+} from './CreateFromGithub/RepositorySource';
 import { environmentRepositoryUrl, reusableEnvironments } from './environmentSource';
 
 const styles = stylex.create({
@@ -69,10 +69,7 @@ const styles = stylex.create({
 type Source = 'existing' | 'github';
 
 interface AddEnvironmentContentProps {
-  /**
-   * Where the dialog opens. A project's environment list opens it on the
-   * environments already configured, since making one has its own button there.
-   */
+  /** Where the dialog opens: a GitHub repository unless the caller says otherwise. */
   defaultSource?: Source;
   /** Called with the environment now linked to the project. */
   onAdded?: (environmentId: string) => void;
@@ -108,13 +105,11 @@ const AddEnvironmentContent = ({
   const reusable = reusableEnvironments(owned, linked, publish);
 
   const [source, setSource] = useState<Source>(defaultSource);
-  const [url, setUrl] = useState('');
-  const [defaultBranch, setDefaultBranch] = useState<string>();
+  const [picked, setPicked] = useState<RepositorySourceValue>({ url: '' });
   const [existingId, setExistingId] = useState<string>();
   const [adding, setAdding] = useState(false);
 
-  const repository = parseGithubRepository(url);
-  const urlInvalid = Boolean(url.trim()) && !repository;
+  const repository = repositoryOf(picked);
   const existing = reusable.find((environment) => environment.id === existingId);
   const ready = source === 'github' ? !!repository : !!existing;
 
@@ -126,7 +121,11 @@ const AddEnvironmentContent = ({
       if (source === 'github') {
         const environment = await attachRepository({
           projectId,
-          repository: { defaultBranch, name: repository!.fullName, url: repository!.url },
+          repository: {
+            defaultBranch: picked.defaultBranch,
+            name: repository!.fullName,
+            url: repository!.url,
+          },
           ...(publish && { visibility: 'public' as const }),
         });
         environmentId = environment.id;
@@ -158,39 +157,15 @@ const AddEnvironmentContent = ({
         />
         {source === 'github' ? (
           <>
-            <RepositoryList
-              selected={repository?.fullName}
+            <RepositorySource
+              value={picked}
+              onChange={setPicked}
+              onSubmit={add}
               onConnect={() => {
                 close();
                 navigate(GITHUB_RETURN_TO);
               }}
-              onSelect={(picked) => {
-                setUrl(picked.htmlUrl);
-                setDefaultBranch(picked.defaultBranch);
-              }}
             />
-            <Flexbox gap={6}>
-              <Text fontSize={13} weight={500}>
-                {t('createFromGithub.urlLabel')}
-              </Text>
-              <Input
-                aria-invalid={urlInvalid}
-                placeholder={t('createFromGithub.urlPlaceholder')}
-                style={urlInvalid ? { borderColor: lobeCssVar.colorError } : undefined}
-                value={url}
-                onPressEnter={add}
-                onChange={(event) => {
-                  setUrl(event.target.value);
-                  // A typed URL names no branch; the repository's default applies.
-                  setDefaultBranch(undefined);
-                }}
-              />
-              {urlInvalid && (
-                <Text fontSize={12} type={'danger'}>
-                  {t('createFromGithub.urlInvalid')}
-                </Text>
-              )}
-            </Flexbox>
             {publish && (
               <Text fontSize={12} type={'secondary'}>
                 {t('overview.context.repository.publishHint')}

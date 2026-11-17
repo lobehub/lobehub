@@ -98,6 +98,18 @@ export class SandboxActionImpl {
     return created;
   };
 
+  createFromRepository = async (params: {
+    name: string;
+    ref?: string;
+    url: string;
+    visibility?: EnvironmentVisibility;
+  }): Promise<CreatedEnvironment> => {
+    const created = await environmentService.createFromRepository(params);
+    await this.refreshEnvironments();
+
+    return created;
+  };
+
   updateEnvironment = async (params: {
     configuration?: SandboxEnvironmentSpecification;
     description?: string;

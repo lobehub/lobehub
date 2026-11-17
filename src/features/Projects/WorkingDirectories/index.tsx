@@ -13,19 +13,11 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import {
-  ContainerIcon,
-  FolderIcon,
-  LinkIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  UnlinkIcon,
-} from 'lucide-react';
+import { ContainerIcon, FolderIcon, MoreHorizontalIcon, PlusIcon, UnlinkIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
 import EnvironmentDetailPanel from '@/features/EnvironmentManager/EnvironmentDetailPanel';
 import EnvironmentItem from '@/features/EnvironmentManager/EnvironmentItem';
 import { EnvironmentListSkeleton } from '@/features/EnvironmentManager/Skeleton';
@@ -93,7 +85,7 @@ interface ProjectWorkingDirectoriesProps {
 /**
  * The environments a project works with. They are the environments configured
  * in settings — the same rows, the same detail panel — linked to the project:
- * linking one, making a new one here or unlinking one never makes a second copy
+ * adding one — from GitHub or from settings — or unlinking one never makes a second copy
  * of a specification, so an edit made on either page is the edit.
  */
 export function ProjectWorkingDirectories({
@@ -105,7 +97,6 @@ export function ProjectWorkingDirectories({
   const navigate = useWorkspaceAwareNavigate();
   const linkedRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
-  const attachEnvironment = useProjectDirectoryStore((s) => s.attachEnvironment);
   const detachEnvironment = useProjectDirectoryStore((s) => s.detachEnvironment);
   const linked = useProjectEnvironments(projectId);
   const directories = useProjectDirectories(projectId);
@@ -137,9 +128,10 @@ export function ProjectWorkingDirectories({
     if (previous && hasEditedEnvironment(previous, rows)) void refreshEnvironments();
   }, [rows, refreshEnvironments]);
 
+  // The one way in: a repository from GitHub — made into an environment when
+  // there is none for it yet — or one already configured.
   const link = () =>
     openAddEnvironmentModal({
-      defaultSource: 'existing',
       onAdded: (environmentId) => {
         setSelectedId(environmentId);
         // A repository added from GitHub may have made a new environment.
@@ -148,21 +140,6 @@ export function ProjectWorkingDirectories({
       projectId,
       publish: shared,
     });
-
-  const create = () =>
-    openCreateEnvironmentModal(
-      shared ? 'public' : undefined,
-      async (created) => {
-        try {
-          await attachEnvironment(projectId, created.id);
-          setSelectedId(created.id);
-        } catch (error) {
-          console.error('Failed to link the new environment to the project', error);
-          toast.error(t('environment.add.failed'));
-        }
-      },
-      t('environment.create'),
-    );
 
   const unlink = (environment: { id: string; name: string }) =>
     confirmModal({
@@ -221,11 +198,8 @@ export function ProjectWorkingDirectories({
 
   const actions = canManage && (
     <Flexbox horizontal align="center" gap={8} style={{ flex: 'none' }}>
-      <Button icon={<Icon icon={LinkIcon} />} onClick={link}>
+      <Button icon={<Icon icon={PlusIcon} />} type="primary" onClick={link}>
         {t('environment.link')}
-      </Button>
-      <Button icon={<Icon icon={PlusIcon} />} type="primary" onClick={create}>
-        {t('environment.create')}
       </Button>
     </Flexbox>
   );

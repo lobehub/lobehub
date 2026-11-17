@@ -4679,23 +4679,24 @@ When I am ___, I need ___
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
-  'tab.environments': 'Environments',
+  'tab.environments': 'Repositories',
   'environments.desc':
-    "How to set up a project: the repository to check out, the setup command, the variables. Pick one from the environment menu under the chat input, and the conversation's working directory — a temporary sandbox or a folder on your drive — is initialized from it once.",
-  'environments.create': 'New environment',
+    "The repositories conversations work in, and how each is set up: the branch to check out, the setup command, the variables. Pick one from the environment menu under the chat input, and the conversation's working directory — a temporary sandbox or a folder on your drive — is initialized from it once.",
+  'environments.create': 'Add repository',
+  'environments.add': 'Add',
   'environments.cancel': 'Cancel',
-  'environments.createFailed': 'Could not create the environment',
+  'environments.createFailed': 'Could not add the repository',
   'environments.namePlaceholder': 'Environment name',
-  'environments.empty': 'No environments yet',
-  'environments.removeFailed': 'Could not delete this environment',
+  'environments.empty': 'No repositories yet',
+  'environments.removeFailed': 'Could not delete this repository',
   'environments.saveFailed': 'Could not save this change',
   'environments.instances.removeFailed': 'Could not delete this copy',
   'environments.instances.removing': 'Deleting — removing its folder and everything in it',
   'environments.instances.removeConfirmTitle': 'Delete copy {{name}}?',
   'environments.instances.removeConfirmContent':
     'Its folder and everything it kept — installed packages, reports, data — will be deleted. This cannot be undone.',
-  'environments.remove': 'Delete environment',
-  'environments.removeConfirmTitle': 'Delete environment {{name}}?',
+  'environments.remove': 'Delete repository',
+  'environments.removeConfirmTitle': 'Delete repository {{name}}?',
   'environments.removeConfirmContent':
     'Its specification and variables are deleted and cannot be recovered. Folders it initialized keep their files; copies built by an earlier version are removed with it.',
   'environments.storage.used': '{{used}} of {{total}}',
@@ -4703,13 +4704,12 @@ When I am ___, I need ___
   'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
   'environments.storage.over':
     'Over the storage limit. Saving a file is refused until you delete something.',
-  'environments.duplicateName': 'You already have an environment with this name',
   'environments.inProject':
-    'A project still uses this environment — remove it from the project first',
+    'A project still uses this repository — remove it from the project first',
   'environments.hasInstances': 'Remove its other copies first',
   'environments.loadFailed.title': 'Could not check your plan',
   'environments.loadFailed.desc':
-    'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your environments.',
+    'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your repositories.',
   'environments.loadFailed.retry': 'Try again',
   'environments.unavailable.title': 'Drive storage is not available here',
   'environments.unavailable.desc':
@@ -4731,8 +4731,7 @@ When I am ___, I need ___
     'Could not refresh GitHub repositories. Showing the previous list. Try again.',
   'environments.github.loadFailed': 'Could not load GitHub repositories. Try again.',
   'environments.github.label': 'Repository',
-  'environments.github.notConnected':
-    'No GitHub connection yet — connect one to build an environment from a repository',
+  'environments.github.notConnected': 'No GitHub connection yet — connect one to add a repository',
   'environments.nameLabel': 'Name',
   'environments.github.optional': 'optional',
   'environments.github.organization': 'Organization',
@@ -4888,9 +4887,8 @@ When I am ___, I need ___
   'environments.visibility.tabs.workspace': 'Workspace',
   'environments.visibility.tabs.private': 'Private',
   'environments.visibility.publish': 'Publish to Workspace',
-  'environments.visibility.createPublishedConfirmTitle':
-    'Create this environment in the workspace?',
-  'environments.visibility.publishConfirmTitle': 'Publish this environment to the workspace?',
+  'environments.visibility.createPublishedConfirmTitle': 'Add this repository to the workspace?',
+  'environments.visibility.publishConfirmTitle': 'Publish this repository to the workspace?',
   'environments.visibility.publicTag': 'Published',
   'environments.visibility.changeFailed': "Could not change this environment's visibility",
   'environments.visibility.readonlyHint':
@@ -4903,7 +4901,7 @@ When I am ___, I need ___
   'environments.files.listFailed': 'This directory could not be listed',
   'environments.files.invalidPath': "The name has to stay inside this copy's directory",
   'environments.files.truncated': 'Only the first entries are shown',
-  'environments.mine': 'My environments',
+  'environments.mine': 'My repositories',
   'environments.form.basics': 'Basics',
   'environments.form.setup': 'Setup',
   'environments.form.runtime': 'Runtime and storage',
@@ -5041,7 +5039,7 @@ When I am ___, I need ___
   'drive.cleanup.collapse': 'Hide items',
   'drive.cleanup.moreItems': '{{count}} smaller items not listed',
   'drive.cleanup.environmentsHint':
-    'Environment snapshots are deleted together with their environment, on the Environments page.',
+    'Environment snapshots are deleted together with their repository, on the Repositories page.',
   'drive.cleanup.selected': '{{count}} selected · {{size}}',
   'drive.cleanup.selectHint': 'Select items, or a whole category, to delete',
   'drive.cleanup.delete': 'Delete selected',

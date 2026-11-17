@@ -25,7 +25,7 @@ const ALLOWED_SOURCE_HOSTS = new Set(['github.com', 'www.github.com']);
  * caller reaching it directly could otherwise store any URL, and a build would
  * then make the execution plane fetch it — an internal address included.
  */
-const environmentSourceSchema = z.object({
+export const environmentSourceSchema = z.object({
   kind: z.literal('git'),
   /** Where the checkout lands, relative to the instance's own directory. */
   path: relativePathSchema.optional(),
