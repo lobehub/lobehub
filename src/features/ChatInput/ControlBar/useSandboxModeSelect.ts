@@ -6,6 +6,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
+import { getRememberedSandboxDirectory } from './rememberedSandboxDirectory';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
 import {
   isPersistentSelection,
@@ -59,7 +60,12 @@ export const useSandboxModeSelect = (
 
   const toPersistent = useCallback(async () => {
     if (!onDrive) {
-      const next = resolveDefaultSandboxSelection(workspaceId);
+      // Back on the drive in the folder the agent's last conversation used,
+      // the same default a new conversation gets.
+      const next = resolveDefaultSandboxSelection(
+        workspaceId,
+        getRememberedSandboxDirectory({ userId, workspaceId }, agentId),
+      );
       // A conversation not started yet gets the default as a default, not as a
       // pick: a project conversation is then still given its repository checkout.
       if (scopeTopicId) await setSelection(next);

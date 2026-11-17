@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { rememberSandboxSelection } from './rememberedSandboxDirectory';
 import {
   prefersTemporarySandbox,
   TEMPORARY_SANDBOX_PREFERENCE_KEY,
@@ -46,7 +47,7 @@ const renderMode = () =>
   );
 
 beforeEach(() => {
-  localStorage.removeItem(TEMPORARY_SANDBOX_PREFERENCE_KEY);
+  localStorage.clear();
   state.driveStatus = 'ready';
   state.selection = {};
   state.topicId = undefined;
@@ -121,6 +122,19 @@ describe('useSandboxModeSelect', () => {
     expect(state.setSelection).not.toHaveBeenCalled();
     expect(state.seedPendingSandboxSelection).toHaveBeenCalledWith('agent-1', {
       workingDirectory: '.',
+    });
+  });
+
+  // T-14158: switching back to the persistent sandbox starts in the folder the
+  // agent's last conversation used, like a new conversation does.
+  it('gives a conversation back the remembered folder', async () => {
+    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'projects/demo' });
+
+    const { result } = renderMode();
+    await act(() => result.current.toPersistent());
+
+    expect(state.seedPendingSandboxSelection).toHaveBeenCalledWith('agent-1', {
+      workingDirectory: 'projects/demo',
     });
   });
 
