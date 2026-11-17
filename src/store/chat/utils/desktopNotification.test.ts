@@ -43,7 +43,11 @@ vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     getAgentMetaById: (agentId: string) => () =>
-      agentId === 'agent-named' ? { avatar: '🤖', title: 'My Agent' } : undefined,
+      agentId === 'agent-named'
+        ? { avatar: '🤖', title: 'My Agent' }
+        : agentId === 'agent-character'
+          ? { avatar: 'generated:character-1', title: 'Picked Character' }
+          : undefined,
   },
 }));
 vi.mock('./notificationAvatar', () => ({
@@ -240,6 +244,26 @@ describe('buildNotificationSender', () => {
     });
 
     expect(sender?.conversationId).toBe('g1:t1');
+  });
+
+  it('passes the emoji or image on to be drawn', async () => {
+    await buildNotificationSender({ agentId: 'agent-named' });
+
+    expect(renderAvatarToDataUrl).toHaveBeenLastCalledWith(
+      'agent-named',
+      expect.objectContaining({ avatar: '🤖' }),
+    );
+  });
+
+  // The canvas draws any non-image avatar as text, so a picked character would
+  // show up as its stored `generated:<seed>` value.
+  it('does not hand a picked character to the canvas', async () => {
+    await buildNotificationSender({ agentId: 'agent-character' });
+
+    expect(renderAvatarToDataUrl).toHaveBeenLastCalledWith(
+      'agent-character',
+      expect.objectContaining({ avatar: undefined }),
+    );
   });
 
   it('keeps the sender when avatar rendering fails', async () => {

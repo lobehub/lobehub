@@ -4,7 +4,6 @@ import type { AcceptanceCommentItem } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
-  Avatar,
   confirmModal,
   DropdownMenu,
   Flexbox,
@@ -18,6 +17,7 @@ import { Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';

@@ -11,9 +11,13 @@ export const GENERATED_AGENT_AVATAR_PREFIX = 'generated:';
 export const toGeneratedAgentAvatar = (seed: string): string =>
   `${GENERATED_AGENT_AVATAR_PREFIX}${seed}`;
 
-/** The seed an `avatar` picked, if it picked a generated character. */
-export const parseGeneratedAgentAvatar = (avatar?: string | null): string | undefined => {
-  if (!avatar?.startsWith(GENERATED_AGENT_AVATAR_PREFIX)) return undefined;
+/**
+ * The seed an `avatar` picked, if it picked a generated character. Takes any
+ * avatar value, since plain avatars also accept elements.
+ */
+export const parseGeneratedAgentAvatar = (avatar?: unknown): string | undefined => {
+  if (typeof avatar !== 'string' || !avatar.startsWith(GENERATED_AGENT_AVATAR_PREFIX))
+    return undefined;
 
   return avatar.slice(GENERATED_AGENT_AVATAR_PREFIX.length).trim() || undefined;
 };

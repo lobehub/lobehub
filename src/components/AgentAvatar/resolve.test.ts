@@ -43,6 +43,7 @@ describe('generated agent avatar values', () => {
     expect(parseGeneratedAgentAvatar(null)).toBeUndefined();
     expect(parseGeneratedAgentAvatar('generated:')).toBeUndefined();
     expect(parseGeneratedAgentAvatar('generated:  ')).toBeUndefined();
+    expect(parseGeneratedAgentAvatar({ type: 'span' })).toBeUndefined();
   });
 
   it('treats empty values and picked characters as drawn, emoji and images as not', () => {

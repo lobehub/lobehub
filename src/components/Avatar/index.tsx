@@ -1,7 +1,10 @@
 'use client';
 
 import { Avatar as LobeAvatar, type AvatarProps as LobeAvatarProps } from '@lobehub/ui';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, type Ref } from 'react';
+
+import GeneratedCharacter from '@/components/AgentAvatar/GeneratedCharacter';
+import { parseGeneratedAgentAvatar } from '@/components/AgentAvatar/resolve';
 
 import { remoteAvatarSrc, resolveAvatar } from './fallback';
 import { useBrokenSrc } from './useBrokenSrc';
@@ -31,13 +34,43 @@ export interface AvatarProps extends LobeAvatarProps {
  * The image element is rendered here rather than left to the library so this
  * component owns the `error` event. Probing the URL separately would let the
  * two disagree, and on disagreement the library's own "UN" fallback wins.
+ *
+ * An agent avatar that picked a generated character (`generated:<seed>`) draws
+ * that character here too, so an agent shown through a plain avatar still
+ * wears the character it picked instead of a placeholder.
  */
 const Avatar = memo<AvatarProps>(
-  ({ alt, avatar, background, brokenFallback, name, size = 48, title, unoptimized, ...rest }) => {
+  ({
+    alt,
+    avatar,
+    background,
+    brokenFallback,
+    name,
+    ref,
+    size = 48,
+    title,
+    unoptimized,
+    ...rest
+  }) => {
     const src = remoteAvatarSrc(avatar);
     const [isBroken, markBroken] = useBrokenSrc(src);
 
     if (isBroken && brokenFallback) return brokenFallback;
+
+    const characterSeed = parseGeneratedAgentAvatar(avatar);
+    if (characterSeed)
+      return (
+        <GeneratedCharacter
+          className={rest.className}
+          domProps={rest}
+          name={name || title}
+          ref={ref as Ref<HTMLElement>}
+          seed={characterSeed}
+          size={size}
+          style={rest.style}
+          onClick={rest.onClick}
+        />
+      );
 
     const imgAlt = alt || name || title || 'avatar';
     const resolved = resolveAvatar({
@@ -70,6 +103,7 @@ const Avatar = memo<AvatarProps>(
         alt={imgAlt}
         avatar={resolved.avatar}
         background={resolved.background}
+        ref={ref}
         size={size}
         title={title}
         unoptimized={unoptimized}

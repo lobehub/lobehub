@@ -2,20 +2,12 @@
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName, type DeviceBoundAgentItem } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { ArrowUpRightIcon, LockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import TopicRow, { getTopicChatUrl } from '@/features/HomeInbox/TopicRow';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';

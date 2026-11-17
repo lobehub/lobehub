@@ -53,7 +53,7 @@ const createInboxOverlayAgentOption = (
   inboxAgentId: string,
   inboxMeta?: OverlayInboxMeta,
 ): ScreenCaptureAgentOption => ({
-  avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
+  avatar: customAgentAvatar(inboxMeta?.avatar) || DEFAULT_INBOX_AVATAR,
   backgroundColor: inboxMeta?.backgroundColor ?? undefined,
   id: inboxAgentId,
   title: agentDisplayName(inboxMeta, LOBE_AI_TITLE),

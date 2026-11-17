@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  Flexbox,
-  Freeze,
-  Icon,
-  Popover,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheckIcon,
@@ -23,6 +14,7 @@ import {
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
 import type { EntityPreview } from '@/store/entityPreview';
