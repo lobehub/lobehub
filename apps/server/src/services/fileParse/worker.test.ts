@@ -16,6 +16,8 @@ import { FileParseError, parseDatasetInWorker, parseFileInWorker } from './index
 // a worker busy for ~1.5s, which on the request thread would stall every timer for as long.
 const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 const SPARSE_ROWS = 100_000;
+// Starting a real worker and walking the sparse range can exceed Vitest's default under CI load.
+const SPARSE_PARSE_TEST_TIMEOUT_MS = 20_000;
 const CORRUPTED_PPTX = here(
   '../../../../../packages/file-loaders/src/loaders/pptx/fixtures/corrupted-slides.pptx',
 );
@@ -75,37 +77,45 @@ const trackTimerProgress = () => {
 };
 
 describe('file parse worker artifact', () => {
-  it('parses a spreadsheet with a huge declared range without stalling the main thread', async () => {
-    const stop = trackTimerProgress();
-    let ticks = 0;
+  it(
+    'parses a spreadsheet with a huge declared range without stalling the main thread',
+    async () => {
+      const stop = trackTimerProgress();
+      let ticks = 0;
 
-    const document = await parseFileInWorker(SPARSE_XLSX, {
-      fileId: 'file-sparse',
-      mode: 'file',
-    }).finally(() => {
-      ticks = stop();
-    });
+      const document = await parseFileInWorker(SPARSE_XLSX, {
+        fileId: 'file-sparse',
+        mode: 'file',
+      }).finally(() => {
+        ticks = stop();
+      });
 
-    expect(document.content).toContain('tail');
-    // A callback ran while the parse was pending on its worker thread.
-    expect(ticks).toBeGreaterThan(0);
-  });
+      expect(document.content).toContain('tail');
+      // A callback ran while the parse was pending on its worker thread.
+      expect(ticks).toBeGreaterThan(0);
+    },
+    SPARSE_PARSE_TEST_TIMEOUT_MS,
+  );
 
-  it('parses an eval dataset spreadsheet in the same bounded worker', async () => {
-    const content = new Uint8Array(await readFile(SPARSE_XLSX));
-    const stop = trackTimerProgress();
-    let ticks = 0;
+  it(
+    'parses an eval dataset spreadsheet in the same bounded worker',
+    async () => {
+      const content = new Uint8Array(await readFile(SPARSE_XLSX));
+      const stop = trackTimerProgress();
+      let ticks = 0;
 
-    const result = await parseDatasetInWorker<{ totalCount: number }>(content, {
-      filename: 'sparse.xlsx',
-      preview: 50,
-    }).finally(() => {
-      ticks = stop();
-    });
+      const result = await parseDatasetInWorker<{ totalCount: number }>(content, {
+        filename: 'sparse.xlsx',
+        preview: 50,
+      }).finally(() => {
+        ticks = stop();
+      });
 
-    expect(ticks).toBeGreaterThan(0);
-    expect(result.totalCount).toBeGreaterThan(0);
-  });
+      expect(ticks).toBeGreaterThan(0);
+      expect(result.totalCount).toBeGreaterThan(0);
+    },
+    SPARSE_PARSE_TEST_TIMEOUT_MS,
+  );
 
   it('parses CSV datasets and reports a broken JSON dataset as a parse failure', async () => {
     await expect(

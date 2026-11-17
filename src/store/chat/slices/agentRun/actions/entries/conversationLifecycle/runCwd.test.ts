@@ -37,29 +37,47 @@ const base = {
   workspaceScoped: false,
 };
 
-describe('resolveSendRunCwd with a directory prepared by the composer', () => {
-  it('runs a new topic in the worktree made just before sending', async () => {
-    const result = await resolveSendRunCwd({ ...base, draftWorkingDirectory: worktree });
+const existingTopic = {
+  metadata: { boundDeviceId: 'dev-1', workingDirectoryConfig: worktree },
+};
+
+describe('resolveSendRunCwd with a pinned worktree', () => {
+  it('starts a Desktop API-bound session in its newly created checkout', async () => {
+    const result = await resolveSendRunCwd({
+      ...base,
+      agencyConfig: { executionTarget: 'local' },
+      draftWorkingDirectory: worktree,
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+      inheritedTopic: { metadata: { workingDirectoryConfig: { path: '/code/old' } } },
+      stagedDirectoryPath: worktree.path,
+    });
+
+    expect(result.workingDirectoryConfig).toEqual(worktree);
+    expect(result.workingDirectory).toBe(worktree.sessionPath);
+  });
+
+  it('keeps a device-bound topic in its saved worktree', async () => {
+    const result = await resolveSendRunCwd({ ...base, existingTopic });
 
     expect(result.runCwdDeviceId).toBe('dev-1');
     expect(result.workingDirectoryConfig).toEqual(worktree);
     expect(result.workingDirectory).toBe(worktree.git!.activeWorktree);
   });
 
-  it('runs a local CLI agent in that worktree too: its session has not started yet', async () => {
+  it('continues a local CLI agent’s session in the same worktree', async () => {
     const result = await resolveSendRunCwd({
       ...base,
-      draftWorkingDirectory: worktree,
+      existingTopic,
       heterogeneousProvider: { type: 'claude-code' },
     });
 
     expect(result.workingDirectory).toBe(worktree.git!.activeWorktree);
   });
 
-  it('outranks the staged project directory', async () => {
+  it('keeps an existing topic’s worktree instead of taking a staged project directory', async () => {
     const result = await resolveSendRunCwd({
       ...base,
-      draftWorkingDirectory: worktree,
+      existingTopic,
       stagedDirectoryPath: '/code/lobehub',
     });
 
@@ -72,7 +90,6 @@ describe('resolveSendRunCwd with a directory prepared by the composer', () => {
     };
     const result = await resolveSendRunCwd({
       ...base,
-      draftWorkingDirectory: worktree,
       existingTopic,
     });
 
@@ -80,7 +97,7 @@ describe('resolveSendRunCwd with a directory prepared by the composer', () => {
     expect(result.workingDirectory).toBe('/code/other');
   });
 
-  it('keeps the agent default without one', async () => {
+  it('keeps the agent default for topics without a pinned directory', async () => {
     const result = await resolveSendRunCwd(base);
     expect(result.workingDirectoryConfig).toEqual({ path: '/code/lobehub' });
   });

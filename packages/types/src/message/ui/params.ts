@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
+import type { FirstSendWorktree } from '../../topic';
 import type { WorkingDirConfig } from '../../workingDir';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
@@ -135,6 +136,10 @@ export interface SendMessageParams {
   editorData?: Record<string, any>;
   files?: UploadFileItem[];
   /**
+   * Create this worktree on the device after the server has accepted the first send.
+   */
+  firstSendWorktree?: FirstSendWorktree;
+  /**
    * Force the agent runtime regardless of the agent's local/cloud/hetero
    * config. Injected straight into `selectRuntimeType` as `parentRuntime`,
    * so it wins over every other signal. Used by task topics (which were
@@ -154,16 +159,12 @@ export interface SendMessageParams {
    * This decouples sendMessage from store selectors.
    */
   messages?: UIChatMessage[];
+
   /**
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
-
-  /**
-   * The working directory a topic this send creates runs in, prepared by the
-   * composer right before sending (a worktree it just created). Ignored when
-   * the send lands in an existing topic, whose directory is its own.
-   */
+  /** A checkout already prepared for this new topic by the Desktop client. */
   newTopicWorkingDirectory?: WorkingDirConfig;
   onlyAddUserMessage?: boolean;
   /**

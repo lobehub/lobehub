@@ -361,11 +361,13 @@ export interface TurnSetupInput {
   openedByTopicId?: string;
   operationTaskId?: string;
   parentMessageId?: string;
+  persistedUserMessageId?: string;
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
   /** See `InternalExecAgentParams.requireDevice`. */
   requireDevice?: boolean;
+  reservedOperationId?: string;
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
@@ -474,10 +476,12 @@ export const setupTurn = async (
     modelOverride,
     operationTaskId,
     parentMessageId,
+    persistedUserMessageId,
     prompt,
     providerOverride,
     requestedDeviceId,
     requireDevice,
+    reservedOperationId,
     resolvedAgentId,
     resume,
     runFromHistory,
@@ -721,6 +725,17 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      const pendingRun = existingTopic?.metadata?.scheduledRun;
+      if (
+        existingTopic?.status === 'scheduled' &&
+        pendingRun?.kind === 'worktree_start' &&
+        pendingRun.operationId !== reservedOperationId
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This conversation is preparing its worktree.',
+        });
+      }
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
       turnProjectId = await resolveTurnProjectId(deps, {
         shareGate,
@@ -1151,6 +1166,6 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
-    userMessageId: userMessageRecord?.id,
+    userMessageId: userMessageRecord?.id ?? persistedUserMessageId,
   };
 };

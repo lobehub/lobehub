@@ -198,6 +198,19 @@ describe('local file preview replica', () => {
     );
   });
 
+  it('includes the topic in the remote file preview request and cache key', async () => {
+    const target = { ...NOTES, topicId: 'tpc_worktree' };
+    vi.mocked(projectFileService.getLocalFilePreview).mockResolvedValue(textPreview('in topic'));
+
+    const { result } = renderPreview(target);
+
+    await waitFor(() => expect(result.current.preview).toEqual(textPreview('in topic')));
+    expect(projectFileService.getLocalFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'device-a', topicId: 'tpc_worktree' }),
+    );
+    expect(localFilePreviewKey(target)).not.toBe(localFilePreviewKey(NOTES));
+  });
+
   it.each(['local', 'sandbox:build'])(
     'reads a device whose id is %s from that device, not a reserved source',
     async (deviceId) => {
