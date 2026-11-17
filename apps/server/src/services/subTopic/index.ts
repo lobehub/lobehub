@@ -108,6 +108,11 @@ export interface SubTopicDeps {
   }) => Promise<{ queued: boolean; reason?: string }>;
   archiveTopic: (topicId: string) => Promise<unknown>;
   /**
+   * Throws unless the caller may edit these topics (`use` on their agent) —
+   * what `topic.updateTopic` checks, so view-only members stay read-only.
+   */
+  assertCanEditTopics: (topicIds: string[]) => Promise<void>;
+  /**
    * Throws unless the caller may run `agentId` in a conversation opened from
    * `openerTopicId` — the same workspace checks `aiAgent.execAgent` applies.
    */
@@ -527,7 +532,7 @@ export class SubTopicService {
     }
 
     const children = await this.deps.listOpened([root.id]);
-    const detached = await this.deps.detachTopics(children.map((child) => child.id));
+    const detached = await this.detachChecked(children.map((child) => child.id));
     await retireOne(root.id);
     return { detached: this.describeMoves(root, detached), retired: [root.id] };
   }
@@ -549,6 +554,13 @@ export class SubTopicService {
       cursor = openedBy.topicId;
     }
     return false;
+  }
+
+  /** Move sub-topics to the top level, once the caller may edit each of them. */
+  private async detachChecked(topicIds: string[]) {
+    if (topicIds.length === 0) return [];
+    await this.deps.assertCanEditTopics(topicIds);
+    return this.deps.detachTopics(topicIds);
   }
 
   /** Move sub-topics to the top level. */
@@ -573,7 +585,7 @@ export class SubTopicService {
       }
     }
 
-    const detached = await this.deps.detachTopics(topics.map((topic) => topic.id));
+    const detached = await this.detachChecked(topics.map((topic) => topic.id));
     return {
       detached: detached.map((row) => {
         const topic = topics.find((item) => item.id === row.id);

@@ -11,6 +11,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertCanUseTopicTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
@@ -87,6 +88,9 @@ export const createSubTopicService = (ctx: CallerCtx) => {
         userId: ctx.userId,
         workspaceId,
       });
+    },
+    assertCanEditTopics: async (topicIds) => {
+      await assertCanUseTopicTargets({ db, userId: ctx.userId, workspaceId }, topicIds);
     },
     detachTopics: (topicIds) => topicModel.detachOpenedTopics(topicIds),
     execAgent: (params) =>

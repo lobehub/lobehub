@@ -37,6 +37,7 @@ const createDeps = () =>
     })),
     appendFollowUp: vi.fn().mockResolvedValue({ queued: false, reason: 'idle' }),
     archiveTopic: vi.fn().mockResolvedValue(undefined),
+    assertCanEditTopics: vi.fn().mockResolvedValue(undefined),
     assertCanOpen: vi.fn().mockResolvedValue(undefined),
     detachTopics: vi.fn(async (ids: string[]) =>
       ids.map((id) => ({
@@ -527,6 +528,29 @@ describe('SubTopicService.retire — attachments', () => {
 
     expect(deps.trashTopic).toHaveBeenCalledWith('tpc_same', { removeFiles: false });
     expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent', { removeFiles: false });
+  });
+});
+
+describe('SubTopicService — edit access', () => {
+  it('refuses to move sub-topics the caller may only view', async () => {
+    const deps = createDeps();
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(new SubTopicService(deps).detach(['tpc_cross'])).rejects.toThrow('FORBIDDEN');
+    expect(deps.assertCanEditTopics).toHaveBeenCalledWith(['tpc_cross']);
+    expect(deps.detachTopics).not.toHaveBeenCalled();
+  });
+
+  it('checks the direct sub-topics before "only this one" moves them up, and retires nothing on refusal', async () => {
+    const deps = createDeps();
+    deps.listOpened.mockResolvedValue([{ id: 'tpc_same' }] as any);
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(
+      new SubTopicService(deps).retire({ action: 'archive', mode: 'self', topicId: 'tpc_parent' }),
+    ).rejects.toThrow('FORBIDDEN');
+    expect(deps.detachTopics).not.toHaveBeenCalled();
+    expect(deps.archiveTopic).not.toHaveBeenCalled();
   });
 });
 
