@@ -350,6 +350,7 @@ export const executeDeviceRpc = async (
         const file = rpc.params.path;
         const entry = await lstat(file).catch((error: NodeJS.ErrnoException) => {
           if (error.code !== 'ENOENT') throw error;
+          return undefined;
         });
         if (entry?.isSymbolicLink()) await guardMutation(worktreePath, [await realpath(file)]);
       }
