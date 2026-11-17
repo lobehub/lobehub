@@ -6,11 +6,20 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
+// Replay counts go through `redisService.botDeferred`; only its connection seam is faked.
+const serviceClient = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock('@/server/services/redis/client', () => ({
+  getRedisServiceClient: async () => serviceClient.current,
+}));
+
 const { MAX_REPLAYS_PER_MESSAGE, deferBotMessages, replayDeferredBotMessages } =
   await import('../deferredMessages');
 const { getOriginMessageId } = await import('../mergeMessages');
 
-/** In-memory Redis with the list / hash commands the deferred queue uses. */
+/**
+ * In-memory Redis: the list commands the deferred queue sends to the agent-runtime client, and
+ * (as `service`) the counter commands `redisService.botDeferred` sends to its own client.
+ */
 function createStatefulRedis() {
   const lists = new Map<string, string[]>();
   /** Set to lose every acknowledgement, the way a crash between the run and the `LREM` would. */
@@ -22,15 +31,7 @@ function createStatefulRedis() {
     return lists.get(key)!;
   };
   const commands = {
-    expire: (key: string, seconds: number) => {
-      ttls.set(key, seconds);
-      return 1;
-    },
-    incrby: (key: string, by: number) => {
-      const next = (counters.get(key) ?? 0) + by;
-      counters.set(key, next);
-      return next;
-    },
+    expire: () => 1,
     lrem: (key: string, count: number, value: string) => {
       const items = list(key);
       const index = items.indexOf(value);
@@ -52,8 +53,28 @@ function createStatefulRedis() {
     counters,
     faults,
     lists,
-    mget: async (...keys: string[]) =>
-      keys.map((key) => (counters.has(key) ? String(counters.get(key)) : null)),
+    service: {
+      mget: async (...keys: string[]) =>
+        keys.map((key) => (counters.has(key) ? String(counters.get(key)) : null)),
+      pipeline: () => {
+        const queued: Array<() => unknown> = [];
+        const add = (key: string, by: number) => {
+          const next = (counters.get(key) ?? 0) + by;
+          counters.set(key, next);
+          return next;
+        };
+        const chain: any = {
+          decr: (key: string) => (queued.push(() => add(key, -1)), chain),
+          exec: async () => queued.map((run) => [null, run()]),
+          expire: (key: string, seconds: number) => (
+            queued.push(() => ttls.set(key, seconds)),
+            chain
+          ),
+          incr: (key: string) => (queued.push(() => add(key, 1)), chain),
+        };
+        return chain;
+      },
+    },
     ttls,
     lrange: async (key: string) => [...list(key)],
     multi: () => {
@@ -83,6 +104,7 @@ describe('deferred replay loop', () => {
   beforeEach(() => {
     redis = createStatefulRedis();
     mockGetAgentRuntimeRedisClient.mockReturnValue(redis);
+    serviceClient.current = redis.service;
   });
 
   /**
@@ -206,8 +228,8 @@ describe('deferred replay loop', () => {
     // message's counter still expires while the thread stays busy.
     const counterKeys = [...redis.counters.keys()];
     expect(counterKeys).toEqual([
-      'bot:deferred-replays:app-1:feishu:group:oc_1:om_1',
-      'bot:deferred-replays:app-1:feishu:group:oc_1:om_2',
+      'replays:v1:app-1:feishu:group:oc_1:om_1',
+      'replays:v1:app-1:feishu:group:oc_1:om_2',
     ]);
     for (const key of counterKeys) expect(redis.ttls.get(key)).toBe(30 * 60);
   });

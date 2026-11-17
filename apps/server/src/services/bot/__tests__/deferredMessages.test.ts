@@ -6,6 +6,9 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
+// No `redisService` connection: the replay budget fails open, as it does without Redis.
+vi.mock('@/server/services/redis/client', () => ({ getRedisServiceClient: async () => null }));
+
 const {
   buildDeferredMessagesKey,
   deferBotMessages,
@@ -18,7 +21,7 @@ const {
 function createRedis(execResult: unknown = []) {
   const calls: Array<[string, ...unknown[]]> = [];
   const chain: any = {};
-  for (const cmd of ['rpush', 'ltrim', 'expire', 'lrem', 'incrby']) {
+  for (const cmd of ['rpush', 'ltrim', 'expire', 'lrem']) {
     chain[cmd] = vi.fn((...args: unknown[]) => {
       calls.push([cmd, ...args]);
       return chain;
@@ -28,7 +31,6 @@ function createRedis(execResult: unknown = []) {
   return {
     calls,
     chain,
-    mget: vi.fn().mockResolvedValue([]),
     lrange: vi.fn().mockResolvedValue([]),
     multi: vi.fn(() => chain),
   };
