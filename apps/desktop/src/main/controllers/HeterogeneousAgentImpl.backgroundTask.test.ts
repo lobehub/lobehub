@@ -1,3 +1,6 @@
+import { PassThrough } from 'node:stream';
+
+import { ClaudeCodeLiveInput } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentCtr from './HeterogeneousAgentImpl';
@@ -45,7 +48,31 @@ describe('HeterogeneousAgentCtr.stopBackgroundTask', () => {
     expect(stopTask).toHaveBeenCalledWith('bys1w0wxo');
   });
 
-  it('refuses a run without an SDK session', async () => {
+  it('writes stop_task into a CLI spawned with live input (Steer)', async () => {
+    const stdin = new PassThrough();
+    const written: any[] = [];
+    stdin.on('data', (chunk: Buffer) => {
+      for (const raw of chunk.toString().split('\n')) if (raw) written.push(JSON.parse(raw));
+    });
+    const liveInput = new ClaudeCodeLiveInput(stdin);
+    const ctr = createCtr({ cli: { liveInput, process: {} } });
+
+    const stopping = ctr.stopBackgroundTask({ sessionId: 'cli', taskId: 'bys1w0wxo' });
+    await vi.waitFor(() => expect(written).toHaveLength(1));
+    expect(written[0]).toMatchObject({
+      request: { subtype: 'stop_task', task_id: 'bys1w0wxo' },
+      type: 'control_request',
+    });
+    liveInput.observe(
+      `${JSON.stringify({
+        response: { request_id: written[0].request_id, response: {}, subtype: 'success' },
+        type: 'control_response',
+      })}\n`,
+    );
+    await expect(stopping).resolves.toBeUndefined();
+  });
+
+  it('refuses a one-shot CLI run, whose stdin closed after the prompt', async () => {
     const ctr = createCtr({ cli: { process: {} } });
 
     await expect(ctr.stopBackgroundTask({ sessionId: 'cli', taskId: 't' })).rejects.toThrow(

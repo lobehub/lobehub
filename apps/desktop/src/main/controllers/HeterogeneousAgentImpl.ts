@@ -85,6 +85,7 @@ import {
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   spawnDshAcpSession,
+  stopClaudeCodeTask,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   buildClaudeCodeReplayTurn,
@@ -3170,15 +3171,17 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
-   * Stop one background task of a Claude Code SDK run. Only the SDK session
-   * takes a per-task stop; a plain CLI spawn closed its stdin after the prompt.
-   * Resolves once CC accepted the request; its `stopped` notification is the
-   * proof, and reaches the renderer through the run's own event stream.
+   * Stop one background task of a Claude Code run whose input is still open:
+   * the SDK session, or a CLI spawned with live input (Steer); a one-shot CLI
+   * closed its stdin. Resolves once CC accepted the request; its `stopped`
+   * report, the proof, reaches the renderer through the run's own stream.
    */
   async stopBackgroundTask({ sessionId, taskId }: StopBackgroundTaskParams): Promise<void> {
-    const sdkSession = this.sessions.get(sessionId)?.sdkSession;
-    if (!sdkSession) throw new Error('This run cannot stop a single background task');
-    await sdkSession.stopTask(taskId);
+    const session = this.sessions.get(sessionId);
+    if (session?.sdkSession) return session.sdkSession.stopTask(taskId);
+    const live = session?.liveInput;
+    if (!live) throw new Error('This run cannot stop a single background task');
+    await stopClaudeCodeTask((request) => live.sendControlRequest(request), taskId);
   }
 
   /**

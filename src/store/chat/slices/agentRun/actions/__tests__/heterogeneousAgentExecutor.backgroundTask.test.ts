@@ -18,6 +18,9 @@ import {
   setupIpcCapture,
 } from './heterogeneousAgentExecutor.testUtils';
 
+const followUp = vi.hoisted(() => ({ mode: 'queue' as 'legacy' | 'queue' | 'steer' }));
+vi.mock('../lifecycle/followUpMode', () => ({ getFollowUpMode: () => followUp.mode }));
+
 const mockSendPrompt = vi.fn();
 const mockStartSession = vi.fn();
 const mockStopBackgroundTask = vi.fn();
@@ -120,6 +123,7 @@ describe('heterogeneousAgentExecutor background tasks', () => {
     vi.clearAllMocks();
     ipc = setupIpcCapture();
     stopperDuringRun = undefined;
+    followUp.mode = 'queue';
     mockStartSession.mockResolvedValue({ sessionId: 'ipc-sess-1' });
     mockSendPrompt.mockImplementation(async (params: any) => {
       ipc.emitRawLine(params.sessionId, ccInit());
@@ -179,10 +183,25 @@ describe('heterogeneousAgentExecutor background tasks', () => {
     expect(getLocalBackgroundTaskStopper(defaultParams.operationId)).toBeUndefined();
   });
 
-  it('offers no stop for a plain CLI spawn', async () => {
+  it('offers no stop for a one-shot CLI spawn (Queue mode closes its stdin)', async () => {
     await withSdkLab(false, () =>
       executeHeterogeneousAgent(() => createMockStore(), defaultParams),
     );
+    expect(mockSendPrompt.mock.calls[0][0]).not.toHaveProperty('liveSteer');
     expect(stopperDuringRun).toBeUndefined();
+  });
+
+  it('offers a stop for a CLI spawned with live input for Steer', async () => {
+    followUp.mode = 'steer';
+    await withSdkLab(false, () =>
+      executeHeterogeneousAgent(() => createMockStore(), defaultParams),
+    );
+
+    expect(mockSendPrompt.mock.calls[0][0]).toMatchObject({ liveSteer: true });
+    expect(stopperDuringRun).toBeDefined();
+    mockStopBackgroundTask.mockResolvedValue(undefined);
+    await stopperDuringRun!('bys1w0wxo');
+    expect(mockStopBackgroundTask).toHaveBeenCalledWith('ipc-sess-1', 'bys1w0wxo');
+    expect(getLocalBackgroundTaskStopper(defaultParams.operationId)).toBeUndefined();
   });
 });

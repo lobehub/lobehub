@@ -1892,7 +1892,6 @@ export const executeHeterogeneousAgent = async (
           }
         : undefined;
 
-    // Only the SDK session stops one background task; a plain CLI spawn closed its stdin.
     const useClaudeCodeSdk = labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState());
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
@@ -1958,11 +1957,6 @@ export const executeHeterogeneousAgent = async (
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
     const sidForCancel = ipcRunSessionId;
-    if (adapterType === 'claude-code' && useClaudeCodeSdk) {
-      unregisterTaskStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
-        heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
-      );
-    }
     get().onOperationCancel?.(operationId, async () => {
       try {
         await heterogeneousAgentService.cancelSession(sidForCancel);
@@ -2499,6 +2493,12 @@ export const executeHeterogeneousAgent = async (
         set: (id) => void (mainState = { ...mainState, lastSpineMessageId: id }),
       },
     });
+    // A task stop needs open input (SDK, or a CLI kept open for Steer); a one-shot CLI has none.
+    if (adapterType === 'claude-code' && (useClaudeCodeSdk || localSteer)) {
+      unregisterTaskStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
+        heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
+      );
+    }
     // Send the prompt — blocks until process exits
     const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
