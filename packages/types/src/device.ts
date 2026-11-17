@@ -677,6 +677,8 @@ export interface DeviceGitRemoveWorktreeResult {
 /** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
   reason?: typeof DEVICE_GIT_OUTDATED;
   /** Echo of the start point; see {@link DeviceGitCheckoutResult.startPoint}. */
   startPoint?: string;

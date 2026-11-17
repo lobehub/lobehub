@@ -193,6 +193,7 @@ class GitService {
   async addGitWorktree({
     branch,
     deviceId,
+    ownerToken,
     path,
     sourcePath,
     startPoint,
@@ -201,6 +202,8 @@ class GitService {
   }: {
     branch: string;
     deviceId?: string;
+    /** Creation receipt for a worktree the app makes for a conversation; echoed when recorded. */
+    ownerToken?: string;
     path: string;
     /** The repo's main checkout; the server keys the target folder on it. */
     sourcePath?: string;
@@ -213,7 +216,10 @@ class GitService {
     stripBranchPrefix?: boolean;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
-    const start = startPoint ? { startPoint } : {};
+    const start = {
+      ...(startPoint ? { startPoint } : {}),
+      ...(ownerToken ? { ownerToken } : {}),
+    };
     const result = deviceId
       ? await lambdaClient.device.addGitWorktree.mutate({
           branch,

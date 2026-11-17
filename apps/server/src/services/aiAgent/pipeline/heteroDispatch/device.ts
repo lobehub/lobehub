@@ -15,6 +15,7 @@ import {
   wakeManagedDevice,
 } from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
+import { restoreOwnedWorktreeBeforeServerRun } from '@/server/services/worktreeCleanup';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -120,7 +121,7 @@ export const dispatchToCliDevice = async (
     heteroExecArgs,
     heteroParams,
     resumeSessionId,
-    topic,
+    topic: preparedTopic,
     topicRepos,
     unansweredUserTurns,
   } = prepared;
@@ -189,6 +190,26 @@ export const dispatchToCliDevice = async (
     );
   }
   const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
+
+  // A turn the server starts on its own (a delegated task reporting back)
+  // never passed the composer's restore step: bring back the worktree a
+  // cleanup removed, so the CLI does not spawn in a folder that is gone.
+  const restored =
+    preparedTopic && topicId
+      ? await traceHeteroStage('device restore_owned_worktree', () =>
+          restoreOwnedWorktreeBeforeServerRun({
+            db: deps.db,
+            metadata: preparedTopic.metadata,
+            topicId,
+            userId: deps.userId,
+            workspaceId: deps.workspaceId,
+          }),
+        )
+      : undefined;
+  const topic =
+    preparedTopic && restored
+      ? { ...preparedTopic, metadata: restored.metadata ?? undefined }
+      : preparedTopic;
 
   // Resolve the working directory for the run: a topic-level override
   // wins, else the device's user-configured defaultCwd.

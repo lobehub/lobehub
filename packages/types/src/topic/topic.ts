@@ -12,6 +12,7 @@ import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
+import type { OwnedWorktree } from '../ownedWorktree';
 import type { OnboardingUnderstandingSession } from '../understanding';
 import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
 import type { TopicPullRequestsMeta } from '../work';
@@ -302,6 +303,13 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /**
+   * Worktrees the app created for this topic, and where their automatic
+   * cleanup stands. Server-owned: claimed whenever metadata is written with
+   * `workingDirectoryConfig.git.autoCreated`, and deliberately absent from
+   * the client-writable metadata schema. See `./ownedWorktree`.
+   */
+  ownedWorktrees?: OwnedWorktree[];
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**

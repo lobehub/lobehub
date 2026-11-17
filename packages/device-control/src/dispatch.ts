@@ -10,6 +10,7 @@ import {
 import {
   addGitWorktree,
   checkoutGitBranch,
+  cleanupOwnedWorktree,
   deleteGitBranch,
   getGitAheadBehind,
   getGitBranch,
@@ -29,6 +30,7 @@ import {
   pushGitBranch,
   removeGitWorktree,
   renameGitBranch,
+  restoreOwnedWorktree,
   revertGitFile,
   runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
@@ -128,6 +130,8 @@ export const DEVICE_RPC_METHODS = [
   'deleteGitBranch',
   'removeGitWorktree',
   'addGitWorktree',
+  'cleanupOwnedWorktree',
+  'restoreOwnedWorktree',
   'pullGitBranch',
   'pushGitBranch',
   'revertGitFile',
@@ -465,8 +469,41 @@ export const executeDeviceRpc = async (
 
     case 'addGitWorktree': {
       return addGitWorktree(
-        params as { branch: string; path: string; startPoint?: string; worktreePath: string },
+        params as {
+          branch: string;
+          ownerToken?: string;
+          path: string;
+          startPoint?: string;
+          worktreePath: string;
+        },
       );
+    }
+
+    // Only the named fields are forwarded: the guard root is the device's own
+    // `~/.lobehub/worktrees`, never something a request can widen.
+    case 'cleanupOwnedWorktree': {
+      const { discard, ownerToken, sourcePath, worktreePath } = params as {
+        discard?: boolean;
+        ownerToken?: string;
+        sourcePath: string;
+        worktreePath: string;
+      };
+      return cleanupOwnedWorktree({
+        discard: discard === true,
+        ownerToken,
+        sourcePath,
+        worktreePath,
+      });
+    }
+
+    case 'restoreOwnedWorktree': {
+      const { branch, ownerToken, sourcePath, worktreePath } = params as {
+        branch: string;
+        ownerToken?: string;
+        sourcePath: string;
+        worktreePath: string;
+      };
+      return restoreOwnedWorktree({ branch, ownerToken, sourcePath, worktreePath });
     }
 
     case 'pullGitBranch': {
