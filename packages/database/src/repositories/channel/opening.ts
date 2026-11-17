@@ -1,5 +1,5 @@
 import type { ChannelContextMessage } from '@lobechat/types';
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
 import {
@@ -307,8 +307,9 @@ const hasSeveralPeople = async (tx: Transaction, channelId: string) => {
 };
 
 /**
- * Opens (or joins) the Thread under `rootMessageId` and moves the job into it, with the
- * follow-ups deferred behind it. Returns the Thread's id.
+ * Opens (or joins) the Thread under `rootMessageId` and moves the job into it, with every answer
+ * still waiting on the same request: the follow-ups deferred behind it, and the peers that chose
+ * to answer in place before the Thread existed. Returns the Thread's id.
  */
 const openReplyThread = async (
   tx: Transaction,
@@ -317,21 +318,25 @@ const openReplyThread = async (
   title: string,
 ) => {
   const { channelId } = job;
-  // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
-  const deferred = await tx
+  // Every answer still waiting on this request moves with it: the follow-ups deferred behind this
+  // one (they must read it to stay silent), and the peers that already chose to answer in place —
+  // a run that started before the Thread opened must not publish outside it, or the same request's
+  // answers split between the timeline and the Thread.
+  const siblings = await tx
     .select({ id: channelJobs.id, memberId: channelJobs.memberId })
     .from(channelJobs)
     .where(
       and(
         eq(channelJobs.channelId, channelId),
         eq(channelJobs.messageId, job.messageId),
-        eq(channelJobs.status, 'queued'),
+        inArray(channelJobs.status, ['queued', 'running']),
+        isNull(channelJobs.publishedMessageId),
         isNull(channelJobs.threadId),
-        sql`${channelJobs.wake}->>'afterMemberId' = ${job.memberId}`,
+        ne(channelJobs.id, job.id),
       ),
     );
   const candidates = [
-    ...new Set([job.requesterMemberId, job.memberId, ...deferred.map(({ memberId }) => memberId)]),
+    ...new Set([job.requesterMemberId, job.memberId, ...siblings.map(({ memberId }) => memberId)]),
   ];
   // A member who has left since the request no longer follows anything.
   const followers = (
@@ -357,7 +362,7 @@ const openReplyThread = async (
   await tx
     .update(channelJobs)
     .set({ threadId: thread.id })
-    .where(inArray(channelJobs.id, [job.id, ...deferred.map(({ id }) => id)]));
+    .where(inArray(channelJobs.id, [job.id, ...siblings.map(({ id }) => id)]));
   return thread.id;
 };
 

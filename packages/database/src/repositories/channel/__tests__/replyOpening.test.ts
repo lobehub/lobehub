@@ -304,6 +304,41 @@ describe('Channel reply opening', () => {
     });
   });
 
+  it('gathers a peer that answered in place even once its run has started', async () => {
+    const { channel, coder, coderJob, member, message, reviewer, reviewerJob } =
+      await mentionTwoAgents();
+
+    // The first Agent chooses to answer in place, and its run starts before any Thread exists.
+    await execution.open(channel.id, coderJob.id, { ack: 'Checking the build logs.' });
+    expect((await jobById(db, coderJob.id)).threadId).toBeNull();
+    expect(await execution.claim(channel.id, coderJob.id, lease)).not.toBeNull();
+
+    // A peer opens the shared Thread afterwards: the run in flight joins it instead of publishing
+    // on the timeline.
+    await execution.open(channel.id, reviewerJob.id, {
+      ack: 'Reviewing the config diff.',
+      threadTitle: 'Deploy failure',
+    });
+
+    const [thread] = await db
+      .select()
+      .from(channelThreads)
+      .where(eq(channelThreads.channelId, channel.id));
+    expect(thread).toMatchObject({
+      metadata: { title: 'Deploy failure' },
+      rootMessageId: message.id,
+    });
+    expect(new Set(thread.followerMemberIds)).toEqual(new Set([member.id, coder.id, reviewer.id]));
+    expect((await jobById(db, coderJob.id)).threadId).toBe(thread.id);
+    expect((await jobById(db, reviewerJob.id)).threadId).toBe(thread.id);
+
+    await execution.accepted(channel.id, coderJob.id);
+    await execution.saveDraft(channel.id, coderJob.id, 'The token expired.');
+    const replyId = await execution.publish(channel.id, coderJob.id);
+    const [reply] = await db.select().from(channelMessages).where(eq(channelMessages.id, replyId));
+    expect(reply.threadId).toBe(thread.id);
+  });
+
   it('keeps a reply without an acknowledgement in place when the request’s Thread is archived', async () => {
     const { asOwner, channel, job, message } = await mentionAgent();
     const thread = await asOwner.createThread(channel.id, { rootMessageId: message.id });
