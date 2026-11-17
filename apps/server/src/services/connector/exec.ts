@@ -1,5 +1,6 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { hasMandatoryApproval } from '@lobechat/const/plugin';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { getDisabledPluginIds, needsConnectorReauthorization } from '@lobechat/types';
 import {
@@ -41,14 +42,26 @@ export type ConnectorToolCallErrorCode =
   /** The device a bound connector runs on can't run it now (offline, gone, too old). */
   | 'PRECONDITION_FAILED';
 
+/**
+ * Why a call was refused, when the HTTP-ish `code` alone does not say:
+ * `approval_required` — an unattended call reached a tool a human must approve.
+ */
+export type ConnectorToolCallErrorReason = 'approval_required';
+
 /** Typed error so the tRPC layer can map to the right code and tests can assert. */
 export class ConnectorToolCallError extends Error {
   readonly code: ConnectorToolCallErrorCode;
+  readonly reason?: ConnectorToolCallErrorReason;
 
-  constructor(code: ConnectorToolCallErrorCode, message: string) {
+  constructor(
+    code: ConnectorToolCallErrorCode,
+    message: string,
+    reason?: ConnectorToolCallErrorReason,
+  ) {
     super(message);
     this.name = 'ConnectorToolCallError';
     this.code = code;
+    this.reason = reason;
   }
 }
 
@@ -194,6 +207,12 @@ export const callConnectorToolById = async (
     toolName: string;
     /** The conversation the call runs in, reported as the call's session. */
     topicId?: string;
+    /**
+     * No human is there to approve the call (the public tool-call API). A tool
+     * a conversation would stop on for approval — `needs_approval`, or marked
+     * for mandatory approval — is refused instead of run.
+     */
+    unattended?: boolean;
   },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
@@ -237,6 +256,17 @@ export const callConnectorToolById = async (
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       `Tool '${params.toolName}' is disabled for this connector`,
+    );
+  }
+  if (
+    params.unattended &&
+    (tool.permission === ConnectorToolPermission.needs_approval ||
+      hasMandatoryApproval(tool.metadata))
+  ) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      `Tool '${params.toolName}' requires human approval for every call and cannot be called without one`,
+      'approval_required',
     );
   }
   // A view-only tool never enters the model's tool list; refuse a model call

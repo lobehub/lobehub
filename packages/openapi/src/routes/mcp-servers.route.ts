@@ -16,10 +16,14 @@ import { DeletedResourceSchema } from '../types/common.type';
 import {
   CreateMcpServerRequestSchema,
   McpServerIdParamSchema,
+  McpServerLiveToolListSchema,
+  McpServerPromptListSchema,
+  McpServerResourceListSchema,
   McpServerSchema,
   McpServerSyncResultSchema,
   UpdateMcpServerRequestSchema,
 } from '../types/mcp-server.type';
+import { McpServerToolCallRequestSchema, ToolCallResultSchema } from '../types/tool-call.type';
 
 const app = new Hono();
 const requireRead = requireAnyPermissionWithApiKeyScope(
@@ -116,6 +120,72 @@ app.post(
   requireWrite,
   zValidator('param', McpServerIdParamSchema),
   async (c) => new McpServerController().syncServer(c),
+);
+
+const LIVE_DESCRIPTION =
+  'Asks the MCP server now, with its stored credentials. Answers 502 when the server fails, 503 when it cannot be reached.';
+
+app.get(
+  '/:id/tools',
+  routeDoc({
+    data: McpServerLiveToolListSchema,
+    description: `${LIVE_DESCRIPTION} The synced tools an agent uses (and their permissions) are on the server object; \`POST /mcp-servers/{id}/sync\` refreshes them.`,
+    errors: [404, 502, 503],
+    summary: 'List the tools an MCP server offers',
+    tags: ['mcp-servers'],
+  }),
+  requireAuth,
+  requireRead,
+  zValidator('param', McpServerIdParamSchema),
+  async (c) => new McpServerController().listLiveTools(c),
+);
+
+app.post(
+  '/:id/tools/call',
+  routeDoc({
+    data: ToolCallResultSchema,
+    description:
+      "Calls one synced tool of this server as the API key's user — `POST /tools/call` addressed by server id, with the same rules: a `disabled` tool is refused and a tool that needs human approval answers `403 approval_required` instead of running.",
+    errors: [404, 412, 502, 503],
+    operationId: 'mcpServers.callTool',
+    summary: 'Call an MCP server tool',
+    tags: ['mcp-servers'],
+  }),
+  requireAuth,
+  requireAnyPermissionWithApiKeyScope(getAllScopePermissions('AGENT_UPDATE'), 'tool:invoke'),
+  zValidator('param', McpServerIdParamSchema),
+  zValidator('json', McpServerToolCallRequestSchema),
+  async (c) => new McpServerController().callTool(c),
+);
+
+app.get(
+  '/:id/resources',
+  routeDoc({
+    data: McpServerResourceListSchema,
+    description: LIVE_DESCRIPTION,
+    errors: [404, 502, 503],
+    summary: 'List the resources an MCP server offers',
+    tags: ['mcp-servers'],
+  }),
+  requireAuth,
+  requireRead,
+  zValidator('param', McpServerIdParamSchema),
+  async (c) => new McpServerController().listResources(c),
+);
+
+app.get(
+  '/:id/prompts',
+  routeDoc({
+    data: McpServerPromptListSchema,
+    description: LIVE_DESCRIPTION,
+    errors: [404, 502, 503],
+    summary: 'List the prompts an MCP server offers',
+    tags: ['mcp-servers'],
+  }),
+  requireAuth,
+  requireRead,
+  zValidator('param', McpServerIdParamSchema),
+  async (c) => new McpServerController().listPrompts(c),
 );
 
 export default app;

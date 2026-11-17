@@ -7,9 +7,12 @@ import {
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import { buildConnectorMcpParams, syncConnectorToolsById } from '@/server/services/connector/sync';
+import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { mcpService } from '@/server/services/mcp';
 
 import { BaseService } from '../common/base.service';
+import { ApiException } from '../common/errors';
 import type { DeletedResource } from '../types/common.type';
 import type {
   CreateMcpServerRequest,
@@ -172,5 +175,67 @@ export class McpServerService extends BaseService {
       userId: this.userId,
     });
     return { id, status: ConnectorStatus.connected, toolCount };
+  }
+
+  /**
+   * Ask the server itself, with the connector's (refreshed) credentials. A
+   * server that cannot be reached or refuses keeps its structured status
+   * (403 for upstream auth, 503 unreachable); anything else is a 502.
+   */
+  private async withLiveServer<T>(id: string, run: (params: any) => Promise<T>): Promise<T> {
+    await this.requireServer(id);
+    const model = await this.getCredentialConnectorModel();
+    const connector = await model.findById(id);
+    if (!connector) throw this.createNotFoundError('MCP server not found');
+
+    try {
+      const fresh = await ensureFreshConnectorToken(connector, model);
+      return await run(buildConnectorMcpParams(fresh));
+    } catch (error) {
+      if ((error as Error)?.name === 'TRPCError') throw error;
+      throw new ApiException(
+        502,
+        'upstream_error',
+        `MCP server request failed: ${(error as Error)?.message ?? 'unknown error'}`,
+      );
+    }
+  }
+
+  async listLiveTools(id: string) {
+    const tools = await this.withLiveServer(id, (params) => mcpService.listRawTools(params));
+    return {
+      items: tools.map((tool) => ({
+        description: tool.description ?? null,
+        inputSchema: (tool.inputSchema ?? null) as null | Record<string, unknown>,
+        name: tool.name,
+      })),
+    };
+  }
+
+  async listResources(id: string) {
+    const resources = await this.withLiveServer(id, (params) => mcpService.listResources(params));
+    return {
+      items: resources.map((resource) => ({
+        description: resource.description ?? null,
+        mimeType: resource.mimeType ?? null,
+        name: resource.name,
+        uri: resource.uri,
+      })),
+    };
+  }
+
+  async listPrompts(id: string) {
+    const prompts = await this.withLiveServer(id, (params) => mcpService.listPrompts(params));
+    return {
+      items: prompts.map((prompt) => ({
+        arguments: (prompt.arguments ?? []).map((argument) => ({
+          description: argument.description ?? null,
+          name: argument.name,
+          required: !!argument.required,
+        })),
+        description: prompt.description ?? null,
+        name: prompt.name,
+      })),
+    };
   }
 }

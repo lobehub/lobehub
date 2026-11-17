@@ -146,6 +146,32 @@ describe('callConnectorToolById', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  it('refuses an unattended call to a tool that needs approval, and still runs it attended', async () => {
+    const ctx = makeCtx(
+      [connector],
+      [tool({ permission: ConnectorToolPermission.needs_approval })],
+    );
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'ok' } as any);
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing', unattended: true }, ctx),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', reason: 'approval_required' });
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+
+    // The chat path keeps its own approval step: the call reaches the server.
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+    expect(mcpService.callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an unattended call to a tool marked for mandatory approval even when set to auto', async () => {
+    const ctx = makeCtx([connector], [tool({ metadata: { mandatoryApproval: true } })]);
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing', unattended: true }, ctx),
+    ).rejects.toMatchObject({ reason: 'approval_required' });
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+  });
+
   it('refuses a model call to a tool only its view may call, and runs the view call', async () => {
     const ctx = makeCtx([connector], [tool({ metadata: { visibility: ['app'] } })]);
     vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'ok' } as any);

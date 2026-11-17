@@ -733,6 +733,8 @@ const connectorCoreRouter = router({
         toolName: z.string().min(1),
         /** The conversation the call runs in, reported as the call's session. */
         topicId: z.string().optional(),
+        /** No human can approve (the public API): refuse approval-gated tools. */
+        unattended: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {

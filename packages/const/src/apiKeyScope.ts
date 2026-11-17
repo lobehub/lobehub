@@ -51,6 +51,13 @@ export const API_KEY_SCOPES = [
   'knowledge:write',
   'mcp:read',
   'mcp:write',
+  /**
+   * Calling an installed connector / MCP tool directly as the key's user
+   * (`POST /api/v1/tools/call`). Its own tier: a tool call acts on a third-party
+   * service with the user's stored credentials, so "may manage connectors" must
+   * not imply "may run their tools". Approval-gated tools stay refused.
+   */
+  'tool:invoke',
   'usage:read',
   'workspace:read',
   'workspace:write',

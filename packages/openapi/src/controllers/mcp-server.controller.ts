@@ -4,7 +4,9 @@ import { BaseController } from '../common/base.controller';
 import type { LegacyArrayListQuery } from '../helpers/legacy-array-list';
 import { pageLoadedList } from '../helpers/legacy-array-list';
 import { McpServerService } from '../services/mcp-server.service';
+import { ToolCallRestService } from '../services/tool-call.service';
 import type { CreateMcpServerRequest, UpdateMcpServerRequest } from '../types/mcp-server.type';
+import type { McpServerToolCallRequest } from '../types/tool-call.type';
 
 export class McpServerController extends BaseController {
   private async getService(c: Context) {
@@ -81,6 +83,68 @@ export class McpServerController extends BaseController {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       return this.success(c, await (await this.getService(c)).syncServer(id), 'MCP server synced');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  async listLiveTools(c: Context) {
+    try {
+      const { id } = this.getParams<{ id: string }>(c);
+      return this.success(
+        c,
+        await (await this.getService(c)).listLiveTools(id),
+        'MCP tools listed',
+      );
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  async listResources(c: Context) {
+    try {
+      const { id } = this.getParams<{ id: string }>(c);
+      return this.success(
+        c,
+        await (await this.getService(c)).listResources(id),
+        'MCP resources listed',
+      );
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  async listPrompts(c: Context) {
+    try {
+      const { id } = this.getParams<{ id: string }>(c);
+      return this.success(
+        c,
+        await (await this.getService(c)).listPrompts(id),
+        'MCP prompts listed',
+      );
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** `POST /tools/call` addressed by server id: the same permission and approval rules. */
+  async callTool(c: Context) {
+    try {
+      const { id } = this.getParams<{ id: string }>(c);
+      const body = await this.getBody<McpServerToolCallRequest>(c);
+      const server = await (await this.getService(c)).getServer(id);
+      const db = await this.getDatabase();
+      const service = new ToolCallRestService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+        c.get('workspaceRole') || undefined,
+      );
+      return this.success(
+        c,
+        await service.callTool({ ...body, identifier: server.identifier }),
+        'Tool called',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

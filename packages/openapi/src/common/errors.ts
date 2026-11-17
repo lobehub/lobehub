@@ -14,6 +14,10 @@ const dateTimeSchema = z.string().meta({ format: 'date-time' });
  * Codes are only ever added — renaming or removing one is a breaking change.
  */
 export const API_ERROR_CODES = {
+  approval_required: {
+    description:
+      'The tool needs a human to approve each call, which an API call cannot give. Change its permission or call it from a conversation.',
+  },
   bad_request: { description: 'The request was understood but cannot be processed as sent.' },
   conflict: { description: 'The request conflicts with the current state of the resource.' },
   forbidden: { description: 'The caller is authenticated but may not perform this operation.' },

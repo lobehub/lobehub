@@ -64,7 +64,9 @@ const styles = stylex.create({
  *
  * - `model:invoke` burns money;
  * - `agent:credential:write` installs a secret into one of an agent's
- *   accounts — managing the agent's accounts must not imply that.
+ *   accounts — managing the agent's accounts must not imply that;
+ * - `tool:invoke` runs connector / MCP tools with their stored credentials —
+ *   managing connectors must not imply acting through them.
  */
 type ScopeGroupKey =
   'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
@@ -74,7 +76,10 @@ type ScopeGroupKey =
  * `t()` calls stay inside the generated key union.
  */
 type ScopeExtraLabel =
-  'apikey.scopes.agentCredential' | 'apikey.scopes.invoke' | 'apikey.scopes.modelInvoke';
+  | 'apikey.scopes.agentCredential'
+  | 'apikey.scopes.invoke'
+  | 'apikey.scopes.modelInvoke'
+  | 'apikey.scopes.toolInvoke';
 
 interface ScopeGroup {
   /**
@@ -125,7 +130,17 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     read: 'knowledge:read',
     write: 'knowledge:write',
   },
-  { key: 'mcp', label: 'apikey.scopes.groups.mcp', read: 'mcp:read', write: 'mcp:write' },
+  {
+    key: 'mcp',
+    label: 'apikey.scopes.groups.mcp',
+    read: 'mcp:read',
+    write: 'mcp:write',
+    extra: {
+      createLabel: 'apikey.scopes.toolInvoke',
+      overviewLabel: 'apikey.scopes.invoke',
+      scope: 'tool:invoke',
+    },
+  },
   { key: 'usage', label: 'apikey.scopes.groups.usage', read: 'usage:read' },
   {
     key: 'workspace',
