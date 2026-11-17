@@ -724,6 +724,11 @@ export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
   /**
+   * When the newest reply that @mentions the viewer was posted, under the same conditions as
+   * `lastReply`; null when no reply mentions them.
+   */
+  lastMentionedAt?: Date | null;
+  /**
    * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
    * thread views and in views cached before summaries existed.
    */

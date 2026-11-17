@@ -240,6 +240,42 @@ describe('Channel public view', () => {
     );
   });
 
+  it("dates each thread's newest @mention of the viewer, for the viewer only", async () => {
+    const { asMember, asOwner, channel, member } = await fixture.createTeamChannel();
+    const send = (content: string, threadId: string, mentions: string[] = []) =>
+      asOwner.send(channel.id, {
+        content,
+        mentions,
+        requestKey: content,
+        routing: 'fallback',
+        threadId,
+      });
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const quiet = await asOwner.send(channel.id, {
+      content: 'Quiet root',
+      requestKey: 'quiet',
+      routing: 'fallback',
+    });
+    const called = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const plain = await asOwner.createThread(channel.id, { rootMessageId: quiet.id });
+    await send('Early ping', called.id, [member.id]);
+    const latest = await send('Late ping', called.id, [member.id]);
+    await send('After the ping', called.id);
+    await send('No ping', plain.id);
+
+    const view = await asMember.detail(channel.id);
+    const thread = (id: string) => view.threads.find((entry) => entry.id === id);
+    expect(thread(called.id)?.lastMentionedAt).toEqual(latest.createdAt);
+    expect(thread(plain.id)?.lastMentionedAt).toBeNull();
+    // The sender was not mentioned, so the same threads carry no mention for them.
+    const own = await asOwner.detail(channel.id);
+    expect(own.threads.find((entry) => entry.id === called.id)?.lastMentionedAt).toBeNull();
+  });
+
   it.each([false, true])(
     'includes the reply author so a new thread can answer without a mention (workspace: %s)',
     async (workspace) => {

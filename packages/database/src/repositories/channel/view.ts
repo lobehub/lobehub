@@ -10,6 +10,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  max,
   or,
   type SQL,
   sql,
@@ -171,18 +172,27 @@ const sourceTopicsByMessage = async (
 const THREAD_PREVIEW_LENGTH = 240;
 
 type ThreadSummary = {
+  lastMentionedAt: Date | null;
   lastReply: Pick<ReturnType<typeof publicMessage>, 'author' | 'content' | 'createdAt' | 'id'>;
   replyCount: number;
 };
 
-/** Reply count and newest reply per thread, so a root can show what it branched into. */
-const threadSummaries = async (tx: Transaction, channelId: string, threadIds: string[]) => {
+/**
+ * Reply count, newest reply and the viewer's newest @mention per thread, so a root can show what
+ * it branched into and the thread list can flag threads that call the viewer.
+ */
+const threadSummaries = async (
+  tx: Transaction,
+  channelId: string,
+  threadIds: string[],
+  viewerMemberId: string | undefined,
+) => {
   if (!threadIds.length) return new Map<string, ThreadSummary>();
   const scope = and(
     eq(channelMessages.channelId, channelId),
     inArray(channelMessages.threadId, threadIds),
   );
-  const [counts, latest] = await Promise.all([
+  const [counts, latest, mentioned] = await Promise.all([
     tx
       .select({ replyCount: count(), threadId: channelMessages.threadId })
       .from(channelMessages)
@@ -195,14 +205,31 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
       .leftJoin(agents, eq(agents.id, channelMessages.agentId))
       .where(scope)
       .orderBy(asc(channelMessages.threadId), desc(channelMessages.sequence)),
+    viewerMemberId
+      ? tx
+          .select({
+            lastMentionedAt: max(channelMessages.createdAt),
+            threadId: channelMessages.threadId,
+          })
+          .from(channelMessages)
+          .where(
+            and(
+              scope,
+              sql`${channelMessages.mentions} @> jsonb_build_array(${viewerMemberId}::text)`,
+            ),
+          )
+          .groupBy(channelMessages.threadId)
+      : [],
   ]);
   const replyCounts = new Map(counts.map((row) => [row.threadId, row.replyCount]));
+  const mentionedAt = new Map(mentioned.map((row) => [row.threadId, row.lastMentionedAt]));
   return new Map<string, ThreadSummary>(
     latest.map((row) => {
       const { author, content, createdAt, id } = publicMessage(row, []);
       return [
         row.threadId!,
         {
+          lastMentionedAt: mentionedAt.get(row.threadId) ?? null,
           lastReply: { author, content: content.slice(0, THREAD_PREVIEW_LENGTH), createdAt, id },
           replyCount: replyCounts.get(row.threadId) ?? 0,
         },
@@ -369,7 +396,10 @@ export const readChannelView = async (
   const summarized = options.threadId
     ? []
     : threads.filter((entry) => pageIds.has(entry.rootMessageId)).map((entry) => entry.id);
-  const summaries = await threadSummaries(tx, channelId, summarized);
+  const viewerMemberId = viewerUserId
+    ? members.find((member) => member.actorType === 'user' && member.userId === viewerUserId)?.id
+    : undefined;
+  const summaries = await threadSummaries(tx, channelId, summarized, viewerMemberId);
   const quoteIds = [
     ...new Set(
       [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
@@ -427,6 +457,7 @@ export const readChannelView = async (
       return summarized.includes(entry.id)
         ? {
             ...named,
+            lastMentionedAt: summaries.get(entry.id)?.lastMentionedAt ?? null,
             lastReply: summaries.get(entry.id)?.lastReply ?? null,
             replyCount: summaries.get(entry.id)?.replyCount ?? 0,
           }
