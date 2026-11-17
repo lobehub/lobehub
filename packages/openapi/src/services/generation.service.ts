@@ -1,4 +1,5 @@
 import type { AsyncTaskError, ImageGenerationAsset, VideoGenerationAsset } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import type { GenerationKind, GenerationWithBatch } from '@/database/models/generation';
@@ -24,7 +25,7 @@ import type {
 } from '../types/generation.type';
 import { GENERATION_KINDS, TERMINAL_GENERATION_STATUSES } from '../types/generation.type';
 
-const WAIT_POLL_INTERVAL_MS = 1000;
+const WAIT_POLL_INTERVAL_MS = 2000;
 
 const isTerminal = (status: string) =>
   (TERMINAL_GENERATION_STATUSES as readonly string[]).includes(status);
@@ -89,8 +90,17 @@ export class GenerationRestService extends BaseService {
     return new GenerationModel(this.db, this.userId, this.workspaceId);
   }
 
+  /** Context for paid generation procedures: spend is attributed to the public API. */
+  private get spendCtx() {
+    return { ...this.ctx, spendOrigin: { trigger: RequestTrigger.Api } };
+  }
+
   /** The topic to add a request to: the caller's own `topicId`, or a new topic. */
-  private async resolveTopic(kind: GenerationKind, prompt: string, topicId?: string) {
+  private async resolveTopic(
+    kind: GenerationKind,
+    prompt: string,
+    topicId?: string,
+  ): Promise<{ created: boolean; id: string }> {
     if (topicId) {
       const topic = await new GenerationTopicModel(this.db, this.userId, this.workspaceId).findById(
         topicId,
@@ -104,14 +114,38 @@ export class GenerationRestService extends BaseService {
           [{ message: `Expected a ${kind} topic`, path: 'body.topicId' }],
         );
       }
-      return topic.id;
+      return { created: false, id: topic.id };
     }
 
     const id = await generationTopicRouter.createCaller(this.ctx).createTopic({
       title: prompt.trim().slice(0, 100),
       type: kind,
     });
-    return id as string;
+    return { created: true, id: id as string };
+  }
+
+  /**
+   * Run a create procedure in `topic`. When the procedure refuses the request
+   * (unknown model, unsupported params, storage full, …) a topic made for it is
+   * removed again, so retrying clients do not leave empty topics behind.
+   */
+  private async inTopic<T>(topic: { created: boolean; id: string }, run: () => Promise<T>) {
+    try {
+      return await run();
+    } catch (error) {
+      if (topic.created) {
+        await generationTopicRouter
+          .createCaller(this.ctx)
+          .deleteTopic({ id: topic.id })
+          .catch((cleanupError: unknown) => {
+            this.log('warn', 'Failed to remove the topic of a refused generation', {
+              cleanupError,
+              topicId: topic.id,
+            });
+          });
+      }
+      throw error;
+    }
   }
 
   private async toPayload(row: GenerationWithBatch): Promise<GenerationPayload> {
@@ -137,19 +171,26 @@ export class GenerationRestService extends BaseService {
     };
   }
 
-  /** A generation row with its task status brought up to date (timed-out tasks fail). */
-  private async findFresh(id: string): Promise<GenerationWithBatch | undefined> {
-    const row = await this.generationModel.findByIdWithBatch(id);
-    if (!row?.asyncTaskId || isTerminal(row.asyncTask?.status ?? 'pending')) return row;
+  /**
+   * The visible generations among `ids`, in that order, with their task status
+   * brought up to date first (tasks past their timeout are failed), as
+   * `generation.getGenerationStatus` does.
+   */
+  private async findFresh(ids: string[]): Promise<GenerationWithBatch[]> {
+    const rows = await this.generationModel.findByIdsWithBatch(ids);
+    const runningTaskIds = rows
+      .filter((row) => row.asyncTaskId && !isTerminal(row.asyncTask?.status ?? 'pending'))
+      .map((row) => row.asyncTaskId!);
+    if (runningTaskIds.length === 0) return rows;
 
-    await new AsyncTaskModel(this.db, this.userId, this.workspaceId).checkTimeoutTasks([
-      row.asyncTaskId,
-    ]);
-    return this.generationModel.findByIdWithBatch(id);
+    await new AsyncTaskModel(this.db, this.userId, this.workspaceId).checkTimeoutTasks(
+      runningTaskIds,
+    );
+    return this.generationModel.findByIdsWithBatch(ids);
   }
 
   async getGeneration(id: string): Promise<GenerationPayload> {
-    const row = await this.findFresh(id);
+    const [row] = await this.findFresh([id]);
     if (!row) throw this.createNotFoundError('Generation not found');
     return this.toPayload(row);
   }
@@ -175,57 +216,68 @@ export class GenerationRestService extends BaseService {
   /** Poll until every generation is final or the deadline passes. */
   private async waitForGenerations(ids: string[], timeoutSeconds: number) {
     const deadline = Date.now() + timeoutSeconds * 1000;
-    let rows = await Promise.all(ids.map((id) => this.findFresh(id)));
+    let rows = await this.findFresh(ids);
 
     while (
-      rows.some((row) => row && !isTerminal(row.asyncTask?.status ?? 'pending')) &&
+      rows.some((row) => !isTerminal(row.asyncTask?.status ?? 'pending')) &&
       Date.now() + WAIT_POLL_INTERVAL_MS <= deadline
     ) {
       await sleep(WAIT_POLL_INTERVAL_MS);
-      rows = await Promise.all(ids.map((id) => this.findFresh(id)));
+      rows = await this.findFresh(ids);
     }
 
     return rows;
   }
 
+  /**
+   * The create response. A request the plan or budget refuses (insufficient
+   * credits, plan limit, frozen workspace, content moderation) is not an HTTP
+   * error: the shared procedure records it as generations that already failed —
+   * the Image / Video pages show them the same way — so they come back with
+   * `status: 'error'` and the reason in `error`.
+   */
   private async batchPayload(
     batchId: string,
     topicId: string,
-    ids: string[],
-    rows?: (GenerationWithBatch | undefined)[],
+    created: { id?: string | null }[],
+    rows?: GenerationWithBatch[],
   ): Promise<GenerationBatchCreated> {
-    const resolved = rows ?? (await Promise.all(ids.map((id) => this.findFresh(id))));
-    const generations = await Promise.all(
-      resolved.filter((row): row is GenerationWithBatch => !!row).map((row) => this.toPayload(row)),
-    );
+    const ids = created.map((generation) => generation.id).filter((id): id is string => !!id);
+    const resolved = rows ?? (await this.findFresh(ids));
+    const generations = await Promise.all(resolved.map((row) => this.toPayload(row)));
     return { batchId, generations, topicId };
   }
 
   async createImages(body: CreateImageGenerationRequest): Promise<GenerationBatchCreated> {
-    const topicId = await this.resolveTopic('image', body.prompt, body.topicId);
+    const topic = await this.resolveTopic('image', body.prompt, body.topicId);
 
-    const result = await imageRouter.createCaller(this.ctx).createImage({
-      generationTopicId: topicId,
-      imageNum: body.n,
-      model: body.model,
-      params: withoutUndefined({
-        ...body.params,
-        cfg: body.cfg,
-        height: body.height,
-        imageUrls: body.imageUrls,
-        prompt: body.prompt,
-        seed: body.seed,
-        steps: body.steps,
-        width: body.width,
+    const result = await this.inTopic(topic, () =>
+      imageRouter.createCaller(this.spendCtx).createImage({
+        generationTopicId: topic.id,
+        imageNum: body.n,
+        model: body.model,
+        params: withoutUndefined({
+          ...body.params,
+          cfg: body.cfg,
+          height: body.height,
+          imageUrls: body.imageUrls,
+          prompt: body.prompt,
+          seed: body.seed,
+          steps: body.steps,
+          width: body.width,
+        }),
+        provider: body.provider,
       }),
-      provider: body.provider,
-    });
+    );
 
-    const ids = result.data.generations.map((generation) => generation.id as string);
+    const { batch, generations } = result.data;
     const rows = body.wait
-      ? await this.waitForGenerations(ids, body.waitTimeoutSeconds)
+      ? await this.waitForGenerations(
+          generations.map((generation) => generation.id).filter((id): id is string => !!id),
+          body.waitTimeoutSeconds,
+        )
       : undefined;
-    return this.batchPayload(result.data.batch.id as string, topicId, ids, rows);
+    return this.batchPayload(batch.id as string, topic.id, generations, rows);
   }
 
   async createVideo(body: CreateVideoGenerationRequest): Promise<GenerationBatchCreated> {
@@ -235,28 +287,30 @@ export class GenerationRestService extends BaseService {
     ) {
       throw this.createNotFoundError('Previous generation not found');
     }
-    const topicId = await this.resolveTopic('video', body.prompt, body.topicId);
+    const topic = await this.resolveTopic('video', body.prompt, body.topicId);
 
-    const result = await videoRouter.createCaller(this.ctx).createVideo({
-      generationTopicId: topicId,
-      model: body.model,
-      params: withoutUndefined({
-        ...body.params,
-        aspectRatio: body.aspectRatio,
-        cameraFixed: body.cameraFixed,
-        duration: body.duration,
-        endImageUrl: body.endImageUrl,
-        generateAudio: body.generateAudio,
-        imageUrl: body.imageUrl,
-        prompt: body.prompt,
-        resolution: body.resolution,
-        seed: body.seed,
+    const result = await this.inTopic(topic, () =>
+      videoRouter.createCaller(this.spendCtx).createVideo({
+        generationTopicId: topic.id,
+        model: body.model,
+        params: withoutUndefined({
+          ...body.params,
+          aspectRatio: body.aspectRatio,
+          cameraFixed: body.cameraFixed,
+          duration: body.duration,
+          endImageUrl: body.endImageUrl,
+          generateAudio: body.generateAudio,
+          imageUrl: body.imageUrl,
+          prompt: body.prompt,
+          resolution: body.resolution,
+          seed: body.seed,
+        }),
+        previousGenerationId: body.previousGenerationId,
+        provider: body.provider,
       }),
-      previousGenerationId: body.previousGenerationId,
-      provider: body.provider,
-    });
+    );
 
-    const ids = result.data.generations.map((generation) => generation.id as string);
-    return this.batchPayload(result.data.batch.id as string, topicId, ids);
+    const { batch, generations } = result.data;
+    return this.batchPayload(batch.id as string, topic.id, generations);
   }
 }

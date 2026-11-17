@@ -50,7 +50,7 @@ const app = new Hono();
 const requireSpeechGeneration = requireAnyPermissionWithApiKeyScope(
   getAllScopePermissions('AI_MODEL_INVOKE'),
   'generation:write',
-  undefined,
+  'You do not have permission to synthesize speech',
   { legacyApiKeyScopes: ['model:invoke'] },
 );
 const requireTranscriptionGeneration = requireAnyPermissionWithApiKeyScope(

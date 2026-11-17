@@ -41943,7 +41943,10 @@ paths:
         with their current status — poll `GET /generations/{id}` or call
         `generations.wait(id)` in the SDK. With `wait: false` it answers as soon
         as the work is queued. Each request is added to `topicId`, or to a new
-        generation topic.
+        generation topic. A request the plan or budget refuses (insufficient
+        credits, plan limit) is recorded as generations that already failed:
+        they come back with `status: 'error'` and the reason in `error`, as on
+        the Image page.
 
 
         **API key scopes:** `generation:write`.
@@ -42045,21 +42048,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
           description: Authentication required
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
-            X-RateLimit-Limit:
-              $ref: "#/components/headers/RateLimitLimit"
-            X-RateLimit-Remaining:
-              $ref: "#/components/headers/RateLimitRemaining"
-            X-RateLimit-Reset:
-              $ref: "#/components/headers/RateLimitReset"
-        "402":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-          description: Payment required
           headers:
             X-Request-Id:
               $ref: "#/components/headers/RequestId"
@@ -42246,7 +42234,10 @@ paths:
         it runs; videos take minutes. Poll `GET /generations/{id}` until the
         status is `success` or `error`, or call `generations.wait(id)` in the
         SDK. Billing and quota follow the Video page. Each request is added to
-        `topicId`, or to a new generation topic.
+        `topicId`, or to a new generation topic. A request the plan or budget
+        refuses (insufficient credits, plan limit) is recorded as a generation
+        that already failed: it comes back with the status `error` and the
+        reason in the `error` field.
 
 
         **API key scopes:** `generation:write`.
@@ -42342,21 +42333,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
           description: Authentication required
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/RequestId"
-            X-RateLimit-Limit:
-              $ref: "#/components/headers/RateLimitLimit"
-            X-RateLimit-Remaining:
-              $ref: "#/components/headers/RateLimitRemaining"
-            X-RateLimit-Reset:
-              $ref: "#/components/headers/RateLimitReset"
-        "402":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-          description: Payment required
           headers:
             X-Request-Id:
               $ref: "#/components/headers/RequestId"

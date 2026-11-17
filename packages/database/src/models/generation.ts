@@ -10,7 +10,7 @@ import type {
 } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import debug from 'debug';
-import { and, count, desc, eq, exists } from 'drizzle-orm';
+import { and, count, desc, eq, exists, inArray } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
@@ -199,13 +199,16 @@ export class GenerationModel {
     });
   }
 
-  /** One generation with its async task and batch, or `undefined` when the caller cannot see it. */
-  async findByIdWithBatch(id: string): Promise<GenerationWithBatch | undefined> {
-    const result = await this.db.query.generations.findFirst({
-      where: and(eq(generations.id, id), this.ownership()),
+  /** The visible generations among `ids`, in the order of `ids`. */
+  async findByIdsWithBatch(ids: string[]): Promise<GenerationWithBatch[]> {
+    if (ids.length === 0) return [];
+
+    const rows = (await this.db.query.generations.findMany({
+      where: and(inArray(generations.id, ids), this.ownership()),
       with: { asyncTask: true, batch: BATCH_RELATION },
-    });
-    return result as GenerationWithBatch | undefined;
+    })) as GenerationWithBatch[];
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.flatMap((id) => byId.get(id) ?? []);
   }
 
   /**

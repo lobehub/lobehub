@@ -168,6 +168,10 @@ export class AudioController extends BaseController {
       }
 
       // Transcribing a stored file reads it: a restricted key needs `file:read` too.
+      // `asr.transcribe` has the same rule, but it reads the key's scopes from its
+      // context, and the caller below leaves them out — passing them would also
+      // re-apply the tRPC `asr` namespace rule (`model:invoke`) on top of the
+      // `generation:write` scope this route already checked.
       const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
       if (
         fields.data.fileId &&
