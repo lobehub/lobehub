@@ -9,6 +9,7 @@ import {
   ChannelExecutionRepository,
   ChannelHistoryRepository,
   ChannelRepository,
+  usesOwnAgent,
 } from '..';
 import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobsOf, lease, nativeConfig } from './testUtils';
@@ -201,5 +202,13 @@ describe('A conversation between Agents', () => {
     expect(await execution.deliverAnswerToAsker(pair.channel.id, replyId)).toBe(false);
     const [reply] = await db.select().from(channelMessages).where(eq(channelMessages.id, replyId));
     expect(reply.routingStatus).toBe('reply');
+  });
+  it("tells the caller's own Agents from ones it cannot use on its own", async () => {
+    const { asker } = await setup();
+    const owner = { userId: fixture.ownerId, workspaceId: fixture.workspaceId };
+    expect(await usesOwnAgent(db, owner, asker.id)).toBe(true);
+    expect(await usesOwnAgent(db, owner, 'agent-of-someone-else')).toBe(false);
+    // Another person sees the owner's Agent only through a share, never as their own.
+    expect(await usesOwnAgent(db, { userId: fixture.memberId }, asker.id)).toBe(false);
   });
 });
