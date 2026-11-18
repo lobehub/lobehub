@@ -3,7 +3,7 @@ import {
   QUOTA_LIMITED_RUN_STATUS,
   TRANSIENT_FAILED_RUN_STATUS,
 } from '@lobechat/const/goal';
-import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
+import type { BriefDecision, TaskRunTrigger, TaskTopicHandoff } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -95,7 +95,7 @@ export class TaskTopicModel {
     params: {
       operationId?: string;
       seq: number;
-      trigger?: 'manual' | 'schedule' | 'heartbeat' | 'goal';
+      trigger?: TaskRunTrigger;
     },
   ): Promise<void> {
     const visibility = await this.getTaskVisibility(taskId);
@@ -487,7 +487,7 @@ export class TaskTopicModel {
    */
   async countByTask(
     taskId: string,
-    options?: { since?: Date; triggers?: Array<'manual' | 'schedule' | 'heartbeat' | 'goal'> },
+    options?: { since?: Date; triggers?: TaskRunTrigger[] },
   ): Promise<number> {
     const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));

@@ -60,6 +60,9 @@ IN_FLIGHT_SQL = '(' + ', '.join("'" + status + "'" for status in IN_FLIGHT_STATU
 SETTLE_REASON = 'deploy'
 # The task reconciler only adopts an interrupted run older than its grace window (15 min).
 SETTLE_REWIND = '20 minutes'
+# Runs parked for a human longer than this are not replayed: the question they were
+# waiting on is long stale by the time the container comes back.
+RESUME_STALE = '24 hours'
 
 # Matches the token and terminal request used by the Onlyboxes provider.
 # This runs inside a one-off LobeHub container on the deployment's network.
@@ -203,6 +206,19 @@ def validate_url(value):
     # Accessing port checks its syntax/range as well.
     parsed.port
     return parsed
+
+
+# psql prints the statement's command tag (`INSERT 0 2`, `UPDATE 3`) after a
+# data-modifying statement, even with `-t -A`: `-q` would silence it, but the shared
+# `query()` helper is also used for plain SELECTs. Strip the tag instead, otherwise
+# every `RETURNING` count is one too high and a zero-row insert looks like a hit.
+COMMAND_TAGS = ('INSERT', 'UPDATE', 'DELETE', 'COPY', 'MOVE', 'FETCH')
+
+
+def returning_rows(rows):
+    """Rows returned by a `RETURNING` statement, without psql's command tag line."""
+    return [row for row in rows
+            if not (len(row) == 1 and row[0].split(' ', 1)[0].upper() in COMMAND_TAGS)]
 
 
 class Manager:
@@ -368,6 +384,94 @@ class Manager:
         })
         return status == 200, text
 
+    def queue_resumes(self, database):
+        """Remember the conversations this deploy is about to kill.
+
+        Written before any settle mutation on purpose: once an operation is flipped
+        to `interrupted` (or finalized) nothing distinguishes an update casualty
+        from a user stop, so this queue is the only durable record of what should
+        be replayed. The new container drains it at boot
+        (`apps/server/src/services/deployResume`) unless RESUME_AFTER_DEPLOY=0.
+
+        One row per topic: `DISTINCT ON (op.topic_id)` collapses the parent and
+        sub-agent operations of a single turn, and the `ON CONFLICT` upsert
+        re-arms a topic that two consecutive deploys interrupted instead of
+        queueing it twice.
+
+        Task runs are queued by default. Plain conversations are queued only with
+        `RESUME_CHAT_AFTER_DEPLOY=1`: replaying one re-sends its last user message
+        as a new turn, which can repeat a tool side effect or a notification, so
+        it is opt-in while a Task replay simply continues its own topic.
+
+        With `RESUME_AFTER_DEPLOY=0` on the app service the feature is off for
+        the whole pipeline, so nothing is queued (the runs are still settled).
+        """
+        resume = str(self.sandbox_environment().get('RESUME_AFTER_DEPLOY', '1')).strip().lower()
+        if resume in ('0', 'off', 'false', 'no'):
+            print('RESUME_AFTER_DEPLOY=0：本次更新不登记待恢复会话。')
+            return
+        chat_resume = str(
+            self.sandbox_environment().get('RESUME_CHAT_AFTER_DEPLOY', '0')).strip().lower()
+        resume_chats = chat_resume in ('1', 'on', 'true', 'yes')
+        columns = ('(id, kind, status, task_id, topic_id, operation_id, user_id,'
+                   ' workspace_id, payload)')
+        new_id = "'drq_' || left(replace(gen_random_uuid()::text, '-', ''), 22)"
+        upsert = ("ON CONFLICT (topic_id) DO UPDATE SET kind = excluded.kind,"
+                  " status = 'pending', task_id = excluded.task_id,"
+                  ' operation_id = excluded.operation_id, user_id = excluded.user_id,'
+                  ' workspace_id = excluded.workspace_id, payload = excluded.payload,'
+                  ' attempts = 0, error = NULL, resumed_at = NULL, updated_at = now()'
+                  ' RETURNING topic_id')
+        # A run parked for a human for longer than the staleness window is not replayed.
+        fresh = ("NOT (op.status = 'waiting_for_human'"
+                 " AND op.updated_at < now() - interval '" + RESUME_STALE + "')")
+        task_sql = (
+            'INSERT INTO deploy_resume_queue ' + columns + '\n'
+            'SELECT ' + new_id + ", 'task', 'pending', picked.task_id, picked.topic_id,"
+            ' picked.id, picked.user_id, picked.workspace_id,'
+            " jsonb_build_object('settledAs', 'task-run')\n"
+            'FROM (\n'
+            '  SELECT DISTINCT ON (op.topic_id) op.id, op.topic_id, op.user_id,'
+            ' op.workspace_id, tt.task_id\n'
+            '  FROM agent_operations op\n'
+            "  JOIN task_topics tt ON tt.topic_id = op.topic_id AND tt.status = 'running'\n"
+            '  WHERE op.status IN ' + IN_FLIGHT_SQL + '\n'
+            '    AND ' + fresh + '\n'
+            '  ORDER BY op.topic_id, op.created_at DESC, op.id DESC\n'
+            ') AS picked\n' + upsert)
+        chat_sql = (
+            'INSERT INTO deploy_resume_queue ' + columns + '\n'
+            'SELECT ' + new_id + ", 'chat', 'pending', NULL, picked.topic_id, picked.id,"
+            ' picked.user_id, picked.workspace_id,\n'
+            "  jsonb_build_object('settledAs', 'residual-chat', 'lastUserMessage',\n"
+            '    (SELECT m.content FROM messages m WHERE m.topic_id = picked.topic_id'
+            " AND m.role = 'user' ORDER BY m.created_at DESC, m.id DESC LIMIT 1))\n"
+            'FROM (\n'
+            '  SELECT DISTINCT ON (op.topic_id) op.id, op.topic_id, op.user_id, op.workspace_id\n'
+            '  FROM agent_operations op\n'
+            '  WHERE op.status IN ' + IN_FLIGHT_SQL + '\n'
+            '    AND op.topic_id IS NOT NULL\n'
+            '    AND ' + fresh + '\n'
+            '    AND NOT EXISTS (SELECT 1 FROM task_topics tt WHERE tt.topic_id = op.topic_id)\n'
+            '  ORDER BY op.topic_id, op.created_at DESC, op.id DESC\n'
+            ') AS picked\n' + upsert)
+        try:
+            # `RETURNING topic_id` plus psql's trailing command tag: strip the tag so a
+            # zero-row insert (`INSERT 0 0`) is not reported as one resumed conversation.
+            tasks = returning_rows(self.query(database, task_sql))
+            chats = returning_rows(self.query(database, chat_sql)) if resume_chats else []
+        except Exception as error:  # A missing queue table must not block the settle.
+            print('警告：写入待恢复清单失败，本次更新不会自动重跑中断的会话：' + str(error),
+                  file=sys.stderr)
+            return
+        if tasks or chats:
+            detail = f'{len(tasks)} 个任务会话'
+            if resume_chats:
+                detail += f'、{len(chats)} 个普通对话'
+            print(f'待恢复清单：已登记 {detail}，新容器启动后自动重跑。')
+        if not resume_chats:
+            print('普通对话默认不自动恢复；需要时设置 RESUME_CHAT_AFTER_DEPLOY=1。')
+
     def reconcile_runs(self, dry_run=False):
         database = self.database()
         if not database:
@@ -387,6 +491,7 @@ class Manager:
         if dry_run:
             print('SETTLE=dry-run：只预览，未修改数据库、未调用结算接口。')
             return
+        self.queue_resumes(database)
         if attached_runs:
             rows = self.query(database, (
                 "UPDATE agent_operations SET status = 'interrupted',\n"

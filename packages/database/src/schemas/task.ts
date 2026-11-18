@@ -249,10 +249,14 @@ export const taskTopics = pgTable(
     status: text('status').notNull().default('running'),
 
     // What triggered this run: 'manual' (ad-hoc run-now / agent tool call),
-    // 'schedule' (cron tick) or 'heartbeat' (interval tick). Null for legacy
-    // rows created before this column existed. Used so the maxExecutions quota
-    // counts only automation ticks, not manual runs.
-    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat' | 'goal'>(),
+    // 'schedule' (cron tick), 'heartbeat' (interval tick), 'goal' (Goal
+    // coordinator) or 'deploy-resume' (boot resumer replaying a run the deploy
+    // interrupted). Null for legacy rows created before this column existed.
+    // Used so the maxExecutions quota counts only automation ticks, not manual
+    // or resumed runs.
+    trigger: text('trigger').$type<
+      'manual' | 'schedule' | 'heartbeat' | 'goal' | 'deploy-resume'
+    >(),
 
     // Handoff (populated after topic completes via LLM summarization)
     // { title, summary, keyFindings: string[], nextAction }

@@ -21,6 +21,7 @@ const prefixes = {
   channelThreads: 'cht',
   channels: 'chn',
   chatGroups: 'cg',
+  deployResumeQueue: 'drq',
   documents: 'docs',
   evalBenchmarks: 'evb',
   evalDatasets: 'ds',

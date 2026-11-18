@@ -9,7 +9,7 @@
 | 编号     | 二开功能                            | 用户入口 / 行为                                                                             | 维护位置                                                                     | 状态                                                          |
 | -------- | ----------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | CUST-001 | 自定义 Docker 镜像发布              | main /canary 推送及手动 Actions 发布本 Fork 的 GHCR 镜像；当前 Linux amd64                  | `.github/workflows/publish-custom-image.yml`                                 | 历史已有；本轮增加 TFS curl 构建参数                          |
-| CUST-002 | 单文件安装 / 更新管理器             | `bash deploy-custom-image.sh`；新机安装、切换 main/canary/ 自定义镜像、更新应用或恢复完整栈 | `scripts/deploy-custom-image.sh`、[部署说明](scripts/deploy-custom-image.md) | 历史已有；本轮增加 TFS 缺省地址、更新后结算运行中任务           |
+| CUST-002 | 单文件安装 / 更新管理器             | `bash deploy-custom-image.sh`；新机安装、切换 main/canary/ 自定义镜像、更新应用或恢复完整栈 | `scripts/deploy-custom-image.sh`、[部署说明](scripts/deploy-custom-image.md) | 历史已有；本轮增加 TFS 缺省地址、更新后结算并自动重跑中断会话 |
 | CUST-003 | 部署脚本接入 Onlyboxes / Market     | 菜单切换、保留配置；从一次性应用容器真实探测 Onlyboxes JIT 与 terminalExec                  | 同上；`scripts/deploy-custom-image.test.py`                                  | 历史已有；仅登记脚本接入，Onlyboxes provider 本身不算本项新增 |
 | CUST-004 | Fork 发布工作流隔离                 | 官方专用发布 / 同步任务在 Fork 默认跳过，防止误执行官方发布路径                             | 下方列出的五个 `.github/workflows/` 文件                                     | 历史已有                                                      |
 | CUST-005 | 个人 TFS / Azure DevOps Server 接入 | 设置 → 集成绑定个人身份；从 TFS 建项目；环境 Git 来源；PR / 构建 / 发布 / TFVC 只读浏览     | 独立 `tfs` 模块及现有入口接点；[详细维护说明](TFS_CUSTOMIZATION.md)          | 本次新增，REST / 本机 Git 已实测，产品页面和部署验收待完成    |
@@ -32,6 +32,13 @@
 - 如果旧安装的缺省值已经写入托管 override，后续改 Collection / 禁用 TFS 要编辑该 override 的对应环境项，或删除这两个项后在 `.env` 配置；override 的优先级高于 `.env`。全程保留文件的托管标记和其他配置。
 - `KEY_VAULTS_SECRET` 是 LobeHub 自己已有的加密密钥，不从 TFS 申请。首次安装脚本用 32 个随机字节生成并写入部署目录 `.env`；也可能来自原先的 `docker-compose/setup.sh`。更新时沿用原值。若缺失应先核查旧配置和备份，不能拿新密钥覆盖旧数据的密钥。
 - 更新已有部署会在 `up -d --wait` 成功后自动结算运行中的任务（`SETTLE=1` 默认；`0` 关闭，`dry-run` 只预览）：把挂在运行中任务上的操作改为 `interrupted` 并回拨 `updated_at` 20 分钟，用 `KEY_VAULTS_SECRET` 自签内部回调触发 `/api/workflows/task/watchdog` 让任务转 `paused`，再逐个 `POST /api/agent/finalize-abandoned`（Bearer `AGENT_GATEWAY_SERVICE_TOKEN`）兜底残留聊天。依赖应用、Gateway 与 PostgreSQL 已就绪；结算失败只告警，不让部署失败，失败项保持 `running` 等下一次看护收敛。首次安装不执行。
+- 更新后自动重跑被中断的会话（`RESUME_AFTER_DEPLOY`，默认 `1`；`0` / `off` / `false` / `no` 关闭，关闭时仍照常结算）：结算前先在 `deploy_resume_queue` 里登记「本次更新打断的会话」，新容器启动时由启动恢复器重跑。清单在把 op 标 `interrupted` **之前**写入，只登记真正在跑的（`agent_operations.status IN ('idle','running',…)`，任务侧还要求 `task_topics.status='running'`）；已 `waiting_for_human` 超过 24 小时的陈留运行不登记。`SETTLE=0` 与 `SETTLE=dry-run` 都不写清单。写入失败只告警，不影响结算与部署结果。
+- 待恢复清单表 `deploy_resume_queue`（`packages/database/src/schemas/deployResumeQueue.ts`，迁移 `0221_nosy_tag.sql`）字段：`kind`(`task`/`chat`)、`status`(`pending`/`running`/`done`/`failed`/`skipped`)、`taskId`、`topicId`、`operationId`、`userId`、`workspaceId`、`payload`(jsonb：`lastUserMessage`、`settledAs`)、`attempts`、`error`、`resumedAt`。索引 `(status, created_at)`；**唯一索引 `topic_id`** 保证同一会话只恢复一次，重复部署用 `ON CONFLICT (topic_id) DO UPDATE` 就地重置为 `pending`（`attempts=0`、`error=NULL`、`resumed_at=NULL`）。`user_id` / `workspace_id` 故意不建外键，避免容器停机期间删用户 / 删工作区导致登记失败。
+- 启动恢复器 `apps/server/src/services/deployResume/`（`resumePendingDeployResumes` → `resumeDeployInterruptedRuns`）：在 `src/instrumentation.ts` 的 `register()` 里挂载，条件 `NEXT_RUNTIME==='nodejs' && DATABASE_URL && !VERCEL_ENV && RESUME_AFTER_DEPLOY !== '0'`，写法与既有 `resumePendingAgentTransferJobs` 一致，**catch + log，绝不阻塞启动**。单次启动最多取 20 条（`MAX_PER_BOOT`），并发 5（`CONCURRENCY`），单行最多 3 次尝试（`MAX_ATTEMPTS`），退避 5s（`RETRY_DELAY_MS`），超过 24 小时的陈旧 `pending` / `running` 直接标 `skipped`（`STALE_AFTER_MS`）。跨进程互斥靠数据库 `claim`（`UPDATE … WHERE status='pending'`），同进程另有 `running` Set 防重入。
+- 任务恢复复用它自己的服务层入口：`TaskRunnerService.runTask({ taskId, continueTopicId: topicId, extraPrompt: '上一轮因部署更新中断，请先检查已完成部分，再继续未完成的工作。', trigger: 'deploy-resume' })`。`trigger` 新增取值 `'deploy-resume'`（`packages/types/src/task/index.ts`、`task_topics.trigger`、`locales` 的 `taskDetail.runTrigger.deploy-resume`），语义同 `manual`：不消耗定时配额、失败不自动 pause。结算后 topic 已是 `canceled`，`runTask` 的「topic 非 running」前置校验因此放行；成功后往话题插一条「因部署更新中断，已自动继续。」提示（仅首次尝试写，避免重试刷屏）。
+- 普通对话恢复走服务层 `startComposerRun`（`apps/server/src/services/aiAgent/composerRun.ts`），**不是** HTTP 自调用 `execAgent`；等价于 UI「重试」：重发 topic 最后一条 `role='user'` 消息（优先用清单里的 `payload.lastUserMessage` 快照，缺失才回查库）。跳过条件：topic 已不存在、关联 op 已是 `done`、topic 已有 live run、op 最后一条 assistant 已是完整回答（登记时 `settledAs` 已区分任务运行与残留聊天）。
+- 上游改动需同步检查的接点：`scripts/deploy-custom-image.sh` 的 `reconcile_runs()` / `settle()` 顺序、`src/instrumentation.ts` 的启动块、`TaskRunnerService.runTask` 的签名与 `TaskRunTrigger` 联合类型、`startComposerRun` 的参数形态，以及 `agent_operations` 的 `IN_FLIGHT_STATUSES` 常量。上游若给 `task_topics` 加 `trigger` 枚举约束（当前是 `text().$type<>`），要补迁移。
+- 尚未覆盖的边界：只重跑一轮，不做断点续传；多副本同时启动靠 `claim` 只会有一个容器跑；`SETTLE` 未开启的部署（`SETTLE=0`）不会登记；计划任务 / 心跳在下一次 tick 自然恢复，不走本清单；恢复计费不设防（自用部署，用户明确要求全开）。
 - 历史依据：`e3c84a0ad6`、`d0b8fa56a2`、`20b371eeb8`、`ecd6a41479`、`a574f77ca9`。后两项分别修复 Compose `$` 反转义和终端不可 seek 的输入问题，合并时不要丢。
 - 上游改变服务名、Compose 模板位置、启动命令或健康检查时，同步检查脚本的 `SERVICE`、模板清单和 `--wait` 流程。镜像发布与部署脚本更新是两件事：本地改源码后，服务器拉取旧标签不会得到新功能。
 
@@ -56,7 +63,7 @@
 
 ## CUST-005：TFS
 
-完整功能、文件、配置、安全边界及实测记录见 [TFS_CUSTOMIZATION.md](TFS_CUSTOMIZATION.md)。合并时至少保持：
+完整功能、文件、配置、安全边界及实测记录见 [TFS\_CUSTOMIZATION.md](TFS_CUSTOMIZATION.md)。合并时至少保持：
 
 1. 独立服务、RPC、前端 service /store/ UI 模块与共享类型；既有项目 / 环境表单中的接点和 en-US /zh-CN 文案。
 2. 每位用户一个个人 TFS 身份，同一外部身份也只能绑定一位用户；身份由服务端确认并经既有 KeyVault 加密，不复用他人凭据。
@@ -97,4 +104,7 @@
 - TFS 前轮：208 项测试通过，类型检查通过，lint 无错误、既有 1 条 warning；真实 NTLM REST 查询与本机 Git 克隆成功。细节见 TFS 文档。
 - 本轮部署补充：15 项 Python 测试通过，覆盖首次安装密钥生成、老部署补缺省值、保留已有 / 禁用 / 托管的 TFS 设置、原密钥与 `.env` 不被更改，以及既有回滚和 Onlyboxes 协议测试。
 - 本轮相关文件 `bun run check --lint --test` 通过，22 项部署相关 TypeScript 测试通过，lint 无错误；`bash -n` 和 `git diff --check` 通过。Python / Shell / Dockerfile 等没有对应 linter 的文件不计为已 lint。
+- 本轮部署自动重跑（2026-11-17）：`python3 scripts/deploy-custom-image.test.py` 24 项通过（登记先于结算、只登记运行中会话、跳过 `waiting_for_human` 陈留、写入失败不阻塞结算、`RESUME_AFTER_DEPLOY=0` 不登记、dry-run 不登记、`RETURNING` 计数不被 psql 命令标签污染）；`pnpm exec vitest run apps/server/src/services/deployResume/index.test.ts` 19 项通过；`pnpm exec oxlint` 覆盖改动文件 0 warning / 0 error；`pnpm exec tsrs --noEmit -p tsconfig.type-check.json` 退出码 0；`bash -n scripts/deploy-custom-image.sh` 通过。本机没有 `bun`，`bun run check` 按其组成（lint + 相关测试 + 全仓类型检查）分别执行。迁移 `0221` 与 `queue_resumes()` 的真实 SQL 已在 `lobe-postgres` 的临时库 `deploy_resume_probe` 上跑通：建表建索引、3 行登记（2 任务 + 1 对话）、二次部署就地重新武装（总行数仍为 3）、`RESUME_AFTER_DEPLOY=0` 写 0 行、按 id 的 `claim` 只有一方成功、`listPending` 命中 `(status, created_at)` 索引。
+- 同批修正一个既有类型错误：`apps/server/src/services/tfs/git.ts` 读取 `getUserSettings()` 返回的 `market` jsonb 时被推断为 `{}`，导致全仓 `type-check` 失败；按 `MarketAuthTokens` 收窄后再读 `accessToken`。与部署自动重跑无关，仅因阻塞类型检查门禁一并修复。
+- 尚未执行：真实造一次中断（更新时正在跑的任务 / 对话）后由新容器启动自动重跑的端到端验收、Docker 镜像构建、目标服务器升级。线上容器镜像早于本次改动，单纯重启只会跑旧代码；真实验收要先构建并推送镜像再走一次更新。库表与脚本 SQL 已在真实 PostgreSQL 上验证，但这不等于产品级恢复验收。
 - 尚未执行 Docker 镜像构建、真实 Compose 解析、目标服务器升级及真实页面验收；不能据此宣称已经上线或全链路通过。

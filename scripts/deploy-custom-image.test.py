@@ -86,6 +86,7 @@ class DeploymentTests(unittest.TestCase):
         self.compose.write_text('services: {}\n')
         self.calls = []
         self.psql = []
+        self.psql_error = None
         self.pull_status = self.up_status = self.probe_status = 0
         self.base = {'services': {'lobe': {
             'image': 'lobehub/lobehub:latest',
@@ -133,6 +134,9 @@ class DeploymentTests(unittest.TestCase):
         elif 'up' in args:
             status = self.up_status
         elif 'psql' in args:
+            statement = args[args.index('-c') + 1]
+            if self.psql_error and self.psql_error in statement:
+                raise RuntimeError('psql failed: ' + self.psql_error)
             stdout = self.psql.pop(0) if self.psql else ''
         elif data == MODULE.ONLYBOXES_PROBE:
             status = self.probe_status
@@ -311,35 +315,126 @@ class DeploymentTests(unittest.TestCase):
             'KEY_VAULTS_SECRET': 'vault-secret',
             'AGENT_GATEWAY_SERVICE_TOKEN': 'service-token',
             'INTERNAL_APP_URL': recorder.url,
+            # Chat replay is opt-in; settle_fixture opts in so the chat cases below
+            # keep exercising the chat queue row.
+            'RESUME_CHAT_AFTER_DEPLOY': '1',
         })
 
     def psql_statements(self):
         return [args[args.index('-c') + 1] for args, _ in self.calls if 'psql' in args]
 
+    def resume_statements(self, statements):
+        """The two resume-queue inserts, in the order reconcile_runs issues them."""
+        return [item for item in statements if 'INSERT INTO deploy_resume_queue' in item]
+
     def test_deploy_settles_interrupted_runs_and_residual_chats(self):
         with CallbackRecorder('vault-secret', 'service-token') as recorder:
             self.settle_fixture(recorder)
-            # 3 in-flight ops, 2 attached to a running task, then the left-over chat op.
-            self.psql = ['3\n', '2\n', '1\n', '1\n', 'op_task_1\nop_task_2\n', '0\n', '0\n', 'op_chat\n']
+            # 4 counts, then: 2 queued task topics, 1 queued chat topic, the interrupted
+            # UPDATE, 2 post-watchdog counts, then the left-over chat op.
+            self.psql = ['3\n', '2\n', '1\n', '1\n', 'drq_task_1\ndrq_task_2\n', 'drq_chat\n',
+                         'op_task_1\nop_task_2\n', '0\n', '0\n', 'op_chat\n']
             self.manager().deploy(self.desired())
         statements = self.psql_statements()
-        self.assertTrue(statements[4].startswith('UPDATE agent_operations'))
-        self.assertIn("status = 'interrupted'", statements[4])
-        self.assertIn("interval '20 minutes'", statements[4])
-        self.assertIn("WHERE status = 'running'", statements[4])
+        queued = self.resume_statements(statements)
+        self.assertEqual(len(queued), 2)
+        self.assertIn("'task', 'pending'", queued[0])
+        self.assertIn('JOIN task_topics tt', queued[0])
+        self.assertIn("tt.status = 'running'", queued[0])
+        self.assertIn("'chat', 'pending'", queued[1])
+        self.assertIn('NOT EXISTS (SELECT 1 FROM task_topics', queued[1])
+        self.assertIn("m.role = 'user'", queued[1])
+        self.assertTrue(statements[6].startswith('UPDATE agent_operations'))
+        self.assertIn("status = 'interrupted'", statements[6])
+        self.assertIn("interval '20 minutes'", statements[6])
+        self.assertIn("WHERE status = 'running'", statements[6])
         self.assertEqual([call[0] for call in recorder.calls],
                          ['/api/workflows/task/watchdog', '/api/agent/finalize-abandoned'])
         self.assertEqual(json.loads(recorder.calls[1][2]),
                          {'operationId': 'op_chat', 'reason': 'deploy'})
         self.assertEqual(recorder.calls[1][1]['Authorization'], 'Bearer service-token')
         output = self.stdout_buf.getvalue()
+        self.assertIn('待恢复清单：已登记 2 个任务会话、1 个普通对话', output)
         self.assertIn('已把 2 个运行中的操作标记为 interrupted', output)
         self.assertIn('残留的聊天操作：已结算 1 个，失败 0 个', output)
+
+    def test_resume_queue_is_written_before_the_interruption_marker(self):
+        """The queue must be the pre-settle record; once ops are interrupted it is unknowable."""
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            self.psql = ['1\n', '1\n', '1\n', '1\n', 'drq_task\n', 'drq_chat\n', 'op_task\n',
+                         '0\n', '0\n', 'op_chat\n']
+            self.manager().deploy(self.desired())
+        statements = self.psql_statements()
+        interrupted = next(i for i, item in enumerate(statements) if item.startswith('UPDATE'))
+        self.assertTrue(all(i < interrupted for i, item in enumerate(statements)
+                            if item.startswith('INSERT INTO deploy_resume_queue')))
+
+    def test_resume_queue_only_records_running_conversations(self):
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            self.psql = ['0\n', '0\n', '0\n', '0\n', '\n', '\n', '0\n', '0\n', '\n']
+            self.manager().deploy(self.desired())
+        statements = self.psql_statements()
+        queued = self.resume_statements(statements)
+        # Nothing in flight: the inserts still run (idempotent SELECT) but write no rows.
+        self.assertEqual(len(queued), 2)
+        self.assertIn("op.status IN ('idle', 'running'", queued[0])
+        self.assertNotIn('UPDATE agent_operations', statements)
+        self.assertNotIn('待恢复清单', self.stdout_buf.getvalue())
+
+    def test_resume_queue_ignores_runs_parked_for_a_human(self):
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            self.psql = ['1\n', '0\n', '0\n', '0\n', '\n', 'drq_chat\n', '0\n', '0\n', 'op_chat\n']
+            self.manager().deploy(self.desired())
+        queued = self.resume_statements(self.psql_statements())
+        for item in queued:
+            self.assertIn("op.status = 'waiting_for_human'", item)
+            self.assertIn("interval '24 hours'", item)
+        self.assertIn("'chat', 'pending'", queued[1])
+
+    def test_resume_queue_failure_does_not_block_the_settle(self):
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            self.psql = ['1\n', '1\n', '1\n', '1\n', 'op_task\n', '0\n', '0\n', 'op_chat\n']
+            self.psql_error = 'INSERT INTO deploy_resume_queue'
+            self.manager().deploy(self.desired())
+        self.assertIn('警告：写入待恢复清单失败', self.stderr_buf.getvalue())
+        statements = self.psql_statements()
+        self.assertTrue(any(item.startswith('UPDATE agent_operations') for item in statements))
+        self.assertIn('已把 1 个运行中的操作标记为 interrupted', self.stdout_buf.getvalue())
+        self.assertEqual(len(recorder.calls), 2)
+
+    def test_resume_queue_is_skipped_when_the_feature_is_off(self):
+        """RESUME_AFTER_DEPLOY=0 turns the queue off; the interrupted runs are still settled."""
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            self.base['services']['lobe']['environment']['RESUME_AFTER_DEPLOY'] = '0'
+            self.psql = ['1\n', '1\n', '1\n', '1\n', 'op_task\n', '0\n', '0\n', 'op_chat\n']
+            self.manager().deploy(self.desired())
+        statements = self.psql_statements()
+        self.assertFalse(self.resume_statements(statements))
+        self.assertTrue(any(item.startswith('UPDATE agent_operations') for item in statements))
+        self.assertIn('RESUME_AFTER_DEPLOY=0', self.stdout_buf.getvalue())
+        self.assertNotIn('待恢复清单：已登记', self.stdout_buf.getvalue())
+        self.assertEqual(len(recorder.calls), 2)
+
+    def test_resume_queue_counts_returning_rows_not_the_psql_tag(self):
+        """psql appends `INSERT 0 N` after a RETURNING statement; the tag is not a topic."""
+        with CallbackRecorder('vault-secret', 'service-token') as recorder:
+            self.settle_fixture(recorder)
+            self.psql = ['1\n', '1\n', '1\n', '1\n', 'drq_task\nINSERT 0 1\n', 'INSERT 0 0\n',
+                         'op_task\n', '0\n', '0\n', 'op_chat\n']
+            self.manager().deploy(self.desired())
+        output = self.stdout_buf.getvalue()
+        self.assertIn('待恢复清单：已登记 1 个任务会话、0 个普通对话', output)
 
     def test_deploy_survives_watchdog_rejection(self):
         with CallbackRecorder('vault-secret', 'service-token', watchdog_status=503) as recorder:
             self.settle_fixture(recorder)
-            self.psql = ['3\n', '2\n', '1\n', '1\n', 'op_task_1\n', '1\n', '1\n', 'op_chat\n']
+            self.psql = ['3\n', '2\n', '1\n', '1\n', 'drq_task\n', 'drq_chat\n', 'op_task_1\n',
+                         '1\n', '1\n', 'op_chat\n']
             self.manager().deploy(self.desired())
         self.assertIn('警告：任务看护返回 HTTP 503', self.stderr_buf.getvalue())
         self.assertEqual(len(recorder.calls), 2)
@@ -359,6 +454,7 @@ class DeploymentTests(unittest.TestCase):
                     if value == 'dry-run':
                         self.assertIn('SETTLE=dry-run', self.stdout_buf.getvalue())
                     self.assertFalse(any('UPDATE' in item for item in self.psql_statements()))
+                    self.assertFalse(self.resume_statements(self.psql_statements()))
                 self.base['services']['lobe']['environment'].pop('INTERNAL_APP_URL')
 
 

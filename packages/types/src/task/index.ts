@@ -78,8 +78,12 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  * - `heartbeat` — a heartbeat interval tick fired the run.
  * - `goal`      — the Goal coordinator started this Work attempt.
  *                 Like `manual`, it never counts against automation quotas.
+ * - `deploy-resume` — the boot resumer replayed a run the deploy script had to
+ *                 interrupt (`deploy_resume_queue`). Treated like `manual`: it is
+ *                 a recovery of a run someone already paid for, not automation
+ *                 health, so it neither spends the quota nor pauses on failure.
  */
-export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
+export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal' | 'deploy-resume';
 
 /**
  * A clarifying question the intent reader wants answered before an agent

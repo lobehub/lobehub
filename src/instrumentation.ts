@@ -42,6 +42,29 @@ export async function register() {
     });
   }
 
+  // Replay the conversations the deploy script queued right before it stopped
+  // the old container. `scripts/deploy-custom-image.sh` records the runs it is
+  // about to interrupt; a normal restart (no deploy) finds an empty queue and
+  // does nothing. Tasks replay by default; plain chats need
+  // `RESUME_CHAT_AFTER_DEPLOY=1` because re-sending their last message repeats
+  // a turn. `RESUME_AFTER_DEPLOY=0` switches the feature off entirely.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.DATABASE_URL &&
+    !process.env.VERCEL_ENV &&
+    process.env.RESUME_AFTER_DEPLOY !== '0'
+  ) {
+    void (async () => {
+      const [{ getServerDB }, { resumePendingDeployResumes }] = await Promise.all([
+        import('@lobechat/database'),
+        import('@/server/services/deployResume'),
+      ]);
+      await resumePendingDeployResumes(await getServerDB());
+    })().catch((err) => {
+      console.error('[Instrumentation] Failed to resume deploy-interrupted conversations:', err);
+    });
+  }
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is
