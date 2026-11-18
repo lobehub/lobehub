@@ -97,13 +97,15 @@ const parseDiffPathLine = (raw: string, prefix: 'a/' | 'b/'): string | null => {
 };
 
 export const dequoteGitPath = (s: string): string =>
-  s.replaceAll(/\\(["\\trn]|[0-7]{3})/g, (_, esc: string) => {
+  s.replaceAll(/\\(["\\trn])|((?:\\[0-7]{3})+)/g, (_, esc: string, octal: string) => {
     if (esc === '"') return '"';
     if (esc === '\\') return '\\';
     if (esc === 't') return '\t';
     if (esc === 'r') return '\r';
     if (esc === 'n') return '\n';
-    return String.fromCodePoint(Number.parseInt(esc, 8));
+    // Git quotes the UTF-8 bytes of non-ASCII names, not Unicode code points.
+    const bytes = octal.match(/[0-7]{3}/g)!.map((byte) => Number.parseInt(byte, 8));
+    return Buffer.from(bytes).toString('utf8');
   });
 
 /**
