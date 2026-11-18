@@ -16,6 +16,8 @@ import {
 import {
   ChevronUpIcon,
   FolderGit2Icon,
+  FolderIcon,
+  GitBranchIcon,
   InfoIcon,
   KeyRoundIcon,
   PencilIcon,
@@ -99,23 +101,49 @@ const RepositoryRow = memo<{
   const [editing, setEditing] = useState(false);
   const github = repositoryPathOf(source.url);
   const label = github ? `${github.owner}/${github.repository}` : source.url;
-  const summary = [
-    source.ref || t('environments.form.defaultBranchShort'),
-    source.path ? `${source.path}/` : t('environments.form.topFolder'),
-    ...(source.setupCommand ? [source.setupCommand.split('\n')[0]] : []),
-  ].join(' · ');
+  // One line: the name, then each setting as an icon and its value. The
+  // default branch says nothing worth a word, so it shows only when one is set.
+  const facts = [
+    ...(source.ref
+      ? [{ icon: GitBranchIcon, title: t('environments.form.ref'), value: source.ref }]
+      : []),
+    ...(source.path
+      ? [{ icon: FolderIcon, title: t('environments.form.path'), value: `${source.path}/` }]
+      : []),
+    ...(source.setupCommand
+      ? [
+          {
+            icon: TerminalIcon,
+            title: t('environments.form.bootstrap'),
+            value: source.setupCommand.split('\n')[0],
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className={styles.item}>
       <Flexbox horizontal align={'center'} gap={12}>
         <Github size={16} />
-        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis weight={500}>
+        <Flexbox horizontal align={'center'} flex={1} gap={16} style={{ minWidth: 0 }}>
+          <Text ellipsis style={{ flex: 'none', maxWidth: '50%' }} weight={500}>
             {label}
           </Text>
-          <Text ellipsis fontSize={12} type={'secondary'}>
-            {summary}
-          </Text>
+          {facts.map((fact) => (
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={4}
+              key={fact.title}
+              style={{ color: cssVar.colorTextSecondary, minWidth: 0 }}
+              title={fact.title}
+            >
+              <Icon icon={fact.icon} size={13} style={{ flex: 'none' }} />
+              <Text ellipsis fontSize={12} type={'secondary'}>
+                {fact.value}
+              </Text>
+            </Flexbox>
+          ))}
         </Flexbox>
         <ActionIcon
           active={editing}
@@ -465,11 +493,11 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
       </PanelSection>
 
       <PanelSection
+        icon={TerminalIcon}
+        title={t('environments.form.setup')}
         desc={
           repositories.length > 0 ? t('environments.form.bootstrapAfterRepositories') : undefined
         }
-        icon={TerminalIcon}
-        title={t('environments.form.setup')}
       >
         <InlineField
           multiline

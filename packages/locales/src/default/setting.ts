@@ -5353,8 +5353,6 @@ When I am ___, I need ___
   'environments.form.addPastedRepository': 'Add',
   'environments.form.repositoryUrlInvalid': 'Not a GitHub repository URL',
   'environments.form.doneEditing': 'Done',
-  'environments.form.defaultBranchShort': 'Default branch',
-  'environments.form.topFolder': 'Top of the working directory',
   'environments.form.repositoryOptional':
     'Optional \u2014 an environment can start without a repository and get one later.',
   'environments.form.layoutHint':
