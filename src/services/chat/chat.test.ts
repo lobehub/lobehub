@@ -1258,8 +1258,8 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
-        expect(requestMessages[0].content).toContain(
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain(
           'Use the activateSkill tool to activate a skill when needed.',
         );
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
@@ -1342,7 +1342,7 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
           expect.objectContaining({
@@ -1394,7 +1394,7 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
         expect(requestMessages[1]).toEqual(
           expect.objectContaining({
