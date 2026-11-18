@@ -8,6 +8,7 @@ import { assembleSkillPool } from '@lobechat/mecha';
 import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
@@ -481,10 +482,10 @@ export const agentShareRouter = router({
       const { book, enabled } = await shareAddressBook(ctx, input.agentId);
       const people = enabled ? await book.listAddressBookPeople() : [];
       const inBook = new Set(people.map((person) => person.id));
-      const unlisted = await Promise.all(
-        (share.shareConfig.deviceAllowUserIds ?? [])
-          .filter((id) => !inBook.has(id))
-          .map((id) => book.findUser(id)),
+      const unlisted = await pMap(
+        (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id)),
+        (id) => book.findUser(id),
+        { concurrency: 5 },
       );
 
       return { enabled, people, unlisted: unlisted.filter((user) => !!user) };

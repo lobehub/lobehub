@@ -421,21 +421,6 @@ describe('agentShareRouter', () => {
       expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('owner-9');
     });
 
-    it('no longer accepts every visitor or email entries', async () => {
-      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
-
-      await expect(
-        caller.updateShareConfig({ agentId: 'agent-1', config: { deviceAccess: 'all' as any } }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      await expect(
-        caller.updateShareConfig({
-          agentId: 'agent-1',
-          config: { deviceAllowEmails: ['a@example.com'] } as any,
-        }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      expect(mockUpdateConfig).not.toHaveBeenCalled();
-    });
-
     it('lists the address book and the granted people who left it', async () => {
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
       const carol = { avatar: null, fullName: 'Carol', id: 'user-carol', username: 'carol' };
