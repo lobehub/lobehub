@@ -16,17 +16,30 @@ import { memberAvatar, memberName } from './memberName';
 import { statusStyles, styles } from './styles';
 import { useOpenReplyAgent } from './useOpenReplyAgent';
 
+/** Failure categories with their own text; a shared Agent's visitor learns why only from these. */
+const RECEIPT_ERROR_KEYS = {
+  [ChatErrorType.ShareHeteroDeviceUnavailable]: 'receipt.errorShareHeteroDevice',
+  [ChatErrorType.ShareHeterogeneousAgentUnsupported]: 'receipt.errorShareHeteroUnsupported',
+  [ChatErrorType.ShareSpendLimitExceeded]: 'receipt.errorShareSpendLimit',
+} as const;
+
+type ReceiptErrorKey =
+  (typeof RECEIPT_ERROR_KEYS)[keyof typeof RECEIPT_ERROR_KEYS] | 'receipt.errorUnavailable';
+
 /**
  * The failure reason under a reply. A known category reads in the viewer's language: a shared
- * Agent's visitor gets no raw text, so the category is all that explains a spend-limit refusal.
+ * Agent's visitor gets no raw text, so the category is all that explains a share's refusal.
  */
 export const receiptErrorText = (
   job: Pick<ChannelPublicJob, 'errorMessage' | 'errorType'>,
-  t: (key: 'receipt.errorShareSpendLimit' | 'receipt.errorUnavailable') => string,
-) =>
-  job.errorType === ChatErrorType.ShareSpendLimitExceeded
-    ? t('receipt.errorShareSpendLimit')
-    : job.errorMessage?.trim() || t('receipt.errorUnavailable');
+  t: (key: ReceiptErrorKey) => string,
+) => {
+  const key =
+    job.errorType && Object.hasOwn(RECEIPT_ERROR_KEYS, job.errorType)
+      ? RECEIPT_ERROR_KEYS[job.errorType as keyof typeof RECEIPT_ERROR_KEYS]
+      : undefined;
+  return key ? t(key) : job.errorMessage?.trim() || t('receipt.errorUnavailable');
+};
 
 export interface ReplyEntry {
   agentId?: string | null;

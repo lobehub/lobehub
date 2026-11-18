@@ -1,5 +1,5 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isAgentShareVisitorHeteroType, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type {
   ChannelExecutionConfig,
   ChannelMemberConfig,
@@ -290,11 +290,18 @@ export const resolveExecutionConfig = async (
     .for('share');
   if (!owned) return null;
   const config = await mergeDefaults(tx, owned, share.ownerId, share.workspaceId, serverDefault);
-  if (agentRuntime(config) !== 'native') return null;
+  // The runtimes its share page runs: Native, or Claude Code / Codex. The visitor picks no device;
+  // the run's share gate decides whether the share grants the owner's device and routes there.
+  const runtime = agentRuntime(config);
+  if (
+    !isChannelRuntime(runtime) ||
+    (runtime !== 'native' && !isAgentShareVisitorHeteroType(runtime))
+  )
+    return null;
   return {
     ...config,
     provider: config.provider || DEFAULT_PROVIDER,
-    runtime: 'native',
+    runtime,
     share: { ownerId: share.ownerId, shareId: share.shareId, workspaceId: share.workspaceId },
   };
 };

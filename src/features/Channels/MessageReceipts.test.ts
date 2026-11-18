@@ -12,6 +12,15 @@ describe('receiptErrorText', () => {
     ).toBe('receipt.errorShareSpendLimit');
   });
 
+  it('explains a shared Claude Code / Codex Agent’s device refusals', () => {
+    expect(
+      receiptErrorText({ errorMessage: 'x', errorType: 'ShareHeterogeneousAgentUnsupported' }, t),
+    ).toBe('receipt.errorShareHeteroUnsupported');
+    expect(
+      receiptErrorText({ errorMessage: 'x', errorType: 'ShareHeteroDeviceUnavailable' }, t),
+    ).toBe('receipt.errorShareHeteroDevice');
+  });
+
   it('shows the recorded reason, or the fallback when none was recorded', () => {
     expect(receiptErrorText({ errorMessage: ' boom ', errorType: null }, t)).toBe('boom');
     expect(receiptErrorText({ errorMessage: null, errorType: 'AgentRuntimeError' }, t)).toBe(

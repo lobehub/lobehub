@@ -139,6 +139,47 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     });
   });
 
+  // The runtimes its share page runs. Whether the share grants the owner's device is the run's
+  // share gate's call, so the claim leaves the device unset either way.
+  it('runs a Claude Code or Codex Agent, as its share page does', async () => {
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+    for (const type of ['claude-code', 'codex'] as const) {
+      await db
+        .update(agents)
+        .set({ agencyConfig: { heterogeneousProvider: { command: type, type } } })
+        .where(eq(agents.id, agentId));
+      const job = await send(channel.id, type);
+      const claim = (await execution.claim(channel.id, job.id, lease))!;
+      expect(claim.job.executionConfig).toMatchObject({
+        runtime: type,
+        share: { ownerId, shareId, workspaceId: null },
+      });
+      expect(claim.job.executionConfig?.deviceId).toBeUndefined();
+      await execution.retireReservation(channel.id, job.id);
+    }
+  });
+
+  it('is blocked for a runtime its share page cannot run', async () => {
+    await db
+      .update(agents)
+      .set({ agencyConfig: { heterogeneousProvider: { command: 'kimi', type: 'kimi-code' } } })
+      .where(eq(agents.id, agentId));
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+    const job = await send(channel.id, 'kimi');
+
+    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+    const [blocked] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
+    expect(blocked.blockedCode).toBe('unavailable');
+  });
+
   it('is blocked once the owner pauses the share', async () => {
     const { channel } = await visitor.create({
       agentId,

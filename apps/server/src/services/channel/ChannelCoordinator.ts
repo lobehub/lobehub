@@ -56,6 +56,23 @@ class ChannelDispatchError extends Error {
   }
 }
 
+/**
+ * Refusals of a shared Agent's run its visitor can act on, raised by the run's share gate before
+ * anything is written: the share grants them no device for a Claude Code / Codex Agent, or the
+ * owner's device is offline. Kept as the job's failure type, as the share page shows them.
+ */
+const SHARE_REFUSAL_TYPES = new Set<string>([
+  ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  ChatErrorType.ShareHeteroDeviceUnavailable,
+]);
+
+const dispatchFailureType = (error: unknown) =>
+  error instanceof ChannelDispatchError
+    ? error.type
+    : error instanceof Error && SHARE_REFUSAL_TYPES.has(error.message)
+      ? error.message
+      : undefined;
+
 /** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
 const describePeer = (agent: ChannelCoAddressedAgent) => {
   const name = agentDisplayName(agent);
@@ -376,6 +393,7 @@ export class ChannelCoordinator {
       await this.executions.accepted(job.channelId, job.id);
     } catch (error) {
       console.error('[channel:dispatch]', error);
+      const type = dispatchFailureType(error);
       const operation = await new AgentOperationModel(
         this.db,
         topic.userId,
@@ -385,14 +403,12 @@ export class ChannelCoordinator {
         await this.executions.retireReservation(
           job.channelId,
           job.id,
-          error instanceof ChannelDispatchError
-            ? { message: error.message, type: error.type }
-            : undefined,
+          type && error instanceof Error ? { message: error.message, type } : undefined,
         );
       } else
         await this.executions.fail(job.channelId, job.id, {
           message: error instanceof Error ? error.message : 'Agent could not start',
-          ...(error instanceof ChannelDispatchError && { type: error.type }),
+          ...(type && { type }),
         });
     } finally {
       clearInterval(renew);

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
@@ -220,4 +221,19 @@ describe('dispatching a contact’s shared Agent', () => {
       type: 'ShareSpendLimitExceeded',
     });
   });
+
+  // A shared Claude Code / Codex Agent's run stops at the share gate when the share grants the
+  // visitor no device, or the owner's device is offline; the visitor must learn which.
+  it.each(['ShareHeterogeneousAgentUnsupported', 'ShareHeteroDeviceUnavailable'])(
+    'records the share gate’s %s refusal so the visitor learns why',
+    async (type) => {
+      execAgent.mockRejectedValue(new TRPCError({ code: 'FORBIDDEN', message: type }));
+      await coordinator().advance('channel');
+
+      expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+        message: type,
+        type,
+      });
+    },
+  );
 });

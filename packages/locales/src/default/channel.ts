@@ -6,6 +6,9 @@ export default {
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
   'receipt.errorReason': 'Failure reason',
+  'receipt.errorShareHeteroDevice': "The creator's device is offline. Try again later.",
+  'receipt.errorShareHeteroUnsupported':
+    "This Agent can run for you only with its creator's permission. Ask its creator for access.",
   'receipt.errorShareSpendLimit':
     'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
