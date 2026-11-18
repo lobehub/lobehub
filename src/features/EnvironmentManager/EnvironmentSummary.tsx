@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox, Text } from '@lobehub/ui';
-import { FolderGit2Icon, KeyRoundIcon, TerminalIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,7 +29,7 @@ const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ enviro
 
   return (
     <Flexbox>
-      <PanelSection icon={FolderGit2Icon} title={t('environments.form.sources')}>
+      <PanelSection title={t('environments.form.sources')}>
         {repositories.length > 0 ? (
           repositories.map((repository) => (
             <Flexbox gap={4} key={repository.name}>
@@ -50,12 +49,12 @@ const EnvironmentSummary = memo<{ environment: EnvironmentFormValue }>(({ enviro
           </Text>
         )}
       </PanelSection>
-      <PanelSection icon={TerminalIcon} title={t('environments.form.setup')}>
+      <PanelSection title={t('environments.form.setup')}>
         <Text code={!!configuration.bootstrapCommand} fontSize={13}>
           {configuration.bootstrapCommand || t('environments.detail.noSetup')}
         </Text>
       </PanelSection>
-      <PanelSection last icon={KeyRoundIcon} title={t('environments.form.env')}>
+      <PanelSection title={t('environments.form.env')}>
         <Text fontSize={13} type={variables.length ? undefined : 'secondary'}>
           {variables.length ? variables.join(', ') : t('environments.form.noVariables')}
         </Text>

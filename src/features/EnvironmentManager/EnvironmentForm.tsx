@@ -15,11 +15,8 @@ import {
 } from '@lobehub/ui';
 import {
   ChevronUpIcon,
-  FolderGit2Icon,
   FolderIcon,
   GitBranchIcon,
-  InfoIcon,
-  KeyRoundIcon,
   PencilIcon,
   PlusIcon,
   TerminalIcon,
@@ -383,11 +380,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   };
 
   const basics = (
-    <PanelSection
-      desc={t('environments.form.desc')}
-      icon={InfoIcon}
-      title={t('environments.form.basics')}
-    >
+    <PanelSection title={t('environments.form.basics')}>
       <InlineField
         required
         label={t('environments.nameLabel')}
@@ -410,7 +403,6 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
 
       <PanelSection
         desc={t('environments.form.sourcesHint')}
-        icon={FolderGit2Icon}
         title={t('environments.form.sources')}
         notice={
           /* When an edit here reaches an instance, which is the question this
@@ -493,7 +485,6 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
       </PanelSection>
 
       <PanelSection
-        icon={TerminalIcon}
         title={t('environments.form.setup')}
         desc={
           repositories.length > 0 ? t('environments.form.bootstrapAfterRepositories') : undefined
@@ -511,12 +502,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
 
       {/* Said plainly because the shape cannot enforce it: a text field
             cannot tell a region from a token. */}
-      <PanelSection
-        last
-        desc={t('environments.form.envHint')}
-        icon={KeyRoundIcon}
-        title={t('environments.form.env')}
-      >
+      <PanelSection desc={t('environments.form.envHint')} title={t('environments.form.env')}>
         <EnvironmentVariables
           entries={Object.entries(configuration.env ?? {})}
           onSave={(entries) => saveConfiguration({ env: Object.fromEntries(entries) })}
