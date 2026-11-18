@@ -221,7 +221,14 @@ export interface ContextFactProviders {
    * ephemeral, which is what every run without one gets.
    */
   resolveSandboxPersistence?: () => Promise<
-    { cwd?: string; mode: 'drive' | 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+    | {
+        cwd?: string;
+        mode: 'drive' | 'ephemeral' | 'persistent';
+        /** The repositories the topic's environment checks out, in order. */
+        repositories?: { folder?: string; ref?: string; repository: string }[];
+        workingDir?: string;
+      }
+    | undefined
   >;
 }
 

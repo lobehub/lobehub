@@ -131,7 +131,7 @@ interface EnvironmentItemProps {
  * repository is this, and who put it here. Every
  * other property of an environment — setup command, variables, branch — is a
  * detail of one environment rather than a way to tell environments apart, so it
- * lives in the panel this row opens.
+ * lives on the page this row opens.
  */
 const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
   const { environment, extra, menuItems, onSelect, selected } = props;
