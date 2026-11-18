@@ -1,5 +1,9 @@
+import { globSync } from 'node:fs';
+import path from 'node:path';
+
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
 const LANDING_SITEMAP_URL = 'https://lobehub.com/sitemap.xml';
@@ -21,7 +25,54 @@ interface CustomNextConfig {
  */
 const FILE_PARSE_WORKER_TRACE = 'dist/file-parse-worker/**/*';
 
+/**
+ * Required trace includes that come from a build step run *before* `next build`. Next silently
+ * ignores an `outputFileTracingIncludes` glob that matches nothing, so a skipped step only shows up
+ * at runtime (e.g. every upload failing to parse). Other required includes are not listed here:
+ * `.next/static` is produced by `next build` itself, and `public/**` is checked-in source.
+ */
+const PRE_BUILD_ARTIFACT_TRACES = [FILE_PARSE_WORKER_TRACE];
+
+interface AssertRequiredBuildArtifactsOptions {
+  phase: string | undefined;
+  /**
+   * Directory the globs resolve against. Must be the Next project root — the base Next uses for
+   * trace includes and the `process.cwd()` the server reads the worker from — so a same-named
+   * directory in a nested checkout (e.g. the `lobehub/` submodule in Cloud) never satisfies it.
+   */
+  projectRoot: string;
+}
+
+export function assertRequiredBuildArtifacts({
+  phase,
+  projectRoot,
+}: AssertRequiredBuildArtifactsOptions) {
+  if (phase !== PHASE_PRODUCTION_BUILD) return;
+
+  const missing = PRE_BUILD_ARTIFACT_TRACES.filter(
+    (pattern) => globSync(pattern, { cwd: projectRoot }).length === 0,
+  );
+  if (missing.length === 0) return;
+
+  throw new Error(
+    `Required build artifact missing under ${projectRoot}: ${missing.join(', ')}. ` +
+      'Run `build:file-parse-worker` before `next build`.',
+  );
+}
+
+/**
+ * `defineConfig` returns a plain object (Cloud spreads it), so it never receives the `phase`
+ * argument Next passes to function configs, and Next only sets `process.env.NEXT_PHASE` after
+ * compilation. The CLI command is the remaining signal that config is loading for a production build.
+ */
+const getNextCliPhase = () =>
+  process.argv[1] && path.basename(process.argv[1]) === 'next' && process.argv[2] === 'build'
+    ? PHASE_PRODUCTION_BUILD
+    : undefined;
+
 export function defineConfig(config: CustomNextConfig) {
+  assertRequiredBuildArtifacts({ phase: getNextCliPhase(), projectRoot: process.cwd() });
+
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
 

@@ -1,14 +1,16 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD } from 'next/constants';
 import {
   getRewrittenUrl,
   unstable_getResponseFromNextConfig,
 } from 'next/experimental/testing/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { defineConfig } from './define-config';
+import { assertRequiredBuildArtifacts, defineConfig } from './define-config';
 
 describe('defineConfig', () => {
   const originalAssetBaseUrl = process.env.ASSET_BASE_URL;
@@ -21,6 +23,66 @@ describe('defineConfig', () => {
 
     if (originalLegacyPrefix === undefined) delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
     else process.env.NEXT_PUBLIC_ASSET_PREFIX = originalLegacyPrefix;
+  });
+
+  describe('required build artifacts', () => {
+    let projectRoot: string;
+
+    const writeWorker = (root: string) => {
+      mkdirSync(path.join(root, 'dist/file-parse-worker'), { recursive: true });
+      writeFileSync(path.join(root, 'dist/file-parse-worker/fileParseWorker.mjs'), '');
+    };
+
+    beforeEach(() => {
+      projectRoot = mkdtempSync(path.join(tmpdir(), 'define-config-'));
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      rmSync(projectRoot, { force: true, recursive: true });
+    });
+
+    it('passes a production build when the worker artifact exists at the project root', () => {
+      writeWorker(projectRoot);
+
+      expect(() =>
+        assertRequiredBuildArtifacts({ phase: PHASE_PRODUCTION_BUILD, projectRoot }),
+      ).not.toThrow();
+    });
+
+    it('fails a production build when the worker artifact is missing', () => {
+      expect(() =>
+        assertRequiredBuildArtifacts({ phase: PHASE_PRODUCTION_BUILD, projectRoot }),
+      ).toThrow(/dist\/file-parse-worker\/\*\*\/\*.*build:file-parse-worker/);
+    });
+
+    it('fails when the artifact exists only in a nested checkout, not the project root', () => {
+      // Cloud builds from its own root; `lobehub/dist/...` from the submodule is never deployed.
+      writeWorker(path.join(projectRoot, 'lobehub'));
+
+      expect(() =>
+        assertRequiredBuildArtifacts({ phase: PHASE_PRODUCTION_BUILD, projectRoot }),
+      ).toThrow(/build:file-parse-worker/);
+    });
+
+    it('skips the check outside a production build', () => {
+      expect(() =>
+        assertRequiredBuildArtifacts({ phase: PHASE_DEVELOPMENT_SERVER, projectRoot }),
+      ).not.toThrow();
+      expect(() => assertRequiredBuildArtifacts({ phase: undefined, projectRoot })).not.toThrow();
+    });
+
+    it('runs the check when config loads for `next build`', () => {
+      vi.spyOn(process, 'cwd').mockReturnValue(projectRoot);
+      const argv = process.argv;
+      process.argv = ['node', '/repo/node_modules/next/dist/bin/next', 'build'];
+
+      try {
+        expect(() => defineConfig({})).toThrow(/build:file-parse-worker/);
+      } finally {
+        process.argv = argv;
+      }
+    });
   });
 
   describe('deployment file tracing', () => {
