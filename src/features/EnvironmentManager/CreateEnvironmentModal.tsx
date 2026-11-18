@@ -1,10 +1,12 @@
 'use client';
 
-import type { EnvironmentVisibility } from '@lobechat/types';
+import type { EnvironmentVisibility, ScmRepositoryListItem } from '@lobechat/types';
+import { layoutRepositorySources } from '@lobechat/types';
 import {
   Button,
   confirmModal,
   createModal,
+  cssVar,
   Flexbox,
   Input,
   ModalFooter,
@@ -15,10 +17,16 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import ExtraRepositories, {
+  type ExtraRepository,
+} from '@/features/Projects/CreateFromGithub/ExtraRepositories';
+import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
+import RepositoryList from '@/features/Projects/CreateFromGithub/RepositoryList';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
-import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 /**
@@ -41,6 +49,7 @@ interface CreateEnvironmentContentProps {
 const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
   ({ onCreated, visibility }) => {
     const { t } = useTranslation('setting');
+    const { t: tProject } = useTranslation('project');
     const { close } = useModalContext();
     const actions = useEnvironmentActions();
 
@@ -49,7 +58,18 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // the person typed is theirs, and picking a different repository must not
     // overwrite it; a suggested one is just a default and follows the pick.
     const [nameIsSuggested, setNameIsSuggested] = useState(true);
-    const [repository, setRepository] = useState<GithubRepositorySelection | undefined>();
+    // The main repository, picked from the list or pasted — the same two ways
+    // the create-project dialog takes one — and any more beside it.
+    const [url, setUrl] = useState('');
+    const [defaultBranch, setDefaultBranch] = useState<string>();
+    const [extras, setExtras] = useState<ExtraRepository[]>([]);
+    const repository = parseGithubRepository(url);
+    const urlInvalid = Boolean(url.trim()) && !repository;
+    const navigate = useWorkspaceAwareNavigate();
+    const connectGithub = () => {
+      close();
+      navigate(GITHUB_RETURN_TO);
+    };
     const [creating, setCreating] = useState(false);
     // The Enter that confirms an IME candidate reaches `keydown` as an Enter,
     // so a Chinese name would submit the dialog on the keystroke that picked it.
@@ -58,14 +78,18 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
 
     const trimmed = name.trim();
 
-    const pickRepository = (selection: GithubRepositorySelection | undefined) => {
-      setRepository(selection);
+    const applyUrl = (next: string, branch?: string) => {
+      setUrl(next);
+      setDefaultBranch(branch);
       setError(undefined);
       // Naming a thing that does not exist yet is the harder half of this dialog,
       // so the repository answers it: an environment for a repository is almost
       // always called after it.
-      if (nameIsSuggested) setName(selection?.repository ?? '');
+      if (nameIsSuggested) setName(parseGithubRepository(next)?.name ?? '');
     };
+
+    const selectRepository = (repo: ScmRepositoryListItem) =>
+      applyUrl(repo.htmlUrl, repo.defaultBranch ?? undefined);
 
     const create = async () => {
       setCreating(true);
@@ -76,16 +100,23 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
           // carries the owner GitHub reported for it, so the checkout URL is
           // built from the pair rather than from whichever owner the list was
           // filtered by — those differ for a repository reached as a collaborator.
+          // No repository at all is a valid environment: setup and variables
+          // only, cloning nothing. Several are laid out side by side.
           configuration: repository
             ? {
                 kind: 'code',
-                sources: [
+                sources: layoutRepositorySources([
                   {
                     kind: 'git',
-                    ref: repository.defaultBranch,
-                    url: `https://github.com/${repository.owner}/${repository.repository}`,
+                    url: repository.url,
+                    ...(defaultBranch && { ref: defaultBranch }),
                   },
-                ],
+                  ...extras.map((extra) => ({
+                    kind: 'git' as const,
+                    url: extra.url,
+                    ...(extra.defaultBranch && { ref: extra.defaultBranch }),
+                  })),
+                ]) as { kind: 'git'; path?: string; ref?: string; url: string }[],
               }
             : { kind: 'code' },
           name: trimmed,
@@ -135,7 +166,29 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
           {/* Repository first, name second. The name is the harder question and the
             repository usually answers it, so asking for the name first makes the
             person invent something they are about to be handed. */}
-          <GithubRepositoryPicker value={repository} onChange={pickRepository} onLeave={close} />
+          <RepositoryList
+            selected={repository?.fullName}
+            onConnect={connectGithub}
+            onSelect={selectRepository}
+          />
+
+          <Flexbox gap={6}>
+            <Text fontSize={12} type={'secondary'} weight={500}>
+              {tProject('createFromGithub.urlLabel')}
+            </Text>
+            <Input
+              aria-invalid={urlInvalid}
+              placeholder={tProject('createFromGithub.urlPlaceholder')}
+              style={urlInvalid ? { borderColor: cssVar.colorError } : undefined}
+              value={url}
+              onChange={(event) => applyUrl(event.target.value)}
+            />
+            <Text fontSize={12} type={urlInvalid ? 'danger' : 'secondary'}>
+              {urlInvalid
+                ? tProject('createFromGithub.urlInvalid')
+                : t('environments.form.repositoryOptional')}
+            </Text>
+          </Flexbox>
 
           <Flexbox gap={6}>
             <Text fontSize={12} type={'secondary'} weight={500}>
@@ -161,11 +214,21 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
               </Text>
             )}
           </Flexbox>
+
+          {repository && (
+            <ExtraRepositories
+              extras={extras}
+              hint={t('environments.form.extraRepositoriesHint')}
+              mainFullName={repository.fullName}
+              onChange={setExtras}
+              onConnect={connectGithub}
+            />
+          )}
         </Flexbox>
         <ModalFooter>
           <Button onClick={close}>{t('environments.cancel')}</Button>
           <Button
-            disabled={!trimmed}
+            disabled={!trimmed || urlInvalid}
             loading={creating}
             type={'primary'}
             onClick={() => void submit()}
@@ -191,5 +254,5 @@ export const openCreateEnvironmentModal = (
     maskClosable: true,
     styles: { content: { padding: 0 } },
     title,
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 520px)',
   });

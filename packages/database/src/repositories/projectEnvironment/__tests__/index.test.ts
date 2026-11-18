@@ -5,7 +5,6 @@ import { getTestDB } from '../../../core/getTestDB';
 import { EnvironmentModel } from '../../../models/environment';
 import { ProjectModel } from '../../../models/project';
 import { UserModel } from '../../../models/user';
-import { WorkspaceModel } from '../../../models/workspace';
 import {
   agents,
   devices,
@@ -17,6 +16,7 @@ import {
   users,
   workspaces,
 } from '../../../schemas';
+import { WorkspaceDeletionRepository } from '../../workspaceDeletion';
 import { mergeRepositories, ProjectEnvironmentRepository } from '../index';
 
 const db = await getTestDB();
@@ -314,7 +314,7 @@ describe('deleting what owns a project', () => {
       .returning();
     await new ProjectEnvironmentRepository(db, userId, 'env-ws').get(project.id);
 
-    await new WorkspaceModel(db, userId).delete('env-ws');
+    await new WorkspaceDeletionRepository(db, userId).delete('env-ws');
 
     expect(await db.select().from(workspaces)).toEqual([]);
     expect(await db.select().from(environments)).toEqual([]);

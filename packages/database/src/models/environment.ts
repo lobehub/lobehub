@@ -407,6 +407,9 @@ export class EnvironmentModel {
             // explicit empty list is a decision.
             configuration: {
               ...params.configuration,
+              ...(params.configuration?.sources && {
+                sources: layoutRepositorySources(params.configuration.sources),
+              }),
               excludePaths: params.configuration?.excludePaths ?? [...DEFAULT_REGENERABLE_PATHS],
             },
             description: params.description ?? null,

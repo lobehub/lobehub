@@ -1,18 +1,14 @@
 import type { ScmRepositoryListItem } from '@lobechat/types';
-import { Github } from '@lobehub/icons';
 import {
-  ActionIcon,
   Button,
   cssVar,
   Flexbox,
-  Icon,
   Input,
   ModalFooter,
   Text,
   toast,
   useModalContext,
 } from '@lobehub/ui';
-import { ChevronDownIcon, ChevronRightIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,16 +26,9 @@ import {
   reserveProjectIds,
 } from '../createProjectForm';
 import MainAgentSection from '../MainAgentSection';
+import ExtraRepositories, { type ExtraRepository } from './ExtraRepositories';
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
-
-/** A repository the advanced options add beside the main one. */
-interface ExtraRepository {
-  defaultBranch?: string;
-  /** `owner/name`. */
-  fullName: string;
-  url: string;
-}
 
 interface FormState {
   /** Default branch of the picked repository; unknown for a pasted URL. */
@@ -52,8 +41,6 @@ interface FormState {
   nameEdited: boolean;
   url: string;
 }
-
-const MAX_EXTRA_REPOSITORIES = 9;
 
 /**
  * New project from a GitHub repository: pick one the connected GitHub App can
@@ -76,9 +63,7 @@ const CreateFromGithubContent = () => {
 
   // Advanced options: more repositories the project's environment checks out
   // beside the main one, side by side in folders named after them.
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [extras, setExtras] = useState<ExtraRepository[]>([]);
-  const [extraUrl, setExtraUrl] = useState('');
 
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
@@ -111,30 +96,6 @@ const CreateFromGithubContent = () => {
 
   const updateName = (name: string) => {
     setForm((current) => ({ ...current, duplicate: undefined, name, nameEdited: true }));
-  };
-
-  const extraParsed = parseGithubRepository(extraUrl);
-  const extraUrlInvalid = Boolean(extraUrl.trim()) && !extraParsed;
-  const isTaken = (fullName: string) =>
-    fullName.toLowerCase() === repository?.fullName.toLowerCase() ||
-    extras.some((item) => item.fullName.toLowerCase() === fullName.toLowerCase());
-
-  /** Adds a repository beside the main one; picking one already there removes it. */
-  const toggleExtra = (extra: ExtraRepository) => {
-    setExtras((current) => {
-      const key = extra.fullName.toLowerCase();
-      if (current.some((item) => item.fullName.toLowerCase() === key))
-        return current.filter((item) => item.fullName.toLowerCase() !== key);
-      if (key === repository?.fullName.toLowerCase()) return current;
-      if (current.length >= MAX_EXTRA_REPOSITORIES) return current;
-      return [...current, extra];
-    });
-  };
-
-  const addExtraUrl = () => {
-    if (!extraParsed || isTaken(extraParsed.fullName)) return;
-    toggleExtra({ fullName: extraParsed.fullName, url: extraParsed.url });
-    setExtraUrl('');
   };
 
   const connectGithub = () => {
@@ -263,99 +224,12 @@ const CreateFromGithubContent = () => {
           <MainAgentSection dedicatedAgentId={reservedIds.agentId} projectName={form.name} />
         )}
         {repository && (
-          <Flexbox gap={8}>
-            <Flexbox horizontal>
-              <Button
-                icon={<Icon icon={advancedOpen ? ChevronDownIcon : ChevronRightIcon} />}
-                size={'small'}
-                type={'text'}
-                onClick={() => setAdvancedOpen((open) => !open)}
-              >
-                {extras.length > 0
-                  ? t('createFromGithub.advancedWithCount', { count: extras.length })
-                  : t('createFromGithub.advanced')}
-              </Button>
-            </Flexbox>
-            {advancedOpen && (
-              <Flexbox gap={12}>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('createFromGithub.extraRepositoriesHint')}
-                </Text>
-                {extras.length > 0 && (
-                  <Flexbox gap={6}>
-                    {extras.map((extra) => (
-                      <Flexbox
-                        horizontal
-                        align={'center'}
-                        gap={8}
-                        key={extra.fullName}
-                        style={{
-                          border: `1px solid ${cssVar.colorBorderSecondary}`,
-                          borderRadius: cssVar.borderRadius,
-                          paddingBlock: 6,
-                          paddingInline: 12,
-                        }}
-                      >
-                        <Github size={14} />
-                        <Text ellipsis style={{ flex: 1 }} weight={500}>
-                          {extra.fullName}
-                        </Text>
-                        <ActionIcon
-                          icon={XIcon}
-                          size={'small'}
-                          title={t('createFromGithub.removeRepository')}
-                          onClick={() => toggleExtra(extra)}
-                        />
-                      </Flexbox>
-                    ))}
-                  </Flexbox>
-                )}
-                <RepositoryList
-                  hideGuide
-                  label={t('createFromGithub.extraRepositoriesLabel')}
-                  picked={extras.map((item) => item.fullName)}
-                  onConnect={connectGithub}
-                  onSelect={(repo) =>
-                    toggleExtra({
-                      defaultBranch: repo.defaultBranch ?? undefined,
-                      fullName: repo.fullName,
-                      url: repo.htmlUrl,
-                    })
-                  }
-                />
-                <Flexbox gap={6}>
-                  <Text fontSize={13} weight={500}>
-                    {t('createFromGithub.extraUrlLabel')}
-                  </Text>
-                  <Flexbox horizontal gap={8}>
-                    <Input
-                      aria-invalid={extraUrlInvalid}
-                      placeholder={t('createFromGithub.urlPlaceholder')}
-                      style={extraUrlInvalid ? { borderColor: cssVar.colorError } : undefined}
-                      value={extraUrl}
-                      onChange={(event) => setExtraUrl(event.target.value)}
-                      onPressEnter={addExtraUrl}
-                    />
-                    <Button
-                      disabled={
-                        !extraParsed ||
-                        isTaken(extraParsed.fullName) ||
-                        extras.length >= MAX_EXTRA_REPOSITORIES
-                      }
-                      onClick={addExtraUrl}
-                    >
-                      {t('createFromGithub.addRepository')}
-                    </Button>
-                  </Flexbox>
-                  {extraUrlInvalid && (
-                    <Text fontSize={12} type={'danger'}>
-                      {t('createFromGithub.urlInvalid')}
-                    </Text>
-                  )}
-                </Flexbox>
-              </Flexbox>
-            )}
-          </Flexbox>
+          <ExtraRepositories
+            extras={extras}
+            mainFullName={repository.fullName}
+            onChange={setExtras}
+            onConnect={connectGithub}
+          />
         )}
       </Flexbox>
       <ModalFooter>

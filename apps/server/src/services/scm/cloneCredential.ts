@@ -1,4 +1,5 @@
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { ScmInstallationModel } from '@/database/models/scm';
 import type { ScmInstallationItem } from '@/database/schemas';
@@ -7,6 +8,9 @@ import type { LobeChatDatabase } from '@/database/type';
 import { mintGitHubRepositoryToken } from './github/app';
 
 const log = debug('lobe-server:scm:clone-credential');
+
+/** Token mints in flight at once for one specification. */
+const CLONE_CREDENTIAL_CONCURRENCY = 3;
 
 /** The only checkout host the sandbox build knows how to authenticate. */
 export const GITHUB_HTTPS_PREFIX = 'https://github.com/';
@@ -168,14 +172,18 @@ export const resolveScmCloneCredentials = async (params: {
     return single ? [single] : [];
   }
 
-  const credentials = await Promise.all(
-    repositories.map(async ({ url }) => {
+  // Each one reads the installations and mints a token, so a specification
+  // with many repositories is resolved a few at a time.
+  const credentials = await pMap(
+    repositories,
+    async ({ url }) => {
       const credential = await resolveScmCloneCredential({
         ...params,
         configuration: { sources: [{ kind: 'git', url }] },
       });
       return credential ? { ...credential, urlPrefix: url } : undefined;
-    }),
+    },
+    { concurrency: CLONE_CREDENTIAL_CONCURRENCY },
   );
 
   return credentials.filter((credential): credential is ScmCloneCredential => !!credential);

@@ -14,7 +14,6 @@ import {
 } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
-import { releaseProjectEnvironments } from './utils/projectEnvironmentCleanup';
 import { countOf } from './utils/rows';
 import { DEFAULT_TEAM_IDENTIFIER, deriveTeamIdentifier } from './workspaceTeam';
 
@@ -164,21 +163,9 @@ export class WorkspaceModel {
     if (await AgentTransferJobModel.hasPendingJobTouchingWorkspace(this.db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
-    return this.db.transaction(async (tx) => {
-      const db = tx as unknown as LobeChatDatabase;
-      const [owned] = await db
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)))
-        .for('update');
-      if (!owned) return db.delete(workspaces).where(sql`false`);
-      // Its projects cascade away with it; their environments would otherwise
-      // hold it back through `environments.workspace_id`.
-      await releaseProjectEnvironments(db, { workspaceId: id });
-      return db
-        .delete(workspaces)
-        .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)));
-    });
+    return this.db
+      .delete(workspaces)
+      .where(and(eq(workspaces.id, id), eq(workspaces.primaryOwnerId, this.userId)));
   };
 
   findById = async (id: string) => {
