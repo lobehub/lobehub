@@ -4,7 +4,7 @@ import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, FolderIcon, PlusIcon, SettingsIcon } from 'lucide-react';
+import { ChevronDownIcon, CircleOffIcon, FolderIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +21,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { environmentRepositoryUrl } from '../environmentSource';
 import { openAddDirectoryModal } from '../WorkingDirectories/AddDirectoryModal';
 import { addedFolderTarget, type useProjectDirectory } from './useProjectDirectory';
-import type { useProjectRepository } from './useProjectRepository';
+import { NO_ENVIRONMENT, type useProjectRepository } from './useProjectRepository';
 import type { useProjectWorkLocation } from './useProjectWorkLocation';
 
 /**
@@ -117,7 +117,7 @@ const ProjectWorkLocationPicker = ({
   } = location;
   const onSandbox = target === 'sandbox';
 
-  const { repositories, repository, setPickedId } = state;
+  const { repositories, repository, setPickedId, withoutEnvironment } = state;
   const repositoryShown = showRepositories && onSandbox && !!repository;
 
   const select = async (next: DeviceExecutionTarget, deviceId?: string) => {
@@ -207,6 +207,17 @@ const ProjectWorkLocationPicker = ({
     <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 260 }}>
       <div {...stylex.props(styles.header)}>{t('overview.context.location.environments')}</div>
       <div {...stylex.props(styles.list)}>
+        {/* Not every conversation needs the checkout: this one starts in an
+            empty working directory. */}
+        {repositories.length > 0 && (
+          <OptionRow
+            compact
+            active={onSandbox && withoutEnvironment}
+            icon={<Icon icon={CircleOffIcon} size={16} />}
+            label={t('environment.none')}
+            onClick={() => pickRepository(NO_ENVIRONMENT)}
+          />
+        )}
         {repositories.map((environment) => (
           <OptionRow
             compact

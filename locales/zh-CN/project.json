@@ -133,6 +133,7 @@
   "disabled.action": "前往实验室开启",
   "disabled.title": "项目工作空间目前处于 Alpha 阶段",
   "environment.configure": "配置环境",
+  "environment.none": "不使用环境（从空目录开始）",
   "goals.create": "新建目标",
   "goals.description": "定义这个项目正在追求的成果，并持续跟踪到验收。",
   "goals.emptyDescription": "为这个项目创建第一个可衡量的成果。",

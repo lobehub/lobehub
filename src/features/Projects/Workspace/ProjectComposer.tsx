@@ -164,7 +164,10 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     mode !== 'chat'
       ? {}
       : location.target === 'sandbox'
-        ? { environmentId: repositoryState.repository?.id }
+        ? {
+            environmentId: repositoryState.repository?.id,
+            withoutEnvironment: repositoryState.withoutEnvironment,
+          }
         : { directoryId: directoryState.directory?.id };
   const { send, sending } = useProjectComposer(project, mode, agentId, place);
 

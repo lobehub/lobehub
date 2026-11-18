@@ -133,6 +133,7 @@
   "disabled.action": "Enable in Labs",
   "disabled.title": "Project workspaces are an Alpha experiment",
   "environment.configure": "Configure environment",
+  "environment.none": "No environment — start in an empty folder",
   "goals.create": "Create goal",
   "goals.description": "Define the outcomes this project is pursuing and track them to acceptance.",
   "goals.emptyDescription": "Create the first measurable outcome for this project.",

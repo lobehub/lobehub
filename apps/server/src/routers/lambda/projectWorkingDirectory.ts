@@ -144,9 +144,14 @@ export const projectWorkingDirectoryRouter = router({
       z.object({
         projectId: z.string(),
         agentId: z.string(),
-        /** The project repository the conversation works in; the first one when left out. */
+        /** Ignored: a project has one environment. Kept for older clients. */
         environmentId: z.string().optional(),
         title: z.string().trim().min(1).max(255),
+        /**
+         * Start in an empty working directory instead of one the project's
+         * environment initializes — the composer's "No environment".
+         */
+        withoutEnvironment: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -162,14 +167,15 @@ export const projectWorkingDirectoryRouter = router({
         resolvePrecreatedTopicSnapshot(ctx.precreatedTopicDeps, input.agentId),
         // A project with a repository works in it from the first message: the
         // topic is written before any run, so no later pick would reach it.
-        resolveProjectTopicSandbox({
-          agentId: input.agentId,
-          db: ctx.serverDB,
-          environmentId: input.environmentId,
-          projectId: input.projectId,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId ?? undefined,
-        }),
+        input.withoutEnvironment
+          ? {}
+          : resolveProjectTopicSandbox({
+              agentId: input.agentId,
+              db: ctx.serverDB,
+              projectId: input.projectId,
+              userId: ctx.userId,
+              workspaceId: ctx.workspaceId ?? undefined,
+            }),
       ]);
       return {
         data: await ctx.topicModel.create({

@@ -511,4 +511,5 @@ export default {
   'createFromGithub.addRepository': 'Add',
   'createFromGithub.removeRepository': 'Remove',
   'createFromGithub.openIntegrations': 'Open GitHub settings',
+  'environment.none': 'No environment \u2014 start in an empty folder',
 };
