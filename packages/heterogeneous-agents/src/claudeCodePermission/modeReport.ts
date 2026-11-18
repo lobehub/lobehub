@@ -59,20 +59,26 @@ export const permissionModeReportPatch = (
  */
 export class PermissionModeReporter {
   private last: HeteroPermissionMode | undefined;
+  /** Why the session started outside the picked mode; dropped once it leaves that mode. */
+  private fallback: HeteroPermissionModeFallback | undefined;
 
   constructor(
     private readonly operationId: string,
-    private readonly fallback: HeteroPermissionModeFallback | undefined,
-  ) {}
+    fallback: HeteroPermissionModeFallback | undefined,
+  ) {
+    this.fallback = fallback;
+  }
 
   /** The event for a record that reports a new mode, else undefined. */
   observe(message: unknown, stepIndex = 0): AgentStreamEvent | undefined {
     const mode = readClaudeCodePermissionMode(message);
     if (!mode || mode === this.last) return;
     this.last = mode;
+    // The root fallback explains only the start mode it replaced. A later
+    // `acceptEdits` (a plan approved with accepted edits) is the user's pick.
+    if (this.fallback === 'root' && mode !== 'acceptEdits') this.fallback = undefined;
     const data: PermissionModeReportData = {
-      // The root fallback explains only the mode it replaced.
-      fallback: this.fallback === 'root' && mode !== 'acceptEdits' ? null : (this.fallback ?? null),
+      fallback: this.fallback ?? null,
       permissionMode: mode,
       phase: PERMISSION_MODE_PHASE,
     };

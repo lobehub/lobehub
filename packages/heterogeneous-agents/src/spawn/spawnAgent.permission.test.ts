@@ -158,7 +158,7 @@ describe('spawnAgent — Claude Code permission modes', () => {
     }
   });
 
-  it('runs bypass as acceptEdits with pre-approved tools as root, and says why', async () => {
+  it('runs bypass as plain acceptEdits as root, and says why', async () => {
     vi.spyOn(process, 'getuid').mockReturnValue(0);
     const live = createLiveProc();
     nextProc = live.proc;
@@ -174,7 +174,8 @@ describe('spawnAgent — Claude Code permission modes', () => {
 
     const { args } = spawnCalls[0];
     expect(args[args.indexOf('--permission-mode') + 1]).toBe('acceptEdits');
-    expect(args).toContain('--allowed-tools');
+    // Nothing pre-approved: a rule would outlive a switch to a stricter mode.
+    expect(args).not.toContain('--allowed-tools');
     expect(args).not.toContain('--allow-dangerously-skip-permissions');
 
     const events: any[] = [];

@@ -29,12 +29,11 @@ describe('buildClaudeCodePermissionArgs', () => {
     },
   );
 
-  it('falls back to acceptEdits with pre-approved tools for bypass as root', () => {
+  it('falls back to plain acceptEdits for bypass as root, pre-approving nothing', () => {
+    // An allow rule would outlive a later switch to a stricter mode.
     expect(buildClaudeCodePermissionArgs({ isRoot: true, mode: 'bypassPermissions' })).toEqual([
       '--permission-mode',
       'acceptEdits',
-      '--allowed-tools',
-      'Bash,Read,Write,Edit,MultiEdit,WebSearch,mcp__*',
       '--permission-prompt-tool',
       'stdio',
     ]);

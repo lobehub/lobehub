@@ -166,5 +166,10 @@ describe('PermissionModeReporter', () => {
       reporter.observe({ permissionMode: 'plan', subtype: 'status', type: 'system' })?.data
         .fallback,
     ).toBeNull();
+    // Approving that plan with accepted edits is the user's own pick, not the fallback.
+    expect(
+      reporter.observe({ permissionMode: 'acceptEdits', subtype: 'status', type: 'system' })?.data
+        .fallback,
+    ).toBeNull();
   });
 });

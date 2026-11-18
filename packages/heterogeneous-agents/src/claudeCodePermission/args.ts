@@ -1,6 +1,11 @@
 import type { HeteroPermissionMode, HeteroPermissionModeFallback } from '@lobechat/types';
 
-/** Tools pre-approved when `acceptEdits` stands in for `bypassPermissions` as root. */
+/**
+ * Tools pre-approved for a root run with the lab off, where nobody can answer a
+ * prompt. Never with a mode: an allow rule outlives a later switch to a
+ * stricter mode (`set_permission_mode` keeps it), so it would silently approve
+ * what the user then asked to be asked about.
+ */
 const ROOT_PRE_APPROVED_TOOLS = 'Bash,Read,Write,Edit,MultiEdit,WebSearch,mcp__*';
 
 /** Claude Code refuses `bypassPermissions` as root (a cloud sandbox). */
@@ -8,7 +13,7 @@ export const isRunningAsRoot = (): boolean => process.getuid?.() === 0;
 
 /**
  * The mode Claude Code can actually run in: as root, `bypassPermissions` falls
- * back to `acceptEdits` (with the common tools pre-approved at spawn).
+ * back to `acceptEdits`.
  */
 export const resolveClaudeCodePermissionMode = (
   mode: HeteroPermissionMode,
@@ -28,7 +33,8 @@ export const resolveClaudeCodePermissionMode = (
  *   `--allow-dangerously-skip-permissions` only PERMITS a later switch to
  *   `bypassPermissions` (the mode chip, approving a plan with "don't ask
  *   again"): without it Claude Code silently turns that switch into `default`.
- *   Root never gets it, since Claude Code refuses it there.
+ *   Root never gets it, since Claude Code refuses it there; root's stand-in
+ *   for `bypassPermissions` is plain `acceptEdits`, asking before commands.
  */
 export const buildClaudeCodePermissionArgs = ({
   isRoot = isRunningAsRoot(),
@@ -37,18 +43,13 @@ export const buildClaudeCodePermissionArgs = ({
   isRoot?: boolean;
   mode?: HeteroPermissionMode;
 }): string[] => {
-  const rootFallbackArgs = [
-    '--permission-mode',
-    'acceptEdits',
-    '--allowed-tools',
-    ROOT_PRE_APPROVED_TOOLS,
-  ];
-  if (!mode) return isRoot ? rootFallbackArgs : ['--permission-mode', 'bypassPermissions'];
+  if (!mode) {
+    return isRoot
+      ? ['--permission-mode', 'acceptEdits', '--allowed-tools', ROOT_PRE_APPROVED_TOOLS]
+      : ['--permission-mode', 'bypassPermissions'];
+  }
 
   const resolved = resolveClaudeCodePermissionMode(mode, isRoot);
-  if (resolved.fallback === 'root')
-    return [...rootFallbackArgs, '--permission-prompt-tool', 'stdio'];
-
   return [
     '--permission-mode',
     resolved.mode,
