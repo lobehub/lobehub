@@ -88,8 +88,14 @@ def split_multipart(
         if value is None:
             continue
         if isinstance(value, (list, tuple)) and not (isinstance(value, tuple) and is_file_content(value)):
-            if value and all(is_file_content(v) for v in value):
+            file_parts = [is_file_content(v) for v in value]
+            if value and all(file_parts):
                 files.extend((key, to_upload_file(v)) for v in value)
+            elif any(file_parts):
+                raise TypeError(
+                    f"`{key}` mixes files with other values; pass every file as bytes, a file object, "
+                    "a pathlib.Path or a (name, content) tuple (a plain str is sent as text)"
+                )
             else:
                 data[key] = [_form_value(v) for v in value]
         elif is_file_content(value):

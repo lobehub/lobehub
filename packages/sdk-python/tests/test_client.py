@@ -161,3 +161,20 @@ async def test_async_client(server: MockServer) -> None:
     assert me["id"] == "user_1"
     assert server.requests[0].headers["authorization"] == "Bearer jwt-async"
     assert [r.headers["x-workspace-id"] for r in server.requests] == ["ws_1", "ws_2"]
+
+
+def test_closing_a_with_options_copy_keeps_the_parent_open(server: MockServer) -> None:
+    server.default = Reply(body=envelope({"id": "user_1"}))
+    client = make(server)
+    with client.with_options(workspace_id="ws_1") as scoped:
+        scoped.users.me()
+    assert not client._http.is_closed
+    assert client.users.me()["id"] == "user_1"
+    client.close()
+    assert client._http.is_closed
+
+
+def test_non_json_success_body_raises_a_lobehub_error(server: MockServer) -> None:
+    server.reply(Reply(body="<html>proxy page</html>", headers={"Content-Type": "text/html"}))
+    with pytest.raises(LobeHubError, match="Expected a JSON answer from GET /api/v1/users/me"):
+        make(server).users.me()

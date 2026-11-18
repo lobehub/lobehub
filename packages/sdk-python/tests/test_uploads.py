@@ -77,3 +77,12 @@ async def test_async_upload(server: MockServer, tmp_path: Path) -> None:
         {"agentId": "agt_1"},
         [("file", "data.json", "application/json", b"{}")],
     )
+
+
+def test_upload_batch_refuses_a_list_mixing_files_and_text(server: MockServer, tmp_path: Path) -> None:
+    first = tmp_path / "a.txt"
+    first.write_bytes(b"A")
+    client = LobeHub(api_key=API_KEY, base_url=server.base_url)
+    with pytest.raises(TypeError, match="mixes files"):
+        client.files.upload_batch({"files": [first, "b.txt"]})  # type: ignore[list-item]
+    assert server.requests == []

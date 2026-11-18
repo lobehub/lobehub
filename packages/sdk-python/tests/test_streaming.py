@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+from typing import Any, AsyncIterator, Dict, List
 
+import httpx
 import pytest
 
-from lobehub import AsyncLobeHub, LobeHub, PermissionDeniedError, ServerSentEvent
+from lobehub import (
+    APIConnectionError,
+    APITimeoutError,
+    AsyncLobeHub,
+    LobeHub,
+    PermissionDeniedError,
+    ServerSentEvent,
+)
 from lobehub._streaming import SSEDecoder, iter_sse
 
 from .conftest import API_KEY, MockServer, Reply, api_error
@@ -148,3 +156,32 @@ async def test_async_stream_events(server: MockServer) -> None:
         async with client.stream_events("GET", "/api/v1/runs/run_1/events") as stream:
             data = [event.data async for event in stream]
     assert data == ["1", "2"]
+
+
+def test_a_stalled_stream_raises_api_timeout_error(server: MockServer) -> None:
+    first = sse({"type": "response.output_text.delta", "sequence_number": 0, "delta": "x"})
+    server.reply(Reply(chunks=[first, first], chunk_delay=1.0))
+    stream = LobeHub(api_key=API_KEY, base_url=server.base_url, timeout=0.3).responses.stream(
+        {"model": "agt_1", "input": "x"}
+    )
+    received = []
+    with pytest.raises(APITimeoutError):
+        for event in stream:
+            received.append(event)
+    assert len(received) == 1
+
+
+@pytest.mark.anyio
+async def test_async_stream_dropped_mid_body_raises_api_connection_error() -> None:
+    class Dropping(httpx.AsyncByteStream):
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            yield b"data: 1\n\n"
+            raise httpx.ReadError("connection reset")
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, stream=Dropping()))
+    client = AsyncLobeHub(api_key=API_KEY, http_client=httpx.AsyncClient(transport=transport))
+    data = []
+    with pytest.raises(APIConnectionError, match="connection reset"):
+        async for event in client.stream_events("GET", "/api/v1/runs/run_1/events"):
+            data.append(event.data)
+    assert data == ["1"]

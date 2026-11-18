@@ -6,7 +6,6 @@ import json as jsonlib
 import os
 import random
 import time
-from email.utils import parsedate_to_datetime
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, TypeVar, Union
 
 import anyio
@@ -18,7 +17,12 @@ from ._constants import (
     IDEMPOTENCY_KEY_HEADER,
     WORKSPACE_HEADER,
 )
-from ._errors import APIConnectionError, APITimeoutError, LobeHubError, make_status_error
+from ._errors import (
+    LobeHubError,
+    connection_error,
+    make_status_error,
+    parse_retry_after,
+)
 from ._response import BinaryResponse
 from ._uploads import split_multipart
 from ._version import __version__
@@ -48,21 +52,6 @@ def _sleep(seconds: float) -> None:
 
 async def _asleep(seconds: float) -> None:
     await anyio.sleep(seconds)
-
-
-def parse_retry_after(value: Optional[str], now: Optional[float] = None) -> Optional[float]:
-    """`Retry-After` as delay-seconds or an HTTP date, in seconds."""
-    if not value:
-        return None
-    try:
-        return max(0.0, float(value))
-    except ValueError:
-        pass
-    try:
-        date = parsedate_to_datetime(value)
-    except (TypeError, ValueError):
-        return None
-    return max(0.0, date.timestamp() - (time.time() if now is None else now))
 
 
 def backoff_delay(attempt: int, rand: Callable[[], float] = random.random) -> float:
@@ -146,6 +135,8 @@ class BaseClient:
         clone = copy.copy(self)
         if clone.__dict__.get("_client") is self:
             clone.__dict__["_client"] = clone
+        # The copy shares the connection pool: closing it must not close the parent's.
+        clone.__dict__["_owns_http"] = False
         # Resources cached by `cached_property` hold the old client: drop them.
         for name in dir(type(self)):
             if isinstance(inspect.getattr_static(type(self), name, None), cached_property):
@@ -226,7 +217,13 @@ class BaseClient:
             return BinaryResponse(response)
         if not response.content:
             return None
-        body = response.json()
+        try:
+            body = response.json()
+        except (jsonlib.JSONDecodeError, UnicodeDecodeError) as error:
+            raise LobeHubError(
+                f"Expected a JSON answer from {response.request.method} {response.request.url.path}, "
+                f"got {response.headers.get('content-type', 'no content type')}"
+            ) from error
         if kind == "envelope" and isinstance(body, dict) and "data" in body:
             return body["data"]
         return body
@@ -238,14 +235,6 @@ class BaseClient:
             if retry_after is not None:
                 return None if retry_after > MAX_RETRY_AFTER else retry_after
         return backoff_delay(attempt)
-
-
-def _connection_error(
-    error: httpx.TransportError, request: httpx.Request, timeout: Optional[float]
-) -> APIConnectionError:
-    if isinstance(error, httpx.TimeoutException):
-        return APITimeoutError(timeout, request=request)
-    return APIConnectionError(str(error) or "Connection error", request=request)
 
 
 class SyncAPIClient(BaseClient):
@@ -297,7 +286,7 @@ class SyncAPIClient(BaseClient):
             try:
                 response = self._http.send(request, stream=True)
             except httpx.TransportError as error:
-                failure = _connection_error(error, request, self._timeout(timeout))
+                failure = connection_error(error, request, self._timeout(timeout))
                 if not can_retry:
                     raise failure from error
                 _sleep(backoff_delay(attempt))
@@ -398,7 +387,7 @@ class AsyncAPIClient(BaseClient):
             try:
                 response = await self._http.send(request, stream=True)
             except httpx.TransportError as error:
-                failure = _connection_error(error, request, self._timeout(timeout))
+                failure = connection_error(error, request, self._timeout(timeout))
                 if not can_retry:
                     raise failure from error
                 await _asleep(backoff_delay(attempt))

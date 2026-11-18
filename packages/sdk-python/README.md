@@ -44,11 +44,13 @@ Every method also takes `extra_headers`, `extra_query`, `extra_body`, `timeout` 
 import asyncio
 from lobehub import AsyncLobeHub
 
+
 async def main() -> None:
     async with AsyncLobeHub() as client:
         me = await client.users.me()
         async for topic in client.topics.iter_list(limit=50):
             print(topic["id"])
+
 
 asyncio.run(main())
 ```
@@ -80,7 +82,10 @@ from lobehub.oauth import (
 
 pkce, state = create_pkce_pair(), secrets.token_urlsafe(16)
 url = create_authorization_url(
-    client_id="my-app", redirect_uri="http://127.0.0.1:8765/callback", code_challenge=pkce.challenge, state=state
+    client_id="my-app",
+    redirect_uri="http://127.0.0.1:8765/callback",
+    code_challenge=pkce.challenge,
+    state=state,
 )
 # Open `url` in the browser, receive the redirect on your callback, then:
 code = parse_authorization_callback(callback_url, state)
@@ -97,12 +102,12 @@ client = LobeHub(access_token=RefreshingToken(client_id="my-app", tokens=tokens,
 ## Workspaces
 
 ```python
-client = LobeHub(workspace_id="ws_...")             # every request acts inside the workspace
-client.agents.list(workspace_id="ws_other")          # one call elsewhere
-team = client.with_options(workspace_id="ws_team")   # a copy sharing the connection pool
+client = LobeHub(workspace_id="ws_...")  # every request acts inside the workspace
+client.agents.list(workspace_id="ws_other")  # one call elsewhere
+team = client.with_options(workspace_id="ws_team")  # a copy sharing the connection pool
 ```
 
-`workspace_id` is sent as `X-Workspace-Id`. A personal API key cannot send it; a workspace API key is bound to its workspace.
+Closing a `with_options()` copy leaves the shared pool open; close the original client. `workspace_id` is sent as `X-Workspace-Id`. A personal API key cannot send it; a workspace API key is bound to its workspace.
 
 ## Timeouts and retries
 

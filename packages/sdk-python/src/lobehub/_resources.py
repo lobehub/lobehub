@@ -117,7 +117,7 @@ class AsyncResponsesResource(AsyncResponses):
 
 
 class FilesResource(Files):
-    """`client.files`, plus `upload()` for any file source (`upload_batch` takes the same sources)."""
+    """`client.files`, plus `upload()` for any file source. `upload_batch` takes the same sources, except a path must be a `pathlib.Path`."""
 
     def upload(
         self,
@@ -167,7 +167,7 @@ class FilesResource(Files):
 
 
 class AsyncFilesResource(AsyncFiles):
-    """`client.files`, plus `upload()` for any file source (`upload_batch` takes the same sources)."""
+    """`client.files`, plus `upload()` for any file source. `upload_batch` takes the same sources, except a path must be a `pathlib.Path`."""
 
     async def upload(
         self,

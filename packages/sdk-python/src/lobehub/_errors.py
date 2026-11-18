@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, Optional, Type
 
 import httpx
@@ -98,11 +100,7 @@ class RateLimitError(APIError):
 
     @property
     def retry_after(self) -> Optional[float]:
-        value = self.headers.get("Retry-After")
-        try:
-            return float(value) if value is not None else None
-        except ValueError:
-            return None
+        return parse_retry_after(self.headers.get("Retry-After"))
 
 
 class InternalServerError(APIError):
@@ -134,6 +132,30 @@ _STATUS_ERRORS: Dict[int, Type[APIError]] = {
     422: UnprocessableEntityError,
     429: RateLimitError,
 }
+
+
+def parse_retry_after(value: Optional[str], now: Optional[float] = None) -> Optional[float]:
+    """`Retry-After` as delay-seconds or an HTTP date, in seconds."""
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        date = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, date.timestamp() - (time.time() if now is None else now))
+
+
+def connection_error(
+    error: httpx.TransportError, request: Optional[httpx.Request], timeout: Optional[float]
+) -> APIConnectionError:
+    """The SDK error for an httpx transport failure (before or while reading a body)."""
+    if isinstance(error, httpx.TimeoutException):
+        return APITimeoutError(timeout, request=request)
+    return APIConnectionError(str(error) or "Connection error", request=request)
 
 
 def _text(value: Any) -> Optional[str]:

@@ -217,3 +217,12 @@ async def test_async_connection_error(sleeps: List[float]) -> None:
     with pytest.raises(APIConnectionError, match="refused"):
         await client.users.me()
     assert len(sleeps) == 1
+
+
+def test_retry_after_accepts_an_http_date(server: MockServer) -> None:
+    server.reply(
+        Reply(429, api_error("rate_limited"), headers={"Retry-After": "Wed, 21 Oct 2099 07:28:00 GMT"})
+    )
+    with pytest.raises(RateLimitError) as caught:
+        make(server, max_retries=0).agent_groups.list()
+    assert caught.value.retry_after is not None and caught.value.retry_after > 60

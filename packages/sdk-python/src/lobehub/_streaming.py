@@ -24,6 +24,8 @@ from typing import (
 import httpx
 from typing_extensions import Self
 
+from ._errors import connection_error
+
 if TYPE_CHECKING:
     from .generated.types import ResponseObject, ResponseStreamEvent
 
@@ -119,6 +121,12 @@ async def aiter_sse(chunks: AsyncIterator[bytes]) -> AsyncIterator[ServerSentEve
         yield event
 
 
+def _read_timeout(response: httpx.Response) -> Optional[float]:
+    timeout = response.request.extensions.get("timeout") or {}
+    value = timeout.get("read")
+    return float(value) if value is not None else None
+
+
 class Stream(Generic[T]):
     """
     A server-sent event stream. The request is sent when iteration starts;
@@ -144,6 +152,9 @@ class Stream(Generic[T]):
                 item = self._transform(message)
                 if item is not None:
                     yield item
+        except httpx.TransportError as error:
+            # Dropped mid-stream, or no bytes for `timeout` seconds.
+            raise connection_error(error, self.response.request, _read_timeout(self.response)) from error
         finally:
             # Breaking out early must not leave the connection (and the run's
             # server-side subscription) open.
@@ -186,6 +197,8 @@ class AsyncStream(Generic[T]):
                 item = self._transform(message)
                 if item is not None:
                     yield item
+        except httpx.TransportError as error:
+            raise connection_error(error, self.response.request, _read_timeout(self.response)) from error
         finally:
             await self.response.aclose()
 
