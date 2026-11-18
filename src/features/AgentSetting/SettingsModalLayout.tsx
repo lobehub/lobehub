@@ -74,7 +74,13 @@ const SettingsModalLayout = memo<SettingsModalLayoutProps>(
                 size={24}
               />
             ) : (
-              <Avatar avatar={avatar} background={background} shape={'square'} size={24} />
+              <Avatar
+                avatar={avatar}
+                background={background}
+                shape={'square'}
+                size={24}
+                title={typeof title === 'string' ? title : undefined}
+              />
             )}
             <Text ellipsis weight={600}>
               {title}

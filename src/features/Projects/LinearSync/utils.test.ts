@@ -57,6 +57,9 @@ describe('formatLinearSyncResult', () => {
     expect(formatLinearSyncResult(result({ commentsImported: 3, updated: 1 }), t)).toBe(
       'linear.sync.result.updated:1 · linear.sync.result.commentsImported:3',
     );
+    expect(formatLinearSyncResult(result({ labelsSynced: 4 }), t)).toBe(
+      'linear.sync.result.labelsSynced:4',
+    );
     expect(formatLinearSyncResult(result({ commentsImported: 2 }), t)).toBe(
       'linear.sync.result.commentsImported:2',
     );

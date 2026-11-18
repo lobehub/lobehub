@@ -113,6 +113,16 @@ export interface WorkspaceUserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
+   * Agents / chat groups this member pinned for themselves in the merged
+   * workspace "Agents" section (newest first). Personal: it never changes
+   * another member's sidebar. Team pins — the ones every member sees — stay on
+   * the shared `agents.pinned` / `chat_groups.pinned` columns, which only
+   * workspace owners and admins may write for public rows. A private row's
+   * own `pinned` column is read as this member's pin too, since only its
+   * creator can see it.
+   */
+  sidebarPinnedItemIds?: string[];
+  /**
    * Per-member pins for sidebar items.
    *
    * @deprecated Pinning is workspace-shared again — it lives on the
@@ -128,6 +138,13 @@ export interface WorkspaceUserPreference {
    *   nothing reads or writes this key.
    */
   topicOnlyMine?: boolean;
+  /**
+   * Directories (`<deviceId>::<path>`, see `getWorktreeModeKey`) where this
+   * member keeps the composer's "New worktree" switch on, most recent first and
+   * capped. Written only through `workspaceUserSettings.setWorktreeModeDir`,
+   * which applies the cap server-side.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export interface LobeUser {
@@ -167,6 +184,11 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * one switch for the experiments that improve how agents write and work with
+   * code; every coding-experience improvement reads this flag
+   */
+  enableBetterCodingExperience: z.boolean().optional(),
+  /**
    * enable agent identity: give an agent its own mail address
    */
   enableAgentIdentity: z.boolean().optional(),
@@ -178,6 +200,10 @@ export const UserLabSchema = z.object({
    * enable artifact deployment features (publish artifacts to a hosted URL)
    */
   enableArtifactDeployment: z.boolean().optional(),
+  /**
+   * edit workspace pages together in a live collaboration room
+   */
+  enablePageCollab: z.boolean().optional(),
   /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
@@ -291,6 +317,21 @@ export const UserIntegrationPreferenceSchema = z.object({
   github: GithubIntegrationPreferenceSchema.optional(),
 });
 
+/**
+ * Per-user preferences across all of the user's workspaces — the user-level
+ * counterpart to {@link WorkspaceUserPreference}, which holds preferences inside
+ * one workspace. Workspaces are shared; how a user arranges them is not.
+ */
+export interface UserWorkspacePreference {
+  /**
+   * The user's own order of the workspace rail, as workspace ids. The personal
+   * space is pinned on top and never listed. Workspaces missing here (newly
+   * joined or created) follow in the server's order; ids of workspaces the user
+   * left are skipped on read and dropped on the next write.
+   */
+  order?: string[];
+}
+
 export interface UserPreference {
   /** Last-used app for "Open working directory in…" split button. Empty/unknown values fall back to platform default. */
   defaultOpenInApp?: string;
@@ -315,6 +356,15 @@ export interface UserPreference {
    * opt-out.
    */
   integration?: UserIntegrationPreference;
+  /**
+   * Keys of the goal asks this user dismissed from the approval island, shared
+   * by every client of the account. Written only through
+   * `UserModel.addIslandDismissals`; deliberately absent from
+   * {@link UserPreferenceSchema}, because `updatePreference` sends the whole
+   * object and replaces arrays, so a stale client would overwrite keys
+   * another client added.
+   */
+  islandDismissals?: string[];
   lab?: UserLab;
   /**
    * Last active workspace id. Used on cloud to land the user back in the
@@ -341,6 +391,13 @@ export interface UserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
+   * Personal-mode order of the pinned Agents / chat groups at the top of the
+   * sidebar, set by drag and drop. Written only through
+   * `home.updatePinnedOrder`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals`.
+   */
+  sidebarPinnedOrder?: string[];
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
@@ -359,6 +416,15 @@ export interface UserPreference {
    * whether to use cmd + enter to send message
    */
   useCmdEnterToSend?: boolean;
+  /** This user's own view over the workspaces they belong to. */
+  workspace?: UserWorkspacePreference;
+  /**
+   * Personal-mode counterpart of {@link WorkspaceUserPreference.worktreeModeDirs}.
+   * Written only through `user.setWorktreeModeDir`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals` —
+   * `updatePreference` deep-merges arrays by index, which would scramble it.
+   */
+  worktreeModeDirs?: string[];
 }
 
 export type ReferralStatusString =
@@ -428,5 +494,6 @@ export const UserPreferenceSchema = z
     topicIncludeCompleted: z.boolean().optional(),
     topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),
+    workspace: z.object({ order: z.array(z.string()).optional() }).optional(),
   })
   .partial();

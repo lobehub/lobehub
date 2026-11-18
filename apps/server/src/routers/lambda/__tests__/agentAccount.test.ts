@@ -119,12 +119,19 @@ describe('agentAccountRouter', () => {
       });
     });
 
-    it('checks the agent before provisioning one', async () => {
+    it('checks usable and editable agent permissions when provisioning', async () => {
       const caller = agentAccountRouter.createCaller(ctx);
 
       await caller.provision({ agentId: 'agt_1', provider: 'agent-mail' });
 
       expect(assertAgentUsableBy).toHaveBeenCalledWith({}, 'agt_1', expect.anything());
+      expect(assertCanEditResource).toHaveBeenCalledWith({
+        db: {},
+        resourceId: 'agt_1',
+        resourceType: 'agent',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
       expect(service.provision).toHaveBeenCalledWith({
         agentId: 'agt_1',
         displayName: undefined,
@@ -152,20 +159,6 @@ describe('agentAccountRouter', () => {
   });
 
   describe('writes prove the caller may edit the agent, not merely use it', () => {
-    it('checks the edit ACL on the agent a write names', async () => {
-      const caller = agentAccountRouter.createCaller(ctx);
-
-      await caller.provision({ agentId: 'agt_1', provider: 'agent-mail' });
-
-      expect(assertCanEditResource).toHaveBeenCalledWith({
-        db: {},
-        resourceId: 'agt_1',
-        resourceType: 'agent',
-        userId: 'user-1',
-        workspaceId: undefined,
-      });
-    });
-
     it('resolves an account-addressed mutation to its agent before authorizing', async () => {
       service.get.mockResolvedValueOnce({ agentId: 'agt_of_account', id: 'acc_9' });
       const caller = agentAccountRouter.createCaller(ctx);
@@ -396,7 +389,7 @@ describe('agentAccountRouter', () => {
       await caller.inbox.markAllRead({ agentId: 'agt_1' });
 
       expect(assertAgentUsableBy).toHaveBeenCalledWith({}, 'agt_1', expect.anything());
-      expect(inbox.markAllRead).toHaveBeenCalledWith('agt_1');
+      expect(inbox.markAllRead).toHaveBeenCalledWith('agt_1', undefined);
     });
   });
 });

@@ -72,3 +72,12 @@ export const tracePrepStage = createStageTracer('operation_prep');
 
 /** The persistence steps of `createOperation` (row, runtime meta + gateway init, state, queue). */
 export const traceStartStage = createStageTracer('operation_start');
+
+/**
+ * The stages of a heterogeneous-agent send (`dispatchHeteroAgent`): the
+ * operation row, the verify-plan wait, the run preparation reads, device
+ * routing, every device-dispatch step and the gateway hop. `execAgent` waits
+ * on all of them before it answers, so these are what the "sending" state
+ * of a Claude Code / Codex send is spent on.
+ */
+export const traceHeteroStage = createStageTracer('hetero_dispatch');

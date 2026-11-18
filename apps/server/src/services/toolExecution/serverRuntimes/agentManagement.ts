@@ -25,6 +25,11 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AgentService } from '@/server/services/agent';
+import {
+  installMarketplaceMcpConnector,
+  type MarketMcpManifest,
+  type MarketplaceInstallOptions,
+} from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
@@ -67,6 +72,16 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     const discoverService = new DiscoverService({
       userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
+    const installScope = {
+      serverDB: context.serverDB,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    };
+    const installMarketplaceConnector = (
+      identifier: string,
+      manifest: MarketMcpManifest,
+      options?: MarketplaceInstallOptions,
+    ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
       callAgent: async (
@@ -312,13 +327,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          // Pin only an id the runtime can load: a builtin, a connector, or a
-          // plugin whose manifest lists its APIs (fetched from the marketplace
-          // when not installed yet). Registering a bare row here used to report
-          // success for ids that never produced a tool.
+          // Pin only an id the runtime can load: a builtin, a connector, or an
+          // installed plugin whose manifest lists its APIs. A marketplace MCP
+          // not installed yet is installed as a connector first. Registering a
+          // bare row here used to report success for ids that never produced a tool.
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
-            { connectorModel, discoverService, pluginModel },
+            { connectorModel, discoverService, installMarketplaceConnector, pluginModel },
             { agentId, source },
           );
           if (resolution.status !== 'loadable')
@@ -445,7 +460,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       },
 
       searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
-        searchMarketTools({ discoverService, pluginModel }, params),
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
         try {

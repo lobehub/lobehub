@@ -1,4 +1,5 @@
 declare module 'verification:component' {
+  import type { AskUserQuestionViewProps } from '@lobechat/shared-tool-ui/ask-user';
   import type { WorkSummaryItem } from '@lobechat/types';
   import type { ListProps } from '@lobehub/ui';
   import type { LucideIcon } from 'lucide-react';
@@ -25,6 +26,25 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const ConversationChatItem: ComponentType<{
+    'actions'?: ReactNode;
+    'avatar': { avatar: string; title: string };
+    'data-message-locate-highlight'?: string;
+    'id': string;
+    'message': ReactNode;
+    'placement': 'left' | 'right';
+    'showTitle'?: boolean;
+    'time'?: number;
+  }>;
+  export const PullRequestDockActionButton: ComponentType<{
+    action: Record<string, unknown> & { kind: string };
+    bypass?: boolean;
+    detail: { baseRefName: string; headRefName: string; headRefOid: string };
+    onAction: () => Promise<boolean>;
+    onPickMethod: () => void;
+    onToggleBypass: () => void;
+    secondary?: boolean;
+  }>;
   export const WorkPreview: ComponentType<{
     item: WorkSummaryItem;
     title: string;
@@ -87,6 +107,7 @@ declare module 'verification:component' {
     onLineWrappingChange: () => void;
   }>;
   export const FilePathDisplay: ComponentType<{ filePath: string; isDirectory: boolean }>;
+  export const AskUserQuestionView: ComponentType<AskUserQuestionViewProps>;
   export const OptionCard: ComponentType<{
     description: string;
     disabled: boolean;
@@ -97,6 +118,28 @@ declare module 'verification:component' {
     selected: boolean;
     onToggle: () => void;
   }>;
+  export const VoiceMessageControl: ComponentType<{
+    actionLabel: string;
+    actionText?: string;
+    cancelLabel: string;
+    durationLabel: string;
+    errorText?: string;
+    expanded?: boolean;
+    groupLabel: string;
+    isRetry?: boolean;
+    onAction: () => void;
+    onCancel: () => void;
+    progress?: number;
+    sendDisabled?: boolean;
+    statusAnnouncement: string;
+    tooltip?: string;
+    waveform: number[];
+  }>;
+  export const AttachmentThumbs: ComponentType<{
+    attachments: Array<{ id: string; name: string; url: string }>;
+    size: 'chip' | 'comment';
+  }>;
+  export const VideoEvidencePlayer: ComponentType<{ frameMaxHeight?: string; src: string }>;
   export const OptionRow: ComponentType<{
     active: boolean;
     desc: string;
@@ -106,6 +149,15 @@ declare module 'verification:component' {
     label: string;
     tag: string;
     onClick: () => void;
+  }>;
+  export const AcceptanceReport: ComponentType<{ runId?: string }>;
+  export const AcceptanceEvidenceList: ComponentType<{ evidence: unknown[] }>;
+  export const ReviewFileList: ComponentType<{
+    active: boolean;
+    composerTarget: { reason: 'read-only'; writable: false };
+    onToggleTree: () => void;
+    showTree: boolean;
+    workingDirectory: string;
   }>;
 }
 

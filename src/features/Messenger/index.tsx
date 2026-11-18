@@ -4,7 +4,6 @@ import { Button, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
-import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
@@ -13,8 +12,7 @@ import {
   MessengerPlatformDetailSkeleton,
 } from '@/components/Skeleton/Settings/MessengerDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
 import { getDiscordInstallErrorReason, getSlackInstallErrorReason } from './i18n';
@@ -66,9 +64,11 @@ const MessengerSettings = memo(() => {
   // next-step guidance.
   const [blocked, setBlocked] = useState<BlockedInstall | null>(null);
 
-  const platformsSWR = useSWR(messengerKeys.availablePlatforms(), () =>
-    messengerService.availablePlatforms(),
-  );
+  // A reload paints the last local copy, then revalidates in the background.
+  const platformsSync = messengerActions.useFetchPlatforms();
+  const platformList = useMessengerStore(messengerSelectors.platforms);
+  const isPlatformsSettled = useMessengerStore(messengerSelectors.isPlatformsSettled);
+  const isPlatformsConfirmed = useMessengerStore(messengerSelectors.isPlatformsConfirmed);
 
   // If the URL points at an unknown platform sub-segment, replace it with the
   // bare list URL — keeps deep-links graceful when bots get removed from the
@@ -125,13 +125,16 @@ const MessengerSettings = memo(() => {
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
   }, [t, selected, ready]);
 
-  const platforms = platformsSWR.data ?? [];
+  const platforms = platformList ?? [];
   const selectedMeta = platforms.find((p) => p.id === selected);
+  // A restored copy may predate a newly enabled platform: until the server
+  // answers, a miss is still loading, not a reason to fall back to the list.
+  const isSelectedPending = !selectedMeta && !isPlatformsConfirmed && !platformsSync.error;
 
   return (
     <div className={styles.page}>
       <Flexbox gap={20}>
-        {selected && !selectedMeta && platformsSWR.isLoading ? (
+        {selected && isSelectedPending ? (
           <MessengerPlatformDetailSkeleton platform={selected} />
         ) : selected && selectedMeta ? (
           <IntegrationDetail
@@ -146,16 +149,20 @@ const MessengerSettings = memo(() => {
           <>
             <Text type="secondary">{t('messenger.subtitle')}</Text>
             <AsyncBoundary
-              data={platformsSWR.data}
-              error={platformsSWR.error}
+              data={isPlatformsSettled || undefined}
+              error={platformsSync.error}
               errorVariant={'block'}
               isEmpty={platforms.length === 0}
-              isLoading={platformsSWR.isLoading}
               loading={<MessengerListGridSkeleton />}
               empty={
                 <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
               }
-              onRetry={() => platformsSWR.mutate()}
+              isLoading={
+                !isPlatformsSettled && (!platformsSync.error || platformsSync.isValidating)
+              }
+              onRetry={() => {
+                void platformsSync.revalidate();
+              }}
             >
               <IntegrationList
                 platforms={platforms}

@@ -1,4 +1,3 @@
-import type { EvalThreadResult } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -8,17 +7,16 @@ import {
   type ResumeThreadTrajectoryPayload,
 } from '@/server/workflows/agentEvalRun';
 
+import { contenderChatConfigOf } from './caseAgent';
 import { recordTrajectoryCompletion } from './completion';
+import { assertCaseConnectorBindings } from './connectorBindings';
 import { createEvalRunDeps } from './deps';
 import { canResumeTrajectory } from './resumeTarget';
+import { interruptEvalOperations } from './runLifecycle';
 import { recordThreadCompletion } from './thread';
+import { prepareTrialMemory } from './trialMemory';
 import type { EvalRunDeps } from './types';
-import { getEvalContextParams, log } from './utils';
-
-const resetResumedThreadResult = (thread: EvalThreadResult): EvalThreadResult => ({
-  threadId: thread.threadId,
-  status: thread.status === 'external' ? 'external' : 'running',
-});
+import { getEvalAttemptId, getEvalContextParams, log } from './utils';
 
 /**
  * Resume a timed-out single-agent trajectory (pass@1).
@@ -46,6 +44,24 @@ export async function executeResumedTrajectory(
     return { reason: resumeCheck.reason, status: 'cancelled' as const, topicId };
   }
 
+  const run = await deps.runModel.findById(runId);
+  await assertCaseConnectorBindings(
+    deps,
+    run?.datasetId,
+    environment,
+    run?.config?.connectorSnapshots?.[testCaseId],
+    true,
+  );
+
+  // Validate the original fixture before the resume claim can reset prior evidence.
+  const memory = await prepareTrialMemory(deps, {
+    environment,
+    resume: true,
+    runId,
+    testCaseId,
+    topicId,
+  });
+
   // Look up the pre-created RunTopic and reset it for resume
   log(
     'executeResumedTrajectory: run=%s testCase=%s topicId=%s parentMessageId=%s',
@@ -54,10 +70,17 @@ export async function executeResumedTrajectory(
     topicId,
     parentMessageId,
   );
-  const runTopic = await deps.runTopicModel.findByRunAndTestCase(runId, testCaseId);
-  if (!runTopic) {
-    throw new Error(`RunTopic not found for run=${runId} testCase=${testCaseId}`);
-  }
+  const executionId = crypto.randomUUID();
+  const claimed = await deps.executionRepo.claimExecution({
+    executionId,
+    expectedExecutionId: params.expectedExecutionId,
+    resume: true,
+    runId,
+    testCaseId,
+    topicId,
+  });
+  if (!claimed) return { reason: 'Resume target changed', status: 'cancelled' as const, topicId };
+  const runTopic = claimed.parent;
 
   // Capture accumulated telemetry from previous runs before clearing evalResult
   const prevSteps = runTopic.evalResult?.steps ?? 0;
@@ -66,17 +89,15 @@ export async function executeResumedTrajectory(
   const prevToolCalls = runTopic.evalResult?.toolCalls ?? 0;
   const prevTokens = runTopic.evalResult?.tokens ?? 0;
   log('executeResumedTrajectory: prev telemetry steps=%d cost=%d', prevSteps, prevCost);
-  const now = new Date();
-
-  await deps.runTopicModel.updateByRunAndTopic(runId, topicId, {
-    createdAt: now, // reset for timeout tracking — resume is a fresh time window
-    evalResult: null,
-    passed: null,
-    score: null,
-    status: 'running',
-  });
-
-  await deps.runModel.update(runId, { startedAt: now, status: 'running' });
+  const bindOperation = async (operationId: string) => {
+    const saved = await deps.runTopicModel.mergeExecutionResult(runId, topicId, executionId, {
+      operationId,
+    });
+    if (!saved) {
+      await interruptEvalOperations(deps, [operationId]);
+      throw new Error('Execution is no longer current');
+    }
+  };
 
   const aiAgentService = new AiAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
@@ -88,43 +109,59 @@ export async function executeResumedTrajectory(
   try {
     const execResult = await aiAgentService.execAgent({
       agentId: targetAgentId,
-      appContext,
+      appContext: { ...appContext, suppressSignal: true },
       autoStart: true,
+      chatConfigOverride: contenderChatConfigOf(run),
       trigger: RequestTrigger.Eval,
       hooks: [
         {
           handler: async (event) => {
             // Local mode: directly record completion
-            await recordTrajectoryCompletion(createEvalRunDeps(db, userId, deps.workspaceId), {
-              runId,
-              status: event.status || event.reason || 'done',
-              telemetry: {
-                completionReason: event.reason,
-                cost: (event.cost ?? 0) + prevCost,
-                duration: event.duration,
-                errorDetail: event.errorDetail,
-                errorMessage: event.errorMessage,
-                // `event.llmCalls` is already cumulative: the operation is seeded with
-                // `initialLlmCalls: prevLlmCalls`.
-                llmCalls: event.llmCalls ?? 0,
-                steps: (event.steps ?? 0) + prevSteps,
-                toolCalls: (event.toolCalls ?? 0) + prevToolCalls,
-                totalTokens: (event.totalTokens ?? 0) + prevTokens,
+            const { allDone } = await recordTrajectoryCompletion(
+              createEvalRunDeps(db, userId, deps.workspaceId),
+              {
+                executionId,
+                topicId,
+                runId,
+                status: event.status || event.reason || 'done',
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: (event.cost ?? 0) + prevCost,
+                  duration: event.duration,
+                  errorDetail: event.errorDetail,
+                  errorMessage: event.errorMessage,
+                  // The seeded operation already reports a cumulative LLM call count.
+                  llmCalls: event.llmCalls ?? 0,
+                  steps: (event.steps ?? 0) + prevSteps,
+                  toolCalls: (event.toolCalls ?? 0) + prevToolCalls,
+                  totalTokens: (event.totalTokens ?? 0) + prevTokens,
+                },
+                testCaseId,
               },
-              testCaseId,
-            });
+            );
+            // Queue mode finalizes from the completion webhook; in-process runs
+            // have only this handler, so the run must be finalized here.
+            if (allDone) await AgentEvalRunWorkflow.triggerFinalizeRun({ runId, userId });
           },
           id: 'eval-trajectory-complete',
           type: 'onComplete' as const,
           webhook: {
-            body: { runId, testCaseId, userId },
+            body: { executionId, runId, testCaseId, topicId, userId },
             delivery: 'qstash' as const,
             url: webhookUrl,
           },
         },
       ],
-      ...getEvalContextParams(envPrompt, environment, params.caseId),
+      ...getEvalContextParams(
+        envPrompt,
+        environment,
+        params.caseId,
+        memory,
+        getEvalAttemptId({ runId, topicId }),
+        run?.config?.connectorSnapshots?.[testCaseId],
+      ),
       initialLlmCalls: prevLlmCalls,
+      onOperationCreated: bindOperation,
       initialStepCount: prevSteps,
       maxSteps,
       parentMessageId,
@@ -134,9 +171,7 @@ export async function executeResumedTrajectory(
     });
 
     if (execResult?.operationId) {
-      await deps.runTopicModel.updateByRunAndTopic(runId, topicId, {
-        evalResult: { operationId: execResult.operationId, rubricScores: [] },
-      });
+      await bindOperation(execResult.operationId);
     }
 
     return { status: 'started' as const, topicId };
@@ -149,6 +184,8 @@ export async function executeResumedTrajectory(
 
     // Record error and finalize the run if all test cases are done
     const { allDone } = await recordTrajectoryCompletion(deps, {
+      executionId,
+      topicId,
       runId,
       status: 'error',
       telemetry: { completionReason: 'error', errorMessage },
@@ -191,42 +228,59 @@ export async function executeResumedThreadTrajectory(
     return { reason: resumeCheck.reason, status: 'cancelled' as const, threadId, topicId };
   }
 
+  // Keep the prior attempt evidence intact if its original fixture is unknown or changed.
+  const run = await deps.runModel.findById(runId);
+  await assertCaseConnectorBindings(
+    deps,
+    run?.datasetId,
+    environment,
+    run?.config?.connectorSnapshots?.[testCaseId],
+    true,
+  );
+
+  const memory = await prepareTrialMemory(deps, {
+    environment,
+    resume: true,
+    runId,
+    testCaseId,
+    threadId,
+    topicId,
+  });
+
   // Look up the pre-created RunTopic and reset it for resume
-  const runTopic = await deps.runTopicModel.findByRunAndTestCase(runId, testCaseId);
-  if (!runTopic) {
-    throw new Error(`RunTopic not found for run=${runId} testCase=${testCaseId}`);
-  }
-
-  const currentThread = await deps.threadModel.findById(threadId);
+  const executionId = crypto.randomUUID();
+  const claimed = await deps.executionRepo.claimExecution({
+    executionId,
+    expectedExecutionId: params.expectedExecutionId,
+    resume: true,
+    runId,
+    testCaseId,
+    threadId,
+    topicId,
+  });
+  if (!claimed)
+    return { reason: 'Resume target changed', status: 'cancelled' as const, threadId, topicId };
+  const currentThread = claimed.thread;
   const currentThreadMeta = (currentThread?.metadata ?? {}) as Record<string, unknown>;
-  const prevThreads = runTopic.evalResult?.threads ?? [];
-  const nextThreads = prevThreads.some((thread) => thread.threadId === threadId)
-    ? prevThreads.map((thread) =>
-        thread.threadId === threadId ? resetResumedThreadResult(thread) : thread,
-      )
-    : [...prevThreads, { status: 'running' as const, threadId }];
-
   // Capture accumulated telemetry from the target thread only
   const prevSteps = (currentThreadMeta.steps as number | undefined) ?? 0;
   const prevCost = (currentThreadMeta.cost as number | undefined) ?? 0;
   const prevLlmCalls = (currentThreadMeta.llmCalls as number | undefined) ?? 0;
   const prevToolCalls = (currentThreadMeta.toolCalls as number | undefined) ?? 0;
   const prevTokens = (currentThreadMeta.tokens as number | undefined) ?? 0;
-  const now = new Date();
-
-  await deps.runTopicModel.updateByRunAndTopic(runId, topicId, {
-    createdAt: now,
-    evalResult: { threads: nextThreads },
-    passed: null,
-    score: null,
-    status: 'running',
-  });
-
-  await deps.threadModel.update(threadId, {
-    metadata: { testCaseId } as any,
-  });
-
-  await deps.runModel.update(runId, { startedAt: now, status: 'running' });
+  const bindOperation = async (operationId: string) => {
+    const saved = await deps.executionRepo.updateThreadMetadata(
+      runId,
+      topicId,
+      threadId,
+      { operationId },
+      { executionId },
+    );
+    if (!saved) {
+      await interruptEvalOperations(deps, [operationId]);
+      throw new Error('Execution is no longer current');
+    }
+  };
 
   const aiAgentService = new AiAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
@@ -238,44 +292,59 @@ export async function executeResumedThreadTrajectory(
   try {
     const execResult = await aiAgentService.execAgent({
       agentId: targetAgentId,
-      appContext,
+      appContext: { ...appContext, suppressSignal: true },
       autoStart: true,
+      chatConfigOverride: contenderChatConfigOf(run),
       trigger: RequestTrigger.Eval,
       hooks: [
         {
           handler: async (event) => {
             // Local mode: directly record thread completion
-            await recordThreadCompletion(createEvalRunDeps(db, userId, deps.workspaceId), {
-              runId,
-              status: event.status || event.reason || 'done',
-              telemetry: {
-                completionReason: event.reason,
-                cost: (event.cost ?? 0) + prevCost,
-                duration: event.duration,
-                errorMessage: event.errorMessage,
-                // `event.llmCalls` is already cumulative: the operation is seeded with
-                // `initialLlmCalls: prevLlmCalls`.
-                llmCalls: event.llmCalls ?? 0,
-                steps: (event.steps ?? 0) + prevSteps,
-                toolCalls: (event.toolCalls ?? 0) + prevToolCalls,
-                totalTokens: (event.totalTokens ?? 0) + prevTokens,
+            const { allRunDone } = await recordThreadCompletion(
+              createEvalRunDeps(db, userId, deps.workspaceId),
+              {
+                executionId,
+                runId,
+                status: event.status || event.reason || 'done',
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: (event.cost ?? 0) + prevCost,
+                  duration: event.duration,
+                  errorMessage: event.errorMessage,
+                  // The seeded operation already reports a cumulative LLM call count.
+                  llmCalls: event.llmCalls ?? 0,
+                  steps: (event.steps ?? 0) + prevSteps,
+                  toolCalls: (event.toolCalls ?? 0) + prevToolCalls,
+                  totalTokens: (event.totalTokens ?? 0) + prevTokens,
+                },
+                testCaseId,
+                threadId,
+                topicId,
               },
-              testCaseId,
-              threadId,
-              topicId,
-            });
+            );
+            // Queue mode finalizes from the completion webhook; in-process runs
+            // have only this handler, so the run must be finalized here.
+            if (allRunDone) await AgentEvalRunWorkflow.triggerFinalizeRun({ runId, userId });
           },
           id: 'eval-thread-complete',
           type: 'onComplete' as const,
           webhook: {
-            body: { runId, testCaseId, threadId, topicId, userId },
+            body: { executionId, runId, testCaseId, threadId, topicId, userId },
             delivery: 'qstash' as const,
             url: webhookUrl,
           },
         },
       ],
-      ...getEvalContextParams(envPrompt, environment, caseId),
+      ...getEvalContextParams(
+        envPrompt,
+        environment,
+        caseId,
+        memory,
+        getEvalAttemptId({ runId, threadId, topicId }),
+        run?.config?.connectorSnapshots?.[testCaseId],
+      ),
       initialLlmCalls: prevLlmCalls,
+      onOperationCreated: bindOperation,
       initialStepCount: prevSteps,
       maxSteps,
       parentMessageId,
@@ -286,9 +355,7 @@ export async function executeResumedThreadTrajectory(
 
     // Write operationId to thread metadata
     if (execResult?.operationId) {
-      await deps.threadModel.update(threadId, {
-        metadata: { operationId: execResult.operationId, testCaseId } as any,
-      });
+      await bindOperation(execResult.operationId);
     }
 
     return { status: 'started' as const, threadId, topicId };
@@ -302,6 +369,7 @@ export async function executeResumedThreadTrajectory(
 
     // Record error and finalize the run if all test cases are done
     const { allRunDone } = await recordThreadCompletion(deps, {
+      executionId,
       runId,
       status: 'error',
       telemetry: { completionReason: 'error', errorMessage },

@@ -6,7 +6,7 @@ import { ProjectRepository } from '../../repositories/project';
 import { agents, environments, projectEnvironments, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ProjectModel } from '../project';
-import { ProjectIdentifierTakenError } from '../projectIdentifier';
+import { isProjectIdentifierConflict, ProjectIdentifierTakenError } from '../projectIdentifier';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'project-identifier-user';
@@ -109,5 +109,31 @@ describe('ProjectModel identifier allocation', () => {
     await expect(repo.create({ identifier: 'ABCDEF', name: 'Maximum' })).resolves.toEqual(
       expect.objectContaining({ identifier: 'ABCDEF' }),
     );
+  });
+});
+
+describe('isProjectIdentifierConflict', () => {
+  it('matches the identifier indexes by constraint name', () => {
+    expect(
+      isProjectIdentifierConflict({ constraint: 'projects_identifier_user_id_key', code: '23505' }),
+    ).toBe(true);
+  });
+
+  it('matches a bare unique violation that names the identifier constraint', () => {
+    expect(
+      isProjectIdentifierConflict({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "projects_identifier_pkey"',
+      }),
+    ).toBe(true);
+  });
+
+  it('ignores unrelated unique violations and non-string messages', () => {
+    expect(isProjectIdentifierConflict({ code: '23505', message: 42 })).toBe(false);
+    expect(isProjectIdentifierConflict({ code: '23505', constraint: 'projects_slug_key' })).toBe(
+      false,
+    );
+    expect(isProjectIdentifierConflict({ cause: new Error('plain') })).toBe(false);
+    expect(isProjectIdentifierConflict(null)).toBe(false);
   });
 });

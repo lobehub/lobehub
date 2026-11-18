@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { encodeMobileSelection, isStackedLayout, parseMobileSelection } from './mobileSelection';
+import { encodeMobileSelection, parseMobileSelection } from './mobileSelection';
 
 describe('mobile skill selection param', () => {
   it('round-trips a selection, including identifiers that contain a colon', () => {
@@ -17,10 +17,9 @@ describe('mobile skill selection param', () => {
   });
 });
 
-describe('isStackedLayout', () => {
-  it('opens connectors as list → detail on desktop too, keeping the skill split', () => {
-    expect(isStackedLayout(false, 'connector')).toBe(true);
-    expect(isStackedLayout(false, 'skill')).toBe(false);
-    expect(isStackedLayout(true, 'skill')).toBe(true);
+describe('skill detail links', () => {
+  it.each(['agent-skill', 'builtin-skill'] as const)('round-trips %s selections', (type) => {
+    const selection = { identifier: 'skill:with-colon', type };
+    expect(parseMobileSelection(encodeMobileSelection(selection))).toEqual(selection);
   });
 });

@@ -12,9 +12,10 @@ import type { AgentInboundWakeInput, AgentInboundWaker } from './inbound';
 import {
   createOwnerChannelReportHook,
   INBOX_RUN_INTERVENTION,
+  INBOX_RUN_PLUGIN_IDS,
   OWNER_CHANNEL_INSTRUCTION,
 } from './ownerChannel';
-import { fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
+import { buildInboxTopicTitle, fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
 
 /** Body budget for the wake prompt; the full text stays readable through the tool. */
 const WAKE_BODY_PREVIEW_CHARS = 2000;
@@ -63,8 +64,10 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
       service.execAgent({
         agentId: account.agentId,
         appContext: { scope: 'agent', topicId },
+        exclusivePluginIds: INBOX_RUN_PLUGIN_IDS,
         hooks: [createOwnerChannelReportHook(db, account.id)],
         prompt: buildInboundPrompt(account, message),
+        title: buildInboxTopicTitle([message]),
         trigger: RequestTrigger.Inbox,
         userInterventionConfig: INBOX_RUN_INTERVENTION,
       });

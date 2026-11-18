@@ -63,3 +63,9 @@ describe('filter', () => {
     ).toThrow();
   });
 });
+
+describe('groupBy project', () => {
+  it('is accepted by groupList', () => {
+    expect(groupListSchema.parse({ groupBy: 'project' }).groupBy).toBe('project');
+  });
+});

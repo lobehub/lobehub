@@ -1,5 +1,11 @@
 import { UserInteractionApiName } from '@lobechat/builtin-tool-user-interaction';
-import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import {
+  buildTaskRunPrompt,
+  type TaskRunPromptGoalLoop,
+  type TaskRunPromptGoalMarks,
+  type TaskRunPromptGoalObjective,
+} from '@lobechat/prompts';
 import type {
   TaskItem,
   TaskTopicHandoff,
@@ -10,6 +16,7 @@ import type {
 import { AcceptanceModel } from '@/database/models/acceptance';
 import type { BriefModel } from '@/database/models/brief';
 import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import { MessageModel } from '@/database/models/message';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
@@ -18,8 +25,14 @@ import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import {
+  buildRoundMarksPrompt,
+  reviewIdOfTask,
+} from '@/server/services/acceptanceReview/roundContext';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
+import { marksForPrompt } from '@/server/services/goal/marks';
+import { GoalObjectiveService } from '@/server/services/goal/objective';
 import {
   countChargedTaskAttempts,
   countUnchargedRuns,
@@ -88,6 +101,47 @@ const readAskedQuestions = async (
 const isJudgedResult = (result: { status: string; verdict: string | null }) =>
   result.status !== 'errored' &&
   (!!result.verdict || result.status === 'passed' || result.status === 'failed');
+
+/** How many lanes a run's prompt lists; the rest are behind `lh goal objective`. */
+const OBJECTIVE_LANES_IN_PROMPT = 8;
+
+/**
+ * The Goal context every run of a Goal Task is handed — the marks other runs
+ * left and, when the goal optimises a score, its objective and leaderboard —
+ * read fresh for this run so what a sibling did a minute ago reaches it. The
+ * terminal acceptance Task judges the Goal rather than doing its work, so it
+ * gets neither. A failed read costs the run this context, never the run.
+ */
+const resolveGoalRunContext = async (
+  task: TaskItem,
+  deps: BuildTaskPromptDeps,
+): Promise<{ marks?: TaskRunPromptGoalMarks; objective?: TaskRunPromptGoalObjective }> => {
+  if (task.name === GOAL_ACCEPTANCE_TASK_TITLE) return {};
+  const { db, userId, workspaceId } = deps;
+  try {
+    const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
+    if (!goal) return {};
+    const graph = await new GoalGraphModel(db, userId, workspaceId).getGraph(goal.id);
+    if (!graph) return {};
+    const node = graph.nodes.find((item) => item.taskId === task.id);
+    const board = graph.goal.config?.objective
+      ? await new GoalObjectiveService(db, userId, workspaceId).leaderboard(goal.id, node?.id)
+      : undefined;
+    return {
+      marks: marksForPrompt(graph),
+      objective: board && {
+        direction: board.objective.direction,
+        evaluator: board.objective.evaluator,
+        lanes: board.lanes.slice(0, OBJECTIVE_LANES_IN_PROMPT),
+        title: board.objective.title,
+        you: board.you,
+      },
+    };
+  } catch (error) {
+    console.error('[buildTaskPrompt] failed to read the goal context:', error);
+    return {};
+  }
+};
 
 /**
  * For a goal task that already ran at least one round, collect what the next
@@ -440,10 +494,20 @@ export async function buildTaskPrompt(
       });
   }
 
-  const goalLoop = await resolveGoalLoopContext(task, deps);
+  const [goalLoop, { marks: goalMarks, objective: goalObjective }] = await Promise.all([
+    resolveGoalLoopContext(task, deps),
+    resolveGoalRunContext(task, deps),
+  ]);
+
+  const reviewId = reviewIdOfTask(task.config);
+  const reviewMarks = reviewId
+    ? await buildRoundMarksPrompt(db, reviewId, { userId, workspaceId }).catch(() => undefined)
+    : undefined;
 
   const prompt = buildTaskRunPrompt({
     ...(goalLoop ? { goalLoop } : {}),
+    ...(goalMarks ? { goalMarks } : {}),
+    ...(goalObjective ? { goalObjective } : {}),
     activities: {
       briefs: briefs.map((b: any) => ({
         createdAt: b.createdAt,
@@ -485,7 +549,7 @@ export async function buildTaskPrompt(
         };
       }),
     },
-    extraPrompt,
+    extraPrompt: [reviewMarks, extraPrompt].filter(Boolean).join('\n\n') || undefined,
     parentTask: parentTaskContext,
     task: {
       assigneeAgentId: task.assigneeAgentId,

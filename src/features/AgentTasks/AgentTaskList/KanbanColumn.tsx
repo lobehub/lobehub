@@ -35,9 +35,7 @@ const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgElevated};
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 4%),
-      0 2px 6px rgb(0 0 0 / 3%);
+    box-shadow: ${cssVar.boxShadowTertiary};
 
     &,
     & * {
@@ -58,25 +56,32 @@ const cardStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskListItem }>(
-  ({ routeScope, task }) => {
-    const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
-      data: { task },
-      id: task.identifier,
-    });
+const DraggableTaskCard = memo<{
+  hideProject?: boolean;
+  routeScope?: TaskItemRouteScope;
+  task: TaskListItem;
+}>(({ hideProject, routeScope, task }) => {
+  const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
+    data: { task },
+    id: task.identifier,
+  });
 
-    return (
-      <div
-        className={cx(cardStyles.card, isDragging && cardStyles.dragging)}
-        ref={setNodeRef}
-        {...listeners}
-        {...attributes}
-      >
-        <AgentTaskItem routeScope={routeScope} task={task} variant="compact" />
-      </div>
-    );
-  },
-);
+  return (
+    <div
+      className={cx(cardStyles.card, isDragging && cardStyles.dragging)}
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+    >
+      <AgentTaskItem
+        hideProject={hideProject}
+        routeScope={routeScope}
+        task={task}
+        variant="compact"
+      />
+    </div>
+  );
+});
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   // The empty-column add pill stays hidden until the column is hovered, or
@@ -200,6 +205,8 @@ interface KanbanColumnProps {
   droppable: boolean;
   groupBy: TaskKanbanGroupBy;
   groupMeta?: TaskGroupMeta;
+  /** The board already belongs to one project, so its cards do not repeat it. */
+  hideProject?: boolean;
   loading?: boolean;
   onHide?: () => void;
   projectId?: string;
@@ -216,6 +223,7 @@ const KanbanColumn = memo<KanbanColumnProps>(
     droppable,
     groupBy,
     groupMeta,
+    hideProject,
     loading,
     onHide,
     projectId,
@@ -328,7 +336,12 @@ const KanbanColumn = memo<KanbanColumnProps>(
             ))
           ) : tasks.length > 0 ? (
             tasks.map((task) => (
-              <DraggableTaskCard key={task.identifier} routeScope={routeScope} task={task} />
+              <DraggableTaskCard
+                hideProject={hideProject}
+                key={task.identifier}
+                routeScope={routeScope}
+                task={task}
+              />
             ))
           ) : canCreate ? (
             <div

@@ -61,7 +61,7 @@ class TaskService {
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
     filter?: TaskListFilter;
-    groupBy?: 'assignee' | 'label' | 'member' | 'priority';
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -156,6 +156,10 @@ class TaskService {
     options?: { takeOwnership?: boolean },
   ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
 
+  /** File a task without a project, with all its subtasks, under `projectId`. */
+  moveTreeToProject = async (id: string, projectId: string) =>
+    lambdaClient.task.moveTreeToProject.mutate({ id, projectId });
+
   update = async (
     id: string,
     data: {
@@ -183,6 +187,8 @@ class TaskService {
       name?: string;
       parentTaskId?: string | null;
       priority?: number;
+      // null takes the task out of its project
+      projectId?: string | null;
       // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
       schedulePattern?: string | null;
       // scheduleTimezone: IANA timezone for the cron expression (e.g. 'Asia/Shanghai')

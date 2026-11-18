@@ -1,4 +1,4 @@
-import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
+import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
 import { confirmModal, toast } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { useDiscoverStore } from '@/store/discover';
 
 interface Options {
   agentId?: string | null;
@@ -85,7 +86,9 @@ export const useAgentMarketSubmission = ({ agentId, canSubmit, getPrompt }: Opti
                   parameters: snapshot.params,
                   provider: snapshot.provider,
                 },
-                plugins: getActivePluginIds(snapshot.plugins),
+                // Everything turned on, not only what is pinned: a connector is
+                // on through an `auto` entry and has no pinned state.
+                plugins: getOptedInPluginIds(snapshot.plugins),
                 systemRole: snapshot.systemRole,
               },
               description: meta.description || '',
@@ -107,6 +110,11 @@ export const useAgentMarketSubmission = ({ agentId, canSubmit, getPrompt }: Opti
             }
             setSubmittedAgentId(agentId);
             setRevision((value) => value + 1);
+            // The header's status / review tags read the Market status replica.
+            void useDiscoverStore
+              .getState()
+              .refreshMarketAgentStatus(result.identifier)
+              .catch(() => undefined);
             toast.success(t('marketSubmission.success'));
           } catch (error) {
             console.error('Failed to submit agent for Market review:', error);

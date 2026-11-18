@@ -771,6 +771,20 @@ describe('FileS3', () => {
       expect(mockS3ClientSend).toHaveBeenCalled();
     });
 
+    it('keeps a private upload private even when uploads are public by default', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({});
+
+      const buffer = Buffer.from('{}');
+      await s3.uploadBuffer('exports/u/t.json', buffer, 'application/json', undefined, {
+        private: true,
+      });
+
+      expect(PutObjectCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ ACL: undefined, Key: 'exports/u/t.json' }),
+      );
+    });
+
     it('should upload buffer without content type', async () => {
       const s3 = new FileS3();
       mockS3ClientSend.mockResolvedValue({});

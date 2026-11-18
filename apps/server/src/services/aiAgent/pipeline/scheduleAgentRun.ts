@@ -5,7 +5,7 @@ import debug from 'debug';
 
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import { type PrecreatedTopicDeps, resolvePrecreatedTopicConfig } from './precreatedTopic';
 import { resolveNewTopicSnapshot } from './turnSetup';
@@ -51,7 +51,7 @@ export const scheduleAgentRun = async (
   });
   const resolvedAgentId = agentConfig.id;
 
-  const titleSource = markdownToTxt(prompt);
+  const titleSource = toTitleText(prompt);
   const snapshot = await resolveNewTopicSnapshot(
     { db: deps.db, userId: deps.userId, workspaceId: deps.workspaceId },
     agentConfig,

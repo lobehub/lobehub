@@ -5,7 +5,7 @@ import { DocumentService } from '@/server/services/document';
 import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
 
-import { isPageCollabEnabled } from './config';
+import { isLegacyPageCollabEnabled, isPageCollabEnabled } from './config';
 import { DbPageSessions } from './dbSession';
 import { RoomPageSessions } from './roomSession';
 import { type PageSessions, PageUnsupportedError, type PageWriter } from './session';
@@ -29,6 +29,9 @@ export const createPageSessions = (db: LobeChatDatabase, writer: PageWriter): Pa
       if (!row) throw new Error(`Page document not found: ${documentId}`);
       if (row.fileType === HTML_DOCUMENT_FILE_TYPE) throw new PageUnsupportedError();
       if (!room || isSkillMarkdownDocument(row)) return stored.openSession(documentId, options);
+      if (!row.workspaceId && !isLegacyPageCollabEnabled()) {
+        return stored.openSession(documentId, options);
+      }
 
       // The room reads and persists with the gateway token and the page owner's
       // scope, so the writer's own permission is the only gate in front of it.
@@ -67,6 +70,19 @@ export const resolvePageAccess = async (
 
   if (await can('edit')) return 'edit';
   return (await can('view')) ? 'view' : 'none';
+};
+
+// The gateway asks this before letting someone into a page's room.
+export const resolveRoomAccess = async (
+  db: LobeChatDatabase,
+  userId: string,
+  documentId: string,
+): Promise<PageAccess> => {
+  if (!isLegacyPageCollabEnabled()) {
+    const meta = await getResourceMeta(db, 'document', documentId);
+    if (!meta?.workspaceId) return 'none';
+  }
+  return resolvePageAccess(db, userId, documentId);
 };
 
 export { isPageCollabEnabled } from './config';

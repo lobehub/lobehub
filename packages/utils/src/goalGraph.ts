@@ -1,6 +1,43 @@
-import type { GoalGraphNode, GoalGraphSnapshot, GoalNodeStatus } from '@lobechat/types';
+import { GOAL_BATCH_TEMPLATE_TITLE, GOAL_MARK_KINDS } from '@lobechat/const/goal';
+import type {
+  GoalGraphNode,
+  GoalGraphSnapshot,
+  GoalMarkKind,
+  GoalNodeKind,
+  GoalNodeStatus,
+} from '@lobechat/types';
 
 type Graph = Pick<GoalGraphSnapshot, 'nodes' | 'edges'>;
+
+export const isMarkKind = (kind: GoalNodeKind | string): kind is GoalMarkKind =>
+  (GOAL_MARK_KINDS as readonly string[]).includes(kind);
+
+/**
+ * A batch's recipe revision: a `template` node, or — for batches written before
+ * that kind — a `finding` with the recipe title.
+ */
+export const isBatchTemplate = (node: Pick<GoalGraphNode, 'kind' | 'title'>) =>
+  node.kind === 'template' || (node.kind === 'finding' && node.title === GOAL_BATCH_TEMPLATE_TITLE);
+
+/**
+ * The graph without its marks and the edges touching them.
+ *
+ * Marks are written by running Tasks at any moment, and their confidence moves
+ * as other runs confirm or refute them. They are context for the work, not
+ * planning input: a planner whose answer is checked against a graph snapshot
+ * reads this view, or every mark a sibling left would make its plan stale.
+ */
+export const withoutMarks = <T extends Graph>(graph: T): T => {
+  if (!graph.nodes.some((node) => isMarkKind(node.kind))) return graph;
+  const marks = new Set(graph.nodes.filter((node) => isMarkKind(node.kind)).map((node) => node.id));
+  return {
+    ...graph,
+    edges: graph.edges.filter(
+      (edge) => !marks.has(edge.sourceNodeId) && !marks.has(edge.targetNodeId),
+    ),
+    nodes: graph.nodes.filter((node) => !marks.has(node.id)),
+  };
+};
 
 /** Containment is a tree; reasoning/provenance edges remain a graph. */
 export const experimentOwner = (graph: Graph, nodeId: string) =>

@@ -2,7 +2,12 @@ import type { ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentState } from '../types';
-import { partitionEmptyArgumentsCalls, toolExpectsNoArguments } from './emptyArgumentsCalls';
+import {
+  buildEmptyArgsToolContent,
+  EMPTY_ARGS_TOOL_CONTENT,
+  partitionEmptyArgumentsCalls,
+  toolExpectsNoArguments,
+} from './emptyArgumentsCalls';
 
 const makeState = (manifestMap: Record<string, unknown> = {}): AgentState =>
   ({ toolManifestMap: manifestMap }) as unknown as AgentState;
@@ -178,5 +183,19 @@ describe('partitionEmptyArgumentsCalls', () => {
     const result = partitionEmptyArgumentsCalls([unknown], makeState({}));
     expect(result.executableCalls).toEqual([]);
     expect(result.emptyArgsCalls).toEqual([unknown]);
+  });
+});
+
+describe('buildEmptyArgsToolContent', () => {
+  it('names the tool and call id so a rejected parallel call is diagnosable', () => {
+    const content = buildEmptyArgsToolContent(
+      call({ apiName: 'writeFile', id: 'call_7', identifier: 'lobe-local-system' }),
+    );
+
+    expect(content).toContain(
+      'the arguments of this call (tool: lobe-local-system.writeFile, call id: call_7) arrived empty',
+    );
+    expect(content).toContain('The call was not executed.');
+    expect(content).not.toBe(EMPTY_ARGS_TOOL_CONTENT);
   });
 });

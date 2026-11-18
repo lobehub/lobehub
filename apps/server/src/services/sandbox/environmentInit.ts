@@ -194,9 +194,18 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   const record = `"\${HOME:-/tmp}/${SANDBOX_ENVIRONMENT_STATE_DIR}"`;
   const key = `"$(printf '%s|%s' "$PWD" ${shellQuote(init.environmentId)} | cksum | cut -d ' ' -f 1)"`;
 
+  // A successful run that clones always leaves the checkout in the folder, so a
+  // `done` record beside an empty folder is stale: the folder was emptied or
+  // made again — a project checkout recreated after someone removed it — while
+  // the sandbox lived on. That folder is initialized again. A failed run's
+  // record still holds, so a broken clone is not retried on every call, and a
+  // setup with nothing to clone keeps relying on its record alone.
+  const staleWhenEmpty =
+    clones.length > 0 ? ` || [ "$(cat "$__lobe_state" 2>/dev/null)" = done ]` : '';
+
   return [
     `__lobe_state=${record}/${key}`,
-    `if [ ! -e "$__lobe_state" ] && [ -z "$(ls -A . 2>/dev/null)" ]; then`,
+    `if [ -z "$(ls -A . 2>/dev/null)" ] && { [ ! -e "$__lobe_state" ]${staleWhenEmpty}; }; then`,
     `  echo ${SANDBOX_ENVIRONMENT_RAN_LINE}`,
     `  mkdir -p ${record}`,
     `  if ${body}; then`,

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, session } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -8,7 +8,12 @@ import { CONNECTOR_OAUTH_RESULT_CHANNEL } from '~common/connectorOAuth';
 
 import ConnectorOAuthCtr from '../ConnectorOAuthCtr';
 
-vi.mock('electron', () => ({ BrowserWindow: vi.fn(), ipcMain: { handle: vi.fn() } }));
+const clearStorageData = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('electron', () => ({
+  BrowserWindow: vi.fn(),
+  ipcMain: { handle: vi.fn() },
+  session: { fromPartition: vi.fn(() => ({ clearStorageData })) },
+}));
 vi.mock('@/const/dir', () => ({ preloadDir: '/preload' }));
 vi.mock('../RemoteServerConfigCtr', () => ({ default: class {} }));
 
@@ -247,5 +252,16 @@ describe('ConnectorOAuthCtr', () => {
     await expect(result).resolves.toBe('dismissed');
     expect(vi.getTimerCount()).toBe(0);
     expect(parent.listenerCount('closed')).toBe(0);
+  });
+  it('clears only the OAuth partition before opening an additional-account window', async () => {
+    const pending = controller.authorize({ ...params, freshSession: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.fromPartition).toHaveBeenCalledWith('connector-oauth');
+    expect(clearStorageData).toHaveBeenCalledOnce();
+    expect(clearStorageData.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(BrowserWindow).mock.invocationCallOrder[0],
+    );
+    send();
+    expect(await pending).toBe('success');
   });
 });

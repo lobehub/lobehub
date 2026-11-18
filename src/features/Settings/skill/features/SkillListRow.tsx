@@ -3,7 +3,7 @@
 import { Block, Center, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronRight, CircleCheck } from 'lucide-react';
+import { CircleCheck } from 'lucide-react';
 import { createContext, memo, type ReactNode, use } from 'react';
 
 import NavItem, { type NavItemProps } from '@/features/NavPanel/components/NavItem';
@@ -21,23 +21,28 @@ export const SkillListVariantProvider = SkillListVariantContext.Provider;
 export const useSkillListVariant = () => use(SkillListVariantContext);
 
 const styles = stylex.create({
-  chevron: {
-    color: sxVar.colorTextQuaternary,
-    flex: 'none',
-  },
+  // A borderless row in a two-column catalog: the icon tile and whitespace
+  // identify an entry, the trailing slot is its one action (`+` or `⋯`).
   iconTile: {
     backgroundColor: sxVar.colorBgContainer,
     borderColor: sxVar.colorBorderSecondary,
-    borderRadius: sxVar.borderRadius,
+    borderRadius: sxVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
     flex: 'none',
-    height: 36,
+    height: 40,
     overflow: 'hidden',
-    width: 36,
+    width: 40,
   },
   row: {
-    minHeight: 60,
+    minHeight: 64,
+    minWidth: 0,
+  },
+  trailing: {
+    alignItems: 'center',
+    display: 'flex',
+    flex: 'none',
+    gap: 8,
   },
 });
 
@@ -80,7 +85,7 @@ const SkillListRow = memo<SkillListRowProps>(
         {...stylex.props(styles.row)}
         clickable={!!onClick}
         gap={12}
-        paddingBlock={10}
+        paddingBlock={12}
         paddingInline={12}
         variant={'borderless'}
         onClick={onClick}
@@ -93,18 +98,14 @@ const SkillListRow = memo<SkillListRowProps>(
             {title}
           </Text>
           {summary && (
-            <Text ellipsis color={cssVar.colorTextDescription} fontSize={12}>
+            <Text ellipsis color={cssVar.colorTextSecondary} fontSize={13}>
               {summary}
             </Text>
           )}
           {description}
         </Flexbox>
-        {extra && (
-          <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-            {extra}
-          </Flexbox>
-        )}
-        {onClick && <Icon {...stylex.props(styles.chevron)} icon={ChevronRight} size={16} />}
+        {/* Row actions stop their own clicks, so they never open the detail. */}
+        {extra && <div {...stylex.props(styles.trailing)}>{extra}</div>}
       </Block>
     );
   },

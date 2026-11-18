@@ -15,8 +15,6 @@ export interface SettingsSearchContext {
   enableChannels: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
-  /** Workspaces are available to this user */
-  enableWorkspace: boolean;
   /** Whether the signed-in user has an email on their profile */
   hasEmail: boolean;
   hideDocs: boolean;
@@ -76,12 +74,28 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   ],
   [SettingsTabs.Billing]: ['billing', 'payment', 'invoice', 'card', 'transaction'],
   [SettingsTabs.Connector]: ['connectors', 'integrations', 'mcp', 'oauth'],
+  [SettingsTabs.Automations]: [
+    'automations',
+    'events',
+    'event subscriptions',
+    'subscriptions',
+    'triggers',
+  ],
+  [SettingsTabs.Webhooks]: ['webhooks', 'webhook url', 'callback', 'http trigger'],
   [SettingsTabs.Credits]: ['credits', 'balance', 'top up', 'recharge', 'buy credits'],
   [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
   [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.SubscriptionAccounts]: [
+    'subscription accounts',
+    'claude code',
+    'codex',
+    'kimi code',
+    'quota',
+    'load balancing',
+  ],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
@@ -199,6 +213,8 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
   [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
   [SettingsTabs.Appearance]: 'settingsSearch.tabKeywords.appearance',
+  [SettingsTabs.Automations]: 'settingsSearch.tabKeywords.automations',
+  [SettingsTabs.Webhooks]: 'settingsSearch.tabKeywords.webhooks',
   [SettingsTabs.Billing]: 'settingsSearch.tabKeywords.billing',
   [SettingsTabs.Connector]: 'settingsSearch.tabKeywords.connector',
   [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
@@ -361,6 +377,30 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
+    anchor: 'advanced-diagnostics',
+    descKey: 'settingAbout.diagnostics.bundle.desc',
+    keywords: ['diagnostics', 'export', 'logs', 'report', 'bug', 'feedback', 'zip'],
+    labelKey: 'settingAbout.diagnostics.bundle.title',
+    tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'advanced-debug-logs',
+    descKey: 'settingAbout.debugLogs.desc',
+    keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
+    labelKey: 'settingAbout.debugLogs.title',
+    tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'advanced-remote-debugging',
+    descKey: 'settingAbout.remoteDebugging.desc',
+    keywords: ['remote debugging', 'cdp', 'devtools', 'diagnostics', 'debug port'],
+    labelKey: 'settingAbout.remoteDebugging.title',
+    tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
     anchor: 'appearance-font-family',
     descKey: 'settingAppearance.font.fontFamily.desc',
     keywords: ['font', 'font family', 'typeface', 'interface font'],
@@ -462,7 +502,9 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
       ns: 'labs',
       tab: SettingsTabs.Labs,
       ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
-      ...(workspaceOnly ? { visible: (ctx: SettingsSearchContext) => ctx.enableWorkspace } : {}),
+      ...(workspaceOnly
+        ? { visible: (ctx: SettingsSearchContext) => ctx.enableBusinessFeatures }
+        : {}),
     }),
   ),
   // Service Model
@@ -604,6 +646,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Hotkey,
   },
   {
+    anchor: 'hotkey-send-message',
+    descKey: 'hotkey.sendMessage.desc',
+    keywords: ['send', 'enter', 'cmd enter', 'ctrl enter', 'newline', 'line break', 'shortcut'],
+    labelKey: 'hotkey.sendMessage.title',
+    tab: SettingsTabs.Hotkey,
+  },
+  {
     anchor: 'hotkey-conversation',
     keywords: ['shortcut', 'keyboard', 'chat'],
     labelKey: 'hotkey.group.conversation',
@@ -648,20 +697,20 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     ns: 'subscription',
     tab: SettingsTabs.Billing,
   },
-  // Credits
+  // Usage and balance (balance anchors keep their `credits-` ids for old links)
   {
     anchor: 'credits-balance',
     keywords: ['balance', 'credits'],
     labelKey: 'balance.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-top-up',
     keywords: ['top up', 'topup', 'buy credits', 'recharge'],
     labelKey: 'credits.topUp.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-cost-estimate-hint',
@@ -669,7 +718,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['cost estimate'],
     labelKey: 'credits.costEstimateHint.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-auto-top-up',
@@ -677,23 +726,16 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['auto top up', 'automatic recharge'],
     labelKey: 'credits.autoTopUp.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-packages',
     keywords: ['package', 'budget'],
     labelKey: 'credits.packages.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   // Plans
-  {
-    anchor: 'plans-model-pricing',
-    keywords: ['model pricing', 'price'],
-    labelKey: 'modelPricing.title',
-    ns: 'subscription',
-    tab: SettingsTabs.Plans,
-  },
   {
     anchor: 'plans-qa',
     keywords: ['faq', 'question'],

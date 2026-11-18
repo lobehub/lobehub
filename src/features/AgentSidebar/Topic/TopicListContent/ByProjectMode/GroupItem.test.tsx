@@ -330,6 +330,32 @@ describe('Project topic group item', () => {
     expect(document.body.textContent).not.toContain('groupTitle.byDevice.unknown');
   });
 
+  /** @example a single directory lives on one device; device sections would nest the device under its own folder. */
+  it('offers no device grouping for a single project-directory group', async () => {
+    render(
+      <AccordionRoot defaultValue={['project-directory:dir-1']}>
+        <GroupItem
+          expanded
+          group={{
+            children: [
+              {
+                id: 't1',
+                metadata: { boundDeviceId: 'device-2' },
+                projectWorkingDirectoryId: 'dir-1',
+                title: 'Directory topic',
+              },
+            ] as any,
+            id: 'project-directory:dir-1',
+          }}
+        />
+      </AccordionRoot>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'topics.subGroup.title' }));
+    expect(await screen.findByText('topics.subGroup.byTime')).toBeTruthy();
+    expect(screen.queryByText('topics.subGroup.byDevice')).toBeNull();
+  });
+
   it("sections a folder by device once it merges this machine's two device identities", () => {
     subGroupModeMock.value = 'byDevice';
     const folder = (id: string, boundDeviceId: string) => ({

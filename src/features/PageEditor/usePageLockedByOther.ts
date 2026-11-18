@@ -3,6 +3,7 @@
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import { isRoomLockOwner } from './collab/roomLock';
 import { usePageEditorStore } from './store';
 
 interface LockedByOtherSessionInput {
@@ -10,6 +11,8 @@ interface LockedByOtherSessionInput {
   holderId: string | null | undefined;
   /** Edit-session id of the current holder (null for legacy/unknown). */
   holderOwnerId: string | null | undefined;
+  /** This session edits through the page's collaboration room. */
+  inRoom?: boolean;
   /** This page instance's own edit-session id. */
   myOwnerId: string | undefined;
   myUserId: string | undefined;
@@ -29,10 +32,12 @@ interface LockedByOtherSessionInput {
 export const isLockedByOtherSession = ({
   holderId,
   holderOwnerId,
+  inRoom,
   myOwnerId,
   myUserId,
 }: LockedByOtherSessionInput): boolean => {
   if (!holderId) return false;
+  if (inRoom && isRoomLockOwner(holderOwnerId)) return false;
   if (holderId !== myUserId) return true;
 
   return Boolean(holderOwnerId && myOwnerId && holderOwnerId !== myOwnerId);
@@ -49,10 +54,12 @@ export const usePageLockedByOther = (): boolean => {
   const lockHolderOwnerId = usePageEditorStore((s) => s.lockHolderOwnerId);
   const myOwnerId = usePageEditorStore((s) => s.lockOwnerId);
   const myUserId = useUserStore(userProfileSelectors.userId);
+  const inRoom = usePageEditorStore((s) => !!s.collab);
 
   return isLockedByOtherSession({
     holderId: lockHolderId,
     holderOwnerId: lockHolderOwnerId,
+    inRoom,
     myOwnerId,
     myUserId,
   });

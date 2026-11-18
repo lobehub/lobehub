@@ -386,6 +386,26 @@ describe('agent quota replicas', () => {
       expect(updateAccount).toHaveBeenCalledWith('a1', { enabled: false });
       expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())?.[0]?.enabled).toBe(false);
     });
+
+    it('shares a private account with the workspace in the replica and on the server', async () => {
+      vi.spyOn(agentQuotaService, 'listAccounts')
+        .mockResolvedValueOnce([account('a1', { visibility: 'private' })])
+        .mockRejectedValue(new Error('offline'));
+      const updateAccount = vi
+        .spyOn(agentQuotaService, 'updateAccount')
+        .mockResolvedValue(undefined as never);
+      renderHook(() => useAgentQuotaStore.getState().useFetchQuotaAccounts(), { wrapper });
+      await waitFor(() =>
+        expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())).toBeDefined(),
+      );
+
+      await act(() => useAgentQuotaStore.getState().setQuotaAccountVisibility('a1', 'public'));
+
+      expect(updateAccount).toHaveBeenCalledWith('a1', { visibility: 'public' });
+      expect(agentQuotaSelectors.accounts(useAgentQuotaStore.getState())?.[0]?.visibility).toBe(
+        'public',
+      );
+    });
   });
 
   describe('user-data reset', () => {
@@ -724,6 +744,71 @@ describe('agent quota replicas', () => {
 
       await waitFor(() => expect(result.current.error).toBeTruthy());
       expect(agentQuotaSelectors.history('a1')(useAgentQuotaStore.getState())).toEqual(history);
+    });
+  });
+
+  describe('readings', () => {
+    const MINUTE = 60_000;
+
+    it('re-reads on the given interval, so an open view tracks teammates spending the account', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const getLatestReadings = vi
+        .spyOn(agentQuotaService, 'getLatestReadings')
+        .mockResolvedValue([]);
+
+      renderHook(
+        () =>
+          useAgentQuotaStore.getState().useFetchQuotaReadings('a1', { refreshInterval: MINUTE }),
+        { wrapper },
+      );
+      await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        vi.advanceTimersByTime(MINUTE + 1);
+      });
+      await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(2));
+    });
+
+    it('marks an account whose read failed, and clears it once a retry answers', async () => {
+      const getLatestReadings = vi
+        .spyOn(agentQuotaService, 'getLatestReadings')
+        .mockRejectedValueOnce(new Error('network down'))
+        .mockResolvedValue([]);
+
+      const { result } = renderHook(
+        () => useAgentQuotaStore.getState().useFetchQuotaReadings('a1'),
+        { wrapper },
+      );
+      await waitFor(() =>
+        expect(agentQuotaSelectors.readingsFailed('a1')(useAgentQuotaStore.getState())).toBe(true),
+      );
+      // Only the account that failed is marked.
+      expect(agentQuotaSelectors.readingsFailed('a2')(useAgentQuotaStore.getState())).toBe(false);
+
+      await act(async () => {
+        await result.current.revalidate();
+      });
+      await waitFor(() =>
+        expect(agentQuotaSelectors.readingsFailed('a1')(useAgentQuotaStore.getState())).toBe(false),
+      );
+      expect(agentQuotaSelectors.readings('a1')(useAgentQuotaStore.getState())).toEqual([]);
+      expect(getLatestReadings).toHaveBeenCalledTimes(2);
+    });
+
+    it('reads once without an interval', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const getLatestReadings = vi
+        .spyOn(agentQuotaService, 'getLatestReadings')
+        .mockResolvedValue([]);
+
+      renderHook(() => useAgentQuotaStore.getState().useFetchQuotaReadings('a1'), { wrapper });
+      await waitFor(() => expect(getLatestReadings).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        vi.advanceTimersByTime(MINUTE + 1);
+      });
+      await tick();
+      expect(getLatestReadings).toHaveBeenCalledTimes(1);
     });
   });
 });

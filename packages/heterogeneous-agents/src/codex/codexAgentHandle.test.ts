@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     (options: CodexThreadTurnOptions, session: CodexThreadSessionOptions) => Promise<void>
   >(),
   sessionClose: vi.fn(),
+  steer: vi.fn(),
 }));
 vi.mock('./CodexAppServerClient', () => ({
   CodexAppServerClient: class {
@@ -34,6 +35,7 @@ vi.mock('./CodexThreadSession', () => ({
     }
     close = mocks.sessionClose;
     interrupt = mocks.interrupt;
+    steer = mocks.steer;
     run(options: CodexThreadTurnOptions) {
       return mocks.run(options, this.options);
     }
@@ -185,6 +187,75 @@ describe('createCodexAgentHandle', () => {
     }
     /** @example Stop is reported as a signal-driven cancellation, never as a failure. */
     expect(await handle.exit).toEqual({ code: null, signal: 'SIGINT' });
+  });
+
+  const runningStatus = {
+    activeTasks: [],
+    lastEventAt: 1,
+    sessionId: 'op-device',
+    state: 'running' as const,
+    transport: 'codex-app-server' as const,
+  };
+
+  // ROOT CAUSE:
+  // The native handle exposed no `sendUserMessage`, so `lh hetero exec` never polled the
+  // steer queue and a follow-up sent mid-run waited for the whole Codex turn to finish.
+  /** @example A follow-up joins the running native turn through `turn/steer`. */
+  it('steers a follow-up into the running turn once it has started', async () => {
+    let releaseTurn!: () => void;
+    const turnDone = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
+    let started!: () => void;
+    mocks.steer.mockResolvedValue('accepted');
+    mocks.run.mockImplementation(async (_turn, session) => {
+      await new Promise<void>((resolve) => {
+        started = () => {
+          session.onRuntimeStatus(runningStatus);
+          resolve();
+        };
+      });
+      await turnDone;
+    });
+    const handle = await createCodexAgentHandle(options);
+
+    const sent = handle.sendUserMessage!('look at the tests too', { uuid: 'msg-steer' });
+    await Promise.resolve();
+    /** @example Before turn/start answers there is no turn to steer, so the write waits. */
+    expect(mocks.steer).not.toHaveBeenCalled();
+
+    started();
+    expect(await sent).toBe(true);
+    /** @example The delivery id comes back as the user message's client id for the confirmation. */
+    expect(mocks.steer).toHaveBeenCalledWith(
+      [{ text: 'look at the tests too', text_elements: [], type: 'text' }],
+      'msg-steer',
+    );
+
+    releaseTurn();
+    await handle.exit;
+  });
+
+  /** @example A turn that takes no input (review, compaction, already ending) leaves the message for the next run. */
+  it('reports a refused steer as not delivered', async () => {
+    mocks.steer.mockResolvedValue('rejected');
+    mocks.run.mockImplementation(async (_turn, session) => {
+      session.onRuntimeStatus(runningStatus);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const handle = await createCodexAgentHandle(options);
+
+    expect(await handle.sendUserMessage!('one more thing', { uuid: 'msg-refused' })).toBe(false);
+    await handle.exit;
+  });
+
+  /** @example A run that ended before its turn started takes nothing; the message waits for the next run. */
+  it('does not steer once the run has ended', async () => {
+    const handle = await createCodexAgentHandle(options);
+    await handle.exit;
+
+    expect(await handle.sendUserMessage!('too late', { uuid: 'msg-late' })).toBe(false);
+    expect(mocks.steer).not.toHaveBeenCalled();
   });
 
   /** @example Unsupported approval policy is refused before executing any native request. */

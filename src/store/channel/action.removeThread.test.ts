@@ -25,6 +25,7 @@ const channel: ChannelListItem = {
   sequence: 0,
   status: 'active',
   createdAt: new Date(),
+  visibility: 'private',
   workspaceId: null,
 };
 const removed: ChannelPublicThread = {

@@ -242,12 +242,19 @@ describe('isDeviceUnreachableResult', () => {
 });
 
 describe('awaitManagedDeviceForToolCall', () => {
-  it('wakes a starting managed device and returns DEVICE_WAKING with a retry hint', async () => {
+  it('waits after an accepted wake and returns DEVICE_WAKING with a retry hint', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
 
+    const settled = vi.fn();
     const pending = awaitManagedDeviceForToolCall(caller, 'managed-a');
+    void pending.then(settled);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(settled).not.toHaveBeenCalled();
+    expect(mocks.queryDeviceList.mock.calls.length).toBeGreaterThan(1);
+
     await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_TOOL_CALL_WAIT_MS);
     const result = await pending;
 
@@ -261,6 +268,11 @@ describe('awaitManagedDeviceForToolCall', () => {
       success: false,
     });
     expect(typeof result === 'object' && result.content).toContain('Retry');
+    expect(settled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: DEVICE_WAKING_ERROR_CODE }),
+      }),
+    );
     warn.mockRestore();
   });
 
@@ -293,28 +305,6 @@ describe('awaitManagedDeviceForToolCall', () => {
     // Only the online check before the wake; the wait loop never polls.
     expect(mocks.queryDeviceList).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
-    warn.mockRestore();
-  });
-
-  it('still waits for the device after an accepted wake', async () => {
-    vi.useFakeTimers();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mocks.findPersonalByDeviceId.mockResolvedValue(managedRow('managed-a'));
-
-    const settled = vi.fn();
-    const pending = awaitManagedDeviceForToolCall(caller, 'managed-a').then(settled);
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(settled).not.toHaveBeenCalled();
-    expect(mocks.queryDeviceList.mock.calls.length).toBeGreaterThan(1);
-
-    await vi.advanceTimersByTimeAsync(MANAGED_DEVICE_TOOL_CALL_WAIT_MS);
-    await pending;
-    expect(settled).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: expect.objectContaining({ code: DEVICE_WAKING_ERROR_CODE }),
-      }),
-    );
     warn.mockRestore();
   });
 

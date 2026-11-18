@@ -206,3 +206,37 @@ describe('project.create from a client that still sends a type or a site', () =>
     expect(result).not.toHaveProperty('siteError');
   });
 });
+
+describe('project.create with ids the create form reserved', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.create.mockResolvedValue({
+      coordinatorAgentId: 'agt_reservedAgnt',
+      id: 'prj_reservedProj',
+      name: 'Launch',
+    });
+    mocks.resolveCoordinatorAgents.mockImplementation(async (projects) => projects);
+  });
+
+  it('passes the reserved project and agent ids on to the repository', async () => {
+    await caller('ws-1').create({
+      dedicatedAgentId: 'agt_reservedAgnt',
+      id: 'prj_reservedProj',
+      name: 'Launch',
+    });
+
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ dedicatedAgentId: 'agt_reservedAgnt', id: 'prj_reservedProj' }),
+    );
+  });
+
+  it.each([
+    { id: 'agt_reservedProj', name: 'Launch' },
+    { id: 'prj_short', name: 'Launch' },
+    { dedicatedAgentId: 'prj_reservedAgnt', name: 'Launch' },
+    { dedicatedAgentId: 'agt_reserved-gnt', name: 'Launch' },
+  ])('rejects an id outside the generated shape: %o', async (input) => {
+    await expect(caller('ws-1').create(input)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+});

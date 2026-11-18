@@ -19,7 +19,13 @@ import {
 } from '@/database/schemas';
 import { ForeignLiveRunError } from '@/server/services/aiAgent/topicStartReservation';
 
-import { ImSendRequestSchema } from '../../types/im.type';
+import {
+  ImReadResultSchema,
+  ImSendRequestSchema,
+  ImSendResultSchema,
+  ImSyncResultSchema,
+  PushTokenRegistrationSchema,
+} from '../../types/im.type';
 import { ImRestService } from '../im.service';
 
 const { execAgentMock, execGroupAgentMock } = vi.hoisted(() => ({
@@ -131,11 +137,11 @@ describe('ImRestService.sync — whole-message delivery', () => {
       .insert(messagesFiles)
       .values({ fileId: 'file_reply', messageId: 'msg_file_reply', userId: USER });
     const result = await service.sync(TOPIC, {});
+    expect(() => ImSyncResultSchema.parse(result)).not.toThrow();
     expect(result.messages[0]).toMatchObject({ content: '', files: [{ id: 'file_reply' }] });
     expect(result.unread).toBe(1);
-    await expect(service.markRead(TOPIC, { messageId: 'msg_file_reply' })).resolves.toEqual({
-      unread: 0,
-    });
+    const read = await service.markRead(TOPIC, { messageId: 'msg_file_reply' });
+    expect(ImReadResultSchema.parse(read)).toEqual({ unread: 0 });
   });
   it('returns attachment metadata with an attachment-only user message', async () => {
     await db.insert(files).values({
@@ -574,6 +580,7 @@ describe('ImRestService.send', () => {
       }),
     );
     expect(execGroupAgentMock).not.toHaveBeenCalled();
+    expect(() => ImSendResultSchema.parse(result)).not.toThrow();
     expect(result).toMatchObject({
       accepted: true,
       operationId: 'op_1',
@@ -892,8 +899,12 @@ describe('ImRestService.send', () => {
 
 describe('ImRestService push tokens', () => {
   it('registers, rotates and unregisters a device', async () => {
-    await service.registerPushToken('device-1', {
+    const registered = await service.registerPushToken('device-1', {
       expoToken: 'ExponentPushToken[aaa]',
+      platform: 'ios',
+    });
+    expect(PushTokenRegistrationSchema.parse(registered)).toEqual({
+      deviceId: 'device-1',
       platform: 'ios',
     });
     await service.registerPushToken('device-1', {

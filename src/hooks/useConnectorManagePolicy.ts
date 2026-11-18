@@ -1,4 +1,6 @@
-import { useResourceManageable } from '@/hooks/useResourceManageable';
+import { useCallback } from 'react';
+
+import { useResourceManageable, useResourceManageableChecker } from '@/hooks/useResourceManageable';
 import { useClientDataSWR } from '@/libs/swr';
 import {
   CONNECTOR_MANAGE_POLICY_SWR_KEY,
@@ -30,19 +32,17 @@ export interface ConnectorManageable {
   restrictedByPolicy: boolean;
 }
 
-/**
- * Client mirror of the server's connector manage gates
- * (`assertConnectorMaintainable` / `assertConnectorCredentialsManageable`).
- * Actions are enabled only once the server-computed policy says they are
- * allowed; a restricted viewer gets disabled controls with the reason on hover.
- */
-export const useConnectorManageable = (connector?: {
+interface ConnectorManageRow {
   agentId?: string | null;
   userId?: string | null;
-}): ConnectorManageable => {
-  const { data: policy, error } = useConnectorManagePolicy();
-  const isCreatorOrOwner = useResourceManageable(connector?.userId);
+}
 
+const resolveConnectorManageable = (
+  connector: ConnectorManageRow | undefined,
+  policy: ConnectorManagePolicy | undefined,
+  policyError: unknown,
+  isCreatorOrOwner: boolean,
+): ConnectorManageable => {
   // Agent-scoped rows belong to that agent's setup and keep the creator rule.
   if (connector?.agentId)
     return {
@@ -52,7 +52,7 @@ export const useConnectorManageable = (connector?: {
       restrictedByPolicy: false,
     };
 
-  if (!policy && !error)
+  if (!policy && !policyError)
     return {
       canManage: false,
       canManageCredentials: false,
@@ -69,4 +69,34 @@ export const useConnectorManageable = (connector?: {
     isPending: false,
     restrictedByPolicy: !canManage,
   };
+};
+
+/**
+ * Client mirror of the server's connector manage gates
+ * (`assertConnectorMaintainable` / `assertConnectorCredentialsManageable`).
+ * Actions are enabled only once the server-computed policy says they are
+ * allowed; a restricted viewer gets disabled controls with the reason on hover.
+ */
+export const useConnectorManageable = (connector?: ConnectorManageRow): ConnectorManageable => {
+  const { data: policy, error } = useConnectorManagePolicy();
+  const isCreatorOrOwner = useResourceManageable(connector?.userId);
+
+  return resolveConnectorManageable(connector, policy, error, isCreatorOrOwner);
+};
+
+/**
+ * Callback variant of {@link useConnectorManageable} for lists that check many
+ * connectors under one hook call, such as the chat input's tool picker.
+ */
+export const useConnectorManageableChecker = (): ((
+  connector: ConnectorManageRow,
+) => ConnectorManageable) => {
+  const { data: policy, error } = useConnectorManagePolicy();
+  const checkCreatorOrOwner = useResourceManageableChecker();
+
+  return useCallback(
+    (connector: ConnectorManageRow) =>
+      resolveConnectorManageable(connector, policy, error, checkCreatorOrOwner(connector.userId)),
+    [checkCreatorOrOwner, error, policy],
+  );
 };

@@ -16,11 +16,13 @@ import type { CliMaintenance } from '../../daemon/maintenance';
 import { appendLog } from '../../daemon/manager';
 import type { ActivityReporter } from '../../device/activityHook';
 import { spawnHeteroAgentRun } from '../../device/agentRun';
+import { executeDeviceMcpCall } from '../../device/mcp';
 import { collectSystemInfo } from '../../device/systemInfo';
 import { executeToolCall } from '../../tools';
 import { executeBrowserCall, type resolveBrowserDevice } from '../../tools/browser';
 import { executeComputerUseCall, type resolveComputerUseDevice } from '../../tools/computerUse';
 import { log } from '../../utils/logger';
+import { prepareCompletionReply } from './completionWatch';
 
 /** Everything a gateway connection's request handlers need from the host process. */
 export interface GatewayHandlerContext {
@@ -96,16 +98,42 @@ export function bindGatewayClientHandlers(
     // round trip, so reporting this back is what separates a slow tool from
     // slow transport.
     const startedAt = performance.now();
+    const dispatch = async () => {
+      const type = toolCall.type ?? 'tool';
+      // Route on the explicit discriminator, never on the apiName alone: a
+      // call of a kind this client does not run (e.g. an MCP server's
+      // `runCommand`) must fail instead of reaching a same-named local tool.
+      if (type === 'mcp') {
+        // A tunneled MCP call for a server only this machine reaches: a stdio
+        // binary, or a localhost / LAN HTTP endpoint.
+        if (!toolCall.params) {
+          const message = 'MCP tool call is missing its connection params.';
+          return { content: message, error: message, state: undefined, success: false };
+        }
+        return executeDeviceMcpCall(
+          {
+            apiName: toolCall.apiName,
+            arguments: toolCall.arguments,
+            params: toolCall.params,
+            timeout,
+          },
+          getToolAuth,
+        );
+      }
+      if (type !== 'tool') {
+        const message = `This device's lh connect does not support "${type}" tool calls. Update the LobeHub CLI and retry.`;
+        return { content: message, error: message, state: undefined, success: false };
+      }
+      // Computer Use's `runCommand` shares its apiName with the shell tool, and
+      // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
+      return toolCall.identifier === COMPUTER_USE_IDENTIFIER
+        ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
+        : toolCall.identifier === BROWSER_IDENTIFIER
+          ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
+          : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getToolAuth());
+    };
     const result = await executeDeviceOperation({ apiName: toolCall.apiName, operationId }, () =>
-      maintenance.run(() =>
-        // Computer Use's `runCommand` shares its apiName with the shell tool, and
-        // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
-        toolCall.identifier === COMPUTER_USE_IDENTIFIER
-          ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
-          : toolCall.identifier === BROWSER_IDENTIFIER
-            ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
-            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getToolAuth()),
-      ),
+      maintenance.run(dispatch),
     ).catch((err: Error) => ({
       content: '',
       error: err.message,
@@ -123,16 +151,27 @@ export function bindGatewayClientHandlers(
       log.toolResult(requestId, result.success, result.content, operationId);
     }
 
-    client.sendToolCallResponse({
-      requestId,
-      result: {
+    const reply = prepareCompletionReply(
+      request,
+      {
         content: result.content,
         error: result.error,
         executionTimeMs,
         state: result.state,
         success: result.success,
       },
-    });
+      {
+        getReporter: () => client,
+        getToolAuth,
+        logger: {
+          error: (...args) => error(args.join(' ')),
+          info: (...args) =>
+            isDaemonChild ? appendLog(`[COMPLETION] ${args.join(' ')}`) : info(args.join(' ')),
+          warn: (...args) => error(args.join(' ')),
+        },
+      },
+    );
+    client.sendToolCallResponse({ requestId, result: reply });
   });
 
   // Handle generic server-internal device RPCs (git / workspace / file ops).
@@ -181,6 +220,7 @@ export function bindGatewayClientHandlers(
             assistantMessageId: request.assistantMessageId,
             args: request.args,
             claudeAccountRouting: request.claudeAccountRouting,
+            claudeCodeEntrypoint: request.claudeCodeEntrypoint,
             cwd: request.cwd,
             imageList: request.imageList,
             jwt: request.jwt,

@@ -47,6 +47,8 @@ export const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
  * heartbeat cadence (STEP_LOCK_HEARTBEAT_MS × DURABLE_LEASE_HEARTBEAT_EVERY_TICKS).
  */
 export const DEAD_OPERATION_LEASE_MS = 10 * 60 * 1000;
+/** Refuses tool calls outside an eval attempt's allowlist (see createEvalToolGateHook). */
+export const EVAL_TOOL_GATE_HOOK_ID = 'eval-tool-gate';
 export const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 export const INTERVENTION_LIFECYCLE_CHECKPOINT_KEY = '_agentInterventionLifecycle';
 

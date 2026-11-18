@@ -210,6 +210,15 @@ afterEach(() => {
   for (const [entity, version] of originalDeclaredVersions) setDeclaredVersion(entity, version);
 });
 
+const defaultGenerationOptions = (
+  client: Parameters<typeof describeEntityGeneration>[0]['client'],
+): Parameters<typeof describeEntityGeneration>[0] => ({
+  client,
+  entity: ENTITY,
+  namespace: NAMESPACE,
+  readCheckpoint: createCheckpointReader(),
+});
+
 describe('classifyMappingChange', () => {
   it('treats an index built from the declared definition as identical', () => {
     expect(classifyMappingChange(ENTITY, declaredMappings(), declaredAnalysis())).toBe('identical');
@@ -968,12 +977,7 @@ describe('resolveInPlaceTarget', () => {
     const mappings = declaredMappings();
     delete mappings.properties.title;
     const client = createClient([buildManagedGeneration(1, { isWriteIndex: true, mappings })]);
-    const status = await describeEntityGeneration({
-      client,
-      entity: ENTITY,
-      namespace: NAMESPACE,
-      readCheckpoint: createCheckpointReader(),
-    });
+    const status = await describeEntityGeneration(defaultGenerationOptions(client));
 
     expect(status).toMatchObject({
       classification: 'upgrade_available',
@@ -987,12 +991,7 @@ describe('resolveInPlaceTarget', () => {
     const mappings = declaredMappings();
     mappings.properties.title.type = 'keyword';
     const client = createClient([buildManagedGeneration(1, { isWriteIndex: true, mappings })]);
-    const status = await describeEntityGeneration({
-      client,
-      entity: ENTITY,
-      namespace: NAMESPACE,
-      readCheckpoint: createCheckpointReader(),
-    });
+    const status = await describeEntityGeneration(defaultGenerationOptions(client));
 
     expect(status).toMatchObject({
       classification: 'upgrade_available',
@@ -1006,12 +1005,7 @@ describe('resolveInPlaceTarget', () => {
     const client = createClient([
       buildManagedGeneration(2, { index: physicalIndex(1), isWriteIndex: true }),
     ]);
-    const status = await describeEntityGeneration({
-      client,
-      entity: ENTITY,
-      namespace: NAMESPACE,
-      readCheckpoint: createCheckpointReader(),
-    });
+    const status = await describeEntityGeneration(defaultGenerationOptions(client));
 
     expect(resolveInPlaceTarget(status)).toBe(physicalIndex(1));
   });
@@ -1027,12 +1021,7 @@ describe('resolveInPlaceTarget', () => {
         mappings,
       }),
     ]);
-    const status = await describeEntityGeneration({
-      client,
-      entity: ENTITY,
-      namespace: NAMESPACE,
-      readCheckpoint: createCheckpointReader(),
-    });
+    const status = await describeEntityGeneration(defaultGenerationOptions(client));
 
     expect(() => resolveInPlaceTarget(status)).toThrow('physical mapping differs');
   });

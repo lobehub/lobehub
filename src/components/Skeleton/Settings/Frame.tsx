@@ -26,7 +26,7 @@ export const SettingsSkeletonHeader = ({ tab }: { tab: string }) => {
 };
 
 /**
- * Same header + padded container (1024px, or full width for `FULL_WIDTH_TABS`)
+ * Same header + padded content column (1024px, wider for Plans)
  * `SettingsContent` draws around a tab body, with the page-action placeholders
  * in the same row at the top of the content column.
  */

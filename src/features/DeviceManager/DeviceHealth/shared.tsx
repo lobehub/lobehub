@@ -6,7 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 
 import type { HealthSlotStatus, HealthStripBlock } from './buildHealthTimeline';
-import { formatPercent, peakUsageLevel, type UsageLevel } from './format';
+import {
+  formatPercent,
+  LOAD_THRESHOLDS,
+  peakUsageLevel,
+  type UsageLevel,
+  usageLevel,
+} from './format';
 
 /**
  * The device's health series, from the device store's replica. The list-row
@@ -51,8 +57,11 @@ const STATUS_COLOR: Record<Exclude<HealthSlotStatus, 'online'>, string> = {
 export const blockColor = (block: HealthStripBlock) =>
   block.status === 'online'
     ? USAGE_COLOR[
-        peakUsageLevel(block.peak.cpuPercent, block.peak.memoryPercent, block.peak.loadPercent) ??
-          'normal'
+        peakUsageLevel(
+          usageLevel(block.peak.cpuPercent),
+          usageLevel(block.peak.memoryPercent),
+          usageLevel(block.peak.loadPercent, LOAD_THRESHOLDS),
+        ) ?? 'normal'
       ]
     : STATUS_COLOR[block.status];
 

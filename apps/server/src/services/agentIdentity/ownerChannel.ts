@@ -1,3 +1,4 @@
+import { AgentAccountIdentifier } from '@lobechat/builtin-tool-agent-account';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { BOT_NO_REPLY_TOKEN } from '@lobechat/types';
 import debug from 'debug';
@@ -21,7 +22,7 @@ export const INBOX_REPORT_WEBHOOK = '/api/agent/webhooks/inbox-report';
  * Where the result goes, told to the woken agent. A run nobody watches would otherwise end in a
  * topic its owner never opens.
  */
-export const OWNER_CHANNEL_INSTRUCTION = `Your final answer is posted to your owner in your direct Channel with them, so write it to them. If nothing here needs them, answer exactly ${BOT_NO_REPLY_TOKEN} and nothing will be posted. You cannot send mail from this run: a send is refused. If a reply is warranted, put the draft in your answer for your owner to approve.`;
+export const OWNER_CHANNEL_INSTRUCTION = `Your final answer is posted to your owner in your direct Channel with them, so write it to them. If nothing here needs them, answer exactly ${BOT_NO_REPLY_TOKEN} and nothing will be posted. In this run you can only read your mailbox, and a send is refused. If a reply is warranted, put the draft in your answer for your owner to approve.`;
 
 /**
  * A woken run has nobody watching it, so it must end rather than park on an approval: a parked
@@ -29,6 +30,14 @@ export const OWNER_CHANNEL_INSTRUCTION = `Your final answer is posted to your ow
  * A call that needs the owner comes back to the agent as refused.
  */
 export const INBOX_RUN_INTERVENTION = { approvalMode: 'headless' } as const;
+
+/**
+ * The only tools a mail-woken run gets: its own mailbox. Whoever wrote the mail is steering this
+ * run, and headless auto-runs every call that merely `required` approval, so any other tool would
+ * be theirs to use: a web fetch carries the owner's data out, a connector acts as the owner.
+ * Exclusive also keeps out default tools and anything the activator could load mid-run.
+ */
+export const INBOX_RUN_PLUGIN_IDS = [AgentAccountIdentifier];
 
 export type OwnerChannelReportResult =
   | 'no-account'

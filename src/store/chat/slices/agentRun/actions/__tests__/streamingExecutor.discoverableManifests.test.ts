@@ -1,8 +1,9 @@
 import { act } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as toolEngineering from '@/helpers/toolEngineering';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 
 import { useChatStore } from '../../../../store';
@@ -24,6 +25,15 @@ const discoverableTool = {
   },
   type: 'builtin',
 } as any;
+
+const initialAgentState = useAgentStore.getState();
+const initialToolState = useToolStore.getState();
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  useAgentStore.setState(initialAgentState);
+  useToolStore.setState(initialToolState);
+});
 
 describe('internal_createAgentState manifest map', () => {
   beforeEach(() => {
@@ -54,5 +64,75 @@ describe('internal_createAgentState manifest map', () => {
 
     expect(state.operationToolSet?.manifestMap['test-discoverable']).toBeDefined();
     expect(state.operationToolSet?.enabledToolIds).not.toContain('test-discoverable');
+  });
+});
+
+describe('connectors on the executing client agent', () => {
+  const ids = ['target-connector', 'parent-connector'];
+  beforeEach(() => {
+    resetTestEnvironment();
+    useAgentStore.setState({
+      activeAgentId: 'parent',
+      agentMap: {
+        parent: createMockAgentConfig({
+          plugins: ['parent-connector', { identifier: 'target-connector', mode: 'disabled' }],
+        }),
+      },
+    });
+    useToolStore.setState({
+      installedPlugins: ids.map((identifier) => ({
+        identifier,
+        manifest: {
+          api: [
+            { description: 'Read', name: 'read', parameters: { properties: {}, type: 'object' } },
+          ],
+          identifier,
+          meta: { title: identifier },
+          type: 'default',
+        },
+        type: 'plugin',
+      })),
+    });
+  });
+
+  const startTarget = (toolMode: 'agent' | 'custom', pinned: string[] = []) => {
+    const chatConfig = createMockChatConfig({ toolMode });
+    const agentConfig = createMockAgentConfig({
+      chatConfig,
+      plugins: [...pinned, { identifier: ids[0], mode: 'auto' }],
+    });
+    useAgentStore.setState((s) => ({ agentMap: { ...s.agentMap, target: agentConfig } }));
+    return useChatStore.getState().internal_createAgentState({
+      agentId: 'parent',
+      messages: [createMockMessage()],
+      parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+      subAgentId: 'target',
+    });
+  };
+
+  it.each(['agent', 'custom'] as const)(
+    'activates only the target’s connector in %s mode',
+    (mode) => {
+      const run = startTarget(mode, mode === 'custom' ? ['lobe-activator'] : []);
+      expect(run.agentConfig.enabledToolIds).toContain('lobe-activator');
+      expect(run.agentConfig.enabledToolIds).not.toContain(ids[0]);
+      const activated = run.toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: run.agentConfig.agentConfig.model,
+        provider: run.agentConfig.agentConfig.provider!,
+        skipDefaultTools: true,
+        toolIds: ids,
+      });
+      expect(activated.tools?.map((tool) => tool.function.name)).toEqual([
+        'target-connector____read',
+      ]);
+    },
+  );
+
+  it('offers the target’s connector up front in custom mode without an activator', () => {
+    const run = startTarget('custom');
+    expect(run.agentConfig.tools?.map((tool) => tool.function.name)).toEqual([
+      'target-connector____read',
+    ]);
   });
 });

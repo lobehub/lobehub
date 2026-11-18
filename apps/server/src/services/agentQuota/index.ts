@@ -17,9 +17,11 @@ import {
   type QuotaTokenUsage,
   rankAccounts,
   selectAccount,
+  summarizeAvailability,
   windowSecondsForKind,
   windowsToCalibrationIntervals,
 } from '@lobechat/heterogeneous-agents/quota';
+import type { QuotaAgentAvailability } from '@lobechat/types';
 import pMap from 'p-map';
 
 import type { AccountIdentityInput, SafeAccount } from '@/database/models/agentQuota';
@@ -119,6 +121,22 @@ const isForeignKeyViolation = (error: unknown): boolean => {
 /** Where a pin came from: the run's own device, or the legacy agent-wide pin. */
 export type AccountPinScope = 'agent' | 'device';
 
+/** An account a device can sign in with, and what the device is told to look for. */
+interface RoutableAccount {
+  id: string;
+  routed: ClaudeCodeRoutedAccount;
+}
+
+/** The accounts a device run may use, before quota is weighed; see `planDeviceAccounts`. */
+type DeviceAccountPlan =
+  | { mode: 'pinned'; pin: RoutableAccount }
+  | {
+      mode: 'balanced';
+      /** A legacy pin picked on another machine: tried first, whatever its load. */
+      pinnedElsewhere?: RoutableAccount;
+      pool: { account: RoutableAccount; priority: number }[];
+    };
+
 export class AgentQuotaService {
   private accounts: AgentProviderAccountModel;
   private bindings: AgentAccountBindingModel;
@@ -160,12 +178,17 @@ export class AgentQuotaService {
     identity: QuotaAccountIdentity;
     provider: string;
     readings: QuotaLimitReading[];
-  }): Promise<SafeAccount> => {
+  }): Promise<SafeAccount | undefined> => {
     const account = await this.accounts.upsertByIdentity(
       params.provider,
       params.identity as AccountIdentityInput,
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
     );
+    // Another member's private account: the reading is dropped rather than
+    // written into an account this member cannot see.
+    if (!account) return undefined;
+    // A sample read on a device proves the account is signed in there.
+    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     // The wallet is not a limit reading, so it can't ride the snapshots table —
     // keep the latest sample on the account row or the persisted view loses the
     // Extra Usage section between live samples.
@@ -174,8 +197,6 @@ export class AgentQuotaService {
         metadata: { ...account.metadata, extraUsage: params.extraUsage },
       });
     }
-    // A sample read on a device proves the account is signed in there.
-    if (params.deviceId) await this.logins.record(account.id, params.deviceId);
     await this.ingestReadings(account.id, params.readings, params.deviceId);
     // Ingestion is the only moment new evidence arrives, so it is also the only
     // sensible calibration trigger. Cheap and self-guarding: without enough clean
@@ -445,47 +466,61 @@ export class AgentQuotaService {
     const accounts = await this.accounts.list();
     const byId = new Map(accounts.map((a) => [a.id, a]));
 
+    // An id the caller cannot see (another member's private account) gets no
+    // load view: its readings inherit the account's visibility.
     return Promise.all(
-      accountIds.map(async (accountId) => {
-        const account = byId.get(accountId);
-        const buckets = await this.listLatestReadings(accountId);
-        const scopedWeeklyUtil: Record<string, number> = {};
-        let sessionUtil = 0;
-        let weeklyUtil = 0;
-        let rateLimitedUntil: number | null = null;
+      accountIds
+        .filter((accountId) => byId.has(accountId))
+        .map(async (accountId) => {
+          const account = byId.get(accountId);
+          const buckets = await this.listLatestReadings(accountId);
+          const scopedWeeklyUtil: Record<string, number> = {};
+          const scopedWeeklyResetsAt: Record<string, number | null> = {};
+          let sessionUtil = 0;
+          let sessionResetsAt: number | null = null;
+          let weeklyUtil = 0;
+          let weeklyResetsAt: number | null = null;
+          let rateLimitedUntil: number | null = null;
 
-        for (const b of buckets) {
-          // A reading whose window has rolled over describes spend that has
-          // since refilled; counting it would keep an account benched long
-          // after its quota came back.
-          const utilization = currentUtilization(b, now);
+          for (const b of buckets) {
+            // A reading whose window has rolled over describes spend that has
+            // since refilled; counting it would keep an account benched long
+            // after its quota came back.
+            const utilization = currentUtilization(b, now);
 
-          if (isSessionLimit(b)) {
-            sessionUtil = utilization;
-            // `utilization` is already 0 once the window rolled over, so a
-            // stale 100% cannot bench the account past its own reset.
-            if (utilization >= 100 && b.resetsAt) rateLimitedUntil = b.resetsAt;
-          } else if (isScopedWeeklyLimit(b)) {
-            scopedWeeklyUtil[b.scopeKey] = utilization;
-          } else if (isWeeklyAllLimit(b)) {
-            weeklyUtil = Math.max(weeklyUtil, utilization);
+            if (isSessionLimit(b)) {
+              sessionUtil = utilization;
+              sessionResetsAt = b.resetsAt ?? null;
+              // `utilization` is already 0 once the window rolled over, so a
+              // stale 100% cannot bench the account past its own reset.
+              if (utilization >= 100 && b.resetsAt) rateLimitedUntil = b.resetsAt;
+            } else if (isScopedWeeklyLimit(b)) {
+              scopedWeeklyUtil[b.scopeKey] = utilization;
+              scopedWeeklyResetsAt[b.scopeKey] = b.resetsAt ?? null;
+            } else if (isWeeklyAllLimit(b) && utilization >= weeklyUtil) {
+              // The fullest weekly window decides when the account frees up.
+              weeklyUtil = utilization;
+              weeklyResetsAt = b.resetsAt ?? null;
+            }
           }
-        }
 
-        const calibration = await this.calibrations.latest(accountId, 'weekly_all');
+          const calibration = await this.calibrations.latest(accountId, 'weekly_all');
 
-        return {
-          accountId,
-          capacityUsd: calibration ? Number(calibration.capacityUsd) : undefined,
-          enabled: account?.enabled ?? true,
-          label: account?.label ?? null,
-          priority: 0,
-          rateLimitedUntil,
-          scopedWeeklyUtil,
-          sessionUtil,
-          weeklyUtil,
-        } satisfies AccountLoadView;
-      }),
+          return {
+            accountId,
+            capacityUsd: calibration ? Number(calibration.capacityUsd) : undefined,
+            enabled: account?.enabled ?? true,
+            label: account?.label ?? null,
+            priority: 0,
+            rateLimitedUntil,
+            scopedWeeklyResetsAt,
+            scopedWeeklyUtil,
+            sessionResetsAt,
+            sessionUtil,
+            weeklyResetsAt,
+            weeklyUtil,
+          } satisfies AccountLoadView;
+        }),
     );
   };
 
@@ -605,74 +640,162 @@ export class AgentQuotaService {
    * The account choice for a run on an execution device, which picks the
    * login itself (only it knows which accounts it is signed in to): the pin,
    * or the whole eligible pool best-first. `null` = no routing, and the device
-   * spawns on its default login as before.
-   *
-   * Only `referenced` accounts map to a device login; a run pinned to any
-   * other account keeps the default login, as on the desktop.
-   *
-   * With the run's `deviceId`, that device's own choice is the pin. A legacy
-   * agent-wide pin stays strict only where its login is recorded; elsewhere
-   * it was picked on another machine, so it becomes the first Auto candidate
-   * and the device falls through to the pool (or its default login).
+   * spawns on its default login as before. Which accounts count is
+   * `planDeviceAccounts`; this only ranks them.
    */
   planDeviceRouting = async (
     agentId: string,
     options: Pick<SelectAccountOptions, 'deviceId' | 'modelScope' | 'now' | 'provider'> = {},
   ): Promise<ClaudeCodeAccountRouting | null> => {
+    const plan = await this.planDeviceAccounts(agentId, options);
+    if (!plan) return null;
+    if (plan.mode === 'pinned') return { candidates: [plan.pin.routed], mode: 'pinned' };
+
+    const now = options.now ?? Date.now();
+    const loads = await this.poolLoads(plan.pool, now);
+    const routedById = new Map(plan.pool.map(({ account }) => [account.id, account.routed]));
+    const candidates = rankAccounts(loads, { modelScope: options.modelScope, now }).flatMap(
+      (load) => routedById.get(load.accountId) ?? [],
+    );
+    const elsewhere = plan.pinnedElsewhere?.routed;
+    if (elsewhere && !candidates.some((c) => c.externalAccountId === elsewhere.externalAccountId))
+      candidates.unshift(elsewhere);
+
+    return candidates.length > 0 ? { candidates, mode: 'balanced' } : null;
+  };
+
+  /**
+   * Whether a run of `agentId` would find quota on `deviceId`, judged on the
+   * accounts `planDeviceAccounts` routes it to — the same ones the dispatcher
+   * uses, so presence cannot read "idle" while every run lands on a spent
+   * account.
+   *
+   * Auto mode is judged on the whole candidate list the dispatcher sends, not
+   * narrowed to the logins recorded for the device: that record is no
+   * inventory. Only a desktop syncs its own full set; a remote device has
+   * just the accounts sampled there, and an emptied set reads like one never
+   * reported. Which candidate the device can sign in with stays its call.
+   */
+  resolveAgentAvailability = async (
+    agentId: string,
+    options: Pick<SelectAccountOptions, 'deviceId' | 'modelScope' | 'now' | 'provider'> = {},
+  ): Promise<QuotaAgentAvailability> => {
+    const plan = await this.planDeviceAccounts(agentId, options);
+    if (!plan) return { accountIds: [], status: 'untracked' };
+
+    // A pin is sent to the device whatever the account's state, so its quota
+    // decides; a disabled pool account is out of the rotation the dispatcher
+    // ranks (`rankAccounts` drops it).
+    const pins = new Set(
+      plan.mode === 'pinned'
+        ? [plan.pin.id]
+        : plan.pinnedElsewhere
+          ? [plan.pinnedElsewhere.id]
+          : [],
+    );
+    const candidateIds = [
+      ...new Set([
+        ...pins,
+        ...(plan.mode === 'balanced' ? plan.pool.map(({ account }) => account.id) : []),
+      ]),
+    ];
+
+    const now = options.now ?? Date.now();
+    const loads = (await this.resolveAccountLoads(candidateIds, now))
+      .map((load) => (pins.has(load.accountId) ? { ...load, enabled: true } : load))
+      .filter((load) => load.enabled);
+    // Every account in the rotation is disabled: the dispatcher routes
+    // nothing and the device's default login runs.
+    if (loads.length === 0) return { accountIds: [], mode: plan.mode, status: 'untracked' };
+
+    const { available, resetsAt } = summarizeAvailability(loads, {
+      modelScope: options.modelScope,
+      now,
+    });
+
+    return {
+      accountIds: loads.map((load) => load.accountId),
+      mode: plan.mode,
+      status: available ? 'available' : 'exhausted',
+      ...(resetsAt !== undefined && { resetsAt }),
+    };
+  };
+
+  /**
+   * The accounts a run of `agentId` on `deviceId` may use, before quota is
+   * weighed. The dispatcher (`planDeviceRouting`) and the availability read
+   * (`resolveAgentAvailability`) both start here, so they cannot disagree:
+   *
+   * 1. the device's own account choice, strict;
+   * 2. a legacy agent-wide pin, strict where its login is recorded (or with no
+   *    device named); elsewhere it was picked on another machine, so it
+   *    becomes the first Auto candidate and the device falls through to
+   *    the pool;
+   * 3. the pool.
+   *
+   * Only `referenced` accounts map to a device login; a pin on any other
+   * account keeps the default login, as on the desktop (`null`).
+   */
+  private planDeviceAccounts = async (
+    agentId: string,
+    options: Pick<SelectAccountOptions, 'deviceId' | 'provider'>,
+  ): Promise<DeviceAccountPlan | null> => {
     const bindings = await this.enabledBindings(agentId, options.provider);
     const accounts = new Map((await this.accounts.list()).map((a) => [a.id, a]));
-    const routed = (accountId: string): ClaudeCodeRoutedAccount | undefined => {
+    const routable = (accountId: string): RoutableAccount | undefined => {
       const account = accounts.get(accountId);
       if (account?.credentialMode !== QuotaCredentialMode.referenced) return;
       if (!account.externalAccountId) return;
       const name = account.label || account.email;
-      return { externalAccountId: account.externalAccountId, ...(name ? { name } : {}) };
+      return {
+        id: accountId,
+        routed: { externalAccountId: account.externalAccountId, ...(name ? { name } : {}) },
+      };
     };
 
     const deviceChoice = await this.deviceChoiceOf(agentId, bindings, options.deviceId);
     if (deviceChoice) {
-      const account = routed(deviceChoice);
-      return account ? { candidates: [account], mode: 'pinned' } : null;
+      const pin = routable(deviceChoice);
+      return pin ? { mode: 'pinned', pin } : null;
     }
 
     const pinned = bindings.find((b) => b.role === QuotaBindingRole.pinned);
-    let pinnedElsewhere: ClaudeCodeRoutedAccount | undefined;
+    let pinnedElsewhere: RoutableAccount | undefined;
     if (pinned) {
-      const account = routed(pinned.accountId);
-      if (!account) return null;
+      const pin = routable(pinned.accountId);
+      if (!pin) return null;
       const strict =
         !options.deviceId ||
         (await this.logins.listByAccount(pinned.accountId)).some(
           (login) => login.deviceId === options.deviceId,
         );
-      if (strict) return { candidates: [account], mode: 'pinned' };
-      pinnedElsewhere = account;
+      if (strict) return { mode: 'pinned', pin };
+      pinnedElsewhere = pin;
     }
 
-    const pool = bindings.filter((b) => b.role === QuotaBindingRole.pool);
-    if (pool.length === 0)
-      return pinnedElsewhere ? { candidates: [pinnedElsewhere], mode: 'balanced' } : null;
+    const pool = bindings
+      .filter((b) => b.role === QuotaBindingRole.pool)
+      .flatMap((b) => {
+        const account = routable(b.accountId);
+        return account ? [{ account, priority: b.priority }] : [];
+      });
+    if (pool.length === 0 && !pinnedElsewhere) return null;
 
-    const now = options.now ?? Date.now();
-    const priorityById = new Map(pool.map((b) => [b.accountId, b.priority]));
+    return { mode: 'balanced', pinnedElsewhere, pool };
+  };
+
+  /** Load views of a plan's pool, carrying each binding's priority. */
+  private poolLoads = async (
+    pool: Extract<DeviceAccountPlan, { mode: 'balanced' }>['pool'],
+    now: number,
+  ) => {
+    if (pool.length === 0) return [];
+    const priorityById = new Map(pool.map(({ account, priority }) => [account.id, priority]));
     const loads = await this.resolveAccountLoads(
-      pool.map((b) => b.accountId),
+      pool.map(({ account }) => account.id),
       now,
     );
-    const candidates = rankAccounts(
-      loads.map((l) => ({ ...l, priority: priorityById.get(l.accountId) ?? 0 })),
-      { modelScope: options.modelScope, now },
-    ).flatMap((load) => routed(load.accountId) ?? []);
-    if (pinnedElsewhere)
-      candidates.splice(
-        0,
-        0,
-        ...[pinnedElsewhere].filter(
-          (account) => !candidates.some((c) => c.externalAccountId === account.externalAccountId),
-        ),
-      );
-
-    return candidates.length > 0 ? { candidates, mode: 'balanced' } : null;
+    return loads.map((l) => ({ ...l, priority: priorityById.get(l.accountId) ?? 0 }));
   };
 
   /**

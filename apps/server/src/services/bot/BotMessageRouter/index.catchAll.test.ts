@@ -41,6 +41,31 @@ vi.mock('../AgentBridgeService', async () =>
 );
 vi.mock('../platforms', async () => (await import('./testUtils')).platformsModule());
 
+const telegramDm = () => ({
+  id: 'telegram:chat-1',
+  isDM: true,
+  post: vi.fn().mockResolvedValue(undefined),
+});
+
+const discordChannel = () => ({
+  id: 'discord:guild-1:channel-1',
+  isDM: false,
+  post: vi.fn().mockResolvedValue(undefined),
+});
+
+const wechatDm = () => ({
+  id: 'wechat:dm-1',
+  isDM: true,
+  post: vi.fn().mockResolvedValue(undefined),
+});
+
+const wechatPaidNoticeAccess = () => ({
+  allowed: true,
+  notice: { id: 'wechat-pro-required-v1' },
+  requiredPlan: 'paid',
+  rolloutMode: 'notice',
+});
+
 describe('BotMessageRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -106,11 +131,7 @@ describe('BotMessageRouter', () => {
     it('should handle DM messages through the catch-all', async () => {
       const handler = await loadDmCatchAllHandler();
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         text: 'hi in a DM',
@@ -122,19 +143,10 @@ describe('BotMessageRouter', () => {
     });
 
     it('posts a one-time WeChat paid-feature notice and continues handling the DM', async () => {
-      mockGetBotFeatureAccessState.mockResolvedValue({
-        allowed: true,
-        notice: { id: 'wechat-pro-required-v1' },
-        requiredPlan: 'paid',
-        rolloutMode: 'notice',
-      });
+      mockGetBotFeatureAccessState.mockResolvedValue(wechatPaidNoticeAccess());
       const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'wechat:dm-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = wechatDm();
       const message = {
         author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
         text: 'hi in WeChat',
@@ -153,20 +165,11 @@ describe('BotMessageRouter', () => {
     });
 
     it('does not repeat the WeChat paid-feature notice after dedupe hits', async () => {
-      mockGetBotFeatureAccessState.mockResolvedValue({
-        allowed: true,
-        notice: { id: 'wechat-pro-required-v1' },
-        requiredPlan: 'paid',
-        rolloutMode: 'notice',
-      });
+      mockGetBotFeatureAccessState.mockResolvedValue(wechatPaidNoticeAccess());
       mockStateSetIfNotExists.mockResolvedValue(false);
       const handler = await loadDmCatchAllHandler({ dmPolicy: 'open' }, 'wechat');
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'wechat:dm-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = wechatDm();
       const message = {
         author: { isBot: false, userId: 'wechat-user-1', userName: 'alice' },
         text: 'hi again',
@@ -179,22 +182,13 @@ describe('BotMessageRouter', () => {
     });
 
     it('does not post the paid-feature notice to senders rejected by the access gates', async () => {
-      mockGetBotFeatureAccessState.mockResolvedValue({
-        allowed: true,
-        notice: { id: 'wechat-pro-required-v1' },
-        requiredPlan: 'paid',
-        rolloutMode: 'notice',
-      });
+      mockGetBotFeatureAccessState.mockResolvedValue(wechatPaidNoticeAccess());
       const handler = await loadDmCatchAllHandler(
         { allowFrom: 'bob-id', dmPolicy: 'allowlist' },
         'wechat',
       );
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'wechat:dm-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = wechatDm();
       const message = {
         author: { isBot: false, userId: 'wechat-stranger', userName: 'stranger' },
         text: 'hi in WeChat',
@@ -220,11 +214,7 @@ describe('BotMessageRouter', () => {
         'wechat',
       );
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'wechat:dm-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = wechatDm();
 
       // A stranger blocked by the allowlist gets the regular rejection, not
       // the paid-block copy — plan state must not leak past the gates.
@@ -252,11 +242,7 @@ describe('BotMessageRouter', () => {
         dmPolicy: 'allowlist',
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         text: 'hi in a DM',
@@ -282,11 +268,7 @@ describe('BotMessageRouter', () => {
         userId: 'owner-id',
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'lin-id', userName: 'Lin' },
         text: 'Hi',
@@ -317,11 +299,7 @@ describe('BotMessageRouter', () => {
         userId: 'owner-id',
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'owner-id', userName: 'me' },
         text: 'self test',
@@ -374,11 +352,7 @@ describe('BotMessageRouter', () => {
         userId: 'owner-id',
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'lin-id', userName: 'Lin' },
         text: 'Hello again',
@@ -415,11 +389,7 @@ describe('BotMessageRouter', () => {
         ],
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'discord:guild-1:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = discordChannel();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         text: 'looks like a bug in checkout',
@@ -445,11 +415,7 @@ describe('BotMessageRouter', () => {
         watchKeywords: [{ keyword: 'bug' }],
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'discord:guild-1:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = discordChannel();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         text: 'looks like a bug in checkout',
@@ -495,11 +461,7 @@ describe('BotMessageRouter', () => {
         watchKeywords: [{ keyword: 'bug' }],
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'discord:guild-1:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = discordChannel();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         text: 'just chatting about the weather',
@@ -516,11 +478,7 @@ describe('BotMessageRouter', () => {
         watchKeywords: [{ instruction: 'Scan for bug.', keyword: 'bug' }],
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'discord:guild-1:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = discordChannel();
       const skipped = [
         {
           author: { isBot: false, userId: 'alice-id', userName: 'alice' },
@@ -555,11 +513,7 @@ describe('BotMessageRouter', () => {
         'discord',
       );
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'discord:guild-1:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = discordChannel();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         raw: { id: 'msg-99' },
@@ -615,11 +569,7 @@ describe('BotMessageRouter', () => {
         'discord',
       );
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'discord:guild-1:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = discordChannel();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         raw: { id: 'msg-99' },
@@ -643,11 +593,7 @@ describe('BotMessageRouter', () => {
         watchKeywords: [{ keyword: 'bug' }],
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         raw: { id: 'msg-99' },
@@ -669,11 +615,7 @@ describe('BotMessageRouter', () => {
         watchKeywords: [{ instruction: 'should not appear', keyword: 'bug' }],
       });
       if (!handler) throw new Error('expected catch-all to be registered');
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         text: 'I think there is a bug in the app',

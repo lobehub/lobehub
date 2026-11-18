@@ -14,7 +14,6 @@ import type {
 } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
-  ChatErrorType,
   ordinaryFileAccessScope,
   resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
@@ -27,6 +26,7 @@ import { AiModelModel } from '@/database/models/aiModel';
 import type { MessageModel } from '@/database/models/message';
 import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import type { TopicModel } from '@/database/models/topic';
+import { defaultsToAuto } from '@/helpers/executionTarget';
 import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
@@ -35,7 +35,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import type { DeviceAccessReason } from '../deviceAccessPolicy';
 import { resolveDeviceAccessPolicy } from '../deviceAccessPolicy';
@@ -46,7 +46,8 @@ import type { InternalExecAgentParams } from '../types';
 import { buildNewTopicMetadata } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
-import { resolveTurnProjectId } from './topicProject';
+import { assertShareHeteroAllowed } from './shareHeteroGate';
+import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -358,11 +359,13 @@ export interface TurnSetupInput {
   modelOverride?: string;
   operationTaskId?: string;
   parentMessageId?: string;
+  persistedUserMessageId?: string;
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
   /** See `InternalExecAgentParams.requireDevice`. */
   requireDevice?: boolean;
+  reservedOperationId?: string;
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
@@ -378,6 +381,7 @@ export interface TurnSetupInput {
   trigger?: string;
   /** The composer-authored part of the user message; see `ExecAgentParams.userMessage`. */
   userMessage?: InternalExecAgentParams['userMessage'];
+  webhookThread?: InternalExecAgentParams['webhookThread'];
 }
 
 export interface TurnSetupResult {
@@ -464,14 +468,17 @@ export const setupTurn = async (
     createdThreadId,
     externalOrigin,
     cronJobId,
+    webhookThread,
     files,
     modelOverride,
     operationTaskId,
     parentMessageId,
+    persistedUserMessageId,
     prompt,
     providerOverride,
     requestedDeviceId,
     requireDevice,
+    reservedOperationId,
     resolvedAgentId,
     resume,
     runFromHistory,
@@ -545,18 +552,30 @@ export const setupTurn = async (
     : providerOverride;
   let topicEditingGroupId: string | undefined;
 
-  // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
-  // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
-  // agents are not available for shared visitor runs. Checked here (using the
-  // agent-level config, before any topic-pinned model override) rather than
-  // at the later hetero-detection site (`isHeteroAgent`) so it runs ahead of
-  // ALL row creation, not just the message rows.
-  if (shareGate && (heterogeneousProvider?.type || isHeterogeneousAgentModelId(model))) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  // Share visitors run Claude Code / Codex only on the granted device. Checked
+  // against the agent-level config before any row is written, and re-asserted
+  // once a reused topic's pinned model and device are applied.
+  const assertShareHetero = async (runModel: string) => {
+    const shareDeviceId = await assertShareHeteroAllowed({
+      agencyConfig: agentConfig.agencyConfig,
+      db: deps.db,
+      heterogeneousType: heterogeneousProvider?.type,
+      model: runModel,
+      ownerUserId: deps.userId,
+      requestedDeviceId: resolvedRequestedDeviceId,
+      shareGate,
+      trigger,
+      workspaceId: deps.workspaceId,
     });
-  }
+    // Route the dispatch to the device the gate selected (an `auto` Agent's
+    // single online device), which the dispatch would not find on its own.
+    // Only the dispatch gets it: pinning the topic to an automatic pick would
+    // keep a later turn on that device after it goes offline and another one
+    // is online.
+    if (shareDeviceId && !resolvedRequestedDeviceId && !isFixedExecutionTargetSelection)
+      resolvedRequestedDeviceId = shareDeviceId;
+  };
+  await assertShareHetero(model);
 
   const assertProjectDirectoryAccess = () => {
     if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
@@ -626,6 +645,7 @@ export const setupTurn = async (
         projectDirectory,
         taskId: operationTaskId,
         topicBoundDeviceId,
+        webhookThread,
       });
       turnProjectId = await resolveTurnProjectId(deps, {
         directoryProjectId: projectDirectory?.projectId,
@@ -634,10 +654,14 @@ export const setupTurn = async (
         taskId: operationTaskId,
       });
 
-      const fallbackTitleSource = markdownToTxt(prompt);
+      const fallbackTitleSource = toTitleText(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
-      const metadataWithSnapshot: ChatTopicMetadata | undefined =
-        metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined;
+      const metadataWithSnapshot = await withProjectSandbox(deps, {
+        agentId: resolvedAgentId,
+        hasDirectory: !!projectDirectory,
+        metadata: metadata || snapshot.metadata ? { ...metadata, ...snapshot.metadata } : undefined,
+        projectId: turnProjectId,
+      });
       // Second argument: the id the client already rendered this topic under
       // (sidebar row, message bucket). Absent → the model mints one as before.
       const newTopicParams = {
@@ -704,6 +728,17 @@ export const setupTurn = async (
       // The pinned model lives in the top-level `topics.model`/`provider` columns
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
+      const pendingRun = existingTopic?.metadata?.scheduledRun;
+      if (
+        existingTopic?.status === 'scheduled' &&
+        pendingRun?.kind === 'worktree_start' &&
+        pendingRun.operationId !== reservedOperationId
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This conversation is preparing its worktree.',
+        });
+      }
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
       turnProjectId = await resolveTurnProjectId(deps, {
         shareGate,
@@ -789,13 +824,19 @@ export const setupTurn = async (
       // grab whichever machine is online now.
       const topicDeviceBindingPinned =
         canUseTopicPin && existingTopic?.metadata?.deviceBindingPinned === true;
+      // An unset target is the same default as `auto` (see `defaultsToAuto`), so
+      // both re-pick a device on every turn instead of resurrecting an earlier
+      // pick — only a binding the caller chose explicitly pins the conversation.
+      const autoTargetSelected =
+        agentConfig.agencyConfig?.executionTarget === 'auto' ||
+        defaultsToAuto(agentConfig.agencyConfig, isHeterogeneousAgentModelId(model));
       // A project-directory topic already routed to its directory's device above.
       if (
         !requestedDeviceId &&
         !existingTopic?.projectWorkingDirectoryId &&
         topicPinnedDeviceId &&
         !isFixedExecutionTargetSelection &&
-        (agentConfig.agencyConfig?.executionTarget !== 'auto' || topicDeviceBindingPinned)
+        (!autoTargetSelected || topicDeviceBindingPinned)
       ) {
         resolvedRequestedDeviceId = topicPinnedDeviceId;
         effectiveRequestedDeviceId = topicPinnedDeviceId;
@@ -803,14 +844,9 @@ export const setupTurn = async (
         log('execAgent: routing topic %s to its bound device %s', topicId, topicPinnedDeviceId);
       }
 
-      // Re-assert the share restriction after topic overrides are applied.
-      // Heterogeneous agents are not available for shared visitor runs.
-      if (shareGate && isHeterogeneousAgentModelId(model)) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
-        });
-      }
+      // Re-assert the share restriction after topic overrides are applied: a
+      // topic pin can switch the run to another heterogeneous runtime or device.
+      await assertShareHetero(model);
 
       // A builder conversation edits exactly one agent, stamped on the topic when
       // it was created. Continuations rebuilt from the durable operation (approval
@@ -860,7 +896,7 @@ export const setupTurn = async (
   // chat) and stops the device list from leaking into the LLM context.
   const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
     botContext,
-    shareVisitor: !!shareGate,
+    shareVisitor: shareGate ? { canUseDevice: shareGate.canUseDevice } : undefined,
   });
   log(
     'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
@@ -1128,6 +1164,6 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
-    userMessageId: userMessageRecord?.id,
+    userMessageId: userMessageRecord?.id ?? persistedUserMessageId,
   };
 };

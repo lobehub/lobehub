@@ -44,6 +44,8 @@ export const channelSelectors = {
   /** The caller's direct conversation with an Agent; a direct Channel never belongs to a project. */
   directByAgent: (agentId: string) => (state: ChannelState) =>
     state.listMap.all?.find((channel) => channel.agentId === agentId && !channel.projectId),
+  /** Public Channels the user can join for a search; undefined while loading. */
+  joinable: (search: string) => (state: ChannelState) => state.joinableMap[search],
   list: (state: ChannelState) => state.listMap.all,
   /** A listed conversation has a reply in progress, which its row shows until it settles. */
   listHasPendingWork: (state: ChannelState) =>

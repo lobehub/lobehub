@@ -25,7 +25,7 @@ needs `--force`; the previous topic joins `previousTopicIds`, and the move is
 recorded as a goal event. Finished goals and goals with a planning turn in flight
 elsewhere are refused. Like `create --topic`, the topic comes from
 the run's operation; an operation-token run (device or gateway) needs the
-`goal:manage` capability that `/goal` grants.
+`goal:manage` capability that a user-sent run (or any `/goal` run) carries.
 
 A topic goal (`create --topic`, `/goal`) opens as a `draft` when the CLI asks
 for one (`draft: true`, sent by every CLI that has `lh goal start`; an older CLI

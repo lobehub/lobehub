@@ -18,6 +18,7 @@ import { isAbsolute } from 'pathe';
 
 import { assertNotWorkspaceRoot, assertPathsWithinWorkspace, joinDevicePath } from './paths';
 import type { DeviceClientGetter } from './types';
+import { type DeviceWorktree, invokeWorkspaceFileRpc } from './workspaceFileRpc';
 
 const log = debug('lobe-server:device-gateway');
 
@@ -36,6 +37,7 @@ export async function moveProjectFiles(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceMoveProjectFileResultItem[]> {
@@ -52,9 +54,11 @@ export async function moveProjectFiles(
     items.map((item) => item.oldPath),
   );
 
-  const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
+  const result = await invokeWorkspaceFileRpc<DeviceMoveProjectFileResultItem[]>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'moveLocalFiles', params: { items, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {
@@ -79,6 +83,7 @@ export async function renameProjectFile(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceRenameProjectFileResult> {
@@ -99,9 +104,11 @@ export async function renameProjectFile(
   assertPathsWithinWorkspace(workingDirectory, [path]);
   assertNotWorkspaceRoot(workingDirectory, [path]);
 
-  const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
+  const result = await invokeWorkspaceFileRpc<DeviceRenameProjectFileResult>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'renameLocalFile', params: { newName, path, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {
@@ -126,6 +133,7 @@ export async function writeProjectFile(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceWriteProjectFileResult> {
@@ -143,9 +151,11 @@ export async function writeProjectFile(
 
   assertPathsWithinWorkspace(workingDirectory, [path]);
 
-  const result = await client.invokeRpc<DeviceWriteProjectFileResult>(
+  const result = await invokeWorkspaceFileRpc<DeviceWriteProjectFileResult>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'writeLocalFile', params: { content, path, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {
@@ -170,6 +180,7 @@ export async function createProjectFile(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceCreateProjectEntryResult> {
@@ -187,9 +198,11 @@ export async function createProjectFile(
 
   assertPathsWithinWorkspace(workingDirectory, [path]);
 
-  const result = await client.invokeRpc<DeviceCreateProjectEntryResult>(
+  const result = await invokeWorkspaceFileRpc<DeviceCreateProjectEntryResult>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'createLocalFile', params: { content, path, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {
@@ -212,6 +225,7 @@ export async function createProjectDirectory(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceCreateProjectEntryResult> {
@@ -221,9 +235,11 @@ export async function createProjectDirectory(
 
   assertPathsWithinWorkspace(workingDirectory, [path]);
 
-  const result = await client.invokeRpc<DeviceCreateProjectEntryResult>(
+  const result = await invokeWorkspaceFileRpc<DeviceCreateProjectEntryResult>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'createLocalDirectory', params: { path, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {
@@ -292,6 +308,7 @@ export async function copyProjectFiles(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceCopyProjectFileResultItem[]> {
@@ -310,9 +327,11 @@ export async function copyProjectFiles(
     items.map((item) => item.sourcePath),
   );
 
-  const result = await client.invokeRpc<DeviceCopyProjectFileResultItem[]>(
+  const result = await invokeWorkspaceFileRpc<DeviceCopyProjectFileResultItem[]>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'copyLocalFiles', params: { items, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {
@@ -336,6 +355,7 @@ export async function trashProjectFiles(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceTrashProjectFilesResult> {
@@ -346,9 +366,11 @@ export async function trashProjectFiles(
   assertPathsWithinWorkspace(workingDirectory, paths);
   assertNotWorkspaceRoot(workingDirectory, paths);
 
-  const result = await client.invokeRpc<DeviceTrashProjectFilesResult>(
+  const result = await invokeWorkspaceFileRpc<DeviceTrashProjectFilesResult>(
+    client,
     { deviceId, timeout, userId, workspaceId },
     { method: 'trashLocalFiles', params: { paths, workspaceRoot: workingDirectory } },
+    params.worktree,
   );
 
   if (!result.success || !result.data) {

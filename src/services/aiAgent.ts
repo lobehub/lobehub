@@ -17,7 +17,7 @@ import type {
 } from '@lobechat/types';
 
 import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
 
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
@@ -311,6 +311,26 @@ class AiAgentService {
     return await lambdaClient.aiAgent.getServerDefaultHeterogeneousCapability.query();
   }
 
+  /** Holds the run fee of an external agent this desktop spawns itself. */
+  async beginLocalHeteroRunFee(
+    params: { topicId?: string },
+    options: { signal?: AbortSignal; workspaceId: string | null },
+  ) {
+    return await createWorkspaceLambdaClient(
+      options.workspaceId,
+    ).aiAgent.beginLocalHeteroRunFee.mutate(params, { signal: options.signal });
+  }
+
+  /** Charges or gives back that fee once the run ends, in the scope it was held in. */
+  async finishLocalHeteroRunFee(
+    params: { durationMs?: number; feeId: string; reason: 'done' | 'error' | 'interrupted' },
+    options: { signal?: AbortSignal; workspaceId: string | null },
+  ) {
+    return await createWorkspaceLambdaClient(
+      options.workspaceId,
+    ).aiAgent.finishLocalHeteroRunFee.mutate(params, { signal: options.signal });
+  }
+
   /**
    * Execute a single Agent task.
    * Returns the operationId needed to connect to the Agent Gateway.
@@ -378,10 +398,23 @@ class AiAgentService {
     return await lambdaClient.agentSteerQueue.remove.mutate(params);
   }
 
-  /**
-   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
-   * the backend cron fires once `runAt` passes; nothing runs now.
-   */
+  /** Persist a first send before the device checkout starts. */
+  async submitWorktreeTurn(
+    params: Parameters<typeof lambdaClient.aiAgent.submitWorktreeTurn.mutate>[0],
+    workspaceId: string | null,
+  ) {
+    return createWorkspaceLambdaClient(workspaceId).aiAgent.submitWorktreeTurn.mutate(params);
+  }
+
+  async cancelWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.cancelWorktreeTurn.mutate({ topicId });
+  }
+
+  async retryWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.retryWorktreeTurn.mutate({ topicId });
+  }
+
+  /** Persist a scheduled turn for the backend to dispatch at the selected time. */
   async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
     return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
   }
@@ -439,6 +472,15 @@ class AiAgentService {
    */
   async getOperationStatus(params: { operationId: string }) {
     return await lambdaClient.aiAgent.getOperationStatus.query(params);
+  }
+
+  /**
+   * Stop one Claude Code background task of a run hosted by `lh hetero exec`.
+   * `accepted` only means Claude Code took the request; the task's `stopped`
+   * snapshot arrives through the run's own stream.
+   */
+  async stopHeteroBackgroundTask(params: { operationId: string; taskId: string }) {
+    return await lambdaClient.aiAgent.stopHeteroBackgroundTask.mutate(params);
   }
 
   /**

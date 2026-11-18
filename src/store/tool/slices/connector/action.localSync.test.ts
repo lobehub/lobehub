@@ -17,6 +17,7 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
       getForEdit: { query: vi.fn() },
+      getLocalCallToken: { mutate: vi.fn() },
       list: { query: vi.fn().mockResolvedValue([]) },
       syncTools: { mutate: vi.fn() },
       syncToolsFromClientById: { mutate: vi.fn() },
@@ -85,4 +86,34 @@ describe('syncConnectorTools on desktop', () => {
       expect(lambdaClient.connector.syncTools.mutate).not.toHaveBeenCalled();
     },
   );
+
+  // `getForEdit` leaves OAuth tokens out: listing without one would fail
+  it('lists an OAuth connector set to connect through the device with its access token', async () => {
+    vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+      credentials: null,
+      id: 'c1',
+      identifier: 'dash',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://nas.tail1234.ts.net/mcp',
+      metadata: { connectVia: 'device' },
+      oidcConfig: { clientId: 'cid', issuer: 'https://auth.example.com' },
+    } as any);
+    vi.mocked(lambdaClient.connector.getLocalCallToken.mutate).mockResolvedValue({
+      accessToken: 'fresh-access',
+      type: 'oauth2',
+    });
+
+    const { result } = renderHook(() => useToolStore());
+    await act(async () => {
+      await result.current.syncConnectorTools('c1');
+    });
+
+    expect(lambdaClient.connector.getLocalCallToken.mutate).toHaveBeenCalledWith({ id: 'c1' });
+    expect(mcpService.listLocalMcpTools).toHaveBeenCalledWith({
+      http: expect.objectContaining({
+        auth: { accessToken: 'fresh-access', type: 'oauth2' },
+        url: 'https://nas.tail1234.ts.net/mcp',
+      }),
+    });
+  });
 });

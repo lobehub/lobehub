@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "Thêm nội dung hiện tại dưới dạng tin nhắn người dùng mà không kích hoạt tạo phản hồi",
-  "addUserMessage.title": "Thêm Tin Nhắn Người Dùng",
   "commandPalette.desc": "Mở bảng lệnh toàn cục để truy cập nhanh các tính năng",
   "commandPalette.title": "Bảng Lệnh",
   "deleteAndRegenerateMessage.desc": "Xóa tin nhắn cuối cùng và tạo lại",

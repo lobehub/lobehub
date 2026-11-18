@@ -5,8 +5,10 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
+import { workService } from '@/services/work';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { linkOwnBranchPullRequest } from '@/store/chat/slices/agentRun/actions/lifecycle/linkOwnBranchPullRequest';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
 import {
@@ -17,7 +19,9 @@ import {
   hasCompletedAssistantText,
   isAudioOnlyFirstUserMessage,
 } from '@/store/chat/utils/topicTitle';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { getUserStoreState } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
@@ -36,6 +40,27 @@ import type {
 } from './types';
 
 const log = debug('lobe-store:run-lifecycle');
+
+const MAX_NOTIFIED_SERVER_OPERATIONS = 200;
+const notifiedServerOperationIds = new Set<string>();
+
+/**
+ * Claim the single desktop notification of a server run. One server run can
+ * reach this renderer through several local operations: a hetero run's in-stream
+ * end arrives before heteroFinish clears the topic marker, so a reconnect can
+ * attach and see that run end again. Local-only runs have no server id to claim.
+ */
+const claimServerRunNotification = (serverOperationId: string | undefined): boolean => {
+  if (!serverOperationId) return true;
+  if (notifiedServerOperationIds.has(serverOperationId)) return false;
+
+  notifiedServerOperationIds.add(serverOperationId);
+  if (notifiedServerOperationIds.size > MAX_NOTIFIED_SERVER_OPERATIONS) {
+    const [oldest] = notifiedServerOperationIds;
+    notifiedServerOperationIds.delete(oldest);
+  }
+  return true;
+};
 
 /**
  * Normalize the runtime/operation status into the cross-runtime
@@ -238,7 +263,7 @@ export const buildRunLifecycle = (
           return;
         }
         const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-        const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
+        const title = toTitleText(firstUserText).slice(0, 80) || 'New Topic';
         // `internal_updateTopic` already balances its own loading owner. For a
         // new client-runtime topic like "阅读下面...", an extra `false` here would
         // consume the runtime's loading owner and hide the sidebar spinner early.
@@ -286,8 +311,10 @@ export const buildRunLifecycle = (
       if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
       if (adapter.runScope === 'sub_agent') return;
 
+      const serverOperationId = get().operations[event.operationId]?.metadata.serverOperationId;
       const disposition = resolveTerminalDisposition(event);
       if (disposition === 'failed' && event.notification) {
+        if (!claimServerRunNotification(serverOperationId)) return;
         await notifyDesktopAgentFailed(get, {
           context: { agentId, groupId, topicId, workspaceSlug },
           error: event.notification.error,
@@ -311,6 +338,7 @@ export const buildRunLifecycle = (
       // completion — the parent run is still going, so it must not fire a
       // "generation finished" notification / badge. See RunScope.
       if (!isDesktop) return;
+      if (!claimServerRunNotification(serverOperationId)) return;
 
       const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
@@ -372,6 +400,23 @@ export const buildRunLifecycle = (
       // side effect. Run it before the queued-message early return so a follow-up
       // cannot strand an audio-first topic without a title.
       if (disposition === 'success') summarizeVoiceTopicTitleAfterCompletion();
+
+      // Same for the topic's linked PRs: a queued follow-up skips the
+      // completion notification, not these. The run's gh / push commands were
+      // linked by the completion Work scan before the run reported its end; only
+      // a mounted list (Better Coding Experience PR chip / sidebar) refetches.
+      if (adapter.runScope !== 'sub_agent') {
+        void workService.refreshTopicPullRequests(topicId).catch(() => {});
+        // A PR someone opened on the topic's own branch — looked up before a
+        // queued turn can move the topic off that branch.
+        if (
+          disposition === 'success' &&
+          topicId &&
+          agentId &&
+          labPreferSelectors.enableBetterCodingExperience(getUserStoreState())
+        )
+          void linkOwnBranchPullRequest(get, { agentId, topicId });
+      }
 
       const completeSuccess = () => {
         get().completeOperation(operationId);

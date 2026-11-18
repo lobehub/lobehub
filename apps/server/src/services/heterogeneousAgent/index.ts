@@ -25,6 +25,7 @@ import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory'
 import { shouldRecordGatewayError } from '@/server/modules/AgentRuntime/gatewayErrorRecord';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
+import type { OperationCompletionShareVisitor } from '@/server/services/agentRuntime/CompletionLifecycle/types';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
@@ -98,6 +99,20 @@ export interface HeterogeneousFinishParams {
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
 
 /**
+ * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
+ * publishes the run's end after clearing the topic's running marker, and an
+ * earlier end lets a client reconnect on that marker and complete the run twice.
+ * A stop stays published because a CLI that exits 0 reports it to heteroFinish
+ * as `success`, so this event is the only signal that the user stopped the run.
+ */
+const isCleanRuntimeEnd = (event: AgentStreamEvent): boolean => {
+  if (event.type !== 'agent_runtime_end') return false;
+
+  const reason = (event.data as { reason?: string } | undefined)?.reason;
+  return !reason || reason === 'success' || reason === 'complete';
+};
+
+/**
  * Older or partially upgraded `lh hetero exec` producers can flatten an
  * adapter-classified terminal error before calling `heteroFinish`. Reclassify
  * the final payload at the server boundary so a recognizable authentication
@@ -164,6 +179,13 @@ export interface HeterogeneousAgentServiceOptions {
   agentOperationModel?: AgentOperationModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
+  /**
+   * The share visitor this run belongs to (from the operation row the dispatch
+   * stamped). A visitor's topic and messages are hidden from default-scoped
+   * models, so without it every write of the run matches nothing; it also
+   * marks the completion as a share run.
+   */
+  shareVisitor?: OperationCompletionShareVisitor;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
   snapshotStore?: ISnapshotStore | null;
   /**
@@ -208,6 +230,7 @@ export class HeterogeneousAgentService {
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
   private readonly traceRecorder: HeteroTraceRecorder;
+  private readonly shareVisitor?: OperationCompletionShareVisitor;
   private readonly userId: string;
   private readonly workspaceId?: string;
 
@@ -223,9 +246,12 @@ export class HeterogeneousAgentService {
     this.queuedFollowUpStarter = options.startQueuedFollowUp;
     this.agentOperationModel =
       options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.shareVisitor = options.shareVisitor;
+    const visitorScope = { includeShareVisitor: !!options.shareVisitor };
+    this.messageModel = new MessageModel(db, userId, workspaceId, undefined, visitorScope);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
-    this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.topicModel =
+      options.topicModel ?? new TopicModel(db, userId, workspaceId, undefined, visitorScope);
     this.traceRecorder = new HeteroTraceRecorder(
       options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
     );
@@ -299,6 +325,10 @@ export class HeterogeneousAgentService {
       );
     }
     for (const event of unpublished) {
+      if (isCleanRuntimeEnd(event)) {
+        this.persistenceHandler.markEventPublished(operationId, event);
+        continue;
+      }
       // Each event already carries operationId; the wire shape matches
       // gateway-driven runs, which also name the step's assistant row on
       // `stream_start` (see `publishData`).
@@ -705,7 +735,9 @@ export class HeterogeneousAgentService {
     // and on success the delivery-checker card + verify gate run against the task's
     // plan. `completeOperation` owns the (formerly hand-rolled) synthetic-state
     // build, so the goal+reply turns and trace aggregates are mapped in ONE place.
-    await new CompletionLifecycle(this.db, this.userId, this.workspaceId).completeOperation(
+    await new CompletionLifecycle(this.db, this.userId, this.workspaceId, {
+      includeShareVisitor: !!this.shareVisitor,
+    }).completeOperation(
       {
         agentId,
         assistantMessageId,
@@ -719,6 +751,7 @@ export class HeterogeneousAgentService {
         orchestrationRole,
         provider: totals?.provider,
         serializedHooks,
+        shareVisitor: this.shareVisitor,
         stepCount: totals?.stepCount ?? null,
         topicId,
         usage: {

@@ -61,6 +61,13 @@ describe('probeNativeRuntimes', () => {
     expect(codexProbe.close).toHaveBeenCalledOnce();
   });
 
+  /** @example The server tunnels stdio / local-network MCP calls only to a CLI that says it runs them. */
+  it('reports that this client runs tunneled MCP calls', async () => {
+    await expect(collectSystemInfo(uncachedProbe)).resolves.toMatchObject({
+      supportedToolCallTypes: ['tool', 'mcp'],
+    });
+  });
+
   /** @example A handshake timeout must not stall device discovery or advertise support. */
   it('bounds native Codex probing and closes the stalled client', async () => {
     vi.useFakeTimers();

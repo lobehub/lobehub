@@ -46,7 +46,7 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
   const setupSpies = (lifecycle: CompletionLifecycle) => {
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
-    vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+    vi.spyOn(verifyServices, 'scheduleVerifyOnCompletion').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
     vi.spyOn(console, 'warn').mockImplementation(function () {});
     return vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);

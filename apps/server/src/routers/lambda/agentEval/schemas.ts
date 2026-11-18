@@ -1,4 +1,7 @@
+import { evalToolManifestsSchema } from '@lobechat/types';
 import { z } from 'zod';
+
+import { evalMemoryFixtureSchema } from '@/server/services/agentEvalRun/evalMemory.schema';
 
 export const rubricTypeSchema = z.enum([
   'equals',
@@ -13,6 +16,7 @@ export const rubricTypeSchema = z.enum([
   'javascript',
   'python',
   'llm-rubric',
+  'rule-checklist',
   'factuality',
   'answer-relevance',
   'similar',
@@ -23,18 +27,69 @@ export const rubricTypeSchema = z.enum([
 
 export const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passthrough();
 
+export const evalCaseAgentConfigSchema = z
+  .object({
+    memory: z
+      .object({
+        effort: z.enum(['low', 'medium', 'high']).optional(),
+        enabled: z.boolean().optional(),
+        toolPermission: z.enum(['read-only', 'read-write']).optional(),
+      })
+      .strict()
+      .optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    plugins: z.array(z.string().trim().min(1)).optional(),
+    systemRole: z.string().optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+
+export const evalConnectorBindingSchema = z
+  .object({
+    connectorId: z.uuid(),
+    transport: z.enum(['mcp', 'lobe-bench']).optional(),
+  })
+  .strict();
+
+export const evalConnectorBindingsSchema = z.record(
+  z.string().trim().min(1).max(255),
+  evalConnectorBindingSchema,
+);
+
 export const evalCaseEnvironmentSchema = z
   .object({
+    agent: evalCaseAgentConfigSchema.optional(),
+    connectorBindings: evalConnectorBindingsSchema.optional(),
+    toolManifests: evalToolManifestsSchema.optional(),
     envPrompt: z.string().optional(),
+    memory: evalMemoryFixtureSchema.optional(),
+    mock: z
+      .object({ services: z.array(z.string().trim().min(1)).min(1) })
+      .strict()
+      .optional(),
+    sessionDate: z
+      .string()
+      .refine((value) => !Number.isNaN(Date.parse(value)), 'sessionDate must be an ISO date')
+      .optional(),
+    timezone: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'timezone must be a supported time zone')
+      .optional(),
+    // Legacy logical service requirements and timeouts. The selected connection,
+    // never case content, supplies the endpoint and credentials.
     toolForwarding: z
       .record(
         z.string().trim().min(1),
-        z
-          .object({
-            endpoint: z.string().url(),
-            timeoutMs: z.number().int().positive().optional(),
-          })
-          .strict(),
+        z.object({ timeoutMs: z.number().int().positive().optional() }).strict(),
       )
       .optional(),
   })
@@ -99,10 +154,19 @@ export const evalTestCaseMessagesSchema = z
     }
   });
 
+/**
+ * A case's own settings over its Environment. Mock connections belong to the
+ * Environment alone, so a case cannot bind its own; it only narrows the
+ * services it uses (`mock.services`).
+ */
+export const evalCaseOwnEnvironmentSchema = evalCaseEnvironmentSchema.omit({
+  connectorBindings: true,
+});
+
 export const evalTestCaseContentSchema = z.object({
   category: z.string().optional(),
   choices: z.array(z.string()).optional(),
-  environment: evalCaseEnvironmentSchema.optional(),
+  environment: evalCaseOwnEnvironmentSchema.optional(),
   expected: z.string().optional(),
   input: z.string(),
   messages: evalTestCaseMessagesSchema.optional(),

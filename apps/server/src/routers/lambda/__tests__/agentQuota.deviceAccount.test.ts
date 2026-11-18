@@ -29,7 +29,7 @@ vi.mock('@/database/models/agentQuota', () => ({
     return {};
   }),
   AgentProviderAccountModel: vi.fn(function () {
-    return {};
+    return { findById: vi.fn(async (id: string) => ({ id })) };
   }),
   AgentQuotaWindowModel: vi.fn(function () {
     return {};
@@ -39,6 +39,7 @@ vi.mock('@/database/models/agentQuota', () => ({
 const mockGetDeviceAccount = vi.fn();
 const mockSetDeviceAccount = vi.fn();
 const mockSelectForAgent = vi.fn();
+const mockResolveAgentAvailability = vi.fn();
 vi.mock('@/server/services/agentQuota', async (importOriginal) => {
   const { AccountNotSignedInOnDeviceError } = await importOriginal<typeof AgentQuotaModule>();
   return {
@@ -46,6 +47,7 @@ vi.mock('@/server/services/agentQuota', async (importOriginal) => {
     AgentQuotaService: vi.fn(function () {
       return {
         getDeviceAccount: mockGetDeviceAccount,
+        resolveAgentAvailability: mockResolveAgentAvailability,
         selectForAgent: mockSelectForAgent,
         setDeviceAccount: mockSetDeviceAccount,
       };
@@ -105,5 +107,34 @@ describe('agentQuota per-device account choice', () => {
       'agt-1',
       expect.objectContaining({ deviceId: 'row-a' }),
     );
+  });
+});
+
+describe('agentQuota.resolveAgentAvailability', () => {
+  it('judges the agent on the device row the gateway id names', async () => {
+    const availability = {
+      accountIds: ['acc-1'],
+      mode: 'pinned',
+      resetsAt: 1_794_985_200_000,
+      status: 'exhausted',
+    };
+    mockResolveAgentAvailability.mockResolvedValue(availability);
+
+    await expect(
+      caller().resolveAgentAvailability({ agentId: 'agt-1', deviceId: 'gateway-a' }),
+    ).resolves.toEqual(availability);
+    // An unknown device is judged as a run without one.
+    await caller().resolveAgentAvailability({ agentId: 'agt-1', deviceId: 'gateway-gone' });
+
+    expect(mockResolveAgentAvailability).toHaveBeenNthCalledWith(1, 'agt-1', {
+      deviceId: 'row-a',
+      modelScope: undefined,
+      provider: undefined,
+    });
+    expect(mockResolveAgentAvailability).toHaveBeenNthCalledWith(2, 'agt-1', {
+      deviceId: undefined,
+      modelScope: undefined,
+      provider: undefined,
+    });
   });
 });

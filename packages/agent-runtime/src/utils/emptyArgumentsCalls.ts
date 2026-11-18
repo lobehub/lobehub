@@ -19,6 +19,21 @@ export const EMPTY_ARGS_TOOL_CONTENT =
 export const EMPTY_ARGS_TOOL_REASON = 'tool_arguments_empty';
 
 /**
+ * Per-call variant of {@link EMPTY_ARGS_TOOL_CONTENT} that names the tool and
+ * the call id, so a rejected row in a parallel batch is diagnosable on its own
+ * (which call lost its arguments) instead of N identical messages.
+ */
+export const buildEmptyArgsToolContent = (toolCalling: ChatToolPayload): string => {
+  const toolName = toolCalling.apiName
+    ? `${toolCalling.identifier}.${toolCalling.apiName}`
+    : toolCalling.identifier;
+  return EMPTY_ARGS_TOOL_CONTENT.replace(
+    'the arguments of this call arrived empty',
+    `the arguments of this call (tool: ${toolName}, call id: ${toolCalling.id}) arrived empty`,
+  );
+};
+
+/**
  * JSON Schema keywords that cannot make an object with no properties
  * invalid, and are therefore safe to ignore when proving that `{}` is a
  * valid input. Any keyword outside this set — combinators (`oneOf` /

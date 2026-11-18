@@ -183,7 +183,6 @@ export interface OperationMetadata {
    * scheduling/execution index.
    */
   llmCalls?: number;
-
   // Progress information
   progress?: {
     current: number;
@@ -203,6 +202,13 @@ export interface OperationMetadata {
 
   // Performance information
   startTime: number;
+
+  /**
+   * Follow-up behavior is Steer, but this run cannot take a message mid-run
+   * (an agent with no native steer): its queue waits for the run end, and the
+   * tray says so.
+   */
+  steerUnsupported?: boolean;
 
   /**
    * Upstream stream retry state surfaced by heterogeneous agents while no
@@ -335,9 +341,29 @@ export interface QueuedMessage {
   /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
    *  keeps its gateway pin when the queue drains. */
   forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /**
+   * The untracked heterogeneous run this follow-up was handed to the server
+   * behind. A later refusal releases exactly that run's marker, so the local
+   * fallback send does not queue behind it again.
+   */
+  heldBehindOperationId?: string;
   id: string;
   interruptMode: 'soft' | 'hard';
+  /**
+   * A merged steer being written into a local agent session (Follow-up
+   * behavior: Steer): `delivering` until the agent reads it, `unknown` when
+   * the write failed and it may or may not have arrived. An `unknown` one is
+   * never sent on its own; the user sends it again or deletes it.
+   */
+  localSteer?: 'delivering' | 'unknown';
   metadata?: MessageMetadata;
+  /**
+   * A run already took this follow-up from the server queue and is handing it
+   * to the agent (a live Claude Code session reads it after its current step).
+   * It can no longer be edited, sent now or deleted; it leaves the tray once
+   * the agent confirms it, or turns back into a waiting entry if that fails.
+   */
+  serverDelivering?: boolean;
   /**
    * Where the server holds this follow-up: `appending` while it is being
    * handed to the server queue behind the running Gateway run, `server` once
@@ -358,9 +384,25 @@ export interface QueuedMessage {
   serverUnconfirmed?: boolean;
 }
 
+/**
+ * Whether the queued message is one a send can take: a steer that may already
+ * be with the agent (`localSteer: 'unknown'`) is never sent on its own, so it
+ * holds no turn and no queue hand-off back.
+ */
+export const isSendableQueuedMessage = (message: QueuedMessage): boolean =>
+  message.localSteer !== 'unknown';
+
 /** Whether only this client holds the queued message, so only it can send it. */
 export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
   !message.serverDelivery;
+
+/**
+ * Whether a run already took the queued message from the server and is
+ * handing it to the agent. Only a message the server still holds counts: one
+ * taken back to this client is waiting here again, whatever flag it kept.
+ */
+export const isServerDeliveringQueuedMessage = (message: QueuedMessage): boolean =>
+  message.serverDelivery === 'server' && !!message.serverDelivering;
 
 /**
  * Merged message ready for injection

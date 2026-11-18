@@ -576,14 +576,12 @@ describe('OperationTraceRecorder', () => {
     });
 
     it('re-pools a value whose introducing step never reached the store', async () => {
-      const first = await recordAcrossInvocations([{ input: { a: 1 }, output: [message(0)] }]);
+      await recordAcrossInvocations([{ input: { a: 1 }, output: [message(0)] }]);
       // The step that pooled message 0 was lost (crash before upload): the
       // next invocation starts from a partial that lacks it.
-      const lostPredecessor = first.steps.map((step) => ({ ...step, stepIndex: 99 })).slice(0, 0);
-
       const { steps } = await recordAcrossInvocations(
         [{ input: { a: 1 }, output: [message(0), message(1)] }],
-        lostPredecessor,
+        [],
       );
 
       expect(resolveAll(steps)[0]?.output).toEqual([message(0), message(1)]);

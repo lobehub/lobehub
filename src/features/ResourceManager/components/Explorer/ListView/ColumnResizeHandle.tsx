@@ -54,10 +54,18 @@ interface ColumnResizeHandleProps {
 }
 
 const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
-  ({ currentWidth, minWidth, maxWidth, onResize }) => {
+  ({ column, currentWidth, minWidth, maxWidth, onResize }) => {
     const [isDragging, setIsDragging] = useState(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
+    const suppressClickRef = useRef<((event: MouseEvent) => void) | null>(null);
+
+    const removeClickGuard = useCallback(() => {
+      if (!suppressClickRef.current) return;
+
+      document.removeEventListener('click', suppressClickRef.current, true);
+      suppressClickRef.current = null;
+    }, []);
 
     const handleMouseMove = useCallback(
       (e: MouseEvent) => {
@@ -72,7 +80,12 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
 
     const handleMouseUp = useCallback(() => {
       setIsDragging(false);
-    }, []);
+      // Resizing usually releases the pointer outside the 16px handle, so the
+      // browser dispatches the follow-up click on a common ancestor (the
+      // column header). Keep the capture guard alive for that click, then
+      // release it in case no click is dispatched at all.
+      setTimeout(removeClickGuard, 0);
+    }, [removeClickGuard]);
 
     const handleMouseDown = useCallback(
       (e: React.MouseEvent) => {
@@ -82,9 +95,22 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
         setIsDragging(true);
         startXRef.current = e.clientX;
         startWidthRef.current = currentWidth;
+
+        // Catch the click that follows this drag before it reaches the
+        // sortable column header, whatever element it is dispatched on.
+        removeClickGuard();
+        const suppressClick = (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          removeClickGuard();
+        };
+        suppressClickRef.current = suppressClick;
+        document.addEventListener('click', suppressClick, true);
       },
-      [currentWidth],
+      [currentWidth, removeClickGuard],
     );
+
+    useEffect(() => removeClickGuard, [removeClickGuard]);
 
     // Attach document-level event listeners when dragging
     useEffect(() => {
@@ -108,6 +134,8 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
     return (
       <div
         className={`${styles.handle} ${isDragging ? styles.handleDragging : ''}`}
+        data-column-resize-handle={column}
+        onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}
       />
     );

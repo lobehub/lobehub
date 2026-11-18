@@ -386,7 +386,7 @@ To sync manually: Actions → Upstream Sync → Run workflow.
 
 ## Troubleshooting
 
-**Deployment fails** — Check build logs in Vercel Dashboard → Deployments → click the failed deployment → Build Logs. Common causes: missing environment variables, TypeScript errors, or out of memory (fix with `NODE_OPTIONS=--max-old-space-size=4096`).
+**Deployment fails** — Check build logs in Vercel Dashboard → Deployments → click the failed deployment → Build Logs. Common causes: missing environment variables, TypeScript errors, or out of memory (fix with `NODE_OPTIONS=--max-old-space-size=4096`, preferably for the build step only: a heap flag that also applies at runtime overrides the parse worker's 768 MB memory limit, so file parsing then runs with the larger limit and logs `file_parse.heap_budget_overridden` once).
 
 **Function timeout** — If requests timeout on Hobby plan: upgrade to Pro (60s timeout), use faster AI models (e.g., GPT-4o-mini instead of GPT-4o), reduce max tokens, or ensure streaming is enabled.
 

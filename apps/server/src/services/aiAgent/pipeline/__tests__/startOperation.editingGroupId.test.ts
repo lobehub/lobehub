@@ -66,7 +66,7 @@ describe('startOperation › group builder editing target inheritance', () => {
   };
 
   it('recovers the parked run editing group when the request names none', async () => {
-    const { agentRuntimeService, ctx, deps, input } = setup('cg_edited');
+    const { agentRuntimeService, calls, ctx, deps, input } = setup('cg_edited');
 
     await startOperation(
       deps,
@@ -83,6 +83,7 @@ describe('startOperation › group builder editing target inheritance', () => {
       }),
     );
     // Read before the parked operation is retired.
+    expect(calls.indexOf('read-group-target')).toBeLessThan(calls.indexOf('retire-source'));
   });
 
   it('lets the parked target win without overwriting a request-named group', async () => {
@@ -130,13 +131,5 @@ describe('startOperation › group builder editing target inheritance', () => {
         appContext: expect.not.objectContaining({ editingGroupId: expect.anything() }),
       }),
     );
-  });
-
-  it('reads the durable target before retiring the parked operation', async () => {
-    const { calls, ctx, deps, input } = setup('cg_edited');
-
-    await startOperation(deps, ctx, input({ approvalSourceOperationId: 'op-parked' }));
-
-    expect(calls.indexOf('read-group-target')).toBeLessThan(calls.indexOf('retire-source'));
   });
 });

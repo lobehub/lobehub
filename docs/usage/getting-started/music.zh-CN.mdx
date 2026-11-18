@@ -1,0 +1,175 @@
+---
+title: 音乐生成
+description: 在音乐页面通过 fal 使用 MiniMax Music 与 ACE-Step 1.5 生成歌曲，或通过 LobeHub API 提交并轮询音乐生成任务。
+tags:
+  - LobeHub
+  - 音乐生成
+  - 文生音乐
+  - fal
+  - MiniMax Music
+  - ACE-Step
+---
+
+# 音乐生成
+
+**音乐** 页面可以根据提示词、歌词与风格生成可播放的歌曲。页面会列出所有已启用的 **音乐**（`text2music`）类型模型。音乐模型由 [fal](https://fal.ai/) 服务商提供：MiniMax Music 与 ACE-Step 1.5，均通过 fal 的队列 API 运行。
+
+<Callout type={'info'}>
+  fal 是唯一的音乐通道。MiniMax 官方音乐接口已对新用户停售，因此 LobeHub 通过 fal 调用 MiniMax Music，而不是直连 MiniMax。MiniMax 服务商的密钥不会用于音乐生成。
+</Callout>
+
+## 配置 fal
+
+### 获取 fal 密钥
+
+1. 在 [fal.ai](https://fal.ai/) 注册，并在 **Billing** 中充值。账户余额不足时，音乐请求会返回余额耗尽错误。
+2. 打开 [API Keys](https://fal.ai/dashboard/keys)，点击 **Add key** 并复制密钥。密钥只显示一次。fal 官方 SDK 从 `FAL_KEY` 变量读取这个密钥。
+
+### 在 LobeHub 中配置
+
+**在设置页配置（任何部署方式）：**
+
+1. 打开 **设置 → AI 服务商 → Fal**。
+2. 开启服务商，把密钥粘贴到 **API Key**，点击 **连通性检查** 旁的 **检查**，密钥有效时显示 **检查通过**。fal 没有对话模型，所以检查会用你的密钥调用 fal 平台 API，而不是发送对话消息；密钥错误时检查不通过。
+3. 打开 fal 的 **模型列表**，切换到 **音乐** 标签。下面四个音乐模型默认已启用。
+
+**自托管服务端** 可以把密钥设为环境变量，所有用户无需填写密钥即可使用 fal。LobeHub 读取 `FAL_API_KEY`，也接受 fal 官方使用的 `FAL_KEY`：
+
+```bash
+# Docker：把密钥写入 --env-file 指定的环境变量文件
+echo 'FAL_KEY=your-fal-key' >> lobehub.env
+docker run -it -d -p 3210:3210 --network pg --env-file lobehub.env --name lobehub lobehub/lobehub
+```
+
+```yaml
+# docker-compose.yml → services.lobe.environment
+FAL_KEY: ${FAL_KEY}
+```
+
+`ENABLED_FAL` 与 `FAL_MODEL_LIST` 见 [fal 环境变量](/zh/docs/self-hosting/environment-variables/model-provider#fal)。
+
+## 模型
+
+| 模型                                 | ID                          | 输入                         | 价格         |
+| ---------------------------------- | --------------------------- | -------------------------- | ---------- |
+| MiniMax Music 2.6                  | `fal-ai/minimax-music/v2.6` | 风格描述、歌词、帮我写歌词、纯音乐、音频设置     | 每首 $0.15   |
+| MiniMax Music 3                    | `minimax/music-3`           | 风格描述、歌词（必填）、时长最长 300 秒     | 每秒 $0.002  |
+| MiniMax Music 01 (Reference Audio) | `fal-ai/minimax-music`      | 歌词（必填，最多 600 字符）、参考音频（必填）  | 每首 $0.035  |
+| ACE-Step 1.5                       | `fal-ai/ace-step-1.5`       | 描述、风格标签、歌词、纯音乐、时长 10–600 秒 | 每秒 $0.0006 |
+
+在 fal 上只有 MiniMax Music 01 接受参考歌曲，MiniMax Music 2.6 与 Music 3 都不支持。想按某首现有歌曲的风格生成时，选择 **MiniMax Music 01 (Reference Audio)**。
+
+### MiniMax Music 参数
+
+| 页面字段                | `params` 键                          | 说明                                                                                           |
+| ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| 提示词                 | `prompt`                            | 风格描述：曲风、情绪、乐器、人声。2.6（10–2000 字符）与 Music 3 必填。Music 01 仅在歌词为空时使用。                             |
+| **歌词**              | `lyrics`                            | 用 `[Verse]`、`[Chorus]`、`[Bridge]` 标记段落。2.6 最多 3500 字符，Music 01 最多 600。Music 3 与 Music 01 必填。 |
+| **帮我写歌词**           | `autoLyrics`                        | 仅 2.6。歌词留空时由 MiniMax 根据提示词写词。                                                                |
+| **纯音乐**             | `instrumental`                      | 仅 2.6。无人声，不发送歌词。                                                                             |
+| **时长**              | `duration`                          | 仅 Music 3，1–300 秒。                                                                           |
+| **参考音频**            | `referenceAudioUrl`                 | 仅 Music 01。含伴奏与人声、长于 15 秒的 MP3 或 WAV。可上传文件或粘贴公开链接，生成的歌曲沿用其风格。                                |
+| **音频格式 / 采样率 / 码率** | `format` / `sampleRate` / `bitrate` | 仅 2.6。`mp3` 或 `wav`；16000–44100 Hz；32–256 kbps。                                              |
+
+### ACE-Step 1.5 参数
+
+| 页面字段    | `params` 键     | 说明                                                         |
+| ------- | -------------- | ---------------------------------------------------------- |
+| 提示词     | `prompt`       | 歌曲描述，最多 512 字符。                                            |
+| **风格**  | `style`        | 逗号分隔的风格标签，如 `synthwave, female vocals, 120 BPM`，最多 256 字符。 |
+| **歌词**  | `lyrics`       | 最多 4096 字符，支持 50 多种语言。                                     |
+| **纯音乐** | `instrumental` | 无人声。LobeHub 会把 `[Instrumental]` 作为歌词发送。                    |
+| **时长**  | `duration`     | 10–600 秒，默认 30 秒。按实际存储的时长计费。                               |
+
+提示词与风格会合并成一段描述发送给 ACE-Step。
+
+## 在音乐页面生成
+
+1. 打开 **音乐** 页面：在创作模式切换中与 **图片**、**视频** 并列，也可以直接访问 `/music`。
+2. 在 **模型** 中选择一个 fal 模型。页面默认打开上次使用的模型，否则选中第一个已启用的音乐模型。
+3. 在提示词输入框描述歌曲，例如 `一首关于深夜列车的温暖原声流行歌`。
+4. 填写所选模型显示的字段。每个模型声明自己支持的参数，只有模型支持的字段才会出现（见上表）。**时长** 与音频格式等设置在模型选择旁的 **音频设置** 按钮里。**参考音频** 可以上传文件，或粘贴音频链接后按回车。参考音频由 fal 自行下载，因此粘贴的链接必须公网可访问；上传文件仅在 LobeHub 文件存储对外提供公开链接时可用。
+5. 点击 **生成**。草稿需要包含提示词、歌词、风格或参考音频之一，且所有必填字段已填写，按钮才可用。歌曲卡片先显示 **排队中…**，再显示 **生成中…**。MiniMax Music 通常不到一分钟，ACE-Step 1.5 可能需要三分钟左右。LobeHub 在后台轮询 fal，可以离开页面。
+6. 歌曲完成后，卡片显示封面、标题、时长、标签和播放器。点击播放即可试听，也可以点击播放器上的下载按钮保存文件。文件存储在 LobeHub 中，而不只在 fal。
+
+生成失败的歌曲会显示原因，并提供 **重试** 与 **复制错误信息**。如果 fal 拒绝了密钥，卡片会显示 **Fal API Key 无效或未填写**，并通过 **前往设置** 打开服务商设置。其他 fal 错误（余额不足、内容审核、限流、超时）也会显示在卡片上。
+
+## 通过 API 生成
+
+音乐页面调用的是 LobeHub 的 `lambda` tRPC API。你可以使用 **设置 → API Keys** 中创建的 LobeHub API Key 调用，密钥需要 `model:invoke` 权限。先设置以下变量：
+
+```bash
+export LOBEHUB_URL=https://your-lobehub.example.com   # 或 http://localhost:3010
+export LOBEHUB_API_KEY=sk-lh-xxxxxxxxxxxxxxxx
+```
+
+**1. 创建音乐话题。** 歌曲归属于类型为 `music` 的话题。
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/generationTopic.createTopic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{"type":"music","title":"API test"}}'
+# → {"result":{"data":{"json":"<generationTopicId>"}}}
+```
+
+**2. 提交生成。** 把 `provider` 设为 `fal`，`model` 设为一个已启用的 fal 音乐模型。`params` 只能包含该模型声明的参数，未知字段会被拒绝。
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"fal",
+    "model":"fal-ai/minimax-music/v2.6",
+    "params":{
+      "prompt":"Warm acoustic pop, gentle female vocals, 90 BPM",
+      "lyrics":"[Verse]\nCity lights are fading slow\n[Chorus]\nRide the night train home"
+    }}}'
+```
+
+同一接口的其他 `params` 示例：
+
+```jsonc
+// ACE-Step 1.5：风格标签 + 60 秒时长
+{ "prompt": "Driving night-time synth track", "style": "synthwave, female vocals, 120 BPM",
+  "lyrics": "[Verse]\nNeon on the water", "duration": 60 }
+
+// ACE-Step 1.5：纯音乐
+{ "prompt": "Calm lo-fi piano for studying", "style": "lo-fi, piano, rain", "instrumental": true, "duration": 30 }
+
+// MiniMax Music 01：按参考歌曲风格生成
+{ "lyrics": "[Verse]\nWalking home under the summer rain", "referenceAudioUrl": "https://example.com/reference.mp3" }
+```
+
+响应包含批次信息，`data.generations` 中每首歌一项，每项有 `id`（生成 ID）和 `asyncTaskId`：
+
+```json
+{ "result": { "data": { "json": {
+  "success": true,
+  "data": {
+    "batch": { "id": "<batchId>", "model": "<model>", "provider": "<provider>" },
+    "generations": [{ "id": "<generationId>", "asyncTaskId": "<asyncTaskId>" }]
+  }
+} } } }
+```
+
+**3. 轮询直到每首歌完成。** 服务端负责轮询服务商，你只需读取任务状态。对 `data.generations` 中的每一项调用以下接口，直到 `status` 为 `success` 或 `error`：
+
+```bash
+curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId>","generationId":"<generationId>"}}'
+```
+
+`status` 依次为 `pending` → `processing` → `success`；服务商拒绝的请求会变为 `error`。成功时，`generation.asset.url` 是保存在 LobeHub 中的音频文件，服务商返回时 `generation.asset` 还包含时长、标题、封面和标签。失败时，`error.body.detail` 是 fal 返回的信息；密钥无效时 `error.body.errorType` 为 `InvalidProviderAPIKey`。
+
+## 常见问题
+
+| 现象                      | 原因与处理                                                  |
+| ----------------------- | ------------------------------------------------------ |
+| 音乐页面没有模型                | fal 未开启或音乐模型被关闭。开启 fal，并检查 **模型列表 → 音乐**。              |
+| **Fal API Key 无效或未填写**  | 密钥错误或已撤销。在 **设置 → AI 服务商 → Fal** 填入有效密钥，或设置 `FAL_KEY`。 |
+| 余额耗尽错误                  | fal 账户没有余额。在 fal **Billing** 中充值。                      |
+| MiniMax Music 01 拒绝参考音频 | 使用长于 15 秒、同时包含伴奏与人声的 MP3 或 WAV。                        |

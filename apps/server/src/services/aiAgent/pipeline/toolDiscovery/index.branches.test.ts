@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as MechaModule from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import {
   buildConnectorOwnershipPrompt,
@@ -79,6 +80,9 @@ const { connectorToolState } = vi.hoisted(() => ({
 // Permission patching builds its own model rather than using `deps`.
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: class {
+    static forEvaluation() {
+      return new this();
+    }
     queryByConnector = vi.fn(async () => connectorToolState.tools);
   },
 }));
@@ -130,6 +134,8 @@ const skillManifest = (identifier: string) => ({
 interface RunOptions {
   agentConfig?: Record<string, unknown>;
   appContext?: Record<string, unknown>;
+  /** The `auto` entries of the agent's plugins — what turns a connector on. */
+  autoSkillIds?: string[];
   canUseDevice?: boolean;
   composioManifests?: unknown[];
   connectorResolve?: (ids: string[]) => unknown[];
@@ -175,6 +181,7 @@ const run = (options: RunOptions = {}) => {
       agentConfig: { chatConfig: {}, id: 'agent-1', plugins: [], ...options.agentConfig },
       appContext: options.appContext,
       assistantMessageId: 'assistant-1',
+      autoSkillIds: options.autoSkillIds ?? [],
       canUseDevice: options.canUseDevice ?? false,
       model: 'test-model',
       prompt: 'hello',
@@ -277,6 +284,7 @@ describe('discoverTools — connector permissions and ownership', () => {
       manifest: skillManifest('community-mcp'),
     };
     const result = await run({
+      autoSkillIds: ['lobehub-notion', 'composio-gmail', 'community-mcp'],
       composioManifests: [skillManifest('composio-gmail')],
       connectorResolve: (ids) =>
         ids.map((identifier, index) => ({ id: `conn-${index}`, identifier })),
@@ -313,6 +321,118 @@ describe('discoverTools — connector permissions and ownership', () => {
     const result = await run().promise;
 
     expect(result.connectorOwnershipNote).toBeUndefined();
+  });
+});
+
+describe('discoverTools — connectors are opt-in per agent', () => {
+  const plugin = (identifier: string) => ({
+    customParams: {},
+    identifier,
+    manifest: skillManifest(identifier),
+  });
+  const sources = {
+    composioManifests: [skillManifest('composio-gmail')],
+    installedPlugins: [plugin('community-mcp')],
+    lobehubSkillManifests: [skillManifest('lobehub-notion')],
+  };
+  const engineManifestIds = () =>
+    lastEngineOptions().additionalManifests.map((m: any) => m.identifier);
+  const engineInstalledIds = () =>
+    (vi.mocked(createServerAgentToolsEngine).mock.calls.at(-1)?.[0] as any).installedPlugins.map(
+      (p: any) => p.identifier,
+    );
+
+  it('keeps a connector the agent never turned on out of the run', async () => {
+    const result = await run(sources).promise;
+
+    expect(engineManifestIds()).toEqual([]);
+    expect(engineInstalledIds()).toEqual([]);
+    expect(result.lobehubSkillManifests).toEqual([]);
+    expect(result.composioManifests).toEqual([]);
+    expect(Object.keys(result.toolManifestMap)).not.toContain('community-mcp');
+  });
+
+  it('lets a connector that is on be discovered without invoking it up front', async () => {
+    const result = await run({
+      ...sources,
+      autoSkillIds: ['lobehub-notion', 'composio-gmail', 'community-mcp'],
+    }).promise;
+
+    expect(engineManifestIds()).toEqual(['lobehub-notion', 'composio-gmail']);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).not.toContain('lobehub-notion');
+    expect(result.agentPlugins).not.toContain('composio-gmail');
+    expect(result.agentPlugins).not.toContain('community-mcp');
+  });
+
+  it('reads a connector pinned before the two-state switch as on, not invoked up front', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { plugins: ['lobehub-notion', 'community-mcp', 'lobe-image-generation'] },
+    }).promise;
+
+    expect(engineManifestIds()).toEqual(['lobehub-notion']);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    // A pinned builtin tool keeps its pin; only connectors lost that state.
+    expect(result.agentPlugins).toEqual(['lobe-image-generation']);
+  });
+
+  it('resolves only the connectors that are on as discoverable', async () => {
+    const resolveByIdentifiers = vi.fn((_ids: string[]) => []);
+
+    await run({
+      ...sources,
+      autoSkillIds: ['custom-mcp'],
+      connectorResolve: resolveByIdentifiers,
+    }).promise;
+
+    expect(resolveByIdentifiers).toHaveBeenCalledTimes(1);
+    expect(resolveByIdentifiers.mock.calls[0][0]).toEqual(['custom-mcp']);
+  });
+
+  it('keeps opted-in connectors discoverable despite a legacy manual preference', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { chatConfig: { skillActivateMode: 'manual' }, plugins: ['lobehub-notion'] },
+      autoSkillIds: ['community-mcp'],
+    }).promise;
+
+    expect(result.agentPlugins).toEqual([]);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(engineManifestIds()).toEqual(['lobehub-notion']);
+  });
+
+  it('invokes a connector that is on directly in custom mode, which has no activator either', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { chatConfig: { toolMode: 'custom' }, plugins: ['lobehub-notion'] },
+      autoSkillIds: ['community-mcp'],
+    }).promise;
+
+    expect(result.agentPlugins).toEqual(
+      expect.arrayContaining(['lobehub-notion', 'community-mcp']),
+    );
+    expect(result.agentPlugins).not.toContain('composio-gmail');
+  });
+
+  it('keeps a connector the turn mentions even when the agent has it off', async () => {
+    const result = await run({
+      ...sources,
+      input: { selectedToolIds: ['community-mcp'] },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toContain('community-mcp');
+  });
+
+  it('leaves an exact toolset untouched by the agent switches', async () => {
+    const result = await run({
+      ...sources,
+      input: { exclusivePluginIds: ['community-mcp'] },
+    }).promise;
+
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
+    expect(result.agentPlugins).toEqual(['community-mcp']);
   });
 });
 
@@ -552,4 +672,55 @@ describe('discoverTools — credential snapshot', () => {
     expect(result.credentialFactsPromise).toBeUndefined();
     expect(credsList).not.toHaveBeenCalled();
   });
+});
+
+describe('discoverTools — exact eval mock bindings', () => {
+  it.each(['notion', 'lobe-web-browsing'])(
+    'replaces ordinary manifests for bound alias %s and skips identifier resolution',
+    async (alias) => {
+      const snapshots = {
+        [alias]: {
+          connectorId: 'fixed-uuid',
+          datasetId: 'dataset',
+          fingerprint: 'fixed-contract',
+          transport: 'mcp' as const,
+        },
+      };
+      const resolve = vi
+        .spyOn(AgentEvalConnectorService.prototype, 'resolveBindings')
+        .mockResolvedValue({
+          manifests: [{ ...skillManifest(alias), type: 'mcp' } as never],
+          snapshots,
+        });
+      const requested: string[] = [];
+      try {
+        const result = await run({
+          agentConfig: { plugins: [alias] },
+          connectorResolve: (ids) => {
+            requested.push(...ids);
+            return [];
+          },
+          input: { evalConnectorSnapshots: snapshots },
+          installedPlugins: [
+            {
+              identifier: alias,
+              manifest: {
+                ...skillManifest(alias),
+                api: [{ name: 'realAccountWrite', parameters: {} }],
+              },
+            },
+          ],
+        }).promise;
+        expect(requested).not.toContain(alias);
+        expect(
+          result.toolManifestMap[alias].api.map((tool: { name: string }) => tool.name),
+        ).toEqual(['doThing']);
+        expect(JSON.stringify(result.toolManifestMap[alias])).not.toMatch(
+          /mcpParams|realAccountWrite/,
+        );
+      } finally {
+        resolve.mockRestore();
+      }
+    },
+  );
 });

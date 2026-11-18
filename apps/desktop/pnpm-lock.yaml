@@ -79,6 +79,9 @@ importers:
       '@lobechat/device-identity':
         specifier: workspace:*
         version: link:../../packages/device-identity
+      '@lobechat/device-mcp':
+        specifier: workspace:*
+        version: link:../../packages/device-mcp
       '@lobechat/device-sandbox':
         specifier: workspace:*
         version: link:../../packages/device-sandbox
@@ -392,6 +395,22 @@ importers:
       node-machine-id:
         specifier: ^1.1.12
         version: 1.1.12
+    devDependencies:
+      vitest:
+        specifier: 5.0.3
+        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(happy-dom@20.14.5)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  ../../packages/device-mcp:
+    dependencies:
+      '@lobechat/const':
+        specifier: workspace:*
+        version: link:../const
+      '@lobechat/utils':
+        specifier: workspace:*
+        version: link:../utils
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
     devDependencies:
       vitest:
         specifier: 5.0.3
@@ -728,8 +747,8 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
       chroma-js:
-        specifier: ^3.2.0
-        version: 3.2.0
+        specifier: ^3.3.0
+        version: 3.3.0
       countries-and-timezones:
         specifier: ^3.9.0
         version: 3.10.0
@@ -834,6 +853,9 @@ importers:
       '@lobechat/device-identity':
         specifier: workspace:*
         version: link:../../packages/device-identity
+      '@lobechat/device-mcp':
+        specifier: workspace:*
+        version: link:../../packages/device-mcp
       '@lobechat/eval-rubric':
         specifier: workspace:*
         version: link:../../packages/eval-rubric
@@ -4160,6 +4182,9 @@ packages:
 
   chroma-js@3.2.0:
     resolution: {integrity: sha512-os/OippSlX1RlWWr+QDPcGUZs0uoqr32urfxESG9U93lhUfbnlyckte84Q8P1UQY/qth983AS1JONKmLS4T0nw==}
+
+  chroma-js@3.3.0:
+    resolution: {integrity: sha512-afEEP0zHO4dxwrqTllKSFWs83+u+htEsmyvSe8IPjKjrfy3qmNk+vpWAdpbA2fJa14LTgkGyemC74J6v3HSUZA==}
 
   chromium-pickle-js@0.2.0:
     resolution: {integrity: sha512-1R5Fho+jBq0DDydt+/vHWj5KJNJCKdARKOCwZUen84I5BreWoLqRLANH1U87eJy1tiASPtMnGqJJq0ZsLoRPOw==}
@@ -11539,6 +11564,8 @@ snapshots:
   chownr@3.0.0: {}
 
   chroma-js@3.2.0: {}
+
+  chroma-js@3.3.0: {}
 
   chromium-pickle-js@0.2.0: {}
 

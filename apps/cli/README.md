@@ -2,6 +2,50 @@
 
 LobeHub command-line interface.
 
+## Release to npm
+
+The `Release CLI` GitHub Actions workflow publishes to npm's `latest` tag when
+CLI production inputs change on `canary`. Merge the feature or fix PR after its
+checks and required product acceptance; no separate version-bump PR is needed.
+
+Automatic inputs are `apps/cli/src/**`, build scripts, `package.json`, the CLI
+workspace/TypeScript/tsdown configuration, and the release workflow/helper.
+Tests, fixtures, Markdown documentation, E2E-only changes and generated manuals
+are excluded. Changes only to shared workspace packages or the offline report
+can be released by manually dispatching `Release CLI` on `canary`.
+
+CI allocates the next patch above the highest stable npm version (for example,
+`0.0.78` → `0.0.79`). A higher stable version intentionally set in `package.json`
+is honored for a minor/major release. The generated version is used for the
+bundle and manual; CI does not commit version changes back to the branch. The
+checked-in version is therefore a development baseline, not necessarily npm's
+latest release. Use `npm view @lobehub/cli version` to check the published version.
+
+The workflow tests the bundle, runs the complete `prepublishOnly` build, checks
+the built CLI and packs it. Immediately before publication it creates a
+`cli-release/v<version>` Git tag pointing at the source commit. The tag reserves
+the version for retries; the published package also records `gitHead`.
+Publication is serialized and the workflow waits up to ten minutes for npm to
+expose the matching version/source under `latest`. A successful upload alone is
+not reported as a verified publication.
+
+Use **Re-run failed jobs** on the original run to recover a failed publication.
+A retry reuses its reserved version or skips it if already published. If npm is
+still processing an earlier reserved release, a different commit's release stops
+with a recovery message instead of allocating another version. Older reruns do
+not publish over newer source commits. Build/test failures before reservation
+can be fixed by the next PR normally. Do not delete reservation tags to retry a
+release. Registry errors stop the workflow.
+
+GitHub may coalesce queued runs while another release is running; the surviving
+newer commit includes the earlier merged changes. This publishes source snapshots,
+not necessarily one version per merged PR.
+
+Publishing uses the repository's `NPM_TOKEN` secret, as the SDK release does.
+It must have publish permission for `@lobehub/cli` and support unattended
+publishing under the package's npm authentication policy. PR previews continue
+to publish separately to `pkg.pr.new`.
+
 ## Update a connected device
 
 ```bash

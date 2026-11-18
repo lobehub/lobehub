@@ -9,7 +9,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -39,11 +39,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface SideBarHeaderLayoutProps {
+  /** `backTo` is a literal path that already carries its workspace scope. */
+  backEscape?: boolean;
   backTo?: string;
   breadcrumb?: BreadcrumbItem[];
   /** Override the leading home breadcrumb item (defaults to home icon → `/`). */
   homeItem?: BreadcrumbItem;
   left?: ReactNode;
+  /** Runs before the back navigation; `preventDefault()` cancels it. */
+  onBack?: (event: MouseEvent) => void;
   right?: ReactNode;
   showBack?: boolean;
   showTogglePanelButton?: boolean;
@@ -54,6 +58,8 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     left,
     right,
     backTo = '/',
+    backEscape,
+    onBack,
     showBack = true,
     breadcrumb = [],
     homeItem,
@@ -70,7 +76,14 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
           overflow: 'hidden',
         }}
       >
-        {showBack && <BackButton size={DESKTOP_HEADER_ICON_SMALL_SIZE} to={backTo} />}
+        {showBack && (
+          <BackButton
+            escape={backEscape}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            to={backTo}
+            onClick={onBack}
+          />
+        )}
         {left && typeof left === 'string' ? (
           <Text ellipsis fontSize={16} weight={500}>
             {left}

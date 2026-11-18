@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { describe, expect, it } from 'vitest';
 
-import { spawnDshAcpSession } from './dshAcpSession';
+import { listDshAcpModels, spawnDshAcpSession } from './dshAcpSession';
 
 /**
  * End-to-end against a REAL DeepSeek Harness runtime — real model calls and
@@ -79,4 +79,32 @@ describe.runIf(runnable)('spawnDshAcpSession — live harness', () => {
     });
     expect(await readFile(path.join(cwd, 'proof.txt'), 'utf8')).toContain('dsh-e2e-proof');
   }, 240_000);
+});
+
+/**
+ * Live catalog discovery against a real CLI. Self-skips unless `DSH_BIN`
+ * points at a DeepSeek Harness install — no API key needed. Run it after a
+ * harness upgrade to catch ACP catalog-shape drift:
+ *
+ *   DSH_BIN="$(command -v dsh)" DSH_HOME=/tmp/dsh-e2e bunx vitest run \
+ *     src/spawn/dshAcpSession.e2e.test.ts -t "enumerates the configured model catalog"
+ */
+describe.skipIf(!process.env.DSH_BIN)('listDshAcpModels — live harness', () => {
+  it('enumerates the configured model catalog over ACP', async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), 'dsh-e2e-'));
+
+    const models = await listDshAcpModels({
+      commandPath: process.env.DSH_BIN!,
+      cwd,
+      env: process.env,
+      timeoutMs: 60_000,
+    });
+
+    expect(models.length).toBeGreaterThan(0);
+    for (const model of models) {
+      expect(model.id).toBeTruthy();
+      expect(model.modelId).toBeTruthy();
+      expect(model.providerId).toBeTruthy();
+    }
+  }, 90_000);
 });

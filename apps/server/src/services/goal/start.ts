@@ -20,6 +20,8 @@ export interface StartGoalRolloutInput {
   probeNodeIds: string[];
   /** The one procedure every unit follows; the batch's Template. */
   recipe: string;
+  /** A short kebab-case name for the plan skill, saying what the recipe does. */
+  skillName?: string;
   /** Overrides the goal's own `config.rollout.trigger`; `off` is not a way to start a batch. */
   trigger?: 'canary' | 'full';
   /** Seeds that become roster units; every other seed when omitted. Seeds left out stay ordinary tasks. */
@@ -298,6 +300,7 @@ export class GoalStartService {
       planSkillOwner: {
         db,
         goalTitle: goal.title,
+        skillName: rollout.skillName,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },

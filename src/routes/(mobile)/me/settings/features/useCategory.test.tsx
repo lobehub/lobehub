@@ -65,7 +65,10 @@ describe('mobile settings useCategory', () => {
       .flatMap((group) => group.items)
       .find((item) => item.key === SettingsTabs.Provider);
 
+    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
+
     expect(provider).toBeDefined();
+    expect(keys).not.toContain(SettingsTabs.OAuthApps);
 
     provider?.onClick?.();
 
@@ -80,16 +83,6 @@ describe('mobile settings useCategory', () => {
     const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
 
     expect(keys).not.toContain(SettingsTabs.Provider);
-  });
-
-  it('hides OAuth Apps by default', () => {
-    const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true),
-    });
-
-    const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
-
-    expect(keys).not.toContain(SettingsTabs.OAuthApps);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

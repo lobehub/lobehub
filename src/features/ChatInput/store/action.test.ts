@@ -6,9 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installMarketMentions, MarketMentionInstallError } from '@/services/mentionMarketInstall';
 import { useAgentStore } from '@/store/agent';
+import { useFileStore } from '@/store/file';
 import { systemAgentSelectors } from '@/store/user/selectors';
+import type { UploadFileItem } from '@/types/files/upload';
 
 import { getDraft, saveDraft } from '../draftStorage';
+import { SYNC_IMAGE_REF_TAGS_COMMAND } from '../InputEditor/ImageRefTag/ImageRefTagPlugin';
 import { getInputHistory } from '../inputHistoryStorage';
 import { createStore, selectors } from '.';
 
@@ -16,6 +19,14 @@ vi.mock('@/services/mentionMarketInstall', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   installMarketMentions: vi.fn(),
 }));
+
+const createHelloEditor = () => ({
+  cleanDocument: vi.fn(),
+  dispatchCommand: vi.fn(),
+  focus: vi.fn(),
+  getLexicalEditor: () => ({}),
+  getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
+});
 
 describe('ChatInput store actions', () => {
   beforeEach(() => {
@@ -49,6 +60,7 @@ describe('ChatInput store actions', () => {
     const editorData = { root: { children: [{ text: 'Hello' }] } };
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : editorData)),
@@ -72,6 +84,7 @@ describe('ChatInput store actions', () => {
   it('drops the stored draft once the send handler clears the composer', () => {
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
@@ -93,6 +106,7 @@ describe('ChatInput store actions', () => {
   it('keeps the stored draft when the send handler declines to clear the composer', () => {
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
@@ -117,6 +131,7 @@ describe('ChatInput store actions', () => {
     const editorData = { root: { children: [{ text: 'Hello' }] } };
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : editorData)),
@@ -144,6 +159,7 @@ describe('ChatInput store actions', () => {
     });
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) =>
@@ -162,12 +178,7 @@ describe('ChatInput store actions', () => {
   });
 
   it('does not record history when the input history feature is disabled', () => {
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       feature: { inputCompletion: true, inputHistory: false, mention: true, slash: true },
@@ -216,7 +227,7 @@ describe('ChatInput store actions', () => {
 
     store.getState().handleSendButton();
 
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(dispatchCommand).not.toHaveBeenCalledWith(KEY_ESCAPE_COMMAND, expect.anything());
   });
 
   // Regression: sendButtonProps.disabled mirrors editor content through the
@@ -224,12 +235,7 @@ describe('ChatInput store actions', () => {
   // mirror still reads "empty" and used to be silently dropped.
   it('sends via resolveSendBlocked even when the stale disabled mirror says blocked', () => {
     const onSend = vi.fn();
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       onSend,
@@ -244,12 +250,7 @@ describe('ChatInput store actions', () => {
 
   it('blocks the send when resolveSendBlocked reports blocked', () => {
     const onSend = vi.fn();
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       onSend,
@@ -264,12 +265,7 @@ describe('ChatInput store actions', () => {
 
   it('keeps gating on sendButtonProps.disabled when no resolver is provided', () => {
     const onSend = vi.fn();
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
       onSend,
@@ -282,12 +278,7 @@ describe('ChatInput store actions', () => {
   });
 
   it('does not record history when no send handler is configured', () => {
-    const editor = {
-      cleanDocument: vi.fn(),
-      focus: vi.fn(),
-      getLexicalEditor: () => ({}),
-      getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
-    };
+    const editor = createHelloEditor();
     const store = createStore({
       editor: editor as unknown as IEditor,
     });
@@ -387,7 +378,7 @@ describe('ChatInput store actions', () => {
       await vi.waitFor(() => expect(onSend).toHaveBeenCalledOnce());
       const { getEditorData, getMarkdownContent } = onSend.mock.calls[0][0];
       expect(getMarkdownContent()).toBe('<mention name="Writer" id="agt_writer" /> hi');
-      expect(getEditorData().root.children[0].children[0].metadata).toEqual({
+      expect(getEditorData().root.children[0].children[0].metadata).toStrictEqual({
         id: 'agt_writer',
         label: 'Writer',
         type: 'agent',
@@ -478,5 +469,109 @@ describe('ChatInput store actions', () => {
       expect(editor.cleanDocument).not.toHaveBeenCalled();
       expect(getInputHistory()).toEqual([]);
     });
+  });
+});
+
+describe('sending while uploads are in flight', () => {
+  const KEY = 'main_agt_a_tpc_1';
+  const upload = (id: string, status: UploadFileItem['status']) =>
+    ({
+      file: { name: `${id}.png`, type: 'image/png' },
+      id,
+      previewUrl: `blob:${id}`,
+      status,
+    }) as unknown as UploadFileItem;
+  const setUploads = (files: UploadFileItem[]) =>
+    useFileStore.setState({ chatUploadFileListByContext: { [KEY]: files } });
+
+  beforeEach(() => {
+    localStorage.clear();
+    setUploads([]);
+  });
+
+  it('queues the send until every upload settles, then sends with the settled numbering', () => {
+    const editor = createHelloEditor();
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      draftKey: KEY,
+      editor: editor as unknown as IEditor,
+      onSend,
+      queueSendWhileUploading: true,
+    });
+    setUploads([upload('a', 'uploading'), upload('b', 'uploading')]);
+
+    store.getState().handleSendButton();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(selectors.isSendQueuedForUploads(store.getState())).toBe(true);
+
+    // A second press while queued neither sends nor queues twice.
+    store.getState().handleSendButton();
+    setUploads([upload('a', 'error'), upload('b', 'uploading')]);
+    expect(onSend).not.toHaveBeenCalled();
+
+    setUploads([upload('a', 'error'), upload('b', 'success')]);
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(selectors.isSendQueuedForUploads(store.getState())).toBe(false);
+    // The failed image takes no number, so the one that uploaded is [Image #1].
+    const syncPayload = editor.dispatchCommand.mock.calls.find(
+      ([command]) => command === SYNC_IMAGE_REF_TAGS_COMMAND,
+    )?.[1];
+    expect([...syncPayload.refs.values()]).toEqual([{ fileId: 'b', number: 1, src: 'blob:b' }]);
+  });
+
+  it('drops a queued send once the composer shows another conversation', () => {
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      draftKey: KEY,
+      editor: createHelloEditor() as unknown as IEditor,
+      onSend,
+      queueSendWhileUploading: true,
+    });
+    setUploads([upload('a', 'uploading')]);
+
+    store.getState().handleSendButton();
+    store.setState({ draftKey: 'main_agt_a_tpc_2' });
+    // The conversation now on screen has nothing queued.
+    expect(selectors.isSendQueuedForUploads(store.getState())).toBe(false);
+
+    setUploads([upload('a', 'success')]);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
+  });
+
+  it('stops watching the uploads once the queued send is cancelled', () => {
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      draftKey: KEY,
+      editor: createHelloEditor() as unknown as IEditor,
+      onSend,
+      queueSendWhileUploading: true,
+    });
+    setUploads([upload('a', 'uploading')]);
+
+    store.getState().handleSendButton();
+    store.getState().cancelUploadQueuedSend();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
+
+    setUploads([upload('a', 'success')]);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('leaves the upload gate to hosts that do not opt in', () => {
+    const onSend = vi.fn();
+    const store = createStore({
+      contextSelectionKey: KEY,
+      editor: createHelloEditor() as unknown as IEditor,
+      onSend,
+    });
+    setUploads([upload('a', 'uploading')]);
+
+    store.getState().handleSendButton();
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
   });
 });

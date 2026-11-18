@@ -1,8 +1,10 @@
 import type { TaskTemplate } from '@lobechat/const';
+import { snapScheduleToStandardMinute } from '@lobechat/utils/cronEval';
 import { toast } from '@lobehub/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessPreciseSchedule } from '@/business/client/hooks/useBusinessPreciseSchedule';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -55,6 +57,7 @@ export const useTaskTemplateCreate = ({
   const { t } = useTranslation('common');
 
   const { allowed: canCreateTask } = usePermission('create_content');
+  const { allowed: canUsePreciseSchedule } = useBusinessPreciseSchedule();
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -77,7 +80,10 @@ export const useTaskTemplateCreate = ({
         description,
         instruction: template.instruction,
         name: title,
-        schedulePattern: template.cronPattern,
+        // A template must stay usable on any plan, so a time the plan cannot pick moves to the nearest half hour.
+        schedulePattern: canUsePreciseSchedule
+          ? template.cronPattern
+          : snapScheduleToStandardMinute(template.cronPattern),
         scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       await taskTemplateService.recordCreated(template.id).catch((recordError) => {
@@ -101,6 +107,7 @@ export const useTaskTemplateCreate = ({
       setLoading(false);
     }
   }, [
+    canUsePreciseSchedule,
     createTask,
     description,
     inboxAgentId,

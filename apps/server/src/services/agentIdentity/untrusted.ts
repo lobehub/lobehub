@@ -60,6 +60,27 @@ export const toUntrustedInboxEntry = (
   };
 };
 
+/** Longest subject a topic title keeps; the mail itself stays readable in the run. */
+const TOPIC_TITLE_MAX_CHARS = 100;
+
+/**
+ * The title of a topic a mail run opens: the subject, plus how many more messages share the run.
+ * Undefined without a usable subject, which leaves the title to the run's own default.
+ */
+export const buildInboxTopicTitle = (
+  messages: Pick<AgentInboxEntry, 'subject'>[],
+): string | undefined => {
+  const subject = messages.map((m) => m.subject?.replaceAll(/\s+/g, ' ').trim()).find(Boolean);
+  if (!subject) return;
+
+  const title =
+    subject.length > TOPIC_TITLE_MAX_CHARS
+      ? `${subject.slice(0, TOPIC_TITLE_MAX_CHARS)}…`
+      : subject;
+
+  return messages.length > 1 ? `${title} +${messages.length - 1}` : title;
+};
+
 /**
  * Render inbound messages as one fenced block. The payload is JSON so every
  * attacker-controlled string is quoted and escaped; the fence tag is

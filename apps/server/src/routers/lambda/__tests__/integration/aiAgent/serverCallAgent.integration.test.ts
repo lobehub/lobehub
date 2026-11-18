@@ -4,7 +4,7 @@
  * execution flow.
  *
  * Verifies the full lifecycle end-to-end on the in-memory runtime:
- *   1. Parent op LLM emits a `lobe-agent-management____callAgent` tool call.
+ *   1. Parent activates agent management, then emits a `lobe-agent-management____callAgent` tool call.
  *   2. The real server executor parks the parent, creates a pending tool
  *      placeholder, and forks the target agent as a child op.
  *   3. The child op completes.
@@ -55,17 +55,13 @@ const PARENT_FINAL = 'I received the target agent result and the delegated work 
 
 const createTestContext = () => ({ jwtPayload: { userId }, userId });
 
-const createCallAgentResponse = () => {
-  const responseId = `resp_call_agent_${Date.now()}`;
-  const msgItemId = `msg_call_agent_${Date.now()}`;
-  const callId = 'call_agent_1';
+const createToolCallResponse = (callId: string, name: string, args: Record<string, unknown>) => {
+  const responseId = `resp_${callId}`;
+  const msgItemId = `msg_${callId}`;
   const fnCall = {
-    arguments: JSON.stringify({
-      agentId: targetAgentId,
-      instruction: 'Handle the delegated backend integration task.',
-    }),
+    arguments: JSON.stringify(args),
     call_id: callId,
-    name: 'lobe-agent-management____callAgent',
+    name,
     type: 'function_call',
   };
 
@@ -220,13 +216,22 @@ afterEach(async () => {
 
 describe('Server callAgent deferred execution', () => {
   it('parks the parent, runs the target agent, backfills the tool message and resumes', async () => {
-    let callCount = 0;
-    mockResponsesCreate.mockImplementation(function () {
-      callCount++;
-      if (callCount === 1) return Promise.resolve(createCallAgentResponse() as any);
-      if (callCount === 2) return Promise.resolve(createFinalTextResponse(TARGET_ANSWER) as any);
-      return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
-    });
+    mockResponsesCreate
+      .mockResolvedValueOnce(
+        createToolCallResponse('activate_1', 'lobe-activator____activateTools', {
+          identifiers: ['lobe-agent-management'],
+          reason: 'Delegate the task to the target agent.',
+        }),
+      )
+      .mockResolvedValueOnce(
+        createToolCallResponse('call_agent_1', 'lobe-agent-management____callAgent', {
+          agentId: targetAgentId,
+          instruction: 'Handle the delegated backend integration task.',
+        }),
+      )
+      .mockResolvedValueOnce(createFinalTextResponse(TARGET_ANSWER))
+      .mockResolvedValueOnce(createFinalTextResponse(PARENT_FINAL))
+      .mockRejectedValue(new Error('Unexpected extra model call'));
 
     const caller = aiAgentRouter.createCaller(createTestContext());
 
@@ -245,7 +250,7 @@ describe('Server callAgent deferred execution', () => {
 
     expect(finalState.status).toBe('done');
     expect(finalState.pendingToolsCalling ?? []).toHaveLength(0);
-    expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
+    expect(mockResponsesCreate).toHaveBeenCalledTimes(4);
 
     const childOps = await serverDB
       .select()
