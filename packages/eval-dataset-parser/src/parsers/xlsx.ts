@@ -4,6 +4,12 @@ import * as XLSX from 'xlsx';
 import type { ParseOptions, ParseResult } from '../types';
 
 export function parseXLSX(data: Buffer | Uint8Array, options?: ParseOptions): ParseResult {
+  if (
+    options?.headerRow !== undefined &&
+    (!Number.isInteger(options.headerRow) || options.headerRow < 0)
+  ) {
+    throw new Error('headerRow must be a non-negative integer');
+  }
   const workbook = XLSX.read(data, { type: 'array' });
 
   // Select sheet
@@ -26,6 +32,7 @@ export function parseXLSX(data: Buffer | Uint8Array, options?: ParseOptions): Pa
 
   const allRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, {
     defval: '',
+    range: options?.headerRow,
     raw: false,
   });
 
