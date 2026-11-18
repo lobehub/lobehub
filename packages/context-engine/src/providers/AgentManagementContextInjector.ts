@@ -249,7 +249,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   }
   if (hasAgents) {
     instructionParts.push(
-      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may hand the work to it with the `callSubAgent` tool and its id as `agentId`. If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may hand the work to it with the `lobe-agent` `callSubAgent` tool (activating `lobe-agent` first if it is not already enabled) and its id as `agentId`. If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
     );
   }
 
