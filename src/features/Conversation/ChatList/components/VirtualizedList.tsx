@@ -512,10 +512,14 @@ const VirtualizedList = memo<VirtualizedListProps>(
             <DebugInspector />
           </Suspense>
         )}
+        {/* Without a hint virtua sizes unmeasured rows at 40px, so the first frame
+            of a topic mounts every row that fits viewport + buffer at 40px —
+            ~20 rows of long replies, each a full markdown parse, for 1–2 visible. */}
         <VList
           bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
           className={VLIST_CLASS_NAME}
           data={dataWithSlots}
+          itemSize={300}
           keepMounted={keepMountedIndicesWithSlots}
           ref={virtuaRef}
           shift={shift}

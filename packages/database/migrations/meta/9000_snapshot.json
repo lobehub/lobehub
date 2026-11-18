@@ -1,8 +1,28 @@
 {
-  "id": "e80f18da-2ffd-4486-aa7e-0db4cf572bbd",
-  "prevId": "77cad3c6-892d-4bc9-a657-a554d6ebb0a6",
-  "version": "7",
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
   "dialect": "postgresql",
+  "enums": {},
+  "id": "47e0b880-816a-4b4b-a8d3-439d38c6927b",
+  "policies": {},
+  "prevId": "4caccfb8-4b95-4149-b512-2d72e1ba77de",
+  "roles": {},
+  "schemas": {},
+  "sequences": {
+    "public.fts_search_sync_revision_seq": {
+      "name": "fts_search_sync_revision_seq",
+      "schema": "public",
+      "increment": "1",
+      "startWith": "1",
+      "minValue": "1",
+      "maxValue": "9223372036854775807",
+      "cache": "1",
+      "cycle": false
+    }
+  },
   "tables": {
     "public.acceptance_comments": {
       "name": "acceptance_comments",
@@ -20051,6 +20071,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "varchar(255)",
@@ -20136,6 +20162,22 @@
           "method": "btree",
           "with": {}
         },
+        "environments_project_id_unique": {
+          "name": "environments_project_id_unique",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"environments\".\"project_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "environments_workspace_visibility_idx": {
           "name": "environments_workspace_visibility_idx",
           "columns": [
@@ -20180,7 +20222,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"environments\".\"workspace_id\" is null",
+          "where": "\"environments\".\"workspace_id\" IS NULL AND \"environments\".\"project_id\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -20208,7 +20250,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"environments\".\"workspace_id\" is not null",
+          "where": "\"environments\".\"workspace_id\" IS NOT NULL AND \"environments\".\"project_id\" IS NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -20234,6 +20276,19 @@
           "tableTo": "workspaces",
           "columnsFrom": [
             "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "environments_project_id_projects_id_fk": {
+          "name": "environments_project_id_projects_id_fk",
+          "tableFrom": "environments",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_id"
           ],
           "columnsTo": [
             "id"
@@ -56349,26 +56404,6 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
-  "schemas": {},
-  "sequences": {
-    "public.fts_search_sync_revision_seq": {
-      "name": "fts_search_sync_revision_seq",
-      "schema": "public",
-      "increment": "1",
-      "startWith": "1",
-      "minValue": "1",
-      "maxValue": "9223372036854775807",
-      "cache": "1",
-      "cycle": false
-    }
-  },
-  "roles": {},
-  "policies": {},
-  "views": {},
-  "_meta": {
-    "columns": {},
-    "schemas": {},
-    "tables": {}
-  }
+  "version": "7",
+  "views": {}
 }
