@@ -50,7 +50,9 @@ export function assertRequiredBuildArtifacts({
   if (phase !== PHASE_PRODUCTION_BUILD) return;
 
   const missing = PRE_BUILD_ARTIFACT_TRACES.filter(
-    (pattern) => globSync(pattern, { cwd: projectRoot }).length === 0,
+    // Only files count: a leftover empty subdirectory must not satisfy the check.
+    (pattern) =>
+      !globSync(pattern, { cwd: projectRoot, withFileTypes: true }).some((entry) => entry.isFile()),
   );
   if (missing.length === 0) return;
 

@@ -56,6 +56,14 @@ describe('defineConfig', () => {
       ).toThrow(/dist\/file-parse-worker\/\*\*\/\*.*build:file-parse-worker/);
     });
 
+    it('fails when the artifact directory holds only empty subdirectories', () => {
+      mkdirSync(path.join(projectRoot, 'dist/file-parse-worker/stale'), { recursive: true });
+
+      expect(() =>
+        assertRequiredBuildArtifacts({ phase: PHASE_PRODUCTION_BUILD, projectRoot }),
+      ).toThrow(/build:file-parse-worker/);
+    });
+
     it('fails when the artifact exists only in a nested checkout, not the project root', () => {
       // Cloud builds from its own root; `lobehub/dist/...` from the submodule is never deployed.
       writeWorker(path.join(projectRoot, 'lobehub'));
