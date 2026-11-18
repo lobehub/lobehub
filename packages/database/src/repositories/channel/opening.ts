@@ -40,6 +40,11 @@ export interface ChannelCoAddressedAgent {
 
 /** A queued job that may still open its reply, with what the opener needs to decide. */
 export interface ChannelOpeningCandidate {
+  /**
+   * Whether someone addressed the Agent (owed answer). False for a follow-up its own rules woke:
+   * the opener then acknowledges only a clear request for work.
+   */
+  addressed: boolean;
   agent: { id: string; name: string | null; title: string | null };
   /**
    * Whether the reply may move into a new Thread: only a request on the main timeline can, in a
@@ -72,10 +77,17 @@ const isOpened = async (db: LobeChatDatabase | Transaction, jobId: string) => {
 };
 
 /**
- * Whether a job opens its reply before the run: an owed answer only. A follow-up nobody asked
- * for, or one deferred behind another member's answer, may stay silent and never acknowledges.
+ * Whether a job opens its reply before the run. An owed answer always does. So does a follow-up
+ * that leads the message (its name in the text, a follow-up window, its duties): its opener
+ * acknowledges only a clear request, and acknowledging commits it to answer (see
+ * {@link applyOpening}). A follow-up deferred behind another member's answer never opens: it
+ * reads that answer first, and most often stays silent.
  */
 export const opensReply = (job: { wake: { afterMemberId?: string; kind: string } | null }) =>
+  !job.wake?.afterMemberId;
+
+/** Whether someone addressed the job's Agent, so it owes an answer and may not stay silent. */
+const owesAnswer = (job: { wake: { afterMemberId?: string; kind: string } | null }) =>
   !job.wake || (job.wake.kind !== 'followup' && !job.wake.afterMemberId);
 
 /**
@@ -101,7 +113,7 @@ const coAddressedJobs = async (
       ),
     );
   return rows
-    .filter(opensReply)
+    .filter(owesAnswer)
     .map(({ name, title }): ChannelCoAddressedAgent => ({ name, title }));
 };
 
@@ -189,6 +201,7 @@ export const findOpeningCandidate = async (
   if (!requestMessage) return;
 
   return {
+    addressed: owesAnswer(job),
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
     canOpenThread: !job.threadId,
     coAddressed: await coAddressedJobs(db, job),
@@ -230,8 +243,18 @@ export const applyOpening = async (
     if (!member?.agentId) return false;
 
     const ack = decision.ack?.trim();
+    // A follow-up that acknowledges has said it will answer: it owes the answer now, and may no
+    // longer end in silence. One that does not stays optional, where it was asked.
+    const optional = job.wake?.kind === 'followup';
+    if (optional && ack)
+      await tx
+        .update(channelJobs)
+        .set({ wake: { ...job.wake!, kind: 'mention' } })
+        .where(eq(channelJobs.id, job.id));
     const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH) ?? '';
-    const layout = await planOpening(tx, channelId, job, { ack, title });
+    // An optional reply never opens or joins a Thread on its own: it may yet stay silent in it.
+    const layout: OpeningLayout =
+      optional && !ack ? 'inline' : await planOpening(tx, channelId, job, { ack, title });
 
     let threadId = job.threadId;
     if (layout === 'underRequest') threadId = await openReplyThread(tx, job, job.messageId, title);
@@ -255,6 +278,7 @@ export const applyOpening = async (
 
     await audit(tx, channelId, REPLY_OPENED_EVENT, job.id, {
       ...(posted && { messageId: posted.id }),
+      ...(optional && posted && { committed: true }),
       ...(threadId !== job.threadId && { threadId }),
     });
 
