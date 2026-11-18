@@ -1,0 +1,244 @@
+---
+title: Widget Development Specification
+description: >-
+  Write LobeHub dashboard widgets against the public @lobechat/widget-spec
+  contract: manifest fields, runtimes, output types, network allow-list,
+  credentials, schedule, metrics and a complete example.
+tags:
+  - LobeHub
+  - Widget
+  - Dashboard
+  - JSON Schema
+  - Development Guide
+---
+
+# Widget Development Specification
+
+A widget is a small script that LobeHub runs in an isolated sandbox. The script prints one JSON document to stdout, and LobeHub draws that document as a dashboard card. Each widget version holds the script plus a declarative **manifest** (what the script needs) and a **view** (how the card looks).
+
+The contract lives in the public package [`@lobechat/widget-spec`](https://github.com/lobehub/lobehub/tree/canary/packages/widget-spec). LobeHub validates drafts with that package: the in-app agent and the tRPC API use it today, and the public widgets REST API reuses the same schemas. A draft that passes the package's schema is accepted by LobeHub.
+
+## Lifecycle
+
+1. **Draft**: save a version (`script`, `runtime`, `outputType`, `manifest`, `view`, optional `changeNote`). Saving runs nothing.
+2. **Dry run**: execute that exact version once in the sandbox and read its real output and logs. If a draft declares credentials (`manifest.env`) or network hosts (`manifest.network.allow`), the user has to approve that exact version first.
+3. **Publish**: make a version live. A version is only published after it has succeeded in a dry run. When the widget has no schedule of its own, publishing adopts `manifest.schedule`.
+4. **Runs**: the scheduler, a manual refresh or a preview executes the live version. Each run ends `succeeded`, `partial`, `failed` or `timeout`.
+
+## The package
+
+```bash
+pnpm add @lobechat/widget-spec zod
+```
+
+| Export                                                             | Use                                                                                                      |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `widgetVersionContentSchema`                                       | A draft as LobeHub records it: `widgetContentSchema` plus `changeNote`. Validate before you save.        |
+| `widgetContentSchema`                                              | `script`, `runtime`, `outputType`, `manifest`, `view`.                                                   |
+| `widgetManifestSchema` / `widgetViewSchema` / `widgetLayoutSchema` | The manifest, the view and the `view.layout` card template.                                              |
+| `widgetOutputSchema` / `parseWidgetOutput(stdout, outputType)`     | Check what the script prints, with the same error codes a run reports.                                   |
+| `widgetPresetSchema` / `BUILTIN_WIDGET_PRESETS`                    | The ready-made widget format and the built-in gallery.                                                   |
+| Types                                                              | `WidgetManifest`, `WidgetView`, `WidgetOutput`, `WidgetLayoutNode`, …, plus `WidgetVersionContentInput`. |
+| Constants                                                          | `WIDGET_RUNTIMES`, `WIDGET_OUTPUT_TYPES`, `WIDGET_OUTPUT_LIMITS`, `WIDGET_MAX_TIMEOUT_MS`, …             |
+
+### JSON Schema
+
+The package ships JSON Schema (draft 2020-12) at `@lobechat/widget-spec/schema/<name>.schema.json`. Names: `version-content`, `content`, `manifest`, `view`, `layout`, `output`, `preset`. At runtime, `widgetJsonSchema(name)` returns the same documents. You can use them in editors, in other languages and with any JSON Schema validator:
+
+```ts
+import Ajv2020 from 'ajv/dist/2020';
+import schema from '@lobechat/widget-spec/schema/version-content.schema.json' with { type: 'json' };
+
+const validate = new Ajv2020({ strict: false }).compile(schema);
+validate(draft); // true / false, with validate.errors
+```
+
+The zod schemas are authoritative. JSON Schema covers every field, type, enum, length limit and pattern. It cannot express these cross-field rules, which only zod and LobeHub enforce:
+
+- params must have unique names, and a param must not share its name with an `env` entry;
+- a `select` param needs `options`, and a param's `default` / `value` must fit its type;
+- `series` names and `table` column keys must be unique;
+- a layout tree has a node limit (`WIDGET_LAYOUT_LIMITS`).
+
+## Version content
+
+| Field        | Type                                              | Rules                                                          |
+| ------------ | ------------------------------------------------- | -------------------------------------------------------------- |
+| `script`     | string                                            | Required, 1 – 262 144 characters (`WIDGET_SCRIPT_MAX_LENGTH`). |
+| `runtime`    | `node` \| `python` \| `bash`                      | Required. See [Runtimes](#runtimes).                           |
+| `outputType` | `stat` \| `list` \| `series` \| `table` \| `data` | Required. The `type` of the document stdout must contain.      |
+| `manifest`   | object \| null                                    | See [Manifest](#manifest).                                     |
+| `view`       | object \| null                                    | See [View](#view).                                             |
+| `changeNote` | string \| null                                    | At most 500 characters; shown in version history.              |
+
+Unknown keys are dropped, not rejected.
+
+## Runtimes
+
+| `runtime` | Environment                                                                               | Reads env as         |
+| --------- | ----------------------------------------------------------------------------------------- | -------------------- |
+| `node`    | Node.js with the global `fetch`. ES modules, so top-level `await` works. No npm packages. | `process.env.NAME`   |
+| `python`  | Python 3, standard library only (`urllib.request`, `json`, …).                            | `os.environ["NAME"]` |
+| `bash`    | A POSIX shell with `curl`. Do not rely on `jq`.                                           | `$NAME`              |
+
+Rules for every runtime:
+
+- Print **exactly one** JSON document to stdout. Send debug output to stderr. If a script logs first and prints the JSON last, LobeHub reads the last non-empty line.
+- Exit non-zero only when there is nothing meaningful to show.
+- Only read data. A widget must never create, change or delete anything in an external system.
+- The script runs unattended on every refresh, so keep it short, deterministic and idempotent.
+- `manifest.timeoutMs` limits a run. The default is 30 000 ms and the maximum is 120 000 ms (`WIDGET_MAX_TIMEOUT_MS`). A run that exceeds it ends as `timeout`.
+- LobeHub stores up to 16 KiB of stdout and stderr per run. Secret values and well-known token shapes are redacted from both.
+
+## Output types
+
+`outputType` declares the document type. If the printed `type` is different, the run fails with `OUTPUT_TYPE_MISMATCH`.
+
+| `type`   | Required fields                      | Example                                                                                                               |
+| -------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `stat`   | `value` (number or text)             | `{"type":"stat","value":1234,"label":"Open issues","unit":"issues","delta":-12,"trend":"down"}`                       |
+| `list`   | `items[].title`                      | `{"type":"list","items":[{"title":"Fix login","url":"https://…","status":"open","time":"2026-01-02T03:04:05Z"}]}`     |
+| `series` | `series[].name`, `points[].t` / `.v` | `{"type":"series","unit":"ms","series":[{"name":"p95","points":[{"t":"2026-01-01","v":120}]}]}`                       |
+| `table`  | `columns[].key`, `rows`              | `{"type":"table","columns":[{"key":"repo"},{"key":"stars","type":"number"}],"rows":[{"repo":"lobehub","stars":100}]}` |
+| `data`   | `data` (any object)                  | `{"type":"data","data":{"city":"Hangzhou","temp":18}}`. `view.layout` or `view.html` draws it.                        |
+
+Limits (`WIDGET_OUTPUT_LIMITS`): 256 KiB of stdout, 200 list items, 20 series of up to 1 000 points each, 30 table columns and 500 rows. Output over a limit is rejected, never clipped. Timestamps are ISO-8601 strings. Table column types are `string`, `number`, `date` and `link`.
+
+**Partial output**: when one of several sources fails, still print the document and add `"meta": {"complete": false, "message": "GitHub API rate-limited"}`. The run ends `partial`. The card shows the output, but the numbers do not enter the metric trend.
+
+Output error codes from `parseWidgetOutput` and failed runs: `EMPTY_OUTPUT`, `INVALID_JSON`, `INVALID_OUTPUT`, `OUTPUT_TOO_LARGE`, `OUTPUT_TYPE_MISMATCH`.
+
+## Manifest
+
+```jsonc
+{
+  "title": "Stars", // ≤ 200 chars
+  "description": "…", // ≤ 2000 chars
+  "env": [], // credentials, ≤ 20
+  "network": { "allow": [] }, // hosts, ≤ 50
+  "params": [], // user settings, ≤ 20
+  "schedule": { "pattern": "0 * * * *", "timezone": "Asia/Shanghai" },
+  "metric": { "key": "stars", "kind": "gauge", "unit": "stars", "valuePath": "value" },
+  "timeoutMs": 30000, // positive integer ≤ 120000
+}
+```
+
+### `network.allow`: the network allow-list
+
+Network access is **off** by default. `network.allow` lists the hostnames the sandbox may reach, for example `["api.github.com", "*.posthog.com"]`. If the list is omitted or empty, the script has no network at all. Each entry is 1 – 253 characters. Write a bare hostname or `*.domain`, without a scheme, port or path; `inject` hosts are matched against these entries. Declare only the hosts the script really calls: the user reviews this list before a dry run.
+
+### `env`: credentials
+
+Never write a token, password or key into the script, manifest, title or description. Instead, declare what the script needs, and read it from the environment at run time:
+
+| Field         | Rules                                                                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Required. A shell identifier (`^[A-Za-z_]\w*$`), e.g. `GITHUB_TOKEN`.                                                                               |
+| `connector`   | The connector that supplies the secret, e.g. `github`. LobeHub looks it up in the agent's connectors, then the workspace's, then the user's own.    |
+| `field`       | For a connector that holds several headers: which header to read, e.g. `DD-API-KEY`. Matched case-insensitively.                                    |
+| `inject`      | `{ host, header?, prefix? }`. Where a Market connector's token is sent (see below). `host` is a hostname or `*.domain`, or a list of 1 – 5 of them. |
+| `required`    | When `true` and the secret cannot be resolved, the run fails with `MISSING_ENV` instead of starting.                                                |
+| `description` | ≤ 500 characters, shown to the user.                                                                                                                |
+
+There are two kinds of connector:
+
+- **Local secrets** (an API key the user saved): the variable holds the real value. Use it as the API expects.
+- **LobeHub Market connectors** (`github`, `linear`, `notion`, `vercel`, …): the variable holds only a per-run placeholder. The sandbox's egress proxy replaces the request header with the real token, so the token never enters the sandbox. This only works when the script sends the placeholder as that header to the provider's API host, for example `Authorization: Bearer $GITHUB_TOKEN` to `api.github.com`. It does not work in a URL, a query string, a body or with another host. To use another host or header, set `inject`, e.g. `{"host":"api.example.com","header":"Authorization","prefix":"Bearer "}`. Every `inject` host must also be covered by `network.allow`.
+
+`MISSING_ENV` names the reason: the connector is not connected, it holds no secret, the field is ambiguous or unknown, or an inject host is missing from `network.allow`.
+
+### `params`: user settings
+
+Settings a person picks, such as a city, a date, a repository or a count, go in `params`, not in the script. The script reads them as text from the environment under their own names.
+
+```json
+{ "name": "CITY", "type": "string", "label": "City", "required": true, "default": "Hangzhou" }
+```
+
+- `name`: `UPPER_SNAKE_CASE`, at most 64 characters, unique, and different from every `env` name.
+- `type`: `string`, `number`, `boolean`, `date` (`YYYY-MM-DD`) or `select` (needs `options: [{ "value": "c", "label": "°C" }]`, 1 – 50 of them).
+- `value` is this widget's choice and `default` is the fallback. Both must fit `type`.
+- Params are stored and shown in plain text. Never put a secret in a param; secrets belong in `env`.
+
+### `schedule`
+
+`{ "pattern": "<cron>", "timezone": "<IANA zone>" }` suggests how often the widget refreshes, e.g. `"*/30 * * * *"`. When a version is published and the widget has no schedule of its own, LobeHub adopts this pattern if it is a valid cron expression. Pick the slowest cadence that keeps the number useful; hourly is a good default.
+
+### `metric`
+
+Every `succeeded` run of the live version adds its numbers to the widget's long-term trend. `metric` controls what is recorded, and it is required to trend a `data` output:
+
+| Output           | What is recorded                                                                                                                                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stat`           | One point per run: the numeric `value`, or the number at `valuePath`. Numeric strings such as `"1,234"` count; other text is skipped.                                   |
+| `data`           | Like `stat`, but only when `valuePath` names the number, e.g. `data.current.temp`.                                                                                      |
+| `series`         | One metric per series (`series:<name>`). Points with an ISO timestamp newer than the latest stored point are appended, so overlapping windows do not duplicate history. |
+| `list` / `table` | Nothing.                                                                                                                                                                |
+
+- `key` is required in `metric`, 1 – 100 characters. A `stat` without `metric` is recorded under the key `value`.
+- `kind` is `gauge` (default; a level, such as stars) or `counter` (a running total).
+- `unit` is at most 50 characters. It falls back to the stat's own `unit`.
+- Previews, `partial` runs and stale runs never write points.
+- A metric key is bound to the content of the version that first wrote it: its script, runtime, output type, manifest and view. After a version with different content is published, LobeHub refuses to append to that key ("Widget metric source changed"). Give the new version a new `metric.key`.
+
+## View
+
+| Field     | Use                                                                                                                                                                                                                                                                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chart`   | `line` \| `bar` \| `area` for `series`.                                                                                                                                                                                                                                                                                               |
+| `columns` | Pick and order `table` columns.                                                                                                                                                                                                                                                                                                       |
+| `limit`   | Cap `list` / `table` rows (≤ 500).                                                                                                                                                                                                                                                                                                    |
+| `size`    | `sm` \| `md` \| `lg` card size hint.                                                                                                                                                                                                                                                                                                  |
+| `layout`  | A declarative card template for `data` output: `stack`, `grid`, `text`, `icon`, `image`, `progress`, `ring`, `dots`, `sparkline`, `badge`, `divider`, `spacer`, `repeat`. Values are literals, `{ "bind": "data.temp", "format": "number" }` or `{ "template": "H {data.hi}°" }`. See `layout.schema.json` for every node and option. |
+| `surface` | Card background (`sky`, `night`, `rain`, …), or a binding that picks one from the data.                                                                                                                                                                                                                                               |
+| `html`    | One self-contained HTML document (≤ 200 KiB) that draws the card in a sandboxed frame with no network. It replaces `layout` and `surface`. It reads `window.widgetData` and registers `window.widgetData.onUpdate(cb)`.                                                                                                               |
+
+## Example: GitHub stars
+
+A `stat` widget that counts a repository's stars every hour and keeps the trend:
+
+```json
+{
+  "runtime": "node",
+  "outputType": "stat",
+  "changeNote": "First version",
+  "script": "const repo = process.env.REPO;\nconst headers = { 'User-Agent': 'lobehub-widget' };\nif (process.env.GITHUB_TOKEN) headers.Authorization = 'Bearer ' + process.env.GITHUB_TOKEN;\nconst res = await fetch('https://api.github.com/repos/' + repo, { headers });\nif (!res.ok) {\n  console.error('GitHub answered ' + res.status);\n  process.exit(1);\n}\nconst r = await res.json();\nconsole.log(JSON.stringify({ type: 'stat', value: r.stargazers_count, label: r.full_name, unit: 'stars' }));\n",
+  "manifest": {
+    "title": "GitHub stars",
+    "description": "Stargazers of the repository, counted at run time.",
+    "network": { "allow": ["api.github.com"] },
+    "env": [{ "name": "GITHUB_TOKEN", "connector": "github" }],
+    "params": [
+      {
+        "name": "REPO",
+        "type": "string",
+        "label": "Repository",
+        "required": true,
+        "default": "lobehub/lobehub"
+      }
+    ],
+    "schedule": { "pattern": "0 * * * *", "timezone": "UTC" },
+    "metric": { "key": "stars", "kind": "gauge", "unit": "stars" },
+    "timeoutMs": 20000
+  },
+  "view": { "size": "sm" }
+}
+```
+
+- `GITHUB_TOKEN` is optional (no `required`). Without it the script calls the API anonymously; with the GitHub connector connected, the egress proxy adds the real token on `api.github.com`.
+- `REPO` is a param, so the same version serves any repository.
+- Check it before you save:
+
+```ts
+import { parseWidgetOutput, widgetVersionContentSchema } from '@lobechat/widget-spec';
+
+const draft = widgetVersionContentSchema.parse(json); // throws with every problem
+parseWidgetOutput('{"type":"stat","value":83650,"unit":"stars"}', draft.outputType);
+// → { ok: true, output: { … }, partial: false }
+```
+
+For complete `data` widgets with layouts, look at the built-in presets in `BUILTIN_WIDGET_PRESETS`, such as `weather-now` and `github-repo`.
+
+## Versioning
+
+The package follows semver. Adding an optional field or relaxing a limit is a minor release. Removing or tightening anything is a major release, because content LobeHub accepted before would start to fail. `schema/*.schema.json` is generated from the zod schemas (`bun run --cwd packages/widget-spec generate`), and the package tests fail when it is stale.

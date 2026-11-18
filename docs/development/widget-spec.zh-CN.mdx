@@ -1,0 +1,243 @@
+---
+title: Widget 开发规范
+description: >-
+  按公开的 @lobechat/widget-spec 契约编写 LobeHub 仪表盘 Widget：manifest
+  字段、运行时、输出类型、网络白名单、凭据、调度、指标与完整示例。
+tags:
+  - LobeHub
+  - Widget
+  - 仪表盘
+  - JSON Schema
+  - 开发指南
+---
+
+# Widget 开发规范
+
+Widget 是一段由 LobeHub 在隔离沙箱中运行的小脚本。脚本向 stdout 打印一个 JSON 文档，LobeHub 再把这个文档渲染成仪表盘卡片。每个 Widget 版本包含脚本、声明式的 **manifest**（脚本运行需要什么）和 **view**（卡片怎么展示）。
+
+契约放在公开包 [`@lobechat/widget-spec`](https://github.com/lobehub/lobehub/tree/canary/packages/widget-spec) 中，LobeHub 用它校验草稿：应用内 Agent 和 tRPC API 现在都用它，公开的 widgets REST API 也复用同一套 schema。能通过这个包 schema 的草稿，LobeHub 就会接受。
+
+## 生命周期
+
+1. **草稿**：保存一个版本（`script`、`runtime`、`outputType`、`manifest`、`view`，可选 `changeNote`）。保存时不会执行任何东西。
+2. **试运行**：在沙箱里把这个版本执行一次，拿到真实的输出和日志。如果草稿声明了凭据（`manifest.env`）或网络主机（`manifest.network.allow`），必须先由用户批准这个版本。
+3. **发布**：让某个版本上线。只有试运行成功过的版本才能发布。如果 Widget 自己还没有调度，发布时会采用 `manifest.schedule`。
+4. **运行**：调度器、手动刷新或预览会执行线上版本。每次运行的结果是 `succeeded`、`partial`、`failed` 或 `timeout`。
+
+## 包
+
+```bash
+pnpm add @lobechat/widget-spec zod
+```
+
+| 导出                                                                 | 用途                                                                                                |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `widgetVersionContentSchema`                                       | LobeHub 记录的草稿：`widgetContentSchema` 加 `changeNote`。保存前先用它校验。                                      |
+| `widgetContentSchema`                                              | `script`、`runtime`、`outputType`、`manifest`、`view`。                                                |
+| `widgetManifestSchema` / `widgetViewSchema` / `widgetLayoutSchema` | manifest、view，以及 `view.layout` 卡片模板。                                                              |
+| `widgetOutputSchema` / `parseWidgetOutput(stdout, outputType)`     | 检查脚本打印的内容，错误码与运行时报告的一致。                                                                           |
+| `widgetPresetSchema` / `BUILTIN_WIDGET_PRESETS`                    | 预设 Widget 的格式，以及内置预设库。                                                                            |
+| 类型                                                                 | `WidgetManifest`、`WidgetView`、`WidgetOutput`、`WidgetLayoutNode` 等，以及 `WidgetVersionContentInput`。 |
+| 常量                                                                 | `WIDGET_RUNTIMES`、`WIDGET_OUTPUT_TYPES`、`WIDGET_OUTPUT_LIMITS`、`WIDGET_MAX_TIMEOUT_MS` 等。         |
+
+### JSON Schema
+
+包里带有 JSON Schema（draft 2020-12），路径是 `@lobechat/widget-spec/schema/<name>.schema.json`，名字有 `version-content`、`content`、`manifest`、`view`、`layout`、`output`、`preset`。运行时调用 `widgetJsonSchema(name)` 会得到相同的文档。它们可以用在编辑器里、其他语言里，以及任何 JSON Schema 校验器中：
+
+```ts
+import Ajv2020 from 'ajv/dist/2020';
+import schema from '@lobechat/widget-spec/schema/version-content.schema.json' with { type: 'json' };
+
+const validate = new Ajv2020({ strict: false }).compile(schema);
+validate(draft); // true / false，错误在 validate.errors
+```
+
+以 zod schema 为准。JSON Schema 覆盖了全部字段、类型、枚举、长度限制和正则，但表达不了下面这些跨字段规则，它们只由 zod 和 LobeHub 校验：
+
+- param 名字必须唯一，且不能和任何 `env` 项同名；
+- `select` 类型的 param 必须有 `options`，param 的 `default` / `value` 必须符合它的类型；
+- `series` 的名字和 `table` 的列 key 必须唯一；
+- 布局树有节点数上限（`WIDGET_LAYOUT_LIMITS`）。
+
+## 版本内容
+
+| 字段           | 类型                                                | 规则                                              |
+| ------------ | ------------------------------------------------- | ----------------------------------------------- |
+| `script`     | string                                            | 必填，1 – 262 144 个字符（`WIDGET_SCRIPT_MAX_LENGTH`）。 |
+| `runtime`    | `node` \| `python` \| `bash`                      | 必填，见[运行时](#运行时)。                                |
+| `outputType` | `stat` \| `list` \| `series` \| `table` \| `data` | 必填，stdout 文档必须是这个 `type`。                       |
+| `manifest`   | object \| null                                    | 见 [Manifest](#manifest)。                        |
+| `view`       | object \| null                                    | 见 [View](#view)。                                |
+| `changeNote` | string \| null                                    | 最多 500 个字符，显示在版本历史中。                            |
+
+未知字段会被丢弃，不会报错。
+
+## 运行时
+
+| `runtime` | 环境                                                          | 读取 env 的方式           |
+| --------- | ----------------------------------------------------------- | -------------------- |
+| `node`    | Node.js，可用全局 `fetch`。脚本是 ES module，可以用顶层 `await`。不能用 npm 包。 | `process.env.NAME`   |
+| `python`  | Python 3，只能用标准库（`urllib.request`、`json` 等）。                 | `os.environ["NAME"]` |
+| `bash`    | 带 `curl` 的 POSIX shell。不要依赖 `jq`。                           | `$NAME`              |
+
+所有运行时都要遵守：
+
+- stdout 上**只能**打印一个 JSON 文档，调试信息打到 stderr。如果脚本先打日志、最后才打印 JSON，LobeHub 会读取最后一个非空行。
+- 只有在没有任何有意义的内容可显示时，才以非零退出码退出。
+- 只读取数据。Widget 绝不能在外部系统中创建、修改或删除任何东西。
+- 脚本在每次刷新时无人值守地运行，要保持简短、确定、幂等。
+- `manifest.timeoutMs` 限制单次运行时长，默认 30 000 ms，最大 120 000 ms（`WIDGET_MAX_TIMEOUT_MS`）。超时的运行结果是 `timeout`。
+- 每次运行，LobeHub 最多保存 16 KiB 的 stdout 和 stderr。两者中的密钥值和常见 token 格式都会被打码。
+
+## 输出类型
+
+`outputType` 声明文档类型。如果打印出来的 `type` 与它不同，运行会以 `OUTPUT_TYPE_MISMATCH` 失败。
+
+| `type`   | 必填字段                                | 示例                                                                                                                    |
+| -------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `stat`   | `value`（数字或文本）                      | `{"type":"stat","value":1234,"label":"Open issues","unit":"issues","delta":-12,"trend":"down"}`                       |
+| `list`   | `items[].title`                     | `{"type":"list","items":[{"title":"Fix login","url":"https://…","status":"open","time":"2026-01-02T03:04:05Z"}]}`     |
+| `series` | `series[].name`、`points[].t` / `.v` | `{"type":"series","unit":"ms","series":[{"name":"p95","points":[{"t":"2026-01-01","v":120}]}]}`                       |
+| `table`  | `columns[].key`、`rows`              | `{"type":"table","columns":[{"key":"repo"},{"key":"stars","type":"number"}],"rows":[{"repo":"lobehub","stars":100}]}` |
+| `data`   | `data`（任意对象）                        | `{"type":"data","data":{"city":"Hangzhou","temp":18}}`，由 `view.layout` 或 `view.html` 渲染。                              |
+
+上限（`WIDGET_OUTPUT_LIMITS`）：stdout 256 KiB，list 200 项，series 20 条、每条最多 1 000 个点，table 30 列、500 行。超出上限的输出会被拒绝，而不是截断。时间戳使用 ISO-8601 字符串。表格列类型可以是 `string`、`number`、`date`、`link`。
+
+**部分输出**：多个数据源中有一个失败时，仍然打印文档，并加上 `"meta": {"complete": false, "message": "GitHub API rate-limited"}`。运行结果是 `partial`：卡片会显示这次输出，但其中的数字不会进入指标趋势。
+
+`parseWidgetOutput` 和失败的运行使用以下输出错误码：`EMPTY_OUTPUT`、`INVALID_JSON`、`INVALID_OUTPUT`、`OUTPUT_TOO_LARGE`、`OUTPUT_TYPE_MISMATCH`。
+
+## Manifest
+
+```jsonc
+{
+  "title": "Stars", // ≤ 200 字符
+  "description": "…", // ≤ 2000 字符
+  "env": [], // 凭据，≤ 20 项
+  "network": { "allow": [] }, // 主机，≤ 50 项
+  "params": [], // 用户设置，≤ 20 项
+  "schedule": { "pattern": "0 * * * *", "timezone": "Asia/Shanghai" },
+  "metric": { "key": "stars", "kind": "gauge", "unit": "stars", "valuePath": "value" },
+  "timeoutMs": 30000, // 正整数，≤ 120000
+}
+```
+
+### `network.allow`：网络白名单
+
+网络默认**关闭**。`network.allow` 列出沙箱可以访问的主机名，例如 `["api.github.com", "*.posthog.com"]`。不写或写空列表，脚本就完全没有网络。每项 1 – 253 个字符，写裸主机名或 `*.domain`，不带协议、端口和路径；`inject` 的主机会和这些条目做匹配。只声明脚本真正会调用的主机：试运行前用户会审阅这个列表。
+
+### `env`：凭据
+
+不要把 token、密码或密钥写进脚本、manifest、标题或描述。应当声明脚本需要什么，运行时从环境变量读取：
+
+| 字段            | 规则                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| `name`        | 必填，合法的 shell 标识符（`^[A-Za-z_]\w*$`），例如 `GITHUB_TOKEN`。                                                   |
+| `connector`   | 提供密钥的连接器，例如 `github`。LobeHub 依次在 Agent、工作区、用户个人的连接器中查找。                                                 |
+| `field`       | 连接器保存了多个 header 时，指定读取哪一个，例如 `DD-API-KEY`，不区分大小写。                                                       |
+| `inject`      | `{ host, header?, prefix? }`：Market 连接器的 token 发往哪里（见下文）。`host` 是主机名或 `*.domain`，也可以是 1 – 5 个这样的值组成的列表。 |
+| `required`    | 为 `true` 时，如果解析不到密钥，运行不会启动，直接以 `MISSING_ENV` 失败。                                                        |
+| `description` | ≤ 500 字符，展示给用户。                                                                                         |
+
+连接器分两类：
+
+- **本地密钥**（用户保存的 API Key）：环境变量里就是真实值，按 API 的要求使用即可。
+- **LobeHub Market 连接器**（`github`、`linear`、`notion`、`vercel` 等）：环境变量里只有一个每次运行都不同的占位符。沙箱的出口代理会把请求头替换成真实 token，所以 token 从不进入沙箱。只有当脚本把占位符放在这个 header 里、发往服务商的 API 主机时才有效，例如向 `api.github.com` 发送 `Authorization: Bearer $GITHUB_TOKEN`。放在 URL、查询参数、请求体里，或者发往其他主机，都不会生效。要用别的主机或 header，就设置 `inject`，例如 `{"host":"api.example.com","header":"Authorization","prefix":"Bearer "}`。每个 `inject` 主机都必须被 `network.allow` 覆盖。
+
+`MISSING_ENV` 会说明原因：连接器未连接、连接器里没有密钥、field 有歧义或不存在，或者 inject 主机不在 `network.allow` 中。
+
+### `params`：用户设置
+
+由用户选择的设置（城市、日期、仓库、数量等）放在 `params` 里，不要写死在脚本中。脚本按 param 的名字从环境变量中读取它，值是文本。
+
+```json
+{ "name": "CITY", "type": "string", "label": "City", "required": true, "default": "Hangzhou" }
+```
+
+- `name`：`UPPER_SNAKE_CASE`，最多 64 个字符，不能重复，也不能和任何 `env` 同名。
+- `type`：`string`、`number`、`boolean`、`date`（`YYYY-MM-DD`）或 `select`（需要 1 – 50 个 `options: [{ "value": "c", "label": "°C" }]`）。
+- `value` 是这个 Widget 的取值，`default` 是没有取值时的默认值，两者都必须符合 `type`。
+- param 以明文保存和展示。不要把密钥放进 param，密钥应该放在 `env` 里。
+
+### `schedule`
+
+`{ "pattern": "<cron>", "timezone": "<IANA 时区>" }` 建议刷新频率，例如 `"*/30 * * * *"`。发布版本时，如果 Widget 自己还没有调度，且这个 pattern 是合法的 cron 表达式，LobeHub 就会采用它。在数字仍然有用的前提下，选最慢的频率；每小时一次是个不错的默认值。
+
+### `metric`
+
+线上版本每次 `succeeded` 的运行都会把数字写进 Widget 的长期趋势。`metric` 决定记录什么；`data` 输出必须配置它才会产生趋势：
+
+| 输出               | 记录内容                                                                   |
+| ---------------- | ---------------------------------------------------------------------- |
+| `stat`           | 每次运行记一个点：数值 `value`，或 `valuePath` 指向的数字。`"1,234"` 这样的数字字符串也算，其他文本会被跳过。 |
+| `data`           | 与 `stat` 相同，但只在 `valuePath` 指向一个数字时记录，例如 `data.current.temp`。          |
+| `series`         | 每条 series 一个指标（`series:<name>`）。只追加时间戳（ISO）比已存最新点更晚的点，所以窗口重叠不会产生重复历史。  |
+| `list` / `table` | 不记录。                                                                   |
+
+- `metric` 里的 `key` 必填，1 – 100 个字符。没有 `metric` 的 `stat` 会记在 `value` 这个 key 下。
+- `kind` 可以是 `gauge`（默认，表示水位，例如 Star 数）或 `counter`（累计值）。
+- `unit` 最多 50 个字符，不写时使用 stat 自己的 `unit`。
+- 预览、`partial` 运行和过期运行都不会写入数据点。
+- 指标 key 绑定在第一次写入它的版本内容上（脚本、运行时、输出类型、manifest 和 view）。内容不同的版本发布后，LobeHub 会拒绝继续往这个 key 追加（"Widget metric source changed"），要给新版本换一个新的 `metric.key`。
+
+## View
+
+| 字段        | 用途                                                                                                                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chart`   | `series` 的图表类型：`line` \| `bar` \| `area`。                                                                                                                                                                                                               |
+| `columns` | 选择 `table` 显示哪些列以及列的顺序。                                                                                                                                                                                                                                 |
+| `limit`   | `list` / `table` 最多显示的行数（≤ 500）。                                                                                                                                                                                                                        |
+| `size`    | 卡片尺寸提示：`sm` \| `md` \| `lg`。                                                                                                                                                                                                                            |
+| `layout`  | `data` 输出的声明式卡片模板：`stack`、`grid`、`text`、`icon`、`image`、`progress`、`ring`、`dots`、`sparkline`、`badge`、`divider`、`spacer`、`repeat`。值可以是字面量、`{ "bind": "data.temp", "format": "number" }` 或 `{ "template": "H {data.hi}°" }`。全部节点和选项见 `layout.schema.json`。 |
+| `surface` | 卡片背景（`sky`、`night`、`rain` 等），或根据数据选择背景的绑定。                                                                                                                                                                                                              |
+| `html`    | 一个自包含的 HTML 文档（≤ 200 KiB），在无网络的沙箱 iframe 里绘制卡片，会替代 `layout` 和 `surface`。它读取 `window.widgetData`，并通过 `window.widgetData.onUpdate(cb)` 注册更新回调。                                                                                                            |
+
+## 示例：GitHub Star
+
+一个 `stat` Widget，每小时统计一次仓库的 Star 数，并保留趋势：
+
+```json
+{
+  "runtime": "node",
+  "outputType": "stat",
+  "changeNote": "First version",
+  "script": "const repo = process.env.REPO;\nconst headers = { 'User-Agent': 'lobehub-widget' };\nif (process.env.GITHUB_TOKEN) headers.Authorization = 'Bearer ' + process.env.GITHUB_TOKEN;\nconst res = await fetch('https://api.github.com/repos/' + repo, { headers });\nif (!res.ok) {\n  console.error('GitHub answered ' + res.status);\n  process.exit(1);\n}\nconst r = await res.json();\nconsole.log(JSON.stringify({ type: 'stat', value: r.stargazers_count, label: r.full_name, unit: 'stars' }));\n",
+  "manifest": {
+    "title": "GitHub stars",
+    "description": "Stargazers of the repository, counted at run time.",
+    "network": { "allow": ["api.github.com"] },
+    "env": [{ "name": "GITHUB_TOKEN", "connector": "github" }],
+    "params": [
+      {
+        "name": "REPO",
+        "type": "string",
+        "label": "Repository",
+        "required": true,
+        "default": "lobehub/lobehub"
+      }
+    ],
+    "schedule": { "pattern": "0 * * * *", "timezone": "UTC" },
+    "metric": { "key": "stars", "kind": "gauge", "unit": "stars" },
+    "timeoutMs": 20000
+  },
+  "view": { "size": "sm" }
+}
+```
+
+- `GITHUB_TOKEN` 是可选的（没有 `required`）。没有它时脚本匿名调用 API；用户连接了 GitHub 连接器后，出口代理会在发往 `api.github.com` 的请求上加上真实 token。
+- `REPO` 是 param，同一个版本可以用于任何仓库。
+- 保存前先检查：
+
+```ts
+import { parseWidgetOutput, widgetVersionContentSchema } from '@lobechat/widget-spec';
+
+const draft = widgetVersionContentSchema.parse(json); // 不合法时抛错并列出全部问题
+parseWidgetOutput('{"type":"stat","value":83650,"unit":"stars"}', draft.outputType);
+// → { ok: true, output: { … }, partial: false }
+```
+
+带布局的完整 `data` Widget，可以参考 `BUILTIN_WIDGET_PRESETS` 中的内置预设，例如 `weather-now` 和 `github-repo`。
+
+## 版本管理
+
+这个包遵循 semver。新增可选字段或放宽限制是 minor 版本；删除或收紧任何规则是 major 版本，因为 LobeHub 以前接受的内容会变得不合法。`schema/*.schema.json` 由 zod schema 生成（`bun run --cwd packages/widget-spec generate`），文件过期时包的测试会失败。
