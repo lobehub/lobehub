@@ -6,7 +6,7 @@ import { type BuiltinSkillEnvironment, isBuiltinSkillEnabled } from './builtinSk
 const log = debug('mecha:skillPool');
 
 export type { BuiltinSkillEnvironment };
-export { isBuiltinSkillEnabled, USER_HIDDEN_BUILTIN_SKILLS } from './builtinSkillGate';
+export { isBuiltinSkillEnabled } from './builtinSkillGate';
 
 /**
  * The skill sources of a run, in precedence order. A host that has no such

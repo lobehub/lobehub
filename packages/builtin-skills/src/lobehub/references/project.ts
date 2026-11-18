@@ -1,4 +1,4 @@
-const content = `# lh project / lh task - Projects and Tasks
+const content = `# lh project - Projects
 
 A project groups tasks, agents and knowledge bases around one outcome. Tasks are
 units of agent work with an identifier such as \`T-12\`.
@@ -17,21 +17,8 @@ units of agent work with an identifier such as \`T-12\`.
 - \`lh project delete <id> [--yes]\` - Delete a project (its tasks are kept, without a project)
 
 ## Tasks
+See \`references/task\` for task commands and \`lh man task\` for the CLI manual.
 
-- \`lh task list [--root] [--parent <id>] [--agent <id>] [--tree] [--board] [-L <n>] [--json]\` - List tasks
-- \`lh task view <id> [--json]\` - View a task (instruction, documents, activities)
-- \`lh task create -i <instruction> [-n <name>] [--agent <id>] [--user <idOrEmail>] [--parent <id>] [--priority <0-4>]\` - Create a task
-- \`lh task edit <id> [-n <name>] [-i <instruction>] [--agent <id>] [--user <idOrEmail>] [--priority <0-4>]\` - Edit a task
-- \`lh task comment <id> -m <text>\` - Add a progress comment
-
-When you are executing a task run, the \`task\` skill covers the full lifecycle
-(subtasks, dependencies, task documents, completion rules). Activate it instead of
-guessing. \`lh man task\` lists every subcommand.
-
-## Tips
-
-- \`--user\` takes an email or username only in a workspace scope (see \`references/workspace\`). In personal scope it needs a \`user_…\` id
-- Priority: 0 none, 1 urgent, 2 high, 3 normal, 4 low
 `;
 
 export default content;

@@ -33,6 +33,7 @@ import provider from './references/provider';
 import quota from './references/quota';
 import search from './references/search';
 import skill from './references/skill';
+import task from './references/task.md';
 import topic from './references/topic';
 import trace from './references/trace';
 import webhook from './references/webhook';
@@ -74,6 +75,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/quota': quota,
     'references/search': search,
     'references/skill': skill,
+    'references/task': task,
     'references/topic': topic,
     'references/trace': trace,
     'references/webhook': webhook,

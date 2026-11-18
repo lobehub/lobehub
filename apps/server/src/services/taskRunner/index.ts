@@ -1,4 +1,3 @@
-import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
@@ -44,7 +43,7 @@ interface TopicRetarget {
 }
 
 export interface RunTaskParams {
-  /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
+  /** Extra builtin tools this run mounts for the task, e.g. the Goal report tool. */
   additionalPluginIds?: string[];
   continueTopicId?: string;
   /** Explicit device target for this run only. The Task itself does not retain the binding. */
@@ -336,7 +335,7 @@ export class TaskRunnerService {
           ? 'agent'
           : 'auto'
       ) as 'agent' | 'auto';
-      const pluginIds = [TaskSkillIdentifier];
+      const pluginIds: string[] = [];
       // Mount BriefIdentifier (createBrief + requestCheckpoint) only in the
       // legacy 'agent' path; in 'auto' the agent must not also call
       // createBrief or we'd double up.
