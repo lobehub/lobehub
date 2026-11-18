@@ -445,6 +445,8 @@ describe('address book of a scope', () => {
     expect(ids(await aliceModel.listAddressBookPeople())).toEqual([bob]);
     expect(await aliceModel.filterAddressBookPeople([bob, carol, alice])).toEqual([bob]);
     expect(await carolModel.filterAddressBookPeople([bob])).toEqual([]);
+    // Nothing to keep once the caller filters themselves out: no query is needed.
+    expect(await aliceModel.filterAddressBookPeople([alice, alice])).toEqual([]);
   });
 
   it('holds every member and every external contact of a workspace', async () => {

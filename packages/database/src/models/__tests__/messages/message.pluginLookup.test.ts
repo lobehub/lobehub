@@ -351,6 +351,17 @@ describe('MessageModel.listToolCallIndexByTopic', () => {
 
     expect(rows.map((row) => row.id)).toEqual(['plug-index-in-scope']);
   });
+
+  it('leaves toolCallId undefined for a row stored without one', async () => {
+    await seedToolMessage({ id: 'plug-index-no-call', toolCallId: null });
+
+    const [row] = await messageModel.listToolCallIndexByTopic('plugin-topic', {
+      interventionStateKey,
+    });
+
+    expect(row.id).toBe('plug-index-no-call');
+    expect(row.toolCallId).toBeUndefined();
+  });
 });
 
 describe('MessageModel.listMessagePluginsByIds', () => {
