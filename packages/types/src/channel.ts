@@ -770,6 +770,12 @@ export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
   /**
+   * When the newest reply worth reporting as unread was posted: an Agent's acknowledgement before
+   * its run is not, so it does not mark the thread unread while its preview still shows. Null when
+   * the thread holds only acknowledgements; present under the same conditions as `lastReply`.
+   */
+  lastNewsAt?: Date | null;
+  /**
    * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
    * thread views and in views cached before summaries existed.
    */
