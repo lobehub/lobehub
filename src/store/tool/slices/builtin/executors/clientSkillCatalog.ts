@@ -14,6 +14,7 @@ import { agentSkillService } from '@/services/skill';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getChatStoreState } from '@/store/chat';
+import { parseSelectedSkillsFromEditorData } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 /** Bind both name lookup and the fallback catalog to the calling agent, not the active tab. */
@@ -36,7 +37,13 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
     : [];
   const userTurns = messages.filter((message) => message.role === 'user');
   const selected = new Set(
-    userTurns.flatMap((message) => message.metadata?.selectedSkillIds ?? []),
+    userTurns.flatMap(
+      (message) =>
+        message.metadata?.selectedSkillIds ??
+        parseSelectedSkillsFromEditorData(message.editorData ?? undefined).map(
+          (skill) => skill.identifier,
+        ),
+    ),
   );
   if (mentionsTopic(userTurns)) selected.add(LobeHubIdentifier);
   const disabled = new Set(getDisabledPluginIds(plugins));

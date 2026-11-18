@@ -18,7 +18,16 @@ vi.mock('@/store/chat', () => ({
   getChatStoreState: () => ({
     dbMessagesMap: {
       main_agent_topic: [{ metadata: { selectedSkillIds: ['main-skill'] }, role: 'user' }],
-      page_agent_doc: [{ metadata: { selectedSkillIds: ['page-skill'] }, role: 'user' }],
+      page_agent_doc: [
+        {
+          editorData: {
+            root: {
+              children: [{ actionCategory: 'skill', actionType: 'page-skill', type: 'action-tag' }],
+            },
+          },
+          role: 'user',
+        },
+      ],
       task_agent_topic: [{ metadata: { selectedSkillIds: ['task-skill'] }, role: 'user' }],
     },
   }),
