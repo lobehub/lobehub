@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "58e6ac33-fa2a-47c2-bdbe-31f3b2ea4eb3",
+  "id": "4caccfb8-4b95-4149-b512-2d72e1ba77de",
   "policies": {},
   "prevId": "77cad3c6-892d-4bc9-a657-a554d6ebb0a6",
   "roles": {},
@@ -19030,7 +19030,7 @@
           "tableTo": "projects",
           "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

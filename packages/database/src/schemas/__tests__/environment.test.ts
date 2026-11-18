@@ -165,17 +165,25 @@ describe('Environment registration schema', () => {
     });
   });
 
-  it("releases a project's environment as standalone when the project is deleted", async () => {
+  it('refuses to delete a project until its environment is dealt with', async () => {
+    // Not `set null`: the environment would turn standalone under its
+    // project-derived name and could collide with a standalone one of the
+    // same name. The caller removes it, or releases it under a name of its
+    // own, first.
     const project = await createProject('GONE');
+    await createEnvironment('Same name');
     const [own] = await db
       .insert(environments)
-      .values({ configuration, name: 'Gone', projectId: project.id, userId })
+      .values({ configuration, name: 'Same name', projectId: project.id, userId })
       .returning();
 
-    await db.delete(projects).where(eq(projects.id, project.id));
+    await expect(db.delete(projects).where(eq(projects.id, project.id))).rejects.toMatchObject({
+      cause: { constraint: 'environments_project_id_projects_id_fk' },
+    });
 
-    const [row] = await db.select().from(environments).where(eq(environments.id, own.id));
-    expect(row.projectId).toBeNull();
+    await db.delete(environments).where(eq(environments.id, own.id));
+    await db.delete(projects).where(eq(projects.id, project.id));
+    expect(await db.select().from(projects).where(eq(projects.id, project.id))).toEqual([]);
   });
 
   it('retains environment records until explicit cleanup on owner or workspace deletion', async () => {

@@ -38,12 +38,16 @@ export const environments = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'restrict' }),
     /**
      * The project this environment belongs to, or null for a standalone one.
-     * `set null` rather than `cascade`: instances reference the row with
-     * `restrict`, so deleting the project removes the environment explicitly
-     * when nothing was built from it, and otherwise leaves it standalone for
-     * its creator instead of blocking the project's deletion.
+     *
+     * `restrict`: a project is deleted only after its environment has been
+     * dealt with — removed when nothing was built from it, otherwise released
+     * as standalone under a name of its own. Not `set null`, which would turn
+     * it standalone under its project-derived name, collide with the
+     * standalone name indexes and abort the deletion; and not `cascade`, since
+     * instances reference the row with `restrict` and their builds live on the
+     * execution plane.
      */
-    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'restrict' }),
     name: varchar('name', { length: 255 }).notNull(),
     description: text('description'),
     /** Registration availability, not the running/stopped state of an instance. */
