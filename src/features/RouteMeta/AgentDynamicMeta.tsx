@@ -110,5 +110,11 @@ export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.s
 export const ShareDynamicMeta = createAgentSectionDynamicMeta('navigation.agentShare');
 export const SelfLearningDynamicMeta = createAgentSectionDynamicMeta('navigation.selfLearning');
 export const PermissionDynamicMeta = createAgentSectionDynamicMeta('navigation.permission');
+export const DocumentsDynamicMeta = createAgentSectionDynamicMeta('navigation.document');
+export const GoalsDynamicMeta = createAgentSectionDynamicMeta('navigation.goals');
+export const TasksDynamicMeta = createAgentSectionDynamicMeta('navigation.tasks');
+export const MailDynamicMeta = createAgentSectionDynamicMeta('navigation.mail');
+export const AutomationsDynamicMeta = createAgentSectionDynamicMeta('navigation.automations');
+export const WebhookDynamicMeta = createAgentSectionDynamicMeta('navigation.webhook');
 
 export default AgentDynamicMeta;

@@ -497,14 +497,22 @@ describe('normalizeGithubToolResult (structured REST results)', () => {
       undefined,
       'create_pull_request',
     );
-    expect(fromRefs?.params.metadata).toEqual({ baseBranch: 'canary', headBranch: 'feat/x' });
+    expect(fromRefs?.params.metadata).toEqual({
+      baseBranch: 'canary',
+      headBranch: 'feat/x',
+      pullRequestLink: 'command',
+    });
 
     const fromArgs = structured(
       { number: 22, repository_full_name: 'lobehub/lobehub' },
       { base: 'main', head: 'feat/y' },
       'create_pull_request',
     );
-    expect(fromArgs?.params.metadata).toEqual({ baseBranch: 'main', headBranch: 'feat/y' });
+    expect(fromArgs?.params.metadata).toEqual({
+      baseBranch: 'main',
+      headBranch: 'feat/y',
+      pullRequestLink: 'command',
+    });
 
     const issue = structured(
       { base: { ref: 'main' }, number: 23, repository_full_name: 'lobehub/lobehub' },
@@ -692,21 +700,30 @@ describe('normalizeGithubToolResult (gh CLI edge cases)', () => {
       `gh pr create --repo lobehub/lobehub --head feat/work-branch --base=canary --title 'T' --body-file /tmp/body.md`,
       'https://github.com/lobehub/lobehub/pull/11',
     );
-    expect(long?.params.metadata).toEqual({ baseBranch: 'canary', headBranch: 'feat/work-branch' });
+    expect(long?.params.metadata).toEqual({
+      baseBranch: 'canary',
+      headBranch: 'feat/work-branch',
+      pullRequestLink: 'command',
+    });
 
     const short = runCommand(
       `gh pr create -R lobehub/lobehub -H fork-owner:fix/x -B main -t 'T'`,
       'https://github.com/lobehub/lobehub/pull/12',
     );
-    expect(short?.params.metadata).toEqual({ baseBranch: 'main', headBranch: 'fork-owner:fix/x' });
+    expect(short?.params.metadata).toEqual({
+      baseBranch: 'main',
+      headBranch: 'fork-owner:fix/x',
+      pullRequestLink: 'command',
+    });
   });
 
   it('records only the base a `gh pr edit --base` changes, and nothing without branch flags', () => {
     const retarget = runCommand(`gh pr edit 13 --repo lobehub/lobehub --base main`);
-    expect(retarget?.params.metadata).toEqual({ baseBranch: 'main' });
+    expect(retarget?.params.metadata).toEqual({ baseBranch: 'main', pullRequestLink: 'command' });
 
     const retitle = runCommand(`gh pr edit 13 --repo lobehub/lobehub --title 'Retitled'`);
-    expect(retitle?.params.metadata).toBeUndefined();
+    // No branch flag: only the command marker, so the create-time branches survive the merge.
+    expect(retitle?.params.metadata).toEqual({ pullRequestLink: 'command' });
   });
 
   it('never attaches branches to an issue', () => {
@@ -726,5 +743,37 @@ describe('normalizeGithubToolResult (gh CLI edge cases)', () => {
         toolName: 'runCommand',
       }),
     ).toBeNull();
+  });
+});
+
+describe('normalizeGithubToolResult (pull-request lifecycle status)', () => {
+  const lifecycle = (command: string, output: string) =>
+    normalizeGithubShellToolResult(
+      { data: { command, exitCode: 0, output }, toolName: 'Bash' },
+      { pullRequestLifecycle: true },
+    );
+
+  it('reads a merge that landed from the command output', () => {
+    const operation = lifecycle(
+      'gh pr merge 42 --repo lobehub/lobehub --squash',
+      '✓ Merged pull request lobehub/lobehub#42',
+    );
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'updated',
+      identifier: 'lobehub/lobehub#42',
+      status: 'merged',
+    });
+  });
+
+  it('leaves the status alone for a merge only queued for auto-merge', () => {
+    const operation = lifecycle(
+      'gh pr merge 43 --repo lobehub/lobehub --auto --squash',
+      '✓ Merged pull request lobehub/lobehub#43',
+    );
+
+    // Nothing merged yet: the queued auto-merge must not read as `merged`.
+    expect(operation?.params.patchFields).not.toContain('status');
+    expect(operation?.params.status).toBeUndefined();
   });
 });

@@ -1,0 +1,16 @@
+name = "no-self-proving-tests"
+builtInAgent = "basic-structured"
+instruction = """
+Review one test file. Owner rule (verbatim): "Do not write implementation-snapshot tests that merely restate internal constant tables, whitelist declarations, object literals, or similarly static structures when those tests provide no independent behavioral signal."
+
+Return no finding for independent public/protocol identifiers, provider registration or architecture/security policies, normalization/validation, state changes, persistence, recovery, dependency-boundary arguments, or legitimate metamorphic invariants such as idempotence. A mock used by real code is not itself a problem. A locally defined function is not evidence of a copied implementation. Do not guess what imported code does.
+
+Report only a case whose supplied evidence establishes one of:
+- The test calls a configured mock directly and merely compares its canned result, without an intervening real consumer.
+- An explicitly copied production implementation is reimplemented and tested locally, while the real implementation is never exercised.
+- Actual and expected are computed by the same deterministic helper with the same inputs; there is no independently derived result or metamorphic property.
+- The entire case only copies explicitly private static declaration data into an expected object/list, with no independent behavioral, registration, protocol or policy contract.
+
+Anchor once on the it/test declaration. Name exactly what is self-proving and why a broken production consumer could still pass. Suggest removing the redundant check/setup or exercising its real consumer with an independent expected outcome. Preserve useful assertions in mixed cases; do not report the entire case when it also proves real behavior. Duplicate proof already present in another case belongs to no-redundant-test-cases.
+If the lack of an independent contract is uncertain, return no finding.
+"""

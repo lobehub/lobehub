@@ -13,8 +13,8 @@ export interface LocalDatabaseColumn {
 }
 
 export interface LocalDatabaseTableRow {
-  entry: LocalDatabaseEntry;
   fields: LocalDatabaseField[];
+  key: string;
   replica?: ReplicaStorageKey;
 }
 
@@ -25,10 +25,12 @@ export interface ReplicaStorageKey {
   version: number;
 }
 
-export interface ReplicaResourceGroup {
-  entryCount: number;
-  name: string;
-}
+export const MAX_RENDERED_ROWS = 300;
+export const REPLICA_KEY_PREFIX = 'replica:';
+export const REPLICA_KEY_DELIMITER = ':';
+
+export const replicaResourcePrefix = (resource: string): string =>
+  `${REPLICA_KEY_PREFIX}${resource}${REPLICA_KEY_DELIMITER}`;
 
 const FIELD_PRIORITY = new Map([
   ['key', 0],
@@ -143,11 +145,11 @@ const pushValueFields = (fields: LocalDatabaseField[], prefix: string, value: un
   }
 };
 
-export const getLocalDatabaseFields = (
-  entry: LocalDatabaseEntry,
+const getLocalDatabaseKeyFields = (
+  key: string,
   replica?: ReplicaStorageKey,
 ): LocalDatabaseField[] => {
-  const fields = [createField('__key', 'key', entry.key)];
+  const fields = [createField('__key', 'key', key)];
 
   if (replica) {
     fields.push(
@@ -158,6 +160,14 @@ export const getLocalDatabaseFields = (
     );
   }
 
+  return fields;
+};
+
+export const getLocalDatabaseFields = (
+  entry: LocalDatabaseEntry,
+  replica?: ReplicaStorageKey,
+): LocalDatabaseField[] => {
+  const fields = getLocalDatabaseKeyFields(entry.key, replica);
   const { value } = entry;
 
   if (isTimestampEnvelope(value)) {
@@ -174,32 +184,11 @@ export const getLocalDatabaseFields = (
   return byPriority(fields, (field) => field.label);
 };
 
-export const createLocalDatabaseTableRows = (
-  entries: LocalDatabaseEntry[],
-): LocalDatabaseTableRow[] =>
-  entries.map((entry) => {
-    const replica = parseReplicaStorageKey(entry.key);
-    return { entry, fields: getLocalDatabaseFields(entry, replica), replica };
+export const createLocalDatabaseTableRows = (keys: string[]): LocalDatabaseTableRow[] =>
+  keys.map((key) => {
+    const replica = parseReplicaStorageKey(key);
+    return { fields: getLocalDatabaseKeyFields(key, replica), key, replica };
   });
-
-export const getReplicaResourceGroups = (rows: LocalDatabaseTableRow[]): ReplicaResourceGroup[] => {
-  const counts = new Map<string, number>();
-
-  for (const { replica } of rows) {
-    if (!replica) continue;
-    counts.set(replica.resource, (counts.get(replica.resource) ?? 0) + 1);
-  }
-
-  return [...counts.entries()]
-    .map(([name, entryCount]) => ({ entryCount, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-};
-
-export const filterRowsByResource = (
-  rows: LocalDatabaseTableRow[],
-  resource: string | null,
-): LocalDatabaseTableRow[] =>
-  resource ? rows.filter(({ replica }) => replica?.resource === resource) : rows;
 
 export const getLocalDatabaseColumns = (rows: LocalDatabaseTableRow[]): LocalDatabaseColumn[] => {
   const columns = new Map<string, LocalDatabaseColumn>();
@@ -213,26 +202,10 @@ export const getLocalDatabaseColumns = (rows: LocalDatabaseTableRow[]): LocalDat
   return byPriority([...columns.values()], (column) => column.label);
 };
 
-export const filterLocalDatabaseRows = (
-  rows: LocalDatabaseTableRow[],
+export const filterLocalDatabaseFields = <T extends LocalDatabaseField>(
+  fields: T[],
   search: string,
-): LocalDatabaseTableRow[] => {
-  const term = search.trim().toLowerCase();
-  if (!term) return rows;
-
-  return rows.filter(({ fields }) =>
-    fields.some(
-      ({ label, value }) =>
-        label.toLowerCase().includes(term) ||
-        formatLocalDatabaseCellValue(value).toLowerCase().includes(term),
-    ),
-  );
-};
-
-export const filterLocalDatabaseFields = (
-  fields: LocalDatabaseField[],
-  search: string,
-): LocalDatabaseField[] => {
+): T[] => {
   const term = search.trim().toLowerCase();
   if (!term) return fields;
 

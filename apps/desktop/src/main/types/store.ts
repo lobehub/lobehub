@@ -21,6 +21,11 @@ export interface ElectronMainStore {
    */
   debugLoggingEnabled: boolean;
   /**
+   * Epoch milliseconds at which `debugLoggingEnabled` turns itself off. Absent means it
+   * stays on until the user turns it off (`modules/debugLogging`).
+   */
+  debugLoggingExpiresAt?: number;
+  /**
    * Explicit completion state for the multi-step desktop onboarding flow.
    * Undefined preserves the legacy behavior for users who completed onboarding
    * before this marker existed.

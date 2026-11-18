@@ -10,6 +10,8 @@ import TaskProjectValue from './TaskProjectValue';
 
 const state = vi.hoisted(() => ({
   allowed: true,
+  confirmModal: vi.fn(),
+  moveTaskTreeToProject: vi.fn(),
   enabled: true,
   projects: undefined as { avatar?: string; id: string; name: string }[] | undefined,
   revalidate: vi.fn(),
@@ -19,6 +21,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
+  confirmModal: state.confirmModal,
   Popover: ({
     children,
     content,
@@ -97,7 +100,8 @@ vi.mock('@/store/project', () => ({
 }));
 
 vi.mock('@/store/task', () => ({
-  useTaskStore: (selector: (s: unknown) => unknown) => selector({ updateTask: state.updateTask }),
+  useTaskStore: (selector: (s: unknown) => unknown) =>
+    selector({ moveTaskTreeToProject: state.moveTaskTreeToProject, updateTask: state.updateTask }),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -138,6 +142,8 @@ beforeEach(() => {
   ];
   state.revalidate.mockClear();
   state.sync = { error: undefined, isHydrated: true, isValidating: false };
+  state.confirmModal.mockReset();
+  state.moveTaskTreeToProject.mockReset();
   state.updateTask.mockReset();
   state.updateTask.mockResolvedValue(undefined);
 });
@@ -236,6 +242,49 @@ describe('ProjectSelector', () => {
     open();
     fireEvent.click(screen.getByText('taskProject.none'));
     expect(state.updateTask).toHaveBeenLastCalledWith('T-1', { projectId: null });
+  });
+
+  it('confirms before filing a task with subtasks, then moves the whole tree', async () => {
+    render(
+      <ProjectSelector subtaskCount={44} taskIdentifier="T-1" value={null}>
+        <button data-testid="trigger">row</button>
+      </ProjectSelector>,
+    );
+    open();
+    fireEvent.click(screen.getByText('Apollo'));
+
+    expect(state.updateTask).not.toHaveBeenCalled();
+    expect(state.confirmModal).toHaveBeenCalledTimes(1);
+    const [options] = state.confirmModal.mock.calls[0];
+    expect(options.title).toBe('taskProject.moveTree.title');
+    expect(state.moveTaskTreeToProject).not.toHaveBeenCalled();
+
+    await options.onOk();
+    expect(state.moveTaskTreeToProject).toHaveBeenCalledWith('T-1', 'p1');
+  });
+
+  it('files a task with no visible subtasks as a tree, with no confirmation', () => {
+    const { rerender } = render(
+      <ProjectSelector subtaskCount={0} taskIdentifier="T-1" value={null}>
+        <button data-testid="trigger">row</button>
+      </ProjectSelector>,
+    );
+    open();
+    fireEvent.click(screen.getByText('Apollo'));
+    // Other members' private subtasks are invisible yet must move along.
+    expect(state.moveTaskTreeToProject).toHaveBeenCalledWith('T-1', 'p1');
+    expect(state.updateTask).not.toHaveBeenCalled();
+
+    // A filed tree cannot move as a whole; the plain save gets the refusal.
+    rerender(
+      <ProjectSelector subtaskCount={3} taskIdentifier="T-1" value="p1">
+        <button data-testid="trigger">row</button>
+      </ProjectSelector>,
+    );
+    open();
+    fireEvent.click(screen.getByText('Website Redesign'));
+    expect(state.updateTask).toHaveBeenLastCalledWith('T-1', { projectId: 'p2' });
+    expect(state.confirmModal).not.toHaveBeenCalled();
   });
 
   it('does not write when the current project is picked again', () => {

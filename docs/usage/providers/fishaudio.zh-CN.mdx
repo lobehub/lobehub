@@ -1,0 +1,68 @@
+---
+title: 在 LobeHub 中使用 Fish Audio API Key
+description: 在 LobeHub 中配置 Fish Audio API Key，使用 Fish Audio S2.1 Pro、Drama 3 生成富有表现力的语音。
+tags:
+  - Fish Audio
+  - 语音合成
+  - TTS
+  - API Key
+---
+
+# 在 LobeHub 中使用 Fish Audio
+
+[Fish Audio](https://fish.audio) 提供富有表现力的多语种语音合成模型，可以用自然语言指导演绎方式。在 LobeHub 中，Fish Audio 只提供语音合成（TTS），没有对话模型。
+
+<Steps>
+  ### 步骤一：获取 Fish Audio API Key
+
+  - 注册或登录 [Fish Audio](https://fish.audio)；
+  - 打开 [API Keys](https://fish.audio/app/api-keys) 页面，创建一个密钥。API 用量为预付费，与 Fish Audio 应用订阅分开计费；
+  - 复制密钥并妥善保存。
+
+  ### 步骤二：在 LobeHub 中配置 Fish Audio
+
+  - 打开 **应用设置 → AI 服务商**，选择 **Fish Audio**（可在服务商搜索框中输入 `Fish` 快速定位）；
+  - 将密钥粘贴到 **API Key** 输入框。修改会自动保存，密钥在存储前会使用 AES-GCM 加密；
+  - 打开服务商名称右侧的开关；
+  - 可选：如需经代理发送请求，可在 **API 代理地址** 中填写。留空则使用 `https://api.fish.audio`。
+
+  ### 步骤三：选择模型
+
+  **模型列表** 的 **TTS** 标签下列出了 Fish Audio 语音模型。Fish Audio S2.1 Pro、Drama 3 默认启用；S2 Pro 与已弃用的 S1 可在同一列表中手动开启。
+
+  Fish Audio 没有对话模型，因此服务商页面不显示 **检查** 按钮。可按下文方式生成一段语音来验证密钥。
+
+  <Callout type={'warning'}>
+    Fish Audio 按每百万 UTF-8 字节计费，一个汉字的费用相当于三个英文字母。LobeHub 也按 UTF-8 字节记录用量，通过 OpenRouter 等 OpenAI 兼容网关调用 Fish Audio 模型时同样如此。大量生成音频前，请先查看 [Fish Audio API 定价](https://docs.fish.audio/developer-guide/models-pricing/pricing-and-rate-limits)。
+  </Callout>
+</Steps>
+
+## 生成语音
+
+语音合成通过 LobeHub 的语音合成接口完成，LobeHub CLI（`lh`）与兼容 OpenAI 的 `POST /api/v1/audio/speech` 接口都使用该接口：
+
+```bash
+lh generate tts "你好，LobeHub" -m fishaudio/s2.1-pro -o hello.mp3
+```
+
+- **音色**：未指定时使用 Fish Audio 自带的默认音色。可用 `--voice <reference_id>` 指定其他音色，即音色页面地址 `fish.audio/m/<reference_id>` 中的 32 位 ID；
+- **长度**：语音以单个响应返回，每次请求最多 4096 个字符，更长的文本请拆成多次请求；
+- **格式**：`mp3`（默认）或 `opus`；
+- **语速**：`0.5` 至 `2`；
+- **演绎指令**：S2.1 Pro、S2 Pro 与 Drama 3 支持不超过 200 个字符的演绎指令，例如 `--instructions "小声、紧张"`。指令会以 `[指令]` 的形式放在文本前面，并一同计费。S1 不支持演绎指令。
+
+<Callout type={'warning'}>
+  LobeHub 不内置任何来自 Fish Audio 社区音色库的音色，社区库中有大量未经授权的角色和真人克隆音色。请只使用你自己克隆或有权使用的音色。
+</Callout>
+
+## 常见问题
+
+**“Fish Audio API Key is incorrect or empty, please check your Fish Audio API Key and try again.”**：没有找到密钥，或密钥被 Fish Audio 拒绝。请在 **应用设置 → AI 服务商 → Fish Audio** 中填写有效密钥，或请管理员在服务端设置 `FISHAUDIO_API_KEY`。密钥被拒绝时，括号中会附上 Fish Audio 返回的原始信息，例如 `Fish Audio API error (401): Invalid token`。
+
+**“Fish Audio API error (402)…”**：账号没有所选模型的 API 余额，请在 Fish Audio 充值 API 额度。
+
+**“Check the voice id…”**：该 `reference_id` 不存在或你的账号无权使用。请指定你自己拥有的音色，或不传 `--voice`。
+
+**限流错误**：账号达到并发请求上限，上限会随累计 API 消费提高。请稍后重试。
+
+自托管部署请参阅 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider#fish-audio) 中的 `FISHAUDIO_API_KEY`。

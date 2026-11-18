@@ -314,6 +314,22 @@ describe('MacOSMenu', () => {
       expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
     });
 
+    it('reopens the last closed tab from File > Reopen Closed Tab (Shift+Command+T)', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const reopenItem = fileMenu.submenu.find(
+        (item: any) => item.accelerator === 'Shift+Command+T',
+      );
+
+      expect(reopenItem).toBeDefined();
+      reopenItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('reopenClosedTab');
+    });
+
     it('should handle visit website click', async () => {
       macOSMenu.buildAndSetAppMenu();
 

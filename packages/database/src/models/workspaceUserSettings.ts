@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
@@ -149,4 +150,35 @@ export class WorkspaceUserSettingsModel {
       .returning();
     return row;
   };
+
+  /**
+   * Turn the composer's "New worktree" switch on or off for one directory and
+   * return the stored list. Read → apply → write under the row lock, so the
+   * cap (see `applyWorktreeModeDir`) is enforced here rather than trusted from a
+   * client copy that may be stale.
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    this.db.transaction(async (trx) => {
+      const [row] = await trx
+        .select({ preference: workspaceUserSettings.preference })
+        .from(workspaceUserSettings)
+        .where(
+          and(
+            eq(workspaceUserSettings.workspaceId, this.workspaceId),
+            eq(workspaceUserSettings.userId, this.userId),
+          ),
+        )
+        .for('update');
+      const current = row?.preference ?? {};
+      const worktreeModeDirs = applyWorktreeModeDir(current.worktreeModeDirs, key, enabled);
+      const next: WorkspaceUserPreference = { ...current, worktreeModeDirs };
+      await trx
+        .insert(workspaceUserSettings)
+        .values({ preference: next, userId: this.userId, workspaceId: this.workspaceId })
+        .onConflictDoUpdate({
+          set: { preference: next, updatedAt: new Date() },
+          target: [workspaceUserSettings.workspaceId, workspaceUserSettings.userId],
+        });
+      return worktreeModeDirs;
+    });
 }

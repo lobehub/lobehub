@@ -7,7 +7,7 @@ import {
   windowsToCalibrationIntervals,
 } from './calibration';
 import { computeTurnCostUsd, totalTokens } from './cost';
-import { selectAccount } from './loadBalancer';
+import { selectAccount, summarizeAvailability } from './loadBalancer';
 import { buildClaudeQuotaWindows, dropRetiredLimits } from './readings';
 import type { QuotaLimitReading } from './types';
 import { CLAUDE_SESSION_WINDOW_SECONDS, windowSecondsForKind } from './types';
@@ -434,5 +434,102 @@ describe('selectAccount', () => {
       { now: 0 },
     );
     expect(pick?.accountId).toBe('p1');
+  });
+});
+
+describe('summarizeAvailability', () => {
+  const base = { enabled: true, priority: 0 };
+  const now = 1000;
+
+  it('is available while any account has headroom', () => {
+    expect(
+      summarizeAvailability(
+        [
+          { ...base, accountId: 'spent', sessionResetsAt: 9000, sessionUtil: 100 },
+          { ...base, accountId: 'free', sessionUtil: 0, weeklyUtil: 56 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: true });
+  });
+
+  it('is exhausted when the only candidate is spent, and says when it comes back', () => {
+    // A device pin leaves one candidate: its spent 5-hour window decides.
+    expect(
+      summarizeAvailability(
+        [
+          {
+            ...base,
+            accountId: 'pin',
+            rateLimitedUntil: 9000,
+            sessionResetsAt: 9000,
+            sessionUtil: 100,
+          },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false, resetsAt: 9000 });
+  });
+
+  it('comes back at the earliest account, each at the latest limit benching it', () => {
+    expect(
+      summarizeAvailability(
+        [
+          // Both windows spent: back only once the weekly one resets too.
+          {
+            ...base,
+            accountId: 'both',
+            sessionResetsAt: 2000,
+            sessionUtil: 100,
+            weeklyResetsAt: 8000,
+            weeklyUtil: 100,
+          },
+          { ...base, accountId: 'weekly', weeklyResetsAt: 5000, weeklyUtil: 100 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false, resetsAt: 5000 });
+  });
+
+  it('promises no time when a benching limit gives none', () => {
+    expect(
+      summarizeAvailability(
+        [
+          { ...base, accountId: 'timed', sessionResetsAt: 2000, sessionUtil: 100 },
+          { ...base, accountId: 'untimed', weeklyResetsAt: null, weeklyUtil: 100 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false });
+  });
+
+  it('judges the scoped weekly only for work on that model', () => {
+    const fableSpent = [
+      {
+        ...base,
+        accountId: 'a',
+        scopedWeeklyResetsAt: { Fable: 7000 },
+        scopedWeeklyUtil: { Fable: 100 },
+        weeklyUtil: 40,
+      },
+    ];
+    expect(summarizeAvailability(fableSpent, { modelScope: 'Fable', now })).toEqual({
+      available: false,
+      resetsAt: 7000,
+    });
+    expect(summarizeAvailability(fableSpent, { now })).toEqual({ available: true });
+  });
+
+  it('ignores disabled accounts: they never come back on their own', () => {
+    expect(
+      summarizeAvailability(
+        [
+          { ...base, accountId: 'off', enabled: false, weeklyUtil: 0 },
+          { ...base, accountId: 'spent', sessionResetsAt: 3000, sessionUtil: 100 },
+        ],
+        { now },
+      ),
+    ).toEqual({ available: false, resetsAt: 3000 });
+    expect(summarizeAvailability([], { now })).toEqual({ available: false });
   });
 });

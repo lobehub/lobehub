@@ -42,7 +42,6 @@ export const KeyEnum = {
 } as const;
 
 export const HotkeyEnum = {
-  AddUserMessage: 'addUserMessage',
   CommandPalette: 'commandPalette',
   DeleteAndRegenerateMessage: 'deleteAndRegenerateMessage',
   DeleteLastMessage: 'deleteLastMessage',
@@ -109,7 +108,8 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.SwitchTab,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
+    // Mod is ⌘ on macOS and Ctrl elsewhere, matching browsers' tab shortcuts.
+    keys: combineKeys([KeyEnum.Mod, KeyEnum.Number]),
     nonEditable: true,
     scopes: [HotkeyScopeEnum.Global],
   },
@@ -204,12 +204,6 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.SaveTopic,
     keys: combineKeys([KeyEnum.Alt, 'n']),
-    scopes: [HotkeyScopeEnum.Chat],
-  },
-  {
-    group: HotkeyGroupEnum.Conversation,
-    id: HotkeyEnum.AddUserMessage,
-    keys: combineKeys([KeyEnum.Alt, KeyEnum.Enter]),
     scopes: [HotkeyScopeEnum.Chat],
   },
   {

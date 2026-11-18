@@ -22,7 +22,7 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { hasReplyActivity } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
-import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { channelJoinEvents, channelTimeline, isSelfJoinable } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
 import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
@@ -108,12 +108,14 @@ const Timeline = ({
     if (feed && followLatest.current && before === undefined) feed.scrollTop = feed.scrollHeight;
   }, [feedTail, before]);
 
+  // Someone reading an open project Channel without joining has no read position to move.
+  const joined = detail?.joined !== false;
   useEffect(() => {
-    if (threadId || sequence === undefined || before !== undefined) return;
+    if (!joined || threadId || sequence === undefined || before !== undefined) return;
     void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
-  }, [channelId, threadId, sequence, before]);
+  }, [channelId, joined, threadId, sequence, before]);
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
@@ -127,7 +129,9 @@ const Timeline = ({
         outgoing.length
           ? [...detail.messages, ...outgoing.map((item) => item.message)]
           : detail.messages,
-        threadId || direct ? [] : channelJoinEvents(detail.members),
+        threadId || direct
+          ? []
+          : channelJoinEvents(detail.members, { selfJoinable: isSelfJoinable(detail.channel) }),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -278,7 +282,9 @@ const Timeline = ({
                 placeholder={
                   threadId
                     ? t('threadComposer')
-                    : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
+                    : t(direct ? 'directComposer' : joined ? 'composer' : 'composerToJoin', {
+                        name: detail.channel.title,
+                      })
                 }
                 onCancelReply={() => reply.clear()}
                 onQueue={(message) => {

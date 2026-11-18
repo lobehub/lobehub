@@ -43,6 +43,15 @@ const schemaAt = (schema: z.ZodType | undefined, path: Path): z.ZodType | undefi
   return current;
 };
 
+/** Whether the original object holding `path` carries keys its schema does not know. */
+const hasForeignKeys = (schema: z.ZodType, original: unknown, path: Path): boolean => {
+  const parentPath = path.slice(0, -1);
+  const parent = at(original, parentPath);
+  const shape = objectShape(schemaAt(schema, parentPath));
+  if (!isRecord(parent) || !shape) return true;
+  return Object.keys(parent).some((key) => !(key in shape));
+};
+
 const coerce = (expected: string | undefined, value: unknown): { value: unknown } | undefined => {
   if (expected === 'number' && typeof value === 'string' && value.trim() !== '') {
     const number = Number(value);
@@ -86,6 +95,8 @@ export const parseLenient = <T>(
     let changed = false;
     /** Entries to drop, per list, applied after the other repairs so indexes stay valid. */
     const drops = new Map<unknown[], { indexes: Set<number>; path: Path }>();
+    /** Required lists the output left out; filled only as a last resort, see below. */
+    const missingLists: Path[] = [];
 
     const drop = (path: Path) => {
       const index = path.findLastIndex((key) => typeof key === 'number');
@@ -161,6 +172,17 @@ export const parseLenient = <T>(
           set(path, coerced.value, `read as ${issue.expected}`);
           continue;
         }
+        if (
+          issue.expected === 'array' &&
+          actual === undefined &&
+          isRecord(at(current, path.slice(0, -1)))
+        ) {
+          missingLists.push(path);
+          // Also queued for dropping: if the list cannot be read as empty below (the answer
+          // carries keys outside the schema), its entry is dropped as before.
+          drop(path);
+          continue;
+        }
         // Null for a field that does not take it: treat it as left out (a default may fill it).
         if (actual === null && isRecord(at(current, path.slice(0, -1)))) {
           set(path, undefined, 'null left out');
@@ -174,6 +196,14 @@ export const parseLenient = <T>(
     // A repair can settle issues reported next to it (a moved field fills the gap it left), so
     // entries are dropped only once a pass has nothing else to repair.
     if (changed) continue;
+    // A required list left out of an otherwise clean answer means no entries: models omit
+    // `memories` when there is nothing to keep. Keys outside the schema in the original output
+    // mean the model answered something else, which stays a failure.
+    const emptyLists = missingLists.filter((path) => !hasForeignKeys(schema, value, path));
+    if (emptyLists.length > 0) {
+      for (const path of emptyLists) set(path, [], 'missing list read as empty');
+      continue;
+    }
     for (const [list, { indexes, path }] of drops) {
       for (const index of [...indexes].sort((a, b) => b - a)) {
         list.splice(index, 1);

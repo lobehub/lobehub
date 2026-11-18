@@ -15,7 +15,7 @@ import {
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { t as translate } from 'i18next';
-import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import { DownloadIcon, Loader2, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -144,12 +144,17 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
             },
           ]}
         >
-          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} loading={loading} />
+          <ActionIcon
+            aria-label={t('connectorMarket.action.manage', { ns: 'setting' })}
+            disabled={!canEdit}
+            icon={MoreHorizontalIcon}
+            loading={loading}
+          />
         </DropdownMenu>
       );
     }
 
-    if (installing) return <ActionIcon loading icon={Loader2} />;
+    if (installing) return <ActionIcon loading aria-label={tc('loading')} icon={Loader2} />;
 
     return (
       <ActionIcon

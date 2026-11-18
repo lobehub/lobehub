@@ -316,7 +316,7 @@ name: skill-name
       });
 
       expect(mockEditor.setDocument).toHaveBeenCalledTimes(1);
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData), {
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', editorData, {
         keepId: true,
       });
     });
@@ -359,14 +359,9 @@ name: skill-name
       expect(consoleWarn).toHaveBeenCalledWith(
         '[DocumentStore] Failed to load SKILL.md editorData, falling back to markdown',
       );
-      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(
-        1,
-        'json',
-        JSON.stringify(editorData),
-        {
-          keepId: true,
-        },
-      );
+      expect(mockEditor.setDocument).toHaveBeenNthCalledWith(1, 'json', editorData, {
+        keepId: true,
+      });
       expect(mockEditor.setDocument).toHaveBeenNthCalledWith(2, 'markdown', '# Body');
 
       consoleWarn.mockRestore();
@@ -390,7 +385,7 @@ name: skill-name
         result.current.onEditorInit(mockEditor, 'doc-1');
       });
 
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData), {
+      expect(mockEditor.setDocument).toHaveBeenCalledWith('json', editorData, {
         keepId: true,
       });
     });

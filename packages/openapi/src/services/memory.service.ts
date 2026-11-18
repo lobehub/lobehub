@@ -1,3 +1,5 @@
+import { count as countRows } from 'drizzle-orm';
+
 import { TopicModel } from '@/database/models/topic';
 import {
   UserMemoryActivityModel,
@@ -7,10 +9,13 @@ import {
   UserMemoryPreferenceModel,
 } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { buildUserMemoryWhere } from '@/database/models/userMemory/where';
+import { userMemories } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
+import type { DeletedResource, DeletedResources } from '../types/common.type';
 import type { MemoryCategory } from '../types/memory.type';
 
 /**
@@ -74,22 +79,30 @@ export class MemoryRestService extends BaseService {
     }
   }
 
-  async deleteEntry(category: MemoryCategory, id: string): ServiceResult<unknown> {
+  async deleteEntry(category: MemoryCategory, id: string): ServiceResult<DeletedResource> {
+    const removed = await this.removeEntry(category, id);
+    // The models report a miss instead of throwing; an entry that is not the
+    // caller's (or is already gone) must not read as deleted.
+    if (!removed) throw this.createNotFoundError('Memory entry not found');
+    return { deleted: true, id };
+  }
+
+  private async removeEntry(category: MemoryCategory, id: string): Promise<boolean> {
     switch (category) {
       case 'identities': {
         return this.userMemoryModel.removeIdentityEntry(id);
       }
       case 'preferences': {
-        return this.preferenceModel.delete(id);
+        return (await this.preferenceModel.delete(id)).success;
       }
       case 'contexts': {
-        return this.contextModel.delete(id);
+        return (await this.contextModel.delete(id)).success;
       }
       case 'activities': {
-        return this.activityModel.delete(id);
+        return (await this.activityModel.delete(id)).success;
       }
       case 'experiences': {
-        return this.experienceModel.delete(id);
+        return (await this.experienceModel.delete(id)).success;
       }
     }
   }
@@ -99,9 +112,19 @@ export class MemoryRestService extends BaseService {
    * extraction status. Resetting the status matters — without it every topic
    * stays marked "extracted" and the purged memories can never come back.
    */
-  async deleteAll(): ServiceResult<void> {
-    await this.userMemoryModel.deleteAll();
+  async deleteAll(): ServiceResult<DeletedResources> {
+    // `count` is the number of memories actually removed: counted inside the
+    // same transaction as the delete, with the predicate the model deletes by.
+    const count = await this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ count: countRows() })
+        .from(userMemories)
+        .where(buildUserMemoryWhere(tx, this.userId, userMemories));
+      await new UserMemoryModel(tx, this.userId).deleteAll();
+      return Number(row?.count ?? 0);
+    });
     await this.personaModel.deletePersona();
     await this.topicModel.resetMemoryExtractStatus();
+    return { count, deleted: true };
   }
 }

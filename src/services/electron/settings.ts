@@ -1,4 +1,5 @@
 import {
+  type DebugLoggingDuration,
   type NetworkProxySettings,
   type ShortcutUpdateResult,
   type WindowsShellMode,
@@ -22,10 +23,17 @@ class DesktopSettingsService {
   };
 
   /**
-   * Turn `debug` records in `<userData>/logs/*.jsonl` on or off for packaged builds
+   * Turn `debug` records in `<userData>/logs/*.jsonl` off, or on for a duration, in packaged builds
    */
-  setDebugLoggingEnabled = async (enabled: boolean) => {
-    return ensureElectronIpc().system.setDebugLoggingEnabled(enabled);
+  setDebugLogging = async (duration: DebugLoggingDuration | 'off') => {
+    return ensureElectronIpc().system.setDebugLogging(duration);
+  };
+
+  /**
+   * Zip the last day of logs with app and system details, and select it in the file manager
+   */
+  exportDiagnostics = async () => {
+    return ensureElectronIpc().system.exportDiagnostics();
   };
 
   /**

@@ -36,6 +36,7 @@ apps/cli/src/
 │   ├── agent-group.ts        # Agent group CRUD
 │   ├── agent-signal/         # Inspect and trigger Agent Signal source events
 │   ├── artifact.ts           # Publish local HTML pages as artifacts
+│   ├── automation.ts         # Automations = MCP Events subscriptions (helpers in automation/)
 │   ├── bot.ts                # Bot integrations (channels, access policies, messengers)
 │   ├── completion.ts         # Shell completion script output
 │   ├── config.ts             # whoami, usage
@@ -71,6 +72,7 @@ apps/cli/src/
 │   ├── trace/                # Inspect and replay recorded agent execution traces
 │   ├── update.ts             # Self-update to the latest published version
 │   ├── user.ts               # User account & settings
+│   ├── webhook.ts            # Custom webhooks (helpers in webhook/, shared with automation)
 │   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
@@ -113,6 +115,7 @@ apps/cli/src/
 | `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                  |
 | `lh file`          | -     | File list, view, delete, recent                                                    |
 | `lh artifact`      | -     | Publish local HTML pages as artifacts                                              |
+| `lh automation`    | -     | Automations (alias `automations`): list, view, rename, check, delete               |
 | `lh kb`            | -     | Knowledge base CRUD, folders, docs, upload, tree view                              |
 | `lh memory`        | -     | User memory CRUD + extraction                                                      |
 | `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
@@ -129,6 +132,7 @@ apps/cli/src/
 | `lh session-group` | -     | Manage agent session groups                                                        |
 | `lh workspace`     | `ws`  | Workspace list, scope switch, members, invites, usage                              |
 | `lh user`          | -     | Manage user account and settings                                                   |
+| `lh webhook`       | -     | Custom webhooks (alias `webhooks`): create, edit, pause, test, rotate-key, calls   |
 | `lh whoami`        | -     | Current user info (including the resolved workspace scope)                         |
 | `lh usage`         | -     | Monthly/daily usage statistics                                                     |
 | `lh man`           | -     | Show a manual page for the CLI or a subcommand                                     |
@@ -368,3 +372,5 @@ See `references/` for each command group:
 - **Skills & Plugins**: `references/skills-plugins.md` (skill, plugin)
 - **Models & Providers**: `references/models-providers.md` (model, provider)
 - **Search & Config**: `references/search-config.md` (search, whoami, usage, workspace)
+- **Webhooks**: `references/webhook.md` (custom webhooks, identifier, Channel delivery)
+- **Automations**: `references/automation.md` (MCP Events subscriptions: list, view, rename, check, delete)

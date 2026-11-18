@@ -193,7 +193,9 @@ describe('GoalService', () => {
     // ① Only the K probes exist as Tasks — the whole 50-unit fan-out never lands.
     expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(5);
     expect(after.nodes.filter((n) => n.kind === 'batch')).toHaveLength(1);
-    expect(after.nodes.filter((n) => n.kind === 'finding')).toHaveLength(1);
+    // The recipe is a `template` node now, no longer a `finding` with its title.
+    expect(after.nodes.filter((n) => n.kind === 'template')).toHaveLength(1);
+    expect(after.nodes.filter((n) => n.kind === 'finding')).toHaveLength(0);
     expect(after.nodes.filter((n) => n.kind === 'decision')).toHaveLength(1);
 
     const state = after.goal.config?.rolloutState;
@@ -212,7 +214,7 @@ describe('GoalService', () => {
     // Five probes inside the batch — never the whole 50-unit roster.
     expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'task')).toHaveLength(5);
     // Plus the one Template and the one Assay that make the batch a batch.
-    expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'finding')).toHaveLength(
+    expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'template')).toHaveLength(
       1,
     );
     expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'decision')).toHaveLength(

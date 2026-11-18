@@ -12,11 +12,12 @@ interface MarkdownImageProps extends ComponentProps<'img'> {
   deviceId?: string;
   markdownFilePath: string;
   node?: unknown;
+  topicId?: string;
   workingDirectory: string;
 }
 
 const MarkdownImage = memo<MarkdownImageProps>(
-  ({ alt, className, deviceId, markdownFilePath, node, src, style, workingDirectory }) => {
+  ({ alt, className, deviceId, markdownFilePath, node, src, style, topicId, workingDirectory }) => {
     void node;
 
     const markdownSrc = typeof src === 'string' ? src : undefined;
@@ -31,6 +32,7 @@ const MarkdownImage = memo<MarkdownImageProps>(
             accept: 'image',
             deviceId,
             filePath: resolvedPath,
+            topicId,
             workingDirectory,
           })
         : null,
@@ -39,6 +41,7 @@ const MarkdownImage = memo<MarkdownImageProps>(
           accept: 'image',
           deviceId,
           path: resolvedPath!,
+          ...(topicId && { topicId }),
           workingDirectory,
         }),
       { revalidateOnFocus: false },

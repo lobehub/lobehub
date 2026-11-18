@@ -37,6 +37,10 @@ export const resolveNavPanelKey = (
       return 'memory';
     }
 
+    case 'music': {
+      return 'music';
+    }
+
     case 'page': {
       return 'page';
     }

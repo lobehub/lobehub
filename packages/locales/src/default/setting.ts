@@ -1,4 +1,26 @@
 export default {
+  'connectorMarket.action.connect': 'Connect',
+  'connectorMarket.action.details': 'View details',
+  'connectorMarket.action.install': 'Install',
+  'connectorMarket.action.manage': 'Manage',
+  'connectorMarket.add': 'Add',
+  'connectorMarket.add.browseStore': 'Browse Skill Store',
+  'connectorMarket.add.browseStoreDesc': 'Built-in tools, skills and MCP servers',
+  'connectorMarket.add.custom': 'Add custom connector',
+  'connectorMarket.add.customDesc': 'Connect your own MCP server',
+  'connectorMarket.detail.byAuthor': 'By {{author}}',
+  'connectorMarket.detail.information': 'Information',
+  'connectorMarket.detail.tools': 'Tools',
+  'connectorMarket.detail.type': 'Type',
+  'connectorMarket.empty.clear': 'Clear search',
+  'connectorMarket.empty.search': 'No connectors match “{{keyword}}”',
+  'connectorMarket.empty.searchDesc': 'Try another name, or find more in the Skill Store.',
+  'connectorMarket.refresh': 'Refresh',
+  'connectorMarket.search.placeholder': 'Search connectors',
+  'connectorMarket.section.installed': 'Installed',
+  'connectorMarket.section.showAll': 'Show all',
+  'connectorMarket.section.showLess': 'Show less',
+  'connectorMarket.source': 'Source',
   'systemAgent.channelRouting.title': 'Channel decision model',
   'systemAgent.channelRouting.modelDesc':
     'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',
@@ -27,6 +49,7 @@ export default {
   'devices.cliUpdate.retryCommand': 'Retry same request',
   'devices.cliUpdate.ambiguous':
     'The request may have been accepted. Refresh status or retry the same request; do not start another operation.',
+  'settingSystemTools.tools.antigravity.desc': 'Antigravity CLI - Google agentic coding CLI',
   'devices.keepAwake.desc':
     'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
   'devices.keepAwake.title': 'Keep Awake While Connected',
@@ -1047,6 +1070,8 @@ export default {
     'The hotkey must include at least one modifier key (Ctrl, Alt, Shift) and one regular key',
   'hotkey.record': 'Press a key to record the hotkey',
   'hotkey.reset': 'Reset to default hotkeys',
+  'hotkey.sendMessage.desc': 'The other key combination inserts a line break',
+  'hotkey.sendMessage.title': 'Send Message',
   'hotkey.title': 'Hotkeys',
   'hotkey.updateError': 'Failed to update hotkey: Network or system error',
   'hotkey.updateSuccess': 'Hotkey updated successfully',
@@ -1384,8 +1409,8 @@ export default {
   'settingAgent.environment.title': 'Environment',
   'settingAgent.environment.desc': 'Where it runs, and what it needs there.',
   'settingAgent.instruction.title': 'Instruction',
-  'settingAgent.instruction.desc':
-    'Who it is and how it should behave. It reads this before every reply.',
+  'settingAgent.instruction.description':
+    'Define the agent’s identity, responsibilities, working methods, and response style. These instructions apply in every conversation.',
   'settingAgent.knowledgePage.title': 'Knowledge Base',
   'settingAgent.knowledgePage.desc': 'The libraries and files it can search when it answers.',
   'settingAgent.knowledgePage.libraries.title': 'Libraries',
@@ -1446,19 +1471,30 @@ export default {
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
   'settingAbout.debugLogs.desc':
-    'Also record detailed debug logs. Turn on while reproducing an issue, then turn off: debug logs use more disk space and may include file paths and URLs.',
+    'Record more detailed logs while you reproduce a problem. Debug logs use more disk space and may include file paths and web addresses.',
   'settingAbout.debugLogs.devDesc': 'Development builds always record debug logs.',
-  'settingAbout.debugLogs.directory': 'Log Files',
-  'settingAbout.debugLogs.openDirectory': 'Open Folder',
-  'settingAbout.debugLogs.openDirectoryDesc': 'Attach these files when you report an issue.',
+  'settingAbout.debugLogs.openDirectory': 'Open Log Folder',
   'settingAbout.debugLogs.title': 'Debug Logs',
-  'settingAbout.diagnostics.title': 'Diagnostics',
+  'settingAbout.debugLogs.option.24h': 'On for 24 hours',
+  'settingAbout.debugLogs.option.always': 'Always on',
+  'settingAbout.debugLogs.option.off': 'Off',
+  'settingAbout.debugLogs.status.always':
+    'On until you turn it off. Debug logs use more disk space.',
+  'settingAbout.debugLogs.status.hours_one': 'On. Turns off automatically in {{count}} hour.',
+  'settingAbout.debugLogs.status.hours_other': 'On. Turns off automatically in {{count}} hours.',
+  'settingAbout.debugLogs.status.soon': 'On. Turns off automatically within the hour.',
+  'settingAbout.debugLogs.updateFailed': "Couldn't change debug logs. Try again.",
+  'settingAbout.diagnostics.bundle.desc':
+    'Packs the last 24 hours of logs with the app version and system details into one file. Attach it when you report a problem.',
+  'settingAbout.diagnostics.bundle.title': 'Diagnostics Package',
+  'settingAbout.remoteDebugging.activeDesc':
+    'On: programs on this computer can control LobeHub through port {{port}}. Turn it off when you finish debugging.',
   'settingAbout.remoteDebugging.confirm.content':
     'After you restart LobeHub, programs on this computer can connect to port {{port}}, control LobeHub windows, and read your signed-in session and data. The port opens on every launch until you turn this off. Turn it on only while debugging.',
   'settingAbout.remoteDebugging.confirm.ok': 'Allow',
   'settingAbout.remoteDebugging.confirm.title': 'Allow remote debugging?',
   'settingAbout.remoteDebugging.desc':
-    'Let developer tools on this computer connect to LobeHub on port {{port}} and read app state.',
+    'For developers troubleshooting LobeHub. When on, other programs on this computer can control LobeHub and read your signed-in session and data. Keep it off for everyday use.',
   'settingAbout.remoteDebugging.launchOptionDesc':
     'Remote debugging was turned on by a launch option for this session.',
   'settingAbout.remoteDebugging.restartToApply': 'Restart LobeHub to apply this change.',
@@ -1553,6 +1589,11 @@ export default {
   'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChatAppearance.chatBehavior.title': 'Chat Behavior',
   'settingChatAppearance.workflowStreamingExpand.title': 'Expand Tool Steps While Running',
+  'settingChatAppearance.followUpBehavior.desc':
+    'Queue follow-ups while the agent runs, or steer the current run',
+  'settingChatAppearance.followUpBehavior.options.queue': 'Queue',
+  'settingChatAppearance.followUpBehavior.options.steer': 'Steer',
+  'settingChatAppearance.followUpBehavior.title': 'Follow-up behavior',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',
   'settingChatAppearance.fontSize.title': 'Font Size',
@@ -1565,6 +1606,9 @@ export default {
   'settingChatAppearance.pasteAutoConvert.desc':
     'Pasted Markdown turns into formatted text in the input. Turn this off to keep text exactly as copied. Press ⇧⌘V (Ctrl+Shift+V on Windows) to paste plain text anytime.',
   'settingChatAppearance.pasteAutoConvert.title': 'Format Markdown on Paste',
+  'settingChatAppearance.showImageReadPreview.desc':
+    'When off, tool calls that read an image fold in with the other calls and stay collapsed until clicked.',
+  'settingChatAppearance.showImageReadPreview.title': 'Show Image Reads on Their Own',
   'settingChatAppearance.title': 'Chat Appearance',
   'settingChatAppearance.transitionMode.desc': 'Choose how chat messages appear',
   'settingChatAppearance.transitionMode.options.fadeIn': 'Fade In',
@@ -1937,7 +1981,13 @@ When I am ___, I need ___
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
+  'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
+  'skillView.empty.search': 'No skills match “{{keyword}}”',
+  'skillView.empty.title': 'No skills yet',
+  'skillView.search.placeholder': 'Search skills',
   'skillView.skills': 'Skills',
+  'skillView.skillsDesc':
+    'Give your agents task-specific skills. Open a skill to see its instructions and resources.',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':
@@ -1956,6 +2006,15 @@ When I am ___, I need ___
     'Copy agent groups and their member agents into another workspace or personal account.',
   'storage.actions.copyAgentGroups.title': 'Agent Groups Copy',
   'storage.actions.export.button': 'Export',
+  'storage.actions.export.download': 'Download',
+  'storage.actions.export.downloadError': 'Download failed. Please try again.',
+  'storage.actions.export.exporting': 'Exporting…',
+  'storage.actions.export.exportingDesc':
+    'Preparing your data in the background. You can leave this page; we will notify you when it is ready.',
+  'storage.actions.export.failed': 'The last export failed. Please try again.',
+  'storage.actions.export.ready': 'Last export: {{time}} · {{size}}',
+  'storage.actions.export.rerun': 'Export Again',
+  'storage.actions.export.startError': 'Could not start the export. Please try again later.',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',
   'storage.actions.export.exportType.agentWithMessage': 'Export Agent and Messages',
   'storage.actions.export.exportType.all': 'Export Global Settings and All Agent Data',
@@ -2619,7 +2678,6 @@ When I am ___, I need ___
   'workspace.billingPage.credits.packages.fallback': 'Package #{{index}}',
   'workspace.billingPage.credits.packages.loadMore': 'Load more',
   'workspace.billingPage.credits.packages.purchased': 'Purchased',
-  'workspace.billingPage.credits.packages.remaining': 'Remaining',
   'workspace.billingPage.credits.packages.source': 'Source',
   'workspace.billingPage.credits.packages.sourceLabel.autoTopUp': 'Auto top-up',
   'workspace.billingPage.credits.packages.sourceLabel.systemGift': 'System gift',
@@ -2633,7 +2691,6 @@ When I am ___, I need ___
   'workspace.billingPage.credits.status.cancelledCta': 'Resume subscription',
   'workspace.billingPage.credits.status.cancelledDesc':
     'Subscription is scheduled to end on {{date}}. Usage will stop refreshing after that.',
-  'workspace.billingPage.credits.balance.creditBalance': 'Top-up balance',
   'workspace.billingPage.credits.balance.basicDesc':
     'Basic workspaces do not include monthly usage — top up below or upgrade to Pro.',
   'workspace.billingPage.credits.balance.freeDesc':
@@ -2790,6 +2847,7 @@ When I am ___, I need ___
   'workspace.billingPage.usage.categories.chat': 'Chat',
   'workspace.billingPage.usage.categories.embedding': 'Embedding',
   'workspace.billingPage.usage.categories.imageGeneration': 'Image generation',
+  'workspace.billingPage.usage.categories.musicGeneration': 'Music generation',
   'workspace.billingPage.usage.categories.tts': 'Text to speech',
   'workspace.billingPage.usage.categories.videoGeneration': 'Video generation',
   'workspace.billingPage.usage.empty':
@@ -4237,7 +4295,6 @@ When I am ___, I need ___
   'workspaceSetting.tab.connector': 'Connectors',
   'workspaceSetting.tab.skill': 'Skills',
   'tools.add': 'Add Skill',
-  'tools.addSkillOrConnector': 'Add Skills / Connectors',
   'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
   'tools.legacyConnector.configure': 'Configure',
   'tools.legacyConnector.upgradeDesc':
@@ -4373,7 +4430,6 @@ When I am ___, I need ___
     'Are you sure you want to uninstall {{name}}? This skill will be removed from the current agent.',
   'tools.builtins.uninstallConfirm.title': 'Uninstall {{name}}',
   'tools.builtins.uninstalled': 'Uninstalled',
-  'tools.disabled': 'The current model does not support function calls and cannot use the skill',
   'tools.composio.addServer': 'Add Server',
   'tools.composio.authCompleted': 'Authentication Completed',
   'tools.composio.authFailed': 'Authentication Failed',
@@ -4607,6 +4663,10 @@ When I am ___, I need ___
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',
+  'tools.picker.disabled': 'This model does not support tool calling.',
+  'tools.picker.management': 'Manage tools',
+  'tools.picker.search': 'Search tools…',
+  'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
   'tools.plugins.groupName': 'Skills',
   'tools.plugins.management': 'Skill Management',
@@ -5110,7 +5170,11 @@ When I am ___, I need ___
   'subscriptionAccounts.columns.status': 'Status',
   'subscriptionAccounts.empty.desc':
     'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
+  'subscriptionAccounts.empty.privateDesc':
+    'No private accounts here. Accounts you sign in to on your devices start here, visible only to you.',
   'subscriptionAccounts.empty.title': 'No subscription accounts yet',
+  'subscriptionAccounts.empty.workspaceDesc':
+    "No accounts are shared with this workspace yet. Share one from the Private tab so teammates' agents can use it.",
   'subscriptionAccounts.filter.all': 'All',
   'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
   'subscriptionAccounts.meter.session': '5-hour',
@@ -5152,17 +5216,20 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.todayDay': 'Today',
   'subscriptionAccounts.calendar.tomorrow': 'Tomorrow {{time}}',
   'subscriptionAccounts.calendar.tomorrowDay': 'Tomorrow',
+  'subscriptionAccounts.tabs.private': 'Private',
+  'subscriptionAccounts.tabs.workspace': 'Workspace',
   'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
   'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
-  'subscriptionAccounts.visibility.private': 'Private',
   'subscriptionAccounts.visibility.privateAction': 'Make private',
   'subscriptionAccounts.visibility.privateConfirm.desc':
     "Only you will see it. Other members' agents stop drawing on its quota.",
   'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
+  'subscriptionAccounts.visibility.privateDone': 'Made private. It now lists under Private.',
   'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
   'subscriptionAccounts.visibility.publicConfirm.desc':
     'Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.',
   'subscriptionAccounts.visibility.publicConfirm.title': 'Share this account with the workspace?',
+  'subscriptionAccounts.visibility.publicDone': 'Shared. It now lists under Workspace.',
   'tab.subscriptionAccounts': 'Subscription Accounts',
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',
@@ -5194,4 +5261,93 @@ When I am ___, I need ___
   'taskLabels.tabs.task': 'Task labels',
   'taskLabels.usage': '{{count}} tasks',
   'taskLabels.actions.more': 'More actions',
+  'tab.automations': 'Automations',
+  'webhooks.empty.desc':
+    'Open an agent and go to Agent Profile → Webhook to create one. Every agent’s webhooks are listed here.',
+  'webhooks.empty.title': 'No webhooks yet',
+  'webhooks.desc':
+    'URLs any outside system can call to run an agent with what it sent. Each call uses credits. To create one, open an agent and go to Agent Profile → Webhook.',
+  'automations.actions.more': 'More actions',
+  'settingsSearch.tabKeywords.webhooks': 'webhooks, webhook url, callback, http trigger',
+  'tab.webhooks': 'Webhooks',
+  'settingsSearch.tabKeywords.automations': 'automations, events, event subscriptions, triggers',
+  'automations.desc':
+    'Connector events your agents subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+  'automations.descWorkspace':
+    'Connector events the agents in this workspace subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
+  'automations.descAgent':
+    'Connector events this agent subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+  'automations.columns.subscription': 'Subscription',
+  'automations.columns.status': 'Status',
+  'automations.columns.target': 'Agent & topic',
+  'automations.columns.topic': 'Topic',
+  'automations.columns.lastDelivery': 'Last event',
+  'automations.source.moreArgs': '{{text}} +{{count}}',
+  'automations.untitledTopic': 'Untitled topic',
+  'automations.error.channel_unavailable':
+    "Couldn't post the last result to the Channel: the Agent or its creator is no longer a member, or the Channel was archived.",
+  'automations.target.channel': 'Posts to {{channel}}',
+  'automations.target.channelHidden': "Posts to a Channel you're not in",
+  'automations.target.channelThread': 'Posts to a thread in {{channel}}: {{thread}}',
+  'automations.target.untitledChannel': 'Untitled Channel',
+  'automations.target.untitledThread': 'Untitled thread',
+  'automations.lastDelivery.never': 'No events yet',
+  'automations.status.active': 'Active',
+  'automations.status.reconnect': 'Reconnect needed',
+  'automations.status.deliveryError': 'Delivery failing',
+  'automations.status.terminated': 'Ended',
+  'automations.status.paused': 'Paused',
+  'automations.error.auth': "The connector's authorization has expired.",
+  'automations.error.connection_refused':
+    'The connector could not connect to LobeHub to deliver events.',
+  'automations.error.timeout': 'The connector timed out delivering events to LobeHub.',
+  'automations.error.tls_error': 'The connector could not open a secure connection to LobeHub.',
+  'automations.error.http_4xx': "LobeHub rejected the connector's deliveries.",
+  'automations.error.http_5xx': "LobeHub failed while receiving the connector's deliveries.",
+  'automations.error.challenge_failed':
+    "The connector could not verify LobeHub's callback address.",
+  'automations.error.delivery_suspended':
+    'The connector had paused delivery after repeated failures and has been asked to resume. This clears when the next event arrives.',
+  'automations.error.wake_cap':
+    'Events arrived too often, so some runs in the last 10 minutes were skipped.',
+  'automations.error.insufficient_budget':
+    'Not enough credits to run the agent. Later events run once you top up.',
+  'automations.error.reconnectToResubscribe':
+    'Access was revoked and the subscription ended. Reconnect the connector, then delete this subscription and ask the agent to subscribe again.',
+  'automations.error.event_unavailable':
+    'The connector no longer offers this event, so the subscription ended.',
+  'automations.error.server_unreachable': "Could not reach the connector's server.",
+  'automations.error.unknown':
+    'The subscription reported an error without details. Check to retry.',
+  'automations.error.terminated': 'The connector ended this subscription.',
+  'automations.remedy.reconnect': 'Reconnect',
+  'automations.actions.check': 'Check',
+  'automations.actions.checkTooltip':
+    'Confirm with the connector that events are still delivered; paused delivery resumes',
+  'automations.actions.delete': 'Delete',
+  'automations.actions.rename': 'Rename',
+  'automations.rename.done': 'Renamed',
+  'automations.rename.failed': "Couldn't rename it. Try again.",
+  'automations.rename.hint':
+    'Only people see this name; the agent keeps using its identifier. Leave it empty to show "{{fallback}}".',
+  'automations.rename.ok': 'Save',
+  'automations.rename.title': 'Rename automation',
+  'automations.actions.noPermission':
+    'Only the member who approved it or a workspace admin can do this',
+  'automations.check.healthy': 'Subscription is working',
+  'automations.check.problem': 'Checked: {{reason}}',
+  'automations.check.tooSoon': 'Just checked. Try again in 30 seconds',
+  'automations.check.notFound': 'This subscription no longer exists',
+  'automations.check.unsupported': "This automation can't be checked",
+  'automations.check.failed': "Couldn't finish the check. Try again",
+  'automations.delete.title': 'Delete this subscription?',
+  'automations.delete.content':
+    '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
+  'automations.delete.ok': 'Delete',
+  'automations.delete.cancel': 'Cancel',
+  'automations.delete.failed': "Couldn't delete the subscription. Try again",
+  'automations.delete.alreadyGone': 'This subscription was already removed',
+  'automations.empty.title': 'No automations yet',
+  'automations.empty.desc':
+    'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
 };

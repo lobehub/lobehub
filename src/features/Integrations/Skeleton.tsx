@@ -3,7 +3,6 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
@@ -15,11 +14,6 @@ const styles = stylex.create({
     paddingInline: '16px',
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,
-  },
-  column: {
-    width: '100%',
-    maxWidth: '760px',
-    marginInline: 'auto',
   },
   // `Connections` card: filled, rows 10px apart from its 2px inset.
   connections: {
@@ -179,8 +173,3 @@ export const IntegrationDetailSkeleton = () => {
     </Flexbox>
   );
 };
-
-/** `IntegrationsLayout`'s reading-width column, for skeletons outside the layout. */
-export const IntegrationsColumn = ({ children }: { children: ReactNode }) => (
-  <div {...stylex.props(styles.column)}>{children}</div>
-);

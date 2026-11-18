@@ -373,6 +373,22 @@ export class AgentDocumentModel {
     return queries.listByDocumentIds(this.ctx, agentId, documentIds, options);
   }
 
+  async listBindingStatesByRefs(agentId: string, refs: string[]) {
+    return queries.listBindingStatesByRefs(this.ctx, agentId, refs);
+  }
+
+  async listRevokedFromAllAgents(documentIds: string[]): Promise<string[]> {
+    return queries.listRevokedFromAllAgents(this.ctx, documentIds);
+  }
+
+  async listExistingDocumentIds(documentIds: string[]): Promise<string[]> {
+    return queries.listExistingDocumentIds(this.ctx, documentIds);
+  }
+
+  async listKnowledgeBaseMemberIds(documentIds: string[]): Promise<string[]> {
+    return queries.listKnowledgeBaseMemberIds(this.ctx, documentIds);
+  }
+
   async hasByAgent(agentId: string): Promise<boolean> {
     return queries.hasByAgent(this.ctx, agentId);
   }

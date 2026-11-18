@@ -83,6 +83,7 @@ export const canJoinRunningTurn = (entry: QueuedFollowUp, state: AgentState): bo
 
   const runAgentId = state.origin?.agentId;
   if (!request.agentId || !runAgentId || request.agentId !== runAgentId) return false;
+  if (entry.subAgentSteer) return true;
 
   return matchesRunningTurnSettings(request, state);
 };

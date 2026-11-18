@@ -19,6 +19,8 @@ vi.mock('../middleware/auth', () => ({
 }));
 
 const { default: AgentRoutes } = await import('./agents.route');
+const { AgentDetailSchema, AgentListSchema, AgentSchema } = await import('../types/agent.type');
+const { DeletedResourceSchema } = await import('../types/common.type');
 
 const USER = 'personal-agent-user';
 
@@ -54,6 +56,7 @@ describe('personal agents', () => {
     expect(res.status).toBe(200);
     const agent = await json(res);
     expect(agent.personal).toBe(true);
+    expect(() => AgentSchema.parse(agent)).not.toThrow();
 
     const [row] = await db.select().from(agents).where(eq(agents.id, agent.id));
     expect(row.metadata).toEqual({ personal: true });
@@ -77,6 +80,7 @@ describe('personal agents', () => {
     expect(personal.total).toBe(1);
     expect(others.agents.map((agent: any) => agent.title)).toEqual(['Writer']);
     expect(all.total).toBe(2);
+    expect(() => AgentListSchema.parse(all)).not.toThrow();
   });
 
   it('treats a non-boolean metadata.personal as not personal instead of failing', async () => {
@@ -105,6 +109,7 @@ describe('personal agents', () => {
 
     expect(copy.id).not.toBe(agent.id);
     expect(copy.personal).toBe(true);
+    expect(() => AgentDetailSchema.parse(copy)).not.toThrow();
     expect((await json(await request('/?personal=true'))).total).toBe(2);
   });
 
@@ -133,5 +138,28 @@ describe('personal agents', () => {
 
     const [row] = await db.select().from(agents).where(eq(agents.id, agent.id));
     expect(row.metadata).toEqual({ personal: false, source: 'import' });
+  });
+});
+
+describe('agent detail and deletion', () => {
+  it('returns the agent with its mounted knowledge', async () => {
+    const agent = await json(await request('/', { body: { title: 'Writer' }, method: 'POST' }));
+
+    const res = await request(`/${agent.id}`);
+    expect(res.status).toBe(200);
+    const detail = await json(res);
+    expect(detail).toMatchObject({ files: [], id: agent.id, knowledgeBases: [] });
+    expect(() => AgentDetailSchema.parse(detail)).not.toThrow();
+  });
+
+  it('answers a delete with the id that is now gone', async () => {
+    const agent = await json(await request('/', { body: { title: 'Doomed' }, method: 'POST' }));
+
+    const res = await request(`/${agent.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    const deleted = await json(res);
+    expect(deleted).toEqual({ deleted: true, id: agent.id });
+    expect(() => DeletedResourceSchema.parse(deleted)).not.toThrow();
+    expect(await db.select().from(agents).where(eq(agents.id, agent.id))).toHaveLength(0);
   });
 });

@@ -1,8 +1,12 @@
-import { z } from 'zod';
-
 import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
 import type { ManagedDevicePhase } from './managedDevice';
 import type { DeviceClient } from './tool/builtin';
+import type {
+  DeviceGitLinkedPullRequest,
+  DeviceGitLinkedPullRequestLookupStatus,
+  DeviceGitUpstreamRef,
+  WorkingDirConfig,
+} from './workingDir';
 
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
@@ -19,7 +23,7 @@ export interface DeviceUnavailableErrorData {
 }
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 /**
  * A filesystem skill discovered on the execution device by the client at
@@ -41,8 +45,9 @@ export interface ProjectSkillMeta {
 }
 
 /**
- * A single project-root agent instructions file (`AGENTS.md` / `CLAUDE.md`) read
- * from the device filesystem during workspace init. Unlike skills (metadata
+ * A single agent instructions file (`AGENTS.md` / `CLAUDE.md`) read from the
+ * working directory or one of its parents up to the repository root during
+ * workspace init. Unlike skills (metadata
  * only), the full body is carried so it can be injected into the system role and
  * rendered in web without a second device round-trip. Carried as a list on
  * {@link WorkspaceInitResult} since multiple files can coexist (e.g. both
@@ -51,6 +56,11 @@ export interface ProjectSkillMeta {
 export interface WorkspaceInstructions {
   /** Full file content (capped at read time, e.g. 64KB). */
   content: string;
+  /**
+   * Absolute path of the file. Absent in scans cached before parent
+   * directories were read, which only covered the working directory.
+   */
+  path?: string;
   /** Source file the instructions were read from. */
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
@@ -77,115 +87,7 @@ export interface WorkspaceInitResult {
   skills: ProjectSkillMeta[];
 }
 
-/**
- * A working directory source a device has used. Structured (rather than a bare
- * path string) so metadata such as the detected repo type, active git
- * branch, and active git worktree survives — a remote client viewing this
- * device can't re-probe its filesystem, so whatever isn't captured here at the
- * source is lost.
- */
-export type WorkingDirRepoType = 'git' | 'github';
-
-export type DeviceGitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
-
-/** A GitHub pull request linked to a branch. */
-export interface DeviceGitLinkedPullRequest {
-  ciStatus?: DeviceGitPullRequestCiStatus;
-  isDraft?: boolean;
-  mergeable?: string;
-  mergedAt?: string | null;
-  mergeStateStatus?: string;
-  number: number;
-  reviewDecision?: string;
-  state: string;
-  title: string;
-  url: string;
-}
-
-export type DeviceGitLinkedPullRequestLookupStatus = 'error' | 'gh-missing' | 'ok';
-
-export interface WorkingDirGithubState {
-  /** Additional PRs targeting the same head branch, beyond the primary one. */
-  extraPullRequestCount?: number;
-  /** GitHub PR linked to the effective working directory's branch. */
-  pullRequest?: DeviceGitLinkedPullRequest | null;
-  /** Lookup status for the linked PR probe. */
-  pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
-}
-
-/**
- * The remote ref a local branch publishes to.
- *
- * Recorded because the local branch name is a DEVICE-LOCAL label: a worktree
- * generates its own (`worktree-feat+foo`), and a push with an explicit refspec
- * (`git push origin local:remote`) renames the branch in flight. Carrying the
- * local name to another machine — or to `gh pr list --head` — yields nothing.
- * The remote ref is the only branch identity that survives leaving this machine,
- * which also makes it the handle for re-fetching the topic's output elsewhere.
- */
-export interface DeviceGitUpstreamRef {
-  /** Branch name ON the remote (`feat/x`), never the local name. */
-  branch: string;
-  /** Remote name (`origin`). */
-  remote: string;
-}
-
-export interface WorkingDirGitState {
-  /**
-   * Active checkout selected under this git source. When absent, the source
-   * path itself is the effective working directory.
-   */
-  activeWorktree?: string;
-  /**
-   * Branch for the effective working directory. Undefined for detached HEAD or
-   * when it has not been probed yet.
-   */
-  branch?: string;
-  /** True when the effective working directory is currently detached. */
-  detached?: boolean;
-  /** GitHub-specific branch metadata such as linked PR and check status. */
-  github?: WorkingDirGithubState;
-  /**
-   * True when the effective working directory is a linked worktree rather than
-   * the source path itself.
-   */
-  isWorktree?: boolean;
-  /**
-   * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
-   * whenever the branch changes — a stale remote ref would bind the topic to
-   * another branch's PR, which is worse than having none.
-   */
-  upstream?: DeviceGitUpstreamRef;
-}
-
-export interface WorkingDirConfig {
-  /**
-   * The code environment picked with this folder. Metadata only on a device:
-   * nothing clones or bootstraps there; the association is kept for later.
-   */
-  environmentId?: string;
-  git?: WorkingDirGitState;
-  path: string;
-  repoType?: WorkingDirRepoType;
-}
-
-export type WorkingDirConfigValue = string | WorkingDirConfig;
-
-export const getWorkingDirSourcePath = (
-  entry?: WorkingDirConfigValue | null,
-): string | undefined => {
-  if (!entry) return undefined;
-  return typeof entry === 'string' ? entry : entry.path;
-};
-
-export const getWorkingDirEffectivePath = (
-  entry?: WorkingDirConfigValue | null,
-): string | undefined => {
-  if (!entry) return undefined;
-  if (typeof entry === 'string') return entry;
-  return entry.git?.activeWorktree || entry.path;
-};
-
+export * from './workingDir';
 export { deriveWorktreePath, type DeriveWorktreePathOptions } from './worktreePath';
 
 export interface WorkingDirEntry extends WorkingDirConfig {
@@ -451,6 +353,12 @@ export interface DeviceGitLinkedPullRequestResult {
   extraCount?: number;
   /** Null when no PR is linked to the branch. */
   pullRequest: DeviceGitLinkedPullRequest | null;
+  /**
+   * `owner/repo` of the GitHub remote the branch publishes to. A PR whose head
+   * repository is this one was pushed from here; a same-named branch in
+   * another fork was not. Absent from devices that predate it.
+   */
+  remoteRepoFullName?: string;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
   status: DeviceGitLinkedPullRequestLookupStatus;
   /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
@@ -604,6 +512,12 @@ export interface DeviceGitWorktreeListItem {
 export interface DeviceGitAheadBehind {
   ahead: number;
   behind: number;
+  /**
+   * Echo of the named branch the counts describe. Absent when they describe
+   * HEAD — and from a device that predates the `branch` parameter, which
+   * silently counts HEAD instead.
+   */
+  branch?: string;
   hasUpstream: boolean;
   pushTarget?: string;
   pushTargetExists?: boolean;
@@ -624,18 +538,39 @@ export interface DeviceGitBranchListItem {
 /** Result of the `checkoutGitBranch` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitCheckoutResult {
   error?: string;
+  reason?: typeof DEVICE_GIT_OUTDATED;
+  /**
+   * Echo of the start point the new branch was cut from. A device that predates
+   * `startPoint` forks from HEAD and echoes nothing, so a caller that asked for
+   * one must treat a missing or different echo as a device to upgrade.
+   */
+  startPoint?: string;
   success: boolean;
 }
+
+/**
+ * Set by the client on a git result it rejected because the device did not
+ * honour a newer parameter (`startPoint` / `branch`): device RPCs carry no
+ * version or capability negotiation, so an older `lh connect` or desktop build
+ * ignores the field and silently acts on HEAD instead.
+ */
+export const DEVICE_GIT_OUTDATED = 'deviceOutdated' as const;
 
 /**
  * Result of the `pullGitBranch` / `pushGitBranch` device RPCs. Mirrors the
  * desktop `GitPullResult` / `GitPushResult` (identical shapes).
  */
 export interface DeviceGitSyncResult {
+  /** Echo of the named branch that was synced; absent for a HEAD pull / push. */
+  branch?: string;
   error?: string;
   /** True when git reported the branch was already up-to-date. */
   noop?: boolean;
+  /** Why a named-branch pull was refused before git ran. */
+  reason?: 'checkedOutElsewhere' | 'noUpstream' | typeof DEVICE_GIT_OUTDATED;
   success: boolean;
+  /** The worktree holding the branch, for `reason: 'checkedOutElsewhere'`. */
+  worktreePath?: string;
 }
 
 /**
@@ -742,6 +677,11 @@ export interface DeviceGitRemoveWorktreeResult {
 /** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitAddWorktreeResult {
   error?: string;
+  /** Echo of the creation receipt the device wrote into the worktree. */
+  ownerToken?: string;
+  reason?: typeof DEVICE_GIT_OUTDATED;
+  /** Echo of the start point; see {@link DeviceGitCheckoutResult.startPoint}. */
+  startPoint?: string;
   success: boolean;
   /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
   worktreePath?: string;
@@ -988,48 +928,6 @@ export interface DeviceListClaudeCodeMemoryResult {
   /** `~/.claude/projects/<project key>/memory` on the device, present or not. */
   memoryDir: string;
 }
-
-const gitLinkedPullRequestSchema = z.object({
-  ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
-  isDraft: z.boolean().optional(),
-  mergeable: z.string().optional(),
-  mergeStateStatus: z.string().optional(),
-  mergedAt: z.string().nullable().optional(),
-  number: z.number(),
-  reviewDecision: z.string().optional(),
-  state: z.string(),
-  title: z.string(),
-  url: z.string(),
-});
-
-export const workingDirConfigSchema = z.object({
-  environmentId: z.string().max(255).optional(),
-  git: z
-    .object({
-      activeWorktree: z.string().optional(),
-      branch: z.string().optional(),
-      detached: z.boolean().optional(),
-      github: z
-        .object({
-          extraPullRequestCount: z.number().optional(),
-          pullRequest: gitLinkedPullRequestSchema.nullable().optional(),
-          pullRequestStatus: z.enum(['error', 'gh-missing', 'ok']).optional(),
-        })
-        .optional(),
-      isWorktree: z.boolean().optional(),
-      // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
-      // unvalidated — zod strips it, so it would never survive a write.
-      upstream: z
-        .object({
-          branch: z.string(),
-          remote: z.string(),
-        })
-        .optional(),
-    })
-    .optional(),
-  path: z.string(),
-  repoType: z.enum(['git', 'github']).optional(),
-});
 
 /** One TCP port a device is listening on that a tunnel can reach. */
 export interface DeviceListeningPort {

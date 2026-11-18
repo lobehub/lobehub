@@ -1,6 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import {
+  getMcpAppEntrypoints,
   getMcpServerFingerprint,
+  isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
   withListingUiMeta,
@@ -22,7 +24,9 @@ import retry from 'async-retry';
 import debug from 'debug';
 
 import {
+  type HttpMCPClientParams,
   type McpAppToolState,
+  type MCPClientOptions,
   type MCPClientParams,
   type McpPrompt,
   type McpResource,
@@ -30,6 +34,7 @@ import {
   type StdioMCPParams,
 } from '@/libs/mcp';
 import { MCPClient } from '@/libs/mcp';
+import type { McpSubscribeEventParams, McpUnsubscribeEventParams } from '@/libs/mcp/events/schema';
 import { isToolVisibleToModel } from '@/libs/mcp/mcpApp';
 import {
   getMCPConnectionErrorType,
@@ -71,6 +76,27 @@ export interface MCPToolCallProcessedResult {
 }
 
 // Removed MCPConnection interface as it's no longer needed
+
+/** A structured MCP connection error (`MCPError.data.type`) as the TRPCError callers see. */
+const toMCPConnectionTRPCError = (error: unknown, message: string) => {
+  const type = getMCPConnectionErrorType(error);
+  return new TRPCError({
+    cause: error,
+    code:
+      // These credentials belong to the upstream MCP, not the signed-in
+      // LobeHub user. A 401 here would trigger the client's global logout.
+      type === 'AUTHORIZATION_ERROR'
+        ? 'FORBIDDEN'
+        : // The configured URL is refused by policy. Not a 403: clients read a
+          // 403 as "you may not modify this connector" and drop the reason.
+          type === 'SSRF_BLOCKED'
+          ? 'BAD_REQUEST'
+          : type === 'INITIALIZATION_TIMEOUT'
+            ? 'TIMEOUT'
+            : 'SERVICE_UNAVAILABLE',
+    message,
+  });
+};
 
 const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
   ProtocolError.isInstance(error) ||
@@ -134,7 +160,7 @@ export class MCPService {
     params: MCPClientParams,
     operationName: string,
     operation: (client: MCPClient) => Promise<T>,
-    { mcpApps = false }: { mcpApps?: boolean } = {},
+    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
   ): Promise<T> {
     const connection = this.getConnectionLogMetadata(params);
 
@@ -150,7 +176,7 @@ export class MCPService {
           // failure (bad URL/token, stdio spawn error) is NOT a stale-session
           // error, so it must bail immediately instead of retrying — otherwise
           // we'd repeat auth attempts / respawn stdio commands needlessly.
-          const client = await this.getClient(params, skipCache, { mcpApps });
+          const client = await this.getClient(params, skipCache, { mcpApps, mcpEvents });
           return await operation(client);
         } catch (error) {
           // Only retry for NoValidSessionId errors
@@ -162,11 +188,15 @@ export class MCPService {
             bail(
               error instanceof TRPCError
                 ? error
-                : new TRPCError({
-                    cause: error,
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: `Error ${operationName} from MCP server: ${(error as Error).message}`,
-                  }),
+                : // A cached session can still be refused later (the host now
+                  // resolves elsewhere): keep its structured error, not a 500.
+                  getMCPConnectionErrorType(error) === 'SSRF_BLOCKED'
+                  ? toMCPConnectionTRPCError(error, (error as Error).message)
+                  : new TRPCError({
+                      cause: error,
+                      code: 'INTERNAL_SERVER_ERROR',
+                      message: `Error ${operationName} from MCP server: ${(error as Error).message}`,
+                    }),
             );
             // After bail() the promise is already rejected; return (do NOT throw)
             // so async-retry does not schedule another attempt.
@@ -197,7 +227,7 @@ export class MCPService {
      * List on a session that announces MCP Apps (the user's `mcp_apps` flag):
      * a server may list the tools only its views call just to such a client.
      */
-    { mcpApps = false }: { mcpApps?: boolean } = {},
+    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
   ): Promise<McpTool[]> {
     return this.withSessionRetry(
       params,
@@ -207,7 +237,54 @@ export class MCPService {
         log(`Tools listed successfully, result count: %d`, result.length);
         return result;
       },
-      { mcpApps },
+      { mcpApps, mcpEvents },
+    );
+  }
+
+  async getEventsCapability(
+    params: MCPClientParams,
+    options: MCPClientOptions = { mcpEvents: true },
+  ) {
+    return this.withSessionRetry(
+      params,
+      'reading events capability',
+      async (client) => client.getEventsCapability(),
+      options,
+    );
+  }
+
+  async listEvents(params: MCPClientParams, options: MCPClientOptions = { mcpEvents: true }) {
+    return this.withSessionRetry(
+      params,
+      'listing events',
+      (client) => client.listEvents(),
+      options,
+    );
+  }
+
+  async subscribeEvent(
+    params: MCPClientParams,
+    input: McpSubscribeEventParams,
+    options: MCPClientOptions = { mcpEvents: true },
+  ) {
+    return this.withSessionRetry(
+      params,
+      'subscribing to event',
+      (client) => client.subscribeEvent(input),
+      options,
+    );
+  }
+
+  async unsubscribeEvent(
+    params: MCPClientParams,
+    input: McpUnsubscribeEventParams,
+    options: MCPClientOptions = { mcpEvents: true },
+  ) {
+    return this.withSessionRetry(
+      params,
+      'unsubscribing from event',
+      (client) => client.unsubscribeEvent(input),
+      options,
     );
   }
 
@@ -246,9 +323,9 @@ export class MCPService {
       async (client) => {
         const result = await client.readResource(uri);
         // A view's _meta.ui may be declared once, on its resources/list entry
-        if (!lacksUiResourceMeta(result)) return result;
+        if (!lacksUiResourceMeta(result, true)) return result;
 
-        return withListingUiMeta(result, uri, await client.listResources());
+        return withListingUiMeta(result, uri, await client.listResources(), true);
       },
       { mcpApps: true },
     );
@@ -264,6 +341,7 @@ export class MCPService {
      * call while `mcpApps` is off, return a failed result without reaching the tool.
      */
     fromApp?: boolean;
+    fromEntrypoint?: boolean;
     /**
      * Runtime flag `mcp_apps` for the calling user. On: the session advertises
      * MCP Apps and the result carries the tool's `ui://` view. Off: the call
@@ -276,20 +354,37 @@ export class MCPService {
     const {
       clientParams,
       fromApp = false,
+      fromEntrypoint = false,
       mcpApps = false,
       toolName,
       argsStr,
       processContentBlocks: processContentBlocksFn,
     } = options;
 
-    const args = safeParseJSON(argsStr);
+    const args = fromEntrypoint ? {} : safeParseJSON(argsStr);
 
     const run = async (client: MCPClient) => {
       log('Calling MCP tool: %s', toolName);
 
+      if (
+        fromEntrypoint &&
+        !(mcpApps && isMcpThreadEntrypoint(await client.getToolUiMeta(toolName)))
+      ) {
+        const message = 'This tool does not declare an enabled thread entrypoint.';
+        return {
+          content: message,
+          state: { content: [{ text: message, type: 'text' }], isError: true },
+          success: false,
+        };
+      }
+
       // Resolved before the call: a stale-session error here is retried by
       // withSessionRetry, which must never re-run a tool that already executed.
-      if (fromApp && !(mcpApps && (await client.isToolCallableByApp(toolName)))) {
+      if (
+        !fromEntrypoint &&
+        fromApp &&
+        !(mcpApps && (await client.isToolCallableByApp(toolName)))
+      ) {
         const message = `The tool "${toolName}" can't be called from an interactive view.`;
         return {
           content: message,
@@ -299,7 +394,12 @@ export class MCPService {
       }
       // A tool the server keeps from the model is its views' alone, even when
       // the model names it (e.g. from an earlier turn)
-      if (!fromApp && mcpApps && (await client.isToolHiddenFromModel(toolName))) {
+      if (
+        !fromEntrypoint &&
+        !fromApp &&
+        mcpApps &&
+        (await client.isToolHiddenFromModel(toolName))
+      ) {
         const message = `The tool "${toolName}" can only be called from its interactive view.`;
         return {
           content: message,
@@ -308,6 +408,9 @@ export class MCPService {
         };
       }
       const uiResourceUri = mcpApps ? await client.getToolUiResourceUri(toolName) : undefined;
+      const preferredModelDisplayMode = uiResourceUri
+        ? (await client.getToolUiMeta(toolName))?.preferredModelDisplayMode
+        : undefined;
 
       try {
         // Delegate the call to the MCPClient instance
@@ -318,7 +421,7 @@ export class MCPService {
         // not the uploaded URLs the chat stores
         const processedResult = await MCPService.processToolCallResult(
           result,
-          fromApp ? undefined : processContentBlocksFn,
+          fromApp || fromEntrypoint ? undefined : processContentBlocksFn,
         );
 
         // MCP Apps: let the chat UI know which `ui://` resource renders this
@@ -326,6 +429,7 @@ export class MCPService {
         if (uiResourceUri && !result.isError) {
           processedResult.state.mcpApp = {
             resourceUri: uiResourceUri,
+            ...(preferredModelDisplayMode && { preferredModelDisplayMode }),
             server: await getMcpServerFingerprint(clientParams),
           };
         }
@@ -368,7 +472,7 @@ export class MCPService {
   private async getClient(
     params: MCPClientParams,
     skipCache = false,
-    { mcpApps = false }: { mcpApps?: boolean } = {},
+    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
   ): Promise<MCPClient> {
     // Every server caller (including connector sync and agent tool execution)
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
@@ -382,7 +486,7 @@ export class MCPService {
 
     // A session announces its capabilities once, at initialize, so sessions
     // with and without MCP Apps are cached apart.
-    const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
+    const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}${mcpEvents ? '#mcp-events' : ''}`;
 
     if (!skipCache && this.clients.has(key)) {
       return this.clients.get(key)!;
@@ -391,7 +495,7 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, { mcpApps });
+      const client = new MCPClient(params, { mcpApps, mcpEvents });
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);
@@ -408,19 +512,7 @@ export class MCPService {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (typeof error === 'object' && !!error && 'data' in error) {
-        const type = getMCPConnectionErrorType(error);
-        throw new TRPCError({
-          cause: error,
-          code:
-            type === 'AUTHORIZATION_ERROR'
-              ? // These credentials belong to the upstream MCP, not the signed-in
-                // LobeHub user. A 401 here would trigger the client's global logout.
-                'FORBIDDEN'
-              : type === 'INITIALIZATION_TIMEOUT'
-                ? 'TIMEOUT'
-                : 'SERVICE_UNAVAILABLE',
-          message: errorMessage,
-        });
+        throw toMCPConnectionTRPCError(error, errorMessage);
       }
 
       // Log detailed error information for debugging
@@ -481,12 +573,28 @@ export class MCPService {
     }
 
     const rawTools = await this.listRawTools(mcpParams, { mcpApps });
-    const tools = this.transformMCPToolToLobeAPI(rawTools);
+
+    return this.buildStreamableMcpManifest(identifier, mcpParams, rawTools, metadata, { mcpApps });
+  }
+
+  /**
+   * An HTTP MCP server's manifest from a tool list read elsewhere: on the
+   * user's device, for a server this deployment can't reach itself. Built the
+   * way {@link getStreamableMcpServerManifest} builds the listing it ran.
+   */
+  buildStreamableMcpManifest(
+    identifier: string,
+    mcpParams: HttpMCPClientParams | StdioMCPParams,
+    rawTools: McpTool[],
+    metadata?: CustomPluginMetadata,
+    { mcpApps = false }: { mcpApps?: boolean } = {},
+  ): ToolManifest {
+    const tools = this.transformMCPToolToLobeAPI(rawTools, mcpApps);
 
     return {
       api: tools,
       identifier,
-      ...this.toMcpAppsManifestFields(rawTools),
+      ...this.toMcpAppsManifestFields(rawTools, mcpApps),
       // @ts-ignore
       mcpParams,
       meta: {
@@ -520,7 +628,7 @@ export class MCPService {
     const manifest = await client.listManifests();
 
     const identifier = params.name;
-    const api = manifest.tools ? this.transformMCPToolToLobeAPI(manifest.tools) : [];
+    const api = manifest.tools ? this.transformMCPToolToLobeAPI(manifest.tools, mcpApps) : [];
 
     return {
       api,
@@ -532,7 +640,7 @@ export class MCPService {
         title: metadata?.name || identifier,
       },
       ...manifest,
-      ...this.toMcpAppsManifestFields(manifest.tools ?? []),
+      ...this.toMcpAppsManifestFields(manifest.tools ?? [], mcpApps),
       // @ts-ignore
       mcpParams,
       // TODO: temporary
@@ -608,8 +716,8 @@ export class MCPService {
    * leaves out "model" exist only for their view, which calls them through the
    * MCP session, so they never enter the manifest.
    */
-  private transformMCPToolToLobeAPI = (data: McpTool[]) =>
-    this.toLobeApi(data.filter(isToolVisibleToModel));
+  private transformMCPToolToLobeAPI = (data: McpTool[], enabled = false) =>
+    this.toLobeApi(data.filter((tool) => isToolVisibleToModel(tool, enabled)));
 
   /**
    * MCP Apps: what a plugin's views may call beyond its model-facing `api`,
@@ -618,10 +726,12 @@ export class MCPService {
    */
   private toMcpAppsManifestFields = (
     data: McpTool[],
-  ): Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools'> => {
-    const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(data);
+    enabled = false,
+  ): Pick<ToolManifest, 'mcpAppOnlyApi' | 'mcpModelOnlyTools' | 'mcpAppEntrypoints'> => {
+    const { appOnlyTools, modelOnlyToolNames } = partitionMcpToolsForViews(data, enabled);
 
     return {
+      ...(enabled && { mcpAppEntrypoints: getMcpAppEntrypoints(data, true) }),
       ...(appOnlyTools.length > 0 && { mcpAppOnlyApi: this.toLobeApi(appOnlyTools) }),
       ...(modelOnlyToolNames.length > 0 && { mcpModelOnlyTools: modelOnlyToolNames }),
     };

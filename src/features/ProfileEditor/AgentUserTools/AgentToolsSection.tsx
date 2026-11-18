@@ -1,6 +1,6 @@
 'use client';
 
-import { getPluginMode, upsertPluginMode } from '@lobechat/types';
+import { getConnectorMode, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
 import { Button, confirmModal, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon, PlugZapIcon, PlusIcon } from 'lucide-react';
@@ -93,7 +93,7 @@ const AgentToolsSection = memo<{
   const agentPlugins = useAgentStore((s) => agentSelectors.getAgentConfigById(agentId)(s)?.plugins);
   const setEnabled = (identifier: string, enabled: boolean) =>
     updateAgentConfigById(agentId, {
-      plugins: upsertPluginMode(agentPlugins, identifier, enabled ? 'pinned' : 'disabled'),
+      plugins: upsertConnectorEnabled(agentPlugins, identifier, enabled),
     });
 
   const tags = agentConnectors.map((connector) => {
@@ -109,7 +109,7 @@ const AgentToolsSection = memo<{
       <PluginTag
         agentId={agentId}
         disabled={!canEdit}
-        enabled={getPluginMode(agentPlugins, connector.identifier) !== 'disabled'}
+        enabled={getConnectorMode(agentPlugins, connector.identifier) === 'auto'}
         key={connector.id}
         pluginId={connector.identifier}
         removable={canManageRow}
@@ -133,7 +133,7 @@ const AgentToolsSection = memo<{
         rows={tags}
         activeCount={
           agentConnectors.filter(
-            (connector) => getPluginMode(agentPlugins, connector.identifier) !== 'disabled',
+            (connector) => getConnectorMode(agentPlugins, connector.identifier) === 'auto',
           ).length
         }
       />

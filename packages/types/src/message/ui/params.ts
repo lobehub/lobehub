@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
+import type { FirstSendWorktree } from '../../topic';
+import type { WorkingDirConfig } from '../../workingDir';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
 import type {
@@ -134,6 +136,10 @@ export interface SendMessageParams {
   editorData?: Record<string, any>;
   files?: UploadFileItem[];
   /**
+   * Create this worktree on the device after the server has accepted the first send.
+   */
+  firstSendWorktree?: FirstSendWorktree;
+  /**
    * Force the agent runtime regardless of the agent's local/cloud/hetero
    * config. Injected straight into `selectRuntimeType` as `parentRuntime`,
    * so it wins over every other signal. Used by task topics (which were
@@ -153,11 +159,13 @@ export interface SendMessageParams {
    * This decouples sendMessage from store selectors.
    */
   messages?: UIChatMessage[];
+
   /**
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
-
+  /** A checkout already prepared for this new topic by the Desktop client. */
+  newTopicWorkingDirectory?: WorkingDirConfig;
   onlyAddUserMessage?: boolean;
   /**
    * Called once the send lifecycle owns the turn, either by persisting the user message or by
@@ -192,6 +200,11 @@ export interface SendMessageParams {
    * remain available after the audio-only turn is dispatched.
    */
   preserveComposer?: boolean;
+  /**
+   * The head of a queue sent one message per turn (Follow-up behavior: Queue).
+   * The rest of that queue waits behind this send instead of joining it.
+   */
+  queueHead?: boolean;
   /**
    * Cancels the send before the conversation lifecycle accepts ownership of the turn.
    * Once `onMessageAccepted` fires, later aborts are ignored and the existing runtime Stop flow

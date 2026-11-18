@@ -7,6 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
 
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
+// No router is mounted here; the task-list origin reads the history state.
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useLocation: () => ({ state: locationMock.state }),
+}));
+
 interface MenuItem {
   key?: string;
   label?: ReactNode;
@@ -154,6 +162,7 @@ const setTaskDetailMap = (map: typeof mocks.taskState.taskDetailMap) =>
 describe('TaskDetailHeaderActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    locationMock.state = undefined;
     mocks.dropdownItems = [];
     mocks.taskState.activeTaskId = 'T-1';
     mocks.taskState.taskDetailMap = { 'T-1': { visibility: 'private' } };
@@ -346,5 +355,33 @@ describe('TaskDetailHeaderActions', () => {
     fireEvent.click(button);
 
     await waitFor(() => expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', true));
+  });
+
+  describe('after deleting the task', () => {
+    const deleteAndConfirm = async () => {
+      render(<TaskDetailHeaderActions />);
+      const item = mocks.dropdownItems.find((i) => i?.key === 'delete') as
+        { onClick?: () => void } | undefined;
+      item?.onClick?.();
+      const opts = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
+      await opts.onOk();
+    };
+
+    it('returns to the filtered task list the detail was opened from', async () => {
+      // The origin is the list's real URL, so it already carries the workspace prefix.
+      locationMock.state = { taskListOrigin: '/ws-slug/tasks?collection=mine' };
+      await deleteAndConfirm();
+
+      expect(mocks.deleteTask).toHaveBeenCalledWith('T-1');
+      expect(mocks.navigate).toHaveBeenCalledWith('/ws-slug/tasks?collection=mine', {
+        escape: true,
+      });
+    });
+
+    it('returns to the bare task list without a carried origin', async () => {
+      await deleteAndConfirm();
+
+      expect(mocks.navigate).toHaveBeenCalledWith('/tasks', { escape: false });
+    });
   });
 });

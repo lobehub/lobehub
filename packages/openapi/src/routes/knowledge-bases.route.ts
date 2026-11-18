@@ -2,16 +2,22 @@ import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { KnowledgeBaseController } from '../controllers/knowledge-base.controller';
 import { requireAnyPermission } from '../middleware';
 import { requireAuth } from '../middleware/auth';
+import { DeletedResourceSchema } from '../types/common.type';
+import { FileListResponseSchema } from '../types/file.type';
 import {
   CreateKnowledgeBaseSchema,
+  KnowledgeBaseDetailResponseSchema,
   KnowledgeBaseFileBatchSchema,
   KnowledgeBaseFileListQuerySchema,
+  KnowledgeBaseFileOperationResultSchema,
   KnowledgeBaseIdParamSchema,
   KnowledgeBaseListQuerySchema,
+  KnowledgeBaseListResponseSchema,
   MoveKnowledgeBaseFilesSchema,
   UpdateKnowledgeBaseSchema,
 } from '../types/knowledge-base.type';
@@ -29,6 +35,11 @@ const app = new Hono();
  */
 app.get(
   '/',
+  routeDoc({
+    data: KnowledgeBaseListResponseSchema,
+    summary: 'List knowledge bases',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_READ'),
@@ -55,6 +66,11 @@ app.get(
  */
 app.post(
   '/',
+  routeDoc({
+    data: KnowledgeBaseDetailResponseSchema,
+    summary: 'Create a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_CREATE'),
@@ -76,6 +92,12 @@ app.post(
  */
 app.get(
   '/:id',
+  routeDoc({
+    data: KnowledgeBaseDetailResponseSchema,
+    errors: [404],
+    summary: 'Get a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_READ'),
@@ -105,6 +127,12 @@ app.get(
  */
 app.patch(
   '/:id',
+  routeDoc({
+    data: KnowledgeBaseDetailResponseSchema,
+    errors: [404],
+    summary: 'Update a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
@@ -127,6 +155,13 @@ app.patch(
  */
 app.delete(
   '/:id',
+  routeDoc({
+    data: DeletedResourceSchema,
+    description: 'Also deletes the files that belong to no other knowledge base.',
+    errors: [404],
+    summary: 'Delete a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_DELETE'),
@@ -157,6 +192,12 @@ app.delete(
  */
 app.get(
   '/:id/files',
+  routeDoc({
+    data: FileListResponseSchema,
+    errors: [404],
+    summary: 'List the files of a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_READ'),
@@ -176,6 +217,12 @@ app.get(
  */
 app.post(
   '/:id/files/batch',
+  routeDoc({
+    data: KnowledgeBaseFileOperationResultSchema,
+    errors: [404],
+    summary: 'Add files to a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
@@ -195,6 +242,14 @@ app.post(
  */
 app.delete(
   '/:id/files/batch',
+  routeDoc({
+    data: KnowledgeBaseFileOperationResultSchema,
+    description:
+      'Detaches the files from the knowledge base without deleting them, and reports per file which ones were detached.',
+    errors: [404],
+    summary: 'Remove files from a knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
@@ -214,6 +269,12 @@ app.delete(
  */
 app.post(
   '/:id/files/move',
+  routeDoc({
+    data: KnowledgeBaseFileOperationResultSchema,
+    errors: [404],
+    summary: 'Move files to another knowledge base',
+    tags: ['knowledge-bases'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),

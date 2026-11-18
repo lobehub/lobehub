@@ -722,6 +722,11 @@ export class GatewayMuxClient {
         break;
       }
 
+      case 'user_changed': {
+        this.listeners.emit('user_changed', message);
+        break;
+      }
+
       case 'op_lifecycle': {
         this.listeners.emit('lifecycle', message);
         break;

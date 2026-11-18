@@ -10,6 +10,7 @@
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
     "./goal": "./src/goal.ts",
     "./hotkeys": "./src/hotkeys.ts",
+    "./imageRef": "./src/imageRef.ts",
     "./mcpApp": "./src/mcpApp.ts",
     "./mediaRef": "./src/mediaRef.ts",
     "./plugin": "./src/plugin.ts",

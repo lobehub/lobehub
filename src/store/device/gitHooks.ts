@@ -262,10 +262,14 @@ const useGitStatusRead = <T>(
   path: string | undefined,
   schedule: ReplicaSyncSchedule,
   enabled = true,
+  branch?: string,
 ): GitStatusReadResult<T> => {
   const params = useMemo(
-    () => (enabled && isEnabled(deviceId, path) ? { deviceId, path } : null),
-    [enabled, deviceId, path],
+    () =>
+      enabled && isEnabled(deviceId, path)
+        ? { deviceId, path, ...(branch ? { branch } : {}) }
+        : null,
+    [enabled, deviceId, path, branch],
   );
   const key = params ? gitStatusKey(params) : undefined;
   const stored = useGitStatusStore((s) => (key ? selectMap(s)[key] : undefined));
@@ -457,10 +461,17 @@ export const useFetchGitWorkingTreeStatus = (deviceId: string | undefined, path?
   );
 
 /**
- * Ahead/behind commit counts. Each load piggybacks a best-effort `git fetch`
- * inside the read, so focus revalidation (5s throttle) surfaces remote updates.
+ * Ahead/behind commit counts — of HEAD, or of `branch` when given (the branch
+ * picked for a new topic, wherever HEAD is). Each load piggybacks a best-effort
+ * `git fetch` inside the read, so focus revalidation (5s throttle) surfaces
+ * remote updates. A named-branch read from a device too old to honour the
+ * branch errors with `DeviceGitOutdatedError` instead of counting HEAD.
  */
-export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: string) =>
+export const useFetchGitAheadBehind = (
+  deviceId: string | undefined,
+  path?: string,
+  branch?: string,
+) =>
   useGitStatusRead<DeviceGitAheadBehind>(
     useGitStatusStore.getState().slices.aheadBehind,
     selectAheadBehindMap,
@@ -468,6 +479,8 @@ export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: stri
     deviceId,
     path,
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true },
+    true,
+    branch,
   );
 
 /**

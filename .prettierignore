@@ -80,6 +80,7 @@ packages/heterogeneous-agents/src/codex/protocol/generated.ts
 
 # Vendored from lobehub/lobe-design-skill via its install.sh --copy; keep upstream formatting and send local fixes upstream.
 .agents/skills/lobe-design/**
+.agents/skills/lobe-design-cli/**
 
 # generated files (regenerate with `bun run shell:vendor` in apps/desktop)
 apps/desktop/shell/rescue/electron-updater.cjs

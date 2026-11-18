@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertWatchKeywordsWritable,
@@ -9,6 +9,15 @@ import {
 
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
+const mockStartClient = vi.hoisted(() => vi.fn());
+const inProcess = vi.hoisted(() => ({
+  canHost: true,
+  host: 'in-process' as 'in-process' | 'message-gateway',
+}));
+
+vi.mock('@/server/services/gateway/replyConnectionHost', () => ({
+  resolveReplyConnectionHost: () => (inProcess.canHost ? inProcess.host : undefined),
+}));
 const mockInvalidateBot = vi.hoisted(() => vi.fn());
 const gatewayState = vi.hoisted(() => ({ useMessageGateway: true }));
 
@@ -19,6 +28,7 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
 vi.mock('@/server/services/gateway', () => ({
   GatewayService: vi.fn(function () {
     return {
+      startClient: mockStartClient,
       stopClient: mockStopClient,
       get useMessageGateway() {
         return gatewayState.useMessageGateway;
@@ -307,14 +317,6 @@ describe('mergeBotSettingsForCreate', () => {
     expect(settings).toMatchObject({ botWakeDisabled: true, dmPolicy: 'open' });
   });
 
-  it('switches bot wake off for a heterogeneous agent created without settings', async () => {
-    const db = dbWith({ heterogeneousProvider: { type: 'claude-code' } });
-
-    expect(
-      (await mergeBotSettingsForCreate(db, 'agt', 'discord', undefined))?.botWakeDisabled,
-    ).toBe(true);
-  });
-
   it('writes the defaults for an ordinary agent created without settings, reactions off', async () => {
     const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', undefined);
 
@@ -352,6 +354,46 @@ describe('mergeBotSettingsForCreate', () => {
     expect(settings).not.toHaveProperty('reactionMode');
   });
 
+  describe('DingTalk behind the message gateway', () => {
+    afterEach(() => {
+      gatewayState.useMessageGateway = true;
+    });
+
+    it('defaults a new bot to webhook mode when the gateway cannot host its Stream connection', async () => {
+      gatewayState.useMessageGateway = true;
+
+      expect(
+        (await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', undefined))?.connectionMode,
+      ).toBe('webhook');
+      expect(
+        (await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {}))?.connectionMode,
+      ).toBe('webhook');
+    });
+
+    it('keeps the mode the caller chose', async () => {
+      gatewayState.useMessageGateway = true;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {
+        connectionMode: 'websocket',
+      });
+
+      expect(settings?.connectionMode).toBe('websocket');
+    });
+
+    it('keeps Stream mode without the gateway', async () => {
+      gatewayState.useMessageGateway = false;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'dingtalk', {});
+
+      expect(settings?.connectionMode).toBe('websocket');
+    });
+
+    it('leaves platforms the gateway can host on their default', async () => {
+      gatewayState.useMessageGateway = true;
+      const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {});
+
+      expect(settings?.connectionMode).not.toBe('webhook');
+    });
+  });
+
   it('keeps a heterogeneous agent opted in when the caller turned it on', async () => {
     const db = dbWith({ heterogeneousProvider: { type: 'codex' } });
     const settings = await mergeBotSettingsForCreate(db, 'agt', 'discord', {
@@ -371,5 +413,87 @@ describe('status reactions of an existing bot', () => {
 
   it('stay on for a row saved before the field existed', () => {
     expect(mergeBotSettingsPatch('discord', {}, { charLimit: 1000 })?.reactionMode).toBe('minimal');
+  });
+});
+
+describe('invalidateBotAfterUpdate — credential changes on an in-process-only platform', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockStartClient.mockResolvedValue('started');
+    inProcess.canHost = true;
+    inProcess.host = 'in-process';
+    gatewayState.useMessageGateway = false;
+  });
+
+  const existing = { applicationId: 'bot-1', platform: 'wecom', userId: 'user-1' };
+
+  it('restarts the WeCom connection on the new secret', async () => {
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' } });
+
+    expect(mockInvalidateBot).toHaveBeenCalledWith('wecom', 'bot-1');
+    expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
+  });
+
+  it('leaves other platforms and settings-only saves alone', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, platform: 'discord' },
+      { credentials: { botToken: 'x' } },
+    );
+    await invalidateBotAfterUpdate(existing, { settings: { charLimit: 500 } });
+    expect(mockStartClient).not.toHaveBeenCalled();
+  });
+
+  it('does not restart where WeCom cannot run, or when the bot is being turned off', async () => {
+    inProcess.canHost = false;
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' } });
+    inProcess.canHost = true;
+    await invalidateBotAfterUpdate(existing, { credentials: { secret: 'new' }, enabled: false });
+
+    expect(mockStartClient).not.toHaveBeenCalled();
+    expect(mockStopClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart when a full save resends the stored secret unchanged', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { botId: 'bot-1', secret: 'same' } },
+      { credentials: { botId: 'bot-1', secret: 'same' } },
+    );
+
+    expect(mockInvalidateBot).toHaveBeenCalledWith('wecom', 'bot-1');
+    expect(mockStartClient).not.toHaveBeenCalled();
+  });
+
+  it('restarts when the stored secret differs from the saved one', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { botId: 'bot-1', secret: 'old' } },
+      { credentials: { botId: 'bot-1', secret: 'new' } },
+    );
+
+    expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
+  });
+
+  it('waits for the restart when the message gateway holds the connection', async () => {
+    inProcess.host = 'message-gateway';
+    let connected = false;
+    mockStartClient.mockImplementationOnce(async () => {
+      await Promise.resolve();
+      connected = true;
+      return 'started';
+    });
+
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { secret: 'old' } },
+      { credentials: { secret: 'new' } },
+    );
+
+    // A serverless invocation may be frozen once it responds, so the gateway connect must land first.
+    expect(connected).toBe(true);
+  });
+
+  it('keeps the save successful when the restart fails', async () => {
+    mockStartClient.mockRejectedValueOnce(new Error('subscribe rejected'));
+    await expect(
+      invalidateBotAfterUpdate(existing, { credentials: { secret: 'bad' } }),
+    ).resolves.toBeUndefined();
   });
 });

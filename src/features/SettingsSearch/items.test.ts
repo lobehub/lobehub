@@ -51,6 +51,15 @@ describe('settings search index', () => {
     }
   });
 
+  it('offers Codex App Server in web settings search for connected-device runs', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find(
+      (entry) => entry.anchor === 'labs-enableCodexAppServer',
+    );
+
+    expect(item).toBeDefined();
+    expect(item!.visible?.(webContext) ?? true).toBe(true);
+  });
+
   it('shows workspace lab features exactly where business features are enabled', () => {
     const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
     const workspaceItems = LAB_FEATURES.filter((feature) => feature.workspaceOnly).map(({ flag }) =>

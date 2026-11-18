@@ -357,6 +357,39 @@ describe('TopicModel scheduled-run guards', () => {
     expect(await readMetadata(otherTopicId)).toEqual({});
   });
 
+  it('only re-arms a failed worktree turn for its owner and keeps the same reservation', async () => {
+    const at = '2026-10-01T00:00:00.000Z';
+    const run = {
+      createdAt: at,
+      error: 'Checkout failed',
+      kind: 'worktree_start',
+      operationId,
+      retryable: true,
+      runAt: at,
+      updatedAt: at,
+      userMessageId: 'msg_saved',
+    } as const;
+    await serverDB.insert(topics).values([
+      { id: topicId, metadata: { scheduledRun: run }, status: 'failed', userId },
+      {
+        id: otherTopicId,
+        metadata: { scheduledRun: run },
+        status: 'failed',
+        userId: otherUserId,
+      },
+    ]);
+
+    expect(await topicModel.retryWorktreeStart(otherTopicId)).toBeUndefined();
+    expect(await readStatus(otherTopicId)).toBe('failed');
+    expect((await readMetadata(otherTopicId))?.scheduledRun).toEqual(run);
+    await expect(topicModel.retryWorktreeStart(topicId)).resolves.toMatchObject({
+      operationId,
+      userMessageId: run.userMessageId,
+    });
+    expect(await readStatus()).toBe('scheduled');
+    expect((await readMetadata())?.scheduledRun).not.toHaveProperty('error');
+  });
+
   it('will not claim a scheduled topic that carries no scheduled run', async () => {
     await serverDB
       .insert(topics)

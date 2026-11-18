@@ -1,227 +1,29 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
-import {
-  BadgeCheck,
-  CircleAlert,
-  ListTodo,
-  Loader2,
-  Lock,
-  MessageSquarePlus,
-  RotateCcw,
-  UsersRound,
-  Wrench,
-} from 'lucide-react';
-import { memo, useEffect, useRef } from 'react';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+import { ListTodo, Lock, UsersRound } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { acceptanceContentLayout } from '../layout';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  repairingArc: css`
-    transform-origin: center;
-    animation: acceptance-repairing-orbit 1.2s linear infinite;
-
-    @keyframes acceptance-repairing-orbit {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-  /* Floats over the scrolling checklist — the decision stays reachable
-     however deep the review goes. */
-  bar: css`
-    position: sticky;
-    z-index: 20;
-    inset-block-end: 16px;
-
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-
-    width: 100%;
-    max-width: ${acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline}px;
-    margin-inline: auto;
-    padding-block: 12px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    @media (width <= 767px) {
-      inset-block-end: max(8px, env(safe-area-inset-bottom));
-      padding: 12px;
-    }
-  `,
-  summary: css`
-    flex: 1;
-    min-width: 160px;
-  `,
-  actions: css`
-    flex: none;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-
-    > button {
-      flex: none;
-    }
-
-    @media (width <= 480px) {
-      width: 100%;
-
-      > button {
-        flex: 1;
-      }
-    }
-  `,
-  // The completion mark springs in the instant review finishes — the felt beat
-  // the abrupt ring→disc swap never had, landing at the decision bar where the
-  // user's next action (accept / send back) already is, not behind a filter.
-  completePop: css`
-    @keyframes acceptance-decision-complete-pop {
-      0% {
-        transform: scale(0.5);
-        opacity: 0;
-      }
-
-      55% {
-        transform: scale(1);
-      }
-
-      100% {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-
-    animation: acceptance-decision-complete-pop 0.2s ease-out both;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-}));
-
-type BarState = 'accepted' | 'live' | 'rejected' | 'settled';
-
-/**
- * The review-progress dial: how many checks the user has signed off, of all.
- * At zero it reads as a dashed "not started" circle; the completed state is
- * rendered by the bar as the BadgeCheck disc, not here.
- */
-/**
- * A repair round in flight: a steady wrench — what is happening — inside a
- * travelling arc — that it is still happening. Same ring geometry as the review
- * dial, so the bar's marks read as one family instead of a spinning reload glyph.
- */
-const RepairingMark = memo(() => {
-  const size = 20;
-  const stroke = 2;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  return (
-    <div style={{ flex: 'none', height: size, position: 'relative', width: size }}>
-      <svg height={size} width={size}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          fill={'none'}
-          r={radius}
-          stroke={cssVar.colorWarningBg}
-          strokeWidth={stroke}
-        />
-        <circle
-          className={styles.repairingArc}
-          cx={size / 2}
-          cy={size / 2}
-          fill={'none'}
-          r={radius}
-          stroke={cssVar.colorWarning}
-          strokeDasharray={`${circumference * 0.3} ${circumference}`}
-          strokeLinecap={'round'}
-          strokeWidth={stroke}
-        />
-      </svg>
-      <Flexbox align={'center'} justify={'center'} style={{ inset: 0, position: 'absolute' }}>
-        <Icon color={cssVar.colorWarning} icon={Wrench} size={10} />
-      </Flexbox>
-    </div>
-  );
-});
-
-RepairingMark.displayName = 'AcceptanceRepairingMark';
-
-const ProgressRing = memo<{ done: number; total: number }>(({ done, total }) => {
-  const size = 20;
-  const stroke = 2;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const ratio = total > 0 ? Math.min(done / total, 1) : 0;
-
-  if (done <= 0)
-    return (
-      <svg height={size} style={{ flex: 'none' }} width={size}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          fill={'none'}
-          r={radius}
-          stroke={cssVar.colorTextQuaternary}
-          strokeDasharray={'3 5'}
-          strokeLinecap={'round'}
-          strokeWidth={stroke}
-        />
-      </svg>
-    );
-
-  return (
-    <div style={{ flex: 'none', height: size, position: 'relative', width: size }}>
-      <svg height={size} width={size}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          fill={'none'}
-          r={radius}
-          stroke={cssVar.colorFillSecondary}
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          fill={'none'}
-          r={radius}
-          stroke={cssVar.colorPrimary}
-          strokeDasharray={`${circumference * ratio} ${circumference}`}
-          strokeLinecap={'round'}
-          strokeWidth={stroke}
-          style={{ transition: 'stroke-dasharray 0.3s ease' }}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
-      <Flexbox
-        align={'center'}
-        justify={'center'}
-        style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', inset: 0, position: 'absolute' }}
-      >
-        <span style={{ color: cssVar.colorTextSecondary, fontWeight: 600 }}>{done}</span>
-      </Flexbox>
-    </div>
-  );
-});
-
-ProgressRing.displayName = 'AcceptanceProgressRing';
+import type { DecisionSegment } from '../Checks/checkDecision';
+import { DecisionActions } from './DecisionActions';
+import { decisionBarStyles as styles } from './decisionBarStyles';
+import type { DecisionBarState } from './DecisionMarks';
+import { DecisionStatusMark } from './DecisionMarks';
+import DecisionStrip from './DecisionStrip';
+import { DecisionTally } from './DecisionTally';
 
 interface DecisionBarProps {
   /** Checks the user has signed off, of `totalCount` reviewable ones. */
   acceptedCount: number;
+  /** Docks the bar across the whole scroll frame — its rule then mirrors the
+      header band's under the tabs — while the content keeps to a column this
+      wide (the body column's max width, its padding included). The caller
+      renders the bar after the column instead of inside it. */
+  dockedMaxWidth?: number;
   /** Rendered inside the conversation portal — the composer beside the bar
       receives the repair draft, so the copy handoff stays standalone-only. */
   embedded?: boolean;
@@ -255,7 +57,8 @@ interface DecisionBarProps {
   /** The origin conversation is known — the rerun dispatch has a target. */
   rerunAvailable: boolean;
   rerunPending: boolean;
-  state: BarState;
+  segments?: DecisionSegment[];
+  state: DecisionBarState;
   /** The state line, prepared by the page (status + counts wording). */
   statusText: string;
   subText?: string;
@@ -274,6 +77,7 @@ interface DecisionBarProps {
 const DecisionBar = memo<DecisionBarProps>(
   ({
     acceptedCount,
+    dockedMaxWidth,
     embedded,
     feedbackCount,
     ignoredCount,
@@ -290,21 +94,14 @@ const DecisionBar = memo<DecisionBarProps>(
     repairing,
     rerunAvailable,
     rerunPending,
+    segments,
     state,
     statusText,
     subText,
     totalCount,
   }) => {
     const { t } = useTranslation('verify');
-
-    const stateMeta = {
-      accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
-      // A repair round renders its own RepairingMark below; a plain verify
-      // stays a neutral info spinner.
-      live: { color: cssVar.colorInfo, icon: Loader2 },
-      rejected: { color: cssVar.colorError, icon: RotateCcw },
-      settled: null,
-    }[state];
+    const docked = dockedMaxWidth !== undefined;
 
     const allConfirmed = totalCount > 0 && acceptedCount + ignoredCount >= totalCount;
     const hasFeedback = feedbackCount > 0;
@@ -319,175 +116,117 @@ const DecisionBar = memo<DecisionBarProps>(
 
     // Pop the completion mark only on the real IN-SESSION transition into a
     // finished review — never on mount-when-already-done (revisiting a settled
-    // acceptance) and never on an unrelated re-render. Seed the ref to `null`
-    // so the first render (whatever its state) is treated as the baseline, not
-    // a transition: `prev === false && now` is the one edge that fires.
+    // acceptance) and never on an unrelated re-render. The first render seeds
+    // the baseline, so only a later change of `reviewComplete` can fire.
     const reviewComplete = allConfirmed || settledNeedsFix;
-    const prevComplete = useRef<boolean | null>(null);
-    const justCompleted = prevComplete.current === false && reviewComplete;
-    useEffect(() => {
-      prevComplete.current = reviewComplete;
-    }, [reviewComplete]);
+    const [seenComplete, setSeenComplete] = useState(reviewComplete);
+    const [justCompleted, setJustCompleted] = useState(false);
+    if (seenComplete !== reviewComplete) {
+      setSeenComplete(reviewComplete);
+      setJustCompleted(reviewComplete);
+    }
 
     return (
-      <div className={styles.bar}>
-        <Flexbox horizontal align={'center'} className={styles.summary} gap={8}>
-          {state === 'live' && repairing ? (
-            <RepairingMark />
-          ) : stateMeta ? (
-            // accepted / live / rejected — a plain coloured status mark.
-            <Icon
-              color={stateMeta.color}
-              icon={stateMeta.icon}
-              size={22}
-              spin={state === 'live'}
-              style={{ flex: 'none' }}
-            />
-          ) : allConfirmed ? (
-            // Every check signed off — the same clean badge the accepted state carries.
-            <Icon
-              className={justCompleted ? styles.completePop : undefined}
-              color={cssVar.colorSuccess}
-              icon={BadgeCheck}
-              size={22}
-              style={{ flex: 'none' }}
-            />
-          ) : settledNeedsFix ? (
-            <Icon
-              className={justCompleted ? styles.completePop : undefined}
-              color={cssVar.colorWarning}
-              icon={CircleAlert}
-              size={22}
-              style={{ flex: 'none' }}
-            />
-          ) : (
-            <ProgressRing done={decidedCount} total={totalCount} />
+      <div {...stylex.props(styles.bar, docked && styles.barDocked)}>
+        {segments && segments.length > 0 && (
+          <DecisionStrip
+            pendingXstyle={styles.stripPending}
+            segmentXstyle={styles.stripSegment}
+            segments={segments}
+            xstyle={styles.strip}
+            label={t('acceptance.bar.stripLabel', {
+              accepted: acceptedCount,
+              total: segments.length,
+            })}
+          />
+        )}
+        <div
+          {...sx(
+            styles.content,
+            docked && styles.contentDocked,
+            docked ? { maxWidth: dockedMaxWidth } : undefined,
           )}
-          <Flexbox gap={2} style={{ flex: '0 1 auto', minWidth: 0 }}>
-            <Text ellipsis type={'secondary'}>
-              {statusText}
-            </Text>
-            {subText && (
-              <Text ellipsis fontSize={12} type={'secondary'}>
-                {subText}
+        >
+          <Flexbox horizontal align={'flex-start'} gap={10} {...stylex.props(styles.summary)}>
+            <span {...stylex.props(styles.mark)}>
+              <DecisionStatusMark
+                allConfirmed={allConfirmed}
+                decidedCount={decidedCount}
+                justCompleted={justCompleted}
+                repairing={repairing}
+                settledNeedsFix={settledNeedsFix}
+                state={state}
+                totalCount={totalCount}
+              />
+            </span>
+            <Flexbox gap={0} style={{ flex: '0 1 auto', minWidth: 0 }}>
+              <Text ellipsis {...stylex.props(styles.statusText)}>
+                {statusText}
               </Text>
-            )}
-            {(readOnlyReason || rejectOnlyReason) && (
-              <Flexbox
-                horizontal
-                align={'center'}
-                data-testid={'acceptance-decision-reason'}
-                gap={4}
-              >
-                <Icon
-                  icon={readOnlyReason ? Lock : UsersRound}
-                  size={12}
-                  style={{ flex: 'none' }}
+              {state === 'settled' && totalCount > 0 && (
+                <DecisionTally
+                  acceptedCount={acceptedCount}
+                  ignoredCount={ignoredCount}
+                  needsFixCount={needsFixCount}
+                  pendingCount={Math.max(totalCount - decidedCount, 0)}
                 />
-                <Text fontSize={12} type={'secondary'}>
-                  {readOnlyReason ?? rejectOnlyReason}
+              )}
+              {subText && (
+                <Text ellipsis fontSize={12} type={'secondary'}>
+                  {subText}
                 </Text>
-              </Flexbox>
-            )}
-          </Flexbox>
+              )}
+              {(readOnlyReason || rejectOnlyReason) && (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  data-testid={'acceptance-decision-reason'}
+                  gap={4}
+                >
+                  <Icon
+                    icon={readOnlyReason ? Lock : UsersRound}
+                    size={12}
+                    style={{ flex: 'none' }}
+                  />
+                  <Text fontSize={12} type={'secondary'}>
+                    {readOnlyReason ?? rejectOnlyReason}
+                  </Text>
+                </Flexbox>
+              )}
+            </Flexbox>
 
-          {/* The clearing list — every note this round queues for the next one.
+            {/* The clearing list — every note this round queues for the next one.
             Sits with the status reading on the left: it explains that reading,
             while the right side stays pure actions. */}
-          {feedbackCount > 0 && (
-            <Button
-              icon={<Icon icon={ListTodo} />}
-              size={'small'}
-              style={{ flex: 'none' }}
-              type={'text'}
-              onClick={onOpenFeedback}
-            >
-              {t('acceptance.bar.feedback', { count: feedbackCount })}
-            </Button>
-          )}
-        </Flexbox>
-        {readOnlyReason ? (
-          // Not this viewer's call: the decision they are waiting on stays in
-          // view, disabled, so the bar says who decides instead of vanishing.
-          state === 'settled' && (
-            <Flexbox horizontal className={styles.actions} gap={8}>
-              <Button disabled title={readOnlyReason} type={'text'}>
-                {t('acceptance.bar.rejectComment')}
-              </Button>
-              <Button disabled title={readOnlyReason} type={'fill'}>
-                {t('acceptance.actions.accept')}
-              </Button>
-            </Flexbox>
-          )
-        ) : rejectOnlyReason ? (
-          // Granted reject access only: sending back is theirs, accepting is not.
-          state === 'settled' && (
-            <Flexbox horizontal className={styles.actions} gap={8}>
-              <Button disabled={pending} type={'fill'} onClick={onRejectComment}>
-                {t('acceptance.bar.rejectComment')}
-              </Button>
-              <Button disabled title={rejectOnlyReason} type={'fill'}>
-                {t('acceptance.actions.accept')}
-              </Button>
-            </Flexbox>
-          )
-        ) : (
-          <Flexbox horizontal className={styles.actions} gap={8}>
-            {/* A dispatched send-back (repairing) keeps the copy entry alive —
-            the reviewer may still hand the prompt to another agent. Embedded,
-            the composer beside it already receives the draft. */}
-            {state === 'live' && hasFeedback && !embedded && (
-              <Button disabled={pending} type={'fill'} onClick={onCopyReview}>
-                {t('acceptance.bar.copyReview')}
+            {feedbackCount > 0 && (
+              <Button
+                icon={<Icon icon={ListTodo} />}
+                size={'small'}
+                style={{ flex: 'none' }}
+                type={'text'}
+                onClick={onOpenFeedback}
+              >
+                {t('acceptance.bar.feedback', { count: feedbackCount })}
               </Button>
             )}
-
-            {(state === 'settled' || state === 'rejected') &&
-              (hasFeedback || state === 'rejected' ? (
-                // Feedback is queued — the delivery isn't being accepted now; the
-                // bar's job is getting the repair round started.
-                <>
-                  {/* Last words before the repair leaves — a global note the next
-                  round reads, for what the queued per-check feedback missed. */}
-                  <Button
-                    disabled={pending}
-                    icon={<Icon icon={MessageSquarePlus} />}
-                    type={'fill'}
-                    onClick={onAddComment}
-                  >
-                    {t('acceptance.bar.addComment')}
-                  </Button>
-                  {/* One commit action per host: standalone copies the repair
-                  prompt; embedded drafts it into the composer beside the bar. */}
-                  {(!embedded || rerunAvailable) && (
-                    <Button
-                      disabled={pending}
-                      loading={embedded && rerunPending}
-                      type={'primary'}
-                      onClick={embedded ? onRerun : onCopyReview}
-                    >
-                      {t(embedded ? 'acceptance.bar.rerun' : 'acceptance.bar.copyReview')}
-                    </Button>
-                  )}
-                </>
-              ) : (
-                // Clean review — accept carries primary weight only once every
-                // check is signed off; before that it stays a quiet option.
-                <>
-                  <Button disabled={pending} type={'text'} onClick={onRejectComment}>
-                    {t('acceptance.bar.rejectComment')}
-                  </Button>
-                  <Button
-                    disabled={pending}
-                    type={allConfirmed ? 'primary' : 'fill'}
-                    onClick={onAccept}
-                  >
-                    {t('acceptance.actions.accept')}
-                  </Button>
-                </>
-              ))}
           </Flexbox>
-        )}
+          <DecisionActions
+            allConfirmed={allConfirmed}
+            embedded={embedded}
+            hasFeedback={hasFeedback}
+            pending={pending}
+            readOnlyReason={readOnlyReason}
+            rejectOnlyReason={rejectOnlyReason}
+            rerunAvailable={rerunAvailable}
+            rerunPending={rerunPending}
+            state={state}
+            onAccept={onAccept}
+            onAddComment={onAddComment}
+            onCopyReview={onCopyReview}
+            onRejectComment={onRejectComment}
+            onRerun={onRerun}
+          />
+        </div>
       </div>
     );
   },

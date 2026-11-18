@@ -45,13 +45,15 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/editor-runtime @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/editor-runtime @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/device-mcp @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/chat-adapter-wecom'
 
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -66,6 +68,7 @@ jobs:
             .github/scripts/size-gate-comment.test.cjs \
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/testCheckout.test.mjs \
             .github/scripts/desktopRelease*.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
 
@@ -86,7 +89,7 @@ jobs:
         run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
       - name: Verify desktop release workflows
-        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs
+        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs .github/scripts/desktop-overlay-type-check.test.mjs .github/scripts/overlayTypeErrors.test.mjs
 
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
@@ -204,8 +207,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -280,8 +285,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -337,6 +344,7 @@ jobs:
         run: echo "::notice::ALint skipped for this ${ALINT_SKIP_REASON}"
 
       - name: alint · expose the diff against the base as dirty changes
+        id: alint_diff
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         env:
@@ -344,6 +352,10 @@ jobs:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'canary' }}
           HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
+          # Tests use the merge commit, but inline lint findings must describe
+          # only the PR head. Preserve installed dependencies for alint below.
+          git fetch --no-tags --depth=1 origin "${HEAD_SHA}"
+          git checkout --force --detach "${HEAD_SHA}"
           MERGE_BASE=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE}...${HEAD_SHA}" --jq .merge_base_commit.sha)
           echo "merge base: ${MERGE_BASE}"
           git fetch --no-tags --depth=1 origin "${MERGE_BASE}"
@@ -354,7 +366,7 @@ jobs:
           git status --short | head -50
 
       - name: alint · restore cache
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
+        if: ${{ !cancelled() && steps.alint_diff.outcome == 'success' }}
         continue-on-error: true
         uses: actions/cache@v4
         with:
@@ -367,7 +379,7 @@ jobs:
             alint-
 
       - name: alint · lint changed files
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
+        if: ${{ !cancelled() && steps.alint_diff.outcome == 'success' }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -385,7 +397,7 @@ jobs:
           bun packages/alint/report.ts alint-output.json
 
       - name: alint · calibrate rule fixtures (when rules or fixtures changed)
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
+        if: ${{ !cancelled() && steps.alint_diff.outcome == 'success' }}
         continue-on-error: true
         run: |
           if git status --porcelain -- alint.config.toml packages/alint ':(glob)packages/*/alint/**' | grep -q .; then
@@ -408,8 +420,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -446,8 +460,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
@@ -507,8 +523,10 @@ jobs:
     steps:
       - name: Checkout
         env:
-          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          # Match the workflow's revision: PR merge commit, or the pushed commit.
+          # Keep fetching anonymously; PR tests must not need checkout credentials.
+          REF_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"

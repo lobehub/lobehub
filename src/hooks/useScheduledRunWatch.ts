@@ -6,6 +6,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 /** Poll cadence once the run is due — the cron dispatcher ticks every ~10 min. */
 const POLL_INTERVAL_MS = 30_000;
+const WORKTREE_POLL_INTERVAL_MS = 1500;
 /** Start polling slightly before `runAt` so the first due tick isn't missed. */
 const POLL_LEAD_MS = 60_000;
 
@@ -40,6 +41,12 @@ export const useScheduledRunWatch = (topicId: string | null | undefined) => {
     if (topic?.status !== 'scheduled') return undefined;
     return topic.metadata?.scheduledRun?.runAt ?? null;
   });
+  const startingWorktree = useChatStore((s) =>
+    Boolean(
+      topicId &&
+      topicSelectors.getTopicById(topicId)(s)?.metadata?.scheduledRun?.kind === 'worktree_start',
+    ),
+  );
 
   useSWR(
     topicId && scheduledRunAt !== undefined ? topicKeys.scheduledRunWatch(topicId) : null,
@@ -47,6 +54,7 @@ export const useScheduledRunWatch = (topicId: string | null | undefined) => {
     {
       refreshInterval: () => {
         if (scheduledRunAt === undefined) return 0;
+        if (startingWorktree) return WORKTREE_POLL_INTERVAL_MS;
         const dueAt = scheduledRunAt ? new Date(scheduledRunAt).getTime() - POLL_LEAD_MS : 0;
         const untilDue = dueAt - Date.now();
         return untilDue > POLL_INTERVAL_MS ? untilDue : POLL_INTERVAL_MS;

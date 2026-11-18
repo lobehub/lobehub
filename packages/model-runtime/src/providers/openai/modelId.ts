@@ -189,14 +189,23 @@ export const isGPTProResponsesModel = (model: string): boolean => {
 };
 
 /**
- * `reasoning.effort: 'none'` is a GPT-5.x-only affordance. GPT-5 Pro never
- * supported it, and GPT-6+ models removed it — their lowest effort is `low`.
+ * GPT-6+ models verified to accept `reasoning.effort: 'none'` on the Responses API.
+ *
+ * @see https://developers.openai.com/api/docs/models/gpt-6.1-terra
+ */
+const GPT6_REASONING_EFFORT_NONE_MODELS = new Set(['gpt-6.1-terra']);
+
+/**
+ * `reasoning.effort: 'none'` is a GPT-5.x affordance that GPT-5 Pro never supported. GPT-6+
+ * models are treated as not accepting it unless listed in `GPT6_REASONING_EFFORT_NONE_MODELS`.
  *
  * @see https://developers.openai.com/docs/guides/latest-model
  */
 export const supportsGPTResponsesReasoningEffortNone = (model: string): boolean => {
   const parsed = isResponsesEndpointGPTModel(model);
-  if (!parsed || parsed.majorVersion !== 5 || parsed.minorVersion === undefined) return false;
+  if (!parsed) return false;
+  if (GPT6_REASONING_EFFORT_NONE_MODELS.has(parsed.normalizedModelId)) return true;
+  if (parsed.majorVersion !== 5 || parsed.minorVersion === undefined) return false;
 
   return !hasModifier(parsed, 'pro');
 };

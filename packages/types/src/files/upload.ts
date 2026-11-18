@@ -53,6 +53,11 @@ export interface UploadFileItem {
    * base64 data, it will use in other data
    */
   base64Url?: string;
+  /**
+   * SHA-256 of the image as it was attached, before compression. A chat draft attaches an
+   * image with the same content only once: pasting it again adds nothing.
+   */
+  contentHash?: string;
   /** Intrinsic dimensions captured for image uploads. */
   dimensions?: {
     height: number;
@@ -77,6 +82,11 @@ export interface UploadFileItem {
    * it will use in the file preview before send the message
    */
   previewUrl?: string;
+  /**
+   * When the same image was last attached again. No second card is added, so the existing
+   * card pulses to show the paste was received.
+   */
+  repastedAt?: number;
   /**
    * Set when the draft was uploaded as an agent-share VISITOR: the file lives
    * under the creator's account, so remove/retry must go through the

@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { UserModel } from '../../../models/user';
-import { channelJobs, channelMemberGrants, channelMembers, devices } from '../../../schemas';
+import {
+  channelJobs,
+  channelMemberGrants,
+  channelMembers,
+  channelMessages,
+  devices,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { createChannelFixture, deviceConfig, jobsOf, lease } from './testUtils';
@@ -48,7 +54,9 @@ const answer = async (channelId: string, jobId: string) => {
 };
 
 describe('claim guards', () => {
-  it('asks for a device before an external Agent without one replies', async () => {
+  // A Channel binds no device by default: an external Agent without a picked device replies
+  // right away, running where its own settings say, instead of waiting for one.
+  it('lets an external Agent without a picked device reply on its own settings', async () => {
     const model = new ChannelRepository(db, fixture.ownerId);
     const { channel } = await model.create({ title: 'Direct to Codex' });
     const agent = await fixture.addAgent(channel.id, 'Codex', {
@@ -57,20 +65,16 @@ describe('claim guards', () => {
       runtime: 'codex',
     });
 
-    const waiting = await request(model, channel.id, agent.id, 'no-device');
-    expect(await execution.claim(channel.id, waiting.job.id, lease)).toBeNull();
-    expect(await jobById(waiting.job.id)).toMatchObject({
-      blockedCode: 'device_required',
-      status: 'queued',
-    });
+    const job = await request(model, channel.id, agent.id, 'no-device');
+    const claim = await execution.claim(channel.id, job.job.id, lease);
 
-    // Choosing a device lets the same queued job start.
-    await model.updateAgentEnvironment(channel.id, agent.id, {
-      deviceId: 'device-4',
-      deviceOwnerId: fixture.ownerId,
-      workingDirectory: '/repo',
+    expect(claim).not.toBeNull();
+    expect(await jobById(job.job.id)).toMatchObject({
+      blockedCode: null,
+      deviceId: null,
+      status: 'running',
+      workingDirectory: null,
     });
-    expect(await execution.claim(channel.id, waiting.job.id, lease)).not.toBeNull();
   });
 
   it('requires an approved grant that matches the device, directory and owner', async () => {
@@ -144,6 +148,21 @@ describe('claim guards', () => {
     const { job } = await request(asMember, channel.id, agent.id, 'req');
 
     await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, member.id));
+
+    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+    expect((await jobById(job.id)).status).toBe('cancelled');
+  });
+
+  it('cancels a job whose request was deleted while it waited', async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Coder');
+    const { job, message } = await request(asMember, channel.id, agent.id, 'withdrawn');
+
+    // Deletion racing the claim: the tombstone lands while the job is still queued.
+    await db
+      .update(channelMessages)
+      .set({ metadata: { deletedAt: new Date().toISOString() } })
+      .where(eq(channelMessages.id, message.id));
 
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
     expect((await jobById(job.id)).status).toBe('cancelled');

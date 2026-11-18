@@ -1,8 +1,8 @@
-// Fixture: a Segmented switching whole panels, kept only in local state.
-import { Flexbox } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui';
+// Fixture: a routed page uses Segmented to switch whole panels in local state.
+import { Flexbox, Segmented } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Route, Routes } from 'react-router-dom';
 
 import DirectoryTree from './DirectoryTree';
 import HealthOverview from './HealthOverview';
@@ -31,4 +31,8 @@ const DeviceDetail = memo<{ deviceId: string }>(({ deviceId }) => {
   );
 });
 
-export default DeviceDetail;
+export const DeviceRoutes = () => (
+  <Routes>
+    <Route element={<DeviceDetail deviceId={'current'} />} path={'/devices/current'} />
+  </Routes>
+);

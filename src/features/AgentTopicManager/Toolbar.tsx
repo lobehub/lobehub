@@ -16,6 +16,8 @@ import {
 } from '@lobehub/ui';
 import {
   Archive,
+  Bot,
+  Braces,
   CalendarRange,
   ChevronDown,
   FolderClosed,
@@ -36,6 +38,7 @@ import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getPlatformIcon } from '@/features/AgentChannel/const';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -164,14 +167,24 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'completed', labelKey: 'management.filters.status.completed' },
 ];
 
-const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'bot', 'api', 'task', 'eval'];
+const TRIGGER_OPTIONS: TriggerFilter[] = [
+  'chat',
+  'channel',
+  'bot',
+  'webhook',
+  'api',
+  'task',
+  'eval',
+];
 
 const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
-  api: Webhook,
-  bot: Hash,
+  api: Braces,
+  bot: Bot,
+  channel: Hash,
   chat: MessageCircle,
   eval: TestTubeIcon,
   task: ListTodoIcon,
+  webhook: Webhook,
 };
 
 const TIME_OPTIONS: TimeRangeFilter[] = ['all', 'today', 'week', 'month'];
@@ -250,16 +263,17 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
   const viewMode = useTopicsViewStore((s) => s.viewMode);
   const setViewMode = useTopicsViewStore((s) => s.setViewMode);
 
+  const channelsEnabled = useChannelsEnabled();
   const triggerItems: DropdownItem[] = useMemo(
     () =>
-      TRIGGER_OPTIONS.map((tr) => ({
+      TRIGGER_OPTIONS.filter((tr) => tr !== 'channel' || channelsEnabled).map((tr) => ({
         extra: <CheckMark visible={triggers.includes(tr)} />,
         icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
         key: tr,
         label: t(`management.filters.trigger.${tr}` as any) as string,
         onClick: () => toggleTrigger(tr),
       })),
-    [triggers, t, toggleTrigger],
+    [channelsEnabled, triggers, t, toggleTrigger],
   );
 
   const projectItems: DropdownItem[] = useMemo(() => {
@@ -289,7 +303,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
       const PlatformIcon = getPlatformIcon(option.key);
       return {
         extra: <CheckMark visible={botChannels.includes(option.key)} />,
-        icon: PlatformIcon ? <PlatformIcon size={14} /> : <Icon icon={Hash} size={14} />,
+        icon: PlatformIcon ? <PlatformIcon size={14} /> : <Icon icon={Bot} size={14} />,
         key: option.key,
         label: option.label,
         onClick: () => toggleBotChannel(option.key),
@@ -359,7 +373,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
     if (!botChannelApplied) {
       items.push({
         children: botChannelItems,
-        icon: <Icon icon={Hash} size={14} />,
+        icon: <Icon icon={Bot} size={14} />,
         key: 'botChannel',
         label: t('management.filters.botChannel.label'),
         type: 'submenu',
@@ -407,9 +421,9 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
   }, [botChannels, botChannelOptions]);
 
   const botChannelChipIcon = useMemo(() => {
-    if (botChannels.length !== 1) return <Icon icon={Hash} size={12} />;
+    if (botChannels.length !== 1) return <Icon icon={Bot} size={12} />;
     const PlatformIcon = getPlatformIcon(botChannels[0]);
-    return PlatformIcon ? <PlatformIcon size={12} /> : <Icon icon={Hash} size={12} />;
+    return PlatformIcon ? <PlatformIcon size={12} /> : <Icon icon={Bot} size={12} />;
   }, [botChannels]);
 
   const handleArchiveStale = useCallback(() => {

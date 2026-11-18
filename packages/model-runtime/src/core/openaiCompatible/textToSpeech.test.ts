@@ -141,6 +141,250 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(result.usage).toEqual({ inputCharacters: 2 });
   });
 
+  it('omits the Fish Audio default voice and bills a gateway Fish model by UTF-8 bytes', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好, hi', model: 's2.1-pro', params: { speed: 1.2 }, voice: 'default' },
+      undefined,
+      { ...context, provider: 'lobehub', requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      { input: '你好, hi', model: 'fish-audio/s2.1-pro', response_format: 'mp3', speed: 1.2 },
+      { headers: undefined, signal: undefined },
+    );
+    // 2 Han × 3 bytes + ", hi" (4) = 10 billed bytes; 10 × $15/1M
+    expect(result.usage).toEqual({ cost: 0.00015, inputCharacters: 10 });
+  });
+
+  it('sends a Fish Audio reference voice and recognizes Fish by its gateway id alone', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+    const voice = '0123456789abcdef0123456789abcdef';
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '语音', model: 'custom-fish', voice },
+      undefined,
+      { ...context, requestModel: 'fish-audio/drama-3' },
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ model: 'fish-audio/drama-3', voice });
+    expect(result.usage?.inputCharacters).toBe(6);
+  });
+
+  it('bills the instructions a gateway writes in front of a Fish Audio input', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好', model: 's2.1-pro', params: { instructions: 'whisper' }, voice: 'default' },
+      undefined,
+      { ...context, requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ instructions: 'whisper' });
+    // "[whisper] " (10) + 2 Han × 3 bytes = 16 billed bytes
+    expect(result.usage?.inputCharacters).toBe(16);
+  });
+
+  it("treats a bare Fish-like id on a custom provider as that provider's own model", async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: 'a'.repeat(5000) + '你好', model: 's1', voice: 'default' },
+      undefined,
+      { ...context, provider: 'my-custom-tts', requestModel: 's1' },
+    );
+
+    // No Fish cap, the caller's voice is kept, and usage counts code points, not bytes.
+    expect(create.mock.calls[0][0]).toMatchObject({ model: 's1', voice: 'default' });
+    expect(result.usage?.inputCharacters).toBe(5002);
+  });
+
+  it('prices a qualified gateway Fish id by the Fish Audio catalog card', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+    vi.mocked(getModelPricing).mockImplementation(async (model, provider) =>
+      model === 's2.1-pro' && provider === 'fishaudio' ? characterPricing : undefined,
+    );
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'fish-audio/s2.1-pro', voice: 'default' },
+      undefined,
+      { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(getModelPricing).toHaveBeenCalledWith('fish-audio/s2.1-pro', 'openrouter', undefined);
+    expect(getModelPricing).toHaveBeenCalledWith('s2.1-pro', 'fishaudio', undefined);
+    // 2 bytes × $15/1M
+    expect(result.usage).toEqual({ cost: 0.00003, inputCharacters: 2 });
+  });
+
+  it('prices an alias mapped to a Fish route by the mapped model card', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+    vi.mocked(getModelPricing).mockImplementation(async (model, provider) =>
+      model === 'drama-3' && provider === 'fishaudio' ? characterPricing : undefined,
+    );
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'custom-fish', voice: 'default' },
+      undefined,
+      { ...context, provider: 'my-gateway', requestModel: 'fish-audio/drama-3' },
+    );
+
+    expect(getModelPricing).toHaveBeenCalledWith('drama-3', 'fishaudio', undefined);
+    expect(result.usage).toEqual({ cost: 0.00003, inputCharacters: 2 });
+  });
+
+  it('validates gateway Fish params against the Fish catalog card before the request', async () => {
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        {
+          input: 'Hi',
+          model: 'fish-audio/s1',
+          params: { instructions: 'whisper' },
+          voice: 'default',
+        },
+        undefined,
+        { ...context, provider: 'openrouter', requestModel: 'fish-audio/s1' },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('params.instructions') },
+      errorType: 'ProviderBizError',
+      provider: 'openrouter',
+    });
+
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        { input: 'Hi', model: 'custom-fish', params: { speed: 3 }, voice: 'default' },
+        undefined,
+        { ...context, provider: 'my-gateway', requestModel: 'fish-audio/s2.1-pro' },
+      ),
+    ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.speed') } });
+    expect(create).not.toHaveBeenCalled();
+
+    // `/audio/speech` cannot carry a sample rate, so a gateway Fish route refuses it.
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        {
+          input: 'Hi',
+          model: 'fish-audio/s2.1-pro',
+          params: { sampleRate: 44_100 },
+          voice: 'default',
+        },
+        undefined,
+        { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+      ),
+    ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.sampleRate') } });
+    expect(create).not.toHaveBeenCalled();
+
+    // s2.1-pro-free follows the S2.1 Pro schema, and a refused sample rate is a clean error.
+    for (const params of [{ speed: 3 }, { sampleRate: 44_100 }]) {
+      await expect(
+        createOpenAICompatibleSpeech(
+          client,
+          { input: 'Hi', model: 'fish-audio/s2.1-pro-free', params, voice: 'default' },
+          undefined,
+          { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro-free' },
+        ),
+      ).rejects.toMatchObject({
+        error: { message: expect.stringContaining('Fish Audio s2.1-pro-free: params.') },
+        errorType: 'ProviderBizError',
+      });
+    }
+    expect(create).not.toHaveBeenCalled();
+
+    // The directed S2 family accepts instructions through the gateway.
+    create.mockResolvedValue(audioResponse([0]));
+    await createOpenAICompatibleSpeech(
+      client,
+      {
+        input: 'Hi',
+        model: 'fish-audio/s2.1-pro',
+        params: { instructions: 'calm' },
+        voice: 'default',
+      },
+      undefined,
+      { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a gateway Fish Audio input over the per-request cap before the request', async () => {
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        { input: 'a'.repeat(4097), model: 'fish-audio/s2.1-pro', voice: 'default' },
+        undefined,
+        { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('the limit is 4096 per request') },
+      errorType: 'ProviderBizError',
+      provider: 'openrouter',
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('lets a gateway Fish Audio input at the cap through', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'a'.repeat(4096), model: 'fish-audio/s2.1-pro', voice: 'default' },
+      undefined,
+      { ...context, requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits a service fallback voice for a fully qualified gateway Fish model', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'fish-audio/s2.1-pro', voice: 'alloy', voiceIsDefault: true },
+      undefined,
+      { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create.mock.calls[0][0]).not.toHaveProperty('voice');
+  });
+
+  it('keeps a fallback voice for non-Fish models', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'tts-1', voice: 'alloy', voiceIsDefault: true },
+      undefined,
+      context,
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ voice: 'alloy' });
+  });
+
+  it('keeps a voice named "default" for non-Fish models', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'tts-1', voice: 'default' },
+      undefined,
+      context,
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ voice: 'default' });
+  });
+
   it('keeps counting code points for non-MiniMax models', async () => {
     create.mockResolvedValue(audioResponse([0]));
 

@@ -369,7 +369,14 @@ export const buildServerVirtualSubAgentRunner = (
         title: description,
         topicId,
       })) as
-        { error?: string; operationId?: string; success?: boolean; threadId?: string } | undefined;
+        | {
+            error?: string;
+            operationId?: string;
+            steered?: boolean;
+            success?: boolean;
+            threadId?: string;
+          }
+        | undefined;
 
       // 3. If the child op never started, no completion bridge will fire — parking
       //    the parent on it would hang forever. Drop the placeholder and signal
@@ -402,6 +409,34 @@ export const buildServerVirtualSubAgentRunner = (
           started: false,
           subOperationId: result?.operationId,
           threadId: '',
+        };
+      }
+
+      // The instruction steered the still-running sub-agent: this call's row
+      // only holds the receipt. It must not read as a running background call
+      // (those count against the limit and wait for delivery) — the running
+      // call's own row reports the result.
+      if (result.steered) {
+        await ctx.messageModel
+          .updatePluginState(placeholder.id, {
+            background: false,
+            status: 'completed',
+            steered: true,
+            threadId: result.threadId,
+          })
+          .catch((error: unknown) =>
+            log(
+              'buildServerVirtualSubAgentRunner: failed to settle steer receipt %s: %O',
+              placeholder.id,
+              error,
+            ),
+          );
+        return {
+          started: true,
+          steered: true,
+          subOperationId: result.operationId,
+          threadId: result.threadId ?? '',
+          toolMessageId: placeholder.id,
         };
       }
 

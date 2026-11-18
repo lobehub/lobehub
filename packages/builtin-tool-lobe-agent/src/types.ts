@@ -239,6 +239,11 @@ export interface CallSubAgentState extends SubAgentRunStats {
    */
   sender?: { agentId: string; name: string };
   status?: 'pending' | 'completed' | 'error';
+  /**
+   * This call sent its instruction to a sub-agent that was still running: it
+   * was queued for that run's next step, and the row only holds the receipt.
+   */
+  steered?: boolean;
   threadId: string;
 }
 

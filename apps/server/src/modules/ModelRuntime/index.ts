@@ -18,6 +18,7 @@ import {
   type ClientSecretPayload,
   type CloudflareKeyVault,
   type ComfyUIKeyVault,
+  type DoubaoSpeechKeyVault,
   type GithubCopilotKeyVault,
   type OAuthDeviceFlowKeyVault,
   type OpenAICompatibleKeyVault,
@@ -58,6 +59,7 @@ type ProviderKeyVaults = OpenAICompatibleKeyVault &
   AWSBedrockKeyVault &
   CloudflareKeyVault &
   ComfyUIKeyVault &
+  DoubaoSpeechKeyVault &
   GithubCopilotKeyVault &
   OAuthDeviceFlowKeyVault &
   SuperGrokKeyVault &
@@ -132,6 +134,16 @@ export const buildPayloadFromKeyVaults = (
       return {
         apiKey: keyVaults.apiKey,
         cloudflareBaseURLOrAccountID: keyVaults.baseURLOrAccountID,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.DoubaoSpeech: {
+      return {
+        apiKey: keyVaults.apiKey,
+        baseURL: keyVaults.baseURL,
+        doubaoSpeechAccessToken: keyVaults.accessToken,
+        doubaoSpeechAppId: keyVaults.appId,
         runtimeProvider,
       };
     }
@@ -295,6 +307,33 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
         payload.cloudflareBaseURLOrAccountID || CLOUDFLARE_BASE_URL_OR_ACCOUNT_ID;
 
       return { apiKey, baseURLOrAccountID };
+    }
+
+    case ModelProvider.DoubaoSpeech: {
+      const baseURL =
+        payload?.baseURL ||
+        (useServerConfig ? process.env.DOUBAOSPEECH_PROXY_URL : undefined) ||
+        undefined;
+
+      // The user's own credentials, of either console, are never mixed with the server's.
+      const hasUserCredentials = !!(
+        payload.apiKey ||
+        payload.doubaoSpeechAppId ||
+        payload.doubaoSpeechAccessToken
+      );
+      const credentials = hasUserCredentials
+        ? {
+            accessToken: payload.doubaoSpeechAccessToken,
+            apiKey: apiKeyManager.pick(payload.apiKey),
+            appId: payload.doubaoSpeechAppId,
+          }
+        : {
+            accessToken: llmConfig.DOUBAOSPEECH_ACCESS_TOKEN,
+            apiKey: apiKeyManager.pick(llmConfig.DOUBAOSPEECH_API_KEY),
+            appId: llmConfig.DOUBAOSPEECH_APP_ID,
+          };
+
+      return baseURL ? { ...credentials, baseURL } : credentials;
     }
 
     case ModelProvider.GithubCopilot: {

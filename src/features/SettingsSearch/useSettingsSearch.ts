@@ -69,6 +69,13 @@ export interface SettingsSearchScope {
    * found on the page that no longer renders it.
    */
   keywordOwnerTabs?: readonly SettingsSearchTab[];
+  /**
+   * Tabs whose page also holds other tabs' settings in this scope, mapped to
+   * the tabs they hold. The host tab answers those tabs' keywords too: personal
+   * Usage holds the balance, while the workspace keeps a separate Credits page.
+   * Keyed by `SettingsSearchTab` values, typed as `string` like the keyword tables.
+   */
+  mergedTabs?: Partial<Record<string, readonly SettingsSearchTab[]>>;
   /** Builtin provider detail URL; defaults to the personal provider page */
   providerUrl?: (providerId: string) => string;
 }
@@ -122,6 +129,7 @@ export const useSettingsSearch = (
     categoryGroups,
     itemTabs,
     keywordOwnerTabs,
+    mergedTabs,
     providerUrl = getPersonalProviderUrl,
   } = scope;
   const { hideDocs, showAiImage } = useServerConfigStore(featureFlagsSelectors);
@@ -165,13 +173,15 @@ export const useSettingsSearch = (
       !itemTabs || itemTabs.has(tab) ? visibleTabs.get(tab) : undefined;
 
     // English floor + localized enrichment (deduped: on en-US they overlap)
-    const getTabKeywords = (tab: SettingsSearchTab) => {
+    const getOwnTabKeywords = (tab: SettingsSearchTab) => {
       const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[tab];
       return [
         ...(TAB_SEARCH_EN_KEYWORDS[tab] ?? []),
         ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
       ];
     };
+    const getTabKeywords = (tab: SettingsSearchTab) =>
+      [tab, ...(mergedTabs?.[tab] ?? [])].flatMap(getOwnTabKeywords);
     const ownerTabs = new Set(keywordOwnerTabs);
     const ownedKeywords = new Set(keywordOwnerTabs?.flatMap(getTabKeywords));
     const withoutOwnedKeywords = (tab: SettingsSearchTab, keywords: string[]) =>
@@ -303,6 +313,7 @@ export const useSettingsSearch = (
     categoryGroups,
     itemTabs,
     keywordOwnerTabs,
+    mergedTabs,
     providerUrl,
     t,
     disableEmailPassword,

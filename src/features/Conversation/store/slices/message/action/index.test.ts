@@ -1,8 +1,9 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
+import { mcpAppContext } from '@/store/mcpApp/context';
 
 import type { ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
@@ -25,193 +26,6 @@ const createTestStore = (context?: Partial<ConversationContext>) =>
       ...context,
     },
   });
-
-describe('message convenience actions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  describe('addAIMessage', () => {
-    it('creates an assistant message with its conversation context and the submitted text', async () => {
-      const store = createTestStore();
-      const createMessage = vi.fn().mockResolvedValue('message-1');
-      store.setState({ createMessage });
-
-      await act(async () => {
-        await store.getState().addAIMessage('assistant content');
-      });
-
-      expect(createMessage).toHaveBeenCalledWith({
-        agentId: 'agent-1',
-        content: 'assistant content',
-        parentId: undefined,
-        role: 'assistant',
-        threadId: undefined,
-        topicId: 'topic-1',
-      });
-    });
-
-    it('preserves the group scope when creating a message', async () => {
-      const store = createTestStore({ groupId: 'group-1', scope: 'group' });
-      const createMessage = vi.fn().mockResolvedValue('message-1');
-      store.setState({ createMessage });
-
-      await act(async () => {
-        await store.getState().addAIMessage('assistant content');
-      });
-
-      expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'group-1' }));
-    });
-
-    it('still allows an empty assistant placeholder', async () => {
-      const store = createTestStore();
-      const createMessage = vi.fn().mockResolvedValue('message-1');
-      store.setState({ createMessage });
-
-      await act(async () => {
-        await store.getState().addAIMessage('');
-      });
-
-      expect(createMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ content: '', role: 'assistant' }),
-      );
-    });
-
-    it('uses the last display message as the parent id', async () => {
-      const store = createTestStore();
-      const createMessage = vi.fn().mockResolvedValue('message-1');
-      store.setState({
-        createMessage,
-        displayMessages: [
-          { id: 'prev-1', content: 'previous', role: 'user', createdAt: 1, updatedAt: 1 },
-        ],
-      });
-
-      await act(async () => {
-        await store.getState().addAIMessage('assistant content');
-      });
-
-      expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ parentId: 'prev-1' }));
-    });
-
-    it('fires the onMessageCreated hook for the created assistant message', async () => {
-      const onMessageCreated = vi.fn();
-      const store = createTestStore();
-      const created: UIChatMessage = {
-        id: 'message-1',
-        content: 'assistant content',
-        role: 'assistant',
-        createdAt: 1,
-        updatedAt: 1,
-      };
-      store.setState({
-        createMessage: vi.fn().mockResolvedValue('message-1'),
-        displayMessages: [created],
-        hooks: { onMessageCreated },
-      });
-
-      await act(async () => {
-        await store.getState().addAIMessage('assistant content');
-      });
-
-      expect(onMessageCreated).toHaveBeenCalledWith(created);
-    });
-
-    it('clears the input after successful creation', async () => {
-      const store = createTestStore();
-      store.setState({
-        createMessage: vi.fn().mockResolvedValue('message-1'),
-        inputMessage: 'submitted draft',
-      });
-
-      await act(async () => {
-        await store.getState().addAIMessage('submitted draft');
-      });
-
-      expect(store.getState().inputMessage).toBe('');
-    });
-
-    it('does not clear the input when creation fails', async () => {
-      const store = createTestStore();
-      store.setState({
-        createMessage: vi.fn().mockResolvedValue(undefined),
-        inputMessage: 'submitted draft',
-      });
-
-      await act(async () => {
-        await store.getState().addAIMessage('submitted draft');
-      });
-
-      expect(store.getState().inputMessage).toBe('submitted draft');
-    });
-  });
-
-  describe('addUserMessage', () => {
-    it('creates a user message with its conversation context, files and the submitted text', async () => {
-      const store = createTestStore();
-      const createMessage = vi.fn().mockResolvedValue('message-1');
-      store.setState({ createMessage });
-
-      await act(async () => {
-        await store.getState().addUserMessage({ message: 'user content', fileList: ['file-1'] });
-      });
-
-      expect(createMessage).toHaveBeenCalledWith({
-        agentId: 'agent-1',
-        content: 'user content',
-        files: ['file-1'],
-        parentId: undefined,
-        role: 'user',
-        threadId: undefined,
-        topicId: 'topic-1',
-      });
-    });
-
-    it('preserves the group scope when creating a message', async () => {
-      const store = createTestStore({ groupId: 'group-1', scope: 'group' });
-      const createMessage = vi.fn().mockResolvedValue('message-1');
-      store.setState({ createMessage });
-
-      await act(async () => {
-        await store.getState().addUserMessage({ message: 'user content' });
-      });
-
-      expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ groupId: 'group-1' }));
-    });
-
-    it('clears the input after successful creation', async () => {
-      const store = createTestStore();
-      store.setState({
-        createMessage: vi.fn().mockResolvedValue('message-1'),
-        inputMessage: 'submitted draft',
-      });
-
-      await act(async () => {
-        await store.getState().addUserMessage({ message: 'submitted draft' });
-      });
-
-      expect(store.getState().inputMessage).toBe('');
-    });
-
-    it('does not clear the input when creation fails', async () => {
-      const store = createTestStore();
-      store.setState({
-        createMessage: vi.fn().mockResolvedValue(undefined),
-        inputMessage: 'submitted draft',
-      });
-
-      await act(async () => {
-        await store.getState().addUserMessage({ message: 'submitted draft' });
-      });
-
-      expect(store.getState().inputMessage).toBe('submitted draft');
-    });
-  });
-});
 
 describe('sendMessage composer ownership', () => {
   afterEach(() => {
@@ -315,5 +129,71 @@ describe('sendMessage composer ownership', () => {
     await expect(result).rejects.toBe(abortError);
     expect(sendMessage).not.toHaveBeenCalled();
     expect(store.getState().inputMessage).toBe('keep this draft');
+  });
+});
+
+describe('MCP App context dispatch', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('preserves the original request shape when no enabled app context exists', async () => {
+    const store = createTestStore();
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [], restore: vi.fn() });
+    await store.getState().sendMessage({ message: 'hello' });
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('contextSelections');
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('onPreflightFailure');
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('onMessageAccepted');
+  });
+  it('attaches the snapshot and restores it on a failed send', async () => {
+    const selection = {
+      id: 'view',
+      source: 'mcpApp' as const,
+      identifier: 'notes',
+      content: 'selected',
+    };
+    const restore = vi.fn();
+    const store = createTestStore();
+    const sendMessage = vi.fn().mockRejectedValue(new Error('offline'));
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [selection], restore });
+    await expect(store.getState().sendMessage({ message: 'hello' })).rejects.toThrow('offline');
+    expect(sendMessage.mock.calls[0][0].contextSelections).toEqual([selection]);
+    expect(restore).toHaveBeenCalledOnce();
+  });
+  it('keeps the snapshot for the next message when a command stores none', async () => {
+    const selection = {
+      id: 'view',
+      source: 'mcpApp' as const,
+      identifier: 'notes',
+      content: 'ctx',
+    };
+    const restore = vi.fn();
+    const store = createTestStore();
+    // `/compact` compresses history and returns without accepting a message
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [selection], restore });
+    await store.getState().sendMessage({ message: '/compact' });
+    expect(restore).toHaveBeenCalledOnce();
+  });
+  it('spends the snapshot on an accepted message', async () => {
+    const selection = {
+      id: 'view',
+      source: 'mcpApp' as const,
+      identifier: 'notes',
+      content: 'ctx',
+    };
+    const restore = vi.fn();
+    const onMessageAccepted = vi.fn();
+    const store = createTestStore();
+    const sendMessage = vi.fn(async (params: { onMessageAccepted?: () => void }) => {
+      params.onMessageAccepted?.();
+      return undefined;
+    });
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [selection], restore });
+    await store.getState().sendMessage({ message: 'hello', onMessageAccepted });
+    expect(restore).not.toHaveBeenCalled();
+    expect(onMessageAccepted).toHaveBeenCalledOnce();
   });
 });

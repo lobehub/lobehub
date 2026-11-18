@@ -12,7 +12,7 @@ const AVATAR_SIZE = 18;
 const styles = stylex.create({
   item: {
     borderRadius: '50%',
-    // Separates overlapping avatars against the pocket glass.
+    // A ring in the page tone, a shade off the pocket, separates overlapping avatars.
     boxShadow: `0 0 0 1.5px ${cssVar.colorBgLayout}`,
     display: 'inline-flex',
     marginInlineStart: { ':first-child': 0, 'default': -6 },
