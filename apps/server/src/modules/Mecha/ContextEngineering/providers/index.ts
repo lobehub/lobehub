@@ -2,6 +2,13 @@ import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
+import type { AvailablePluginInfo } from '@lobechat/context-engine';
+import {
+  type AgentContextDocument,
+  agentDocumentChangesByMessage,
+  type AgentDocumentIndexSnapshot,
+  agentDocumentsFromSnapshot,
+} from '@lobechat/context-engine/agent-document';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
@@ -14,8 +21,10 @@ import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
 import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { ConnectorModel } from '@/database/models/connector';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -29,14 +38,23 @@ import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { findRevokedDocumentReads } from '@/server/services/agentDocuments/revokedReads';
 import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
+import { type AgentDocumentIndexTurn, resolveServerAgentDocumentIndex } from './agentDocumentIndex';
+
 export interface ServerContextFactSource {
   ctx: RuntimeExecutorContext;
+  /**
+   * The step's conversation and provider cache TTL. With it the documents
+   * index renders from a snapshot kept across warm turns; without it, from
+   * the live documents.
+   */
+  documentIndexTurn?: AgentDocumentIndexTurn;
   state: AgentState;
 }
 
@@ -65,6 +83,7 @@ const getAppUrl = (): string | undefined => {
  */
 export const createServerContextFactProviders = ({
   ctx,
+  documentIndexTurn,
   state,
 }: ServerContextFactSource): ContextFactProviders => {
   const { serverDB, userId } = ctx;
@@ -79,6 +98,46 @@ export const createServerContextFactProviders = ({
       })
     : ordinaryDocumentAccessScope;
 
+  // `listAgentDocuments` and `listAgentDocumentChanges` must render from the
+  // same snapshot, and resolving one may write it, so resolve once per agent.
+  const agentDocumentIndexes = new Map<
+    string,
+    Promise<{ docs: AgentContextDocument[]; snapshot?: AgentDocumentIndexSnapshot }>
+  >();
+  const loadAgentDocumentIndex = (agentId: string) => {
+    let pending = agentDocumentIndexes.get(agentId);
+    if (!pending) {
+      pending = (async () => {
+        const docs = toAgentContextDocuments(
+          await new AgentDocumentsService(
+            db,
+            userId,
+            workspaceId,
+            undefined,
+            documentAccessScope,
+          ).getAgentContextDocuments(agentId),
+        );
+        if (!documentIndexTurn) return { docs };
+        try {
+          const snapshot = await resolveServerAgentDocumentIndex({
+            agentId,
+            ctx,
+            docs,
+            state,
+            turn: documentIndexTurn,
+          });
+          return { docs, snapshot };
+        } catch (error) {
+          // A snapshot only saves cache; never lose the documents over it.
+          log('Agent-document index snapshot failed, rendering live documents: %O', error);
+          return { docs };
+        }
+      })();
+      agentDocumentIndexes.set(agentId, pending);
+    }
+    return pending;
+  };
+
   return {
     findAgentDocument: async (agentId, documentId) => {
       const doc = await new AgentDocumentsService(
@@ -90,6 +149,13 @@ export const createServerContextFactProviders = ({
       ).getDocumentById(documentId, agentId);
       return doc ? { content: doc.content, title: doc.title } : null;
     },
+
+    findRevokedDocumentReads: async (agentId, documentIds) =>
+      findRevokedDocumentReads(
+        new AgentDocumentModel(db, userId, workspaceId, documentAccessScope),
+        agentId,
+        documentIds,
+      ),
 
     findTopic: async (topicId) => {
       const topic = await new TopicModel(db, userId, ctx.workspaceId).findById(topicId);
@@ -241,15 +307,17 @@ export const createServerContextFactProviders = ({
       };
     },
 
+    listAgentDocumentChanges: async (agentId) => {
+      const index = await loadAgentDocumentIndex(agentId);
+      return index.snapshot && agentDocumentChangesByMessage(index.snapshot);
+    },
+
     listAgentDocuments: async (agentId) => {
-      const docs = await new AgentDocumentsService(
-        db,
-        userId,
-        workspaceId,
-        undefined,
-        documentAccessScope,
-      ).getAgentContextDocuments(agentId);
-      return toAgentContextDocuments(docs);
+      const { docs, snapshot } = await loadAgentDocumentIndex(agentId);
+      // The index renders the snapshot, so documents created, edited or
+      // deleted since do not rewrite the prompt prefix behind it; the change
+      // notes (`listAgentDocumentChanges`) tell the model about them.
+      return snapshot ? agentDocumentsFromSnapshot(docs, snapshot) : docs;
     },
 
     // Connected = ACTIVE Composio connections across BOTH the legacy plugin
@@ -303,21 +371,37 @@ export const createServerContextFactProviders = ({
       }));
     },
 
-    // Custom MCP connectors the user installed, beyond the shared catalog.
-    // Read from the installed-plugins table: the run's tool source map only
-    // classifies skill / Composio / client tools, so it cannot tell a custom
-    // connector apart, and a connector the agent has not pinned yet must
+    // Custom MCP servers the user installed, beyond the shared catalog: custom
+    // connectors (every install now) and the custom plugin rows older installs
+    // left, one entry per identifier. Read from the tables: the run's tool
+    // source map only classifies skill / Composio / client tools, so it cannot
+    // tell a custom connector apart, and one the agent has not pinned yet must
     // still be offered to createAgent / updateAgent.
     listCustomPlugins: async () => {
-      const installed = await new PluginModel(db, userId, ctx.workspaceId).query();
-      return installed
-        .filter((plugin) => plugin.type === 'customPlugin')
-        .map((plugin) => ({
+      const [connectors, installed] = await Promise.all([
+        new ConnectorModel(db, userId, ctx.workspaceId).queryPublic(),
+        new PluginModel(db, userId, ctx.workspaceId).query(),
+      ]);
+      const plugins = new Map<string, AvailablePluginInfo>();
+      for (const connector of connectors) {
+        if (connector.sourceType !== 'custom') continue;
+        plugins.set(connector.identifier, {
+          description: connector.description ?? undefined,
+          identifier: connector.identifier,
+          name: connector.name || connector.identifier,
+          type: 'custom',
+        });
+      }
+      for (const plugin of installed) {
+        if (plugin.type !== 'customPlugin' || plugins.has(plugin.identifier)) continue;
+        plugins.set(plugin.identifier, {
           description: plugin.manifest?.meta?.description,
           identifier: plugin.identifier,
           name: plugin.manifest?.meta?.title || plugin.identifier,
-          type: 'custom' as const,
-        }));
+          type: 'custom',
+        });
+      }
+      return [...plugins.values()];
     },
 
     listEnabledProviders: async () => {

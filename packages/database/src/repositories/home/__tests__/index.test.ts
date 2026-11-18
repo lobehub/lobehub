@@ -22,6 +22,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await clientDB.delete(Schema.workspaces);
   await clientDB.delete(Schema.users);
 });
 
@@ -429,6 +430,57 @@ describe('HomeRepository', () => {
       const group = result.ungrouped.find((i) => i.id === groupId);
       expect(group).toBeDefined();
       expect(group!.unreadCount).toBe(1);
+    });
+
+    it("should not count teammates' unread topics in workspace sidebar badges", async () => {
+      const workspaceId = 'ws-unread-badge';
+      const agentId = 'ws-shared-agent';
+      const groupId = 'ws-shared-group';
+
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.workspaces).values({
+          id: workspaceId,
+          name: 'Unread Badge Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(Schema.agents).values({
+          id: agentId,
+          title: 'Shared Agent',
+          userId,
+          virtual: false,
+          workspaceId,
+        });
+        await tx.insert(Schema.chatGroups).values({
+          id: groupId,
+          title: 'Shared Group',
+          userId,
+          workspaceId,
+        });
+        await tx.insert(Schema.topics).values([
+          { agentId, id: 'ws-my-agent-unread', status: 'unread', userId, workspaceId },
+          {
+            agentId,
+            id: 'ws-teammate-agent-unread',
+            status: 'unread',
+            userId: otherUserId,
+            workspaceId,
+          },
+          { groupId, id: 'ws-my-group-unread', status: 'unread', userId, workspaceId },
+          {
+            groupId,
+            id: 'ws-teammate-group-unread',
+            status: 'unread',
+            userId: otherUserId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      const result = await new HomeRepository(clientDB, userId, workspaceId).getSidebarAgentList();
+
+      expect(result.ungrouped.find((i) => i.id === agentId)?.unreadCount).toBe(1);
+      expect(result.ungrouped.find((i) => i.id === groupId)?.unreadCount).toBe(1);
     });
 
     describe('agents.pinned is the only sidebar pin source', () => {

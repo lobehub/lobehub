@@ -447,6 +447,36 @@ describe('DeviceGateway', () => {
         );
       });
 
+      it('routes a worktree trash request through the desktop and makes only one RPC', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          error: 'Unknown device RPC method',
+          success: false,
+        });
+        const worktree = { approvedRoot: '/repo', sourcePath: '/repo', worktreePath: '/checkout' };
+        const paths = ['/checkout/a.ts'];
+
+        await expect(
+          new DeviceGateway().trashProjectFiles({
+            deviceId: 'dev-1',
+            paths,
+            userId: 'user-1',
+            workingDirectory: '/checkout',
+            worktree,
+          }),
+        ).rejects.toThrow('Unknown device RPC method');
+        expect(mockClient.invokeRpc).toHaveBeenCalledExactlyOnceWith(
+          { clientKinds: ['desktop'], deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+          {
+            method: 'runWorktreeFileOperation',
+            params: {
+              ...worktree,
+              rpc: { method: 'trashLocalFiles', params: { paths, workspaceRoot: '/checkout' } },
+            },
+          },
+        );
+      });
+
       it('throws when any path escapes the workspace', async () => {
         configure();
         const proxy = new DeviceGateway();

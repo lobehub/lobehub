@@ -50,6 +50,29 @@ describe('queue hand-off after a run stopped elsewhere', () => {
     expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(false);
   });
 
+  it('holds no hand-off for a steer that may already be with the agent', () => {
+    const { result } = renderHook(() => useChatStore());
+
+    act(() => {
+      const { operationId } = result.current.startOperation({
+        context,
+        metadata: { startTime: 1000 },
+        type: 'execHeterogeneousAgent',
+      });
+      result.current.enqueueMessage(messageMapKey(context), {
+        content: 'maybe delivered',
+        createdAt: 2000,
+        id: 'q-unknown',
+        interruptMode: 'soft',
+        localSteer: 'unknown',
+      });
+      result.current.completeOperation(operationId);
+    });
+
+    expect(operationSelectors.isQueueDrainPending(context)(result.current)).toBe(false);
+    expect(operationSelectors.isInputVisiblyLoadingByContext(context)(result.current)).toBe(false);
+  });
+
   it('still hands the queue off behind a run that completed', () => {
     const { result } = renderHook(() => useChatStore());
 

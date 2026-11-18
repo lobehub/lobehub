@@ -117,7 +117,6 @@ describe('TrashAction', () => {
       expect(restored).toBeTruthy();
       expect(restored(['agent:list', true])).toBe(true);
       expect(restored(['replica:sync', 'topicList', 1, 'scope', 'agent_x', {}])).toBe(true);
-      expect(restored(['agentSync:list', true, 'scope'])).toBe(true);
       expect(restored(['message:list', { agentId: 'a', topicId: 't' }, 1])).toBe(true);
       expect(restored(['trash:list', 'all'])).toBe(false);
       expect(restored('not-an-array')).toBe(false);

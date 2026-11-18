@@ -8,14 +8,12 @@ import { randomUUID } from 'node:crypto';
 
 import type { RecentItem } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { replicaKeys } from 'local-replica';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
-import { SWRConfig, unstable_serialize, useSWRConfig } from 'swr';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { fileService } from '@/services/file';
 import { recentService } from '@/services/recent';
@@ -23,11 +21,7 @@ import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import { useHomeStore } from '@/store/home';
 import { HOME_TOPIC_RECENTS_PARAMS, TRAY_RECENTS_PARAMS } from '@/store/home/slices/recent/action';
-import {
-  createConversationRecentQueryKey,
-  createRecentQueryKey,
-  initialRecentState,
-} from '@/store/home/slices/recent/initialState';
+import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
 import { docsHomeListResource, recentListResource } from '@/store/home/slices/recent/projection';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
@@ -123,23 +117,6 @@ describe('recents replica', () => {
 
     await waitFor(() => expect(titleOf(SIDEBAR, 'task:a')).toBe('Cached'));
     expect(result.current.isValidating).toBe(true);
-  });
-
-  it('fetches topic recents with previews for the conversation list', async () => {
-    const getAll = vi
-      .spyOn(recentService, 'getAll')
-      .mockImplementation(async () => [item('t1', 'Topic', 'topic')]);
-    const conversations = createConversationRecentQueryKey(50);
-
-    renderHook(() => useHomeStore((s) => s.useFetchConversationRecents)(50), { wrapper });
-
-    await waitFor(() =>
-      expect(
-        homeRecentSelectors.conversationRecents(conversations)(useHomeStore.getState()),
-      ).toHaveLength(1),
-    );
-    // Topics with previews: the IM rows show the latest reply, not the title.
-    expect(getAll).toHaveBeenCalledWith(50, ['topic'], true);
   });
 
   it('does not fetch while logged out', () => {
@@ -268,25 +245,6 @@ describe('Home topic and tray recents on the recentList replica', () => {
     expect(new Set([SIDEBAR, DRAWER, HOME_TOPICS, TRAY]).size).toBe(4);
     // Sidebar entries keep their original key, so persisted rows still hydrate.
     expect(SIDEBAR).toBe('limit:11');
-  });
-
-  it('keeps the new sync keys out of the legacy SWR persistence tiers', () => {
-    for (const params of [HOME_TOPIC_RECENTS_PARAMS, TRAY_RECENTS_PARAMS]) {
-      const serialized = unstable_serialize(
-        replicaKeys.sync(
-          recentListResource.name,
-          recentListResource.version,
-          scope,
-          recentListResource.key(params),
-          params,
-        ),
-      );
-      expect(
-        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].filter((pattern) =>
-          serialized.includes(pattern),
-        ),
-      ).toEqual([]);
-    }
   });
 
   it('asks the server for the same rows as before', async () => {

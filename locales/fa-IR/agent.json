@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "مهاجرت به حالت وب‌سوکت را در نظر بگیرید",
   "channel.quickSetup.connect.desc": "آنچه را که در بالا پر کرده‌اید ذخیره می‌کند و ربات را آنلاین می‌کند. بقیه موارد را می‌توان بعداً تغییر داد.",
   "channel.quickSetup.connect.title": "ذخیره و اتصال",
-  "channel.quickSetup.discord.bot.desc": "در صفحه Bot، توکن را بازنشانی کرده و کپی کنید، سپس Message Content Intent را فعال کنید.",
-  "channel.quickSetup.discord.bot.title": "توکن ربات را دریافت کنید و محتوای پیام را مجاز کنید",
   "channel.quickSetup.discord.create.desc": "در Developer Portal، روی New Application کلیک کرده و نامی برای آن انتخاب کنید.",
   "channel.quickSetup.discord.create.title": "یک برنامه ایجاد کنید",
   "channel.quickSetup.discord.credentials.desc": "هر دو در General Information قرار دارند.",

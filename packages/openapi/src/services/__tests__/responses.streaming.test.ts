@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 
+import { ResponseObjectSchema } from '../../types/responses.type';
 import type * as ResumeModule from '../client-tool-resume.responses';
 import { ResponsesService } from '../responses.service';
 
@@ -178,6 +179,7 @@ describe('ResponsesService function call outputs', () => {
       topicId: 'tpc_1',
     });
     expect(response).toMatchObject({ id: 'tpc_1', status: 'completed' });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 
   it('streams the resumed run on the same response id', async () => {
@@ -216,6 +218,7 @@ describe('ResponsesService function call outputs', () => {
       output: [{ call_id: 'call_9', name: 'get_weather', type: 'function_call' }],
       status: 'incomplete',
     });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 
   it('falls back to a new turn when nothing is parked on the topic', async () => {
@@ -251,6 +254,7 @@ describe('ResponsesService function call outputs', () => {
         status: 'failed',
         error: { code: 'invalid_request_error' },
       });
+      expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
       expect(execAgentMock).not.toHaveBeenCalled();
       expect(executeResponseRunMock).not.toHaveBeenCalled();
     },
@@ -281,11 +285,51 @@ describe('ResponsesService function call outputs', () => {
       tools_mode: 'exclusive',
     });
     expect(response.status).toBe('completed');
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
     expect(execAgentMock).toHaveBeenCalledWith(
       expect.objectContaining({
         exclusivePluginIds: ['lobe-agent-documents'],
         functionTools: [{ name: 'read_page', parameters: { type: 'object' } }],
       }),
     );
+  });
+});
+
+describe('ResponsesService non-streaming response object', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    execAgentMock.mockResolvedValue({ operationId: 'op_1', success: true, topicId: 'tpc_9' });
+  });
+
+  it('matches the documented OpenResponses object for every output item kind', async () => {
+    executeResponseRunMock.mockResolvedValue({
+      messages: [
+        {
+          content: 'Checking.',
+          role: 'assistant',
+          tool_calls: [{ function: { arguments: '{}', name: 'search____query' }, id: 'call_1' }],
+        },
+        { content: 'result', role: 'tool', tool_call_id: 'call_1' },
+        { content: 'Done.', role: 'assistant' },
+      ],
+      status: 'done',
+      usage: { llm: { tokens: { input: 5, output: 7, total: 12 } } },
+    });
+
+    const response = await buildService().createResponse({
+      input: 'hi',
+      metadata: { source: 'test' },
+      model: 'agt_1',
+      tool_choice: { name: 'lookup', type: 'function' },
+    });
+
+    expect(response.output.map((item: { type: string }) => item.type)).toEqual([
+      'message',
+      'function_call',
+      'function_call_output',
+      'message',
+    ]);
+    expect(response.usage).toMatchObject({ input_tokens: 5, output_tokens: 7, total_tokens: 12 });
+    expect(() => ResponseObjectSchema.parse(response)).not.toThrow();
   });
 });

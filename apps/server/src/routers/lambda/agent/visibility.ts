@@ -14,6 +14,7 @@ import {
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
 
+import { releasePrivatePin } from '../_helpers/sidebarPin';
 import { agentProcedure } from './procedures';
 
 export const visibilityRouter = router({
@@ -32,6 +33,21 @@ export const visibilityRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Hand a private pin to the creator's personal list BEFORE the row goes
+      // public: done afterwards, a failure in between would leave a public
+      // pinned row — a team pin no owner/admin chose.
+      if (ctx.workspaceId) {
+        const meta = await ctx.agentModel.getAgentVisibilityMeta(input.id);
+        if (meta?.pinned && meta.visibility === 'private') {
+          await releasePrivatePin({
+            clearPinned: () => ctx.agentModel.update(input.id, { pinned: false }),
+            creatorId: meta.userId,
+            db: ctx.serverDB,
+            itemId: input.id,
+            workspaceId: ctx.workspaceId,
+          });
+        }
+      }
       const result = await ctx.agentModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
         const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
@@ -155,6 +171,18 @@ export const visibilityRouter = router({
               'Cannot make this agent private while it supervises workspace group chats. Remove it as supervisor first.',
           });
         }
+      }
+
+      // Before the row turns public, so a failure never leaves a team pin
+      // nobody with the role set (see `publishAgentToWorkspace`).
+      if (input.visibility === 'public' && meta.pinned) {
+        await releasePrivatePin({
+          clearPinned: () => ctx.agentModel.update(input.id, { pinned: false }),
+          creatorId: meta.userId,
+          db: ctx.serverDB,
+          itemId: input.id,
+          workspaceId: ctx.workspaceId,
+        });
       }
 
       const updated = await ctx.agentModel.setVisibility(input.id, input.visibility);

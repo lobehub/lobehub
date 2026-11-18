@@ -8,7 +8,7 @@ import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorFo
 
 import { CriticalAgentInterventionPersistenceError } from '../../CompletionLifecycle';
 import { logToolCallPc } from '../../formalObservation';
-import { StepOwnershipLostError } from '../executionErrors';
+import { DurableStatusUnavailableError, StepOwnershipLostError } from '../executionErrors';
 import type { AgentRuntimeServiceContext } from '../types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -22,7 +22,8 @@ export type StepFailureDeps = Pick<
  * A step threw. Record it on the span, persist the error state, settle the
  * completion lifecycle and finalize the trace, then rethrow — except a failed
  * intervention Review publication, which keeps the run parked for the retry,
- * and a lost step lock, which leaves the run to whoever owns it now.
+ * a lost step lock, which leaves the run to whoever owns it now, and an
+ * unreadable durable status, which leaves the run for the queue retry.
  */
 export async function failStep(
   deps: StepFailureDeps,
@@ -47,6 +48,14 @@ export async function failStep(
   // queue redelivers the step instead and the claim decides who runs it.
   if (error instanceof StepOwnershipLostError) {
     log('[%s][%d] Step lock lost before commit; leaving the run as it is', operationId, stepIndex);
+    throw error;
+  }
+  if (error instanceof DurableStatusUnavailableError) {
+    log(
+      '[%s][%d] Durable status unavailable; leaving the run for a queue retry',
+      operationId,
+      stepIndex,
+    );
     throw error;
   }
 

@@ -192,6 +192,7 @@ const startRun = async (
     connectToGateway: vi.fn(),
     getOperationAbortSignal: vi.fn(() => AbortSignal.abort()),
     internal_pinTopicStatus: vi.fn(),
+    internal_dispatchMessage: vi.fn(),
     internal_dispatchTopic: vi.fn(),
     moveQueuedMessages: vi.fn(),
     moveVoiceMessages: vi.fn(),

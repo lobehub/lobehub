@@ -1,12 +1,17 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import {
+  agentsKnowledgeBases,
   documents,
   knowledgeBaseFiles,
   knowledgeBases,
+  projectKnowledgeBases,
   resourcePermissions,
+  tasks,
+  workspaceMembers,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
@@ -164,21 +169,144 @@ export const assertFileNotInRestrictedKnowledgeBase = async (
   }
 };
 
+/** Picks, from the caller's restricted knowledge base ids, the ones a read may still use. */
+export type UsableKnowledgeBaseResolver = (restrictedIds: string[]) => Promise<string[]>;
+
+/**
+ * Of `knowledgeBaseIds`, the ones mounted on the agent (or on its project,
+ * directly or through the task) by a user who may browse them.
+ *
+ * "No access" keeps a knowledge base usable on the agents it is mounted on, so
+ * an agent may read its full content for a member who cannot browse it. The
+ * mount must come from someone who can browse the knowledge base (its
+ * creator, a curator or a collaborator): a member mounting a knowledge base
+ * they cannot browse on their own agent must not unlock it.
+ */
+export const getKnowledgeBaseIdsMountedByBrowsers = async (
+  ctx: Pick<KnowledgeBaseAccessCtx, 'serverDB' | 'workspaceId'>,
+  scope: { agentId?: string; projectId?: string; taskId?: string },
+  knowledgeBaseIds: string[],
+): Promise<string[]> => {
+  const { serverDB: db, workspaceId } = ctx;
+  if (!workspaceId || knowledgeBaseIds.length === 0) return [];
+
+  let projectId = scope.projectId;
+  if (!projectId && scope.taskId) {
+    const [task] = await db
+      .select({ projectId: tasks.projectId })
+      .from(tasks)
+      .where(and(eq(tasks.id, scope.taskId), eq(tasks.workspaceId, workspaceId)))
+      .limit(1);
+    projectId = task?.projectId ?? undefined;
+  }
+
+  const [agentMounts, projectMounts] = await Promise.all([
+    scope.agentId
+      ? db
+          .select({
+            knowledgeBaseId: agentsKnowledgeBases.knowledgeBaseId,
+            mountedBy: agentsKnowledgeBases.userId,
+          })
+          .from(agentsKnowledgeBases)
+          .where(
+            and(
+              eq(agentsKnowledgeBases.agentId, scope.agentId),
+              eq(agentsKnowledgeBases.workspaceId, workspaceId),
+              eq(agentsKnowledgeBases.enabled, true),
+              inArray(agentsKnowledgeBases.knowledgeBaseId, knowledgeBaseIds),
+            ),
+          )
+      : [],
+    projectId
+      ? db
+          .select({
+            knowledgeBaseId: projectKnowledgeBases.knowledgeBaseId,
+            mountedBy: projectKnowledgeBases.addedByUserId,
+          })
+          .from(projectKnowledgeBases)
+          .where(
+            and(
+              eq(projectKnowledgeBases.projectId, projectId),
+              eq(projectKnowledgeBases.workspaceId, workspaceId),
+              eq(projectKnowledgeBases.enabled, true),
+              inArray(projectKnowledgeBases.knowledgeBaseId, knowledgeBaseIds),
+            ),
+          )
+      : [],
+  ]);
+
+  const mounts = [...agentMounts, ...projectMounts];
+  const mountAuthors = [
+    ...new Set(mounts.flatMap(({ mountedBy }) => (mountedBy ? [mountedBy] : []))),
+  ];
+  if (mountAuthors.length === 0) return [];
+
+  // Only current members vouch for a mount: a removed member keeps their rows
+  // (membership is soft-deleted) and, as a creator, would otherwise still pass
+  // the creator exemption in `getRestrictedKnowledgeBaseIds`.
+  const activeMembers = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        inArray(workspaceMembers.userId, mountAuthors),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    );
+  const mounters = activeMembers.map(({ userId }) => userId);
+  const restrictedByMounter = new Map(
+    await pMap(
+      mounters,
+      async (userId) =>
+        [
+          userId,
+          new Set(await getRestrictedKnowledgeBaseIds({ serverDB: db, userId, workspaceId })),
+        ] as const,
+      { concurrency: 5 },
+    ),
+  );
+
+  return [
+    ...new Set(
+      mounts
+        .filter(
+          ({ knowledgeBaseId, mountedBy }) =>
+            !!mountedBy &&
+            restrictedByMounter.has(mountedBy) &&
+            !restrictedByMounter.get(mountedBy)!.has(knowledgeBaseId),
+        )
+        .map(({ knowledgeBaseId }) => knowledgeBaseId),
+    ),
+  ];
+};
+
 /**
  * Assert a full-content batch read (`chunk.getFileContents`) does not leak a
  * restricted knowledge base's content. Accepts the mixed id list the endpoint
  * takes: `file_*` ids resolve through `knowledge_base_files`, `docs_*` ids
  * through `documents.knowledge_base_id`. The member-facing "No access" level
- * only promises attached agents continued retrieval (semantic search) — full
+ * keeps the knowledge base usable by the agents it is mounted on — direct
  * document dumps stay manager-only, matching the browse restriction.
+ *
+ * `resolveUsableKnowledgeBaseIds` lets an agent tool read exempt the restricted
+ * knowledge bases mounted on the running agent (see
+ * `getKnowledgeBaseIdsMountedByBrowsers`). It only runs when the caller has
+ * restricted knowledge bases. A file that is also in another restricted
+ * knowledge base stays blocked.
  */
 export const assertContentsNotInRestrictedKnowledgeBase = async (
   ctx: KnowledgeBaseAccessCtx,
   ids: string[],
+  options: { resolveUsableKnowledgeBaseIds?: UsableKnowledgeBaseResolver } = {},
 ): Promise<void> => {
   if (!ctx.workspaceId || ids.length === 0) return;
 
-  const restricted = await getRestrictedKnowledgeBaseIds(ctx);
+  let restricted = await getRestrictedKnowledgeBaseIds(ctx);
+  if (restricted.length > 0 && options.resolveUsableKnowledgeBaseIds) {
+    const usable = new Set(await options.resolveUsableKnowledgeBaseIds(restricted));
+    restricted = restricted.filter((id) => !usable.has(id));
+  }
   if (restricted.length === 0) return;
 
   const documentIds = ids.filter((id) => id.startsWith('docs_'));

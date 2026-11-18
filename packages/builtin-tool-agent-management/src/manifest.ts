@@ -194,7 +194,9 @@ export const AgentManagementManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Install a plugin/tool for an agent. Use 'official' source for builtin tools, Composio integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
+        "Install a plugin/tool for an agent. This tool ALWAYS REQUIRES user approval before installation, even in auto-run mode. Use 'official' source for builtin tools, Composio integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
+      // An install adds a third-party endpoint the agent's later runs call
+      humanIntervention: 'always',
       name: AgentManagementApiName.installPlugin,
       parameters: {
         properties: {

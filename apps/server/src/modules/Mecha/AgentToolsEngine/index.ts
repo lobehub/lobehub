@@ -112,6 +112,7 @@ export const createServerAgentToolsEngine = (
     globalMemoryEnabled = false,
     hasEnabledKnowledgeBases = false,
     hasIdentityAccount = false,
+    hasEventConnector = false,
     hasOversizedFiles = false,
     isBotConversation = false,
     isGroupSupervisor = false,
@@ -161,6 +162,7 @@ export const createServerAgentToolsEngine = (
     executionTarget,
     hasEnabledKnowledgeBases,
     hasIdentityAccount,
+    hasEventConnector,
     hasOversizedFiles,
     isBotConversation,
     isGroupSupervisor,
@@ -211,6 +213,8 @@ export const createServerAgentToolsEngine = (
     manifestContext,
     enableChecker: createEnableChecker({
       allowExplicitActivation: resolved.allowExplicitActivation,
+      explicitActivationIds:
+        resolved.toolMode === 'custom' ? params.allowedConnectorIds : undefined,
       rules: resolved.rules,
     }),
   });

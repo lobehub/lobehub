@@ -5,6 +5,7 @@ import { chunk } from 'es-toolkit/compat';
 import type { NewChunkItem, NewUnstructuredChunkItem } from '../schemas';
 import { chunks, embeddings, fileChunks, files, unstructuredChunks } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { insertInBatches } from '../utils/batchInsert';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class ChunkModel {
@@ -29,14 +30,21 @@ export class ChunkModel {
     return this.db.transaction(async (trx) => {
       if (params.length === 0) return [];
 
-      const result = await trx
-        .insert(chunks)
-        .values(
-          params.map((p) =>
-            buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, p),
-          ),
-        )
-        .returning();
+      // One statement per INSERT_BATCH_SIZE rows, all inside this transaction: a spreadsheet of
+      // tens of thousands of rows would otherwise exceed PG's 65,535 bind parameters, and
+      // Drizzle's query builder overflows the call stack on that many rows before it gets there.
+      const result: (typeof chunks.$inferSelect)[] = [];
+      await insertInBatches(params, async (batch) => {
+        const created = await trx
+          .insert(chunks)
+          .values(
+            batch.map((p) =>
+              buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, p),
+            ),
+          )
+          .returning();
+        result.push(...created);
+      });
 
       const fileChunksData = result.map((chunk) => ({
         chunkId: chunk.id,
@@ -45,8 +53,7 @@ export class ChunkModel {
         workspaceId: this.workspaceId ?? null,
       }));
 
-      // `params` is non-empty here and INSERT … RETURNING yields one row per value.
-      await trx.insert(fileChunks).values(fileChunksData);
+      await insertInBatches(fileChunksData, (batch) => trx.insert(fileChunks).values(batch));
 
       return result;
     });

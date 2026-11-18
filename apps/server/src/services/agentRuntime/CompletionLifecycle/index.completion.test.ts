@@ -270,18 +270,21 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
   // Scheduled = a user-deferred chat turn; Cron = the rate-limit auto-resume of
   // a user's chat turn. Both are "user walked away" runs the recall exists for.
-  it.each([RequestTrigger.Chat, RequestTrigger.Scheduled, RequestTrigger.Cron])(
-    'notifies for a user-recallable %s-triggered completion',
-    async (trigger) => {
-      const lifecycle = buildLifecycle();
-      stubSideEffects(lifecycle);
+  it.each([
+    RequestTrigger.Chat,
+    RequestTrigger.Scheduled,
+    RequestTrigger.Cron,
+    RequestTrigger.McpEvent,
+    RequestTrigger.Webhook,
+  ])('notifies for a user-recallable %s-triggered completion', async (trigger) => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
 
-      await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
-      await flushMicrotasks();
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
+    await flushMicrotasks();
 
-      expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
+  });
 
   it('falls back to the op row trigger when metadata carries none (synthetic hetero path)', async () => {
     const lifecycle = buildLifecycle();
@@ -396,5 +399,23 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
       [],
     );
     expect(hookDispatcher.unregister).toHaveBeenCalledWith('op-1');
+  });
+});
+
+describe('CompletionLifecycle.buildStateFromInput share visitor', () => {
+  const build = (input: Record<string, unknown>) =>
+    (new CompletionLifecycle({} as any, 'user-1') as any).buildStateFromInput({
+      operationId: 'op-share',
+      ...input,
+    });
+
+  it('marks the synthesized state as a share visitor run', () => {
+    const shareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+    expect(build({ shareVisitor }).principal).toEqual({ actor: { shareVisitor } });
+  });
+
+  it('adds no principal for an ordinary run', () => {
+    expect(build({}).principal).toBeUndefined();
   });
 });

@@ -1,6 +1,4 @@
 export default {
-  'addUserMessage.desc': 'Add the current input as a user message without triggering generation',
-  'addUserMessage.title': 'Add a User Message',
   'commandPalette.desc': 'Open the global command palette for quick access to features',
   'commandPalette.title': 'Command Palette',
   'deleteAndRegenerateMessage.desc': 'Delete the last message and regenerate',
@@ -45,7 +43,8 @@ export default {
   'switchAgent.desc':
     'Switch between pinned agents in the sidebar by holding Ctrl and pressing numbers 0-9',
   'switchAgent.title': 'Quick Switch Agent',
-  'switchTab.desc': 'Jump to a specific tab by its position (1–9) in the Desktop app tab bar',
+  'switchTab.desc':
+    'Jump to a tab by its position (1–8) in the Desktop app tab bar, or to the last tab with 9',
   'switchTab.title': 'Switch to Tab by Number',
   'openTaskFilter.desc': 'Open the filter menu on the Tasks page',
   'openTaskFilter.title': 'Filter Tasks',

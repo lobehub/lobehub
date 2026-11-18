@@ -1,21 +1,26 @@
 import type { ChannelListItem } from '@lobechat/types';
 import { CHANNEL_LIMITS } from '@lobechat/types';
 import { copyToClipboard, toast } from '@lobehub/ui';
-import { Archive, ArchiveRestore, Copy, PencilLine, Trash } from 'lucide-react';
+import { Archive, ArchiveRestore, Copy, LogOut, PencilLine, Trash } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { openRenameModal } from '@/components/RenameModal';
 import { channelActions } from '@/store/channel';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
+import { canLeaveChannel } from './memberManagement';
 import { useChannelArchive } from './useChannelArchive';
+import { useLeaveChannel } from './useMemberActions';
 import { useRemoveChannel } from './useRemoveChannel';
 
-/** A Channel's menu wherever it is listed: rename, copy id, archive, and move to the trash. */
+/**
+ * A Channel's menu wherever it is listed: rename, copy id, archive, leave, and move to the trash.
+ */
 export const useChannelMenu = () => {
   const { t } = useTranslation('channel');
   const remove = useRemoveChannel();
   const { archive, unarchive } = useChannelArchive();
+  const leave = useLeaveChannel();
 
   const rename = (channel: ChannelListItem) =>
     openRenameModal({
@@ -51,6 +56,12 @@ export const useChannelMenu = () => {
         }
       },
     },
+    ...(canLeaveChannel(channel)
+      ? [
+          { type: 'divider' as const },
+          { icon: LogOut, key: 'leave', label: t('leave'), onClick: () => leave(channel) },
+        ]
+      : []),
     ...(channel.canDelete
       ? [
           channel.status === 'archived'

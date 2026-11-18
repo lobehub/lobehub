@@ -10,12 +10,10 @@ import {
   SearchIcon,
   TargetIcon,
 } from 'lucide-react';
-import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useSelfLearningSurface';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
@@ -26,14 +24,18 @@ import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { isAgentProfileRoute } from './isAgentProfileRoute';
 
-const Nav = memo(() => {
+interface NavProps {
+  onOpenProfile: () => void;
+  showProfile: boolean;
+}
+
+const Nav = ({ onOpenProfile, showProfile }: NavProps) => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
   const { t: tSelfLearning } = useTranslation('selfLearning');
@@ -53,15 +55,7 @@ const Nav = memo(() => {
   const isTopicsActive = pathname.endsWith('/topics');
   const router = useQueryRoute();
   const { allowed: canCreateTopic } = usePermission('create_content');
-  const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource } = useResourceAccess('agent', agentId);
-  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
-  // Only a server-confirmed edit denial hides the entry. `canEditResource` stays
-  // permissive while workspace access is loading, so the entry no longer drops
-  // out each time an agent is opened; the profile page itself is still guarded by
-  // `ResourceConfigAccessGate`.
-  const hideProfile = !isAgentEditable || !canEditContent || !canEditResource;
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
   const isNewTopicSendInFlight = useChatStore(topicSelectors.isNewTopicSendInFlight);
@@ -69,7 +63,7 @@ const Nav = memo(() => {
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // Self-evolving lives in the profile group; it stays here only where that group
   // cannot reach it: members with no profile entry, and the mobile Segmented.
-  const showSelfLearningEntry = enableSelfLearning && (hideProfile || isMobileSurface());
+  const showSelfLearningEntry = enableSelfLearning && (!showProfile || isMobileSurface());
 
   const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
@@ -107,15 +101,12 @@ const Nav = memo(() => {
           router.push(urlJoin('/agent', agentId!, 'topics'));
         }}
       />
-      {!hideProfile && (
+      {showProfile && isMobileSurface() && (
         <NavItem
           active={isProfileActive}
           icon={BotPromptIcon}
           title={t('tab.profile')}
-          onClick={() => {
-            switchTopic(null, { skipRefreshMessage: true });
-            router.push(urlJoin('/agent', agentId!, 'profile'));
-          }}
+          onClick={onOpenProfile}
         />
       )}
       {showSelfLearningEntry && (
@@ -151,6 +142,6 @@ const Nav = memo(() => {
       />
     </Flexbox>
   );
-});
+};
 
 export default Nav;

@@ -15,7 +15,6 @@ import { Clock3, Dices } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
 import { ModelIcon } from '@/components/LobeIcons';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
@@ -810,7 +809,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             onValueChange={setValue}
           />
         </div>
-        <VideoFreeQuotaInfo />
       </Flexbox>
     </Flexbox>
   );

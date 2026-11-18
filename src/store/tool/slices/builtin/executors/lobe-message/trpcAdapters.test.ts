@@ -1,18 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockListProviders, mockSendMessage } = vi.hoisted(() => ({
+const { mockListPlatforms, mockListProviders, mockSendMessage } = vi.hoisted(() => ({
+  mockListPlatforms: vi.fn(),
   mockListProviders: vi.fn(),
   mockSendMessage: vi.fn(),
 }));
 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
-    agentBotProvider: { list: { query: mockListProviders } },
+    agentBotProvider: {
+      list: { query: mockListProviders },
+      listPlatforms: { query: mockListPlatforms },
+    },
     botMessage: { sendMessage: { mutate: mockSendMessage } },
   },
 }));
 
-const { trpcMessageService } = await import('./trpcAdapters');
+const { trpcBotProvider, trpcMessageService } = await import('./trpcAdapters');
+
+describe('trpcBotProvider.listPlatforms', () => {
+  it('does not offer a platform this deployment cannot run', async () => {
+    mockListPlatforms.mockResolvedValue([
+      { id: 'discord', name: 'Discord', schema: [] },
+      { id: 'wecom', name: 'WeCom', schema: [], unavailableReason: 'needs an in-process server' },
+    ]);
+
+    const platforms = await trpcBotProvider.listPlatforms();
+
+    expect(platforms.map((p) => p.id)).toEqual(['discord']);
+  });
+});
 
 describe('trpcMessageService routing', () => {
   beforeEach(() => {

@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import type { McpUiToolMeta } from '@lobechat/const/mcpApp';
+import {
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
@@ -16,7 +21,24 @@ import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
+import { getEventsCapability } from './events/capability';
+import { createMcpEventError } from './events/errors';
+import { nameHeaderFetch } from './events/nameHeaderFetch';
+import type {
+  McpEventType,
+  McpSubscribeEventParams,
+  McpUnsubscribeEventParams,
+} from './events/schema';
+import {
+  MCP_EVENTS_EXTENSION_ID,
+  McpListEventsResultSchema,
+  McpSubscribeEventParamsSchema,
+  McpSubscribeEventResultSchema,
+  McpUnsubscribeEventParamsSchema,
+  McpUnsubscribeEventResultSchema,
+} from './events/schema';
 import { getToolUiResourceUri, isToolVisibleToApp, MCP_APPS_CLIENT_CAPABILITIES } from './mcpApp';
+import { createMCPSSRFBlockedError, isMCPSSRFBlockedError, mcpSsrfSafeFetch } from './ssrf';
 import {
   type MCPClientParams,
   type MCPError,
@@ -37,6 +59,14 @@ const MCP_TOOL_TIMEOUT = (() => {
 })();
 // How long a failed tool listing counts as "no views" before the next result lists again
 const UI_RESOURCE_LIST_RETRY_MS = 60_000;
+
+/**
+ * A request the SSRF policy refused is a configuration error, never a transient
+ * or empty result: surface it as the structured `SSRF_BLOCKED` error.
+ */
+const throwIfSSRFBlocked = (e: unknown) => {
+  if (isMCPSSRFBlockedError(e)) throw createMCPSSRFBlockedError(e);
+};
 
 /**
  * Pre-check stdio command to capture detailed error information
@@ -177,14 +207,20 @@ export interface MCPClientOptions {
    * Apps, and servers answer as they would any other client.
    */
   mcpApps?: boolean;
+  /** Advertise SEP-3415 and enable webhook subscription requests. */
+  mcpEvents?: boolean;
 }
 
 export class MCPClient {
   private mcp: Client;
   private transport: Transport;
   private params: MCPClientParams;
+  private mcpEvents: boolean;
+  private rawDiscoverCapabilities?: unknown;
   /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
   private uiResourceUris?: Map<string, string>;
+  private readonly mcpApps: boolean;
+  private toolUiMeta?: Map<string, McpUiToolMeta>;
   /**
    * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
    * the same listing. An allow-list: a name the listing didn't name is refused.
@@ -195,12 +231,26 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
+  constructor(
+    params: MCPClientParams,
+    { mcpApps = false, mcpEvents = false }: MCPClientOptions = {},
+  ) {
+    this.mcpApps = mcpApps;
     this.params = params;
+    this.mcpEvents = mcpEvents;
     this.mcp = new Client(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
       {
-        ...(mcpApps ? { capabilities: MCP_APPS_CLIENT_CAPABILITIES } : {}),
+        ...(mcpApps || mcpEvents
+          ? {
+              capabilities: {
+                extensions: {
+                  ...(mcpApps ? MCP_APPS_CLIENT_CAPABILITIES.extensions : {}),
+                  ...(mcpEvents ? { [MCP_EVENTS_EXTENSION_ID]: {} } : {}),
+                },
+              },
+            }
+          : {}),
         // Stdio stays legacy: auto would spawn a sibling probe process and can
         // wait the entire probe timeout on servers that ignore unknown requests.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
@@ -249,8 +299,17 @@ export class MCPClient {
           }
         }
 
-        // Create StreamableHTTPClientTransport and pass headers
+        // Create StreamableHTTPClientTransport and pass headers. Every request
+        // it makes (including redirects and OAuth) goes through the SSRF-safe
+        // fetch: this client runs on the server, never on the user's device.
+        // MCP Events wraps that same fetch to add the Mcp-Name header, so it never
+        // trades the SSRF guard for the header.
         this.transport = new StreamableHTTPClientTransport(new URL(params.url), {
+          fetch: mcpEvents
+            ? nameHeaderFetch(mcpSsrfSafeFetch, (capabilities) => {
+                this.rawDiscoverCapabilities = capabilities;
+              })
+            : mcpSsrfSafeFetch,
           requestInit: { headers },
         });
 
@@ -297,6 +356,8 @@ export class MCPClient {
       console.error('MCP connection failed:', getMCPErrorLogMetadata(e));
 
       if (this.params.type === 'http') {
+        throwIfSSRFBlocked(e);
+
         if (
           (SdkHttpError.isInstance(e) && (e.status === 401 || e.status === 403)) ||
           UnauthorizedError.isInstance(e) ||
@@ -381,6 +442,81 @@ export class MCPClient {
     return this.mcp.getProtocolEra();
   }
 
+  getEventsCapability() {
+    if (!this.mcpEvents) return { supported: false };
+    return getEventsCapability(
+      this.rawDiscoverCapabilities ?? this.mcp.getServerCapabilities(),
+      this.getProtocolEra(),
+    );
+  }
+
+  private assertEventsCapability() {
+    if (!this.getEventsCapability().supported) {
+      throw createMCPError(
+        'VALIDATION_ERROR',
+        'MCP Events Unsupported: this connection does not support events',
+      );
+    }
+  }
+
+  async listEvents(): Promise<McpEventType[]> {
+    this.assertEventsCapability();
+    const events: McpEventType[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    try {
+      do {
+        const page = await this.mcp.request(
+          { method: 'events/list', params: cursor ? { cursor } : {} },
+          McpListEventsResultSchema,
+          { timeout: MCP_TOOL_TIMEOUT },
+        );
+        events.push(...page.events);
+        cursor = page.nextCursor;
+        if (cursor) {
+          if (cursors.has(cursor))
+            throw createMCPError(
+              'VALIDATION_ERROR',
+              'MCP events/list returned a repeated pagination cursor',
+            );
+          cursors.add(cursor);
+        }
+      } while (cursor);
+      return events;
+    } catch (error) {
+      if (this.isNoValidSessionError(error)) throw new Error('NoValidSessionId', { cause: error });
+      throw createMcpEventError(error);
+    }
+  }
+
+  async subscribeEvent(input: McpSubscribeEventParams) {
+    this.assertEventsCapability();
+    try {
+      return await this.mcp.request(
+        { method: 'events/subscribe', params: McpSubscribeEventParamsSchema.parse(input) },
+        McpSubscribeEventResultSchema,
+        { timeout: MCP_TOOL_TIMEOUT },
+      );
+    } catch (error) {
+      if (this.isNoValidSessionError(error)) throw new Error('NoValidSessionId', { cause: error });
+      throw createMcpEventError(error);
+    }
+  }
+
+  async unsubscribeEvent(input: McpUnsubscribeEventParams) {
+    this.assertEventsCapability();
+    try {
+      return await this.mcp.request(
+        { method: 'events/unsubscribe', params: McpUnsubscribeEventParamsSchema.parse(input) },
+        McpUnsubscribeEventResultSchema,
+        { timeout: MCP_TOOL_TIMEOUT },
+      );
+    } catch (error) {
+      if (this.isNoValidSessionError(error)) throw new Error('NoValidSessionId', { cause: error });
+      throw createMcpEventError(error);
+    }
+  }
+
   /**
    * Detect the StreamableHTTP "session expired" error.
    *
@@ -401,24 +537,37 @@ export class MCPClient {
     try {
       log('Listing tools...');
       const { tools } = await this.mcp.listTools();
+      this.toolUiMeta = this.mcpApps
+        ? new Map(tools.map((tool) => [tool.name, resolveMcpUiToolMeta(tool._meta)]))
+        : undefined;
       this.uiResourceUris = new Map(
         tools.flatMap((tool) => {
-          const uri = getToolUiResourceUri(tool);
+          const uri = getToolUiResourceUri(tool, this.mcpApps);
           return uri ? [[tool.name, uri] as const] : [];
         }),
       );
       this.appVisibleTools = new Set(
-        tools.filter((tool) => isToolVisibleToApp(tool)).map((tool) => tool.name),
+        tools.filter((tool) => isToolVisibleToApp(tool, this.mcpApps)).map((tool) => tool.name),
       );
       this.modelHiddenTools = new Set(
         tools
-          .filter((tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta), 'model'))
+          .filter(
+            (tool) => !isMcpToolVisibleTo(getMcpToolVisibility(tool._meta, this.mcpApps), 'model'),
+          )
           .map((tool) => tool.name),
       );
       log('Listed %d MCP tool(s)', tools.length);
-      return tools as McpTool[];
+      return (
+        this.mcpApps
+          ? tools.map((tool) => ({
+              ...tool,
+              icons: tool.icons ?? this.mcp.getServerVersion()?.icons,
+            }))
+          : tools
+      ) as McpTool[];
     } catch (e) {
       console.error('Failed to list MCP tools:', getMCPErrorLogMetadata(e));
+      throwIfSSRFBlocked(e);
 
       if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
@@ -436,6 +585,7 @@ export class MCPClient {
       return resources as McpResource[];
     } catch (e) {
       console.error('Failed to list MCP resources:', getMCPErrorLogMetadata(e));
+      throwIfSSRFBlocked(e);
 
       if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
@@ -453,6 +603,7 @@ export class MCPClient {
       return prompts as McpPrompt[];
     } catch (e) {
       console.error('Failed to list MCP prompts:', getMCPErrorLogMetadata(e));
+      throwIfSSRFBlocked(e);
 
       if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
@@ -495,6 +646,12 @@ export class MCPClient {
    * call, then the next call lists again. On the server nothing else refreshes
    * the map: manifests are listed on a separate client without MCP Apps.
    */
+  async getToolUiMeta(toolName: string) {
+    if (!this.mcpApps) return undefined;
+    await this.ensureToolUiListed();
+    return this.toolUiMeta?.get(toolName);
+  }
+
   async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
     await this.ensureToolUiListed();
 
@@ -525,6 +682,7 @@ export class MCPClient {
 
   private forgetToolListing() {
     this.uiResourceUris = undefined;
+    this.toolUiMeta = undefined;
     this.appVisibleTools = undefined;
     this.modelHiddenTools = undefined;
     this.uiResourceListFailedAt = undefined;
@@ -547,6 +705,7 @@ export class MCPClient {
     try {
       return await this.mcp.readResource({ uri });
     } catch (e) {
+      throwIfSSRFBlocked(e);
       if (this.isNoValidSessionError(e)) {
         throw new Error('NoValidSessionId', { cause: e });
       }
@@ -570,6 +729,7 @@ export class MCPClient {
       });
       return result as ToolCallResult;
     } catch (e) {
+      throwIfSSRFBlocked(e);
       // The server rejects the request before executing the tool, so retrying
       // with a fresh session is safe (no double side effects).
       if (this.isNoValidSessionError(e)) {

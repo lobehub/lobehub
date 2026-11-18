@@ -54,7 +54,12 @@ const StagedProjectHint = memo(() => {
 
   return (
     <Flexbox horizontal align={'center'} className={styles.card} gap={12}>
-      <ProjectAvatar avatar={directory.projectAvatar} name={directory.projectName} size={32} />
+      <ProjectAvatar
+        avatar={directory.projectAvatar}
+        id={directory.projectId}
+        name={directory.projectName}
+        size={32}
+      />
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text fontSize={14}>
           <Trans

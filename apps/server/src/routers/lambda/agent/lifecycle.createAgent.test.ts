@@ -40,16 +40,15 @@ describe('agent.createAgent direct Channel', () => {
     "opens the creator's direct Channel to the new Agent in scope %s",
     async (workspaceId) => {
       const config = { name: '小满', title: 'Health Assistant' };
-      await expect(
-        caller(workspaceId).createAgent({ config, localDeviceId: 'desktop' }),
-      ).resolves.toEqual({ agentId: 'agt_new' });
+      await expect(caller(workspaceId).createAgent({ config })).resolves.toEqual({
+        agentId: 'agt_new',
+      });
 
-      // The device hint is for the Channel only; the Agent itself is created without it.
       expect(mocks.createAgent).toHaveBeenCalledWith({ config });
+      // The direct Channel binds no device, so nothing about this desktop is passed along.
       expect(mocks.createAgentDirectChannel).toHaveBeenCalledWith({
         agentId: 'agt_new',
         db: {},
-        localDeviceId: 'desktop',
         userId: 'owner',
         workspaceId,
       });

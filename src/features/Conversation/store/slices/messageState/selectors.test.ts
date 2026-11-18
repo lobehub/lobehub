@@ -96,3 +96,42 @@ describe('selectedDeletableMessageIds', () => {
     ).toEqual(['u1', 'g1', 'c2', 'tool-result-1', 's1', 'a2']);
   });
 });
+
+describe('isMessageInterrupted', () => {
+  const withRow = (row: Record<string, unknown>, generating = false) =>
+    ({
+      dbMessages: [{ id: 'a1', role: 'assistant', ...row }],
+      operationState: {
+        getMessageOperationState: () => ({ isGenerating: generating, isInterrupted: false }),
+      },
+    }) as unknown as State;
+
+  // ROOT CAUSE:
+  //
+  // The "interrupted" hint only read the in-session cancelled operation. A run
+  // stopped before its first output keeps the `...` placeholder, which renders
+  // nothing, so after a reload (or on a late cancel that never opened a socket)
+  // the turn showed as an empty bubble with no stopped state.
+  //
+  // Before: false. After: the server's persisted marker shows it stopped.
+  it('reads the persisted marker on a placeholder stopped before its first output', () => {
+    const row = { content: '...', metadata: { interruptedMidStream: true } };
+
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow(row))).toBe(true);
+  });
+
+  it('reads the persisted marker on a turn stopped mid-stream', () => {
+    const row = { content: 'Roses are', metadata: { interruptedMidStream: true } };
+
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow(row))).toBe(true);
+  });
+
+  it('ignores the marker while the row is generating again, and rows without it', () => {
+    const row = { content: '...', metadata: { interruptedMidStream: true } };
+
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow(row, true))).toBe(false);
+    expect(messageStateSelectors.isMessageInterrupted('a1')(withRow({ content: 'done' }))).toBe(
+      false,
+    );
+  });
+});

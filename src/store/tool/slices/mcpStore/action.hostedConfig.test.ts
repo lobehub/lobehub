@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ReplicaModule from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
-import { pluginService } from '@/services/plugin';
 import type { ToolStore } from '@/store/tool/store';
 
 import { createMCPPluginStoreSlice } from './action';
+import { installMarketplaceConnector } from './installMarketplaceConnector';
 
 const environment = vi.hoisted(() => ({ isDesktop: true }));
 
@@ -40,7 +40,7 @@ vi.mock('@/services/discover', () => ({
 vi.mock('@/services/mcp', () => ({
   mcpService: { checkInstallation: vi.fn(), getStdioMcpServerManifest: vi.fn() },
 }));
-vi.mock('@/services/plugin', () => ({ pluginService: { installPlugin: vi.fn() } }));
+vi.mock('./installMarketplaceConnector', () => ({ installMarketplaceConnector: vi.fn() }));
 vi.mock('@/utils/sleep', () => ({ sleep: async () => {} }));
 
 const HOSTED_URL = 'https://runtime.example.com/runtimes/hosted-mcp/invocations';
@@ -106,7 +106,7 @@ beforeEach(() => {
     identifier: 'hosted-mcp',
     meta: { title: 'Hosted MCP' },
   } as never);
-  vi.mocked(pluginService.installPlugin).mockResolvedValue(undefined);
+  vi.mocked(installMarketplaceConnector).mockResolvedValue(undefined);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -130,13 +130,17 @@ describe('hosted MCP plugins that need user config', () => {
       expect.anything(),
       expect.any(AbortSignal),
     );
-    expect(pluginService.installPlugin).toHaveBeenCalledWith(
+    expect(installMarketplaceConnector).toHaveBeenCalledWith(
       expect.objectContaining({
-        // The stored connection keeps the template; the key stays in settings
-        customParams: {
-          mcp: expect.objectContaining({ args: stdioConnection.args, type: 'stdio' }),
-        },
+        // A connector has no settings to fill the args on each call: it stores them filled
+        connection: expect.objectContaining({
+          args: ['-y', 'hosted-mcp', 'API_KEY=user-key'],
+          command: 'npx',
+          env: { API_KEY: 'user-key' },
+          type: 'stdio',
+        }),
       }),
+      expect.any(Function),
     );
   });
 
@@ -146,10 +150,9 @@ describe('hosted MCP plugins that need user config', () => {
     await actions.installMCPPlugin('hosted-mcp');
 
     expect(mcpService.checkInstallation).not.toHaveBeenCalled();
-    expect(pluginService.installPlugin).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customParams: { mcp: expect.objectContaining({ type: 'cloud' }) },
-      }),
+    expect(installMarketplaceConnector).toHaveBeenCalledWith(
+      expect.objectContaining({ connection: expect.objectContaining({ type: 'cloud' }) }),
+      expect.any(Function),
     );
   });
 
@@ -159,10 +162,9 @@ describe('hosted MCP plugins that need user config', () => {
     await actions.installMCPPlugin('hosted-mcp', { config: { API_KEY: 'user-key' } });
 
     expect(mcpService.checkInstallation).not.toHaveBeenCalled();
-    expect(pluginService.installPlugin).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customParams: { mcp: expect.objectContaining({ type: 'cloud' }) },
-      }),
+    expect(installMarketplaceConnector).toHaveBeenCalledWith(
+      expect.objectContaining({ connection: expect.objectContaining({ type: 'cloud' }) }),
+      expect.any(Function),
     );
   });
 });

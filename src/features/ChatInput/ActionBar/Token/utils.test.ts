@@ -53,9 +53,7 @@ describe('Token tool utils', () => {
 
   describe('getToolExcludeDefaultToolIds', () => {
     it('excludes discovery tools in manual skill mode', () => {
-      expect(getToolExcludeDefaultToolIds('manual')).toEqual(
-        expect.arrayContaining(['lobe-activator', 'lobe-skill-store']),
-      );
+      expect(getToolExcludeDefaultToolIds('manual')).toEqual(['lobe-activator']);
     });
 
     it('keeps default tools in auto skill mode', () => {

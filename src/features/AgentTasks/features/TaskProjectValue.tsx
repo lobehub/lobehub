@@ -31,6 +31,7 @@ const TaskProjectValue = memo<TaskProjectValueProps>(
         <>
           <ProjectAvatar
             avatar={display.project.avatar}
+            id={display.project.id}
             name={display.project.name}
             size={iconSize}
           />

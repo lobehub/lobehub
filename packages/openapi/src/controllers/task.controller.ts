@@ -104,8 +104,7 @@ export class TaskController extends BaseController {
     try {
       const { id } = this.getParams<TaskIdParam>(c);
       const service = await this.service(c);
-      await service.deleteTask(id);
-      return this.success(c, undefined, 'Task deleted');
+      return this.success(c, await service.deleteTask(id), 'Task deleted');
     } catch (error) {
       return this.handleError(c, error);
     }

@@ -259,6 +259,7 @@ describe('LocalFileLink Render', () => {
             filePath: '/Users/me/project/docs/x.pdf',
             workingDirectory: '/Users/me/project',
           }),
+          topicId: 'topic-1',
           workingDirectory: '/Users/me/project',
         },
       ]);

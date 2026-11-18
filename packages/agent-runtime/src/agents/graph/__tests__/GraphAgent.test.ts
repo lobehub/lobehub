@@ -691,11 +691,8 @@ describe('GraphAgent', () => {
       expect(getFragment(stepEight, 'graph_runtime_guidance')).toMatchObject({
         wrapper: { attributes: { stage: 'plan' } },
       });
-      expect(Object.keys(getGraphRuntimeState(state) ?? {}).sort()).toEqual([
-        'graphContext',
-        'graphState',
-        'instructionCount',
-      ]);
+      const keys = Object.keys(getGraphRuntimeState(state) ?? {}).sort();
+      expect(keys).toEqual(['graphContext', 'graphState', 'instructionCount', 'terminalNode']);
     });
 
     it('should use four-step guidance cadence near a finite node budget', async () => {

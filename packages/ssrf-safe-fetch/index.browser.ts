@@ -17,6 +17,27 @@ export interface SSRFOptions {
   maxContentLength?: number;
 }
 
+/** Kept for API parity with the server version; the browser fetch never throws it. */
+export class SSRFBlockedError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'SSRFBlockedError';
+  }
+}
+
+/** Kept for API parity with the server version. */
+export const isSSRFBlockedError = (error: unknown): boolean => {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current instanceof Error && !seen.has(current)) {
+    if (current instanceof SSRFBlockedError || current.message.startsWith('SSRF blocked'))
+      return true;
+    seen.add(current);
+    current = current.cause;
+  }
+  return false;
+};
+
 /**
  * Browser-safe fetch implementation
  * Uses native fetch API in browser environments

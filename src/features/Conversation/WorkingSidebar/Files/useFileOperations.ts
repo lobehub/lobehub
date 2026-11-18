@@ -226,11 +226,13 @@ export const useFileOperations = ({
             ? await projectFileService.createProjectDirectory({
                 deviceId,
                 path,
+                ...(deviceId && activeTopicId && { topicId: activeTopicId }),
                 workingDirectory: projectRoot,
               })
             : await projectFileService.createProjectFile({
                 deviceId,
                 path,
+                ...(deviceId && activeTopicId && { topicId: activeTopicId }),
                 workingDirectory: projectRoot,
               });
         if (!result.success) throw new Error(result.error || 'Unknown error');
@@ -249,7 +251,7 @@ export const useFileOperations = ({
         open: kind === 'file',
       });
     },
-    [afterWrite, deviceId, projectRoot, reasonOf, t, toAbsolute],
+    [activeTopicId, afterWrite, deviceId, projectRoot, reasonOf, t, toAbsolute],
   );
 
   const commitRename = useCallback(
@@ -260,6 +262,7 @@ export const useFileOperations = ({
           deviceId,
           newName,
           path: node.data.path,
+          ...(deviceId && activeTopicId && { topicId: activeTopicId }),
           workingDirectory: projectRoot,
         });
         if (!result.success) throw new Error(String(result.error || 'Unknown error'));
@@ -280,7 +283,7 @@ export const useFileOperations = ({
       const parentRel = getParentRelativePath(node.id) ?? '';
       await afterWrite({ id: toEntryId(`${parentRel}${newName}`, !!node.isFolder) });
     },
-    [afterWrite, deviceId, projectRoot, reasonOf, retargetLocalFiles, t],
+    [activeTopicId, afterWrite, deviceId, projectRoot, reasonOf, retargetLocalFiles, t],
   );
 
   /** Moves entries into `targetDirRel`, skipping (and reporting) name clashes. */
@@ -305,6 +308,7 @@ export const useFileOperations = ({
             newPath: join(targetDir, entry.name),
             oldPath: entry.path,
           })),
+          ...(deviceId && activeTopicId && { topicId: activeTopicId }),
           workingDirectory: projectRoot,
         });
       } catch (error) {
@@ -340,6 +344,7 @@ export const useFileOperations = ({
       return failed.length === 0;
     },
     [
+      activeTopicId,
       afterWrite,
       caseInsensitive,
       deviceId,
@@ -410,6 +415,7 @@ export const useFileOperations = ({
             const result = await projectFileService.trashProjectFiles({
               deviceId,
               paths: entries.map((entry) => entry.path),
+              ...(deviceId && activeTopicId && { topicId: activeTopicId }),
               workingDirectory: projectRoot,
             });
             items = result.items;
@@ -463,7 +469,17 @@ export const useFileOperations = ({
             : t('workingPanel.files.delete.confirmTitle', { name: first.name, trash: trashName }),
       });
     },
-    [afterWrite, closeLocalFilesAt, deviceId, dirtyFilePaths, projectRoot, reasonOf, t, trashName],
+    [
+      activeTopicId,
+      afterWrite,
+      closeLocalFilesAt,
+      deviceId,
+      dirtyFilePaths,
+      projectRoot,
+      reasonOf,
+      t,
+      trashName,
+    ],
   );
 
   const duplicate = useCallback(
@@ -472,6 +488,7 @@ export const useFileOperations = ({
         const [result] = await projectFileService.copyProjectFiles({
           deviceId,
           items: [{ sourcePath: entry.path }],
+          ...(deviceId && activeTopicId && { topicId: activeTopicId }),
           workingDirectory: projectRoot,
         });
         if (!result?.success || !result.targetPath) {
@@ -490,7 +507,7 @@ export const useFileOperations = ({
         );
       }
     },
-    [afterWrite, deviceId, projectRoot, reasonOf, t, toRelative],
+    [activeTopicId, afterWrite, deviceId, projectRoot, reasonOf, t, toRelative],
   );
 
   const putOnClipboard = useCallback(
@@ -535,6 +552,7 @@ export const useFileOperations = ({
         results = await projectFileService.copyProjectFiles({
           deviceId,
           items,
+          ...(deviceId && activeTopicId && { topicId: activeTopicId }),
           workingDirectory: projectRoot,
         });
       } catch (error) {
@@ -561,6 +579,7 @@ export const useFileOperations = ({
       );
     },
     [
+      activeTopicId,
       afterWrite,
       caseInsensitive,
       clearClipboard,

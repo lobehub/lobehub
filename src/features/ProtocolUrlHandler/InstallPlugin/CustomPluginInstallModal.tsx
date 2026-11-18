@@ -12,7 +12,6 @@ import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
 import { type McpConnectionParams } from '@/types/plugins';
-import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import ConfigDisplay from './ConfigDisplay';
 import { type McpInstallRequest } from './types';
@@ -36,7 +35,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       headers?: Record<string, string>;
     }>({});
 
-    const [installCustomPlugin] = useToolStore((s) => [s.installCustomPlugin]);
+    const installCustomMcpConnector = useToolStore((s) => s.installCustomMcpConnector);
     const testMcpConnection = useToolStore((s) => s.testMcpConnection);
     const togglePlugin = useAgentStore((s) => s.togglePlugin);
 
@@ -87,23 +86,14 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
           throw new Error(t('protocolInstall.messages.manifestNotFound'));
         }
 
-        // Third-party marketplace and custom plugins: build custom plugin data
-        // Use the real manifest obtained from connection testing
-        const customPlugin: LobeToolCustomPlugin = {
-          customParams: {
-            avatar: schema.icon,
-            description: schema.description,
-            mcp: {
-              ...finalConfig, // Use the merged config
-              headers: finalConfig.type === 'http' ? finalConfig.headers : undefined,
-            },
-          },
+        // Third-party marketplace and custom MCP servers are added as custom connectors
+        await installCustomMcpConnector({
+          config: finalConfig,
+          description: schema.description,
+          icon: schema.icon,
           identifier: schema.identifier,
-          manifest: testResult.manifest, // Use the real manifest
-          type: 'customPlugin',
-        };
-
-        await installCustomPlugin(customPlugin);
+          name: schema.name,
+        });
         await togglePlugin(schema.identifier);
         toast.success(t('protocolInstall.messages.installSuccess', { name: schema.name }));
 
@@ -120,7 +110,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       schema,
       updatedConfig,
       onComplete,
-      installCustomPlugin,
+      installCustomMcpConnector,
       testMcpConnection,
       togglePlugin,
       t,

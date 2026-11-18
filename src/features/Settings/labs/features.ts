@@ -17,6 +17,7 @@ type LabFeatureI18nKey =
   | 'agentGraphConfig'
   | 'agentIdentity'
   | 'artifactDeployment'
+  | 'betterCodingExperience'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
@@ -119,6 +120,12 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableBetterCodingExperience',
+    i18nKey: 'betterCodingExperience',
+    searchKeywords: ['coding', 'code', 'developer', 'programming', 'IDE'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableProjects',
     i18nKey: 'projects',
     searchKeywords: ['project', 'workspace'],
@@ -166,7 +173,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    desktopOnly: true,
     flag: 'enableCodexAppServer',
     i18nKey: 'codexAppServer',
     searchKeywords: ['codex', 'app server'],

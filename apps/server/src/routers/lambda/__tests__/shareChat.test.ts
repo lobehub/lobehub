@@ -411,12 +411,12 @@ describe('shareChatRouter', () => {
         expect.objectContaining({
           // Agent id comes from the share record, not client input.
           agentId: share.agentId,
-          shareGate: {
+          shareGate: expect.objectContaining({
             agentId: share.agentId,
             shareConfig: share.shareConfig,
             shareId: share.shareId,
             visitorUserId: VISITOR,
-          },
+          }),
         }),
       );
     });

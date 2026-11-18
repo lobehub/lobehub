@@ -120,6 +120,13 @@ export interface IAgentStateManager {
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
 
+  /**
+   * Read only the persisted state's `status`. Use it instead of
+   * `loadAgentState` when the status is all the caller needs: the Redis
+   * implementation reads one hash field rather than the whole state blob.
+   */
+  loadAgentStatus: (operationId: string) => Promise<AgentState['status'] | null>;
+
   /** Read the inline step loop's parked envelope, if any. */
   loadInlineResume: (operationId: string) => Promise<null | string>;
 
@@ -238,6 +245,29 @@ export interface IStreamEventManager {
     cursor?: string,
     limit?: number,
   ) => Promise<StreamHistoryPage>;
+
+  /**
+   * Optional: tell the gateway that this operation is deliberately silent
+   * because it is waiting on a deferred tool result.
+   *
+   * The gateway's inactivity watchdog treats silence as a dead agent-runtime
+   * function. A parked operation emits nothing until its result arrives — for a
+   * shell command that can be tens of minutes — so without this it is rewritten
+   * as `Operation abandoned: inactivity_watchdog` mid-wait. The deadline
+   * replaces the watchdog window until the first real event clears it.
+   *
+   * Absent on managers without a gateway (local/desktop runs have no watchdog
+   * to satisfy). Resolves to `false` when the gateway does not implement the
+   * route, so callers can fall back to their own timeout.
+   */
+  markOperationParked?: (
+    operationId: string,
+    /**
+     * `stepIndex` is the parking step: its own later events must not end the
+     * park, only a later step (the resume) or the run ending does.
+     */
+    params: { parkedUntil: number; reason?: string; stepIndex?: number },
+  ) => Promise<boolean>;
 
   /**
    * Optional: open a one-shot relay channel on the gateway, owned by `userId`.

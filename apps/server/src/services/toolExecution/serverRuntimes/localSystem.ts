@@ -9,6 +9,7 @@ import {
   awaitManagedDeviceForToolCall,
   isDeviceUnreachableResult,
 } from '@/server/services/deviceGateway/managedDeviceWake';
+import { buildShellCompletion } from '@/server/services/deviceGateway/toolCallCompletion';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
@@ -136,7 +137,17 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // it: `lh goal plan` and the other run-attributed commands need it. The
         // model's own `env` wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
-          finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
+          // `sandboxRoot` moves the fence; like `sandbox` below it is host-owned
+          // (only the skills runtime sets it), so a model-supplied one is dropped.
+          const { sandboxRoot: _offContractSandboxRoot, ...commandArgs } = finalArgs as Record<
+            string,
+            unknown
+          >;
+          finalArgs = {
+            ...(commandArgs as typeof finalArgs),
+            topicId: context.topicId,
+            agentId: context.agentId,
+          };
           const lhEnv = buildDeviceLhEnv({
             operationId: context.operationId,
             workspaceId: await getContentWorkspaceId(),
@@ -162,10 +173,18 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         }
 
         const deviceWorkspaceId = await getDeviceWorkspaceId();
+        // Only a command can outlive its call. The device may keep watching it
+        // and report the final result later, which lets the transport park the
+        // run instead of the model polling.
+        const completion =
+          api.name === LocalSystemApiName.runCommand
+            ? buildShellCompletion(context.toolCallId)
+            : undefined;
         const execute = () =>
           executeAuthorizedDeviceToolCall(
             context.serverDB,
             {
+              completion,
               deviceId: context.activeDeviceId!,
               operationId: context.operationId,
               userId: context.userId!,

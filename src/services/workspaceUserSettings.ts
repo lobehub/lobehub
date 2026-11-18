@@ -16,6 +16,10 @@ export class WorkspaceUserSettingsService {
   updatePreference = async (patch: Partial<WorkspaceUserPreference>): Promise<void> => {
     await lambdaClient.workspaceUserSettings.updatePreference.mutate(patch);
   };
+
+  /** One directory's "New worktree" switch; resolves to the stored (capped) list. */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    lambdaClient.workspaceUserSettings.setWorktreeModeDir.mutate({ enabled, key });
 }
 
 export const workspaceUserSettingsService = new WorkspaceUserSettingsService();

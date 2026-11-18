@@ -7,6 +7,11 @@ import { routeMeta } from '@/spa/router/routeMeta';
 
 // Route metas load with the router on first paint; keep the Channel store out of that graph.
 const ChannelDynamicMeta = lazy(() => import('./ChannelDynamicMeta'));
+const ChannelSettingsDynamicMeta = lazy(() =>
+  import('./ChannelDynamicMeta').then((module) => ({
+    default: module.ChannelSettingsDynamicMeta,
+  })),
+);
 
 export const channelRouteMeta = routeMeta({
   DynamicMeta: ChannelDynamicMeta,
@@ -16,6 +21,7 @@ export const channelRouteMeta = routeMeta({
 });
 
 export const channelSettingsRouteMeta = routeMeta({
+  DynamicMeta: ChannelSettingsDynamicMeta,
   icon: Settings,
   Skeleton: createSurfaceSkeleton('form'),
   titleKey: 'channel:settings.title',

@@ -57,9 +57,16 @@ export const useTerminalTarget = (topicKey: string, agentId?: string): TerminalT
   const devices = useDeviceStore(deviceSelectors.deviceList);
   const deviceListConfirmed = useDeviceStore(deviceSelectors.isDeviceListConfirmed);
   // Only devices that can actually open a shell. An offline row, or one whose
-  // live connections are all desktop ones, answers a terminal RPC with a
-  // refusal — offering it would fail the session the moment it is claimed.
-  const targets = useMemo(() => devices.filter(canHostTerminal), [devices]);
+  // live connections are all from a desktop without terminal support, answers
+  // a terminal RPC with a refusal — offering it would fail the session the
+  // moment it is claimed. This desktop's own row is "this machine" already.
+  const targets = useMemo(
+    () =>
+      devices.filter(
+        (device) => canHostTerminal(device) && !(isDesktop && device.deviceId === currentDeviceId),
+      ),
+    [devices, currentDeviceId],
+  );
   const { deviceId: targetDeviceId, ready: canSpawn } = resolveTerminalDevice({
     configLoading: isPreferenceLoading,
     listSettled: deviceListConfirmed || !!deviceListError,

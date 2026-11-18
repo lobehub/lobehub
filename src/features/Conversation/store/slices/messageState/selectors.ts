@@ -135,10 +135,17 @@ const isMessageContinuing = (id: string) => (s: State) =>
   s.operationState.getMessageOperationState(id).isContinuing;
 
 /**
- * Check if a message generation was interrupted by user
+ * Check if a message generation was interrupted by user: its operation was
+ * cancelled in this session, or the server persisted the stopped marker (which
+ * is what survives a refresh, on partial output and on a bare placeholder).
  */
-const isMessageInterrupted = (id: string) => (s: State) =>
-  s.operationState.getMessageOperationState(id).isInterrupted;
+const isMessageInterrupted = (id: string) => (s: State) => {
+  const { isGenerating, isInterrupted } = s.operationState.getMessageOperationState(id);
+  if (isInterrupted || isGenerating) return isInterrupted;
+
+  const message = dataSelectors.getDbMessageById(id)(s);
+  return !!message?.metadata?.interruptedMidStream;
+};
 
 /**
  * Check if a message is in reasoning state
