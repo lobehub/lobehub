@@ -309,20 +309,6 @@ export const statusStyles = stylex.create({
     borderRadius: '50%',
     backgroundColor: 'currentcolor',
   },
-  /** A bare red dot beside a message whose reply failed. */
-  failureMark: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 18,
-    height: 18,
-    padding: 0,
-    borderWidth: 0,
-    borderRadius: '50%',
-    color: cssVar.colorError,
-    cursor: 'pointer',
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorErrorBg },
-  },
   failureButton: {
     flex: 'none',
     gap: 4,

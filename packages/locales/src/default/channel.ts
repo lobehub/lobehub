@@ -213,7 +213,6 @@ export default {
   'events.joined': '{{names}} joined the channel',
   'events.youInvited': 'You invited {{names}} to the channel',
   'failure.locate': 'Show message',
-  'failure.messageLabel': 'Reply failed: {{names}}',
   'failure.title': 'Failed replies · {{count}}',
   'nameOptional': 'Channel name (optional)',
   'rename': 'Rename channel',

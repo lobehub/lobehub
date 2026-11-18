@@ -76,6 +76,34 @@ describe('Channel reply opening', () => {
     expect((await jobById(db, job.id)).threadId).toBeNull();
   });
 
+  it('names the acknowledgement on the job, so a failed run shows under it', async () => {
+    const { channel, job } = await mentionAgent();
+    await execution.open(channel.id, job.id, { ack: 'Got it, checking CI.' });
+    const claimed = (await execution.claim(channel.id, job.id, lease))!;
+    await execution.fail(channel.id, claimed.job.id, { message: "You've hit your 5-hour limit" });
+
+    const ack = (await messagesOf(channel.id)).find((row) => row.routingStatus === 'reply');
+    const repository = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const { jobs } = await repository.detail(channel.id);
+    expect(jobs).toEqual([
+      expect.objectContaining({
+        errorMessage: "You've hit your 5-hour limit",
+        id: job.id,
+        openingMessageId: ack!.id,
+        status: 'failed',
+      }),
+    ]);
+  });
+
+  it('names no acknowledgement on a job that opened without one', async () => {
+    const { channel, job } = await mentionAgent();
+    await execution.open(channel.id, job.id, {});
+
+    const repository = new ChannelRepository(db, fixture.memberId, fixture.workspaceId);
+    const { jobs } = await repository.detail(channel.id);
+    expect(jobs).toEqual([expect.objectContaining({ id: job.id, openingMessageId: null })]);
+  });
+
   it('in a group with several people, opens the Thread under the request and acknowledges inside it', async () => {
     const { channel, job, member, message } = await mentionAgent();
 

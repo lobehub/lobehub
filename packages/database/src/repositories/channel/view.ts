@@ -277,6 +277,10 @@ const publicJobColumns = {
       ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
     )`,
   writerHeld: channelJobs.writerHeld,
+  // The acknowledgement posted before the run (`openingRequestKey`), so a failure shows under it.
+  openingMessageId: sql<string | null>`(SELECT ${channelMessages.id} FROM ${channelMessages}
+      WHERE ${channelMessages.channelId} = ${channelJobs.channelId}
+        AND ${channelMessages.requestKey} = 'opening:' || ${channelJobs.id}::text)`,
   topicId: channelJobs.topicId,
   // A trashed topic has no owner here, so its link goes with it.
   topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}

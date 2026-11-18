@@ -1,7 +1,12 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { ChannelDetail, ChannelPublicMessage, ExternalWorkSummaryItem } from '@lobechat/types';
+import type {
+  ChannelDetail,
+  ChannelPublicJob,
+  ChannelPublicMessage,
+  ExternalWorkSummaryItem,
+} from '@lobechat/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { act, createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -96,8 +101,11 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 vi.mock('./MessageAttachments', () => ({ MessageAttachments: () => null }));
 vi.mock('./MessageReceipts', () => ({
-  MessageFailureMark: () => null,
   MessageRoutingStatus: () => null,
+}));
+vi.mock('./ReplyFailure', () => ({
+  ReplyFailureCard: ({ job }: { job: { id: string } }) =>
+    createElement('div', { 'data-testid': 'reply-failure' }, job.id),
 }));
 
 const detail = {
@@ -335,5 +343,22 @@ describe('ChannelMessage thread card', () => {
       screen.getByRole('button', { name: /openThread/ }).querySelector('.lucide-corner-down-right'),
     ).not.toBeNull();
     expect(screen.queryByText('threadCard.messages')).toBeNull();
+  });
+});
+
+describe('ChannelMessage reply failures', () => {
+  it('mounts the failure card of a reply under the acknowledgement it posted', () => {
+    render(
+      <ChannelMessage
+        detail={detail}
+        failures={[{ id: 'job_1' } as ChannelPublicJob]}
+        message={{
+          ...message({ avatar: null, id: 'agt_1', name: 'Sanjo', type: 'agent' }),
+          content: 'On it, checking CI first.',
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('reply-failure').textContent).toBe('job_1');
   });
 });

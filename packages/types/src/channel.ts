@@ -757,6 +757,8 @@ export interface ChannelPublicJob {
   id: string;
   memberId: string;
   messageId: string;
+  /** The acknowledgement the reply posted before its run, so its outcome can show under it. */
+  openingMessageId?: string | null;
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
