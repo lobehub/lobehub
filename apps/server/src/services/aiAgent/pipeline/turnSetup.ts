@@ -569,11 +569,11 @@ export const setupTurn = async (
     });
     // Route the dispatch to the device the gate selected (an `auto` Agent's
     // single online device), which the dispatch would not find on its own.
-    if (shareDeviceId && !resolvedRequestedDeviceId && !isFixedExecutionTargetSelection) {
+    // Only the dispatch gets it: pinning the topic to an automatic pick would
+    // keep a later turn on that device after it goes offline and another one
+    // is online.
+    if (shareDeviceId && !resolvedRequestedDeviceId && !isFixedExecutionTargetSelection)
       resolvedRequestedDeviceId = shareDeviceId;
-      effectiveRequestedDeviceId = shareDeviceId;
-      topicBoundDeviceId = shareDeviceId;
-    }
   };
   await assertShareHetero(model);
 

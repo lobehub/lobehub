@@ -10,9 +10,11 @@ const {
   mockGetUserSettings,
   mockMessageCreate,
   mockDispatchHeteroAgent,
+  mockReserveShareVisitorTopic,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockDispatchHeteroAgent: vi.fn(),
+  mockReserveShareVisitorTopic: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetScopedOnlineDevices: vi.fn(),
   mockGetUserSettings: vi.fn(),
@@ -157,7 +159,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 // The share path's atomic cap reservations open real DB transactions — stub
 // them so the forced-headless test below can drive execAgent with a bare mock db.
 vi.mock('../shareVisitorAbuseGuards', () => ({
-  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  reserveShareVisitorTopic: mockReserveShareVisitorTopic,
   reserveShareVisitorTurn: vi.fn().mockResolvedValue({ id: 'msg-1' }),
 }));
 
@@ -208,6 +210,7 @@ describe('AiAgentService.execAgent - share visitors and heterogeneous agents', (
   beforeEach(() => {
     vi.clearAllMocks();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockReserveShareVisitorTopic.mockResolvedValue({ id: 'topic-1' });
     mockGetUserSettings.mockResolvedValue({});
     mockGetScopedOnlineDevices.mockResolvedValue([]);
     mockGetAgentConfig.mockResolvedValue(
@@ -284,5 +287,10 @@ describe('AiAgentService.execAgent - share visitors and heterogeneous agents', (
       expect.anything(),
       expect.objectContaining({ requestedDeviceId: 'device-2' }),
     );
+    // The automatic pick is not an explicit pin: a later turn may go to
+    // whichever device is online then.
+    const [, topicParams] = mockReserveShareVisitorTopic.mock.calls[0];
+    expect(topicParams.metadata?.deviceBindingPinned).not.toBe(true);
+    expect(topicParams.metadata?.boundDeviceId).toBeUndefined();
   });
 });
