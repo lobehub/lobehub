@@ -146,28 +146,16 @@ describe('discoverTools — same-identifier connector rows', () => {
     expect((result.toolManifestMap.github as any).mcpParams.url).toBe('https://mcp.example/shared');
   });
 
-  it('invokes every row of a connector that is on when the run has no activator', async () => {
-    const result = await run(['github'], { chatConfig: { skillActivateMode: 'manual' } });
-
-    expect(toolNames(result.toolsResult)).toEqual([
-      'github-abcd1234____create_issue____mcp',
-      'github-abcd1234____list_issues____mcp',
-      'github____list_issues____mcp',
-    ]);
-  });
-
-  it('invokes a connector with only a private row, under its own prefix', async () => {
+  it('offers a connector with only a private row under its own prefix', async () => {
     // The agent's switch names the connector; with no shared row its only
-    // tool set is the private row's, which the run still invokes up front
-    const result = await run(['github'], {
-      chatConfig: { skillActivateMode: 'manual' },
-      rows: [mine],
-    });
+    // tool set is the private row's, which the pool still carries
+    const result = await run(['github'], { rows: [mine] });
 
-    expect(toolNames(result.toolsResult)).toEqual([
-      'github-abcd1234____create_issue____mcp',
-      'github-abcd1234____list_issues____mcp',
-    ]);
+    expect(result.toolManifestMap.github).toBeUndefined();
+    expect((result.toolManifestMap['github-abcd1234'] as any)?.connector).toEqual({
+      id: 'conn-mine',
+      identifier: 'github',
+    });
   });
 
   it("drops every row's tool set when the agent disables the connector", async () => {
