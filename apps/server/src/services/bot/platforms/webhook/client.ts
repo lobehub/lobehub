@@ -28,9 +28,11 @@ import {
 } from './callback';
 import { toOutboundMessage } from './outbound';
 import {
+  BOT_ID_PATTERN,
   BOT_WEBHOOK_OUTBOUND_EVENTS,
   type BotWebhookInboundAttachment,
   decodeWebhookThreadId,
+  MIN_SIGNING_SECRET_LENGTH,
   WEBHOOK_PLATFORM_ID,
 } from './protocol';
 
@@ -38,9 +40,6 @@ const log = debug('bot-platform:webhook:client');
 
 /** Inbound attachments are downloaded on demand, each capped at this size. */
 const MAX_INBOUND_ATTACHMENT_BYTES = 20 * 1024 * 1024;
-
-export const BOT_ID_PATTERN = '^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$';
-export const MIN_SIGNING_SECRET_LENGTH = 32;
 
 export const toCallbackTarget = (
   applicationId: string,
@@ -188,7 +187,7 @@ export class BotWebhookClientFactory extends ClientFactory {
       errors.push({
         code: 'missing_credentials',
         field: 'applicationId',
-        message: 'Bot ID must be 3-64 letters, digits, "-" or "_"',
+        message: 'Bot ID must be 3-64 letters, digits, "-" or "_", and not a UUID',
       });
     if (!isHttpUrl(credentials.callbackUrl))
       errors.push({
@@ -209,6 +208,8 @@ export class BotWebhookClientFactory extends ClientFactory {
         toCallbackTarget(applicationId!, credentials),
         BOT_WEBHOOK_OUTBOUND_EVENTS.ping,
         { message: 'LobeHub connection test' },
+        // An interactive check answers on the first try; retries are for replies.
+        { attempts: 1 },
       );
       return { valid: true };
     } catch (error) {

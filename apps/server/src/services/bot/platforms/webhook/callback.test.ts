@@ -53,6 +53,17 @@ describe('sendBotWebhookEvent', () => {
     expect(postSignedWebhook).toHaveBeenCalledTimes(BOT_WEBHOOK_CALLBACK_ATTEMPTS);
   });
 
+  it('makes a single attempt when asked to (interactive connection test)', async () => {
+    postSignedWebhook.mockResolvedValue(result(503));
+
+    const promise = sendBotWebhookEvent(TARGET, 'bot.ping', { message: 'x' }, { attempts: 1 });
+    promise.catch(() => {});
+    await vi.runAllTimersAsync();
+
+    await expect(promise).rejects.toBeInstanceOf(BotWebhookCallbackError);
+    expect(postSignedWebhook).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry an address the SSRF guard blocked', async () => {
     postSignedWebhook.mockResolvedValue(
       result(null, {

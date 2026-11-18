@@ -83,7 +83,7 @@ describe('BotWebhookAdapter.handleWebhook (inbound)', () => {
     const message = await factory();
     expect(message).toMatchObject({
       author: { fullName: 'Alice', userId: 'u-1' },
-      id: 'msg-1',
+      id: `${threadId}#msg-1`,
       isMention: true,
       text: 'hello bot',
       threadId,
@@ -95,6 +95,16 @@ describe('BotWebhookAdapter.handleWebhook (inbound)', () => {
         url: 'https://cdn.example.com/a.png',
       }),
     ]);
+  });
+
+  it('scopes the message id to its thread, so per-chat ids never collide in dedupe', async () => {
+    const { adapter } = await makeAdapter();
+
+    const a = adapter.parseMessage({ ...MESSAGE, conversationId: 'chat-a', id: '1001' } as any);
+    const b = adapter.parseMessage({ ...MESSAGE, conversationId: 'chat-b', id: '1001' } as any);
+
+    expect(a.id).not.toBe(b.id);
+    expect(a.raw.id).toBe('1001');
   });
 
   it('answers a signed ping without dispatching', async () => {

@@ -9,7 +9,7 @@ import {
   watchKeywordsField,
 } from '../const';
 import type { FieldSchema } from '../types';
-import { BOT_ID_PATTERN, MIN_SIGNING_SECRET_LENGTH } from './client';
+import { BOT_ID_PATTERN, MIN_SIGNING_SECRET_LENGTH } from './protocol';
 
 export const schema: FieldSchema[] = [
   {

@@ -60,6 +60,7 @@ export const sendBotWebhookEvent = async (
   target: BotWebhookCallbackTarget,
   type: BotWebhookOutboundEventType,
   data: BotWebhookOutboundEvent['data'],
+  { attempts = BOT_WEBHOOK_CALLBACK_ATTEMPTS }: { attempts?: number } = {},
 ): Promise<{ event: BotWebhookOutboundEvent; result: SignedWebhookResult }> => {
   const event: BotWebhookOutboundEvent = {
     botId: target.botId,
@@ -71,7 +72,7 @@ export const sendBotWebhookEvent = async (
   const body = JSON.stringify(event);
 
   let result: SignedWebhookResult | undefined;
-  for (let attempt = 1; attempt <= BOT_WEBHOOK_CALLBACK_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     result = await postSignedWebhook({
       body,
       headers: {
@@ -85,7 +86,7 @@ export const sendBotWebhookEvent = async (
     if (result.error === null) return { event, result };
 
     log('event %s attempt %d failed: %s', event.id, attempt, result.error);
-    if (attempt === BOT_WEBHOOK_CALLBACK_ATTEMPTS || !isRetryable(result)) break;
+    if (attempt === attempts || !isRetryable(result)) break;
     await sleep(RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS.at(-1)!);
   }
 

@@ -27,14 +27,12 @@ export type WebhookDeliveryOutcome =
       reason: 'already_claimed' | 'already_settled' | 'endpoint_disabled' | 'not_due' | 'not_found';
     };
 
-type SendResult = SignedWebhookResult;
-
 /** POST one signed delivery; every outcome, a thrown error included, becomes a result. */
 const send = async (
   url: string,
   secret: string,
   delivery: Pick<WebhookDeliveryRow, 'eventId' | 'eventType' | 'id' | 'payload'>,
-): Promise<SendResult> =>
+): Promise<SignedWebhookResult> =>
   postSignedWebhook({
     body: JSON.stringify(delivery.payload),
     headers: {
@@ -96,7 +94,7 @@ export const attemptWebhookDelivery = async (
   const attempts = await worker.claimAttempt(deliveryId, delivery.attempts);
   if (attempts === null) return { outcome: 'skipped', reason: 'already_claimed' };
 
-  let sent: SendResult;
+  let sent: SignedWebhookResult;
   try {
     sent = await send(endpoint.url, await openWebhookSecret(endpoint.secret), delivery);
   } catch (error) {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { BotWebhookInboundSchema, decodeWebhookThreadId, encodeWebhookThreadId } from './protocol';
+import {
+  BOT_ID_PATTERN,
+  BotWebhookInboundSchema,
+  decodeWebhookThreadId,
+  encodeWebhookThreadId,
+} from './protocol';
 
 describe('webhook thread ids', () => {
   it('round-trips a group conversation with a sub-thread, colons included', () => {
@@ -76,5 +81,22 @@ describe('BotWebhookInboundSchema', () => {
     ],
   ])('refuses %s', (_label, message) => {
     expect(BotWebhookInboundSchema.safeParse({ message, type: 'message' }).success).toBe(false);
+  });
+});
+
+describe('BOT_ID_PATTERN', () => {
+  const pattern = new RegExp(BOT_ID_PATTERN);
+
+  it('accepts ordinary Bot IDs', () => {
+    expect(['support-bot', 'abc', 'Team_Bot-01'].every((id) => pattern.test(id))).toBe(true);
+  });
+
+  it('refuses UUID-shaped ids, which the inbound route reads as REST bot ids', () => {
+    expect(pattern.test('3763999e-6918-499f-aba1-5cb0ec7d6a56')).toBe(false);
+    expect(pattern.test('3763999E-6918-499F-ABA1-5CB0EC7D6A56')).toBe(false);
+  });
+
+  it('refuses ids that are too short or carry other characters', () => {
+    expect(['ab', '-bot', 'a b', 'bot:1'].some((id) => pattern.test(id))).toBe(false);
   });
 });

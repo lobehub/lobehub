@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '@/types/botRuntimeStatus';
+
 import { CursorPaginationQuerySchema, paginatedListSchema } from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
 
@@ -16,22 +18,18 @@ export type BotListQuery = z.infer<typeof BotListQuerySchema>;
 
 // ==================== Shared fields ====================
 
-/** The runtime states `getBotRuntimeStatus` reports (`src/types/botRuntimeStatus.ts`). */
-export const BOT_RUNTIME_STATUS_VALUES = [
-  'connected',
-  'disconnected',
-  'dormant',
-  'failed',
-  'queued',
-  'starting',
-] as const;
+/** The runtime states `getBotRuntimeStatus` reports. */
+const BOT_RUNTIME_STATUS_VALUES = Object.values(BOT_RUNTIME_STATUSES) as [
+  BotRuntimeStatus,
+  ...BotRuntimeStatus[],
+];
 
 const BotPlatformSchema = z
   .string()
   .min(1)
   .max(50)
   .describe(
-    'Platform id: `webhook` (custom webhook channel), `discord`, `slack`, `telegram`, `feishu`, `lark`, `line`, `qq`, `wechat`, `wecom`, `dingtalk`, `imessage`.',
+    'Platform id, e.g. `webhook` (the custom webhook channel), `discord`, `slack`, `telegram`, `feishu`.',
   );
 
 const BotApplicationIdSchema = z

@@ -10,6 +10,11 @@ import { z } from 'zod';
 
 export const WEBHOOK_PLATFORM_ID = 'webhook';
 
+/** A UUID-shaped Bot ID is refused: the inbound route reads a UUID as the bot's REST id. */
+export const BOT_ID_PATTERN =
+  '^(?![\\dA-Fa-f]{8}-[\\dA-Fa-f]{4}-[\\dA-Fa-f]{4}-[\\dA-Fa-f]{4}-[\\dA-Fa-f]{12}$)[A-Za-z0-9][A-Za-z0-9_-]{2,63}$';
+export const MIN_SIGNING_SECRET_LENGTH = 32;
+
 /** Same header names as developer webhooks, so one verifier serves both. */
 export const BOT_WEBHOOK_HEADERS = WEBHOOK_HEADERS;
 
@@ -38,7 +43,7 @@ export const BotWebhookInboundMessageSchema = z.object({
   attachments: z.array(BotWebhookInboundAttachmentSchema).max(10).optional(),
   /** The conversation (chat, room, channel) the message was sent in. */
   conversationId: z.string().min(1).max(255),
-  /** Your id for this message; replies reference it as `replyTo`. */
+  /** Your id for this message, unique within its conversation / thread. */
   id: z.string().min(1).max(255),
   /** A one-to-one chat with the bot. Group messages need `mentioned` to wake it. */
   isDirect: z.boolean().optional().default(false),
@@ -98,7 +103,7 @@ export interface BotWebhookOutboundMessage {
   isDirect: boolean;
   /** LobeHub's id for this message (`out_…`); an update carries the same id. */
   messageId: string;
-  /** The inbound message id this answers, when known. */
+  /** The message id a `POST /api/v1/bots/{id}/messages` call replied to; `null` otherwise. */
   replyTo: string | null;
   text: string;
   threadId: string | null;

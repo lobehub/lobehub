@@ -46005,9 +46005,8 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 50
-                  description: "Platform id: `webhook` (custom webhook channel), `discord`,
-                    `slack`, `telegram`, `feishu`, `lark`, `line`, `qq`,
-                    `wechat`, `wecom`, `dingtalk`, `imessage`."
+                  description: Platform id, e.g. `webhook` (the custom webhook channel),
+                    `discord`, `slack`, `telegram`, `feishu`.
                 settings:
                   type: object
                   propertyNames:

@@ -6,7 +6,7 @@ Schemas live in `protocol.ts`; keep the docs, the schemas and `protocol.test.ts`
 ## Shape
 
 - Platform id `webhook`, connection mode `webhook` (stateless, serverless-safe).
-- `applicationId` is the developer-chosen **Bot ID** (`^[A-Za-z0-9][A-Za-z0-9_-]{2,63}$`).
+- `applicationId` is the developer-chosen **Bot ID** (`BOT_ID_PATTERN`: 3–64 of `[A-Za-z0-9_-]`, never UUID-shaped).
 - Credentials: `callbackUrl` (shown in the clear) and `signingSecret` (password, ≥ 32 chars).
 
 ## Inbound

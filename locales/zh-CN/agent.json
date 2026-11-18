@@ -673,7 +673,7 @@
   "channel.watchKeywordsHint": "命中关键词即唤醒机器人，无需 @；指令会拼到用户消息前再发给 AI。整词匹配，不区分大小写。",
   "channel.webhook.botId": "Bot ID",
   "channel.webhook.botIdHint": "这个机器人的标识，在 LobeHub 内唯一。它是入站地址的一部分，并会在每次回调中作为 `botId` 回传。",
-  "channel.webhook.botIdInvalid": "请使用 3–64 位字母、数字、\"-\" 或 \"_\"，并以字母或数字开头。",
+  "channel.webhook.botIdInvalid": "请使用 3–64 位字母、数字、\"-\" 或 \"_\"，以字母或数字开头，且不能是 UUID 格式。",
   "channel.webhook.botIdPlaceholder": "例如 support-bot",
   "channel.webhook.callbackUrl": "回调地址",
   "channel.webhook.callbackUrlHint": "LobeHub 把智能体的回复 POST 到这个地址。它必须可从公网访问，私有和内网地址会被拒绝。",

@@ -16897,7 +16897,7 @@ export type PostApiV1BotsData = {
          */
         enabled?: boolean;
         /**
-         * Platform id: `webhook` (custom webhook channel), `discord`, `slack`, `telegram`, `feishu`, `lark`, `line`, `qq`, `wechat`, `wecom`, `dingtalk`, `imessage`.
+         * Platform id, e.g. `webhook` (the custom webhook channel), `discord`, `slack`, `telegram`, `feishu`.
          */
         platform: string;
         /**

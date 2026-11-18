@@ -262,6 +262,13 @@ export class BotWebhookAdapter implements Adapter<BotWebhookThread, BotWebhookIn
     threadId?: string,
   ): Message<BotWebhookInboundMessage> {
     const text = raw.text ?? '';
+    const resolvedThreadId =
+      threadId ??
+      this.encodeThreadId({
+        conversationId: raw.conversationId,
+        isDirect: raw.isDirect,
+        threadId: raw.threadId,
+      });
     return new Message({
       attachments: toAttachments(raw),
       author: {
@@ -272,18 +279,14 @@ export class BotWebhookAdapter implements Adapter<BotWebhookThread, BotWebhookIn
         userName: raw.user.name || raw.user.id,
       },
       formatted: parseMarkdown(text),
-      id: raw.id,
+      // The Chat SDK deduplicates on the message id across the whole agent, while many
+      // platforms number messages per chat: scope the developer's id to its thread.
+      id: `${resolvedThreadId}#${raw.id}`,
       isMention: raw.isDirect || raw.mentioned,
       metadata: { dateSent: toDate(raw.timestamp), edited: false },
       raw,
       text,
-      threadId:
-        threadId ??
-        this.encodeThreadId({
-          conversationId: raw.conversationId,
-          isDirect: raw.isDirect,
-          threadId: raw.threadId,
-        }),
+      threadId: resolvedThreadId,
     });
   }
 

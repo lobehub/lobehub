@@ -366,7 +366,7 @@ export default {
     'A name for this bot, unique across LobeHub. It is part of the inbound URL and is sent back as `botId` in every callback.',
   'channel.webhook.botIdPlaceholder': 'e.g. support-bot',
   'channel.webhook.botIdInvalid':
-    'Use 3–64 letters, digits, "-" or "_", starting with a letter or digit.',
+    'Use 3–64 letters, digits, "-" or "_", starting with a letter or digit (not a UUID).',
   'channel.webhook.callbackUrl': 'Callback URL',
   'channel.webhook.callbackUrlHint':
     "Where LobeHub POSTs the agent's replies. It must be publicly reachable; private and internal addresses are refused.",

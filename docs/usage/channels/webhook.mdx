@@ -23,7 +23,7 @@ The **Custom Webhook** channel connects a LobeHub agent to a chat platform LobeH
 
   ### Fill in the fields
 
-  - **Bot ID** — a name for this bot, unique across LobeHub (3–64 letters, digits, `-` or `_`). It is part of the inbound URL and comes back as `botId` in every callback.
+  - **Bot ID** — a name for this bot, unique across LobeHub (3–64 letters, digits, `-` or `_`; not shaped like a UUID). It is part of the inbound URL and comes back as `botId` in every callback.
   - **Callback URL** — where LobeHub POSTs replies. It must be reachable from the public internet: private, loopback and link-local addresses are refused, and redirects are not followed.
   - **Signing Secret** — at least 32 characters. Click **Generate secret** for a random one and copy it to your platform.
 
@@ -108,7 +108,7 @@ await verifyWebhookSignature({ headers: request.headers, payload: rawBody, secre
 
 | Field                    | Required | Meaning                                                                                                                                                                                                              |
 | ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `message.id`             | yes      | Your id for the message (≤ 255 chars).                                                                                                                                                                               |
+| `message.id`             | yes      | Your id for the message (≤ 255 chars), unique within its conversation / thread. A repeat within 10 minutes is ignored as a retry.                                                                                    |
 | `message.conversationId` | yes      | The chat, room or channel it was sent in. Each conversation keeps its own agent topic.                                                                                                                               |
 | `message.threadId`       | no       | A sub-thread inside the conversation. A thread is its own conversation for the agent.                                                                                                                                |
 | `message.user.id`        | yes      | The sender's id on your platform. Access rules (allowlists) match against it.                                                                                                                                        |
@@ -167,6 +167,7 @@ LobeHub POSTs each event to your callback URL, signed as above, with `X-LobeHub-
 | `bot.ping`            | **Test connection** — `data` is `{ "message": "LobeHub connection test" }`. |
 
 - `text` is Markdown. Render or strip it as your platform needs.
+- `replyTo` carries the `replyTo` of a `POST /api/v1/bots/{id}/messages` call; agent replies to an inbound message set it to `null` — match them by `conversationId` / `threadId`.
 - An attachment has a `url` you can GET (it may expire — download it promptly), or inline base64 `data` when no URL exists.
 - Answer `2xx` within 10 seconds. A network error, timeout, `5xx`, `408` or `429` is retried twice (after 0.5 s and 2 s) with the same event `id`, so deduplicate on it; any other status is final.
 
