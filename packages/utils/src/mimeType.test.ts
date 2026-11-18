@@ -230,7 +230,7 @@ describe('resolveMimeType', () => {
     // Windows PowerShell 5.1 `Tee-Object` / `Out-File` write UTF-16LE with a
     // BOM. Its leading 0xFF 0xFE matches file-type's MPEG audio frame sync, so
     // CLI evidence uploads were stored as audio/mpeg and sent to the model as
-    // audio (LobeHub task T-14389).
+    // audio.
     const utf16le = (text: string) => Buffer.from(`\uFEFF${text}`, 'utf16le');
     const utf16be = (text: string) => utf16le(text).swap16();
     const output = 'PS C:\\> backup compare: OK\r\nsqlite integrity_check: ok\r\n';
