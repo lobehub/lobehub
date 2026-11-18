@@ -9556,6 +9556,10 @@ components:
             - assistant
             - system
             - tool
+            - task
+            - supervisor
+            - verify
+            - taskCallback
         search:
           type: object
           propertyNames:
@@ -9629,6 +9633,10 @@ components:
             - assistant
             - system
             - tool
+            - task
+            - supervisor
+            - verify
+            - taskCallback
       required:
         - content
         - role

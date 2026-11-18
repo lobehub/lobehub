@@ -1,4 +1,4 @@
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type { ChatTopicMetadata, CreateMessageRoleType } from '@lobechat/types';
 import { z } from 'zod';
 
 import { THREAD_STATUS, THREAD_TYPE, topics } from '@/database/schemas/topic';
@@ -313,6 +313,23 @@ export const TopicTranscriptSchema = z.discriminatedUnion('format', [
 
 export type TopicTranscript = z.infer<typeof TopicTranscriptSchema>;
 
+/**
+ * Every role a stored message can carry: what `CreateMessageParams` writes plus
+ * `system`. Exports include the runtime's rows too (`verify` delivery-checker
+ * cards, `task` / `taskCallback` / `supervisor` turns), so an export only
+ * imports back when this contract accepts them.
+ */
+const STORED_MESSAGE_ROLES = [
+  'user',
+  'assistant',
+  'system',
+  'tool',
+  'task',
+  'supervisor',
+  'verify',
+  'taskCallback',
+] as const satisfies readonly (CreateMessageRoleType | 'system')[];
+
 /** One message of an export: the lossless `version: '2.0'` format the importer reads. */
 export const ExportedTopicMessageSchema = z
   .object({
@@ -337,7 +354,7 @@ export const ExportedTopicMessageSchema = z
     pluginState: jsonObjectSchema.optional(),
     provider: z.string().optional(),
     reasoning: jsonObjectSchema.optional(),
-    role: z.enum(['user', 'assistant', 'system', 'tool']),
+    role: z.enum(STORED_MESSAGE_ROLES),
     search: jsonObjectSchema.optional(),
     tool_call_id: z.string().optional(),
     tools: z.array(jsonObjectSchema).optional(),
@@ -369,7 +386,7 @@ const ImportedMessageSchema = z
     model: z.string().optional(),
     parentId: z.string().nullable().optional(),
     provider: z.string().optional(),
-    role: z.enum(['user', 'assistant', 'system', 'tool']),
+    role: z.enum(STORED_MESSAGE_ROLES),
   })
   .meta({ id: 'ImportedTopicMessage' });
 

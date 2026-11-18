@@ -38,6 +38,9 @@ vi.mock('@/database/models/rbac', () => ({
       rbac.mode === 'all' ||
       (rbac.mode === 'owner' && !permissions.every((code) => code.endsWith(':all')));
     hasPermission = async () => rbac.mode === 'all';
+    // The search view filter reads the caller's workspace grants; topics here
+    // back no workspace-shared agent, so no grant decides their visibility.
+    getUserPermissions = async () => [];
   },
 }));
 // The full-text backend is pg_search in production; stand in with a substring match.
@@ -316,6 +319,27 @@ describe('GET /:id/export and POST /import', () => {
       .from(messagePlugins)
       .where(eq(messagePlugins.id, rows[2].id));
     expect(plugin).toMatchObject({ state: { page: 1 }, toolCallId: 'call_b' });
+  });
+
+  it('round-trips the runtime roles a topic stores, such as a verify card', async () => {
+    await db.insert(messages).values({
+      content: 'Delivery check passed',
+      createdAt: new Date('2026-01-01T00:00:04Z'),
+      id: 'msg_b5',
+      parentId: 'msg_b4',
+      role: 'verify',
+      topicId: TOPIC,
+      userId: USER,
+    });
+
+    const exported = ExportedTopicSchema.parse(await data(await request(`/${TOPIC}/export`)));
+    expect(exported.messages.at(-1)).toMatchObject({ role: 'verify' });
+
+    const res = await post('/import', { agentId: AGENT_2, data: exported });
+    expect(res.status).toBe(201);
+    const imported = TopicImportResultSchema.parse(await data(res));
+    const rows = await topicMessages(imported.topic.id);
+    expect(rows.map((row) => row.role)).toEqual(['user', 'assistant', 'tool', 'user', 'verify']);
   });
 
   it('imports a plain message list as a chain', async () => {

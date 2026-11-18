@@ -24,6 +24,9 @@ vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => db }));
 vi.mock('@/database/models/rbac', () => ({
   RbacModel: class {
     hasAnyPermission = async () => rbac.allow;
+    // The search view filter reads the caller's workspace grants; messages here
+    // back no workspace-shared agent, so no grant decides their visibility.
+    getUserPermissions = async () => [];
   },
 }));
 vi.mock('@/server/services/file', () => ({

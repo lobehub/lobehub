@@ -2780,7 +2780,7 @@ export type ExportedTopicMessage = {
     reasoning?: {
         [key: string]: unknown;
     };
-    role: 'user' | 'assistant' | 'system' | 'tool';
+    role: 'user' | 'assistant' | 'system' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
     search?: {
         [key: string]: unknown;
     };
@@ -2806,7 +2806,7 @@ export type ImportedTopicMessage = {
     model?: string;
     parentId?: string | null;
     provider?: string;
-    role: 'user' | 'assistant' | 'system' | 'tool';
+    role: 'user' | 'assistant' | 'system' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
 };
 
 export type TopicTranscriptMessage = {
