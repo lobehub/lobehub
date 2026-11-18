@@ -1,7 +1,9 @@
 import type { AgentEvent, BlobStore } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
 
 import type { RuntimeExecutorContext } from '../context';
 import { formatErrorForState } from '../formatErrorForState';
@@ -69,6 +71,7 @@ const createAttempt = (
   attemptOverrides?: {
     clientIp?: string;
     agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
+    enforceInvocationDeadline?: boolean;
     userAgent?: string;
   },
   abortSignal?: AbortSignal,
@@ -748,5 +751,78 @@ describe('ServerCallLlmAttempt', () => {
         },
       }),
     );
+  });
+
+  describe('invocation deadline', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Stream some output, then hang until the call is aborted. */
+    const streamUntilAborted =
+      (onAbort: 'end' | 'throw') =>
+      async ({ callback, signal }: ChatMethodOptions) => {
+        await callback?.onThinking?.('Long reasoning');
+        await callback?.onText?.('Partial answer');
+        await new Promise<void>((resolve, reject) => {
+          signal?.addEventListener('abort', () =>
+            onAbort === 'throw' ? reject(signal.reason) : resolve(),
+          );
+        });
+      };
+
+    const runNearDeadline = async (attempt: { execute: () => Promise<void> }) => {
+      // 100s left: the call must stop 30s before the host kills the invocation.
+      const run = runWithInvocationDeadline(Date.now() + 100_000, () => attempt.execute());
+      const settled = run.catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(69_999);
+      await vi.advanceTimersByTimeAsync(1);
+      return settled;
+    };
+
+    it('stops a still-streaming call before the host kills the invocation', async () => {
+      const { attempt, handleChatStreamError } = createAttempt(
+        streamUntilAborted('throw'),
+        undefined,
+        { enforceInvocationDeadline: true },
+      );
+
+      const error = await runNearDeadline(attempt);
+
+      expect(error).toMatchObject({ errorType: 'LlmStepTimeout', provider: 'test-provider' });
+      // Partial output stays available so it can be kept on the message.
+      expect(attempt.snapshot()).toMatchObject({
+        content: 'Partial answer',
+        thinkingContent: 'Long reasoning',
+      });
+      expect(recordModelCompletionFailureMock).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'stream_error' }),
+      );
+      expect(handleChatStreamError).not.toHaveBeenCalled();
+    });
+
+    it('does not treat a stream that ends cleanly on abort as a completed turn', async () => {
+      const { attempt } = createAttempt(streamUntilAborted('end'), undefined, {
+        enforceInvocationDeadline: true,
+      });
+
+      const error = await runNearDeadline(attempt);
+
+      expect(error).toMatchObject({ errorType: 'LlmStepTimeout' });
+    });
+
+    it('leaves the call alone when deadline enforcement is off', async () => {
+      const { attempt, chat } = createAttempt(async ({ callback }) => {
+        await callback?.onText?.('Answer');
+      });
+
+      await runWithInvocationDeadline(Date.now() + 100_000, () => attempt.execute());
+
+      expect(chat.mock.calls[0][1]?.signal).toBeUndefined();
+    });
   });
 });

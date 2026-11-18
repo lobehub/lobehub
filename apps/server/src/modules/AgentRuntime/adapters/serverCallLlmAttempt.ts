@@ -31,6 +31,11 @@ import { pickString, toRecord } from '@lobechat/utils/object';
 
 import type { ModelCompletionFailureReason } from '@/business/server/recordModelCompletionFailure';
 import { recordModelCompletionFailure } from '@/business/server/recordModelCompletionFailure';
+import {
+  createInvocationDeadlineSignal,
+  type InvocationDeadlineSignal,
+  isInvocationDeadlineAbort,
+} from '@/server/utils/invocationDeadline';
 
 import type { RuntimeExecutorContext } from '../context';
 import { isOperationInterrupted, log, timing } from '../executorHelpers';
@@ -39,6 +44,35 @@ import {
   type ServerCallLlmStreamSink,
 } from './serverCallLlmStreamSink';
 import type { ServerCallLlmTooling } from './serverCallLlmTooling';
+
+/**
+ * Room left before the step invocation is killed for stopping the stream,
+ * persisting the partial message, recording the failure and settling the
+ * operation. Same budget the device relay keeps (`LLM_RELAY_INVOCATION_MARGIN_MS`).
+ *
+ * The cut-off call is not billed to the user: the provider reports output
+ * tokens only when the stream ends, and the visible reasoning is a summary of
+ * the billed thinking, so no estimate from the partial text is accurate. The
+ * upstream may still bill it; stopping redeliveries is what bounds that cost.
+ */
+export const LLM_STEP_DEADLINE_MARGIN_MS = 30_000;
+
+/** Shortest window an LLM call gets, however late in the invocation it starts. */
+const LLM_STEP_DEADLINE_MIN_MS = 15_000;
+
+/**
+ * The step invocation was about to be killed while the model was still
+ * streaming. Typed so the retry policy stops instead of regenerating the same
+ * long output, and so the UI renders a dedicated message.
+ */
+export const createLlmStepTimeoutError = (provider: string) =>
+  Object.assign(new Error('LLM call stopped before the step invocation deadline'), {
+    errorType: AgentRuntimeErrorType.LlmStepTimeout,
+    provider,
+  });
+
+export const isLlmStepTimeoutError = (error: unknown): boolean =>
+  (error as { errorType?: unknown } | null)?.errorType === AgentRuntimeErrorType.LlmStepTimeout;
 
 interface CreateServerCallLlmAttemptInput {
   /**
@@ -54,6 +88,12 @@ interface CreateServerCallLlmAttemptInput {
   /** Client IP of the originating request, forwarded into the LLM-call metadata for auditing and spend attribution. */
   clientIp?: string;
   ctx: RuntimeExecutorContext;
+  /**
+   * Stop the call shortly before the step invocation is killed (see
+   * `createInvocationDeadlineSignal`). Off for relayed attempts, which manage
+   * their own deadline.
+   */
+  enforceInvocationDeadline?: boolean;
   events: AgentEvent[];
   maxAttempts: number;
   messageCount: number;
@@ -177,6 +217,8 @@ export class ServerCallLlmAttempt {
   private readonly topicId?: string;
   private readonly trigger?: unknown;
   private usage?: ModelUsage;
+  private deadline?: InvocationDeadlineSignal;
+  private readonly enforceInvocationDeadline: boolean;
 
   constructor({
     agentShareVisitorIds,
@@ -185,6 +227,7 @@ export class ServerCallLlmAttempt {
     chatPayload,
     clientIp,
     ctx,
+    enforceInvocationDeadline,
     events,
     maxAttempts,
     messageCount,
@@ -201,6 +244,7 @@ export class ServerCallLlmAttempt {
     this.attempt = attempt;
     this.chatPayload = chatPayload;
     this.ctx = ctx;
+    this.enforceInvocationDeadline = !!enforceInvocationDeadline;
     this.maxAttempts = maxAttempts;
     this.messageCount = messageCount;
     this.model = model;
@@ -228,9 +272,29 @@ export class ServerCallLlmAttempt {
   }
 
   async execute(): Promise<void> {
+    // Without this the host kills the invocation mid-stream: the route attempt
+    // never finalizes, nothing is billed while the upstream bills the full
+    // output, and the queue redelivers the step to regenerate it from scratch.
+    this.deadline = this.enforceInvocationDeadline
+      ? createInvocationDeadlineSignal({
+          marginMs: LLM_STEP_DEADLINE_MARGIN_MS,
+          minMs: LLM_STEP_DEADLINE_MIN_MS,
+        })
+      : undefined;
     try {
       await this.executeModelCall();
     } catch (error) {
+      if (isInvocationDeadlineAbort(this.deadline?.signal)) {
+        log(
+          '[%s] LLM call stopped before the invocation deadline (content: %d chars, reasoning: %d chars)',
+          this.operationLogId,
+          this.streamSink.content.length,
+          this.streamSink.thinkingContent.length,
+        );
+        await this.recordCompletionFailure('stream_error', error);
+        throw createLlmStepTimeoutError(this.provider);
+      }
+
       const isAlreadyRecorded =
         error instanceof ModelEmptyError || error instanceof ModelRefusalError;
       const isAborted = this.runtimeDiagnostics.providerResponse?.aborted;
@@ -245,6 +309,8 @@ export class ServerCallLlmAttempt {
       }
 
       throw error;
+    } finally {
+      this.deadline?.dispose();
     }
   }
 
@@ -349,7 +415,7 @@ export class ServerCallLlmAttempt {
       },
       diagnostics: this.runtimeDiagnostics,
       metadata: this.runtimeMetadata,
-      signal: this.ctx.abortSignal,
+      signal: this.resolveSignal(),
       user: this.ctx.userId,
     };
     const response = await this.modelRuntime.chat(this.chatPayload, chatOptions);
@@ -362,6 +428,9 @@ export class ServerCallLlmAttempt {
       await this.reportStreamFailure(error, chatOptions);
       throw error;
     }
+    // Some streams end cleanly on abort instead of throwing; a cut-off answer
+    // or half-streamed tool call must not pass as a completed turn.
+    if (isInvocationDeadlineAbort(this.deadline?.signal)) throw this.deadline!.signal.reason;
 
     await this.streamSink.flushTextBuffer();
     await this.streamSink.flushReasoningBuffer();
@@ -375,6 +444,14 @@ export class ServerCallLlmAttempt {
     await this.assertNonEmptyCompletion();
     this.salvageAnswerFromReasoning();
     this.logResult();
+  }
+
+  /** The user-stop signal, and the invocation deadline when the host declared one. */
+  private resolveSignal(): AbortSignal | undefined {
+    const signals = [this.ctx.abortSignal, this.deadline?.signal].filter(
+      (signal): signal is AbortSignal => !!signal,
+    );
+    return signals.length > 1 ? AbortSignal.any(signals) : signals[0];
   }
 
   clearBuffers() {
@@ -410,6 +487,8 @@ export class ServerCallLlmAttempt {
     // Empty completions and refusals carry their own classification and UI.
     if (error instanceof ModelEmptyError || error instanceof ModelRefusalError) return;
     if (this.runtimeDiagnostics.providerResponse?.aborted) return;
+    // Our own stop, settled by `execute()`; not a provider failure to report.
+    if (isInvocationDeadlineAbort(this.deadline?.signal)) return;
     if (await isOperationInterrupted(this.ctx)) return;
 
     await this.modelRuntime.handleChatStreamError(error, { options, payload: this.chatPayload });

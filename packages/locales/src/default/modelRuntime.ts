@@ -57,6 +57,8 @@ export default {
     'Sorry, the upstream provider rejected the request as malformed. Please check the input or try a different model.',
   InvalidVertexCredentials:
     'Vertex authentication failed. Please check your credentials and try again.',
+  LlmStepTimeout:
+    'The model took too long on this step and was stopped before it finished. Try a lower reasoning effort, or split the work into smaller requests.',
   LobeHubModelDeprecated:
     'The selected model is no longer available. Ask the bot or agent owner to select an available model, then try again.',
   LocationNotSupportError:

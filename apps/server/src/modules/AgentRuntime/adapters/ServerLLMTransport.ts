@@ -63,7 +63,7 @@ import type { LlmExecutionSite } from '../llmRelay/resolveLlmExecutionSite';
 import { resolveLlmExecutionSite } from '../llmRelay/resolveLlmExecutionSite';
 import { getAgentRuntimeRedisClient } from '../redis';
 import type { IStreamEventManager } from '../types';
-import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
+import { createServerCallLlmAttempt, isLlmStepTimeoutError } from './serverCallLlmAttempt';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -371,7 +371,40 @@ export class ServerLLMTransport implements LLMTransport {
     }
 
     const modelRuntime = await this.getModelRuntime(input.provider);
-    return this.runAttemptWithRuntime(input, modelRuntime);
+    const execution = await this.runAttemptWithRuntime(input, modelRuntime, this.ctx, {
+      enforceInvocationDeadline: true,
+    });
+    if (!execution.ok && isLlmStepTimeoutError(execution.error)) {
+      await this.keepPartialOnStepTimeout(input, execution);
+    }
+    return execution;
+  }
+
+  /**
+   * A call stopped at the invocation deadline already streamed its reasoning
+   * and text to the user. Keep it on the message,
+   * marked as cut short, instead of replacing it with only the error.
+   */
+  private async keepPartialOnStepTimeout(
+    input: LLMAttemptInput,
+    execution: Extract<LLMAttemptExecution, { ok: false }>,
+  ) {
+    const messageId = input.assistantMessageId;
+    const { content, thinkingContent } = execution.output;
+    if (!messageId || (!content && !thinkingContent)) return;
+
+    try {
+      await this.ctx.messageModel.update(messageId, {
+        content,
+        metadata: { interruptedMidStream: true } as any,
+        ...(thinkingContent && { reasoning: { content: thinkingContent } }),
+      });
+    } catch (error) {
+      console.error(
+        '[ServerLLMTransport] Failed to keep partial output after step timeout:',
+        error,
+      );
+    }
   }
 
   async stream(
@@ -667,6 +700,7 @@ export class ServerLLMTransport implements LLMTransport {
     input: LLMAttemptInput,
     modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>,
     ctx: RuntimeExecutorContext = this.ctx,
+    options: { enforceInvocationDeadline?: boolean } = {},
   ): Promise<LLMAttemptExecution> {
     const resolved = input.context.resolvedTools;
     if (!resolved) throw new Error('Resolved tools are required for a server LLM attempt');
@@ -714,6 +748,9 @@ export class ServerLLMTransport implements LLMTransport {
       blobStore: this.blobStore,
       chatPayload,
       ctx,
+      // Relayed attempts size their own deadlines to the invocation
+      // (`fitLlmRelayDeadlines`) and keep their partials themselves.
+      enforceInvocationDeadline: options.enforceInvocationDeadline,
       events: input.events,
       maxAttempts: input.maxAttempts,
       messageCount: chatPayload.messages.length,

@@ -22,6 +22,7 @@ import {
   runWithScheduledWorkScope,
 } from '@/server/utils/scheduleAfterResponse';
 
+import { STEP_INVOCATION_MAX_DURATION_MS } from '../invocationBudget';
 import { resumeAbandonedParent } from './resumeAbandonedParent';
 
 const log = debug('lobe-server:agent:run-step');
@@ -40,13 +41,12 @@ const log = debug('lobe-server:agent:run-step');
  * headroom between this deadline and the route's `maxDuration`. That headroom
  * has to cover a long LLM step, and step length varies a lot by model: most
  * models finish LLM steps within ~40s at p99, but some run into several
- * minutes (one model family measured ~317s at p99, ~439s max). With 450s under
- * a 600s `maxDuration`, steps started before the deadline were observed ending
- * within seconds of the kill.
+ * minutes (one model family measured ~317s at p99, ~439s max).
  *
- * 300s leaves 300s of headroom under 600s. A killed step is not lost — it
- * resumes from the parked envelope — but it is paid for twice, so keep this
- * conservative and raise it only alongside `maxDuration`. Once past the
+ * 450s leaves 350s of headroom under the 800s invocation. A server LLM call
+ * still streaming 30s before the kill is stopped and fails the operation with
+ * `LlmStepTimeout` (see `serverCallLlmAttempt`), so keep this conservative and
+ * raise it only alongside `STEP_INVOCATION_MAX_DURATION_MS`. Once past the
  * deadline the pending step goes back to the queue and a fresh invocation
  * picks it up.
  */
@@ -62,12 +62,6 @@ const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADL
  * anything still running keeps going.
  */
 const STEP_BOUNDARY_FLUSH_TIMEOUT_MS = 10_000;
-
-/**
- * The route's `maxDuration`: when the host kills this invocation, counted from
- * the start of the request.
- */
-const STEP_INVOCATION_MAX_DURATION_MS = 600_000;
 
 const toIsoString = (value: Date | string | null | undefined): null | string => {
   if (!value) return null;
