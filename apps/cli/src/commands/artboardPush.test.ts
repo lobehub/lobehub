@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { pushArtboardDir } from './artboardPush';
 
-const sha = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
+const md5 = (bytes: string | Buffer) => createHash('md5').update(bytes).digest('hex');
 
 let dir: string;
 
@@ -18,26 +18,20 @@ const put = (relative: string, content: string | Buffer) => {
 };
 
 const client = (
-  remote: { hash: string; path: string; size: number }[],
-  options: {
-    boards?: { source: { hash: string; kind: 'file'; path: string } | null; title: string }[];
-    uploads?: { headers?: Record<string, string>; path: string; url: string }[];
-  } = {},
+  remote: { contentType: string; hash: string; path: string; size: number }[],
+  options: { uploads?: { headers?: Record<string, string>; path: string; url: string }[] } = {},
 ) => {
   const writeFiles = vi.fn(async ({ files }: { files: { writes?: { path: string }[] } }) => ({
     files: (files.writes ?? []).map((write) => ({ hash: 'h', path: write.path, size: 1 })),
   }));
   const prepareFileUploads = vi.fn(async () => ({ uploads: options.uploads ?? [] }));
-  const read = vi.fn(async () => ({ artboard: { content: { boards: options.boards ?? [] } } }));
   return {
     api: {
       listFiles: { query: vi.fn(async () => remote) },
       prepareFileUploads: { mutate: prepareFileUploads },
-      read: { query: read },
       writeFiles: { mutate: writeFiles },
     },
     prepareFileUploads,
-    read,
     writeFiles,
   };
 };
@@ -63,7 +57,14 @@ describe('pushArtboardDir', () => {
     put('pages/same.html', '<p>same</p>');
     put('shots/a.png', png);
     const { api, writeFiles } = client([
-      { hash: sha('<p>same</p>'), path: 'pages/same.html', size: 11 },
+      { contentType: 'text/html', hash: md5('<p>same</p>'), path: 'pages/same.html', size: 11 },
+      // A sha256 of the same bytes is not the ETag the server reports.
+      {
+        contentType: 'image/png',
+        hash: createHash('sha256').update(png).digest('hex'),
+        path: 'shots/a.png',
+        size: 4,
+      },
     ]);
 
     const result = await pushArtboardDir(api, 'art_1', dir, {});
@@ -80,7 +81,6 @@ describe('pushArtboardDir', () => {
     });
     expect(result).toEqual({
       deleted: [],
-      kept: [],
       skipped: [],
       unchanged: ['pages/same.html'],
       uploaded: ['pages/home.html', 'shots/a.png'],
@@ -102,8 +102,8 @@ describe('pushArtboardDir', () => {
   it('deletes remote files missing locally only with prune', async () => {
     put('index.html', '<p>hi</p>');
     const remote = [
-      { hash: sha('<p>hi</p>'), path: 'index.html', size: 9 },
-      { hash: 'x', path: 'old.html', size: 1 },
+      { contentType: 'text/html', hash: md5('<p>hi</p>'), path: 'index.html', size: 9 },
+      { contentType: 'text/html', hash: 'x', path: 'old.html', size: 1 },
     ];
     const kept = client(remote);
     expect((await pushArtboardDir(kept.api, 'art_1', dir, {})).deleted).toEqual([]);
@@ -118,26 +118,28 @@ describe('pushArtboardDir', () => {
     expect(result.deleted).toEqual(['old.html']);
   });
 
-  it('keeps a board shown file on prune and deletes the unused one', async () => {
+  it('prunes every remote file missing locally, even one a board points at', async () => {
     put('index.html', '<p>hi</p>');
     const remote = [
-      { hash: sha('<p>hi</p>'), path: 'index.html', size: 9 },
-      { hash: 'x', path: 'old.html', size: 1 },
-      { hash: 'y', path: 'pages/shown.html', size: 1 },
+      { contentType: 'text/html', hash: md5('<p>hi</p>'), path: 'index.html', size: 9 },
+      { contentType: 'text/html', hash: 'x', path: 'old.html', size: 1 },
+      { contentType: 'text/html', hash: 'y', path: 'pages/shown.html', size: 1 },
     ];
-    const { api, writeFiles } = client(remote, {
-      boards: [
-        { source: { hash: 'y', kind: 'file', path: 'pages/shown.html' }, title: '首页' },
-        { source: null, title: 'Pick one' },
-      ],
-    });
+    const { api, writeFiles } = client(remote);
 
     const result = await pushArtboardDir(api, 'art_1', dir, { prune: true });
 
     expect(writeFiles).toHaveBeenCalledTimes(1);
-    expect(writeFiles.mock.calls[0][0]).toEqual({ files: { deletes: ['old.html'] }, id: 'art_1' });
-    expect(result.deleted).toEqual(['old.html']);
-    expect(result.kept).toEqual([{ path: 'pages/shown.html', title: '首页' }]);
+    expect(writeFiles.mock.calls[0][0]).toEqual({
+      files: { deletes: ['old.html', 'pages/shown.html'] },
+      id: 'art_1',
+    });
+    expect(result).toEqual({
+      deleted: ['old.html', 'pages/shown.html'],
+      skipped: [],
+      unchanged: ['index.html'],
+      uploaded: [],
+    });
   });
 
   it('keeps every request under 2 MB encoded and sends a large image through a presigned PUT', async () => {
@@ -158,7 +160,7 @@ describe('pushArtboardDir', () => {
     for (const [input] of writeFiles.mock.calls)
       expect(Buffer.byteLength(JSON.stringify(input))).toBeLessThanOrEqual(2 * 1024 * 1024);
     expect(prepareFileUploads).toHaveBeenCalledWith({
-      files: [{ hash: sha(image), path: 'shots/big.png', size: image.byteLength }],
+      files: [{ path: 'shots/big.png', size: image.byteLength }],
       id: 'art_1',
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -168,7 +170,7 @@ describe('pushArtboardDir', () => {
     expect(init.headers).toEqual(headers);
     expect(Buffer.from(init.body).equals(image)).toBe(true);
     const writes = writeFiles.mock.calls.flatMap(([input]) => input.files.writes ?? []);
-    expect(writes).toContainEqual({ hash: sha(image), path: 'shots/big.png' });
+    expect(writes).toContainEqual({ path: 'shots/big.png', uploaded: true });
     expect(writes.map((write) => write.path).sort()).toEqual([
       'pages/a.html',
       'pages/b.html',
@@ -179,18 +181,13 @@ describe('pushArtboardDir', () => {
     expect(result.uploaded).toHaveLength(5);
   });
 
-  it('commits a blob the server already stores without uploading it again', async () => {
-    const image = Buffer.alloc(3 * 1024 * 1024, 9);
-    put('shots/big.png', image);
+  it('fails without committing a large file the server returned no upload for', async () => {
+    put('shots/big.png', Buffer.alloc(3 * 1024 * 1024, 9));
     const { api, writeFiles } = client([], { uploads: [] });
 
-    await pushArtboardDir(api, 'art_1', dir, {});
-
+    await expect(pushArtboardDir(api, 'art_1', dir, {})).rejects.toThrow(/shots\/big\.png/);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(writeFiles.mock.calls[0][0]).toEqual({
-      files: { writes: [{ hash: sha(image), path: 'shots/big.png' }] },
-      id: 'art_1',
-    });
+    expect(writeFiles).not.toHaveBeenCalled();
   });
 
   it('names the file whose presigned upload was refused and commits nothing for it', async () => {

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -170,7 +169,9 @@ describe('lh artboard', () => {
   });
 
   it('lists the files of a board with their sizes', async () => {
-    listFiles.mockResolvedValue([{ hash: 'abc', path: 'pages/empty.html', size: 2048 }]);
+    listFiles.mockResolvedValue([
+      { contentType: 'text/html', hash: 'abc', path: 'pages/empty.html', size: 2048 },
+    ]);
     await run(['artboard', 'files', 'list', 'art_8f2k']);
 
     expect(listFiles).toHaveBeenCalledWith({ id: 'art_8f2k' });
@@ -178,7 +179,7 @@ describe('lh artboard', () => {
   });
 
   it('lists the files as JSON on request', async () => {
-    const files = [{ hash: 'abc', path: 'pages/empty.html', size: 2048 }];
+    const files = [{ contentType: 'text/html', hash: 'abc', path: 'pages/empty.html', size: 2048 }];
     listFiles.mockResolvedValue(files);
     await run(['artboard', 'files', 'list', 'art_8f2k', '--json']);
 
@@ -189,7 +190,7 @@ describe('lh artboard', () => {
     const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     readFile.mockResolvedValue({
       content: '<h1>空项目</h1>',
-      hash: 'abc',
+      contentType: 'text/html',
       path: 'pages/empty.html',
     });
     await run(['artboard', 'files', 'read', 'art_8f2k', 'pages/empty.html']);
@@ -200,7 +201,11 @@ describe('lh artboard', () => {
   });
 
   it('refuses to print a binary file', async () => {
-    readFile.mockResolvedValue({ hash: 'abc', path: 'shots/a.png' });
+    readFile.mockResolvedValue({
+      base64: 'iVBORw==',
+      contentType: 'image/png',
+      path: 'shots/a.png',
+    });
     await expect(run(['artboard', 'files', 'read', 'art_8f2k', 'shots/a.png'])).rejects.toThrow(
       'shots/a.png is binary',
     );
@@ -272,15 +277,14 @@ describe('lh artboard', () => {
         path.join(dir, 'big.png'),
       ]);
 
-      const hash = createHash('sha256').update(image).digest('hex');
       expect(prepareFileUploads).toHaveBeenCalledWith({
-        files: [{ hash, path: 'shots/big.png', size: image.byteLength }],
+        files: [{ path: 'shots/big.png', size: image.byteLength }],
         id: 'art_8f2k',
       });
       expect(fetchMock.mock.calls[0][0]).toBe('https://s3.test/blob');
       expect(fetchMock.mock.calls[0][1].method).toBe('PUT');
       expect(writeFiles).toHaveBeenCalledWith({
-        files: { writes: [{ hash, path: 'shots/big.png' }] },
+        files: { writes: [{ path: 'shots/big.png', uploaded: true }] },
         id: 'art_8f2k',
       });
     });
@@ -300,6 +304,25 @@ describe('lh artboard', () => {
       ).rejects.toThrow('notes.md');
       expect(writeFiles).not.toHaveBeenCalled();
     });
+  });
+
+  it('pushes a folder with --prune without reading the boards that point at its files', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'artboard-push-cmd-'));
+    fs.writeFileSync(path.join(dir, 'index.html'), '<p>hi</p>');
+    listFiles.mockResolvedValue([
+      { contentType: 'text/html', hash: 'x', path: 'pages/empty.html', size: 1 },
+    ]);
+    writeFiles.mockResolvedValue({ files: [] });
+
+    await run(['artboard', 'push', 'art_8f2k', dir, '--prune']);
+    fs.rmSync(dir, { force: true, recursive: true });
+
+    expect(read).not.toHaveBeenCalled();
+    expect(writeFiles).toHaveBeenLastCalledWith({
+      files: { deletes: ['pages/empty.html'] },
+      id: 'art_8f2k',
+    });
+    expect(log.mock.calls).toEqual([['pushed 1 · unchanged 0 · deleted 1']]);
   });
 
   it('removes files', async () => {

@@ -20,17 +20,20 @@ Read the repository for the data and the screens the requirement touches, so the
 
 Run \`lh man artboard\` for the exact flags and \`lh artboard ops\` for the shape of every op; both come from the installed CLI and are not repeated here. One requirement gets one artboard: \`lh artboard create\` makes it for this conversation's project, \`lh artboard list\` shows the ones that already exist.
 
-**Screens.** A board shows a screen. Write each screen as a plain HTML page, a real screen of the product at the board's size with its own layout, colors, type and inline SVG, in a folder laid out like the artboard (for example \`pages/checkout/a.html\`, shared CSS in \`shared/base.css\`, screenshots in \`shots/\`, all referenced by relative paths):
+**Screens.** A board shows a screen. Write each screen as a plain HTML page, a real screen of the product at the board's size with its own layout, colors, type and inline SVG, in a folder laid out like the artboard (for example \`pages/checkout/a.html\`, shared CSS in \`shared/base.css\`, screenshots in \`shots/\`, all referenced by relative paths). A board points at its page with source \`{"kind":"file","path":"pages/checkout/a.html"}\`; the file may not be written yet, and the board shows the page as soon as it is. Build the artboard in this order, so the user watches it fill in:
 
-- \`lh artboard push <id> <dir>\` uploads the folder as files of the artboard and skips files that did not change; point each board at its page with source \`{"kind":"file","path":"pages/checkout/a.html"}\`;
+1. Lay out the whole structure first: one \`lh artboard create --ops\` (or \`lh artboard update --ops\` on an artboard that exists) with the pages, groups, edges and every board, each board's source pointing at the path its page will have although that file is not written yet.
+2. Then write the pages one board at a time with \`lh artboard files write <id> <path> --from <file>\` (or from stdin), each as soon as it is ready, so the boards appear one by one. Write the shared CSS and images a page uses before the page.
+3. \`lh artboard push <id> <dir>\` re-syncs a whole folder later: it uploads only the files that changed, and with \`--prune\` deletes the artboard files that are no longer in the folder.
+
 - a page cannot fetch or open network connections; https images, fonts, styles and scripts load;
-- to change a screen, edit the file and push again: every board showing it updates and comments on it are marked outdated;
-- to change one file without a push, \`lh artboard files write <id> <path> --from <file>\` replaces it (or reads it from stdin); \`lh artboard files list <id>\`, \`lh artboard files read <id> <path>\` and \`lh artboard files rm <id> <path>\` list, print and remove files. A file a board shows cannot be removed, and \`push --prune\` keeps it;
-- a screenshot of the current product can be an image board: put it in the folder and point a board at it.
+- to change a screen, write its file again: every board showing it updates and comments on it are marked outdated;
+- \`lh artboard files list <id>\`, \`lh artboard files read <id> <path>\` and \`lh artboard files rm <id> <path>\` list, print and remove files; a board whose file is removed stays and shows the page again once it is written;
+- a screenshot of the current product can be an image board: write it under \`shots/\` and point a board at it.
 
 A board of type "decision" needs no source.
 
-If no screen can be made (the push is refused or times out), tell the user in one line which step failed and hold the discussion in chat. Never stand a decision board or a text card in for a screen: a decision board marks where the journey branches and shows only a short title.
+If no screen can be made (writing the files is refused or times out), tell the user in one line which step failed and hold the discussion in chat. Never stand a decision board or a text card in for a screen: a decision board marks where the journey branches and shows only a short title.
 
 **Layout.**
 

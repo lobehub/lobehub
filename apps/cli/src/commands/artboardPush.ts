@@ -2,13 +2,10 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {
-  type ArtboardContent,
-  isArtboardTextPath,
-  normalizeArtboardFilePath,
-} from '@lobechat/types';
+import { isArtboardTextPath, normalizeArtboardFilePath } from '@lobechat/types';
 
 interface RemoteFile {
+  /** ETag of the stored object: the MD5 hex of its bytes. */
   hash: string;
   path: string;
   size: number;
@@ -17,20 +14,15 @@ interface RemoteFile {
 type FileWrite =
   | { base64: string; path: string }
   | { content: string; path: string }
-  | { hash: string; path: string };
+  | { path: string; uploaded: true };
 
 export interface ArtboardFilesApi {
   listFiles: { query: (input: { id: string }) => Promise<RemoteFile[]> };
   prepareFileUploads: {
     mutate: (input: {
-      files: { hash: string; path: string; size: number }[];
+      files: { path: string; size: number }[];
       id: string;
     }) => Promise<{ uploads: { headers?: Record<string, string>; path: string; url: string }[] }>;
-  };
-  read: {
-    query: (input: {
-      id: string;
-    }) => Promise<{ artboard: { content: Pick<ArtboardContent, 'boards'> } }>;
   };
   writeFiles: {
     mutate: (input: {
@@ -42,14 +34,13 @@ export interface ArtboardFilesApi {
 
 export interface LocalArtboardFile {
   bytes: Buffer;
+  /** MD5 hex of the bytes, comparable to the ETag `listFiles` reports. */
   hash: string;
   path: string;
 }
 
 export interface ArtboardPushResult {
   deleted: string[];
-  /** Remote files missing locally that `--prune` left alone because a board shows them. */
-  kept: { path: string; title: string }[];
   skipped: string[];
   unchanged: string[];
   uploaded: string[];
@@ -66,7 +57,7 @@ const encodedBytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value)
 
 export const toLocalArtboardFile = (relative: string, bytes: Buffer): LocalArtboardFile => ({
   bytes,
-  hash: createHash('sha256').update(bytes).digest('hex'),
+  hash: createHash('md5').update(bytes).digest('hex'),
   path: relative,
 });
 
@@ -87,8 +78,8 @@ const putBlob = async (
 
 /**
  * Writes files to an artboard in requests of at most 2 MB encoded. A file too
- * large for one request is PUT to storage through a presigned URL first and
- * then committed by its hash.
+ * large for one request is PUT to its path through a presigned URL first and
+ * then committed as uploaded.
  */
 export const writeArtboardFiles = async (
   api: Pick<ArtboardFilesApi, 'prepareFileUploads' | 'writeFiles'>,
@@ -108,18 +99,16 @@ export const writeArtboardFiles = async (
 
   if (large.length) {
     const { uploads } = await api.prepareFileUploads.mutate({
-      files: large.map((file) => ({
-        hash: file.hash,
-        path: file.path,
-        size: file.bytes.byteLength,
-      })),
+      files: large.map((file) => ({ path: file.path, size: file.bytes.byteLength })),
       id,
     });
     const byPath = new Map(uploads.map((upload) => [upload.path, upload]));
     for (const file of large) {
       const upload = byPath.get(file.path);
-      if (upload) await putBlob(file, upload);
-      writes.push({ hash: file.hash, path: file.path });
+      if (!upload)
+        throw new Error(`Upload of ${file.path} failed: the server returned no upload URL`);
+      await putBlob(file, upload);
+      writes.push({ path: file.path, uploaded: true });
     }
   }
 
@@ -156,7 +145,6 @@ export const pushArtboardDir = async (
   const remote = new Map((await api.listFiles.query({ id })).map((file) => [file.path, file.hash]));
   const result: ArtboardPushResult = {
     deleted: [],
-    kept: [],
     skipped: [],
     unchanged: [],
     uploaded: [],
@@ -185,23 +173,8 @@ export const pushArtboardDir = async (
   if (options.prune) {
     const missing = [...remote.keys()].filter((file) => !local.has(file));
     if (missing.length) {
-      // The server refuses to delete a file a board shows; keep those instead of failing the prune.
-      const { artboard } = await api.read.query({ id });
-      const shownBy = new Map<string, string>();
-      for (const board of artboard.content.boards)
-        if (board.source && !shownBy.has(board.source.path))
-          shownBy.set(board.source.path, board.title);
-
-      const deletes: string[] = [];
-      for (const file of missing) {
-        const title = shownBy.get(file);
-        if (title === undefined) deletes.push(file);
-        else result.kept.push({ path: file, title });
-      }
-      if (deletes.length) {
-        await api.writeFiles.mutate({ files: { deletes }, id });
-        result.deleted = deletes;
-      }
+      await api.writeFiles.mutate({ files: { deletes: missing }, id });
+      result.deleted = missing;
     }
   }
   return result;

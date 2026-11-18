@@ -159,8 +159,6 @@ export const registerArtboardCommand = (program: Command) => {
       );
       for (const skipped of result.skipped)
         console.log(`skipped ${skipped}: not a file a board can serve`);
-      for (const kept of result.kept)
-        console.log(`kept ${kept.path}: shown by board "${kept.title}"`);
     });
 
   const files = artboard
@@ -203,7 +201,7 @@ export const registerArtboardCommand = (program: Command) => {
 
   files
     .command('rm <id> <paths...>')
-    .description('Delete files of the artboard; a file a board shows cannot be deleted')
+    .description('Delete files of the artboard; boards that show one stay and wait for it again')
     .action(async (id: string, paths: string[]) => {
       const client = await getTrpcClient();
       await client.artboard.writeFiles.mutate({ files: { deletes: paths }, id });

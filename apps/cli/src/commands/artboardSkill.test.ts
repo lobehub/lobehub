@@ -136,6 +136,28 @@ describe('lh artboard skill init', () => {
     expect(skill).not.toMatch(/lh artifact save|Canvas/);
   });
 
+  it('streams: lays out every board first, then writes their files one at a time', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    const create = skill.indexOf('lh artboard create');
+    const write = skill.indexOf('lh artboard files write <id> <path> --from <file>');
+    expect(create).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(create);
+    expect(skill).toMatch(/not written yet/i);
+    expect(skill).toMatch(/one board at a time/i);
+    expect(skill).toMatch(/push[^.]*re-?sync/i);
+  });
+
+  it('does not tie a board to an existing file', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    expect(skill).not.toMatch(/cannot be (?:removed|deleted)/i);
+    expect(skill).not.toMatch(/--prune` keeps/i);
+    expect(skill).not.toMatch(/must exist/i);
+  });
+
   it('states what the journey needs before it can be finalized', async () => {
     await run('--dir', directory);
 
