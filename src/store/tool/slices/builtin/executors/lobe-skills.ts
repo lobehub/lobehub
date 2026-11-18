@@ -84,6 +84,9 @@ const runtime = new SkillsExecutionRuntime({
         const result = await cloudSandboxService.exportAndUploadFile(path, filename, topicId);
 
         return {
+          // The runtime puts this reason in the model-facing text; without it
+          // a missing file reads as a broken export channel.
+          error: result.error,
           fileId: result.fileId,
           filename: result.filename,
           mimeType: result.mimeType,
@@ -91,8 +94,9 @@ const runtime = new SkillsExecutionRuntime({
           success: result.success,
           url: result.url,
         };
-      } catch {
+      } catch (error) {
         return {
+          error: { message: (error as Error).message },
           filename,
           success: false,
         };

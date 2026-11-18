@@ -22,6 +22,7 @@ import type {
   RunCommandOptions,
   RunCommandParams,
 } from '../types';
+import { formatExportFailure, getInvalidExportPathReason } from './exportFileMessages';
 
 /**
  * Unified skill service interface for dependency injection.
@@ -292,12 +293,22 @@ export class SkillsExecutionRuntime {
       };
     }
 
+    const invalidReason = getInvalidExportPathReason(path);
+    if (invalidReason) {
+      return {
+        content: `Invalid path ${JSON.stringify(path ?? '')}: ${invalidReason}. Pass the path of a file, e.g. "./output/result.csv" or the absolute path printed by \`realpath <file>\`.`,
+        success: false,
+      };
+    }
+
     try {
       const result = await this.service.exportFile(path, filename);
 
       if (!result.success) {
+        // `content` is all the model reads — the error is metadata — so the
+        // reason has to be in it, or a missing file reads as a broken export.
         return {
-          content: `Failed to export file: ${filename}`,
+          content: formatExportFailure(path, filename, result.error),
           error: result.error,
           success: false,
         };
