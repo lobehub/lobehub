@@ -325,6 +325,12 @@ export const channelRouter = router({
       data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
       success: true,
     })),
+  deleteMessage: channelProcedure
+    .input(z.object({ channelId, messageId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.deleteMessage(input.channelId, input.messageId);
+      return { success: true };
+    }),
   /** An admin removes a person or an Agent from a group Channel. */
   removeMember: channelProcedure
     .input(z.object({ channelId, memberId: z.uuid() }))

@@ -34,6 +34,7 @@ import {
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
+import { deleteMessage } from './delete';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
@@ -1100,6 +1101,17 @@ export class ChannelRepository {
   /** Rewrites the text of the caller's own message; see `editMessage`. */
   editMessage = async (channelId: string, messageId: string, content: string) =>
     this.write(channelId, (tx) => editMessage(tx, channelId, this.userId, messageId, content));
+
+  /** Deletes the caller's own message, or any as an admin; see `deleteMessage`. */
+  deleteMessage = async (channelId: string, messageId: string): Promise<ChannelJobItem[]> =>
+    this.write(channelId, (tx, { member }) =>
+      deleteMessage(
+        tx,
+        channelId,
+        { admin: hasRole(member.role, 'admin'), userId: this.userId },
+        messageId,
+      ),
+    );
 
   /** Sends an unassigned message back to the decision model. Its author or an admin may retry. */
   retryRouting = async (channelId: string, messageId: string): Promise<ChannelMessageItem> =>
