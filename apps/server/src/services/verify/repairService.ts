@@ -112,26 +112,11 @@ export const createRepairRunner = (params: {
   provider?: string | null;
   taskId?: string | null;
   topicId?: string | null;
-  /**
-   * Trigger of the run being repaired. The repair redoes that run's own work,
-   * so it keeps the same spend attribution (e.g. `task`).
-   */
-  trigger?: string | null;
   userId: string;
   workspaceId?: string;
 }): RepairSpawner | undefined => {
-  const {
-    agentId,
-    db,
-    maxRepairRounds,
-    model,
-    provider,
-    taskId,
-    topicId,
-    trigger,
-    userId,
-    workspaceId,
-  } = params;
+  const { agentId, db, maxRepairRounds, model, provider, taskId, topicId, userId, workspaceId } =
+    params;
   if (!agentId || !topicId) return undefined;
 
   return async ({ failedItemIds, instruction, operationId, verifyMessageId }) => {
@@ -230,9 +215,10 @@ export const createRepairRunner = (params: {
         ...(provider ? { provider } : {}),
         suppressUserMessage: true,
         ...(taskId ? { taskId } : {}),
-        // LobeHub-routed model calls must name a trigger. A source run without
-        // one (legacy row) is attributed to the acceptance that asked for the fix.
-        trigger: trigger || RequestTrigger.Verify,
+        // LobeHub-routed model calls must name a trigger. Not inherited from the
+        // repaired run: a recallable one (e.g. `chat`) would make the completion
+        // gate treat this internal round as a top-level run and push the user.
+        trigger: RequestTrigger.Verify,
         userInterventionConfig: { approvalMode: 'headless' },
       })
       .catch((error) => {
@@ -313,7 +299,6 @@ const buildRunRepairSpawner = async (
     provider: op?.provider,
     taskId: taskOperation?.taskId,
     topicId: op?.topicId,
-    trigger: op?.trigger,
     userId,
     workspaceId,
   });
