@@ -104,6 +104,9 @@ const redactAgentDevicePins = async <
 };
 const idInput = z.object({ id: z.string().uuid() });
 
+/** The most conversations one `associateTopics` call files; larger groups are sent in batches. */
+const ASSOCIATE_TOPICS_BATCH_SIZE = 50;
+
 export const projectWorkingDirectoryRouter = router({
   associateTopic: write
     .input(
@@ -128,6 +131,41 @@ export const projectWorkingDirectoryRouter = router({
         success: true,
       };
     }),
+  /**
+   * File a group of conversations into a project in one write. The client
+   * splits a large selection into batches of {@link ASSOCIATE_TOPICS_BATCH_SIZE}
+   * to report progress; each batch is one transaction.
+   */
+  associateTopics: write
+    .input(
+      z.object({
+        projectId: z.string(),
+        topicIds: z.array(z.string()).min(1).max(ASSOCIATE_TOPICS_BATCH_SIZE),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const guardCtx = { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId };
+      await assertCanUseTopicTargets(guardCtx, input.topicIds);
+      await assertCreatorTopicTargets(guardCtx, input.topicIds);
+      return {
+        data: await ctx.directoryRepo.associateTopics(input.projectId, input.topicIds),
+        success: true,
+      };
+    }),
+  /** The caller's conversations that are not in any project yet, for the project-side picker. */
+  listMovableTopics: procedure
+    .input(
+      z.object({
+        keyword: z.string().max(255).optional(),
+        projectId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.directoryRepo.listMovableTopics(input.projectId, {
+        keyword: input.keyword,
+      }),
+      success: true,
+    })),
   createProjectTopic: procedure
     .use(withScopedPermission('topic:create'))
     .input(

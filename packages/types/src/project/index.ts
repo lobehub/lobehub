@@ -52,3 +52,29 @@ export type ProjectCompletionDecision = (typeof PROJECT_COMPLETION_DECISIONS)[nu
 export const PROJECT_MEMBER_ROLES = ['viewer', 'member', 'admin'] as const;
 
 export type ProjectMemberRole = (typeof PROJECT_MEMBER_ROLES)[number];
+
+/** Why a conversation was left out when filing a group into a project. */
+export type SkippedProjectTopicReason =
+  'differentLocation' | 'needsDirectory' | 'notFound' | 'otherProject' | 'running';
+
+export interface SkippedProjectTopic {
+  id: string;
+  reason: SkippedProjectTopicReason;
+}
+
+/** The outcome of filing one batch of conversations into a project. */
+export interface AssociateProjectTopicsResult {
+  movedTopicIds: string[];
+  skippedTopics: SkippedProjectTopic[];
+}
+
+/** A conversation the project-side picker offers to file into a project. */
+export interface MovableProjectTopic {
+  agentAvatar: string | null;
+  agentBackgroundColor: string | null;
+  agentId: string | null;
+  agentTitle: string | null;
+  id: string;
+  title: string | null;
+  updatedAt: Date | string;
+}

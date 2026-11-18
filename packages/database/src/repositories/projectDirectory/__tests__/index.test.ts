@@ -801,3 +801,146 @@ describe('ProjectDirectoryRepository.relocate', () => {
     ).rejects.toThrow('Project not found or access denied');
   });
 });
+
+describe('ProjectDirectoryRepository.associateTopics', () => {
+  it('files a group in one write and skips what cannot move with its reason', async () => {
+    await db.insert(projects).values({
+      id: 'other-project',
+      identifier: 'OTH',
+      name: 'Other project',
+      userId,
+    });
+    await db.insert(topics).values([
+      { id: 'plain-1', agentId: 'repo-agent', userId },
+      { id: 'plain-2', agentId: 'repo-agent', userId, metadata: { workingDirectory: undefined } },
+      { id: 'already', agentId: 'repo-agent', userId, projectId: base.projectId },
+      { id: 'elsewhere', agentId: 'repo-agent', userId, projectId: 'other-project' },
+      { id: 'busy', agentId: 'repo-agent', userId, status: 'running' },
+      { id: 'local', agentId: 'repo-agent', userId, metadata: { workingDirectory: '/no/folder' } },
+    ]);
+    const result = await repo.associateTopics(base.projectId, [
+      'plain-1',
+      'plain-2',
+      'plain-1',
+      'already',
+      'elsewhere',
+      'busy',
+      'local',
+      'missing',
+    ]);
+    expect(result.movedTopicIds.sort()).toEqual(['already', 'plain-1', 'plain-2']);
+    expect(result.skippedTopics).toEqual(
+      expect.arrayContaining([
+        { id: 'missing', reason: 'notFound' },
+        { id: 'elsewhere', reason: 'otherProject' },
+        { id: 'busy', reason: 'running' },
+        { id: 'local', reason: 'needsDirectory' },
+      ]),
+    );
+    expect(result.skippedTopics).toHaveLength(4);
+    const rows = await db.select().from(topics);
+    const projectOf = Object.fromEntries(rows.map((row) => [row.id, row.projectId]));
+    expect(projectOf).toMatchObject({
+      'already': base.projectId,
+      'busy': null,
+      'elsewhere': 'other-project',
+      'local': null,
+      'plain-1': base.projectId,
+      'plain-2': base.projectId,
+    });
+  });
+
+  it("binds a local-folder topic to the project's directory at the same location", async () => {
+    const directory = await repo.bind(base);
+    await db.insert(topics).values({
+      id: 'in-folder',
+      agentId: 'repo-agent',
+      userId,
+      metadata: { workingDirectory: '/work//repo/' },
+    });
+    const result = await repo.associateTopics(base.projectId, ['in-folder']);
+    expect(result).toEqual({ movedTopicIds: ['in-folder'], skippedTopics: [] });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'in-folder'));
+    expect(topic).toMatchObject({
+      projectId: base.projectId,
+      projectWorkingDirectoryId: directory.id,
+      metadata: {
+        boundDeviceId: base.deviceId,
+        workingDirectory: base.path,
+        workingDirectoryConfig: { path: base.path },
+      },
+    });
+  });
+
+  it('does not bind a topic to a directory a run cannot start from', async () => {
+    const directory = await repo.bind(base);
+    await db
+      .update(projectWorkingDirectories)
+      .set({ permission: 'readOnly' })
+      .where(eq(projectWorkingDirectories.id, directory.id));
+    await db.insert(topics).values({
+      id: 'read-only',
+      agentId: 'repo-agent',
+      userId,
+      metadata: { workingDirectory: base.path },
+    });
+    const result = await repo.associateTopics(base.projectId, ['read-only']);
+    expect(result).toEqual({
+      movedTopicIds: [],
+      skippedTopics: [{ id: 'read-only', reason: 'needsDirectory' }],
+    });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'read-only'));
+    expect(topic).toMatchObject({ projectId: null, projectWorkingDirectoryId: null });
+  });
+
+  it('keeps the worktree and CLI session state of a topic filed at its own location', async () => {
+    const directory = await repo.bind(base);
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/work/repo-wt', isWorktree: true },
+      path: '/work/repo/',
+      sessionPath: '/work/repo-wt',
+    };
+    await db.insert(topics).values([
+      { id: 'batch-wt', agentId: 'repo-agent', userId, metadata: { workingDirectoryConfig } },
+      { id: 'single-wt', agentId: 'repo-agent', userId, metadata: { workingDirectoryConfig } },
+    ]);
+    await repo.associateTopics(base.projectId, ['batch-wt']);
+    await repo.associateTopic(base.projectId, 'single-wt', directory.id);
+    for (const id of ['batch-wt', 'single-wt']) {
+      const [topic] = await db.select().from(topics).where(eq(topics.id, id));
+      expect(topic.metadata?.workingDirectoryConfig).toEqual({
+        ...workingDirectoryConfig,
+        path: base.path,
+      });
+      expect(topic.projectWorkingDirectoryId).toBe(directory.id);
+    }
+  });
+
+  it('refuses a project the caller cannot manage', async () => {
+    await db.insert(topics).values({ id: 'mine', agentId: 'repo-agent', userId });
+    await expect(otherRepo.associateTopics(base.projectId, ['mine'])).rejects.toThrow(
+      'access denied',
+    );
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'mine'));
+    expect(topic.projectId).toBeNull();
+  });
+});
+
+describe('ProjectDirectoryRepository.listMovableTopics', () => {
+  it("lists the caller's live topics outside any project, newest first, with a keyword", async () => {
+    await db.update(agents).set({ title: 'Writer' }).where(eq(agents.id, 'repo-agent'));
+    await db.insert(topics).values([
+      { id: 'old', agentId: 'repo-agent', userId, title: 'Old notes', updatedAt: new Date(1000) },
+      { id: 'new', agentId: 'repo-agent', userId, title: 'New plan', updatedAt: new Date(2000) },
+      { id: 'filed', agentId: 'repo-agent', userId, projectId: base.projectId },
+      { id: 'gone', agentId: 'repo-agent', userId, deletedAt: new Date() },
+      { id: 'no-agent', userId },
+    ]);
+    const all = await repo.listMovableTopics(base.projectId);
+    expect(all.map((topic) => topic.id)).toEqual(['new', 'old']);
+    expect(all[0]).toMatchObject({ agentId: 'repo-agent', agentTitle: 'Writer' });
+    const matched = await repo.listMovableTopics(base.projectId, { keyword: 'plan' });
+    expect(matched.map((topic) => topic.id)).toEqual(['new']);
+    await expect(otherRepo.listMovableTopics(base.projectId)).rejects.toThrow('access denied');
+  });
+});

@@ -1,7 +1,13 @@
-import type { ChatTopicMetadata } from '@lobechat/types';
+import type {
+  AssociateProjectTopicsResult,
+  ChatTopicMetadata,
+  MovableProjectTopic,
+  SkippedProjectTopic,
+  SkippedProjectTopicReason,
+} from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
 import { EnvironmentModel, normalizeProjectRepository } from '../../models/environment';
 import { EnvironmentInstanceModel } from '../../models/environmentInstance';
@@ -34,13 +40,10 @@ export class ProjectDirectoryError extends TRPCError {
   }
 }
 
-export type SkippedProjectTopicReason =
-  'differentLocation' | 'notFound' | 'otherProject' | 'running';
+export type { SkippedProjectTopic, SkippedProjectTopicReason } from '@lobechat/types';
 
-export interface SkippedProjectTopic {
-  id: string;
-  reason: SkippedProjectTopicReason;
-}
+/** The most conversations the project-side picker lists at once. */
+export const MOVABLE_TOPICS_LIMIT = 200;
 
 /**
  * Point a conversation at another device directory. The cwd and CLI session
@@ -63,6 +66,28 @@ const pinTopicToDirectory = (
     boundDeviceId: deviceId,
     workingDirectory: path,
     workingDirectoryConfig: { path },
+  };
+};
+
+/**
+ * File a conversation into a project directory at the location it already
+ * works in. Device and path are unchanged, so the structured config — the
+ * active worktree and the CLI session's cwd — is kept; only the path is
+ * written in the directory's canonical form.
+ */
+const fileTopicIntoDirectory = (
+  metadata: ChatTopicMetadata | null | undefined,
+  directory: { deviceId: string; path: string },
+): ChatTopicMetadata => {
+  const config = metadata?.workingDirectoryConfig;
+  return {
+    ...metadata,
+    boundDeviceId: directory.deviceId,
+    workingDirectory: directory.path,
+    workingDirectoryConfig:
+      config && typeof config === 'object'
+        ? { ...config, path: directory.path }
+        : { path: directory.path },
   };
 };
 
@@ -300,6 +325,163 @@ export class ProjectDirectoryRepository {
     });
   }
 
+  /**
+   * List the caller's conversations that can be filed into a project: not in
+   * any project yet, live, and not a share visitor's. Newest first, so the
+   * project-side picker starts with what the user just worked on.
+   */
+  async listMovableTopics(
+    projectId: string,
+    options: { keyword?: string; limit?: number } = {},
+  ): Promise<MovableProjectTopic[]> {
+    await this.assertManageableProject(projectId);
+    const keyword = options.keyword?.trim();
+    return this.db
+      .select({
+        agentAvatar: agents.avatar,
+        agentBackgroundColor: agents.backgroundColor,
+        agentId: topics.agentId,
+        agentTitle: agents.title,
+        id: topics.id,
+        title: topics.title,
+        updatedAt: topics.updatedAt,
+      })
+      .from(topics)
+      .innerJoin(agents, eq(agents.id, topics.agentId))
+      .where(
+        and(
+          // Creator-scoped: the picker lists the caller's own conversations, so
+          // filing a group never sweeps another member's topics along.
+          eq(topics.userId, this.userId),
+          buildWorkspaceWhere(this.scope(), topics),
+          isNull(topics.projectId),
+          isNull(topics.deletedAt),
+          isNull(topics.senderId),
+          keyword ? ilike(topics.title, `%${keyword.replaceAll(/[%_\\]/g, '\\$&')}%`) : undefined,
+        ),
+      )
+      .orderBy(desc(topics.updatedAt))
+      .limit(Math.min(options.limit ?? MOVABLE_TOPICS_LIMIT, MOVABLE_TOPICS_LIMIT));
+  }
+
+  /**
+   * File a group of conversations into a project in one transaction. Ownership
+   * is rewritten in bulk; a conversation that cannot move is skipped with its
+   * reason instead of failing the others. A conversation that already works in
+   * a local directory keeps it: it is bound to the project's directory at the
+   * same location when there is exactly one, and skipped otherwise — creating
+   * a directory binding stays an explicit, per-location step.
+   */
+  async associateTopics(
+    projectId: string,
+    topicIds: string[],
+  ): Promise<AssociateProjectTopicsResult> {
+    await this.assertManageableProject(projectId);
+    const ids = [...new Set(topicIds)];
+    if (ids.length === 0) return { movedTopicIds: [], skippedTopics: [] };
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const selected = await db
+        .select()
+        .from(topics)
+        .where(
+          // Workspace-scoped without share-visitor topics — see `bind`.
+          and(
+            inArray(topics.id, ids),
+            buildWorkspaceWhere(this.scope(), topics),
+            isNull(topics.deletedAt),
+            isNull(topics.senderId),
+          ),
+        )
+        .for('update');
+      const skippedTopics: SkippedProjectTopic[] = [];
+      const found = new Set(selected.map((topic) => topic.id));
+      for (const id of ids) if (!found.has(id)) skippedTopics.push({ id, reason: 'notFound' });
+
+      const needsLocation = selected.some(
+        (topic) =>
+          !topic.projectId &&
+          getWorkingDirSourcePath(
+            topic.metadata?.workingDirectoryConfig ?? topic.metadata?.workingDirectory,
+          ),
+      );
+      const directories = needsLocation
+        ? (
+            await new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId).list(
+              projectId,
+            )
+          )
+            // Only a binding a run can start from: `resolve` refuses disabled
+            // environments and read-only directories at the next turn.
+            .filter((directory) => directory.runnable)
+        : [];
+      const agentIds = [
+        ...new Set(selected.flatMap((topic) => (topic.agentId ? [topic.agentId] : []))),
+      ];
+      const fixedDevices = new Map<string, string | undefined>();
+      if (needsLocation && agentIds.length)
+        for (const agent of await db
+          .select()
+          .from(agents)
+          .where(and(inArray(agents.id, agentIds), buildWorkspaceWhere(this.scope(), agents))))
+          if (agent.agencyConfig?.executionTargetSelectionPolicy === 'fixed')
+            fixedDevices.set(agent.id, agent.agencyConfig.boundDeviceId);
+
+      const movedTopicIds: string[] = [];
+      const plainTopicIds: string[] = [];
+      for (const topic of selected) {
+        if (topic.projectId === projectId) {
+          movedTopicIds.push(topic.id);
+          continue;
+        }
+        if (topic.projectId) {
+          skippedTopics.push({ id: topic.id, reason: 'otherProject' });
+          continue;
+        }
+        if (isTopicInFlight(topic)) {
+          skippedTopics.push({ id: topic.id, reason: 'running' });
+          continue;
+        }
+        const metadata = topic.metadata ?? {};
+        const source = getWorkingDirSourcePath(
+          metadata.workingDirectoryConfig ?? metadata.workingDirectory,
+        );
+        if (!source) {
+          plainTopicIds.push(topic.id);
+          continue;
+        }
+        const pinned = metadata.boundDeviceId;
+        const fixed = topic.agentId ? fixedDevices.get(topic.agentId) : undefined;
+        const matches = directories.filter(
+          (directory) =>
+            normalizeProjectDirectory(source, directory.platform) === directory.path &&
+            (!pinned || pinned === directory.deviceId) &&
+            (!topic.agentId || !fixedDevices.has(topic.agentId) || fixed === directory.deviceId),
+        );
+        if (matches.length !== 1) {
+          skippedTopics.push({ id: topic.id, reason: 'needsDirectory' });
+          continue;
+        }
+        const [directory] = matches;
+        await db
+          .update(topics)
+          .set({
+            metadata: fileTopicIntoDirectory(metadata, directory),
+            projectId,
+            projectWorkingDirectoryId: directory.id,
+          })
+          .where(eq(topics.id, topic.id));
+        movedTopicIds.push(topic.id);
+      }
+      if (plainTopicIds.length) {
+        await db.update(topics).set({ projectId }).where(inArray(topics.id, plainTopicIds));
+        movedTopicIds.push(...plainTopicIds);
+      }
+      await joinTopicAgentsToProjects(db, { topicIds: movedTopicIds });
+      return { movedTopicIds, skippedTopics };
+    });
+  }
+
   async associateTopic(projectId: string, topicId: string, directoryId?: string) {
     await this.assertManageableProject(projectId);
     return this.db.transaction(async (tx) => {
@@ -368,12 +550,7 @@ export class ProjectDirectoryRepository {
           ...(directory
             ? {
                 projectWorkingDirectoryId: directory.id,
-                metadata: {
-                  ...topic.metadata,
-                  boundDeviceId: directory.deviceId,
-                  workingDirectory: directory.path,
-                  workingDirectoryConfig: { path: directory.path },
-                },
+                metadata: fileTopicIntoDirectory(topic.metadata, directory),
               }
             : {}),
         })

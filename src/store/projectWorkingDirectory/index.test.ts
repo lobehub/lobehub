@@ -5,6 +5,7 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { projectWorkingDirectoryService } from '@/services/projectWorkingDirectory';
 
 import {
+  ASSOCIATE_TOPICS_BATCH_SIZE,
   findProjectDirectory,
   PROJECT_TOPICS_POLL_INTERVAL,
   type ProjectDirectory,
@@ -45,6 +46,75 @@ const invalidates = (name: string, entryKey: string) =>
     );
 
 describe('projectWorkingDirectory store', () => {
+  describe('associateTopics', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.mocked(mutate).mockClear();
+    });
+
+    it('files a large group in batches, reports progress and refreshes the project at once', async () => {
+      const ids = Array.from({ length: ASSOCIATE_TOPICS_BATCH_SIZE + 2 }, (_, i) => `t-${i}`);
+      const associate = vi
+        .spyOn(projectWorkingDirectoryService, 'associateTopics')
+        .mockImplementation(
+          async ({ topicIds }) =>
+            ({
+              data: {
+                movedTopicIds: topicIds.filter((id) => id !== 't-1'),
+                skippedTopics: topicIds.includes('t-1') ? [{ id: 't-1', reason: 'running' }] : [],
+              },
+              success: true,
+            }) as never,
+        );
+      const progress = vi.fn();
+
+      const result = await useProjectDirectoryStore
+        .getState()
+        .associateTopics('p-1', [...ids, 't-0'], progress);
+
+      expect(associate).toHaveBeenCalledTimes(2);
+      expect(associate.mock.calls[0][0].topicIds).toHaveLength(ASSOCIATE_TOPICS_BATCH_SIZE);
+      expect(progress.mock.calls.map(([p]) => p)).toEqual([
+        { done: 0, total: ids.length },
+        { done: ASSOCIATE_TOPICS_BATCH_SIZE, total: ids.length },
+        { done: ids.length, total: ids.length },
+      ]);
+      expect(result.movedTopicIds).toHaveLength(ids.length - 1);
+      expect(result.skippedTopics).toEqual([{ id: 't-1', reason: 'running' }]);
+      expect(result.error).toBeUndefined();
+      expect(invalidates('projectTopics', 'p-1')).toBe(true);
+    });
+
+    it('still reports the filed topics when the refresh afterwards fails', async () => {
+      vi.spyOn(projectWorkingDirectoryService, 'associateTopics').mockResolvedValue({
+        data: { movedTopicIds: ['t-1'], skippedTopics: [] },
+        success: true,
+      } as never);
+      vi.mocked(mutate).mockRejectedValueOnce(new Error('network'));
+
+      const result = await useProjectDirectoryStore.getState().associateTopics('p-1', ['t-1']);
+
+      expect(result).toEqual({ movedTopicIds: ['t-1'], skippedTopics: [] });
+    });
+
+    it('stops at a failed batch and keeps what the earlier batches filed', async () => {
+      const ids = Array.from({ length: ASSOCIATE_TOPICS_BATCH_SIZE + 1 }, (_, i) => `t-${i}`);
+      const failure = new Error('boom');
+      vi.spyOn(projectWorkingDirectoryService, 'associateTopics')
+        .mockResolvedValueOnce({
+          data: { movedTopicIds: ids.slice(0, ASSOCIATE_TOPICS_BATCH_SIZE), skippedTopics: [] },
+          success: true,
+        } as never)
+        .mockRejectedValueOnce(failure);
+
+      const result = await useProjectDirectoryStore.getState().associateTopics('p-1', ids);
+
+      expect(result.error).toBe(failure);
+      expect(result.movedTopicIds).toHaveLength(ASSOCIATE_TOPICS_BATCH_SIZE);
+      expect(invalidates('projectTopics', 'p-1')).toBe(true);
+    });
+  });
+
   describe('relocateDirectory', () => {
     afterEach(() => vi.restoreAllMocks());
 

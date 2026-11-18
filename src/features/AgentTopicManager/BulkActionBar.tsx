@@ -6,6 +6,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { openFileTopicsToProjectModal } from '@/features/Projects/MoveTopics/FileTopicsToProjectModal';
 import { openAssociateTopicModal } from '@/features/Projects/WorkingDirectories/AssociateTopicModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -134,13 +135,19 @@ const BulkActionBar = memo<BulkActionBarProps>(({ topics }) => {
           />
         )}
         <MoveToAgentButton />
-        {selectedIds.length === 1 && canEditTopic && (
+        {canEditTopic && (
           <ActionIcon
             aria-label={t('directories.bind', { ns: 'project' })}
             icon={FolderInput}
             size="small"
             title={t('directories.bind', { ns: 'project' })}
-            onClick={() => openAssociateTopicModal(selectedIds[0], activeAgentId)}
+            onClick={() =>
+              // One topic may need its working directory picked; a group is
+              // filed in bulk, with directories matched on the server.
+              selectedIds.length === 1
+                ? openAssociateTopicModal(selectedIds[0], activeAgentId)
+                : openFileTopicsToProjectModal({ onDone: exitSelectMode, topicIds: selectedIds })
+            }
           />
         )}
         <ActionIcon

@@ -1,3 +1,4 @@
+import type { SkippedProjectTopic } from '@lobechat/types';
 import type { StoreApi } from 'zustand';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn, type UseBoundStoreWithEqualityFn } from 'zustand/traditional';
@@ -35,6 +36,23 @@ export type {
 
 /** Poll cadence for the project topic list while a conversation is in flight. */
 export const PROJECT_TOPICS_POLL_INTERVAL = 5000;
+
+/** Conversations filed per `associateTopics` request; matches the server's cap. */
+export const ASSOCIATE_TOPICS_BATCH_SIZE = 50;
+
+export type { SkippedProjectTopic } from '@lobechat/types';
+
+export interface AssociateTopicsProgress {
+  done: number;
+  total: number;
+}
+
+export interface AssociateTopicsResult {
+  /** The batch that failed, when one did; the batches before it are already filed. */
+  error?: unknown;
+  movedTopicIds: string[];
+  skippedTopics: SkippedProjectTopic[];
+}
 
 /** Statuses the server can still move on its own. */
 const IN_FLIGHT_STATUSES = new Set(['running', 'waitingForHuman']);
@@ -91,6 +109,16 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   associateTopic: (
     ...args: ServiceParams<'associateTopic'>
   ) => Promise<ServiceData<'associateTopic'>>;
+  /**
+   * File a group of conversations into a project, in batches so a long run
+   * reports progress. A failed batch stops the run; the batches before it stay
+   * filed and the result carries the error.
+   */
+  associateTopics: (
+    projectId: string,
+    topicIds: string[],
+    onProgress?: (progress: AssociateTopicsProgress) => void,
+  ) => Promise<AssociateTopicsResult>;
   /** Link an environment to a project. */
   attachEnvironment: (...args: ServiceParams<'attachEnvironment'>) => Promise<void>;
   /** Link a GitHub repository to a project, making its environment when needed. */
@@ -216,6 +244,35 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       const result = await projectWorkingDirectoryService.createProjectTopic(input);
       await projectTopics.revalidate(input.projectId);
       return result.data;
+    },
+    associateTopics: async (projectId, topicIds, onProgress) => {
+      const ids = [...new Set(topicIds)];
+      const result: AssociateTopicsResult = { movedTopicIds: [], skippedTopics: [] };
+      onProgress?.({ done: 0, total: ids.length });
+      try {
+        for (let start = 0; start < ids.length; start += ASSOCIATE_TOPICS_BATCH_SIZE) {
+          const batch = ids.slice(start, start + ASSOCIATE_TOPICS_BATCH_SIZE);
+          const { data } = await projectWorkingDirectoryService.associateTopics({
+            projectId,
+            topicIds: batch,
+          });
+          result.movedTopicIds.push(...data.movedTopicIds);
+          result.skippedTopics.push(...data.skippedTopics);
+          onProgress?.({ done: start + batch.length, total: ids.length });
+        }
+      } catch (error) {
+        result.error = error;
+      }
+      // Refresh right away instead of waiting for the next poll or focus, so
+      // the project lists the group as soon as the write lands. Best effort:
+      // the topics are already filed, so a failed refresh must not hide that.
+      if (result.movedTopicIds.length)
+        await Promise.allSettled([
+          projectTopics.revalidate(projectId),
+          directoryTopics.revalidate(),
+          environmentTopics.revalidate(),
+        ]);
+      return result;
     },
     associateTopic: async (input) => {
       const result = await projectWorkingDirectoryService.associateTopic(input);

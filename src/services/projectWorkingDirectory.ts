@@ -1,3 +1,5 @@
+import type { AssociateProjectTopicsResult, MovableProjectTopic } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 type Client = typeof lambdaClient.projectWorkingDirectory;
@@ -10,6 +12,16 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.createProjectTopic.mutate(input);
   associateTopic = (input: Parameters<Client['associateTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.associateTopic.mutate(input);
+  associateTopics = (input: {
+    projectId: string;
+    topicIds: string[];
+  }): Promise<{ data: AssociateProjectTopicsResult; success: boolean }> =>
+    lambdaClient.projectWorkingDirectory.associateTopics.mutate(input);
+  listMovableTopics = (input: {
+    keyword?: string;
+    projectId: string;
+  }): Promise<{ data: MovableProjectTopic[]; success: boolean }> =>
+    lambdaClient.projectWorkingDirectory.listMovableTopics.query(input);
   listEnvironments = (projectId?: string) =>
     lambdaClient.projectWorkingDirectory.listEnvironments.query({ projectId });
   saveEnvironment = (input: Parameters<Client['saveEnvironment']['mutate']>[0]) =>

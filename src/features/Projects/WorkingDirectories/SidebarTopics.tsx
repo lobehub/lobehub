@@ -10,7 +10,7 @@ import {
   Flexbox,
   Text,
 } from '@lobehub/ui';
-import { PlusIcon } from 'lucide-react';
+import { FolderInputIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -39,6 +39,8 @@ import {
 } from '@/store/projectWorkingDirectory';
 import { filterTopics, type TopicListFilter } from '@/utils/client/topic';
 
+import { openMoveTopicsIntoProjectModal } from '../MoveTopics/MoveTopicsIntoProjectModal';
+import { useCanManageProject } from '../useCanManageProject';
 import { canStageDraftOn } from './startProjectTopicDraft';
 import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 import { useProjectTopicReveal } from './useProjectTopicReveal';
@@ -97,6 +99,7 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
   );
   const startTopic = useStartProjectTopic(projectId);
   const fixedDeviceId = useAgentFixedDeviceId(coordinatorAgentId);
+  const canManage = useCanManageProject();
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
@@ -117,6 +120,15 @@ function ProjectTopicList({ projectId, coordinatorAgentId, itemKey }: ProjectDir
         >
           <ToggleGroups />
           <Filter />
+          {canManage && (
+            <ActionIcon
+              aria-label={t('moveTopics.intoProjectTitle')}
+              icon={FolderInputIcon}
+              size="small"
+              title={t('moveTopics.intoProjectTitle')}
+              onClick={() => openMoveTopicsIntoProjectModal(projectId)}
+            />
+          )}
           <ActionIcon
             aria-label={t('sidebar.newConversation')}
             disabled={!directoriesRequest.hasData || !!directoriesRequest.error}
