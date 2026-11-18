@@ -170,7 +170,7 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Default: -
 - Example: `eyJVc2VySUQiOiJ...`
 
-Without `QSTASH_TOKEN`, a long-running server (Docker or `next start`) runs the same jobs on its built-in scheduler: it checks scheduled tasks every minute, and the startup log shows `⏰ Built-in scheduler started`. With several replicas, each one runs the scheduler, and each scheduled run still starts only once. Serverless deployments such as Vercel cannot keep the built-in scheduler running, so they need QStash: without it, the startup log reports an error and the Scheduled tasks tab shows a warning.
+Without registered QStash Schedules, a long-running server (Docker or `next start`) runs the same jobs on its built-in scheduler: it checks scheduled tasks every minute, and the startup log shows `⏰ Built-in scheduler started`. With several replicas, each one runs the scheduler, and each scheduled run still starts only once. A QStash token alone does not register the schedules. Only the Docker image registers them, so if you register them yourself outside Docker, also set `QSTASH_SCHEDULES_MANAGED=1` to turn the built-in scheduler off. Serverless deployments such as Vercel or Netlify cannot keep the built-in scheduler running, so they need QStash: without it, the startup log reports an error and the Scheduled tasks tab shows a warning.
 
 ### `PROXY_URL`
 

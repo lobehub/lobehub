@@ -346,7 +346,14 @@ describe('getServerGlobalConfig', () => {
       'builtin',
     );
 
+    // A token alone does not register any schedule.
     vi.stubEnv('QSTASH_TOKEN', 'token');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'scheduledTaskDispatch',
+      'builtin',
+    );
+
+    vi.stubEnv('QSTASH_SCHEDULES_MANAGED', '1');
     await expect(loadServerConfig(false)).resolves.toHaveProperty(
       'scheduledTaskDispatch',
       'qstash',

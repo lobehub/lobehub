@@ -166,7 +166,7 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 默认值：-
 - 示例：`eyJVc2VySUQiOiJ...`
 
-未设置 `QSTASH_TOKEN` 时，常驻运行的服务（Docker 或 `next start`）会用内置调度器执行同样的任务：每分钟检查一次定时任务，启动日志中会出现 `⏰ Built-in scheduler started`。多副本部署时每个副本都会运行内置调度器，同一次定时运行仍只会启动一次。Vercel 等 Serverless 部署无法持续运行内置调度器，必须配置 QStash；否则启动日志会报错，「定时任务」页也会显示警告。
+没有已注册的 QStash Schedules 时，常驻运行的服务（Docker 或 `next start`）会用内置调度器执行同样的任务：每分钟检查一次定时任务，启动日志中会出现 `⏰ Built-in scheduler started`。多副本部署时每个副本都会运行内置调度器，同一次定时运行仍只会启动一次。只设置 QStash Token 并不会注册这些计划，只有 Docker 镜像会自动注册；如果在 Docker 之外自行注册，请同时设置 `QSTASH_SCHEDULES_MANAGED=1` 以关闭内置调度器。Vercel、Netlify 等 Serverless 部署无法持续运行内置调度器，必须配置 QStash；否则启动日志会报错，「定时任务」页也会显示警告。
 
 ### `PROXY_URL`
 

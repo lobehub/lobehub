@@ -216,6 +216,11 @@ const createQstashSchedule = async () => {
     return;
   }
 
+  // Tell the server it is spawned next that QStash drives these schedules, so it
+  // does not run them again on its built-in scheduler. Set before the first
+  // await: the server process inherits the environment when it is spawned.
+  process.env.QSTASH_SCHEDULES_MANAGED ??= '1';
+
   for (const schedule of QSTASH_SCHEDULES) {
     const url = `${QSTASH_URL}/v2/schedules/${APP_URL}${schedule.path}`;
 

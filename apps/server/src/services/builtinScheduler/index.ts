@@ -139,7 +139,7 @@ export const startBuiltinScheduler = (): BuiltinScheduler => {
   g.__lobeBuiltinScheduler = scheduler;
 
   console.info(
-    `⏰ Built-in scheduler started: QStash is not configured, so this server runs ${BUILTIN_SCHEDULER_JOBS.map(
+    `⏰ Built-in scheduler started: no QStash Schedules drive this server, so it runs ${BUILTIN_SCHEDULER_JOBS.map(
       (job) => `${job.id} (every ${job.everyMinutes} min)`,
     ).join(', ')}.`,
   );

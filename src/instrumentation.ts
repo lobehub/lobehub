@@ -58,7 +58,7 @@ export async function register() {
     } else if (dispatch === 'unconfigured') {
       if (isDev) {
         console.warn(
-          '⚠️ Scheduler: cron-pattern scheduled tasks will not run in this dev server. Set ENABLE_SCHEDULER_IN_DEV=1 to run the built-in scheduler (only against a database you own), or configure QSTASH_TOKEN.',
+          '⚠️ Scheduler: cron-pattern scheduled tasks will not run in this dev server. Set ENABLE_SCHEDULER_IN_DEV=1 to run the built-in scheduler (only against a database you own), or register QStash Schedules and set QSTASH_SCHEDULES_MANAGED=1.',
         );
       } else {
         console.error(
