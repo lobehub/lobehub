@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     { id: 'market-row', identifier: 'excel-analysis', name: 'Excel Analysis', source: 'market' },
     { id: 'user-row', identifier: 'custom-writing', name: 'Custom Writing', source: 'user' },
   ],
+  updateConfig: vi.fn(),
   togglePlugin: vi.fn(),
   setPluginMode: vi.fn(),
 }));
@@ -40,7 +41,7 @@ vi.mock('../../hooks/useEffectiveModel', () => ({
   useEffectiveModel: () => ({ model: 'model', provider: 'provider' }),
 }));
 vi.mock('../../hooks/useUpdateAgentConfig', () => ({
-  useUpdateAgentConfig: () => ({ updateAgentChatConfig: vi.fn() }),
+  useUpdateAgentConfig: () => ({ updateAgentConfig: mocks.updateConfig }),
 }));
 vi.mock('../Memory/useMemoryEnabled', () => ({ useMemoryEnabled: () => false }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -52,8 +53,9 @@ vi.mock('@/features/Connectors/CustomConnectorModal/useConnectorConfigure', () =
 vi.mock('@/hooks/useFetchInstalledPlugins', () => ({ useFetchInstalledPlugins: vi.fn() }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: unknown) => unknown) =>
-    selector({ setPluginMode: mocks.setPluginMode, togglePlugin: mocks.togglePlugin }),
+  useAgentStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
+    getState: () => ({}),
+  }),
 }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
@@ -94,7 +96,7 @@ vi.mock('@/store/tool/selectors', () => ({
     getUserAgentSkills: () => mocks.skills.filter((skill) => skill.source === 'user'),
   },
   builtinToolSelectors: {
-    fixedDisplayMetaList: () => () => [],
+    fixedDisplayMetaList: () => () => [{ identifier: 'lobe-skills', meta: { title: 'Skills' } }],
     installedBuiltinSkills: () => mocks.builtinSkills,
     // The real metadata inventory mixes tools and skill manifests.
     metaList: () => [
@@ -154,7 +156,7 @@ describe('chat input tool picker', () => {
 
   it.each([
     { id: 'gmail', pin: false },
-    { id: 'builtin-tool', pin: true },
+    { id: 'builtin-tool', pin: false },
   ])('offers the applicable activation actions on the $id row', async ({ id, pin }) => {
     mocks.composioEnabled = true;
     mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
@@ -162,19 +164,29 @@ describe('chat input tool picker', () => {
 
     const Row = () => {
       const { marketItems } = useControls();
-      const group = marketItems.find((item) => item?.key === 'auto');
-      const row = group?.type === 'group' && group.children?.find((item) => item?.key === id);
+      const row = marketItems.find((item) => item?.key === id);
       if (!row || !('label' in row)) throw new Error(`Missing row ${id}`);
       return createElement(Fragment, null, row.label);
     };
     render(createElement(Row));
     fireEvent.contextMenu(screen.getByRole('button', { name: 'tools.skillActivateMode.title' }));
 
-    expect(
-      await screen.findByRole('button', { name: 'tools.activation.action.auto' }),
-    ).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'tools.activation.action.disable' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'tools.loading.onDemand' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'tools.loading.never' })).toBeTruthy();
     expect(!!screen.queryByRole('button', { name: 'tools.activation.action.pin' })).toBe(pin);
+  });
+
+  it('does not list the fixed skill loader as a configurable tool, even with a legacy disable', () => {
+    mocks.plugins = [{ identifier: 'lobe-skills', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls());
+    act(() => result.current.marketHeader.props.onSearchChange('lobe-skills'));
+    expect(leafKeys(result.current.marketItems)).not.toContain('lobe-skills');
+  });
+
+  it('does not offer an agent-wide discovery switch on the enabled group', () => {
+    const { result } = renderHook(() => useControls());
+    render(result.current.marketHeader);
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('only shows connectors with connection records and keeps rows needing authorization', () => {
@@ -207,26 +219,53 @@ describe('chat input tool picker', () => {
     const { result } = renderHook(() => useControls());
 
     const { autoCount, marketItems } = result.current;
-    const autoGroup = marketItems.find((item) => item?.key === 'auto');
-    expect(autoGroup?.type).toBe('group');
-    if (autoGroup?.type !== 'group') throw new Error('Missing Auto group');
-    expect(leafKeys(autoGroup.children ?? []).sort()).toEqual(
-      [...toolIds, 'gmail', 'vercel'].sort(),
-    );
+    expect(leafKeys(marketItems).sort()).toEqual([...toolIds, 'gmail', 'vercel'].sort());
     expect(autoCount).toBe(toolIds.length + 2);
-    const disabledGroup = marketItems.find((item) => item?.key === 'disabled');
-    expect(disabledGroup?.type).toBe('group');
-    if (disabledGroup?.type !== 'group') throw new Error('Missing Disabled group');
-    expect(leafKeys(disabledGroup.children ?? [])).toEqual(
+    act(() => result.current.marketHeader.props.onFilterChange('disabled'));
+    expect(leafKeys(result.current.marketItems)).toEqual(
       expect.arrayContaining(['airtable', 'slack']),
     );
     const keys = leafKeys(marketItems);
     for (const identifier of ['google-drive', 'notion', 'twitter'])
       expect(keys).not.toContain(identifier);
 
-    act(() => result.current.marketHeader.props.onChange({ target: { value: 'Google Drive' } }));
+    act(() => result.current.marketHeader.props.onSearchChange('builtin-tool'));
+    expect(leafKeys(result.current.marketItems)).toEqual(['builtin-tool']);
+    act(() => result.current.marketHeader.props.onSearchChange(''));
+    expect(leafKeys(result.current.marketItems)).toContain('slack');
+    act(() => result.current.marketHeader.props.onSearchChange('Google Drive'));
+    expect(result.current.marketHeader.props.empty).toBe(true);
     expect(leafKeys(result.current.marketItems)).toEqual([]);
     expect(result.current.autoCount).toBe(toolIds.length + 2);
+  });
+
+  it('writes web browsing to the search setting, clearing only its stale plugin override', async () => {
+    const other = { identifier: 'my-skill', mode: 'pinned' };
+    mocks.plugins = [other, { identifier: 'lobe-web-browsing', mode: 'disabled' }];
+    const { result } = renderHook(() => useControls());
+    await act(() => result.current.setPolicy('lobe-web-browsing', 'auto'));
+    expect(mocks.updateConfig).toHaveBeenCalledExactlyOnceWith({
+      chatConfig: { searchMode: 'auto' },
+      plugins: [other],
+    });
+  });
+
+  it('derives the profile summary from the same unfiltered options as chat', () => {
+    const { result } = renderHook(() => useControls());
+    const active = leafKeys(result.current.marketItems);
+    expect(result.current.activeTools.map((item) => item.id)).toEqual(active);
+    act(() => result.current.marketHeader.props.onFilterChange('disabled'));
+    const disabled = leafKeys(result.current.marketItems);
+    expect(disabled).toContain('lobe-web-browsing');
+    const options = result.current.toolOptions;
+    expect(options.filter((tool) => tool.enabled).map((tool) => tool.id)).toEqual(active);
+    expect(options.filter((tool) => !tool.enabled).map((tool) => tool.id)).toEqual(disabled);
+    expect(options.find((tool) => tool.id === 'lobe-web-browsing')?.title).toBe(
+      'tools.builtins.lobe-web-browsing.title',
+    );
+    expect(result.current.totalCount).toBe(active.length + disabled.length);
+    act(() => result.current.marketHeader.props.onSearchChange('no such tool'));
+    expect(result.current.activeTools.map((item) => item.id)).toEqual(active);
   });
 
   it('offers only tool management in the footer, without an add-tools action', () => {
@@ -271,32 +310,18 @@ describe('chat input tool picker', () => {
       const keys = leafKeys(result.current.marketItems);
       expect(keys).toEqual(expect.arrayContaining(toolIds));
       for (const id of libraryIds) expect(keys).not.toContain(id);
-      expect(result.current.pinnedCount).toBe(0);
+      expect(result.current.marketItems.some((item) => item?.key === 'pinned')).toBe(false);
       expect(result.current.autoCount).toBe(toolIds.length);
       expect(mocks.togglePlugin).not.toHaveBeenCalled();
       expect(mocks.setPluginMode).not.toHaveBeenCalled();
     },
   );
 
-  it('also excludes builtin and user skills from the installed picker in manual mode', () => {
-    mocks.mode = 'manual';
-    mocks.checked = [...toolIds, ...libraryIds];
-    mocks.plugins = mocks.checked.map((identifier) => ({ identifier, mode: 'pinned' }));
-    const { result } = renderHook(() => useControls());
-
-    expect(leafKeys(result.current.installedPluginItems)).toEqual(expect.arrayContaining(toolIds));
-    for (const id of libraryIds) {
-      expect(leafKeys(result.current.marketItems)).not.toContain(id);
-      expect(leafKeys(result.current.installedPluginItems)).not.toContain(id);
-    }
-    expect(result.current.pinnedCount).toBe(toolIds.length);
-  });
-
   it.each(['Excel Analysis', 'lobe-agent-browser', 'lobe-artifacts', 'lobehub'])(
     'does not reveal skills through search for %s',
     (value) => {
       const { result } = renderHook(() => useControls());
-      act(() => result.current.marketHeader.props.onChange({ target: { value } }));
+      act(() => result.current.marketHeader.props.onSearchChange(value));
       expect(leafKeys(result.current.marketItems)).toEqual([]);
     },
   );

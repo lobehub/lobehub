@@ -1,3 +1,4 @@
+import { getUserDisabledToolIds, isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { resolveSubAgentChatConfig } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
@@ -5,7 +6,7 @@ import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from 
 import {
   applyTopicModelToHeterogeneousProvider,
   getAutoPluginIds,
-  getDisabledPluginIds,
+  getPinnedPluginIds,
   resolveAgentAgencyConfig,
   resolveHeterogeneousModelOverride,
 } from '@lobechat/types';
@@ -264,10 +265,13 @@ export const resolveRunAgentConfig = async (
   // Capture disabled identifiers off the row before the resolved config
   // collapses plugins to pinned ids: they later filter the auto-discovery
   // candidate pool so a disabled plugin can't be rediscovered.
-  const disabledPluginIds = getDisabledPluginIds(row.plugins);
+  const disabledPluginIds = getUserDisabledToolIds(row.plugins, resolved.chatConfig);
   // Same for the explicit `auto` entries: a library skill is opt-in per agent,
   // so the skill pool needs the ones this agent opted into without pinning.
-  const autoSkillIds = getAutoPluginIds(row.plugins);
+  const autoSkillIds = [
+    ...getAutoPluginIds(row.plugins),
+    ...getPinnedPluginIds(row.plugins).filter(isOnDemandBuiltinTool),
+  ];
 
   // One mutable object from here on — later stages append to `systemRole` and
   // `createOperation` must see those writes.

@@ -1,4 +1,5 @@
 import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
+import { getUnselectedBuiltinToolIds, getUserDisabledToolIds } from '@lobechat/builtin-tools';
 import {
   REQUEST_AGENT_ID_HEADER,
   REQUEST_OPERATION_ID_HEADER,
@@ -14,7 +15,7 @@ import {
   ChatErrorType,
   type ChatMessageError,
   getAutoPluginIds,
-  getDisabledPluginIds,
+  getOptedInPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -235,7 +236,11 @@ class ChatService {
       // A connector the agent has not turned on is off for it, so it leaves the
       // discovery list too; one this turn already enabled (an @-mention) stays.
       disabledPluginIds: [
-        ...getDisabledPluginIds(agentConfig.plugins),
+        ...getUserDisabledToolIds(agentConfig.plugins, chatConfig),
+        ...getUnselectedBuiltinToolIds([
+          ...getOptedInPluginIds(agentConfig.plugins),
+          ...(enabledToolIds ?? []),
+        ]),
         ...resolveAgentConnectorActivation(
           { chatConfig, plugins: agentConfig.plugins },
           enabledToolIds,

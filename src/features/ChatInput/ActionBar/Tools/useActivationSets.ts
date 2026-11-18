@@ -1,3 +1,4 @@
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import { type AgentPluginEntry, type AgentPluginMode } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
@@ -34,10 +35,12 @@ export const resolveActivationSets = ({
   rawPlugins: AgentPluginEntry[] | undefined;
 }) => {
   const connectorIds = new Set(connectorIdList);
-  const optInIds = new Set([...librarySkillIds, ...connectorIdList]);
+  const optInIds = new Set([...onDemandBuiltinToolIds, ...librarySkillIds, ...connectorIdList]);
 
   return {
-    checkedSet: new Set(pinnedIds.filter((id) => !connectorIds.has(id))),
+    checkedSet: new Set(
+      pinnedIds.filter((id) => !connectorIds.has(id) && !onDemandBuiltinToolIds.includes(id)),
+    ),
     connectorIds,
     disabledIdSet: new Set(resolveDisabledIds(rawPlugins, optInIds)),
     /** Identifiers that are off without an entry, so Auto must be written explicitly. */

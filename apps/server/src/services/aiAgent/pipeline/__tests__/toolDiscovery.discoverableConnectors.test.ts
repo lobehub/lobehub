@@ -335,16 +335,15 @@ describe('discoverTools — custom MCP connectors are opt-in per agent', () => {
     { label: 'turned on', options: ON },
     { label: 'pinned', options: { plugins: [YINGMI] } },
   ])(
-    'enables a connector the agent $label directly when manual mode strips the activator',
+    'defers a connector the agent $label even with a legacy manual preference',
     async ({ options }) => {
       const result = await run({ ...options, chatConfig: { skillActivateMode: 'manual' } });
 
-      expect(result.toolsResult.enabledToolIds).toContain(YINGMI);
-      expect(
-        offeredToolNames(result).some((name) =>
-          name.startsWith(`${YINGMI}____BatchGetFundNavHistory`),
-        ),
-      ).toBe(true);
+      expect(result.toolsResult.enabledToolIds).toContain('lobe-activator');
+      expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+      expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
+        YINGMI,
+      );
     },
   );
 
