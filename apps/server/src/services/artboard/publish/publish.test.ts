@@ -163,63 +163,6 @@ describe('ArtboardPublishService', () => {
     );
   });
 
-  it('ships each pinned page release once and points its boards at it', async () => {
-    const loadDeployment = vi.fn(
-      async (source: { deploymentId: string; releaseId: string; revision: number }) => ({
-        deploymentId: source.deploymentId,
-        html: `<p>${source.releaseId}</p>`,
-        revision: source.revision,
-      }),
-    );
-    const page = {
-      deploymentId: 'dep_page',
-      kind: 'deployment' as const,
-      releaseId: 'rel_12',
-      revision: 2,
-    };
-    const boards = [
-      board({ id: 'a', source: page, type: 'html' }),
-      board({ id: 'b', source: page, type: 'html' }),
-    ];
-
-    await service(boards, { loadDeployment }).publish('art_1');
-
-    expect(loadDeployment).toHaveBeenCalledTimes(1);
-    expect(loadDeployment).toHaveBeenCalledWith({
-      deploymentId: 'dep_page',
-      releaseId: 'rel_12',
-      revision: 2,
-    });
-    const { bundle } = site.publishArtboardSite.mock.calls[0][0];
-    expect(bundle.files).toEqual([
-      {
-        content: '<p>rel_12</p>',
-        contentType: 'text/html; charset=utf-8',
-        encoding: 'utf8',
-        path: '/deployments/dep_page/r2/index.html',
-      },
-    ]);
-    expect(bundle.html).toContain('"src":"deployments/dep_page/r2/index.html"');
-  });
-
-  it('names the board whose page release cannot be read', async () => {
-    const boards = [
-      board({
-        source: { deploymentId: 'dep_page', kind: 'deployment', releaseId: 'rel_1', revision: 1 },
-        title: 'Pricing',
-        type: 'html',
-      }),
-    ];
-
-    await expect(
-      service(boards, { loadDeployment: async () => undefined }).publish('art_1'),
-    ).rejects.toMatchObject({
-      code: 'PRECONDITION_FAILED',
-      message: expect.stringContaining('Pricing'),
-    });
-    expect(site.publishArtboardSite).not.toHaveBeenCalled();
-  });
-
   it('lets the person who shared the board update it after someone else edited the board', async () => {
     work.findArtboardWork.mockResolvedValue({
       metadata: { artboardPublish: { deploymentId: 'dep_1', publisherUserId: 'user_1' } },

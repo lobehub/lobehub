@@ -24,8 +24,7 @@ Run \`lh man artboard\` for the exact flags and \`lh artboard ops\` for the shap
 
 - \`lh artifact guide canvas\` gives the components and rules a Canvas page follows;
 - write one page per screen and save it with \`lh artifact save <file> --json\`, which returns the \`canvasId\` and \`version\` the board's source takes. Saving the same file again makes a new version of that Canvas; \`--new\` starts another one. Do not publish it: the artboard only needs it saved;
-- a screen that already exists as a picture (a screenshot of the current product) can be an image board instead: upload it with \`lh file upload\`;
-- a page that was already published (a \`dep_…\` id or a \`/share/artifact/…\` link) can be a board as it is, through a deployment source; it is shown at the release you pin, the latest by default.
+- a screen that already exists as a picture (a screenshot of the current product) can be an image board instead: upload it with \`lh file upload\`.
 
 \`lh man artifact\` and \`lh man file\` have the details. A board of type "decision" needs no source.
 

@@ -22,14 +22,12 @@ const OP_TYPES = [
 
 const sourceSchema = {
   description:
-    'What the board shows. Canvas: {kind:"canvas", canvasId, version?, path?}; version defaults to the latest, path picks a page of a multi-page Canvas. Published page: {kind:"deployment", deployment, revision?} with its dep_… id or /share/artifact/<id> link; revision defaults to the latest release, and a published Canvas is placed at its published version. Image: {kind:"image", fileRef} with a file id from <file id> or an image ref from <image ref> in this conversation. A decision board has no source.',
+    'What the board shows. Canvas: {kind:"canvas", canvasId, version?, path?}; version defaults to the latest, path picks a page of a multi-page Canvas. Image: {kind:"image", fileRef} with a file id from <file id> or an image ref from <image ref> in this conversation. A decision board has no source.',
   properties: {
     canvasId: { type: 'string' },
-    deployment: { type: 'string' },
     fileRef: { type: 'string' },
-    kind: { enum: ['canvas', 'deployment', 'image'], type: 'string' },
+    kind: { enum: ['canvas', 'image'], type: 'string' },
     path: { type: 'string' },
-    revision: { type: 'integer' },
     version: { type: 'integer' },
   },
   required: ['kind'],

@@ -19,9 +19,6 @@ const viewSource = (
     case 'canvas': {
       return { canvasId: boardId, kind: 'canvas', version: 1 };
     }
-    case 'deployment': {
-      return { deploymentId: boardId, kind: 'deployment', releaseId: boardId, revision: 1 };
-    }
     case 'image': {
       return { fileId: boardId, kind: 'image' };
     }
@@ -37,9 +34,7 @@ export const snapshotToBoard = (snapshot: ArtboardPublishSnapshot): ViewerBoard 
   const publishedAt = new Date(snapshot.publishedAt);
 
   const boards = snapshot.boards.map(({ source, ...board }) => {
-    // Both are bundled HTML pages the viewer frames the same way.
-    if (source?.kind === 'canvas' || source?.kind === 'deployment')
-      canvasSrc[board.id] = source.src;
+    if (source?.kind === 'canvas') canvasSrc[board.id] = source.src;
     if (source?.kind === 'image') imageUrls[board.id] = source.src;
     return {
       ...board,

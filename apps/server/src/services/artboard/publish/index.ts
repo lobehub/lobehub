@@ -3,7 +3,6 @@ import { ARTBOARD_VIEWER_MAJOR, type ArtboardItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 
-import { readArtifactDeploymentRelease } from '@/business/server/artifactDeployment';
 import {
   getArtboardViewerUrl,
   getCanvasPublishRuntimeUrl,
@@ -22,7 +21,6 @@ import { ARTBOARD_TOOL_IDENTIFIER, ArtboardService, describeArtboard } from '..'
 import { ARTBOARD_SOURCE_CONCURRENCY } from '../sources';
 import {
   type ArtboardPublishCanvasBundle,
-  type ArtboardPublishDeployment,
   type ArtboardPublishImage,
   buildArtboardPublishBundle,
 } from './bundle';
@@ -37,11 +35,6 @@ export interface ArtboardPublishDeps {
     canvasId: string,
     version: number,
   ) => Promise<ArtboardPublishCanvasBundle | undefined>;
-  loadDeployment: (source: {
-    deploymentId: string;
-    releaseId: string;
-    revision: number;
-  }) => Promise<ArtboardPublishDeployment | undefined>;
   loadImage: (fileId: string) => Promise<ArtboardPublishImage | undefined>;
 }
 
@@ -87,16 +80,6 @@ const createDefaultDeps = ({
         entry: manifest.entry || CANVAS_ENTRY,
         version,
       };
-    },
-    loadDeployment: async ({ deploymentId, releaseId, revision }) => {
-      const html = await readArtifactDeploymentRelease({
-        db,
-        deploymentId,
-        releaseId,
-        userId,
-        workspaceId,
-      });
-      return html === undefined ? undefined : { deploymentId, html, revision };
     },
     loadImage: async (fileId) => {
       const file = await new FileModel(db, userId, workspaceId).findById(fileId);
@@ -161,8 +144,7 @@ export class ArtboardPublishService {
     const missing = artboard.content.boards.find(
       (board) => !board.source && board.type !== 'decision',
     );
-    if (missing)
-      throw precondition(`Board "${missing.title}" has no Canvas, page or image to publish`);
+    if (missing) throw precondition(`Board "${missing.title}" has no Canvas or image to publish`);
 
     const viewerUrl = await getArtboardViewerUrl(ARTBOARD_VIEWER_MAJOR);
     if (!viewerUrl) throw precondition('The publication host has no compatible artboard viewer');
@@ -170,18 +152,11 @@ export class ArtboardPublishService {
     const snapshot = buildArtboardPublishSnapshot(artboard, {
       publishedAt: new Date().toISOString(),
     });
-    const [canvases, deployments, images] = await Promise.all([
+    const [canvases, images] = await Promise.all([
       this.loadCanvases(artboard),
-      this.loadDeployments(artboard),
       this.loadImages(artboard),
     ]);
-    const bundle = buildArtboardPublishBundle({
-      canvases,
-      deployments,
-      images,
-      snapshot,
-      viewerUrl,
-    });
+    const bundle = buildArtboardPublishBundle({ canvases, images, snapshot, viewerUrl });
 
     if (!work)
       await this.workModel.registerArtboard({
@@ -250,30 +225,6 @@ export class ArtboardPublishService {
         const canvas = await this.deps.loadCanvas(canvasId, version);
         if (!canvas) throw precondition(`Board "${title}" points at a Canvas version that is gone`);
         return canvas;
-      },
-      { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
-    );
-  }
-
-  private loadDeployments(artboard: ArtboardItem) {
-    const refs = new Map<
-      string,
-      { deploymentId: string; releaseId: string; revision: number; title: string }
-    >();
-    for (const board of artboard.content.boards)
-      if (board.source?.kind === 'deployment') {
-        const { deploymentId, releaseId, revision } = board.source;
-        const key = `${deploymentId}@${revision}`;
-        if (!refs.has(key))
-          refs.set(key, { deploymentId, releaseId, revision, title: board.title });
-      }
-
-    return pMap(
-      [...refs.values()],
-      async ({ title, ...source }) => {
-        const page = await this.deps.loadDeployment(source);
-        if (!page) throw precondition(`Board "${title}" points at a page release that is gone`);
-        return page;
       },
       { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
     );

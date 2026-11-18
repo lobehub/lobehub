@@ -83,17 +83,6 @@ export const toArtboardContent = (
           }
         : null;
     }
-    if (
-      board.sourceDeploymentId &&
-      board.sourceDeploymentReleaseId &&
-      board.sourceDeploymentRevision
-    )
-      return {
-        deploymentId: board.sourceDeploymentId,
-        kind: 'deployment',
-        releaseId: board.sourceDeploymentReleaseId,
-        revision: board.sourceDeploymentRevision,
-      };
     return board.sourceFileId ? { fileId: board.sourceFileId, kind: 'image' } : null;
   };
 

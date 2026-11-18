@@ -1,36 +1,13 @@
 import type { ArtboardBoardType } from '@lobechat/types';
 
-import type { ArtboardBoardRow } from '@/database/models/artboard';
-
 import { failArtboard } from './errors';
 import type { ResolvedArtboardOp, ResolvedBoardSource } from './sources';
 
-export const sourceColumns = (source?: ResolvedBoardSource) => {
-  const deployment = source?.kind === 'deployment' ? source : undefined;
-  return {
-    sourceDeploymentId: deployment?.deploymentId ?? null,
-    sourceDeploymentReleaseId: deployment?.releaseId ?? null,
-    sourceDeploymentRevision: deployment?.revision ?? null,
-    sourceFileId: source?.kind === 'image' ? source.fileId : null,
-    sourcePath: source?.kind === 'canvas' ? source.path : null,
-    sourceWorkVersionId: source?.kind === 'canvas' ? source.workVersionId : null,
-  };
-};
-
-/**
- * Names the exact content a board shows, so a comment can tell when the board moved on.
- * Images have no versions and return undefined.
- */
-export const sourceVersionKey = (
-  board: Pick<
-    ArtboardBoardRow,
-    'sourceDeploymentId' | 'sourceDeploymentReleaseId' | 'sourceWorkVersionId'
-  >,
-): string | undefined => {
-  if (board.sourceWorkVersionId) return board.sourceWorkVersionId;
-  if (board.sourceDeploymentId && board.sourceDeploymentReleaseId)
-    return `deployment:${board.sourceDeploymentId}@${board.sourceDeploymentReleaseId}`;
-};
+export const sourceColumns = (source?: ResolvedBoardSource) => ({
+  sourceFileId: source?.kind === 'image' ? source.fileId : null,
+  sourcePath: source?.kind === 'canvas' ? source.path : null,
+  sourceWorkVersionId: source?.kind === 'canvas' ? source.workVersionId : null,
+});
 
 export const boardTypeOf = (
   requested: ArtboardBoardType | undefined,

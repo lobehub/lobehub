@@ -3,7 +3,6 @@ export const systemPrompt = `You can lay out a requirement on an artboard: a boa
 <when_to_use>
 - Use an artboard when a requirement needs its flow or its options discussed, not for a single screen.
 - Build each screen as a Canvas first, then place it on the artboard as a board. A screenshot or photo from the conversation can be a board too.
-- An existing Canvas or published page can be a board as it is: place a Canvas by its canvasId, and a page someone published by its dep_… id or share link. The board keeps the version it was placed with.
 </when_to_use>
 
 <layout>

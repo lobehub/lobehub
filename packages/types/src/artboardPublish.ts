@@ -11,7 +11,7 @@ export const ARTBOARD_VIEWER_MAJOR = 1;
 export const ARTBOARD_SNAPSHOT_ELEMENT_ID = 'artboard-snapshot';
 
 export interface ArtboardPublishSource {
-  kind: 'canvas' | 'deployment' | 'image';
+  kind: 'canvas' | 'image';
   src: string;
 }
 

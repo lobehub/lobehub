@@ -14,14 +14,9 @@ export const canvasSitePrefix = (canvasId: string, version: number) =>
 
 export const imageSitePath = (fileId: string) => `images/${fileId}`;
 
-export const deploymentSitePath = (deploymentId: string, revision: number) =>
-  `deployments/${deploymentId}/r${revision}/index.html`;
-
 const toSiteSource = (source: ArtboardBoardSource | null): ArtboardPublishSource | null => {
   if (!source) return null;
   if (source.kind === 'image') return { kind: 'image', src: imageSitePath(source.fileId) };
-  if (source.kind === 'deployment')
-    return { kind: 'deployment', src: deploymentSitePath(source.deploymentId, source.revision) };
   return {
     kind: 'canvas',
     src: `${canvasSitePrefix(source.canvasId, source.version)}/${source.path ?? 'index.html'}`,

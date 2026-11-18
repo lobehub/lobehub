@@ -133,13 +133,7 @@ const BoardLabel = ({
   if (board.type === 'decision' && !flagged) return null;
 
   const recommendedText = t('artboard.board.recommended');
-  const sourceVersion =
-    source?.kind === 'canvas'
-      ? source.version
-      : source?.kind === 'deployment'
-        ? source.revision
-        : undefined;
-  const version = sourceVersion && sourceVersion > 1 ? `v${sourceVersion}` : null;
+  const version = source?.kind === 'canvas' && source.version > 1 ? `v${source.version}` : null;
   const image = source?.kind === 'image';
   const locked = linked && !verify;
   const rowScale = boardLabelScale(k, board.rect.w);

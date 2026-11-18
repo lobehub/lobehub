@@ -4,7 +4,6 @@ import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useArtifactDeploymentPreviewUrl } from '@/business/client/hooks/useArtifactDeploymentPreviewUrl';
 import { openCanvasModal } from '@/features/CanvasModal/loader';
 
 import { useBoard } from '../BoardContext';
@@ -108,9 +107,6 @@ const CheckDetail = ({ boardId }: { boardId: string }) => {
   const { journey } = useBoardAcceptance();
   const { canReview } = useCheckReview(boardId);
   const item = board.boardById[boardId];
-  const pageUrl = useArtifactDeploymentPreviewUrl(
-    item?.source?.kind === 'deployment' ? item.source : undefined,
-  );
   if (!item) return null;
 
   const state = nodeState(journey, boardId);
@@ -141,10 +137,10 @@ const CheckDetail = ({ boardId }: { boardId: string }) => {
     ),
   ];
   const { source } = item;
-  const designUrl = source?.kind === 'image' ? board.imageUrls[source.fileId] : pageUrl;
+  const designImage = source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
   const openDesign = () => {
     if (source?.kind === 'canvas') void openCanvasModal(source.canvasId, source.version);
-    else if (designUrl) window.open(designUrl, '_blank', 'noopener');
+    else if (designImage) window.open(designImage, '_blank', 'noopener');
   };
   const next = checks[checks.findIndex((check) => check.id === boardId) + 1];
 
@@ -162,12 +158,7 @@ const CheckDetail = ({ boardId }: { boardId: string }) => {
             <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
               <Text style={{ fontSize: 12 }} type="secondary">
                 {t('artboard.verify.reference', {
-                  rev:
-                    item.source?.kind === 'canvas'
-                      ? item.source.version
-                      : item.source?.kind === 'deployment'
-                        ? item.source.revision
-                        : 1,
+                  rev: item.source?.kind === 'canvas' ? item.source.version : 1,
                 })}
               </Text>
               <div

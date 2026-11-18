@@ -209,26 +209,17 @@ export const artboardBoards = pgTable(
     }),
     sourcePath: text('source_path'),
     sourceFileId: text('source_file_id').references(() => files.id, { onDelete: 'set null' }),
-    // A hosted HTML deployment pinned at one release. No foreign key: deployments live with
-    // the hosting service, outside this database.
-    sourceDeploymentId: text('source_deployment_id'),
-    sourceDeploymentReleaseId: text('source_deployment_release_id'),
-    sourceDeploymentRevision: integer('source_deployment_revision'),
     metadata: jsonb('metadata').$type<ArtboardBoardMetadata>(),
     ...timestamps,
   },
   (t) => [
     check(
       'artboard_boards_single_source_check',
-      sql`num_nonnulls(${t.sourceWorkVersionId}, ${t.sourceFileId}, ${t.sourceDeploymentId}) <= 1`,
-    ),
-    check(
-      'artboard_boards_deployment_release_check',
-      sql`num_nonnulls(${t.sourceDeploymentId}, ${t.sourceDeploymentReleaseId}, ${t.sourceDeploymentRevision}) IN (0, 3)`,
+      sql`num_nonnulls(${t.sourceWorkVersionId}, ${t.sourceFileId}) <= 1`,
     ),
     check(
       'artboard_boards_decision_no_source_check',
-      sql`${t.type} <> 'decision' OR num_nonnulls(${t.sourceWorkVersionId}, ${t.sourceFileId}, ${t.sourcePath}, ${t.sourceDeploymentId}) = 0`,
+      sql`${t.type} <> 'decision' OR num_nonnulls(${t.sourceWorkVersionId}, ${t.sourceFileId}, ${t.sourcePath}) = 0`,
     ),
     index('artboard_boards_artboard_id_idx').on(t.artboardId),
     index('artboard_boards_page_id_idx').on(t.pageId),

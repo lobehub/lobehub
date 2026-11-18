@@ -3,7 +3,6 @@ import * as stylex from '@stylexjs/stylex';
 import { Maximize2Icon, MessageSquareQuoteIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { useArtifactDeploymentPreviewUrl } from '@/business/client/hooks/useArtifactDeploymentPreviewUrl';
 import { openCanvasModal } from '@/features/CanvasModal/loader';
 import { sx } from '@/styles/sx';
 
@@ -27,9 +26,6 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
     s.mode === 'discuss' && s.selected ? board.boardById[s.selected] : undefined,
   );
   const noChatInput = useArtboardStore((s) => s.gallery || s.fullscreen);
-  const pageUrl = useArtifactDeploymentPreviewUrl(
-    selected?.source?.kind === 'deployment' ? selected.source : undefined,
-  );
   if (!selected || selected.pageId !== board.pageId) return null;
 
   const refer = () => {
@@ -40,10 +36,9 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
 
   const { rect, source } = selected;
   const imageUrl = source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
-  const fullUrl = imageUrl ?? pageUrl;
   const openFull = () => {
     if (source?.kind === 'canvas') void openCanvasModal(source.canvasId, source.version);
-    else if (fullUrl) window.open(fullUrl, '_blank', 'noopener');
+    else if (imageUrl) window.open(imageUrl, '_blank', 'noopener');
   };
 
   return (
@@ -57,7 +52,7 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
       })}
     >
       <ActionIcon
-        disabled={source?.kind === 'canvas' ? false : !fullUrl}
+        disabled={source?.kind === 'canvas' ? false : !imageUrl}
         icon={Maximize2Icon}
         size={'small'}
         title={t('artboard.selection.view')}
