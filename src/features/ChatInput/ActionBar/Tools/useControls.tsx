@@ -199,11 +199,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           ...(hasLegacyEntry && { plugins: upsertPluginMode(plugins, id, 'auto') }),
         });
       } else {
-        // Chat has no activator: media generation is offered to the model only when pinned.
+        // Chat has no activator: media generation reaches the model there only when pinned.
+        // Pin it in every mode — the mode can switch later without rewriting plugins, and
+        // Agent mode still loads a pinned on-demand builtin through the activator.
         const pinMediaTool =
-          mode === 'auto' &&
-          (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier) &&
-          chatConfigByIdSelectors.isChatModeById(agentId)(state);
+          mode === 'auto' && (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier);
         await updateAgentConfig({
           plugins: upsertPluginMode(
             plugins,

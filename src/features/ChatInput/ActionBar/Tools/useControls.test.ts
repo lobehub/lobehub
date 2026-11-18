@@ -184,21 +184,22 @@ describe('chat input tool picker', () => {
   });
 
   it.each(['lobe-image-generation', 'lobe-video-generation'])(
-    're-enables %s as a pin in Chat mode and on demand in Agent mode',
+    're-enables %s as a pin in either mode, so a later switch to Chat keeps it callable',
     async (id) => {
       mocks.plugins = [{ identifier: id, mode: 'disabled' }];
       const { result } = renderHook(() => useControls());
 
-      mocks.chatMode = true;
+      // Agent mode: Chat requires a pin, and switching modes does not rewrite plugins.
+      mocks.chatMode = false;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
         plugins: [{ identifier: id, mode: 'pinned' }],
       });
 
-      mocks.chatMode = false;
+      mocks.chatMode = true;
       await act(() => result.current.setPolicy(id, 'auto'));
       expect(mocks.updateConfig).toHaveBeenLastCalledWith({
-        plugins: [{ identifier: id, mode: 'auto' }],
+        plugins: [{ identifier: id, mode: 'pinned' }],
       });
     },
   );
