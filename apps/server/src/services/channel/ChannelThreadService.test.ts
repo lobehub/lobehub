@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelError } from '@/database/repositories/channel';
 
-import { ChannelThreadService, runChannelWatchReport } from './ChannelThreadService';
+import { ChannelThreadService, runChannelWatchReport, steerEntryId } from './ChannelThreadService';
 
 const mocks = vi.hoisted(() => ({
   currentRun: vi.fn(),
@@ -142,6 +142,19 @@ describe('ChannelThreadService.steerThread', () => {
       threadId: 'cht_1',
     });
     if (!outcome) expect(mocks.queueRunSteer).not.toHaveBeenCalled();
+  });
+
+  it('appends the same steer entry when the tool call is retried', async () => {
+    mocks.queueRunSteer.mockResolvedValue({ queued: true });
+
+    await service().steerThread({ content: 'x', threadId: 'cht_1' }, 'call-1');
+    await service().steerThread({ content: 'x', threadId: 'cht_1' }, 'call-1');
+
+    const [first, retry] = mocks.queueRunSteer.mock.calls.map(([, params]) => params.entry.id);
+    expect(first).toBe(retry);
+    expect(first).toBe(steerEntryId('op-main', 'call-1'));
+    expect(first).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
+    expect(steerEntryId('op-main', 'call-2')).not.toBe(first);
   });
 
   it('refuses to resend a correction that may already have landed', async () => {

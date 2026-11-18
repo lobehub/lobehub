@@ -603,7 +603,13 @@ export class ChannelHistoryRepository {
     const offset = integer(params.offset, 0, 0, Number.MAX_SAFE_INTEGER);
     return this.read(
       operationId,
-      async (tx, channelId, manifest) => {
+      async (tx, channelId, runManifest) => {
+        // A message `readMessages({ threadId })` returned is read in that same live scope.
+        const other =
+          params.threadId && params.threadId !== runManifest.threadId
+            ? await findThread(tx, channelId, params.threadId)
+            : null;
+        const manifest = other ? liveThreadManifest(runManifest, other) : runManifest;
         const [message] = await readManifestMessages(tx, channelId, manifest, {
           messageId: params.messageId,
         });

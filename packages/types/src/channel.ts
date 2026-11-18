@@ -412,6 +412,8 @@ export interface ChannelReadMessageParams {
   messageId: string;
   /** Character offset for reading a long message without flooding the context. */
   offset?: number;
+  /** The Thread `readMessages({ threadId })` returned the message from. */
+  threadId?: string;
 }
 
 export interface ChannelHistoryMessage extends ChannelContextMessage {

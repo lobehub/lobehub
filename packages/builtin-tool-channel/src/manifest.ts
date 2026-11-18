@@ -44,7 +44,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.readMessage,
       description:
-        'Read up to 12000 characters of one public message, with author and attachment references. Use a message ID returned by readMessages (or the current request). Follow nextOffset for the remaining text; null means complete.',
+        'Read up to 12000 characters of one public message, with author and attachment references. Use a message ID returned by readMessages (or the current request), with the same threadId if readMessages read another Thread. Follow nextOffset for the remaining text; null means complete.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -55,6 +55,11 @@ export const ChannelManifest: BuiltinToolManifest = {
             type: 'integer',
             minimum: 0,
             description: 'Character offset from nextOffset. Default 0.',
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'The threadId you passed to readMessages when it returned this message from another Thread.',
           },
         },
       },

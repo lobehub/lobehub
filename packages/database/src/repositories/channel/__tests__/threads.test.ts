@@ -114,6 +114,15 @@ describe('Channel Threads from a run', () => {
     });
     expect(page.messages.map((m) => m.id)).toEqual([root.id, work.request.id, later.id]);
     expect(page.cutoffSequence).toBe(later.sequence);
+    await expect(
+      state.history.readMessage(main.operationId, {
+        messageId: later.id,
+        threadId: work.threadId!,
+      }),
+    ).resolves.toMatchObject({ message: { content: 'Found the cause' }, nextOffset: null });
+    await expect(
+      state.history.readMessage(main.operationId, { messageId: later.id }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('targets another Thread with the Agent’s open replies, never the run’s own', async () => {

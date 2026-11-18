@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   ChannelCreatedThread,
@@ -81,6 +81,17 @@ const integer = (value: number | undefined, fallback: number, min: number, max: 
   if (!Number.isSafeInteger(result) || result < min || result > max)
     throw new ChannelError('BAD_REQUEST', `Expected an integer between ${min} and ${max}`);
   return result;
+};
+
+/**
+ * The steer entry id of one tool call, UUID-shaped: a retried call appends the same entry, which
+ * the steer queue recognizes instead of delivering the correction twice.
+ */
+export const steerEntryId = (operationId: string, requestId: string) => {
+  const hex = createHash('sha256')
+    .update(`channel-steer:${operationId}:${requestId}`)
+    .digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 };
 
 const scheduleReport = async (payload: ChannelWatchReportPayload) => {
@@ -216,7 +227,7 @@ export class ChannelThreadService {
           entry: {
             channelSteer: true,
             createdAt: Date.now(),
-            id: randomUUID(),
+            id: steerEntryId(this.operationId, requestId),
             request: {
               agentId: target.self.agentId,
               appContext: { topicId: running.topicId! },
