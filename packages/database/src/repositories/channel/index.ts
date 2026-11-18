@@ -65,6 +65,13 @@ import { channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView } from './view';
+import {
+  readWakeConfig,
+  replaceChannelWake,
+  replaceMemberWake,
+  wakeRecordScope,
+  withMemberWake,
+} from './wake';
 
 export type { ChannelAddAgentInput } from './agent';
 export { memberEnvironment } from './agent';
@@ -116,14 +123,6 @@ const WORKSPACE_MANAGER_ROLES = ['owner', 'admin'];
  * scope (personal, or the given workspace). Every write runs inside `write`, which holds the
  * `channels` row lock so mutations of one channel serialize in a transaction.
  */
-/** A member config with its reply strategy set, or without one when `wake` is empty. */
-/** An environment plus the member's own settings that live beside it: reply strategy and mute. */
-const withMemberWake = (
-  config: ChannelMemberConfig,
-  wake: Record<string, unknown> | null | undefined,
-  muted: boolean | undefined,
-): ChannelMemberConfig => ({ ...config, ...(wake && { wake }), ...(muted && { muted }) });
-
 export class ChannelRepository {
   private readonly workspaceId: string | null;
   /** The caller's own sidebar sections in this scope. */
@@ -306,65 +305,22 @@ export class ChannelRepository {
    * `null` means the defaults apply. Validation belongs to the shared wake schema in the caller.
    */
   wakeConfig = async (channelId: string) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const members = await tx
-          .select({ config: channelMembers.config, id: channelMembers.id })
-          .from(channelMembers)
-          .where(
-            and(
-              eq(channelMembers.channelId, channelId),
-              eq(channelMembers.actorType, 'agent'),
-              eq(channelMembers.status, 'active'),
-            ),
-          );
-        return {
-          channel: channel.config?.wake ?? null,
-          members: members.map((member) => ({
-            memberId: member.id,
-            wake: member.config?.wake ?? null,
-          })),
-        };
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => readWakeConfig(tx, channel), { minRole: 'admin' });
 
   /**
    * Whose records one Agent member's wake decisions are filed under: its Agent's owner, in the
    * channel's workspace. `null` when the Agent has no owner left to file them under.
    */
   memberWakeRecordScope = async (channelId: string, memberId: string) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const member = await requireAgentMember(tx, channelId, memberId);
-        const [agent] = await tx
-          .select({ userId: agents.userId })
-          .from(agents)
-          .where(eq(agents.id, member.agentId));
-        return agent?.userId ? { userId: agent.userId, workspaceId: channel.workspaceId } : null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => wakeRecordScope(tx, channel, memberId), {
+      minRole: 'admin',
+    });
 
   /** Replaces the channel's reply strategy; `null` returns it to the defaults. */
   updateChannelWakeConfig = async (channelId: string, wake: Record<string, unknown> | null) =>
-    this.write(
-      channelId,
-      async (tx, { channel }) => {
-        const { wake: _previous, ...rest } = channel.config ?? {};
-        const config = wake ? { ...rest, wake } : rest;
-        const [updated] = await tx
-          .update(channels)
-          .set({ config: Object.keys(config).length ? config : null })
-          .where(eq(channels.id, channelId))
-          .returning();
-        await audit(tx, channelId, 'wake_config_changed', channelId, { reset: !wake });
-        return updated.config?.wake ?? null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel }) => replaceChannelWake(tx, channel, wake), {
+      minRole: 'admin',
+    });
 
   /**
    * Replaces one Agent member's own reply strategy over the channel's; `null` removes it. Its
@@ -375,22 +331,9 @@ export class ChannelRepository {
     memberId: string,
     wake: Record<string, unknown> | null,
   ) =>
-    this.write(
-      channelId,
-      async (tx) => {
-        const current = await requireAgentMember(tx, channelId, memberId);
-        const [member] = await tx
-          .update(channelMembers)
-          .set({
-            config: withMemberWake(memberEnvironment(current.config), wake, current.config?.muted),
-          })
-          .where(eq(channelMembers.id, memberId))
-          .returning();
-        await audit(tx, channelId, 'member_wake_config_changed', memberId, { reset: !wake });
-        return member.config?.wake ?? null;
-      },
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx) => replaceMemberWake(tx, channelId, memberId, wake), {
+      minRole: 'admin',
+    });
 
   rename = async (channelId: string, title: string) =>
     this.write(
