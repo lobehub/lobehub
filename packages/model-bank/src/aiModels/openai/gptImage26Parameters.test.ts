@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { ModelParamsMetaSchema } from '../standard-parameters';
-import { gptImage2Schema, gptImage26Schema } from './imageParameters';
+import { gptImage2Schema } from '../../const/imageParameters';
+import { ModelParamsMetaSchema } from '../../standard-parameters';
+
+import { gptImage26Schema } from './gptImage26Parameters';
 
 describe('gptImage26Schema', () => {
   it('declares GIF output within API bounds and six quality tiers, sharing GPT Image 2 sizes', () => {

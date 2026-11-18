@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { gptImage26Schema } from '../../const/imageParameters';
+import { gptImage26Schema } from './gptImage26Parameters';
 import { openaiImageModels } from './nonChat';
 
 describe('GPT Image 2.6 model cards', () => {

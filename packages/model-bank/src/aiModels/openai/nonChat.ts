@@ -1,4 +1,4 @@
-import { gptImage1Schema, gptImage2Schema, gptImage26Schema } from '../../const/imageParameters';
+import { gptImage1Schema, gptImage2Schema } from '../../const/imageParameters';
 import {
   openaiGpt4oMiniTTSSchema,
   openaiGpt4oTTSVoices,
@@ -13,6 +13,8 @@ import type {
   AITTSModelCard,
   AIVideoModelCard,
 } from '../../types/aiModel';
+
+import { gptImage26Schema } from './gptImage26Parameters';
 
 /** OpenAI cards for endpoints other than chat and decisions; `allModels` lives in `./index`. */
 
