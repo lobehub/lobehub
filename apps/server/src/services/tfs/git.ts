@@ -77,8 +77,11 @@ export const runTfsGit = async (
     url: source.url,
   });
   const settings = await new UserModel(deps.db, deps.userId).getUserSettings();
+  // `user_settings.market` is an untyped jsonb column, so its row type is opaque
+  // here; the shape is `MarketAuthTokens` (see `@lobechat/types` user settings).
+  const marketAccessToken = (settings?.market as { accessToken?: string } | undefined)?.accessToken;
   const marketService = new MarketService({
-    accessToken: settings?.market?.accessToken,
+    accessToken: marketAccessToken,
     userInfo: {
       sandboxOperation: deps.operationId
         ? { operationId: deps.operationId, topicId: input.topicId }
