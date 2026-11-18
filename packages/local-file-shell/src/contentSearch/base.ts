@@ -166,7 +166,7 @@ export abstract class BaseContentSearch {
         }
 
         for (const dir of EXCLUDED_DIRS) args.push('--glob', `!**/${dir}/**`);
-        args.push(pattern, target);
+        args.push('--', pattern, target);
         break;
       }
 
@@ -191,7 +191,7 @@ export abstract class BaseContentSearch {
         }
 
         for (const dir of EXCLUDED_DIRS) args.push('--ignore-dir', dir);
-        args.push(pattern, target);
+        args.push('--', pattern, target);
         break;
       }
 
@@ -218,7 +218,7 @@ export abstract class BaseContentSearch {
         }
 
         for (const dir of EXCLUDED_DIRS) args.push('--exclude-dir', dir);
-        args.push('-E', pattern, target);
+        args.push('-E', '--', pattern, target);
         break;
       }
     }
