@@ -40,6 +40,7 @@ const FavoriteItem = memo<FavoriteItemProps>(({ active, item }) => {
       <NavItem
         active={active}
         contextMenuItems={menuItems}
+        height={32}
         icon={<FavoriteItemIcon item={item} />}
         title={item.title}
         actions={() => (

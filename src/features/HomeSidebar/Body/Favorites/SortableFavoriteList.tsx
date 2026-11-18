@@ -140,6 +140,7 @@ const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => 
           {activeItem ? (
             <div {...stylex.props(styles.overlay)}>
               <NavItem
+                height={32}
                 icon={<FavoriteItemIcon item={activeItem} />}
                 // The card itself is the surface: no hover tint on top of the white.
                 style={{ backgroundColor: 'transparent' }}
