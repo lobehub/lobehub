@@ -161,13 +161,12 @@ const PullRequest = memo<PullRequestProps>(
             title={t('workingPanel.pr.ghMissing.title')}
             action={
               <Flexbox horizontal gap={6}>
-                <Button size={'small'} type={'primary'} onClick={() => void mutate()}>
+                <Button type={'primary'} onClick={() => void mutate()}>
                   {t('workingPanel.pr.ghMissing.retry')}
                 </Button>
                 {externalUrl && (
                   <Button
                     icon={<Icon icon={GlobeIcon} size={12} />}
-                    size={'small'}
                     onClick={() => openTrustedExternalUrl(externalUrl)}
                   >
                     {t('workingPanel.pr.ghMissing.open')}
