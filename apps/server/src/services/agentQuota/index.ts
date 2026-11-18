@@ -668,8 +668,13 @@ export class AgentQuotaService {
    * Whether a run of `agentId` would find quota on `deviceId`, judged on the
    * accounts `planDeviceAccounts` routes it to — the same ones the dispatcher
    * uses, so presence cannot read "idle" while every run lands on a spent
-   * account. In Auto mode the device only signs in with logins it holds, so
-   * where it has reported its logins, the pool is narrowed to them.
+   * account.
+   *
+   * Auto mode is judged on the whole candidate list the dispatcher sends, not
+   * narrowed to the logins recorded for the device: that record is no
+   * inventory. Only a desktop syncs its own full set; a remote device has
+   * just the accounts sampled there, and an emptied set reads like one never
+   * reported. Which candidate the device can sign in with stays its call.
    */
   resolveAgentAvailability = async (
     agentId: string,
@@ -678,7 +683,7 @@ export class AgentQuotaService {
     const plan = await this.planDeviceAccounts(agentId, options);
     if (!plan) return { accountIds: [], status: 'untracked' };
 
-    let accountIds =
+    const accountIds =
       plan.mode === 'pinned'
         ? [plan.pin.id]
         : [
@@ -687,14 +692,6 @@ export class AgentQuotaService {
               ...plan.pool.map(({ account }) => account.id),
             ]),
           ];
-    if (plan.mode === 'balanced' && options.deviceId) {
-      const here = new Set(
-        (await this.logins.listByDevice(options.deviceId)).map((login) => login.accountId),
-      );
-      if (here.size > 0) accountIds = accountIds.filter((id) => here.has(id));
-    }
-    // None of the agent's accounts is signed in there: the default login runs.
-    if (accountIds.length === 0) return { accountIds, mode: plan.mode, status: 'untracked' };
 
     const now = options.now ?? Date.now();
     const loads = await this.resolveAccountLoads(accountIds, now);

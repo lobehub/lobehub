@@ -280,37 +280,45 @@ describe('AgentQuotaService.resolveAgentAvailability', () => {
     ).toMatchObject({ mode: 'balanced', status: 'available' });
   });
 
-  it('narrows Auto mode to the logins the device holds', async () => {
-    const spentOnA = await withSession('acc-a', deviceA, 100);
-    const freeOnB = await withSession('acc-b', deviceB, 0);
-    for (const account of [spentOnA, freeOnB])
+  // Regression: Auto mode was narrowed to the logins recorded for the device.
+  // That record is partial (a remote device only has the accounts sampled
+  // there) and an emptied set read like one never reported, so the verdict
+  // flipped while the dispatcher kept offering the same candidates.
+  it('judges Auto mode on the candidates the dispatcher sends, whatever logins are recorded', async () => {
+    const spent = await withSession('acc-spent', deviceA, 100);
+    const free = await withSession('acc-free', deviceB, 0);
+    for (const account of [spent, free])
       await bindings.upsert({ accountId: account.id, agentId, role: QuotaBindingRole.pool });
+    const expected = {
+      accountIds: [spent.id, free.id],
+      mode: 'balanced',
+      status: 'available',
+    };
 
-    // Device A can only sign in with the spent account.
+    // Only the spent account was ever sampled on device A.
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual(
+      expected,
+    );
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toMatchObject({ candidates: [{ externalAccountId: 'acc-free' }], mode: 'balanced' });
+
+    // Device A then reports it holds no login at all.
+    await service.syncDeviceLogins(deviceA, 'claude-code', []);
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual(
+      expected,
+    );
+  });
+
+  it('is exhausted in Auto mode once every candidate is spent, and says when one returns', async () => {
+    const early = await withSession('acc-early', deviceA, 100);
+    await bindings.upsert({ accountId: early.id, agentId, role: QuotaBindingRole.pool });
+
     expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
-      accountIds: [spentOnA.id],
+      accountIds: [early.id],
       mode: 'balanced',
       resetsAt,
       status: 'exhausted',
-    });
-    expect(
-      await service.resolveAgentAvailability(agentId, { deviceId: deviceB, now }),
-    ).toMatchObject({ accountIds: [freeOnB.id], status: 'available' });
-    // Without a device, the whole pool counts.
-    expect(await service.resolveAgentAvailability(agentId, { now })).toMatchObject({
-      status: 'available',
-    });
-  });
-
-  it('does not judge an agent none of whose accounts the device signs in with', async () => {
-    const elsewhere = await withSession('acc-b', deviceB, 100);
-    await signedIn('acc-other', deviceA);
-    await bindings.upsert({ accountId: elsewhere.id, agentId, role: QuotaBindingRole.pool });
-
-    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
-      accountIds: [],
-      mode: 'balanced',
-      status: 'untracked',
     });
   });
 

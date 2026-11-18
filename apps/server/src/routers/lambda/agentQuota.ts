@@ -439,8 +439,8 @@ export const agentQuotaRouter = router({
   /**
    * Whether an agent would find quota on the device it runs on, judged on the
    * accounts a run there is routed to (its device pick, a legacy pin, or the
-   * pool that device signs in with). Presence reads this instead of judging
-   * the whole pool, which reads "idle" while a device pin is spent.
+   * pool's candidates). Presence reads this instead of judging the whole pool,
+   * which reads "idle" while a device pin is spent.
    */
   resolveAgentAvailability: quotaProcedure
     .input(

@@ -10,8 +10,8 @@ export interface QuotaDeviceAccount {
 /**
  * Whether an agent would find quota where it runs, judged on the accounts the
  * dispatcher would route it to there (its device's pick, a legacy pin, or the
- * pool the device can sign in with). Presence reads it; a scheduler can check
- * it before dispatching.
+ * pool's candidates). Presence reads it; a scheduler can check it before
+ * dispatching.
  *
  * - `available`: at least one of those accounts has headroom;
  * - `exhausted`: every one of them is spent;
