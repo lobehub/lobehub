@@ -729,7 +729,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         <OptionRow
           compact
           active={isActive('local')}
-          desc={t('heteroAgent.executionTarget.localDesc')}
           icon={<ExecutionTargetIcon target={'local'} />}
           label={t('heteroAgent.executionTarget.local')}
           tags={tagsFor(isActive('local'))}
@@ -742,14 +741,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       {thisComputerDevices.map((d) => renderDeviceRow(d, { thisComputer: !showLocalRow }))}
       {/* The first level is one plain list with no section labels: the choices
           that run nowhere in particular (no device, auto), then a row per group
-          — sandboxes, then devices — whose choices open beside it. Every row
-          keeps a one-line description, so the list reads evenly. A
+          — sandboxes, then devices — whose choices open beside it. The rows
+          are titles only; what each choice means is said one level down. A
           heterogeneous agent has neither of the first two rows. */}
       {isHetero ? null : (
         <OptionRow
           compact
           active={isActive('none')}
-          desc={t('heteroAgent.executionTarget.noneDesc')}
           icon={<ExecutionTargetIcon target={'none'} />}
           label={t('heteroAgent.executionTarget.none')}
           onClick={() => void handleSelect('none')}
@@ -759,7 +757,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         <OptionRow
           compact
           active={isActive('auto')}
-          desc={t('heteroAgent.executionTarget.autoDesc')}
           icon={<ExecutionTargetIcon target={'auto'} />}
           label={t('heteroAgent.executionTarget.auto')}
           onClick={() => void handleSelect('auto')}
@@ -767,7 +764,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       )}
       <GroupSubmenu
         active={!!activeSandboxLabel}
-        desc={t('heteroAgent.executionTarget.sandboxGroupDesc')}
         hint={activeSandboxLabel}
         icon={<Icon icon={BoxesIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandboxGroup')}
