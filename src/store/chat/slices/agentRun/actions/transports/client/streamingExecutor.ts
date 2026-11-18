@@ -35,6 +35,10 @@ import {
 import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import {
+  applyAgentConnectorActivation,
+  resolveAgentConnectorActivation,
+} from '@/helpers/toolEngineering/connectorActivation';
 import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -66,8 +70,10 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
+import { steerQueuedFollowUps } from './clientSteer';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -214,10 +220,23 @@ export class StreamingExecutorActionImpl {
           }
         : resolvedAgentConfig;
 
-    const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
+    const { agentConfig: agentConfigData, plugins: resolvedPluginIds } = agentConfig;
     const selectedToolIds = initialContext?.initialContext?.selectedTools?.map(
       (tool) => tool.identifier,
     );
+    // Connectors are two-state: one the agent has on is found through the
+    // activator, so it leaves the invocation set here unless this turn mentions
+    // it. Manual mode has no activator and invokes it directly instead.
+    const runAgent = {
+      chatConfig: agentConfig.chatConfig,
+      enabledPluginIds: resolvedPluginIds,
+      plugins: agentConfigData?.plugins,
+    };
+    const connectors = resolveAgentConnectorActivation(runAgent, selectedToolIds);
+    const pluginIds =
+      disableTools || !resolvedPluginIds
+        ? resolvedPluginIds
+        : applyAgentConnectorActivation(resolvedPluginIds, connectors);
 
     if (!agentConfigData || !agentConfigData.model) {
       throw new Error(
@@ -272,11 +291,9 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
-      { hasOversizedFiles: hasPreviewableFiles(messages) },
+      { hasOversizedFiles: hasPreviewableFiles(messages), runAgent: { ...runAgent, connectors } },
     );
-    // When skillActivateMode is 'manual':
-    // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
-    // (skills, web-browsing, sandbox, memory, etc.) remain available for all agents.
+    // Manual mode omits the activator and keeps explicit pins and runtime tools.
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({
@@ -726,7 +743,20 @@ export class StreamingExecutorActionImpl {
       );
       // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
-      const hasQueuedMessages = (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
+      // Steer joins what can join right here; Queue lets the run finish first.
+      const followUpMode = getFollowUpMode();
+      if (followUpMode === 'steer') {
+        const steered = await steerQueuedFollowUps(this.#get, {
+          context,
+          contextKey,
+          nextContext,
+          operationId,
+          state,
+        });
+        if (steered) ({ nextContext, state } = steered);
+      }
+      const hasQueuedMessages =
+        followUpMode !== 'queue' && (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
       const stepContext = computeStepContext({
         activatedSkills,
         activatedToolIds,

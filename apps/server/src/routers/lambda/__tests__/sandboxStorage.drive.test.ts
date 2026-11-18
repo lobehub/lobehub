@@ -37,10 +37,12 @@ const STORAGE_KEY = `ws-org-${workspaceId}`;
 const personalKey = (userId: string) => `ws-mem-${workspaceId}-${userId}`;
 
 const plane = vi.hoisted(() => ({
+  analyzeStorage: vi.fn(),
   copyInstance: vi.fn(),
   createDirectory: vi.fn(),
   deleteFile: vi.fn(),
   deleteInstance: vi.fn(),
+  deletePaths: vi.fn(),
   exportFile: vi.fn(),
   getStorage: vi.fn(),
   listFiles: vi.fn(),
@@ -151,6 +153,14 @@ beforeEach(async () => {
   plane.createDirectory.mockReset().mockImplementation(async ({ path }) => ({ path }));
   plane.deleteFile.mockReset().mockImplementation(async ({ path }) => ({ path }));
   plane.deleteInstance.mockReset().mockResolvedValue(undefined);
+  plane.analyzeStorage.mockReset();
+  plane.deletePaths.mockReset().mockImplementation(async ({ paths }) => ({
+    deleted: paths,
+    done: true,
+    freedBytes: 0,
+    missing: [],
+    pending: [],
+  }));
   // A storage service that cannot export, so a download packs in a sandbox
   // unless a case says otherwise.
   plane.exportFile
@@ -572,6 +582,107 @@ describe('the public drive', () => {
     ).resolves.toMatchObject({ path: 'atlas-old' });
     expect(plane.writeFile).toHaveBeenCalled();
     expect(plane.renameFile).toHaveBeenCalled();
+  });
+});
+
+describe('analyzing and cleaning up the drive', () => {
+  const analysis = {
+    result: {
+      categories: [{ bytes: 300, category: 'other', items: 3 }],
+      items: [
+        {
+          bytes: 100,
+          category: 'other',
+          isDirectory: false,
+          path: 'projA/a.bin',
+          regenerable: false,
+        },
+        {
+          bytes: 100,
+          category: 'other',
+          isDirectory: false,
+          path: 'secret/key',
+          regenerable: false,
+        },
+        {
+          bytes: 150,
+          category: 'dependencies',
+          isDirectory: true,
+          path: 'projects',
+          regenerable: true,
+        },
+      ],
+      largestDirectories: [
+        { bytes: 200, path: 'projects' },
+        { bytes: 100, path: 'projects/secret' },
+        { bytes: 100, path: 'projA' },
+      ],
+      largestFiles: [
+        { bytes: 100, category: 'other', path: 'secret/key' },
+        { bytes: 100, category: 'other', path: 'projA/a.bin' },
+      ],
+      totalBytes: 300,
+    },
+    scannedBytes: 300,
+    status: 'done',
+  };
+
+  it('names nothing inside a hidden directory, nor the folder holding one, but keeps the totals', async () => {
+    await legacyPrivateFolder(ownerId, 'secret');
+    await legacyPrivateFolder(ownerId, 'projects/secret');
+    plane.analyzeStorage.mockResolvedValue(analysis);
+
+    const seen = await drive(memberId).analyzeStorage({ restart: true });
+
+    expect(plane.analyzeStorage).toHaveBeenCalledWith(expect.objectContaining({ restart: true }));
+    expect(seen.result?.totalBytes).toBe(300);
+    expect(seen.result?.items.map((item) => item.path)).toEqual(['projA/a.bin']);
+    expect(seen.result?.largestFiles.map((entry) => entry.path)).toEqual(['projA/a.bin']);
+    expect(seen.result?.largestDirectories.map((entry) => entry.path)).toEqual(['projA']);
+  });
+
+  it('shows the owner of a personal drive everything', async () => {
+    plane.analyzeStorage.mockResolvedValue(analysis);
+
+    const seen = await drive(ownerId).analyzeStorage({ drive: 'personal' });
+
+    expect(reached).toEqual([personalKey(ownerId)]);
+    expect(seen.result?.items).toHaveLength(3);
+  });
+
+  it('deletes a batch once, with duplicates collapsed and the flag passed on', async () => {
+    const result = await drive(memberId).deleteFiles({
+      paths: ['projA/node_modules', 'projA/node_modules', 'b.zip'],
+      regenerableOnly: true,
+    });
+
+    expect(plane.deletePaths).toHaveBeenCalledWith(
+      expect.objectContaining({ paths: ['projA/node_modules', 'b.zip'], regenerableOnly: true }),
+    );
+    expect(result.done).toBe(true);
+  });
+
+  it('refuses a batch that reaches a hidden directory, deleting nothing', async () => {
+    await legacyPrivateFolder(ownerId, 'projects/secret');
+
+    await expect(
+      drive(memberId).deleteFiles({ paths: ['projA/a.bin', 'projects'] }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'PATH_HOLDS_HIDDEN' });
+    await expect(
+      drive(memberId).deleteFiles({ paths: ['projects/secret/key'] }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(drive(memberId).deleteFiles({ paths: ['.sandbox/envs'] })).rejects.toThrow();
+    expect(plane.deletePaths).not.toHaveBeenCalled();
+  });
+
+  it('passes a refusal of non-regenerable paths through as its code', async () => {
+    plane.deletePaths.mockRejectedValue(
+      new SandboxStorageFilesError('not regenerable', 400, 'storage_paths_not_regenerable'),
+    );
+
+    await expect(
+      drive(memberId).deleteFiles({ paths: ['notes.md'], regenerableOnly: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'storage_paths_not_regenerable' });
   });
 });
 

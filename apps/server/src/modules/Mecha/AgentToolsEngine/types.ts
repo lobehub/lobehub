@@ -88,6 +88,8 @@ export interface ServerCreateAgentToolsEngineParams {
     /** Plugin IDs enabled for this agent */
     plugins?: string[];
   };
+  /** Configured connectors a custom toolset can load after explicit activation. */
+  allowedConnectorIds?: ReadonlySet<string>;
   /**
    * Whether device tools (local-system / remote-device) are allowed this turn.
    * Computed by `resolveDeviceAccessPolicy` from the caller identity:
@@ -120,6 +122,8 @@ export interface ServerCreateAgentToolsEngineParams {
   globalMemoryEnabled?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
+  /** An available enabled HTTP connector supports events and the webhook flag is on. */
+  hasEventConnector?: boolean;
   /**
    * Whether the executing agent owns an identity account (e.g. a mail
    * address). Gates

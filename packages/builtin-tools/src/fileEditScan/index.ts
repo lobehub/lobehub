@@ -61,7 +61,7 @@ const LOCAL_SYSTEM_FILE_APIS = new Map<string, StructuredFileApiKind>([
 
 /**
  * Codex heterogeneous agent.
- * Source: `@lobechat/heterogeneous-agents` `adapters/codex.ts` — `toToolPayload`
+ * Source: `@lobechat/heterogeneous-agents` `adapters/codex/` — `toToolPayload`
  * stamps every Codex tool call with `identifier = 'codex'` (`CODEX_IDENTIFIER`)
  * and `synthesizeFileChangePluginState` produces apiName `file_change`, state
  * shape `{ changes: [{ path, kind, diffText?, linesAdded, linesDeleted }] }`
@@ -98,7 +98,7 @@ const CLAUDE_CODE_EDIT_APIS = new Set(['Edit', 'Write', 'MultiEdit']);
  *   `transcript/claudeCode.ts` `CLAUDE_CODE_IDENTIFIER` + tool name `Bash`;
  *   failures surface via the tool-result `error` (is_error), not a state field.
  * - codex command_execution. Source: `@lobechat/heterogeneous-agents`
- *   `adapters/codex.ts` `CODEX_IDENTIFIER` + `CODEX_COMMAND_API`; state pluginState
+ *   `adapters/codex/` `CODEX_IDENTIFIER` + `CODEX_COMMAND_API`; state pluginState
  *   carries `{ exitCode?, success, … }`.
  *
  * - lobe-skills runCommand / execScript, DEVICE rows only. Source:

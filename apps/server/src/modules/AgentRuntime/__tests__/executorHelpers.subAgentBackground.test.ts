@@ -100,6 +100,38 @@ describe('buildServerVirtualSubAgentRunner in background mode', () => {
     expect(result).toMatchObject({ started: true, threadId: 'thread-1' });
   });
 
+  // Steering a running sub-agent starts no run: this call's row only holds the
+  // receipt, and must not count as a background run still waiting for its result.
+  it('settles the placeholder of an instruction that steered a running sub-agent', async () => {
+    const { messageModel, runner } = buildRunner({
+      operationId: 'running-child-op',
+      steered: true,
+      success: true,
+      threadId: 'thread-1',
+    });
+
+    const result = await runner.run({
+      background: true,
+      description: 'research',
+      instruction: 'only 2025',
+      subAgentId: 'thread-1',
+    });
+
+    expect(messageModel.updatePluginState).toHaveBeenCalledWith('placeholder-1', {
+      background: false,
+      status: 'completed',
+      steered: true,
+      threadId: 'thread-1',
+    });
+    expect(result).toEqual({
+      started: true,
+      steered: true,
+      subOperationId: 'running-child-op',
+      threadId: 'thread-1',
+      toolMessageId: 'placeholder-1',
+    });
+  });
+
   it('leaves a foreground placeholder as before', async () => {
     const { messageModel, runner } = buildRunner();
 

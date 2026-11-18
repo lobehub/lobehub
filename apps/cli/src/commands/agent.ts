@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import { AgentGraphSchema } from '@lobechat/types/agent/graph';
-import { type Command, InvalidArgumentError } from 'commander';
+import { type Command, InvalidArgumentError, Option } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
@@ -9,6 +9,7 @@ import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { registerAgentAccountCommand, registerAgentInboxCommand } from './agent/account';
+import { registerAgentMoveCommands } from './agent/move';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
@@ -43,8 +44,19 @@ const readJsonObjectFile = async (
   return parsed as Record<string, unknown>;
 };
 
+/** Values `agent.createAgent` accepts for `visibility`; omit it to keep the server default. */
+const AGENT_VISIBILITIES = ['private', 'public'] as const;
+type AgentVisibility = (typeof AGENT_VISIBILITIES)[number];
+
 const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
   readJsonObjectFile(agencyConfigFile, 'agencyConfig');
+
+interface AgentListOptions {
+  json?: string | boolean;
+  keyword?: string;
+  limit?: string;
+  tag?: string;
+}
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -59,8 +71,9 @@ export function registerAgentCommand(program: Command) {
     .description('List agents')
     .option('-L, --limit <n>', 'Maximum number of items', '30')
     .option('-k, --keyword <keyword>', 'Filter by keyword')
+    .option('--tag <tag>', 'Only agents carrying this tag')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
+    .action(async (options: AgentListOptions) => {
       const client = await getTrpcClient();
 
       // The inbox (Lobe AI) is a real assistant the user can open, and this is
@@ -72,12 +85,25 @@ export function registerAgentCommand(program: Command) {
         keyword?: string;
         limit?: number;
         offset?: number;
+        tag?: string;
       } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
+      if (options.tag?.trim()) input.tag = options.tag.trim();
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
       const result = await client.agent.queryAgents.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+      const listed: any[] = Array.isArray(result) ? result : ((result as any).items ?? []);
+      // An older server drops the unknown `tag` input and returns an unfiltered
+      // page whose rows carry no `tags`: keep only rows that really carry the
+      // tag, so unrelated agents are never printed as a filtered result.
+      const tag = input.tag;
+      const items =
+        tag === undefined
+          ? listed
+          : listed.filter((a) => Array.isArray(a?.tags) && a.tags.includes(tag));
+      if (tag !== undefined && listed.length > 0 && !listed.some((a) => Array.isArray(a?.tags))) {
+        log.warn('This server does not filter agents by tag; upgrade it to use --tag.');
+      }
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -154,6 +180,8 @@ export function registerAgentCommand(program: Command) {
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
+        // Visibility only means something inside a workspace.
+        if (r.workspaceId && r.visibility) meta.push(`Visibility: ${r.visibility}`);
         if (meta.length > 0) console.log(pc.dim(meta.join(' · ')));
 
         if (r.systemRole) {
@@ -175,14 +203,29 @@ export function registerAgentCommand(program: Command) {
     .option('-p, --provider <provider>', 'Provider ID')
     .option('-s, --system-role <role>', 'System role prompt')
     .option('--group <groupId>', 'Group ID')
+    .option(
+      '--tag <tag>',
+      'Tag the agent (repeatable), e.g. so an app can find the agents it created',
+      (tag: string, tags: string[] = []) => [...tags, tag],
+    )
+    .addOption(
+      new Option(
+        '--visibility <visibility>',
+        'Who can see the agent in a workspace: `private` (only you) or `public` (workspace members). Omit to use the server default',
+      ).choices(AGENT_VISIBILITIES),
+    )
+    .option('--json [fields]', 'Output the created agent as JSON, optionally selecting fields')
     .action(
       async (options: {
         description?: string;
         group?: string;
+        json?: string | boolean;
         model?: string;
         provider?: string;
         systemRole?: string;
+        tag?: string[];
         title?: string;
+        visibility?: AgentVisibility;
       }) => {
         const client = await getTrpcClient();
         const buildUrl = await resolveAppUrlBuilder(client);
@@ -193,16 +236,51 @@ export function registerAgentCommand(program: Command) {
         if (options.model) config.model = options.model;
         if (options.provider) config.provider = options.provider;
         if (options.systemRole) config.systemRole = options.systemRole;
+        const tags = [...new Set((options.tag ?? []).map((t) => t.trim()).filter(Boolean))];
+        if (tags.length > 0) config.tags = tags;
 
         const input: Record<string, any> = { config };
         if (options.group) input.groupId = options.group;
+        // Passed through as-is. When omitted the key is left out entirely so the
+        // server keeps deciding (its default, or the folder's visibility).
+        if (options.visibility) input.visibility = options.visibility;
 
         const result = await client.agent.createAgent.mutate(input as any);
         const r = result as any;
         const agentId = r.agentId || r.id;
         const url = buildUrl(`/agent/${encodeURIComponent(agentId)}`);
+
+        if (options.json !== undefined) {
+          // `createAgent` only returns the id, so read the stored row back: the
+          // visibility reported here is what the server persisted (default or
+          // folder-inherited included), never an echo of the flag. The agent
+          // already exists at this point, so a failed read-back must still print
+          // its id (with `visibility: null`) — exiting non-zero would invite the
+          // caller to retry and create a duplicate.
+          let created: any = null;
+          try {
+            created = await client.agent.getAgentConfigById.query({ agentId });
+          } catch (error) {
+            log.warn(`Created ${agentId}, but could not read it back: ${(error as Error).message}`);
+          }
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(
+            {
+              id: agentId,
+              ...(r.sessionId ? { sessionId: r.sessionId } : {}),
+              title: created?.title ?? options.title ?? null,
+              url,
+              visibility: created?.visibility ?? null,
+              workspaceId: created?.workspaceId ?? null,
+            },
+            fields,
+          );
+          return;
+        }
+
         console.log(`${pc.green('✓')} Created agent ${pc.bold(agentId)}`);
         if (r.sessionId) console.log(`  Session: ${r.sessionId}`);
+        if (options.visibility) console.log(`  Visibility: ${options.visibility}`);
         console.log(`${pc.bold('agent')}: ${url}`);
       },
     );
@@ -398,6 +476,10 @@ export function registerAgentCommand(program: Command) {
       await client.agent.updateAgentPinned.mutate({ id: agentId, pinned: false });
       console.log(`${pc.green('✓')} Unpinned agent ${pc.bold(agentId)}`);
     });
+
+  // ── transfer / move-group ───────────────────────────
+
+  registerAgentMoveCommands(agent);
 
   // ── kb-files ───────────────────────────────────────
 

@@ -307,7 +307,7 @@ const ACTIVATION_MODE_CONTROLLED_TOOL_IDS = new Set(activationModeControlledTool
  * that aren't available in the current environment.
  *
  * The list must match what the engine actually enables: in manual skill-activate mode the
- * discovery tools in `manualModeExcludeToolIds` (activator, skill-store) are stripped from
+ * discovery tools in `manualModeExcludeToolIds` are stripped from
  * the defaults before the enable checker runs, so they are NOT on — exclude them here too,
  * otherwise the UI would claim a fixed tool that the runtime omits.
  */

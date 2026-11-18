@@ -9,6 +9,7 @@ import {
   rehomeAgentConnectorsForScopeTransfer,
 } from '../../utils/agentConnectors';
 import { ConnectorModel } from '../connector';
+import { connectorAgentConfigScope } from '../connectorScope';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -492,5 +493,49 @@ describe('ConnectorModel.queryAllAgentScoped', () => {
     const rows = await wsModel.queryAllAgentScoped();
 
     expect(rows.map((r) => r.id)).toEqual([wsOwned.id]);
+  });
+});
+
+describe('connectorAgentConfigScope', () => {
+  it('keeps a personal Agent to the caller own rows outside a workspace', async () => {
+    const mine = await insertConnector({ agentId: agentA, identifier: 'gmail', name: 'Mine' });
+    await insertConnector({ identifier: 'slack', name: 'Theirs', userId: otherUserId });
+
+    const rows = await serverDB
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(connectorAgentConfigScope(serverDB, { userId }, agentA));
+
+    expect(rows.map((row) => row.id)).toEqual([mine.id]);
+  });
+
+  it('keeps another member private row out of a workspace Agent config', async () => {
+    const shared = await insertConnector({
+      agentId: agentA,
+      identifier: 'gmail',
+      name: 'Shared',
+      workspaceId,
+    });
+    const [privateRow] = await serverDB
+      .insert(userConnectors)
+      .values({
+        agentId: agentB,
+        identifier: 'slack',
+        name: 'Private',
+        sourceType: 'custom',
+        status: 'connected',
+        userId: otherUserId,
+        visibility: 'private',
+        workspaceId,
+      })
+      .returning();
+
+    const rows = await serverDB
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(connectorAgentConfigScope(serverDB, { userId, workspaceId }, agentA));
+
+    expect(rows.map((row) => row.id)).toEqual([shared.id]);
+    expect(rows.map((row) => row.id)).not.toContain(privateRow.id);
   });
 });

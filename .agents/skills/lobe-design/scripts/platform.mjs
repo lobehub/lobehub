@@ -49,7 +49,8 @@ function expandIds(s) {
   return out;
 }
 
-const NA = /不适用|n\/a|not applicable|关闭|停用/i;
+const NA = /不适用|n\/a|not applicable/i;
+const NA_CELL = /^(不适用|n\/a|not applicable|关闭|停用)$/i;
 /** 读项目层的适用性：返回被标为不适用的规则编号 / lint id。 */
 export function parseApplicability(text) {
   const off = new Set();
@@ -57,8 +58,11 @@ export function parseApplicability(text) {
   for (const line of text.split('\n')) {
     const lo = line.match(/lint-off\s*[:：]\s*`?([^`\n]+)/i);
     if (lo) { for (const id of expandIds(lo[1])) off.add(id); continue; }
-    if (!NA.test(line)) continue;
-    // 表格行：只看标「不适用」的那一行；普通行：只看「不适用」前后同一句
+    // 表格行：必须有一格整格是标记；「停用账号」「关闭评论」这类业务描述里的词不算
+    const marked = /^\s*\|/.test(line)
+      ? line.split('|').some((c) => NA_CELL.test(c.trim()))
+      : NA.test(line);
+    if (!marked) continue;
     for (const id of expandIds(line)) off.add(id);
   }
   return off;

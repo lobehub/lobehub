@@ -230,6 +230,71 @@ describe('AsyncTaskModel', () => {
     });
   });
 
+  describe('claimPending', () => {
+    it('claims a pending task once and moves it to processing', async () => {
+      const taskId = await asyncTaskModel.create({
+        status: AsyncTaskStatus.Pending,
+        type: AsyncTaskType.DataExport,
+      });
+
+      expect(await asyncTaskModel.claimPending(taskId)).toBe(true);
+      expect(await asyncTaskModel.claimPending(taskId)).toBe(false);
+
+      const task = await asyncTaskModel.findById(taskId);
+      expect(task?.status).toBe(AsyncTaskStatus.Processing);
+    });
+
+    it('does not claim a settled task or another user’s task', async () => {
+      const settledId = await asyncTaskModel.create({
+        status: AsyncTaskStatus.Error,
+        type: AsyncTaskType.DataExport,
+      });
+      const pendingId = await asyncTaskModel.create({
+        status: AsyncTaskStatus.Pending,
+        type: AsyncTaskType.DataExport,
+      });
+      await serverDB.insert(users).values({ id: 'async-task-other-user' });
+      const otherModel = new AsyncTaskModel(serverDB, 'async-task-other-user');
+
+      expect(await asyncTaskModel.claimPending(settledId)).toBe(false);
+      expect(await otherModel.claimPending(pendingId)).toBe(false);
+      expect((await asyncTaskModel.findById(pendingId))?.status).toBe(AsyncTaskStatus.Pending);
+    });
+  });
+
+  describe('findAllByType', () => {
+    it('returns only the given type in the caller’s scope, newest first', async () => {
+      await serverDB.insert(users).values({ id: 'async-task-other-user' });
+      await serverDB.insert(asyncTasks).values([
+        {
+          createdAt: new Date('2026-01-01'),
+          status: AsyncTaskStatus.Success,
+          type: AsyncTaskType.DataExport,
+          userId,
+        },
+        {
+          createdAt: new Date('2026-02-01'),
+          status: AsyncTaskStatus.Pending,
+          type: AsyncTaskType.DataExport,
+          userId,
+        },
+        { status: AsyncTaskStatus.Success, type: AsyncTaskType.Chunking, userId },
+        {
+          status: AsyncTaskStatus.Success,
+          type: AsyncTaskType.DataExport,
+          userId: 'async-task-other-user',
+        },
+      ]);
+
+      const tasks = await asyncTaskModel.findAllByType(AsyncTaskType.DataExport);
+
+      expect(tasks.map((task) => [task.status, task.createdAt.toISOString()])).toEqual([
+        [AsyncTaskStatus.Pending, '2026-02-01T00:00:00.000Z'],
+        [AsyncTaskStatus.Success, '2026-01-01T00:00:00.000Z'],
+      ]);
+    });
+  });
+
   describe('findActiveByType', () => {
     it('should find active tasks with Pending status', async () => {
       await serverDB.insert(asyncTasks).values({

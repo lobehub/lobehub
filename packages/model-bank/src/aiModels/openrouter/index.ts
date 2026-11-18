@@ -1,6 +1,7 @@
 import type { AIChatModelCard } from '../../types/aiModel';
 import { openrouterDecisionModels } from './decision';
 import { openrouterGoogleModels } from './google';
+import { openrouterGpt62Models } from './gpt62';
 
 // https://openrouter.ai/docs/api-reference/list-available-models
 const openrouterChatModels: AIChatModelCard[] = [
@@ -107,6 +108,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     settings: { extendParams: ['disableContextCaching'], searchImpl: 'params' },
     type: 'chat',
   },
+  ...openrouterGpt62Models,
   {
     abilities: {
       functionCall: true,

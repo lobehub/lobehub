@@ -12,6 +12,7 @@ import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFla
 
 import { hasNonPersistedMessage } from './messagePersistence';
 import { getAgentRuntimeRedisClient } from './redis';
+import { restoreSlimState, slimStateForPersist } from './slimAgentState';
 
 const log = debug('lobe-server:agent-runtime:agent-state-manager');
 
@@ -123,7 +124,28 @@ const STRIP_FLAG_CACHE_TTL_MS = 5000;
 const STRIP_FLAG_CACHE_MAX = 1024;
 
 /**
- * Resolved values, keyed by owner ('' for the global value).
+ * Whether a persisted blob may also leave out the copies `slimStateForPersist`
+ * drops (see `slimAgentState.ts`): runtime flag `agent_runtime_slim_state`,
+ * overridden by `AGENT_RUNTIME_SLIM_STATE` (`0` kill switch, `1` force on).
+ * Same rollout contract as the tool set: the load path restores them
+ * unconditionally, so this build must be everywhere before the flag is
+ * published, and flipping it either way is safe for operations in flight.
+ */
+interface PersistOptions {
+  slim: boolean;
+  stripToolSet: boolean;
+}
+
+const envOverride = (name: string): boolean | undefined => {
+  const value = process.env[name];
+  if (value === '0') return false;
+  if (value === '1') return true;
+  return undefined;
+};
+
+/**
+ * Resolved values, keyed by owner ('' for the global value). One provider read
+ * resolves both flags.
  *
  * `getMergedFeatureFlags` always reads the per-user override record when it is
  * given a user id, and that provider does not cache a missing record
@@ -133,47 +155,60 @@ const STRIP_FLAG_CACHE_MAX = 1024;
  * back because stripping stays inline. This cache bounds the lookup to once per
  * owner per TTL.
  */
-const stripFlagCache = new Map<string, { expiresAt: number; value: boolean }>();
+const persistFlagCache = new Map<string, { expiresAt: number; value: PersistOptions }>();
 
-/** Clear the strip-flag resolution cache (for testing). */
+/** Clear the persistence-flag resolution cache (for testing). */
 export const resetStripOperationToolsetCache = () => {
-  stripFlagCache.clear();
+  persistFlagCache.clear();
 };
 
-const resolveStripOperationToolset = async (userId?: string): Promise<boolean> => {
-  const override = process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET;
-  if (override === '0') return false;
-  if (override === '1') return true;
-
+const resolveFlags = async (userId?: string): Promise<PersistOptions> => {
   // Owners without a user id all resolve the global value, so they share a key.
   const cacheKey = userId ?? '';
-  const cached = stripFlagCache.get(cacheKey);
+  const cached = persistFlagCache.get(cacheKey);
   if (cached) {
     if (cached.expiresAt > Date.now()) return cached.value;
-    stripFlagCache.delete(cacheKey);
+    persistFlagCache.delete(cacheKey);
   }
 
   try {
     const flags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-    const enabled = flags.enableStripOperationToolset === true;
+    const value: PersistOptions = {
+      slim: flags.enableSlimAgentState === true,
+      stripToolSet: flags.enableStripOperationToolset === true,
+    };
 
     // Evict the oldest entry instead of growing with the number of owners.
-    if (stripFlagCache.size >= STRIP_FLAG_CACHE_MAX) {
-      const oldestKey = stripFlagCache.keys().next().value;
-      if (oldestKey !== undefined) stripFlagCache.delete(oldestKey);
+    if (persistFlagCache.size >= STRIP_FLAG_CACHE_MAX) {
+      const oldestKey = persistFlagCache.keys().next().value;
+      if (oldestKey !== undefined) persistFlagCache.delete(oldestKey);
     }
-    stripFlagCache.set(cacheKey, {
-      expiresAt: Date.now() + STRIP_FLAG_CACHE_TTL_MS,
-      value: enabled,
-    });
+    persistFlagCache.set(cacheKey, { expiresAt: Date.now() + STRIP_FLAG_CACHE_TTL_MS, value });
 
-    return enabled;
+    return value;
   } catch (error) {
-    // Deliberately not cached: a transient read failure must not pin the flag
+    // Deliberately not cached: a transient read failure must not pin the flags
     // off for a whole TTL.
-    log('Failed to resolve agent_runtime_strip_operation_toolset, keeping inline: %O', error);
-    return false;
+    log('Failed to resolve agent state persistence flags, keeping inline: %O', error);
+    return { slim: false, stripToolSet: false };
   }
+};
+
+const resolvePersistOptions = async (userId?: string): Promise<PersistOptions> => {
+  const stripOverride = envOverride('AGENT_RUNTIME_STRIP_OPERATION_TOOLSET');
+  // The tool set kill switch restores the fully inline blob, so it turns
+  // slimming off too unless that is forced on separately.
+  const slimOverride =
+    envOverride('AGENT_RUNTIME_SLIM_STATE') ?? (stripOverride === false ? false : undefined);
+  // Both pinned by env: never touch the flag provider.
+  if (stripOverride !== undefined && slimOverride !== undefined) {
+    return { slim: slimOverride, stripToolSet: stripOverride };
+  }
+  const flags = await resolveFlags(userId);
+  return {
+    slim: slimOverride ?? flags.slim,
+    stripToolSet: stripOverride ?? flags.stripToolSet,
+  };
 };
 
 export interface StepResult {
@@ -274,18 +309,23 @@ export class AgentStateManager {
    * (group-member supervisor turns); the size win is forgone to avoid losing
    * the prompt.
    */
-  private serializeStateForPersist(state: AgentState, stripToolSet: boolean): string {
+  private serializeStateForPersist(state: AgentState, options: PersistOptions): string {
+    const { slim, stripToolSet } = options;
+    // Copies of the tool set are dropped against the full state, before the tool
+    // set itself leaves the blob; `restoreSlimState` rebuilds them after it is
+    // re-attached on load.
+    const source = slim ? slimStateForPersist(state) : state;
     // `operationToolSet` is externalized to its own key (see
     // `externalizeToolSet`) and re-attached on load, so it never travels in the
     // blob — once stripping is enabled. Until then the blob keeps its inline
     // copy so a previous-build worker can still execute the operation (see
-    // `resolveStripOperationToolset`). It is immutable after creation, so a single
+    // `resolvePersistOptions`). It is immutable after creation, so a single
     // write per operation replaces re-serializing ~300–400 KB of tool schemas
     // at every step.
-    const { operationToolSet: _toolSet, ...withoutToolSet } = state as AgentState & {
+    const { operationToolSet: _toolSet, ...withoutToolSet } = source as AgentState & {
       operationToolSet?: unknown;
     };
-    const persistable = (stripToolSet ? withoutToolSet : state) as AgentState & {
+    const persistable = (stripToolSet ? withoutToolSet : source) as AgentState & {
       messages?: unknown;
       operationToolSet?: unknown;
     };
@@ -350,21 +390,27 @@ export class AgentStateManager {
     const stateKey = `${this.STATE_PREFIX}:${operationId}`;
 
     try {
-      const stripToolSet = await resolveStripOperationToolset(state.origin?.userId);
+      const persistOptions = await resolvePersistOptions(state.origin?.userId);
+      const { stripToolSet } = persistOptions;
       if (stripToolSet) await this.externalizeToolSet(operationId, state);
-      const serializedState = this.serializeStateForPersist(state, stripToolSet);
-      await this.redis.setex(stateKey, this.DEFAULT_TTL, serializedState);
+      const serializedState = this.serializeStateForPersist(state, persistOptions);
+      // One MULTI, like `saveStepResult`: `loadAgentStatus` reads the status
+      // from the metadata hash, so it must never disagree with the blob.
+      const pipeline = this.redis.multi();
+      pipeline.setex(stateKey, this.DEFAULT_TTL, serializedState);
       // Keep the externalized tool set alive in lockstep with the blob so a
       // long run never loads a stripped blob whose tool set has expired.
-      if (stripToolSet) await this.redis.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
-
-      // Update metadata
-      await this.updateOperationMetadata(operationId, {
+      if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
+      const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
+      const metadata: Partial<AgentOperationMetadata> = {
         lastActiveAt: new Date().toISOString(),
         status: state.status,
         totalCost: state.cost?.total || 0,
         totalSteps: getLlmCallCount(state),
-      });
+      };
+      pipeline.hmset(metaKey, metadata as any);
+      pipeline.expire(metaKey, this.DEFAULT_TTL);
+      await pipeline.exec();
 
       // State change events are recorded through the events array in saveStepResult
 
@@ -392,6 +438,9 @@ export class AgentStateManager {
       // that context in `metadata`; lift it once here so readers see one shape.
       const state = normalizeAgentState(JSON.parse(serializedState) as AgentState);
       await this.rehydrateToolSet(operationId, state);
+      // Unconditional, like the tool set: a blob saved with slimming on loads the
+      // same whatever the flag says now.
+      restoreSlimState(state);
       log('[%s] Loaded state (step %d)', operationId, state.stepCount);
 
       return state;
@@ -399,6 +448,18 @@ export class AgentStateManager {
       console.error('Failed to load agent state:', error);
       throw error;
     }
+  }
+
+  /**
+   * Read only the persisted status. Both save paths write it to the metadata
+   * hash in the same MULTI as the blob, so this is the blob's status without
+   * downloading the blob, which can run to hundreds of KB. Falls back to the blob
+   * only when the hash has no status field.
+   */
+  async loadAgentStatus(operationId: string): Promise<AgentState['status'] | null> {
+    const status = await this.redis.hget(`${this.METADATA_PREFIX}:${operationId}`, 'status');
+    if (status) return status as AgentState['status'];
+    return (await this.loadAgentState(operationId))?.status ?? null;
   }
 
   /**
@@ -442,7 +503,8 @@ export class AgentStateManager {
     try {
       // Write-once before opening the pipeline; the inline loop warms the cache
       // on its first step and every later step skips the tool-set write.
-      const stripToolSet = await resolveStripOperationToolset(stepResult.newState.origin?.userId);
+      const persistOptions = await resolvePersistOptions(stepResult.newState.origin?.userId);
+      const { stripToolSet } = persistOptions;
       if (stripToolSet) await this.externalizeToolSet(operationId, stepResult.newState);
 
       const pipeline = this.redis.multi();
@@ -452,7 +514,7 @@ export class AgentStateManager {
       pipeline.setex(
         stateKey,
         this.DEFAULT_TTL,
-        this.serializeStateForPersist(stepResult.newState, stripToolSet),
+        this.serializeStateForPersist(stepResult.newState, persistOptions),
       );
       // Refresh the externalized tool set's TTL alongside the blob.
       if (stripToolSet) pipeline.expire(this.toolSetKey(operationId), this.DEFAULT_TTL);
@@ -613,37 +675,6 @@ export class AgentStateManager {
     } catch (error) {
       console.error('Failed to create operation metadata:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Update operation metadata
-   */
-  private async updateOperationMetadata(
-    operationId: string,
-    updates: Partial<AgentOperationMetadata>,
-  ): Promise<void> {
-    const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
-
-    try {
-      const redisUpdates: Record<string, string> = {};
-
-      Object.entries(updates).forEach(([key, value]) => {
-        if (value !== undefined) {
-          if (typeof value === 'object') {
-            redisUpdates[key] = JSON.stringify(value);
-          } else {
-            redisUpdates[key] = value.toString();
-          }
-        }
-      });
-
-      if (Object.keys(redisUpdates).length > 0) {
-        await this.redis.hmset(metaKey, redisUpdates);
-        await this.redis.expire(metaKey, this.DEFAULT_TTL);
-      }
-    } catch (error) {
-      console.error('Failed to update session metadata:', error);
     }
   }
 

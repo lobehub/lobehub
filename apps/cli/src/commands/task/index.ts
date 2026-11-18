@@ -45,7 +45,7 @@ export function registerTaskCommand(program: Command) {
     .description('List tasks')
     .option(
       '--status <status>',
-      'Filter by status (pending/running/paused/completed/failed/canceled)',
+      'Filter by status (backlog/running/scheduled/paused/completed/failed/canceled)',
     )
     .option('--root', 'Only show root tasks (no parent)')
     .option('--parent <id>', 'Filter by parent task ID')
@@ -916,7 +916,7 @@ export function registerTaskCommand(program: Command) {
 
         const prefix = indent === 0 ? '' : '  '.repeat(indent) + '├── ';
         const name = t.name || t.identifier || '';
-        const status = t.status || 'pending';
+        const status = t.status || 'backlog';
         const identifier = t.identifier || t.id;
         console.log(`${prefix}${pc.dim(identifier)} ${statusBadge(status)} ${name}`);
 

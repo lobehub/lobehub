@@ -3,18 +3,24 @@ import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { resolveLinkIdentity } from '@/server/services/connector/identity';
 import {
   discoverConnectorAuthorizationServerMetadata,
   exchangeConnectorCode,
   toClientInformation,
 } from '@/server/services/connector/oauth';
-import { consumeConnectorOAuthState } from '@/server/services/connector/stateStore';
+import {
+  consumeConnectorOAuthState,
+  saveConnectorOAuthCompletion,
+} from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
+import { scheduleRefreshByConnector } from '@/server/services/inboundWebhook/lifecycle';
 
 const log = debug('lobe-server:connector:oauth-callback');
 
@@ -57,6 +63,8 @@ const renderResultPage = (result: {
   success: boolean;
   /** Whether the tool list synced. `false` = authorized but tools unavailable. */
   synced?: boolean;
+  linkId?: string;
+  outcome?: 'created' | 'reauthorized' | 'matchedExisting';
 }): NextResponse => {
   const payload = jsonForScript({ type: 'lobe-connector-oauth', ...result });
   const html = `<!doctype html>
@@ -150,15 +158,31 @@ export const GET = async (req: NextRequest) => {
       resource: connector.mcpServerUrl ?? undefined,
     });
 
-    const { credentials, tokenExpiresAt } = tokensToCredentials(tokens, {
+    const { credentials } = tokensToCredentials(tokens, {
       clientSecret: oidc.clientSecret,
     });
 
-    await connectorModel.update(payload.connectorId, {
-      credentials: JSON.stringify(credentials),
-      // Remember the auth method that worked so refreshes don't fail the same way.
-      ...(authMethod && { oidcConfig: { ...oidc, tokenEndpointAuthMethod: authMethod } }),
-      tokenExpiresAt,
+    if (authMethod)
+      await connectorModel.update(payload.connectorId, {
+        oidcConfig: { ...oidc, tokenEndpointAuthMethod: authMethod },
+      });
+    const connectorLinkModel = new ConnectorLinkModel(
+      serverDB,
+      payload.lobeUserId,
+      payload.workspaceId,
+      gateKeeper,
+    );
+    if (credentials.type !== 'oauth2') return renderFailure('invalid_credentials');
+    const earliestLink = payload.linkTarget
+      ? undefined
+      : (await connectorLinkModel.listByConnectorIds([payload.connectorId]))[0];
+    const authorization = await connectorLinkModel.applyAuthorization(payload.connectorId, {
+      target:
+        payload.linkTarget ??
+        (earliestLink ? { kind: 'existing', linkId: earliestLink.id } : { kind: 'new' }),
+      identity: await resolveLinkIdentity({ tokens, metadata }),
+      credentials,
+      authorizerId: payload.lobeUserId,
     });
 
     // Sync the tool list server-side so the connector is immediately usable —
@@ -171,11 +195,18 @@ export const GET = async (req: NextRequest) => {
     );
     let synced = false;
     try {
-      const { toolCount } = await syncConnectorToolsById(payload.connectorId, {
-        connectorModel,
-        connectorToolModel,
-        userId: payload.lobeUserId,
-      });
+      const { toolCount } = await syncConnectorToolsById(
+        payload.connectorId,
+        {
+          connectorModel,
+          connectorLinkModel,
+          connectorToolModel,
+          // A connector set to connect through the device lists on the user's device
+          serverDB,
+          userId: payload.lobeUserId,
+        },
+        { linkId: authorization.linkId },
+      );
       synced = true;
       log('connector %s authorized + synced %d tools', payload.connectorId, toolCount);
     } catch (err) {
@@ -185,7 +216,28 @@ export const GET = async (req: NextRequest) => {
       log('post-OAuth tool sync failed for connector=%s: %O', payload.connectorId, err);
     }
 
-    return renderResultPage({ connectorId: payload.connectorId, success: true, synced });
+    // Only a fallback for a window that misses the result below: the account
+    // is stored, so failing to record how the flow ended must not fail it.
+    await saveConnectorOAuthCompletion(state, {
+      connectorId: payload.connectorId,
+      lobeUserId: payload.lobeUserId,
+      workspaceId: payload.workspaceId,
+      ...authorization,
+    }).catch((err) => {
+      log('recording the OAuth completion of connector=%s failed: %O', payload.connectorId, err);
+    });
+    // After the response: the popup must not wait on renewing this connector's subscriptions.
+    scheduleRefreshByConnector(
+      serverDB,
+      { userId: payload.lobeUserId, workspaceId: payload.workspaceId },
+      payload.connectorId,
+    );
+    return renderResultPage({
+      connectorId: payload.connectorId,
+      success: true,
+      synced,
+      ...authorization,
+    });
   } catch (err) {
     if (IssuerMismatchError.isInstance(err)) return renderFailure('issuer_mismatch', err);
     const message = err instanceof Error ? err.message : 'internal_error';

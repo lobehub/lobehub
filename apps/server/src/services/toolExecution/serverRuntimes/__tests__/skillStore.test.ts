@@ -2,11 +2,19 @@ import { RBAC_PERMISSIONS } from '@lobechat/const/rbac';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  getAgentConfigById: vi.fn(),
   getSkillDownloadUrl: vi.fn(),
   getUserSettings: vi.fn(),
   hasAnyPermission: vi.fn(),
   importFromUrl: vi.fn(),
   SkillImporter: vi.fn(),
+  updateConfig: vi.fn(),
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn(function () {
+    return { getAgentConfigById: mocks.getAgentConfigById, updateConfig: mocks.updateConfig };
+  }),
 }));
 
 vi.mock('@lobechat/builtin-tool-skill-store', () => ({
@@ -168,6 +176,53 @@ describe('skillStoreRuntime', () => {
     expect(result).toEqual({
       skill: { id: 'skl_memory', name: 'memory-setup' },
       status: 'unchanged',
+    });
+  });
+
+  // A library skill is opt-in per agent, so a skill the model installs mid-run
+  // would otherwise be off for the very agent that installed it.
+  describe('turning an imported skill on for the run agent', () => {
+    const importAs = async (agentId?: string) => {
+      mocks.getSkillDownloadUrl.mockReturnValue('https://market.example/download');
+      mocks.importFromUrl.mockResolvedValue({
+        skill: { id: 'skl_1', identifier: 'excalidraw', name: 'excalidraw' },
+        status: 'created',
+      });
+      const { skillStoreRuntime } = await import('../skillStore');
+      const runtime = (await skillStoreRuntime.factory({
+        agentId,
+        serverDB,
+        toolManifestMap: {},
+        userId: 'user-1',
+      })) as any;
+      await runtime.service.importFromMarket('excalidraw');
+    };
+
+    it('sets the skill to auto for the agent that imported it', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({ plugins: ['lobe-web-browsing'] });
+
+      await importAs('agent-1');
+
+      expect(mocks.updateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: ['lobe-web-browsing', { identifier: 'excalidraw', mode: 'auto' }],
+      });
+    });
+
+    it('leaves an entry the user already chose alone', async () => {
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'excalidraw', mode: 'disabled' }],
+      });
+
+      await importAs('agent-1');
+
+      expect(mocks.updateConfig).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the import has no agent', async () => {
+      await importAs();
+
+      expect(mocks.getAgentConfigById).not.toHaveBeenCalled();
+      expect(mocks.updateConfig).not.toHaveBeenCalled();
     });
   });
 });

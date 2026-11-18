@@ -9,9 +9,15 @@ import { channelActions } from '@/store/channel';
 import type { ChannelMentionInvite } from './mentions';
 import { useMentionInvites } from './useMentionInvites';
 
-const { agentDraft } = vi.hoisted(() => ({
+const { agentDraft, agentOptions, confirmInvite } = vi.hoisted(() => ({
   agentDraft: { issue: undefined as string | undefined },
+  agentOptions: {
+    project: undefined as
+      undefined | { canAddAgents: boolean; memberIds: string[]; name: string | undefined },
+  },
+  confirmInvite: vi.fn(),
 }));
+vi.mock('./confirmInvite', () => ({ confirmInvite }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, string>) =>
@@ -28,6 +34,7 @@ vi.mock('./CreateChannel/useChannelAgentOptions', () => ({
       { id: 'agt_project', title: 'Project writer' },
       { id: 'agt_joined', title: 'Joined writer' },
     ],
+    project: agentOptions.project,
     projectAgentIds: ['agt_project'],
   }),
 }));
@@ -49,6 +56,7 @@ const channel: ChannelListItem = {
   sequence: 0,
   status: 'active',
   title: 'Team',
+  visibility: 'private',
   workspaceId: 'ws_1',
 };
 
@@ -77,6 +85,8 @@ const setup = (current: ChannelListItem = channel, members = [joinedAgent]) => {
 describe('@mentions that invite people and Agents from outside the Channel', () => {
   beforeEach(() => {
     agentDraft.issue = undefined;
+    agentOptions.project = undefined;
+    confirmInvite.mockResolvedValue(true);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(channelService, 'userCandidates').mockResolvedValue([
       { avatar: null, fullName: 'Writer Lin', userId: 'user_lin', username: 'lin' },
@@ -178,7 +188,8 @@ describe('@mentions that invite people and Agents from outside the Channel', () 
   it("adds an Agent with the invite dialog's environment defaults", async () => {
     const { result, rerenderDrafts } = setup();
     let resolved: Promise<string[] | undefined>;
-    act(() => {
+    // The question is answered before the Agent's environment starts resolving.
+    await act(async () => {
       resolved = result.current.resolve([target('agent', 'agt_writer')]);
     });
     rerenderDrafts();
@@ -192,7 +203,8 @@ describe('@mentions that invite people and Agents from outside the Channel', () 
     agentDraft.issue = 'deviceOffline';
     const { result, rerenderDrafts } = setup();
     let resolved: Promise<string[] | undefined>;
-    act(() => {
+    // The question is answered before the Agent's environment starts resolving.
+    await act(async () => {
       resolved = result.current.resolve([target('agent', 'agt_writer')]);
     });
     rerenderDrafts();
@@ -209,7 +221,7 @@ describe('@mentions that invite people and Agents from outside the Channel', () 
       agentDraft.issue = 'devicesLoading';
       const { result, rerenderDrafts } = setup();
       let resolved: Promise<string[] | undefined>;
-      act(() => {
+      await act(async () => {
         resolved = result.current.resolve([target('agent', 'agt_writer')]);
       });
       rerenderDrafts();
@@ -231,5 +243,59 @@ describe('@mentions that invite people and Agents from outside the Channel', () 
       'mem_user_lin',
     ]);
     expect(channelActions.addMember).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks before bringing someone in, once per person', async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.invite(target('user', 'user_lin'));
+    });
+    await expect(result.current.resolve([target('user', 'user_lin')])).resolves.toEqual([
+      'mem_user_lin',
+    ]);
+    expect(confirmInvite).toHaveBeenCalledOnce();
+    expect(confirmInvite).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'mentionInvite.confirmPerson' }),
+    );
+  });
+
+  it('mentions someone the user declined to invite by name only, without adding them', async () => {
+    confirmInvite.mockResolvedValue(false);
+    const { result } = setup();
+    act(() => {
+      result.current.invite(target('user', 'user_lin'));
+    });
+    await expect(
+      result.current.resolve([target('user', 'user_lin'), target('agent', 'agt_joined')]),
+    ).resolves.toEqual(['mem_joined']);
+    // Sending does not ask again; only choosing them from the menu again does.
+    expect(confirmInvite).toHaveBeenCalledOnce();
+    expect(channelActions.addMember).not.toHaveBeenCalled();
+    expect(result.current.error).toBe('');
+  });
+
+  it('says an Agent from outside joins the project first', async () => {
+    agentOptions.project = { canAddAgents: true, memberIds: ['agt_project'], name: 'Apollo' };
+    const { result, rerenderDrafts } = setup({ ...channel, projectId: 'pro_1' });
+    let resolved: Promise<string[] | undefined>;
+    await act(async () => {
+      resolved = result.current.resolve([target('agent', 'agt_writer')]);
+    });
+    rerenderDrafts();
+    await expect(resolved!).resolves.toEqual(['mem_agt_writer']);
+    expect(confirmInvite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: `mentionInvite.confirmAgentProject ${JSON.stringify({ project: 'Apollo' })}`,
+      }),
+    );
+  });
+
+  it('offers only the project’s Agents to someone who cannot add Agents to the project', async () => {
+    agentOptions.project = { canAddAgents: false, memberIds: ['agt_project'], name: 'Apollo' };
+    const { result } = setup({ ...channel, projectId: 'pro_1' });
+    const options = await result.current.options('writer');
+    expect(
+      options.filter((option) => option.metadata.actorType === 'agent').map((o) => o.metadata.id),
+    ).toEqual(['agt_project']);
   });
 });

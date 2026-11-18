@@ -1,7 +1,9 @@
 /**
- * Interactive terminal (PTY) RPCs, relayed to the `lh connect` process.
+ * Interactive terminal (PTY) RPCs, relayed to the device client hosting the
+ * shell — `lh connect` or the desktop app.
  */
 import type {
+  DeviceClient,
   DeviceCloseTerminalResult,
   DeviceCreateTerminalSessionResult,
   DeviceReadTerminalResult,
@@ -15,6 +17,15 @@ interface TerminalRpcScope {
   timeout?: number;
   userId: string;
   workspaceId?: string;
+}
+
+/**
+ * Scope of a call on an existing session. `client` is what `createTerminalSession`
+ * answered with: each client keeps its own sessions, so on a device holding
+ * both connections the call has to reach the one that created the shell.
+ */
+interface TerminalSessionRpcScope extends TerminalRpcScope {
+  client?: DeviceClient;
 }
 
 /** The five device RPCs that make up one interactive terminal session. */
@@ -40,14 +51,14 @@ export async function createTerminalSession(
 
 export async function writeTerminal(
   getClient: DeviceClientGetter,
-  params: TerminalRpcScope & { data: string; id: string },
+  params: TerminalSessionRpcScope & { data: string; id: string },
 ): Promise<void> {
   await invokeTerminalRpc(getClient, 'writeTerminal', params, { data: params.data, id: params.id });
 }
 
 export async function readTerminal(
   getClient: DeviceClientGetter,
-  params: TerminalRpcScope & { cursor: number; id: string },
+  params: TerminalSessionRpcScope & { cursor: number; id: string },
 ): Promise<DeviceReadTerminalResult> {
   return invokeTerminalRpc(getClient, 'readTerminal', params, {
     cursor: params.cursor,
@@ -57,7 +68,7 @@ export async function readTerminal(
 
 export async function resizeTerminal(
   getClient: DeviceClientGetter,
-  params: TerminalRpcScope & { cols: number; id: string; rows: number },
+  params: TerminalSessionRpcScope & { cols: number; id: string; rows: number },
 ): Promise<void> {
   await invokeTerminalRpc(getClient, 'resizeTerminal', params, {
     cols: params.cols,
@@ -68,7 +79,7 @@ export async function resizeTerminal(
 
 export async function closeTerminal(
   getClient: DeviceClientGetter,
-  params: TerminalRpcScope & { id: string },
+  params: TerminalSessionRpcScope & { id: string },
 ): Promise<DeviceCloseTerminalResult> {
   return invokeTerminalRpc(getClient, 'closeTerminal', params, { id: params.id });
 }
@@ -76,24 +87,33 @@ export async function closeTerminal(
 /**
  * Relay one terminal RPC and unwrap its result.
  *
- * Every call carries the `cli` channel hint: the PTY lives in the `lh
- * connect` process, so on a machine also running the desktop app the RPC has
- * to reach that connection — the desktop's own terminal is local-only and
- * would refuse these. A gateway that predates the hint ignores it, which is
- * why the refusal below still has to surface as an error.
+ * Opening a shell carries the `cli` channel hint, so a device running both
+ * `lh connect` and the desktop app hosts it in the daemon. Calls on an existing
+ * session are restricted (`clientKinds`) to the client that created it — the
+ * two keep separate sessions, so letting the gateway re-pick per call would
+ * send a desktop session's reads to the CLI as soon as `lh connect` comes up.
+ * A gateway that predates either field ignores it, which is why a refusal
+ * still has to surface as an error.
  */
 export async function invokeTerminalRpc<T>(
   getClient: DeviceClientGetter,
   method: TerminalRpcMethod,
-  params: TerminalRpcScope,
+  params: TerminalSessionRpcScope,
   rpcParams: Record<string, unknown>,
 ): Promise<T> {
-  const { deviceId, timeout = 15_000, userId, workspaceId } = params;
+  const { client: sessionClient, deviceId, timeout = 15_000, userId, workspaceId } = params;
   const client = getClient();
   if (!client) throw new Error('Device gateway is not configured on this deployment.');
 
   const result = await client.invokeRpc<T>(
-    { channel: 'cli', deviceId, timeout, userId, workspaceId },
+    {
+      channel: 'cli',
+      ...(sessionClient ? { clientKinds: [sessionClient] } : {}),
+      deviceId,
+      timeout,
+      userId,
+      workspaceId,
+    },
     { method, params: rpcParams },
   );
   // `writeTerminal` / `resizeTerminal` answer with no payload, so absence of

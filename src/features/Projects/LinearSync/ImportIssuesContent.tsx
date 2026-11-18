@@ -44,6 +44,8 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
     const [selected, setSelected] = useState<Set<string>>(() => new Set());
     // Comments carry much of an issue's context, so they come along unless unchecked.
     const [syncComments, setSyncComments] = useState(true);
+    // So do labels, which is how a task is found again among the others.
+    const [syncLabels, setSyncLabels] = useState(true);
     // Archived issues stay out, as in Linear, unless asked for.
     const [includeArchived, setIncludeArchived] = useState(false);
     const [starting, setStarting] = useState<'import' | 'rule' | null>(null);
@@ -115,6 +117,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           issueIds: [...selected],
           projectId,
           syncComments,
+          syncLabels,
         }),
       );
 
@@ -134,7 +137,7 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
           ruleId = rule.id;
           setSavedRuleId(rule.id);
         }
-        return linearService.startRuleSync(ruleId, { includeArchived, syncComments });
+        return linearService.startRuleSync(ruleId, { includeArchived, syncComments, syncLabels });
       });
 
     const leaveRunning = () => {
@@ -229,8 +232,10 @@ const ImportIssuesContent = memo<LinearIssueImportModalOptions>(
             <ImportOptions
               includeArchived={includeArchived}
               syncComments={syncComments}
+              syncLabels={syncLabels}
               onIncludeArchivedChange={changeIncludeArchived}
               onSyncCommentsChange={setSyncComments}
+              onSyncLabelsChange={setSyncLabels}
             />
           </>
         ) : null}

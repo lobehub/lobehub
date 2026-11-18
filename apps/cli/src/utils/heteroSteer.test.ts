@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { type HeteroSteerClient, withHeteroSteer } from './heteroSteer';
+import {
+  buildSteerPrompt,
+  type HeteroSteerClient,
+  type HeteroSteerMessage,
+  withHeteroSteer,
+} from './heteroSteer';
 
 vi.mock('./logger', () => ({ log: { debug: vi.fn() } }));
 
@@ -48,7 +53,7 @@ const replay = (uuid: string): Event => ({
 });
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const createClient = (messages: Array<{ content: string; messageId: string } | null>) => {
+const createClient = (messages: Array<HeteroSteerMessage | null>) => {
   const wait = vi.fn(async (_input: unknown, options?: { signal?: AbortSignal }) => {
     const next = messages.shift();
     if (next !== undefined) return { message: next };
@@ -84,11 +89,122 @@ describe('withHeteroSteer', () => {
     stream.end();
 
     expect(sendUserMessage).toHaveBeenCalledWith('use pnpm', { uuid: 'msg-1' });
-    expect(wait.mock.calls[0][0]).toEqual({ blockMs: 1, operationId: 'op-1' });
+    expect(wait.mock.calls[0][0]).toEqual({ acceptsImages: true, blockMs: 1, operationId: 'op-1' });
+    expect(wait.mock.calls[1][0]).toEqual({ acceptsImages: true, operationId: 'op-1' });
     expect(await out).toEqual([
       { data: { liveSteer: true, newStep: true }, type: 'stream_start' },
       replay('msg-1'),
     ]);
+  });
+
+  it('holds follow-ups while the session waits for the user, and gives back one handed out then', async () => {
+    const { client, giveBack, wait } = createClient([{ content: 'go', messageId: 'msg-1' }]);
+    const sendUserMessage = vi.fn(async () => true);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, isWaitingForUser: () => true, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(giveBack).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
+    expect(wait.mock.calls[0][0]).toMatchObject({ holdSteer: true });
+  });
+
+  it('types images pasted into a follow-up in as image blocks', async () => {
+    const image = { id: 'file_1', url: 'https://bucket.example.com/1.png?sig=s' };
+    const { client } = createClient([
+      {
+        content: '![image.png](https://app.lobehub.com/f/file_1)',
+        imageList: [image],
+        messageId: 'msg-1',
+      },
+    ]);
+    const sendUserMessage = vi.fn(async () => true);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).toHaveBeenCalledWith(
+      [
+        { text: '![image.png](https://app.lobehub.com/f/file_1)', type: 'text' },
+        { source: { id: 'file_1', type: 'url', url: image.url }, type: 'image' },
+      ],
+      { uuid: 'msg-1' },
+    );
+  });
+
+  it('falls back to the text when its images cannot be loaded', async () => {
+    const { client, giveBack } = createClient([
+      {
+        content: 'see this',
+        imageList: [{ id: 'f', url: 'https://x/expired' }],
+        messageId: 'msg-1',
+      },
+    ]);
+    const sendUserMessage = vi.fn(async (prompt: unknown) => {
+      if (typeof prompt !== 'string') throw new Error('image fetch failed: 403');
+      return true;
+    });
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalledTimes(2));
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).toHaveBeenLastCalledWith('see this', { uuid: 'msg-1' });
+    expect(giveBack).not.toHaveBeenCalled();
+  });
+
+  it('returns an uploaded image follow-up intact when its image cannot be loaded', async () => {
+    const { client, giveBack, wait } = createClient([
+      {
+        content: 'see the screenshot',
+        imageList: [{ id: 'f', url: 'https://x/expired' }],
+        messageId: 'msg-1',
+        requiresImages: true,
+      },
+    ]);
+    const sendUserMessage = vi.fn(async (prompt: unknown) => {
+      if (typeof prompt !== 'string') throw new Error('image fetch failed: 403');
+      return true;
+    });
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage, supportsSteerImageAttachments: true },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
+    await flush();
+    stream.end();
+    await out;
+
+    expect(wait.mock.calls[0][0]).toMatchObject({ acceptsImageAttachments: true });
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
   });
 
   it('gives a refused message back and stops polling', async () => {
@@ -163,5 +279,12 @@ describe('withHeteroSteer', () => {
     expect(await collect(withHeteroSteer({ events: stream.events }, false))).toEqual([
       replay('uuid-prompt'),
     ]);
+  });
+});
+
+describe('buildSteerPrompt', () => {
+  it('keeps a text-only follow-up a plain string', () => {
+    expect(buildSteerPrompt({ content: 'hi', messageId: 'm' })).toBe('hi');
+    expect(buildSteerPrompt({ content: 'hi', imageList: [], messageId: 'm' })).toBe('hi');
   });
 });

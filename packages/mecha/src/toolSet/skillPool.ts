@@ -24,6 +24,13 @@ export interface SkillPoolSources {
 }
 
 export interface AssembleSkillPoolOptions {
+  /**
+   * Library (`db`) skills the agent set to `auto`. A library skill is opt-in
+   * per agent — the profile is where one is turned on — so unlike every other
+   * source it is listed only when named here, in `enabledPluginIds` or in
+   * `turnSkillIds`. `manual` mode still narrows it to the latter two.
+   */
+  autoSkillIds?: readonly string[];
   /** Gates the device-only builtin skills. */
   canExecuteOnDevice?: boolean;
   /** Skills the agent explicitly disabled; neither listed nor activatable. */
@@ -79,9 +86,19 @@ export const assembleSkillPool = (
           )
       : (skills: readonly SkillMeta[] = []) => skills;
 
+  // A library skill the agent never turned on is disabled for it, whatever the
+  // mode: installing a skill into the library does not hand it to every agent.
+  const autoSkillIds = new Set(options.autoSkillIds ?? []);
+  const optedIn = (sources.db ?? []).filter(
+    (skill) =>
+      enabledPluginIds.has(skill.identifier) ||
+      autoSkillIds.has(skill.identifier) ||
+      turnSkillIds.has(skill.identifier),
+  );
+
   const ordered = [
     ...(sources.project ?? []),
-    ...selectable(sources.db),
+    ...selectable(optedIn),
     ...selectable(sources.agentSkills),
     ...selectable(sources.builtin),
   ];

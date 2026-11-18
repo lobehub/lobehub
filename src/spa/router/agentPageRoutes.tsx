@@ -1,18 +1,28 @@
-import { FileTextIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
-import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
-import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { goalDetailRouteMeta } from '@/features/AgentGoals/routeMeta';
+import { taskRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
+  agentAutomationsRouteMeta,
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
+  agentDocumentsRouteMeta,
+  agentEngineRouteMeta,
+  agentEnvironmentRouteMeta,
+  agentGoalsRouteMeta,
+  agentInstructionRouteMeta,
+  agentKnowledgeRouteMeta,
   agentMailRouteMeta,
   agentPermissionRouteMeta,
   agentProfileRouteMeta,
   agentSelfLearningRouteMeta,
   agentShareRouteMeta,
+  agentSkillsRouteMeta,
   agentStatisticsRouteMeta,
+  agentTasksRouteMeta,
+  agentToolsRouteMeta,
+  agentWebhookRouteMeta,
   topicsRouteMeta,
 } from '@/routes/(main)/agent/features/routeMeta';
 import { agentDocumentListLoader } from '@/spa/router/agentDocumentListLoader';
@@ -25,7 +35,7 @@ import { dynamicElement, dynamicLayout, redirectElement } from '@/utils/router';
 
 /**
  * The full-page agent surfaces under `/agent/:aid` beside the chat: docs,
- * goals, profile, channels, topics, statistics, share, self-evolving,
+ * goals, profile, instruction, knowledge, engine, environment, tools, skills, channels, topics, statistics, share, self-evolving,
  * permission and tasks. Mounted by the desktop router under the agent layout
  * and reused by the mobile router (`mobileAgentRoutes.tsx`).
  */
@@ -37,13 +47,7 @@ export const agentPageChildren: RouteObject[] = [
           () => import('@/routes/(main)/agent/docs'),
           'Desktop > Chat > DocumentsIndex',
         ),
-        handle: {
-          meta: routeMeta({
-            icon: FileTextIcon,
-            Skeleton: NoRouteSkeleton,
-            titleKey: 'navigation.document',
-          }),
-        },
+        handle: { meta: agentDocumentsRouteMeta },
         index: true,
       },
       {
@@ -65,7 +69,7 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/goals'), 'Desktop > Chat > Goals'),
-    handle: { meta: goalsRouteMeta },
+    handle: { meta: agentGoalsRouteMeta },
     path: 'goals',
   },
   {
@@ -83,6 +87,51 @@ export const agentPageChildren: RouteObject[] = [
     ),
     handle: { meta: agentProfileRouteMeta },
     path: 'profile',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/instruction'),
+      'Desktop > Chat > Instruction',
+    ),
+    handle: { meta: agentInstructionRouteMeta },
+    path: 'instruction',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/knowledge'),
+      'Desktop > Chat > Knowledge',
+    ),
+    handle: { meta: agentKnowledgeRouteMeta },
+    path: 'knowledge',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/engine'),
+      'Desktop > Chat > Engine',
+    ),
+    handle: { meta: agentEngineRouteMeta },
+    path: 'engine',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/environment'),
+      'Desktop > Chat > Environment',
+    ),
+    handle: { meta: agentEnvironmentRouteMeta },
+    path: 'environment',
+  },
+  {
+    element: dynamicElement(() => import('@/routes/(main)/agent/tools'), 'Desktop > Chat > Tools'),
+    handle: { meta: agentToolsRouteMeta },
+    path: 'tools',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/skills'),
+      'Desktop > Chat > Skills',
+    ),
+    handle: { meta: agentSkillsRouteMeta },
+    path: 'skills',
   },
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/mail'), 'Desktop > Chat > Mail'),
@@ -106,6 +155,22 @@ export const agentPageChildren: RouteObject[] = [
     handle: { meta: agentChannelDetailRouteMeta },
     loader: channelDataLoader,
     path: 'channel/:platform',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/automations'),
+      'Desktop > Chat > Automations',
+    ),
+    handle: { meta: agentAutomationsRouteMeta },
+    path: 'automations',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/webhook'),
+      'Desktop > Chat > Webhook',
+    ),
+    handle: { meta: agentWebhookRouteMeta },
+    path: 'webhook',
   },
   {
     element: dynamicElement(
@@ -215,7 +280,7 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/tasks'), 'Desktop > Chat > Tasks'),
-    handle: { meta: tasksRouteMeta },
+    handle: { meta: agentTasksRouteMeta },
     loader: scheduledTaskListLoader,
     path: 'tasks',
   },

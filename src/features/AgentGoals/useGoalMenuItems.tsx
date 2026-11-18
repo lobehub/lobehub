@@ -1,4 +1,3 @@
-import { isGoalArchiveBlocked } from '@lobechat/types';
 import { confirmModal, copyToClipboard, type DropdownItem, Icon, toast } from '@lobehub/ui';
 import {
   ArchiveIcon,
@@ -28,6 +27,7 @@ import {
   toManualStatus,
 } from './goalStatusMenu';
 import { useConfirmDeleteGoal, useGoalRename, useGoalShareUrl } from './useGoalActions';
+import { useGoalArchiveToggle } from './useGoalArchiveToggle';
 
 interface UseGoalMenuItemsOptions {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -36,6 +36,8 @@ interface UseGoalMenuItemsOptions {
   archivedAt?: Date | string | null;
   creatorUserId?: string | null;
   goalId: string;
+  /** Leaves the archive action out for a host that shows it on its own, like the detail header. */
+  omitArchive?: boolean;
   /** Replaces the default redirect to the goal list after a delete. */
   onDeleted?: () => void;
   /** Replaces the rename dialog, for a host that already edits the title in place. */
@@ -54,6 +56,7 @@ export const useGoalMenuItems = ({
   archivedAt,
   creatorUserId,
   goalId,
+  omitArchive,
   onDeleted,
   onRename,
   onStatusChanged,
@@ -72,27 +75,20 @@ export const useGoalMenuItems = ({
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const startGoal = useGoalStore((s) => s.startGoal);
   const closeGoal = useGoalStore((s) => s.closeGoal);
-  const archiveGoal = useGoalStore((s) => s.archiveGoal);
   const transferItems = useGoalTransferMenuItem(goalId) as DropdownItem[] | null;
   const { autoRename, openRename } = useGoalRename(goalId);
   // The server lets a workspace goal be renamed only by its creator or an owner.
   const canRename = canEditTask && canClose;
 
   const current = toManualStatus(status);
-  const isArchived = !!archivedAt;
-  // Archived goals leave every list, so only a goal that is done with —
-  // completed or canceled — may be put away. Restoring is always fine.
-  const archiveBlocked = !isArchived && (!status || isGoalArchiveBlocked({ status }));
-
-  const toggleArchive = useCallback(async () => {
-    try {
-      await archiveGoal(goalId, !isArchived);
-      toast.success(t(isArchived ? 'goalList.unarchiveSuccess' : 'goalList.archiveSuccess'));
-      onStatusChanged?.();
-    } catch {
-      toast.error(t(isArchived ? 'goalList.unarchiveFailed' : 'goalList.archiveFailed'));
-    }
-  }, [archiveGoal, goalId, isArchived, onStatusChanged, t]);
+  const archive = useGoalArchiveToggle({
+    archivedAt,
+    creatorUserId,
+    goalId,
+    onArchived: onStatusChanged,
+    status,
+  });
+  const { isArchived } = archive;
 
   const changeStatus = useCallback(
     (next: ManualGoalStatus) => {
@@ -188,20 +184,16 @@ export const useGoalMenuItems = ({
       },
       ...(transferItems ?? []),
       { type: 'divider' },
-      ...(archivedAt === undefined
+      ...(omitArchive || archivedAt === undefined
         ? []
         : [
             {
-              desc: !canClose
-                ? t('goalList.archiveDenied')
-                : archiveBlocked
-                  ? t('goalList.archiveBlocked')
-                  : undefined,
-              disabled: !canClose || archiveBlocked,
+              desc: archive.deniedReason,
+              disabled: !!archive.deniedReason,
               icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
               key: 'archive',
-              label: t(isArchived ? 'goalList.unarchive' : 'goalList.archive'),
-              onClick: toggleArchive,
+              label: archive.label,
+              onClick: archive.toggle,
             } satisfies DropdownItem,
           ]),
       {
@@ -214,7 +206,7 @@ export const useGoalMenuItems = ({
       },
     ],
     [
-      archiveBlocked,
+      archive,
       archivedAt,
       autoRename,
       canClose,
@@ -225,13 +217,13 @@ export const useGoalMenuItems = ({
       current,
       goalId,
       isArchived,
+      omitArchive,
       onRename,
       openRename,
       shareUrl,
       status,
       t,
       title,
-      toggleArchive,
       transferItems,
     ],
   );

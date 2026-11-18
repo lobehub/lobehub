@@ -9,8 +9,6 @@ import type {
   GitCheckoutResult,
   GitDeleteBranchResult,
   GitFileRevertResult,
-  GitPullResult,
-  GitPushResult,
   GitRemoteBranchListItem,
   GitRenameBranchResult,
 } from './types';
@@ -20,7 +18,29 @@ const execFileAsync = promisify(execFile);
 
 /** Reject obviously invalid branch refs early to avoid a confusing git error. */
 export const isInvalidBranchRef = (name: string): boolean =>
-  /[\s~^:?*[\\]/.test(name) || name.startsWith('-') || name.includes('..');
+  /[\s~^:?*[\\]/.test(name) ||
+  name.startsWith('-') ||
+  name.includes('..') ||
+  // `<ref>@{…}` is reflog / upstream syntax, never part of a branch name — and
+  // the ahead/behind read appends `@{upstream}` to the name it is given.
+  name.includes('@{');
+
+/**
+ * A start point as git should read it: `refs/heads/<name>` when a local branch
+ * of that name exists, so a tag (or remote ref) sharing the name cannot make
+ * it ambiguous; anything else (a commit sha) as given.
+ */
+export const qualifyStartPoint = async (dirPath: string, startPoint: string): Promise<string> => {
+  try {
+    await execFileAsync('git', ['show-ref', '--verify', '--quiet', `refs/heads/${startPoint}`], {
+      cwd: dirPath,
+      timeout: 5000,
+    });
+    return `refs/heads/${startPoint}`;
+  } catch {
+    return startPoint;
+  }
+};
 
 /**
  * List local git branches ordered by most recent commit. `current` is true for
@@ -109,24 +129,43 @@ export const listGitRemoteBranches = async (
  * Check out (or create + check out) a branch. Relies on git itself to reject
  * unsafe checkouts (dirty tree, non-fast-forward, etc.) and surfaces git's
  * stderr so the UI can display a meaningful error.
+ *
+ * `startPoint` (with `create`) cuts the new branch from that branch instead of
+ * HEAD — `git checkout -b <branch> <startPoint>` — and is echoed back on success
+ * so a caller can tell this device honoured it (an older one ignores the field).
+ * Uncommitted changes travel with the checkout under git's own rules: no stash,
+ * no force, and a conflicting change makes git refuse.
  */
 export const checkoutGitBranch = async (payload: {
   branch: string;
   create?: boolean;
   path: string;
+  startPoint?: string;
 }): Promise<GitCheckoutResult> => {
-  const { path: dirPath, branch, create } = payload;
+  const { path: dirPath, branch, create, startPoint } = payload;
   if (!branch?.trim()) {
     return { error: 'Branch name is required', success: false };
   }
   if (isInvalidBranchRef(branch)) {
     return { error: `Invalid branch name: ${branch}`, success: false };
   }
+  if (startPoint !== undefined) {
+    if (!create) return { error: 'A start point needs a new branch', success: false };
+    if (!startPoint.trim() || isInvalidBranchRef(startPoint))
+      return { error: `Invalid start point: ${startPoint}`, success: false };
+  }
 
-  const args = create ? ['checkout', '-b', branch] : ['checkout', branch];
+  const args = create
+    ? [
+        'checkout',
+        '-b',
+        branch,
+        ...(startPoint ? [await qualifyStartPoint(dirPath, startPoint)] : []),
+      ]
+    : ['checkout', branch];
   try {
     await execFileAsync('git', args, { cwd: dirPath, timeout: 10_000 });
-    return { success: true };
+    return startPoint ? { startPoint, success: true } : { success: true };
   } catch (error: any) {
     const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
     log.debug('[checkoutGitBranch] failed', { args, stderr });
@@ -186,48 +225,6 @@ export const deleteGitBranch = async (payload: {
     const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
     log.debug('[deleteGitBranch] failed', { branch, stderr });
     return { error: stderr || 'git branch delete failed', success: false };
-  }
-};
-
-/**
- * Pull the current branch's upstream via fast-forward only. `--ff-only` avoids
- * accidental merge commits when the local branch has diverged.
- */
-export const pullGitBranch = async (payload: { path: string }): Promise<GitPullResult> => {
-  const { path: dirPath } = payload;
-  try {
-    const { stdout } = await execFileAsync('git', ['pull', '--ff-only'], {
-      cwd: dirPath,
-      timeout: 60_000,
-    });
-    const noop = /Already up to date/i.test(stdout);
-    return { noop, success: true };
-  } catch (error: any) {
-    const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
-    log.debug('[pullGitBranch] failed', { stderr });
-    return { error: stderr || 'git pull failed', success: false };
-  }
-};
-
-/**
- * Push the current branch to its same-named remote on `origin`. Uses
- * `git push -u origin HEAD` so the action works even when the local branch name
- * differs from the configured upstream.
- */
-export const pushGitBranch = async (payload: { path: string }): Promise<GitPushResult> => {
-  const { path: dirPath } = payload;
-  try {
-    const { stderr } = await execFileAsync('git', ['push', '-u', 'origin', 'HEAD'], {
-      cwd: dirPath,
-      timeout: 60_000,
-    });
-    // git push writes progress/status to stderr even on success
-    const noop = /Everything up-to-date/i.test(stderr);
-    return { noop, success: true };
-  } catch (error: any) {
-    const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
-    log.debug('[pushGitBranch] failed', { stderr });
-    return { error: stderr || 'git push failed', success: false };
   }
 };
 

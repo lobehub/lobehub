@@ -89,7 +89,7 @@ describe('AnthropicStream interruptions', () => {
 
     expect(chunks).toContain('event: error\n');
     expect(onErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'terminated', type: 'ProviderBizError' }),
+      expect.objectContaining({ message: 'terminated', type: 'ProviderStreamInterrupted' }),
     );
     expect(onFinalMock).toHaveBeenCalledWith(
       expect.objectContaining({ error: expect.objectContaining({ message: 'terminated' }) }),

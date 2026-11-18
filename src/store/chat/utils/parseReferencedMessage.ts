@@ -1,4 +1,5 @@
 import { cleanSpeakerTag } from './cleanSpeakerTag';
+import { parseChannelPrompt } from './parseChannelPrompt';
 
 /**
  * The quoted / replied-to message an IM bot inbound carries ahead of the
@@ -50,7 +51,9 @@ export const splitReferencedMessage = (
 /**
  * Strip every bot-prompt tag (`<speaker … />`, `<referenced_message>`) from a
  * user message, leaving only what the user typed. Use for copy / re-edit paths
- * where the quote is context, not the user's words.
+ * where the quote is context, not the user's words. A Channel run's prompt
+ * leaves only its request.
  */
 export const cleanBotPromptTags = (content: string): string =>
+  parseChannelPrompt(content)?.request.content ??
   splitReferencedMessage(cleanSpeakerTag(content)).body;

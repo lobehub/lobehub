@@ -50,6 +50,10 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     return normalizeAgentState(structuredClone(state));
   }
 
+  async loadAgentStatus(operationId: string): Promise<AgentState['status'] | null> {
+    return this.states.get(operationId)?.status ?? null;
+  }
+
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
     // Save latest state
     // Use JSON round-trip instead of structuredClone to safely handle

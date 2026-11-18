@@ -16,11 +16,14 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.betterCodingExperience.desc':
+    'A set of experiments that improve how agents write, run and review code with you.',
+  'features.betterCodingExperience.title': 'Better Coding Experience',
   'features.claudeCodeSdk.desc':
     'Run Claude Code sessions through the Claude Agent SDK instead of spawning the CLI. Enables richer streaming and session control.',
   'features.claudeCodeSdk.title': 'Claude Code SDK Runtime',
   'features.codexAppServer.desc':
-    'Run Codex sessions through the local app-server instead of one-shot CLI processes. Enables token streaming and native turn control.',
+    'Run Codex through App Server on desktop or a connected device for interactive questions and native turn control. Applies to subsequent runs.',
   'features.codexAppServer.title': 'Codex App Server Runtime',
   'features.desktopSplitView.desc':
     'Show two desktop tabs side by side, with independent navigation and a resizable divider.',
@@ -46,7 +49,7 @@ export default {
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.messageTextSelectionActions.desc':
-    'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
+    'Show Quote and Copy actions when selecting text in chat messages. Quote adds the selected text to your message as a quote.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',

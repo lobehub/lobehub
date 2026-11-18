@@ -1,4 +1,4 @@
-import { getActivePluginIds } from '@lobechat/types';
+import { getConnectorMode } from '@lobechat/types';
 import { Switch } from '@lobehub/ui';
 import { LinkIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
@@ -12,8 +12,8 @@ import { useStore } from '../store';
 const AgentConnectors = memo(() => {
   const { t } = useTranslation('setting');
 
-  const [userEnabledPlugins, toggleAgentPlugin] = useStore((s) => [
-    getActivePluginIds(s.config.plugins),
+  const [agentPlugins, toggleAgentPlugin] = useStore((s) => [
+    s.config.plugins,
     s.toggleAgentPlugin,
   ]);
 
@@ -38,7 +38,8 @@ const AgentConnectors = memo(() => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {connectors.map((connector) => {
-        const isEnabled = userEnabledPlugins.includes(connector.identifier);
+        // A connector is two-state: on is any entry that is not disabled.
+        const isEnabled = getConnectorMode(agentPlugins, connector.identifier) === 'auto';
         const enabledCount = connector.tools.filter((t) => t.permission !== 'disabled').length;
 
         return (
@@ -62,7 +63,7 @@ const AgentConnectors = memo(() => {
             <Switch
               checked={isEnabled}
               size="small"
-              onChange={() => toggleAgentPlugin(connector.identifier)}
+              onChange={() => toggleAgentPlugin(connector.identifier, !isEnabled)}
             />
           </div>
         );

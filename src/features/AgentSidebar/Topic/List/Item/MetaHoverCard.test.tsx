@@ -23,12 +23,21 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/const/version', () => ({ isDesktop: false }));
 
+const labMock = vi.hoisted(() => ({ betterCoding: false }));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableBetterCodingExperience: () => labMock.betterCoding },
+}));
+
 vi.mock('@/features/ChatInput/ControlBar/DirIcon', () => ({
   default: ({ size }: { size?: number }) => <span data-size={size} data-testid="dir-icon" />,
 }));
 
 afterEach(() => {
   vi.clearAllMocks();
+  labMock.betterCoding = false;
 });
 
 describe('MetaHoverCard', () => {
@@ -118,5 +127,34 @@ describe('MetaHoverCard', () => {
     expect(link).toHaveAttribute('href', 'https://github.com/lobehub/lobehub/pull/16951');
     expect(link).toHaveTextContent('metaCard.pr.merged · #16951 perf(swr): persist activeScopeKey');
     expect(screen.getByTitle('#16951 perf(swr): persist activeScopeKey')).toBeInTheDocument();
+  });
+
+  it('hides the branch-guessed PR under Better Coding Experience', () => {
+    const metadata: ChatTopicMetadata = {
+      workingDirectory: '/repo',
+      workingDirectoryConfig: {
+        git: {
+          branch: 'feat/x',
+          github: {
+            pullRequest: {
+              number: 42,
+              state: 'open',
+              title: 'guessed PR',
+              url: 'https://github.com/lobehub/lobehub/pull/42',
+            },
+          },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    };
+
+    const { rerender } = render(<MetaHoverCard metadata={metadata} title="Topic" />);
+    expect(screen.getByText(/guessed PR/)).toBeInTheDocument();
+
+    labMock.betterCoding = true;
+    rerender(<MetaHoverCard metadata={metadata} title="Topic 2" />);
+    expect(screen.queryByText(/guessed PR/)).not.toBeInTheDocument();
+    expect(screen.getByText('feat/x')).toBeInTheDocument();
   });
 });

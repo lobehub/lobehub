@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { MouseEvent, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicListScopeContext } from '../../TopicListScope';
@@ -22,6 +22,12 @@ const onlyMineMock = vi.hoisted(() => ({ value: false }));
 const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
 const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
 const hasDraftMock = vi.hoisted(() => ({ value: false }));
+const isDesktopMock = vi.hoisted(() => ({ value: false }));
+const electronTabMocks = vi.hoisted(() => ({
+  activateTab: vi.fn(),
+  addNewTab: vi.fn(),
+  addTab: vi.fn(),
+}));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as
     | {
@@ -58,7 +64,11 @@ vi.mock('motion/react-m', () => ({
 
 vi.mock('../../useScopedTopics', () => ({ useScopedTopic: () => scopedTopicMock.value }));
 
-vi.mock('@/const/version', () => ({ isDesktop: false }));
+vi.mock('@/const/version', () => ({
+  get isDesktop() {
+    return isDesktopMock.value;
+  },
+}));
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
     actions,
@@ -67,6 +77,8 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra,
     href,
     icon,
+    onClick,
+    onDoubleClick,
     slots,
     title,
   }: {
@@ -76,10 +88,18 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra?: ReactNode;
     href?: string;
     icon?: ReactNode;
+    onClick?: (event: MouseEvent) => void;
+    onDoubleClick?: (event: MouseEvent) => void;
     slots?: { iconBelow?: ReactNode; titlePrefix?: ReactNode };
     title?: ReactNode;
   }) => (
-    <div data-active={String(active)} data-href={href} data-testid="nav-item">
+    <div
+      data-active={String(active)}
+      data-href={href}
+      data-testid="nav-item"
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+    >
       <div data-testid="nav-item-leading">
         {icon}
         {slots?.iconBelow}
@@ -128,7 +148,10 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGoals: () => goalsEnabledMock.value },
+  labPreferSelectors: {
+    enableBetterCodingExperience: () => false,
+    enableGoals: () => goalsEnabledMock.value,
+  },
   userProfileSelectors: { userId: () => currentUserIdMock.value },
 }));
 vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
@@ -162,9 +185,10 @@ vi.mock('@/store/chat/selectors', () => ({
   },
 }));
 vi.mock('@/store/electron', () => {
-  const useElectronStore = (selector: (state: { addTab: () => void }) => unknown) =>
-    selector({ addTab: vi.fn() });
-  useElectronStore.getState = () => ({ addTab: vi.fn() });
+  const state = () => ({ ...electronTabMocks, activeTabId: undefined, tabs: [] });
+  const useElectronStore = (selector: (state: ReturnType<typeof state>) => unknown) =>
+    selector(state());
+  useElectronStore.getState = state;
   return { useElectronStore };
 });
 vi.mock('../../hooks/useTopicNavigation', () => ({
@@ -685,5 +709,45 @@ describe('TopicItem mobile thread list', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.queryByTestId('thread-list')).not.toBeInTheDocument();
+  });
+});
+
+// A lagging UI turns a repeated click into a double click, and a double click
+// used to open the topic in a new desktop tab. New tabs now take an explicit
+// gesture (Cmd/Ctrl+click, middle click, or the context menu).
+describe('TopicItem double click on desktop', () => {
+  beforeEach(() => {
+    isDesktopMock.value = true;
+  });
+
+  afterEach(() => {
+    isDesktopMock.value = false;
+    electronTabMocks.activateTab.mockClear();
+    electronTabMocks.addNewTab.mockClear();
+    electronTabMocks.addTab.mockClear();
+  });
+
+  it('switches to the topic without opening a new tab', async () => {
+    const navigateToTopic = vi.fn();
+    useTopicNavigationMock.mockReturnValue({
+      focusTopicPopup: vi.fn().mockResolvedValue(false),
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic,
+      routeTopicId: undefined,
+      urlTopicId: undefined,
+    });
+
+    render(<TopicItem id="tpc_test" title="Topic" />);
+    const row = screen.getByTestId('nav-item');
+    fireEvent.click(row, { detail: 1 });
+    fireEvent.click(row, { detail: 2 });
+    fireEvent.doubleClick(row, { detail: 2 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(navigateToTopic).toHaveBeenCalledWith('tpc_test');
+    expect(electronTabMocks.addTab).not.toHaveBeenCalled();
+    expect(electronTabMocks.addNewTab).not.toHaveBeenCalled();
+    expect(electronTabMocks.activateTab).not.toHaveBeenCalled();
   });
 });

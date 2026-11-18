@@ -16,6 +16,7 @@ interface PullRequestSidebarTabProps {
   onOpenTab: (tab: string) => void;
   onRetryConfirm?: () => void;
   pullRequest: DeviceGitLinkedPullRequest;
+  repositoryPath?: string;
   workingDirectory: string;
 }
 
@@ -34,7 +35,7 @@ const PullRequestSidebarTab = memo<PullRequestSidebarTabProps>(
             {...rest}
             active={active}
             deviceId={deviceId}
-            key={JSON.stringify([deviceId, workingDirectory, pullRequest.number])}
+            key={JSON.stringify([deviceId, workingDirectory, pullRequest.number, pullRequest.url])}
             number={pullRequest.number}
             summary={pullRequest}
             url={pullRequest.url}

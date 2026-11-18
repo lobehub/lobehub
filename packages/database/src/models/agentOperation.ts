@@ -208,7 +208,12 @@ export class AgentOperationModel {
     if (params.requireReservation) {
       const [started] = await this.db
         .update(agentOperations)
-        .set(values)
+        .set({
+          ...values,
+          ...(params.metadata && {
+            metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb`,
+          }),
+        })
         .where(reservationIdentity)
         .returning({ id: agentOperations.id });
       if (!started) throw new Error('Operation reservation is no longer available');
@@ -404,6 +409,28 @@ export class AgentOperationModel {
       sameServerDefaultRelayInvocation(existing, invocation)
       ? existing
       : null;
+  }
+
+  /** A rejected publish must never be resurrected by stale recovery. */
+  async recordDispatchFailure(operationId: string, message: string): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        completedAt: new Date(),
+        completionReason: 'error',
+        error: { message, type: 'QueueDispatchError' },
+        status: 'error',
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
   }
 
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */

@@ -44,14 +44,13 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
     const agencyConfig = config?.agencyConfig;
     // This card writes the shared config, so a private device (resolvable only
     // by the member who enrolled it) may be bound only when that member is the
-    // sole runner: a private Agent. A fixed target must stay public — the
-    // server rejects anything else (`assertFixedExecutionTarget`).
+    // sole runner: a private Agent — fixed or not, as the policy is dormant
+    // until publication, and publishing re-checks a fixed target
+    // (`assertFixedExecutionTarget`).
     const privateDeviceBlockedReason =
       config?.visibility !== 'private'
         ? t('settingAgent.devicePolicy.privateDevicePublicAgent')
-        : agencyConfig?.executionTargetSelectionPolicy === 'fixed'
-          ? t('settingAgent.devicePolicy.privateDeviceFixed')
-          : undefined;
+        : undefined;
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);

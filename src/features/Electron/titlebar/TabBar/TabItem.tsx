@@ -39,6 +39,7 @@ interface TabDragFollow {
 }
 
 interface TabItemProps {
+  canReopenClosed: boolean;
   drag?: TabDragFollow;
   /**
    * Where the tab's offset spring starts on the very first render — the strip's previous
@@ -63,6 +64,7 @@ interface TabItemProps {
   onDragStart: (id: string, event: React.PointerEvent<HTMLElement>) => void;
   onMoveBy: (id: string, delta: -1 | 1) => void;
   onOpenInSplitView: (id: string) => void;
+  onReopenClosed: () => void;
   onTogglePin: (id: string) => void;
   pinnedCount: number;
   splitViewEnabled: boolean;
@@ -74,6 +76,7 @@ interface TabItemProps {
 
 const TabItem = memo<TabItemProps>(
   ({
+    canReopenClosed,
     item,
     isActive,
     isSplitVisible,
@@ -97,6 +100,7 @@ const TabItem = memo<TabItemProps>(
     onDragStart,
     onMoveBy,
     onOpenInSplitView,
+    onReopenClosed,
     onTogglePin,
   }) => {
     const styles = useStyles;
@@ -238,6 +242,7 @@ const TabItem = memo<TabItemProps>(
     const contextMenuItems = useCallback(
       (): DropdownItem[] =>
         buildTabContextMenuItems({
+          canReopenClosed,
           id,
           index,
           inSplitView: isSplitVisible,
@@ -247,6 +252,7 @@ const TabItem = memo<TabItemProps>(
           onCloseRight,
           onCloseSplitView,
           onOpenInSplitView,
+          onReopenClosed,
           onTogglePin,
           pinned,
           pinnedCount,
@@ -269,7 +275,9 @@ const TabItem = memo<TabItemProps>(
         onCloseRight,
         onCloseSplitView,
         onOpenInSplitView,
+        onReopenClosed,
         onTogglePin,
+        canReopenClosed,
       ],
     );
 
@@ -287,7 +295,7 @@ const TabItem = memo<TabItemProps>(
             size={16}
           />
         ) : meta.avatarSeed ? (
-          <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+          <ProjectAvatar avatar={meta.avatar} id={meta.avatarSeed} name={meta.title} size={16} />
         ) : meta.avatarKind === 'workspace' ? (
           <WorkspaceAvatar avatar={meta.avatar} name={meta.title} size={16} />
         ) : meta.avatar ? (

@@ -57,11 +57,8 @@ import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
 
 const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    padding-inline: 12px;
-  `,
   error: css`
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorErrorBg};
@@ -73,7 +70,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   groupHeader: css`
     cursor: pointer;
-    padding-block: 9px;
+    padding-block: 8px;
     padding-inline: 12px;
   `,
 }));
@@ -305,7 +302,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     return (
       <Flexbox gap={8}>
         {header}
-        <Flexbox className={styles.body}>
+        <Flexbox>
           <AcceptanceError onRetry={() => void mutateSubject()} />
         </Flexbox>
       </Flexbox>
@@ -316,7 +313,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     <Flexbox gap={8}>
       {header}
       <Collapsible open={sectionExpanded}>
-        <Flexbox className={styles.body} gap={14}>
+        <Flexbox gap={16}>
           {bundleLoading && <Spin size="middle" />}
           {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
@@ -341,7 +338,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
                   </Text>
                 </Flexbox>
               )}
-              <Flexbox gap={7}>
+              <Flexbox gap={8}>
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.checklist')}

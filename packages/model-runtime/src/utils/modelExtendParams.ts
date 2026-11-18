@@ -82,15 +82,16 @@ export interface ModelExtendParams {
 }
 
 type ThinkingLevelExtendParam =
-  'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4';
+  'thinkingLevel' | 'thinkingLevel2' | 'thinkingLevel3' | 'thinkingLevel4' | 'thinkingLevel5';
 
-type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
+type ThinkingLevelValue = NonNullable<LobeAgentChatConfig[ThinkingLevelExtendParam]>;
 
 const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
   thinkingLevel: 'high',
   thinkingLevel2: 'high',
   thinkingLevel3: 'high',
   thinkingLevel4: 'minimal',
+  thinkingLevel5: 'high',
 } as const satisfies Record<ThinkingLevelExtendParam, ThinkingLevelValue>;
 
 const MODEL_THINKING_LEVEL_DEFAULTS: Partial<

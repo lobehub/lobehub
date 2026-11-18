@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   } as any,
 }));
 
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
 vi.mock('@/libs/contextMenu', () => ({
   showContextMenu: mocks.showContextMenu,
 }));
@@ -104,6 +106,7 @@ vi.mock('antd', async (importOriginal) => ({
 }));
 
 vi.mock('react-router', () => ({
+  useLocation: () => ({ state: locationMock.state }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -184,6 +187,7 @@ vi.mock('./TopicStatusIcon', () => ({
 
 describe('TaskSubtasks', () => {
   beforeEach(() => {
+    locationMock.state = undefined;
     mocks.activeWorkspaceId = 'workspace-1';
     mocks.buildContextMenuItems.mockClear();
     mocks.installKeyboardHandlers.mockClear();
@@ -209,7 +213,9 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child/child-task');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child/child-task', {
+      state: undefined,
+    });
   });
 
   it('routes right-click on a subtask through @/libs/contextMenu', () => {
@@ -291,7 +297,7 @@ describe('TaskSubtasks', () => {
 
     fireEvent.click(screen.getByTestId('subtask-tree-node'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child/child-task');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-child/child-task', { state: undefined });
   });
 
   it('uses the running topic status icon when a subtask has an active topic run', () => {
@@ -309,5 +315,16 @@ describe('TaskSubtasks', () => {
     render(<TaskSubtasks />);
 
     expect(screen.getByTestId('topic-status-icon')).toBeTruthy();
+  });
+
+  it('keeps carrying the source task list into a subtask', () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(<TaskSubtasks />);
+
+    fireEvent.click(screen.getByTestId('subtask-tree-node'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-child/child-task', {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
   });
 });

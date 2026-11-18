@@ -5,13 +5,18 @@ import { executionTargetValue } from '@/features/ExecutionTargetPicker';
 export type PrivateDeviceBlock = 'fixed' | 'publicAgent';
 
 /**
- * Why the profile picker cannot bind a private workspace device, if it cannot.
+ * Why a manager's picker cannot bind a private workspace device, if it cannot.
  *
  * A manager's pick replaces the shared default that every member resolves, and
  * a private device resolves only for the member who enrolled it — so the
- * shared row may name one only on a private Agent that is not fixed. A
- * member's pick stays in their own override, where their private device is
- * fine. Personal agents have no private workspace devices at all.
+ * shared row of a published Agent should not name one (`publicAgent`), and a
+ * published fixed Agent cannot: the server rejects it (`fixed`,
+ * `FixedAgentRequiresPublicWorkspaceDevice`). A private Agent has a single
+ * runner, its owner, and its selection policy is dormant until publication
+ * (publishing re-checks the fixed target), so any of the owner's private
+ * devices is fine there. A member's pick stays in their own override, where
+ * their private device is fine. Personal agents have no private workspace
+ * devices at all.
  */
 export const getPrivateDeviceBlock = ({
   canManageAgent,
@@ -25,8 +30,8 @@ export const getPrivateDeviceBlock = ({
   visibility?: 'private' | 'public';
 }): PrivateDeviceBlock | undefined => {
   if (!isWorkspaceAgent || !canManageAgent) return;
-  if (visibility !== 'private') return 'publicAgent';
-  if (selectionPolicy === 'fixed') return 'fixed';
+  if (visibility === 'private') return;
+  return selectionPolicy === 'fixed' ? 'fixed' : 'publicAgent';
 };
 
 /** The picker value for a resolved target; undefined leaves the placeholder. */

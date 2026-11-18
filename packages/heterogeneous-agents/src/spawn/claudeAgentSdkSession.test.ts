@@ -260,3 +260,349 @@ describe('ClaudeAgentSdkSession plugins', () => {
     expect(options).not.toHaveProperty('plugins');
   });
 });
+
+describe('ClaudeAgentSdkSession.stopTask', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  const newSession = () =>
+    new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-sdk-stop',
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'hi', role: 'user' }, type: 'user' })}\n`,
+    });
+
+  it('asks the running query to stop the task', async () => {
+    const stopTask = vi.fn().mockResolvedValue(undefined);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    sdkQueryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {
+        await held;
+        yield* [];
+      },
+      close: vi.fn(),
+      stopTask,
+    }));
+
+    const session = newSession();
+    const running = session.run();
+    await vi.waitFor(() => expect(sdkQueryMock).toHaveBeenCalled());
+
+    await session.stopTask('bys1w0wxo');
+    expect(stopTask).toHaveBeenCalledWith('bys1w0wxo');
+
+    release();
+    await running;
+  });
+
+  it('refuses once the query ended', async () => {
+    sdkQueryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {},
+      close: vi.fn(),
+      stopTask: vi.fn(),
+    }));
+    const session = newSession();
+    await session.run();
+
+    await expect(session.stopTask('bys1w0wxo')).rejects.toThrow('no longer running');
+  });
+});
+
+describe('ClaudeAgentSdkSession input lifetime', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  const sessionWith = (script: (input: { ended: () => boolean }) => AsyncGenerator<any>) => {
+    sdkQueryMock.mockImplementation(({ prompt }: { prompt: AsyncIterable<unknown> }) => {
+      let inputEnded = false;
+      void (async () => {
+        for await (const _ of prompt) {
+          // drain
+        }
+        inputEnded = true;
+      })();
+      const messages = script({ ended: () => inputEnded });
+      return { [Symbol.asyncIterator]: () => messages, close: vi.fn(), stopTask: vi.fn() };
+    });
+    return new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-sdk-input',
+      resumeSessionId: 'cc-session',
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'hi', role: 'user' }, type: 'user' })}\n`,
+    });
+  };
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 1200));
+  const result = (extra: Record<string, unknown> = {}) => ({
+    is_error: false,
+    num_turns: 1,
+    result: 'done',
+    subtype: 'success',
+    type: 'result',
+    ...extra,
+  });
+  const notificationResult = (numTurns: number) =>
+    result({ num_turns: numTurns, origin: { kind: 'task-notification' }, result: '' });
+  const taskStarted = (id: string) => ({
+    description: 'ping',
+    subtype: 'task_started',
+    task_id: id,
+    tool_use_id: `toolu_${id}`,
+    type: 'system',
+  });
+  const taskNotification = (id: string) => ({
+    output_file: '',
+    status: 'completed',
+    subtype: 'task_notification',
+    summary: 'ping',
+    task_id: id,
+    type: 'system',
+  });
+
+  // Recorded from a resumed desktop SDK run: the previous run's stopped task is
+  // reported, its empty pass closes, then this run's own turn starts a task.
+  it('keeps the input open for a task started after a resumed session reports leftovers', async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield taskNotification('leftover');
+      yield notificationResult(0);
+      yield { model: 'claude-haiku', session_id: 'cc-session', subtype: 'init', type: 'system' };
+      yield taskStarted('b1');
+      yield result();
+      await settle();
+      seen.push(ended());
+      yield taskNotification('b1');
+      yield notificationResult(1);
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+
+  it('keeps the input open while a second task still runs after the first one ends', async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield taskStarted('b1');
+      yield taskStarted('b2');
+      yield result();
+      yield taskNotification('b1');
+      yield notificationResult(1);
+      await settle();
+      seen.push(ended());
+      yield taskNotification('b2');
+      yield notificationResult(1);
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+
+  // Recorded from claude 2.1.308: `task_updated(killed)` then
+  // `task_notification(stopped)`, and no `result` after it.
+  it('ends the session when the last task is stopped between turns', async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield taskStarted('b1');
+      yield result();
+      await settle();
+      seen.push(ended());
+      yield { ...taskNotification('b1'), status: 'stopped' };
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+
+  it("leaves a task stopped mid-turn to that turn's own result", async () => {
+    const seen: boolean[] = [];
+    const session = sessionWith(async function* ({ ended }) {
+      yield { model: 'claude-haiku', session_id: 'cc-session', subtype: 'init', type: 'system' };
+      yield taskStarted('b1');
+      yield { ...taskNotification('b1'), status: 'stopped' };
+      await settle();
+      seen.push(ended());
+      yield result();
+      await settle();
+      seen.push(ended());
+    });
+
+    await session.run();
+    expect(seen).toEqual([false, true]);
+  });
+});
+
+describe('ClaudeAgentSdkSession steer', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  it('hands a steered message to the running query, with no priority, and waits for its answer', async () => {
+    const steeredInputs: any[] = [];
+    let ready!: () => void;
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let queryOptions: any;
+    sdkQueryMock.mockImplementation(({ options, prompt }) => {
+      queryOptions = options;
+      const input = prompt[Symbol.asyncIterator]();
+      return {
+        async *[Symbol.asyncIterator]() {
+          await input.next();
+          yield { session_id: 's', subtype: 'init', type: 'system' };
+          ready();
+          const steered = await input.next();
+          steeredInputs.push(steered.value);
+          // Written as the cycle ended: its result comes before the message is read.
+          yield {
+            is_error: false,
+            subtype: 'success',
+            terminal_reason: 'completed',
+            type: 'result',
+          };
+          yield {
+            isReplay: true,
+            message: { content: 'x', role: 'user' },
+            type: 'user',
+            uuid: 'steer-1',
+          };
+          yield { is_error: false, result: 'ok', subtype: 'success', type: 'result' };
+          // Answered: input closes, and the query ends.
+          expect((await input.next()).done).toBe(true);
+        },
+        close: vi.fn(),
+      };
+    });
+
+    const session = new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-steer',
+      replayUserMessages: true,
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'go', role: 'user' }, type: 'user' })}\n`,
+    });
+    const running = session.run();
+    await started;
+
+    expect(
+      session.steer(
+        {
+          message: { content: 'also this', role: 'user' },
+          parent_tool_use_id: null,
+          type: 'user',
+        } as any,
+        'steer-1',
+      ),
+    ).toBe(true);
+    await running;
+
+    expect(steeredInputs[0]).toMatchObject({ type: 'user', uuid: 'steer-1' });
+    expect(steeredInputs[0]).not.toHaveProperty('priority');
+    expect(queryOptions.extraArgs).toMatchObject({ 'replay-user-messages': null });
+    // Input has closed: a later steer goes as a turn of its own.
+    expect(session.steer({ message: { content: 'late', role: 'user' } } as any, 'steer-2')).toBe(
+      false,
+    );
+  });
+});
+
+describe('ClaudeAgentSdkSession steer and background-task notifications', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  it('settles a notification turn that ends while a steer waits, so input still closes after it', async () => {
+    let ready!: () => void;
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let inputDone = false;
+    sdkQueryMock.mockImplementation(({ prompt }) => {
+      const input = prompt[Symbol.asyncIterator]();
+      return {
+        async *[Symbol.asyncIterator]() {
+          await input.next();
+          yield { session_id: 's', subtype: 'init', type: 'system' };
+          yield { session_id: 's', subtype: 'task_started', task_id: 't1', type: 'system' };
+          ready();
+          await input.next(); // the steer
+          yield { session_id: 's', subtype: 'task_notification', task_id: 't1', type: 'system' };
+          // The notification's turn ends before the steer is read.
+          yield {
+            is_error: false,
+            origin: { kind: 'task-notification' },
+            subtype: 'success',
+            type: 'result',
+          };
+          yield {
+            isReplay: true,
+            message: { content: 'x', role: 'user' },
+            type: 'user',
+            uuid: 'steer-1',
+          };
+          yield { is_error: false, subtype: 'success', type: 'result' };
+          inputDone = (await input.next()).done === true;
+        },
+        close: vi.fn(),
+      };
+    });
+
+    const session = new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-notify',
+      replayUserMessages: true,
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'go', role: 'user' }, type: 'user' })}\n`,
+    });
+    const running = session.run();
+    await started;
+    session.steer({ message: { content: 'also', role: 'user' }, type: 'user' } as any, 'steer-1');
+    await running;
+
+    // The steer's answer closed input: no notification left pending holds it open.
+    expect(inputDone).toBe(true);
+  });
+});

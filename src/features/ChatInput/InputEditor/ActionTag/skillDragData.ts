@@ -99,14 +99,8 @@ const setSkillDragImage = (event: React.DragEvent, label: string): void => {
     zIndex: '9999',
   });
 
-  // Row layout is: [chevron svg] [skill icon svg] [name] [count] [row actions].
-  // The hover action buttons (view / rename / delete) stay in the DOM even when
-  // hidden, so exclude them before taking the last svg — otherwise we'd grab the
-  // trailing Trash2 action icon instead of the skill icon.
-  const svgs = Array.from(host.querySelectorAll('svg')).filter(
-    (svg) => !svg.closest('.skill-row-actions'),
-  );
-  const iconSvg = svgs.at(-1);
+  // The only row glyphs are the optional tree chevron and the shared skill icon.
+  const iconSvg = Array.from(host.querySelectorAll('svg')).at(-1);
   if (iconSvg) {
     const iconClone = iconSvg.cloneNode(true) as SVGElement;
     iconClone.style.flexShrink = '0';

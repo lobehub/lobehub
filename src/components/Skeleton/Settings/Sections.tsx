@@ -67,6 +67,11 @@ export type SettingsSectionSkeleton =
       columns?: number;
       /** Table rows below the header row. */
       rows?: number;
+      /**
+       * A row of this many compact label + figure columns above the table,
+       * split from it by a divider.
+       */
+      stats?: number;
       /** A filter / search bar above the table. */
       toolbar?: boolean;
       /** A tab strip above the table. */
@@ -111,6 +116,8 @@ export type SettingsSectionSkeleton =
        * of `cellHeight`.
        */
       blocks: QuotaBlockShape[];
+      /** Setting rows (label + description, control) under the blocks. */
+      rows?: number;
       variant: 'quota';
     })
   | (GroupHeadOptions & {
@@ -133,7 +140,10 @@ export type SettingsSectionSkeleton =
       variant: 'cards';
     })
   | {
-      /** An outlined block with an avatar and two text lines. */
+      /**
+       * A filled lead block above the groups: a large title, a description, a
+       * full-width input with a trailing button, and a short line under it.
+       */
       variant: 'banner';
     };
 
@@ -141,6 +151,8 @@ export interface SettingsSectionsShape {
   /** Vertical gap between sections, as set by the real page's stack. */
   gap?: number;
   sections: SettingsSectionSkeleton[];
+  /** Number of tabs in a strip above the sections, 16px above the first one. */
+  tabs?: number;
   /** The page draws its own large title + divider above the sections. */
   title?: boolean;
 }
@@ -158,9 +170,7 @@ export type SettingsSectionsFrame = 'container' | 'header' | 'none';
 
 const styles = stylex.create({
   banner: {
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
     borderRadius: cssVar.borderRadiusLG,
   },
   card: {
@@ -368,7 +378,7 @@ const InsetTiles = ({
   tiles: number;
 }) => (
   <div
-    {...sx([styles.grid], undefined, {
+    {...sx(styles.grid, {
       gap: 8,
       gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
     })}
@@ -489,7 +499,7 @@ const Detail = ({
     </Flexbox>
     <div {...stylex.props(styles.divider)} />
     <div
-      {...sx([styles.grid], undefined, {
+      {...sx(styles.grid, {
         columnGap: 24,
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
       })}
@@ -531,9 +541,7 @@ const Quota = ({ blocks }: { blocks: QuotaBlockShape[] }) => (
     {blocks.map(({ caption, cellHeight, labels }, index) => (
       <div key={index} {...stylex.props(styles.quotaBlock)}>
         <QuotaCaption caption={caption} />
-        <div
-          {...sx([styles.grid], undefined, { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' })}
-        >
+        <div {...sx(styles.grid, { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' })}>
           {[0, 1].map((cell) => (
             <Flexbox gap={10} height={cellHeight} justify={'center'} key={cell} paddingInline={16}>
               <QuotaCellLabel index={cell} label={labels?.[cell]} />
@@ -631,17 +639,19 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   switch (section.variant) {
     case 'banner': {
       return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={stylex.props(styles.banner).className}
-          gap={16}
-          padding={18}
-        >
-          <SkeletonBar height={48} radius={'50%'} width={48} />
-          <Flexbox gap={10}>
-            <SkeletonBar height={18} width={240} />
-            <SkeletonBar height={12} width={360} />
+        <Flexbox className={stylex.props(styles.banner).className} gap={20} padding={24}>
+          <Flexbox gap={16}>
+            <SkeletonBar height={24} width={320} />
+            <SkeletonBar height={14} width={440} />
+          </Flexbox>
+          <Flexbox gap={12}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Flexbox flex={1}>
+                <SkeletonBar height={40} />
+              </Flexbox>
+              <SkeletonBar height={40} width={136} />
+            </Flexbox>
+            <SkeletonBar height={22} width={176} />
           </Flexbox>
         </Flexbox>
       );
@@ -692,6 +702,12 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
       return (
         <Group {...section} flush>
           <Quota blocks={section.blocks} />
+          {section.rows && (
+            <Flexbox paddingInline={16}>
+              <div {...stylex.props(styles.divider)} />
+              <FormRows rows={section.rows} />
+            </Flexbox>
+          )}
         </Group>
       );
     }
@@ -719,6 +735,14 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'table': {
       return (
         <Group {...section} flush>
+          {section.stats && (
+            <>
+              <Flexbox padding={16}>
+                <InsetTiles columns={section.stats} tileHeight={50} tiles={section.stats} />
+              </Flexbox>
+              <div {...stylex.props(styles.divider)} />
+            </>
+          )}
           <TableBody
             columns={section.columns}
             rows={section.rows ?? 3}
@@ -752,6 +776,15 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   }
 };
 
+/** A page-level tab strip above the sections. */
+const PageTabs = ({ count }: { count: number }) => (
+  <Flexbox horizontal align={'center'} gap={32} height={44}>
+    {Array.from({ length: count }, (_, index) => (
+      <SkeletonBar height={14} key={index} width={widthAt(index, [40, 56, 64])} />
+    ))}
+  </Flexbox>
+);
+
 /** Large page title + divider, matching a settings page that renders its own heading. */
 const PageTitle = () => (
   <Flexbox gap={24} style={{ paddingTop: 12 }}>
@@ -766,14 +799,24 @@ const PageTitle = () => (
  * The sections of a settings page without any surrounding chrome. Use it
  * directly where a layout already draws the header and padded container.
  */
-export const SettingsSectionsBody = ({ shape }: { shape: SettingsSectionsShape }) => (
-  <Flexbox aria-busy data-testid={'settings-sections-skeleton'} gap={shape.gap ?? 36}>
-    {shape.title && <PageTitle />}
-    {shape.sections.map((section, index) => (
-      <Section key={index} section={section} />
-    ))}
-  </Flexbox>
-);
+export const SettingsSectionsBody = ({ shape }: { shape: SettingsSectionsShape }) => {
+  const sections = (
+    <Flexbox aria-busy data-testid={'settings-sections-skeleton'} gap={shape.gap ?? 36}>
+      {shape.title && <PageTitle />}
+      {shape.sections.map((section, index) => (
+        <Section key={index} section={section} />
+      ))}
+    </Flexbox>
+  );
+  if (!shape.tabs) return sections;
+
+  return (
+    <Flexbox gap={16}>
+      <PageTabs count={shape.tabs} />
+      {sections}
+    </Flexbox>
+  );
+};
 
 /**
  * Route skeleton for a settings-style page made of stacked filled groups.

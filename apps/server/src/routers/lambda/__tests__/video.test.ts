@@ -121,9 +121,6 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
 vi.mock('@/server/services/generation/videoPricingDefaults', () => ({
   fillVideoPricingDefaults: mockFillVideoPricingDefaults,
 }));
-vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
-  getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
-}));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
   after: (cb: () => void) => mockAfter(cb),
 }));
@@ -776,6 +773,14 @@ describe('videoRouter', () => {
       ]);
       expect(mockGetVideoAvgLatencies).toHaveBeenCalledOnce();
       expect(mockGetVideoAvgLatencies).toHaveBeenCalledWith(models);
+    });
+  });
+
+  describe('getVideoFreeQuota', () => {
+    it('reports no free quota for released clients that still query it', async () => {
+      const caller = videoRouter.createCaller(mockCtx);
+
+      await expect(caller.getVideoFreeQuota({ model: 'model-1' })).resolves.toBeNull();
     });
   });
 });

@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import path from 'node:path';
 
 /**
  * Utility class for safely storing temporary files. Callers clean up in `finally`.
@@ -10,41 +10,47 @@ import { basename, join, resolve } from 'node:path';
  * any later stray error into a crash. Callers own cleanup; the host owns termination.
  */
 export class TempFileManager {
-  private readonly tempDir: string;
-  private filePaths: Set<string> = new Set();
+  private tempDir?: Promise<string>;
+  private readonly writes = new Set<Promise<string>>();
+  private cleanupPromise?: Promise<void>;
 
-  constructor(dirname: string) {
-    // Create unique temporary directory (cross-platform safe)
-    this.tempDir = mkdtempSync(join(tmpdir(), dirname));
-  }
+  constructor(private readonly dirname: string) {}
 
-  /**
-   * Write Uint8Array data to a temporary file
-
-   */
+  /** Creates the directory asynchronously on first write; no new write is accepted once cleanup has started. */
   async writeTempFile(data: Uint8Array, name: string): Promise<string> {
-    // Sanitize filename to prevent path traversal (GHSA-2g9j-v25c-4j97)
-    const safeName = basename(name);
-    const filePath = resolve(this.tempDir, safeName);
+    if (this.cleanupPromise) throw new Error('Temp file manager is already closed');
+
+    const directory = (this.tempDir ??= mkdtemp(path.join(tmpdir(), this.dirname)));
+    const writing = (async () => {
+      // Sanitize filename to prevent path traversal (GHSA-2g9j-v25c-4j97)
+      const filePath = path.resolve(await directory, path.basename(name));
+      await writeFile(filePath, data);
+      return filePath;
+    })();
+    this.writes.add(writing);
 
     try {
-      writeFileSync(filePath, data);
-      this.filePaths.add(filePath);
-      return filePath;
+      return await writing;
     } catch (error) {
-      this.cleanup(); // Immediately cleanup on write failure
+      // Remove itself first so the cleanup on the failure path does not wait for this write.
+      this.writes.delete(writing);
+      // A cleanup error must not mask the original write failure.
+      await this.cleanup().catch(() => {});
       throw new Error(`Failed to write temp file: ${(error as Error).message}`, { cause: error });
+    } finally {
+      this.writes.delete(writing);
     }
   }
 
-  /**
-   * Safely cleanup temporary resources
-   */
-  cleanup(): void {
-    if (existsSync(this.tempDir)) {
-      // Recursively delete directory and its contents
-      rmSync(this.tempDir, { force: true, recursive: true });
-      this.filePaths.clear();
-    }
+  /** Callers `await` it in `finally`; concurrent and repeated calls share one cleanup. */
+  cleanup(): Promise<void> {
+    this.cleanupPromise ??= (async () => {
+      // Wait for admitted writes to settle before deleting, so a delete never interleaves with a
+      // write and leaves a file behind.
+      await Promise.allSettled(this.writes);
+      const directory = await this.tempDir?.catch(() => undefined);
+      if (directory) await rm(directory, { force: true, recursive: true });
+    })();
+    return this.cleanupPromise;
   }
 }

@@ -34,6 +34,14 @@ export class HomeService {
   };
 
   /**
+   * Save the drag-and-drop order of the sidebar's pinned rows (the team pins
+   * in a workspace, the user's own pins in personal mode).
+   */
+  updatePinnedOrder = async (ids: string[]): Promise<void> => {
+    await lambdaClient.home.updatePinnedOrder.mutate({ ids });
+  };
+
+  /**
    * Update an agent's session group
    */
   updateAgentSessionGroupId = (agentId: string, sessionGroupId: string | null): Promise<void> => {

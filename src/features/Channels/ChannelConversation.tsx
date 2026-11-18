@@ -20,14 +20,11 @@ import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
+import { hasReplyActivity } from './jobStatus';
 import { JoinEventLine } from './JoinEventLine';
-import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { channelJoinEvents, channelTimeline, isSelfJoinable } from './joinEvents';
 import { isCurrentUserMember } from './memberName';
-import {
-  channelDayLabel,
-  channelTimeFormatters,
-  presentChannelTimeline,
-} from './messagePresentation';
+import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { presentOutgoingMessage, timelineTail } from './outgoing';
 import { OutgoingStatus } from './OutgoingStatus';
 import { ReplyActivity } from './ReplyActivity';
@@ -111,12 +108,14 @@ const Timeline = ({
     if (feed && followLatest.current && before === undefined) feed.scrollTop = feed.scrollHeight;
   }, [feedTail, before]);
 
+  // Someone reading an open project Channel without joining has no read position to move.
+  const joined = detail?.joined !== false;
   useEffect(() => {
-    if (threadId || sequence === undefined || before !== undefined) return;
+    if (!joined || threadId || sequence === undefined || before !== undefined) return;
     void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
-  }, [channelId, threadId, sequence, before]);
+  }, [channelId, joined, threadId, sequence, before]);
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
@@ -130,7 +129,9 @@ const Timeline = ({
         outgoing.length
           ? [...detail.messages, ...outgoing.map((item) => item.message)]
           : detail.messages,
-        threadId || direct ? [] : channelJoinEvents(detail.members),
+        threadId || direct
+          ? []
+          : channelJoinEvents(detail.members, { selfJoinable: isSelfJoinable(detail.channel) }),
         !detail.hasMore && before === undefined,
       )
     : [];
@@ -220,10 +221,7 @@ const Timeline = ({
                         {...stylex.props(styles.dateDivider)}
                       >
                         <time dateTime={date.toISOString()} title={timeFormats.date.format(date)}>
-                          {channelDayLabel(date, {
-                            locale: i18n.language,
-                            yesterday: t('date.yesterday'),
-                          })}
+                          {timeFormats.date.format(date)}
                         </time>
                       </div>
                     )}
@@ -277,13 +275,16 @@ const Timeline = ({
                 members={activeMembers}
                 replyTarget={reply.target}
                 activity={
-                  // A direct conversation shows its Agent's state beside the name in the header.
-                  direct && !threadId ? null : <ReplyActivity detail={detail} threadId={threadId} />
+                  hasReplyActivity(detail, threadId) ? (
+                    <ReplyActivity detail={detail} threadId={threadId} />
+                  ) : null
                 }
                 placeholder={
                   threadId
                     ? t('threadComposer')
-                    : t(direct ? 'directComposer' : 'composer', { name: detail.channel.title })
+                    : t(direct ? 'directComposer' : joined ? 'composer' : 'composerToJoin', {
+                        name: detail.channel.title,
+                      })
                 }
                 onCancelReply={() => reply.clear()}
                 onQueue={(message) => {

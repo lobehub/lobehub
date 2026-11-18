@@ -1,4 +1,5 @@
-import { Alert, Button, createStaticStyles, cx, Skeleton } from '@lobehub/ui';
+import { Alert, Button, cx, Skeleton } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCcw } from 'lucide-react';
 import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,33 +12,27 @@ import {
 
 import { type ChatItemProps } from '../type';
 
-const styles = createStaticStyles(({ css }) => ({
-  close: css`
-    @media (width <= 480px) {
-      width: 24px;
-      height: 24px;
-    }
-  `,
-  extraContent: css`
-    padding: 0;
-    background: transparent;
+const NARROW = '@media (width <= 480px)';
 
-    @media (width <= 480px) {
-      margin-inline: 8px;
-    }
-  `,
-  extraHeader: css`
-    @media (width <= 480px) {
-      padding-inline: 8px;
-    }
-  `,
-  root: css`
-    @media (width <= 480px) {
-      gap: 6px;
-      padding-inline: 8px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  close: {
+    width: { default: null, [NARROW]: '24px' },
+    height: { default: null, [NARROW]: '24px' },
+  },
+  extraContent: {
+    padding: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    marginInline: { default: null, [NARROW]: '8px' },
+  },
+  extraHeader: {
+    paddingInline: { default: null, [NARROW]: '8px' },
+  },
+  root: {
+    gap: { default: null, [NARROW]: '6px' },
+    paddingInline: { default: null, [NARROW]: '8px' },
+  },
+});
 
 export interface ErrorContentProps {
   customErrorRender?: ChatItemProps['customErrorRender'];
@@ -105,10 +100,13 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
       }}
       classNames={{
         ...error.classNames,
-        close: cx(styles.close, error.classNames?.close),
-        extraContent: cx(styles.extraContent, error.classNames?.extraContent),
-        extraHeader: cx(styles.extraHeader, error.classNames?.extraHeader),
-        root: cx(styles.root, error.classNames?.root),
+        close: cx(stylex.props(styles.close).className, error.classNames?.close),
+        extraContent: cx(
+          stylex.props(styles.extraContent).className,
+          error.classNames?.extraContent,
+        ),
+        extraHeader: cx(stylex.props(styles.extraHeader).className, error.classNames?.extraHeader),
+        root: cx(stylex.props(styles.root).className, error.classNames?.root),
       }}
       style={{
         overflow: 'hidden',

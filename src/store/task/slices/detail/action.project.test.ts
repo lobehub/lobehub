@@ -16,6 +16,7 @@ vi.mock('@/services/task', () => ({
     getDetail: vi.fn(),
     groupList: vi.fn(),
     list: vi.fn(),
+    moveTreeToProject: vi.fn(),
     update: vi.fn(),
   },
 }));
@@ -161,6 +162,24 @@ describe('updateTask projectId', () => {
     });
   });
 
+  it('names the reason the server gave, and clears the failed save state', async () => {
+    seed();
+    const refused = Object.assign(new Error('Task has subtasks in its current project'), {
+      data: { code: 'BAD_REQUEST', errorData: { projectMoveRefusal: 'split_subtasks' } },
+    });
+    vi.mocked(taskService.update).mockRejectedValue(refused);
+
+    await state()
+      .updateTask('T-1', { projectId: 'p2' })
+      .catch(() => {});
+
+    expect(saveToast).toHaveBeenCalledWith(refused, {
+      hideCause: true,
+      title: expect.stringContaining("subtasks can't be left behind"),
+    });
+    expect(state().taskSaveStatusMap['T-1']).toBe('idle');
+  });
+
   it('keeps the server cause and retry for any other failed save', async () => {
     seed();
     const failed = Object.assign(new Error('boom'), { data: { code: 'INTERNAL_SERVER_ERROR' } });
@@ -228,5 +247,45 @@ describe('a project-scoped collection remembers its project', () => {
       options?.onSuccess?.(fetched);
     });
     await waitFor(() => expect(state().taskGroupListMap[queryKey]?.projectId).toBe('p1'));
+  });
+});
+
+describe('moveTaskTreeToProject', () => {
+  it('moves the tree on the server and refreshes the lists and the detail', async () => {
+    seed();
+    vi.mocked(taskService.moveTreeToProject).mockResolvedValue({ success: true } as any);
+
+    expect(await state().moveTaskTreeToProject('T-1', 'p2')).toBe(true);
+
+    expect(taskService.moveTreeToProject).toHaveBeenCalledWith('T-1', 'p2');
+    expect(taskDetailRefreshes('T-1').length).toBeGreaterThan(0);
+    expect(saveToast).not.toHaveBeenCalled();
+  });
+
+  it('explains a refused move without a retry and leaves no failed state', async () => {
+    seed();
+    const refused = Object.assign(new Error('Task tree cannot move'), {
+      data: { code: 'BAD_REQUEST', errorData: { projectMoveRefusal: 'external_dependency' } },
+    });
+    vi.mocked(taskService.moveTreeToProject).mockRejectedValue(refused);
+
+    expect(await state().moveTaskTreeToProject('T-1', 'p2')).toBe(false);
+
+    expect(saveToast).toHaveBeenCalledWith(refused, {
+      hideCause: true,
+      title: expect.stringContaining('Remove those dependencies first'),
+    });
+    expect(state().taskSaveStatusMap['T-1']).toBe('idle');
+  });
+
+  it('offers a retry for any other failure', async () => {
+    seed();
+    const failed = Object.assign(new Error('boom'), { data: { code: 'INTERNAL_SERVER_ERROR' } });
+    vi.mocked(taskService.moveTreeToProject).mockRejectedValue(failed);
+
+    expect(await state().moveTaskTreeToProject('T-1', 'p2')).toBe(false);
+
+    expect(saveToast).toHaveBeenCalledWith(failed, { retry: expect.any(Function) });
+    expect(state().taskSaveStatusMap['T-1']).toBe('failed');
   });
 });
