@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
   mayBeOversizedKnowledgeFile,
@@ -17,14 +19,18 @@ const { mockParseFile, MockDocumentService } = vi.hoisted(() => {
   };
 });
 
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({ afterUnscoped: vi.fn() }));
+
 vi.mock('@/server/services/document', () => ({
   DocumentService: MockDocumentService,
 }));
 
-const db = {} as never;
+let db: Parameters<typeof resolveKnowledgeFileContents>[0]['db'];
 
 describe('resolveKnowledgeFileContents', () => {
   beforeEach(() => {
+    db = {} as typeof db;
+    vi.mocked(afterUnscoped).mockClear();
     mockParseFile.mockReset();
     MockDocumentService.mockClear();
   });
@@ -132,6 +138,75 @@ describe('resolveKnowledgeFileContents', () => {
         filename: 'broken.docx',
       },
     ]);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('returns the processing placeholder after five seconds while the same scoped parse continues', async () => {
+    vi.useFakeTimers();
+    const deferred = Promise.withResolvers<{ content: string }>();
+    mockParseFile.mockReturnValue(deferred.promise);
+    const input = {
+      db,
+      files: [{ enabled: true, id: 'slow', name: 'slow.md' }],
+      userId: 'u1',
+      workspaceId: 'w1',
+    };
+
+    const initial = resolveKnowledgeFileContents(input);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(initial).resolves.toEqual([
+      {
+        content: '',
+        error:
+          'The file is attached but is still being processed; its contents are not available for this message.',
+        fileId: 'slow',
+        filename: 'slow.md',
+      },
+    ]);
+    const second = resolveKnowledgeFileContents(input);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(second).resolves.toEqual(await initial);
+    expect(afterUnscoped).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+
+    const next = resolveKnowledgeFileContents(input);
+    expect(mockParseFile).toHaveBeenCalledTimes(1);
+    deferred.resolve({ content: 'parsed body' });
+    await vi.mocked(afterUnscoped).mock.calls[0][0]();
+    await expect(next).resolves.toEqual([
+      { content: 'parsed body', fileId: 'slow', filename: 'slow.md' },
+    ]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('caches a late failure for five minutes within one authorization scope', async () => {
+    vi.useFakeTimers();
+    const deferred = Promise.withResolvers<{ content: string }>();
+    mockParseFile.mockReturnValueOnce(deferred.promise).mockResolvedValue({ content: 'parsed' });
+    const input = {
+      db,
+      files: [{ enabled: true, id: 'broken', name: 'broken.md' }],
+      userId: 'u1',
+      workspaceId: 'w1',
+    };
+
+    const initial = resolveKnowledgeFileContents(input);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await initial;
+    deferred.reject(new Error('parse failed'));
+    await vi.advanceTimersByTimeAsync(0);
+    const cached = await resolveKnowledgeFileContents(input);
+    expect(cached[0].error).toBe('The file is attached but its contents could not be extracted.');
+    expect(mockParseFile).toHaveBeenCalledTimes(1);
+
+    await resolveKnowledgeFileContents({ ...input, userId: 'u2' });
+    await resolveKnowledgeFileContents({ ...input, workspaceId: 'w2' });
+    expect(mockParseFile).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(300_000);
+    const retried = await resolveKnowledgeFileContents(input);
+    expect(retried[0].content).toBe('parsed');
+    expect(mockParseFile).toHaveBeenCalledTimes(4);
   });
 
   it('excludes disabled files and returns an empty list without enabled ones', async () => {

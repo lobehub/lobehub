@@ -12,6 +12,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 import { DocumentService } from '../document';
+import { resolveKnowledgeFileContents } from '../file/resolveKnowledgeFileContents';
 import { KnowledgeBaseSearchService } from './index';
 
 vi.mock('@/database/models/agentDocuments', () => ({ AgentDocumentModel: vi.fn() }));
@@ -258,6 +259,57 @@ describe('KnowledgeBaseSearchService', () => {
         fileId: 'file_bad',
         filename: 'bad.pdf',
       });
+    });
+
+    it('shares processing and failure status with the request-time knowledge parse', async () => {
+      vi.useFakeTimers();
+      try {
+        const file = { id: 'file_slow', name: 'slow.pdf' };
+        fileModelMock.findById.mockResolvedValue(file);
+        documentModelMock.findByFileId.mockResolvedValue(undefined);
+        const deferred = Promise.withResolvers<{ content: string }>();
+        documentServiceMock.parseFile.mockReturnValue(deferred.promise);
+
+        const hydration = resolveKnowledgeFileContents({
+          db: serverDB,
+          files: [{ ...file, enabled: true }],
+          userId,
+        });
+        await vi.advanceTimersByTimeAsync(5_000);
+        const [processing] = await hydration;
+
+        const [pendingRead] = await service.getFileContents([file.id]);
+        expect(pendingRead).toMatchObject({
+          content: '',
+          error: processing.error,
+          fileId: file.id,
+        });
+        expect(pendingRead.error).toContain('still being processed');
+        expect(documentServiceMock.parseFile).toHaveBeenCalledExactlyOnceWith(file.id);
+
+        deferred.reject(new Error('internal parser details'));
+        await vi.advanceTimersByTimeAsync(0);
+        const [failedRead] = await service.getFileContents([file.id]);
+        expect(failedRead.error).toBe(
+          'The file is attached but its contents could not be extracted.',
+        );
+        expect(documentServiceMock.parseFile).toHaveBeenCalledTimes(1);
+
+        // A later successful parse from another path wins over the cooldown.
+        documentModelMock.findByFileId.mockResolvedValue({
+          content: 'stored text',
+          metadata: null,
+        });
+        const [availableRead] = await service.getFileContents([file.id]);
+        expect(availableRead.content).toBe('stored text');
+        expect(availableRead.error).toBeUndefined();
+
+        fileModelMock.findById.mockResolvedValue(undefined);
+        const [deniedRead] = await service.getFileContents([file.id]);
+        expect(deniedRead.error).toBe('File not found');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('returns "File not found" when file_* id is missing', async () => {

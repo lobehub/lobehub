@@ -22,6 +22,7 @@ import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
 import { resolveEnterpriseContentScopes } from '@/server/services/enterpriseKnowledge/contentAccess';
+import { getKnowledgeFileParsePlaceholder } from '@/server/services/file/resolveKnowledgeFileContents';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import {
   assertContentsNotInRestrictedKnowledgeBase,
@@ -373,6 +374,22 @@ export class KnowledgeBaseSearchService {
       await this.documentModel.findByFileId(fileId);
 
     if (!document) {
+      // A knowledge file may already be parsing or cooling down after a failure.
+      const placeholder = getKnowledgeFileParsePlaceholder(
+        this.serverDB,
+        this.userId,
+        this.workspaceId,
+        fileId,
+      );
+      if (placeholder) {
+        return {
+          content: '',
+          error: placeholder,
+          fileId: resultId,
+          filename: filename ?? file.name,
+        };
+      }
+
       try {
         document = await this.documentService.parseFile(fileId);
       } catch (error) {
