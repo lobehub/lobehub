@@ -45,6 +45,11 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 vi.mock('@/server/services/connector/sync', () => ({
   syncConnectorToolsById: syncConnectorToolsByIdMock,
 }));
+// The token refresher pulls in the connector-link model and its schema
+// tables; the CRUD paths under test never refresh a token.
+vi.mock('@/server/services/connector/tokens', () => ({
+  ensureFreshConnectorToken: vi.fn(async (connector: unknown) => connector),
+}));
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: class {
     queryByConnector = vi.fn().mockResolvedValue([]);
