@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   AgentAccountBindingModel,
   AgentDeviceAccountBindingModel,
+  AgentProviderAccountModel,
 } from '@/database/models/agentQuota';
 import { agents, devices, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -317,6 +318,45 @@ describe('AgentQuotaService.resolveAgentAvailability', () => {
     expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
       accountIds: [early.id],
       mode: 'balanced',
+      resetsAt,
+      status: 'exhausted',
+    });
+  });
+
+  // Regression: an all-disabled Auto pool read "exhausted" with no reset, so
+  // presence showed the agent off duty for good, while the dispatcher routes
+  // nothing there and the device's default login runs.
+  it('does not judge an Auto pool whose accounts are all disabled', async () => {
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    const spent = await withSession('acc-spent', deviceA, 100);
+    const free = await withSession('acc-free', deviceA, 0);
+    for (const account of [spent, free]) {
+      await bindings.upsert({ accountId: account.id, agentId, role: QuotaBindingRole.pool });
+      await accounts.update(account.id, { enabled: false });
+    }
+
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toBeNull();
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [],
+      mode: 'balanced',
+      status: 'untracked',
+    });
+  });
+
+  it('still judges a device pin on a disabled account: the run is sent to it', async () => {
+    const spent = await withSession('acc-spent', deviceA, 100);
+    await bindings.upsert({ accountId: spent.id, agentId, role: QuotaBindingRole.pool });
+    await service.setDeviceAccount(agentId, deviceA, spent.id);
+    await new AgentProviderAccountModel(serverDB, userId).update(spent.id, { enabled: false });
+
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toMatchObject({ candidates: [{ externalAccountId: 'acc-spent' }], mode: 'pinned' });
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [spent.id],
+      mode: 'pinned',
       resetsAt,
       status: 'exhausted',
     });

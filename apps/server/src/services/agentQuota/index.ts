@@ -683,25 +683,38 @@ export class AgentQuotaService {
     const plan = await this.planDeviceAccounts(agentId, options);
     if (!plan) return { accountIds: [], status: 'untracked' };
 
-    const accountIds =
+    // A pin is sent to the device whatever the account's state, so its quota
+    // decides; a disabled pool account is out of the rotation the dispatcher
+    // ranks (`rankAccounts` drops it).
+    const pins = new Set(
       plan.mode === 'pinned'
         ? [plan.pin.id]
-        : [
-            ...new Set([
-              ...(plan.pinnedElsewhere ? [plan.pinnedElsewhere.id] : []),
-              ...plan.pool.map(({ account }) => account.id),
-            ]),
-          ];
+        : plan.pinnedElsewhere
+          ? [plan.pinnedElsewhere.id]
+          : [],
+    );
+    const candidateIds = [
+      ...new Set([
+        ...pins,
+        ...(plan.mode === 'balanced' ? plan.pool.map(({ account }) => account.id) : []),
+      ]),
+    ];
 
     const now = options.now ?? Date.now();
-    const loads = await this.resolveAccountLoads(accountIds, now);
+    const loads = (await this.resolveAccountLoads(candidateIds, now))
+      .map((load) => (pins.has(load.accountId) ? { ...load, enabled: true } : load))
+      .filter((load) => load.enabled);
+    // Every account in the rotation is disabled: the dispatcher routes
+    // nothing and the device's default login runs.
+    if (loads.length === 0) return { accountIds: [], mode: plan.mode, status: 'untracked' };
+
     const { available, resetsAt } = summarizeAvailability(loads, {
       modelScope: options.modelScope,
       now,
     });
 
     return {
-      accountIds,
+      accountIds: loads.map((load) => load.accountId),
       mode: plan.mode,
       status: available ? 'available' : 'exhausted',
       ...(resetsAt !== undefined && { resetsAt }),
