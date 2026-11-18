@@ -22,6 +22,7 @@ import {
   RestartGoalRequestSchema,
   UpdateGoalRequestSchema,
 } from '../types/goal.type';
+import GoalAdvancedRoutes from './goals-advanced.route';
 
 /**
  * Goal routes.
@@ -199,5 +200,8 @@ GoalRoutes.post(
   zValidator('json', RestartGoalRequestSchema),
   async (c) => new GoalController().restartGoal(c),
 );
+
+// Configuration, graph edits, events, decisions, metrics and close.
+GoalRoutes.route('/', GoalAdvancedRoutes);
 
 export default GoalRoutes;

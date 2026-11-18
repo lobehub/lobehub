@@ -24,6 +24,7 @@ import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
 import AgentSignalsRoutes from './signals.route';
+import TaskTemplatesRoutes from './task-templates.route';
 import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
 import UsageRoutes from './usage.route';
@@ -60,4 +61,5 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'task-templates': TaskTemplatesRoutes,
 };

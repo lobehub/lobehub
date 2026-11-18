@@ -88,7 +88,7 @@ export class TaskRestService extends BaseService {
     });
   }
 
-  async getTask(id: string): ServiceResult<unknown> {
+  async getTask(id: string) {
     const detail = await this.taskService.getTaskDetail(
       (await resolveTaskOrThrow(this.taskModel, id)).id,
     );
@@ -96,7 +96,7 @@ export class TaskRestService extends BaseService {
     return detail;
   }
 
-  async createTask(input: CreateTaskRequest): ServiceResult<unknown> {
+  async createTask(input: CreateTaskRequest) {
     // The request schemas check the cron pattern and the timezone one at a
     // time; this checks the pair the task ends up with, exactly like the tRPC
     // create boundary, so a schedule the dispatcher cannot evaluate is refused
@@ -121,7 +121,7 @@ export class TaskRestService extends BaseService {
     return task;
   }
 
-  async updateTask(id: string, input: UpdateTaskRequest): ServiceResult<unknown> {
+  async updateTask(id: string, input: UpdateTaskRequest) {
     // Hierarchy, visibility, assignment and schedule invariants all live in one
     // shared place, so this patch cannot persist what the in-app editor refuses
     // — a task parented to itself, a public child under a private parent, an
@@ -160,7 +160,7 @@ export class TaskRestService extends BaseService {
     return updated;
   }
 
-  async updateTaskStatus(id: string, input: UpdateTaskStatusRequest): ServiceResult<unknown> {
+  async updateTaskStatus(id: string, input: UpdateTaskStatusRequest) {
     // A person (or their agent) made this change, so it belongs in the feed —
     // the service treats a missing actor as a system transition.
     return this.taskService.updateStatus(
@@ -173,7 +173,7 @@ export class TaskRestService extends BaseService {
     );
   }
 
-  async runTask(id: string, input: RunTaskRequest): ServiceResult<unknown> {
+  async runTask(id: string, input: RunTaskRequest) {
     const task = await this.taskModel.resolve(id);
     if (!task) throw this.createNotFoundError('Task not found');
     // Same runner as the in-app "Run now" (tRPC `task.run`), so the archived-task
@@ -182,7 +182,7 @@ export class TaskRestService extends BaseService {
     return runner.runTask({ extraPrompt: input.prompt, taskId: task.id });
   }
 
-  async listRuns(id: string, query: TaskRunListQuery): ServiceResult<unknown> {
+  async listRuns(id: string, query: TaskRunListQuery) {
     const task = await this.taskModel.resolve(id);
     if (!task) throw this.createNotFoundError('Task not found');
     const rows = await this.taskTopicModel.findWithHandoff(

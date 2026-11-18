@@ -913,9 +913,7 @@ export type Goal = {
     agentId: string | null;
     archivedAt: string | null;
     completedAt: string | null;
-    config: {
-        [key: string]: unknown;
-    } | null;
+    config: GoalConfig | null;
     createdAt: string;
     deletedAt: string | null;
     id: string;
@@ -933,6 +931,119 @@ export type Goal = {
     userId: string;
     visibility: 'private' | 'public';
     workspaceId: string | null;
+};
+
+export type GoalConfig = {
+    acceptance?: {
+        criteriaIds?: Array<string>;
+        metrics?: Array<{
+            key: string;
+            op?: 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
+            target: number;
+            title?: string;
+            [key: string]: unknown;
+        }>;
+        [key: string]: unknown;
+    };
+    /**
+     * The owner's latest request for changes.
+     */
+    changeRequest?: {
+        comment?: string;
+        requestedAt: string;
+        taskId: string;
+        [key: string]: unknown;
+    };
+    exploration?: {
+        /**
+         * Coordinator-owned exploration lease.
+         */
+        checkpoint?: {
+            [key: string]: unknown;
+        };
+        instruction: string;
+        maxExperiments: number;
+        [key: string]: unknown;
+    };
+    manager?: {
+        instruction?: string;
+        maxTurns?: number;
+        openedForHandoff?: string;
+        [key: string]: unknown;
+    };
+    /**
+     * Coordinator-owned main Agent turn state.
+     */
+    managerState?: {
+        [key: string]: unknown;
+    };
+    maxConcurrentTasks?: number | null;
+    model?: string;
+    /**
+     * The score this goal optimises.
+     */
+    objective?: {
+        [key: string]: unknown;
+    };
+    pausedBy?: 'measured_acceptance' | 'exploration_limit' | 'exploration_revision_limit' | 'pattern_break' | 'release_review' | 'user';
+    /**
+     * Coordinator-owned decomposition lease.
+     */
+    planningCheckpoint?: {
+        [key: string]: unknown;
+    };
+    planningProtocol?: 'lease-v1';
+    provider?: string;
+    quotaRetryWakeAt?: string;
+    recovery?: {
+        maxAttemptsPerTask?: number;
+        maxStepsPerRun?: number | null;
+        operationLeaseTimeoutMs?: number;
+        [key: string]: unknown;
+    };
+    /**
+     * Coordinator-owned wrap-up report receipt.
+     */
+    report?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Batch rollout policy of a repeated-mould goal.
+     */
+    rollout?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Coordinator-owned batch progress.
+     */
+    rolloutState?: {
+        [key: string]: unknown;
+    };
+    schedule?: {
+        deadline?: string | null;
+        [key: string]: unknown;
+    };
+    supervision?: {
+        enabled: boolean;
+        maxIncidents?: number;
+        [key: string]: unknown;
+    };
+    /**
+     * Supervisor topic and incident ledger; read it typed from `GET /goals/{id}/supervision`.
+     */
+    supervisorState?: {
+        [key: string]: unknown;
+    };
+    taskAgentId?: string;
+    taskModel?: string;
+    taskProvider?: string;
+    /**
+     * Coordinator-owned decomposition notes.
+     */
+    understanding?: {
+        [key: string]: unknown;
+    };
+    [key: string]: unknown;
 };
 
 export type GoalGraphSnapshot = {
@@ -1194,6 +1305,47 @@ export type GoalAdvanceResult = {
 export type GoalRestartResult = {
     goal: Goal;
     restartedTaskIds: Array<string>;
+};
+
+export type GoalConfigUpdateResult = {
+    graph: GoalGraph;
+    reassignedTaskIds: Array<string>;
+};
+
+export type GoalRetiredNodes = {
+    retiredNodeIds: Array<string>;
+};
+
+export type GoalRemovedEdges = {
+    edgeIds: Array<string>;
+};
+
+export type GoalEventList = {
+    events: Array<GoalGraphEvent>;
+    hasMore: PageHasMore;
+    nextCursor: PageNextCursor;
+};
+
+export type GoalMetricState = {
+    allMet: boolean;
+    criteria: Array<{
+        key: string;
+        met: boolean;
+        observedAt?: number;
+        op: string;
+        target: number;
+        title?: string;
+        value: number | null;
+    }>;
+};
+
+export type GoalObservation = {
+    advanced: boolean;
+    key: string;
+    metricId: string;
+    observedAt: string;
+    pointId: string;
+    value: number;
 };
 
 export type ImSendResult = {
@@ -2231,12 +2383,8 @@ export type TaskListItem = {
     assigneeUserId: string | null;
     automationMode: 'heartbeat' | 'schedule' | null;
     completedAt: string | null;
-    config: {
-        [key: string]: unknown;
-    } | null;
-    context: {
-        [key: string]: unknown;
-    } | null;
+    config: TaskConfig | null;
+    context: TaskContext | null;
     createdAt: string;
     createdByAgentId: string | null;
     createdByUserId: string;
@@ -2274,6 +2422,100 @@ export type TaskListItem = {
     };
 };
 
+export type TaskConfig = {
+    checkpoint?: {
+        onAgentRequest?: boolean;
+        tasks?: {
+            afterIds?: Array<string>;
+            afterTasks?: Array<{
+                id: string;
+                identifier: string;
+            }>;
+            beforeIds?: Array<string>;
+            beforeTasks?: Array<{
+                id: string;
+                identifier: string;
+            }>;
+        };
+        topic?: {
+            after?: boolean;
+            before?: boolean;
+        };
+    };
+    execution?: {
+        boundDeviceId?: string;
+        repos?: Array<string>;
+        workingDirectory?: string;
+        workingDirectoryConfig?: {
+            path: string;
+            repoType?: string;
+        };
+    };
+    model?: string;
+    provider?: string;
+    review?: TaskReviewConfig;
+    verify?: {
+        enabled?: boolean;
+        maxIterations?: number;
+        requirement?: string;
+        verifierAgentId?: string;
+        verifyCriteriaIds?: Array<string>;
+        verifyRubricId?: string;
+    };
+    [key: string]: unknown;
+};
+
+export type TaskReviewConfig = {
+    autoRetry?: boolean;
+    enabled?: boolean;
+    judge?: {
+        model?: string;
+        provider?: string;
+        [key: string]: unknown;
+    };
+    maxIterations?: number;
+    rubrics?: Array<{
+        config: {
+            [key: string]: unknown;
+        };
+        extractor?: {
+            [key: string]: unknown;
+        };
+        id: string;
+        name: string;
+        threshold?: number;
+        type: string;
+        weight?: number;
+        [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+};
+
+export type TaskContext = {
+    completion?: {
+        requestedByOperationId?: string;
+    };
+    /**
+     * Lifecycle audit of the latest runs.
+     */
+    lifecycle?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Where the task was created from.
+     */
+    origin?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Schedule and heartbeat bookkeeping.
+     */
+    scheduler?: {
+        [key: string]: unknown;
+    };
+    [key: string]: unknown;
+};
+
 export type TaskLabelRef = {
     color?: string | null;
     id: string;
@@ -2288,12 +2530,8 @@ export type Task = {
     assigneeUserId: string | null;
     automationMode: 'heartbeat' | 'schedule' | null;
     completedAt: string | null;
-    config: {
-        [key: string]: unknown;
-    } | null;
-    context: {
-        [key: string]: unknown;
-    } | null;
+    config: TaskConfig | null;
+    context: TaskContext | null;
     createdAt: string;
     createdByAgentId: string | null;
     createdByUserId: string;
@@ -2350,9 +2588,7 @@ export type TaskDetail = {
             before?: boolean;
         };
     };
-    config?: {
-        [key: string]: unknown;
-    };
+    config?: TaskConfig;
     createdAt?: string;
     createdByUserId?: string | null;
     dependencies?: Array<{
@@ -2655,6 +2891,116 @@ export type TaskRun = {
     trigger: 'manual' | 'schedule' | 'heartbeat' | 'goal' | null;
 };
 
+export type SubtaskOrder = {
+    id: string;
+    identifier: string;
+    sortOrder: number;
+};
+
+export type TaskDependency = {
+    /**
+     * Reserved for conditional dependencies.
+     */
+    condition: unknown;
+    createdAt: string;
+    dependsOnId: string;
+    dependsOnIdentifier: string | null;
+    id: string;
+    taskId: string;
+    /**
+     * `blocks` holds the task in backlog until the upstream task completes.
+     */
+    type: 'blocks' | 'relates';
+    userId: string;
+    visibility: 'private' | 'public';
+    workspaceId: string | null;
+};
+
+export type TaskComment = {
+    accessedAt: string;
+    authorAgentId: string | null;
+    authorUserId: string | null;
+    briefId: string | null;
+    content: string;
+    createdAt: string;
+    editorData: unknown;
+    id: string;
+    taskId: string;
+    topicId: string | null;
+    updatedAt: string;
+    userId: string;
+    visibility: 'private' | 'public';
+    workspaceId: string | null;
+};
+
+export type TaskPinnedDocument = {
+    createdAt: string;
+    documentId: string;
+    id: string;
+    pinnedBy: string;
+    taskId: string;
+    userId: string;
+    visibility: 'private' | 'public';
+    workspaceId: string | null;
+};
+
+export type TaskCheckpoint = {
+    onAgentRequest?: boolean;
+    tasks?: {
+        afterIds?: Array<string>;
+        afterTasks?: Array<{
+            id: string;
+            identifier: string;
+        }>;
+        beforeIds?: Array<string>;
+        beforeTasks?: Array<{
+            id: string;
+            identifier: string;
+        }>;
+    };
+    topic?: {
+        after?: boolean;
+        before?: boolean;
+    };
+    afterTasks?: Array<{
+        id?: string;
+        identifier: string;
+    }>;
+    beforeTasks?: Array<{
+        id?: string;
+        identifier: string;
+    }>;
+};
+
+export type TaskCheckpointConfig = {
+    onAgentRequest?: boolean;
+    tasks?: {
+        afterIds?: Array<string>;
+        afterTasks?: Array<{
+            id: string;
+            identifier: string;
+        }>;
+        beforeIds?: Array<string>;
+        beforeTasks?: Array<{
+            id: string;
+            identifier: string;
+        }>;
+    };
+    topic?: {
+        after?: boolean;
+        before?: boolean;
+    };
+};
+
+export type TaskVerifyConfig = {
+    enabled?: boolean;
+    maxIterations?: number;
+    requirement?: string;
+    verifierAgentId?: string;
+    verifyCriteriaIds?: Array<string>;
+    verifyRubricId?: string;
+};
+
 export type Topic = {
     agentId: string | null;
     completedAt: string | null;
@@ -2774,6 +3120,23 @@ export type Usage = {
         spend: number;
         type: string;
     }>;
+};
+
+export type TaskTemplate = {
+    category: 'content-creation' | 'engineering' | 'design' | 'learning-research' | 'business' | 'marketing' | 'product' | 'sales-customer' | 'operations' | 'hr' | 'finance-legal' | 'creator' | 'investing' | 'parenting' | 'health' | 'hobbies' | 'personal-life';
+    connectors: Array<{
+        identifier: string;
+        required: boolean;
+        source: 'composio' | 'lobehub';
+    }>;
+    cronPattern: string;
+    description: string;
+    icon?: 'github';
+    id: number;
+    identifier: string;
+    instruction: string;
+    interests: Array<'writing' | 'coding' | 'design' | 'education' | 'business' | 'marketing' | 'product' | 'sales' | 'operations' | 'hr' | 'finance-legal' | 'creator' | 'investing' | 'parenting' | 'health' | 'hobbies' | 'personal'>;
+    title: string;
 };
 
 /**
@@ -8550,6 +8913,1059 @@ export type PostApiV1GoalsByIdRestartResponses = {
 
 export type PostApiV1GoalsByIdRestartResponse = PostApiV1GoalsByIdRestartResponses[keyof PostApiV1GoalsByIdRestartResponses];
 
+export type PatchApiV1GoalsByIdConfigData = {
+    body: {
+        agent?: {
+            agentId: string;
+            goalOnly?: boolean;
+        };
+        budget?: {
+            deadline?: string | null;
+            maxAttemptsPerTask?: number;
+            maxConcurrentTasks?: number | null;
+            maxExperiments?: number;
+            maxManagerTurns?: number;
+            maxRounds?: number | null;
+            maxStepsPerRun?: number | null;
+            maxTotalCost?: number | null;
+        };
+        model?: {
+            model: string;
+            provider: string;
+        } | null;
+        requirement?: string;
+        taskAgent?: {
+            agentId: string | null;
+            goalOnly?: boolean;
+        };
+        taskModel?: {
+            model: string;
+            provider: string;
+        } | null;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/config';
+};
+
+export type PatchApiV1GoalsByIdConfigErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1GoalsByIdConfigError = PatchApiV1GoalsByIdConfigErrors[keyof PatchApiV1GoalsByIdConfigErrors];
+
+export type PatchApiV1GoalsByIdConfigResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalConfigUpdateResult;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1GoalsByIdConfigResponse = PatchApiV1GoalsByIdConfigResponses[keyof PatchApiV1GoalsByIdConfigResponses];
+
+export type GetApiV1GoalsByIdGraphData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Comma-separated graph features the client renders (`batch`, `marks`). Node kinds a client does not declare are sent as the kind it already draws.
+         */
+        capabilities?: string;
+    };
+    url: '/api/v1/goals/{id}/graph';
+};
+
+export type GetApiV1GoalsByIdGraphErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsByIdGraphError = GetApiV1GoalsByIdGraphErrors[keyof GetApiV1GoalsByIdGraphErrors];
+
+export type GetApiV1GoalsByIdGraphResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalGraph;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsByIdGraphResponse = GetApiV1GoalsByIdGraphResponses[keyof GetApiV1GoalsByIdGraphResponses];
+
+export type PostApiV1GoalsByIdNodesData = {
+    body: {
+        description?: string;
+        kind: 'problem' | 'experiment' | 'task' | 'finding' | 'decision';
+        priority?: number;
+        questionId?: string;
+        scopeId?: string;
+        status?: 'proposed' | 'active' | 'waiting' | 'resolved' | 'rejected' | 'retired';
+        title: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/nodes';
+};
+
+export type PostApiV1GoalsByIdNodesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdNodesError = PostApiV1GoalsByIdNodesErrors[keyof PostApiV1GoalsByIdNodesErrors];
+
+export type PostApiV1GoalsByIdNodesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: GoalGraphNode;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdNodesResponse = PostApiV1GoalsByIdNodesResponses[keyof PostApiV1GoalsByIdNodesResponses];
+
+export type PostApiV1GoalsByIdNodesRetireData = {
+    body: {
+        nodeIds: Array<string>;
+        reason?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/nodes/retire';
+};
+
+export type PostApiV1GoalsByIdNodesRetireErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdNodesRetireError = PostApiV1GoalsByIdNodesRetireErrors[keyof PostApiV1GoalsByIdNodesRetireErrors];
+
+export type PostApiV1GoalsByIdNodesRetireResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalRetiredNodes;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdNodesRetireResponse = PostApiV1GoalsByIdNodesRetireResponses[keyof PostApiV1GoalsByIdNodesRetireResponses];
+
+export type DeleteApiV1GoalsByIdEdgesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query: {
+        /**
+         * Omit to remove every edge from source to target.
+         */
+        kind?: 'contains' | 'answers' | 'decomposes' | 'depends_on' | 'derived_from' | 'investigates' | 'produces' | 'supports' | 'contradicts' | 'leads_to';
+        reason?: string;
+        sourceNodeId: string;
+        targetNodeId: string;
+    };
+    url: '/api/v1/goals/{id}/edges';
+};
+
+export type DeleteApiV1GoalsByIdEdgesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1GoalsByIdEdgesError = DeleteApiV1GoalsByIdEdgesErrors[keyof DeleteApiV1GoalsByIdEdgesErrors];
+
+export type DeleteApiV1GoalsByIdEdgesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalRemovedEdges;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1GoalsByIdEdgesResponse = DeleteApiV1GoalsByIdEdgesResponses[keyof DeleteApiV1GoalsByIdEdgesResponses];
+
+export type PostApiV1GoalsByIdEdgesData = {
+    body: {
+        kind: 'contains' | 'answers' | 'decomposes' | 'depends_on' | 'derived_from' | 'investigates' | 'produces' | 'supports' | 'contradicts' | 'leads_to';
+        sourceNodeId: string;
+        targetNodeId: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/edges';
+};
+
+export type PostApiV1GoalsByIdEdgesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdEdgesError = PostApiV1GoalsByIdEdgesErrors[keyof PostApiV1GoalsByIdEdgesErrors];
+
+export type PostApiV1GoalsByIdEdgesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: GoalGraphEdge;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdEdgesResponse = PostApiV1GoalsByIdEdgesResponses[keyof PostApiV1GoalsByIdEdgesResponses];
+
+export type GetApiV1GoalsByIdEventsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from the previous page's `nextCursor`. Omit for the first page.
+         */
+        cursor?: string;
+        entityType?: 'goal' | 'node' | 'edge' | 'decision' | 'task';
+        eventType?: 'created' | 'updated' | 'activated' | 'resolved' | 'rejected' | 'retired' | 'linked' | 'unlinked';
+        /**
+         * Page size, 1–200. Defaults to 50.
+         */
+        limit?: number;
+    };
+    url: '/api/v1/goals/{id}/events';
+};
+
+export type GetApiV1GoalsByIdEventsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsByIdEventsError = GetApiV1GoalsByIdEventsErrors[keyof GetApiV1GoalsByIdEventsErrors];
+
+export type GetApiV1GoalsByIdEventsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalEventList;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsByIdEventsResponse = GetApiV1GoalsByIdEventsResponses[keyof GetApiV1GoalsByIdEventsResponses];
+
+export type GetApiV1GoalsByIdDecisionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Only decisions in this state; `pending` lists the gates waiting on a person.
+         */
+        status?: 'pending' | 'resolved' | 'canceled';
+    };
+    url: '/api/v1/goals/{id}/decisions';
+};
+
+export type GetApiV1GoalsByIdDecisionsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsByIdDecisionsError = GetApiV1GoalsByIdDecisionsErrors[keyof GetApiV1GoalsByIdDecisionsErrors];
+
+export type GetApiV1GoalsByIdDecisionsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<GoalGraphDecision>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsByIdDecisionsResponse = GetApiV1GoalsByIdDecisionsResponses[keyof GetApiV1GoalsByIdDecisionsResponses];
+
+export type PostApiV1GoalsByIdDecisionsByDecisionIdData = {
+    body: {
+        optionId: string;
+        resolution?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        decisionId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/decisions/{decisionId}';
+};
+
+export type PostApiV1GoalsByIdDecisionsByDecisionIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdDecisionsByDecisionIdError = PostApiV1GoalsByIdDecisionsByDecisionIdErrors[keyof PostApiV1GoalsByIdDecisionsByDecisionIdErrors];
+
+export type PostApiV1GoalsByIdDecisionsByDecisionIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalGraphDecision;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdDecisionsByDecisionIdResponse = PostApiV1GoalsByIdDecisionsByDecisionIdResponses[keyof PostApiV1GoalsByIdDecisionsByDecisionIdResponses];
+
+export type PostApiV1GoalsByIdClarificationsData = {
+    body: {
+        answers: Array<{
+            decisionId: string;
+            optionId: string;
+            resolution?: string;
+        }>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/clarifications';
+};
+
+export type PostApiV1GoalsByIdClarificationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdClarificationsError = PostApiV1GoalsByIdClarificationsErrors[keyof PostApiV1GoalsByIdClarificationsErrors];
+
+export type PostApiV1GoalsByIdClarificationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalGraph;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdClarificationsResponse = PostApiV1GoalsByIdClarificationsResponses[keyof PostApiV1GoalsByIdClarificationsResponses];
+
+export type DeleteApiV1GoalsByIdMetricsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query: {
+        /**
+         * Comma-separated clause keys to drop.
+         */
+        keys: string;
+    };
+    url: '/api/v1/goals/{id}/metrics';
+};
+
+export type DeleteApiV1GoalsByIdMetricsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1GoalsByIdMetricsError = DeleteApiV1GoalsByIdMetricsErrors[keyof DeleteApiV1GoalsByIdMetricsErrors];
+
+export type DeleteApiV1GoalsByIdMetricsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalGraph;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1GoalsByIdMetricsResponse = DeleteApiV1GoalsByIdMetricsResponses[keyof DeleteApiV1GoalsByIdMetricsResponses];
+
+export type GetApiV1GoalsByIdMetricsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/metrics';
+};
+
+export type GetApiV1GoalsByIdMetricsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsByIdMetricsError = GetApiV1GoalsByIdMetricsErrors[keyof GetApiV1GoalsByIdMetricsErrors];
+
+export type GetApiV1GoalsByIdMetricsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalMetricState;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsByIdMetricsResponse = GetApiV1GoalsByIdMetricsResponses[keyof GetApiV1GoalsByIdMetricsResponses];
+
+export type PutApiV1GoalsByIdMetricsData = {
+    body: {
+        metrics: Array<{
+            key: string;
+            /**
+             * Defaults to `gte`.
+             */
+            op?: 'gte' | 'lte' | 'gt' | 'lt' | 'eq';
+            target: number;
+            title?: string;
+        }>;
+        mode?: 'merge' | 'replace';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/metrics';
+};
+
+export type PutApiV1GoalsByIdMetricsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1GoalsByIdMetricsError = PutApiV1GoalsByIdMetricsErrors[keyof PutApiV1GoalsByIdMetricsErrors];
+
+export type PutApiV1GoalsByIdMetricsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: GoalGraph;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1GoalsByIdMetricsResponse = PutApiV1GoalsByIdMetricsResponses[keyof PutApiV1GoalsByIdMetricsResponses];
+
+export type PostApiV1GoalsByIdMetricsObservationsData = {
+    body: {
+        key: string;
+        kind?: 'gauge' | 'counter';
+        observedAt?: string;
+        title?: string;
+        unit?: string;
+        value: number;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/metrics/observations';
+};
+
+export type PostApiV1GoalsByIdMetricsObservationsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdMetricsObservationsError = PostApiV1GoalsByIdMetricsObservationsErrors[keyof PostApiV1GoalsByIdMetricsObservationsErrors];
+
+export type PostApiV1GoalsByIdMetricsObservationsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: GoalObservation;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdMetricsObservationsResponse = PostApiV1GoalsByIdMetricsObservationsResponses[keyof PostApiV1GoalsByIdMetricsObservationsResponses];
+
+export type PostApiV1GoalsByIdCloseData = {
+    body: {
+        status: 'achieved' | 'canceled';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/close';
+};
+
+export type PostApiV1GoalsByIdCloseErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdCloseError = PostApiV1GoalsByIdCloseErrors[keyof PostApiV1GoalsByIdCloseErrors];
+
+export type PostApiV1GoalsByIdCloseResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Goal;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdCloseResponse = PostApiV1GoalsByIdCloseResponses[keyof PostApiV1GoalsByIdCloseResponses];
+
 export type PostApiV1ImMessagesData = {
     body: {
         agentId: string;
@@ -13732,6 +15148,1341 @@ export type PostApiV1TasksByIdRunsResponses = {
 
 export type PostApiV1TasksByIdRunsResponse = PostApiV1TasksByIdRunsResponses[keyof PostApiV1TasksByIdRunsResponses];
 
+export type GetApiV1TasksByIdSubtasksData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Return every descendant instead of only direct children. Each row carries `parentTaskId`, so the tree can be rebuilt.
+         */
+        recursive?: 'true' | 'false';
+    };
+    url: '/api/v1/tasks/{id}/subtasks';
+};
+
+export type GetApiV1TasksByIdSubtasksErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdSubtasksError = GetApiV1TasksByIdSubtasksErrors[keyof GetApiV1TasksByIdSubtasksErrors];
+
+export type GetApiV1TasksByIdSubtasksResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<Task>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdSubtasksResponse = GetApiV1TasksByIdSubtasksResponses[keyof GetApiV1TasksByIdSubtasksResponses];
+
+export type PostApiV1TasksByIdSubtasksData = {
+    body: {
+        assigneeAgentId?: string;
+        assigneeUserId?: string;
+        automationMode?: 'heartbeat' | 'schedule';
+        config?: {
+            [key: string]: unknown;
+        };
+        createdByAgentId?: string;
+        description?: string;
+        instruction: string;
+        name?: string;
+        priority?: number;
+        projectId?: string;
+        schedulePattern?: string;
+        scheduleTimezone?: string;
+        visibility?: 'private' | 'public';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/subtasks';
+};
+
+export type PostApiV1TasksByIdSubtasksErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Precondition failed
+     */
+    412: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdSubtasksError = PostApiV1TasksByIdSubtasksErrors[keyof PostApiV1TasksByIdSubtasksErrors];
+
+export type PostApiV1TasksByIdSubtasksResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: Task;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdSubtasksResponse = PostApiV1TasksByIdSubtasksResponses[keyof PostApiV1TasksByIdSubtasksResponses];
+
+export type PutApiV1TasksByIdSubtasksOrderData = {
+    body: {
+        order: Array<string>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/subtasks/order';
+};
+
+export type PutApiV1TasksByIdSubtasksOrderErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1TasksByIdSubtasksOrderError = PutApiV1TasksByIdSubtasksOrderErrors[keyof PutApiV1TasksByIdSubtasksOrderErrors];
+
+export type PutApiV1TasksByIdSubtasksOrderResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<SubtaskOrder>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1TasksByIdSubtasksOrderResponse = PutApiV1TasksByIdSubtasksOrderResponses[keyof PutApiV1TasksByIdSubtasksOrderResponses];
+
+export type GetApiV1TasksByIdDependenciesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/dependencies';
+};
+
+export type GetApiV1TasksByIdDependenciesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdDependenciesError = GetApiV1TasksByIdDependenciesErrors[keyof GetApiV1TasksByIdDependenciesErrors];
+
+export type GetApiV1TasksByIdDependenciesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<TaskDependency>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdDependenciesResponse = GetApiV1TasksByIdDependenciesResponses[keyof GetApiV1TasksByIdDependenciesResponses];
+
+export type PostApiV1TasksByIdDependenciesData = {
+    body: {
+        dependsOnId: string;
+        /**
+         * `blocks` holds the task in backlog until the upstream task completes.
+         */
+        type?: 'blocks' | 'relates';
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/dependencies';
+};
+
+export type PostApiV1TasksByIdDependenciesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdDependenciesError = PostApiV1TasksByIdDependenciesErrors[keyof PostApiV1TasksByIdDependenciesErrors];
+
+export type PostApiV1TasksByIdDependenciesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: TaskDependency;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdDependenciesResponse = PostApiV1TasksByIdDependenciesResponses[keyof PostApiV1TasksByIdDependenciesResponses];
+
+export type DeleteApiV1TasksByIdDependenciesByDependsOnIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        /**
+         * Id or identifier (`T-12`) of the upstream task.
+         */
+        dependsOnId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/dependencies/{dependsOnId}';
+};
+
+export type DeleteApiV1TasksByIdDependenciesByDependsOnIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1TasksByIdDependenciesByDependsOnIdError = DeleteApiV1TasksByIdDependenciesByDependsOnIdErrors[keyof DeleteApiV1TasksByIdDependenciesByDependsOnIdErrors];
+
+export type DeleteApiV1TasksByIdDependenciesByDependsOnIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1TasksByIdDependenciesByDependsOnIdResponse = DeleteApiV1TasksByIdDependenciesByDependsOnIdResponses[keyof DeleteApiV1TasksByIdDependenciesByDependsOnIdResponses];
+
+export type GetApiV1TasksByIdCommentsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/comments';
+};
+
+export type GetApiV1TasksByIdCommentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdCommentsError = GetApiV1TasksByIdCommentsErrors[keyof GetApiV1TasksByIdCommentsErrors];
+
+export type GetApiV1TasksByIdCommentsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<TaskComment>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdCommentsResponse = GetApiV1TasksByIdCommentsResponses[keyof GetApiV1TasksByIdCommentsResponses];
+
+export type PostApiV1TasksByIdCommentsData = {
+    body: {
+        authorAgentId?: string;
+        briefId?: string;
+        content: string;
+        editorData?: {
+            [key: string]: unknown;
+        };
+        topicId?: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/comments';
+};
+
+export type PostApiV1TasksByIdCommentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdCommentsError = PostApiV1TasksByIdCommentsErrors[keyof PostApiV1TasksByIdCommentsErrors];
+
+export type PostApiV1TasksByIdCommentsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: TaskComment;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdCommentsResponse = PostApiV1TasksByIdCommentsResponses[keyof PostApiV1TasksByIdCommentsResponses];
+
+export type DeleteApiV1TasksByIdCommentsByCommentIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        commentId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/comments/{commentId}';
+};
+
+export type DeleteApiV1TasksByIdCommentsByCommentIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1TasksByIdCommentsByCommentIdError = DeleteApiV1TasksByIdCommentsByCommentIdErrors[keyof DeleteApiV1TasksByIdCommentsByCommentIdErrors];
+
+export type DeleteApiV1TasksByIdCommentsByCommentIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1TasksByIdCommentsByCommentIdResponse = DeleteApiV1TasksByIdCommentsByCommentIdResponses[keyof DeleteApiV1TasksByIdCommentsByCommentIdResponses];
+
+export type PatchApiV1TasksByIdCommentsByCommentIdData = {
+    body: {
+        content: string;
+        editorData?: {
+            [key: string]: unknown;
+        };
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        commentId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/comments/{commentId}';
+};
+
+export type PatchApiV1TasksByIdCommentsByCommentIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TasksByIdCommentsByCommentIdError = PatchApiV1TasksByIdCommentsByCommentIdErrors[keyof PatchApiV1TasksByIdCommentsByCommentIdErrors];
+
+export type PatchApiV1TasksByIdCommentsByCommentIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskComment;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TasksByIdCommentsByCommentIdResponse = PatchApiV1TasksByIdCommentsByCommentIdResponses[keyof PatchApiV1TasksByIdCommentsByCommentIdResponses];
+
+export type GetApiV1TasksByIdDocumentsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/documents';
+};
+
+export type GetApiV1TasksByIdDocumentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdDocumentsError = GetApiV1TasksByIdDocumentsErrors[keyof GetApiV1TasksByIdDocumentsErrors];
+
+export type GetApiV1TasksByIdDocumentsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<TaskPinnedDocument>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdDocumentsResponse = GetApiV1TasksByIdDocumentsResponses[keyof GetApiV1TasksByIdDocumentsResponses];
+
+export type PostApiV1TasksByIdDocumentsData = {
+    body: {
+        documentId: string;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/documents';
+};
+
+export type PostApiV1TasksByIdDocumentsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdDocumentsError = PostApiV1TasksByIdDocumentsErrors[keyof PostApiV1TasksByIdDocumentsErrors];
+
+export type PostApiV1TasksByIdDocumentsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data: TaskPinnedDocument;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdDocumentsResponse = PostApiV1TasksByIdDocumentsResponses[keyof PostApiV1TasksByIdDocumentsResponses];
+
+export type DeleteApiV1TasksByIdDocumentsByDocumentIdData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        documentId: string;
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/documents/{documentId}';
+};
+
+export type DeleteApiV1TasksByIdDocumentsByDocumentIdErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1TasksByIdDocumentsByDocumentIdError = DeleteApiV1TasksByIdDocumentsByDocumentIdErrors[keyof DeleteApiV1TasksByIdDocumentsByDocumentIdErrors];
+
+export type DeleteApiV1TasksByIdDocumentsByDocumentIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: DeletedResource;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1TasksByIdDocumentsByDocumentIdResponse = DeleteApiV1TasksByIdDocumentsByDocumentIdResponses[keyof DeleteApiV1TasksByIdDocumentsByDocumentIdResponses];
+
+export type GetApiV1TasksByIdCheckpointsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/checkpoints';
+};
+
+export type GetApiV1TasksByIdCheckpointsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdCheckpointsError = GetApiV1TasksByIdCheckpointsErrors[keyof GetApiV1TasksByIdCheckpointsErrors];
+
+export type GetApiV1TasksByIdCheckpointsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskCheckpoint;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdCheckpointsResponse = GetApiV1TasksByIdCheckpointsResponses[keyof GetApiV1TasksByIdCheckpointsResponses];
+
+export type PutApiV1TasksByIdCheckpointsData = {
+    body: {
+        onAgentRequest?: boolean;
+        tasks?: {
+            afterIds?: Array<string>;
+            beforeIds?: Array<string>;
+        };
+        topic?: {
+            after?: boolean;
+            before?: boolean;
+        };
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/checkpoints';
+};
+
+export type PutApiV1TasksByIdCheckpointsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1TasksByIdCheckpointsError = PutApiV1TasksByIdCheckpointsErrors[keyof PutApiV1TasksByIdCheckpointsErrors];
+
+export type PutApiV1TasksByIdCheckpointsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskCheckpointConfig;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1TasksByIdCheckpointsResponse = PutApiV1TasksByIdCheckpointsResponses[keyof PutApiV1TasksByIdCheckpointsResponses];
+
+export type GetApiV1TasksByIdReviewData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/review';
+};
+
+export type GetApiV1TasksByIdReviewErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdReviewError = GetApiV1TasksByIdReviewErrors[keyof GetApiV1TasksByIdReviewErrors];
+
+export type GetApiV1TasksByIdReviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskReviewConfig | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdReviewResponse = GetApiV1TasksByIdReviewResponses[keyof GetApiV1TasksByIdReviewResponses];
+
+export type PutApiV1TasksByIdReviewData = {
+    body: {
+        autoRetry?: boolean;
+        enabled: boolean;
+        judge?: {
+            model?: string;
+            provider?: string;
+        };
+        maxIterations?: number;
+        rubrics: Array<{
+            config: {
+                [key: string]: unknown;
+            };
+            extractor?: {
+                [key: string]: unknown;
+            };
+            id: string;
+            name: string;
+            threshold?: number;
+            type: string;
+            weight?: number;
+        }>;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/review';
+};
+
+export type PutApiV1TasksByIdReviewErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1TasksByIdReviewError = PutApiV1TasksByIdReviewErrors[keyof PutApiV1TasksByIdReviewErrors];
+
+export type PutApiV1TasksByIdReviewResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskReviewConfig;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1TasksByIdReviewResponse = PutApiV1TasksByIdReviewResponses[keyof PutApiV1TasksByIdReviewResponses];
+
+export type GetApiV1TasksByIdVerifyData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/verify';
+};
+
+export type GetApiV1TasksByIdVerifyErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdVerifyError = GetApiV1TasksByIdVerifyErrors[keyof GetApiV1TasksByIdVerifyErrors];
+
+export type GetApiV1TasksByIdVerifyResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskVerifyConfig | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdVerifyResponse = GetApiV1TasksByIdVerifyResponses[keyof GetApiV1TasksByIdVerifyResponses];
+
+export type PatchApiV1TasksByIdVerifyData = {
+    body: {
+        enabled?: boolean | null;
+        maxIterations?: number | null;
+        requirement?: string | null;
+        verifierAgentId?: string | null;
+        verifyCriteriaIds?: Array<string> | null;
+        verifyRubricId?: string | null;
+    };
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/verify';
+};
+
+export type PatchApiV1TasksByIdVerifyErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TasksByIdVerifyError = PatchApiV1TasksByIdVerifyErrors[keyof PatchApiV1TasksByIdVerifyErrors];
+
+export type PatchApiV1TasksByIdVerifyResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: TaskVerifyConfig;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TasksByIdVerifyResponse = PatchApiV1TasksByIdVerifyResponses[keyof PatchApiV1TasksByIdVerifyResponses];
+
+export type PostApiV1TasksByIdArchiveData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/archive';
+};
+
+export type PostApiV1TasksByIdArchiveErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdArchiveError = PostApiV1TasksByIdArchiveErrors[keyof PostApiV1TasksByIdArchiveErrors];
+
+export type PostApiV1TasksByIdArchiveResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Task;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdArchiveResponse = PostApiV1TasksByIdArchiveResponses[keyof PostApiV1TasksByIdArchiveResponses];
+
+export type PostApiV1TasksByIdUnarchiveData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+        /**
+         * Makes the request safe to retry: the first request with a key runs, and repeats with the same key and the same request within 24 hours get its stored response back (with `Idempotent-Replayed: true`). A repeat while the first is still running answers 409, and reusing a key for a different request (method, path or body) answers 422 (both `idempotency_conflict`). Server errors, 429s and streamed responses are not stored. Keys are scoped to the authenticated user, the credential (API key) and the resolved workspace. A request still running after 5 minutes releases its in-flight claim, after which a retry with the same key runs again.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/unarchive';
+};
+
+export type PostApiV1TasksByIdUnarchiveErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdUnarchiveError = PostApiV1TasksByIdUnarchiveErrors[keyof PostApiV1TasksByIdUnarchiveErrors];
+
+export type PostApiV1TasksByIdUnarchiveResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Task;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdUnarchiveResponse = PostApiV1TasksByIdUnarchiveResponses[keyof PostApiV1TasksByIdUnarchiveResponses];
+
 export type GetApiV1TopicsData = {
     body?: never;
     headers?: {
@@ -14756,3 +17507,72 @@ export type GetApiV1UsageResponses = {
 };
 
 export type GetApiV1UsageResponse = GetApiV1UsageResponses[keyof GetApiV1UsageResponses];
+
+export type GetApiV1TaskTemplatesData = {
+    body?: never;
+    headers?: {
+        /**
+         * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
+         */
+        'X-Workspace-Id'?: string;
+    };
+    path?: never;
+    query?: {
+        /**
+         * How many templates to recommend, 1–10.
+         */
+        count?: number;
+        /**
+         * Comma-separated interest areas to match, e.g. `engineering,marketing`.
+         */
+        interestKeys?: string;
+        /**
+         * Locale of the template copy, e.g. `zh-CN`.
+         */
+        locale?: string;
+        /**
+         * Change it to draw a different set for the same day.
+         */
+        refreshSeed?: string;
+    };
+    url: '/api/v1/task-templates';
+};
+
+export type GetApiV1TaskTemplatesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TaskTemplatesError = GetApiV1TaskTemplatesErrors[keyof GetApiV1TaskTemplatesErrors];
+
+export type GetApiV1TaskTemplatesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data: Array<TaskTemplate>;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TaskTemplatesResponse = GetApiV1TaskTemplatesResponses[keyof GetApiV1TaskTemplatesResponses];
