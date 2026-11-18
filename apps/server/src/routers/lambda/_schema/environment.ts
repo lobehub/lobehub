@@ -81,7 +81,27 @@ export const configurationSchema = z.object({
   // gets is still one folder: the first repository is checked out at its top
   // and each one after it into a folder of its own (`path`, which the form
   // fills with the repository's name), the layout Codex environments use.
-  sources: z.array(environmentSourceSchema).max(10).optional(),
+  sources: z
+    .array(environmentSourceSchema)
+    .max(10)
+    // Two checkouts into one folder would merge their files and leave one
+    // repository's `.git` over the other's. Folders left blank are given
+    // distinct ones by `layoutRepositorySources`; one set by hand is kept as
+    // it is, so it is checked here.
+    .refine(
+      (sources) => {
+        const folders = sources.flatMap((source) => {
+          const folder = source.path
+            ?.trim()
+            .replace(/^\.?\/+/, '')
+            .replace(/\/+$/, '');
+          return folder && folder !== '.' ? [folder] : [];
+        });
+        return new Set(folders).size === folders.length;
+      },
+      { message: 'Two repositories cannot be checked out into the same folder' },
+    )
+    .optional(),
 });
 
 /**

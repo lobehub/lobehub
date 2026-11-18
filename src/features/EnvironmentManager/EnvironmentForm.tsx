@@ -22,7 +22,7 @@ import {
   TerminalIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -283,10 +283,41 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   const [pickingRepository, setPickingRepository] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Every field saves the whole specification, so two saves in flight at once
+  // would each start from the same snapshot and the later one would undo the
+  // earlier. Saves run one after another, each on top of the last one saved;
+  // while none is running, the snapshot follows what the server returned.
+  const latest = useRef(configuration);
+  const pending = useRef(0);
+  const queue = useRef<Promise<unknown> | undefined>(undefined);
+  const stored = environment.configuration;
+  useEffect(() => {
+    if (pending.current === 0) latest.current = (stored ?? {}) as SandboxEnvironmentSpecification;
+  }, [stored]);
+
+  type Changes = Partial<SandboxEnvironmentSpecification>;
+
   /** Write one change to the specification; the toast is the only trace a per-field save leaves. */
-  const saveConfiguration = async (changes: Partial<SandboxEnvironmentSpecification>) => {
-    const next = compact({ ...configuration, ...changes });
-    await onSave({ configuration: next });
+  const saveConfiguration = async (
+    changes: Changes | ((current: SandboxEnvironmentSpecification) => Changes),
+  ) => {
+    pending.current++;
+    const task = (queue.current ?? Promise.resolve())
+      .catch(() => {})
+      .then(async () => {
+        const current = latest.current;
+        const next = compact({
+          ...current,
+          ...(typeof changes === 'function' ? changes(current) : changes),
+        });
+        await onSave({ configuration: next });
+        latest.current = next;
+      })
+      .finally(() => {
+        pending.current--;
+      });
+    queue.current = task;
+    await task;
     toast.success(t('environments.form.saved'));
   };
 
@@ -306,14 +337,32 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
   // not a git source (an old `files` one) is kept as it is.
   const sources = configuration.sources ?? [];
   const repositories = sources.filter((source): source is GitSource => source.kind === 'git');
-  const otherSources = sources.filter((source) => source.kind !== 'git');
-  const saveRepositories = (next: GitSource[]) =>
-    saveConfiguration({ sources: [...next, ...otherSources] });
+  /** Rewrites the repositories as they stand when the save runs, keeping other sources. */
+  const saveRepositories = (update: (current: GitSource[]) => GitSource[]) =>
+    saveConfiguration((current) => {
+      const all = current.sources ?? [];
+      const git = all.filter((source): source is GitSource => source.kind === 'git');
+      return { sources: [...update(git), ...all.filter((source) => source.kind !== 'git')] };
+    });
 
-  const updateRepository = (index: number, changes: Partial<Omit<GitSource, 'kind' | 'url'>>) =>
-    saveRepositories(
-      repositories.map((source, at) => {
-        if (at !== index) return source;
+  const folderOf = (path: string | undefined) =>
+    path
+      ?.trim()
+      .replace(/^\.?\/+/, '')
+      .replace(/\/+$/, '') || undefined;
+
+  const updateRepository = (url: string, changes: Partial<Omit<GitSource, 'kind' | 'url'>>) => {
+    // Two checkouts in one folder would merge into each other.
+    const folder = changes.path === undefined ? undefined : folderOf(changes.path);
+    if (
+      folder &&
+      repositories.some((source) => source.url !== url && folderOf(source.path) === folder)
+    )
+      return Promise.reject(new Error(t('environments.form.duplicateFolder')));
+
+    return saveRepositories((current) =>
+      current.map((source) => {
+        if (source.url !== url) return source;
         const next = { ...source, ...changes };
         // A blank field means "the default", which is the key left out.
         if (!next.ref) delete next.ref;
@@ -322,18 +371,21 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
         return next;
       }),
     );
+  };
 
   // The last repository left goes back to the top of the working directory
   // when its folder was only the one it got for sitting beside another.
-  const removeRepository = (index: number) =>
-    run(() => {
-      const rest = repositories.filter((_, at) => at !== index);
-      if (rest.length === 1 && rest[0].path === repositoryFolderName(rest[0].url)) {
-        const { path: _path, ...only } = rest[0];
-        return saveRepositories([only]);
-      }
-      return saveRepositories(rest);
-    });
+  const removeRepository = (url: string) =>
+    run(() =>
+      saveRepositories((current) => {
+        const rest = current.filter((source) => source.url !== url);
+        if (rest.length === 1 && rest[0].path === repositoryFolderName(rest[0].url)) {
+          const { path: _path, ...only } = rest[0];
+          return [only];
+        }
+        return rest;
+      }),
+    );
 
   const [pastedUrl, setPastedUrl] = useState('');
 
@@ -367,14 +419,15 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
     // several sit side by side, each in a folder named after it.
     void run(() =>
       saveRepositories(
-        layoutRepositorySources([
-          ...repositories,
-          {
-            kind: 'git' as const,
-            url,
-            ...(picked.defaultBranch && { ref: picked.defaultBranch }),
-          },
-        ]) as GitSource[],
+        (current) =>
+          layoutRepositorySources([
+            ...current,
+            {
+              kind: 'git' as const,
+              url,
+              ...(picked.defaultBranch && { ref: picked.defaultBranch }),
+            },
+          ]) as GitSource[],
       ),
     );
   };
@@ -425,13 +478,13 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, hideBasics, o
         )}
         {repositories.length > 0 && (
           <Flexbox gap={8}>
-            {repositories.map((source, index) => (
+            {repositories.map((source) => (
               <RepositoryRow
                 busy={busy}
                 key={source.url}
                 source={source}
-                onChange={(changes) => updateRepository(index, changes)}
-                onRemove={() => removeRepository(index)}
+                onChange={(changes) => updateRepository(source.url, changes)}
+                onRemove={() => removeRepository(source.url)}
               />
             ))}
           </Flexbox>

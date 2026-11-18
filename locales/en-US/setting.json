@@ -872,6 +872,7 @@
   "environments.form.descriptionPlaceholder": "What this environment is for",
   "environments.form.disconnect": "Disconnect",
   "environments.form.doneEditing": "Done",
+  "environments.form.duplicateFolder": "Another repository already uses this folder.",
   "environments.form.editEnv": "Edit variable",
   "environments.form.editRepositorySettings": "Edit branch, folder and setup",
   "environments.form.env": "Environment variables",

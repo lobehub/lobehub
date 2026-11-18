@@ -872,6 +872,7 @@
   "environments.form.descriptionPlaceholder": "这个环境是用来做什么的",
   "environments.form.disconnect": "断开",
   "environments.form.doneEditing": "完成",
+  "environments.form.duplicateFolder": "另一个仓库已经用了这个文件夹。",
   "environments.form.editEnv": "编辑变量",
   "environments.form.editRepositorySettings": "编辑分支、文件夹和初始化命令",
   "environments.form.env": "环境变量",

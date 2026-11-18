@@ -227,6 +227,64 @@ export const projectWorkingDirectoryRouter = router({
       success: true,
     })),
   /**
+   * Compatibility for clients built before a project had exactly one
+   * environment (a tab left open across the deploy, a released desktop app).
+   * Each maps onto the single environment rather than failing as an unknown
+   * procedure; remove once no supported client calls them.
+   *
+   * - `attachRepository` adds the repository to the project's environment.
+   * - `attachEnvironment` adds the repositories of an environment the caller
+   *   can read to it; nothing is linked.
+   * - `detachEnvironment` has nothing to undo and returns the environment.
+   */
+  attachRepository: write
+    .input(
+      z.object({
+        projectId: z.string(),
+        repository: z.object({
+          defaultBranch: z.string().max(255).optional(),
+          name: z.string().trim().min(1).max(255),
+          url: z.string().min(1).max(2048),
+        }),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { projectId, repository } }) => {
+      const parsed = configurationSchema.safeParse({
+        sources: [
+          {
+            kind: 'git',
+            url: repository.url,
+            ...(repository.defaultBranch && { ref: repository.defaultBranch }),
+          },
+        ],
+      });
+      if (!parsed.success)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unsupported repository URL' });
+      return {
+        data: await ctx.environmentRepo.addRepositories(projectId, [parsed.data]).catch(notFound),
+        success: true,
+      };
+    }),
+  attachEnvironment: write
+    .input(z.object({ environmentId: z.string().uuid(), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const source = await ctx.environmentModel.findById(input.environmentId);
+      if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      return {
+        data: await ctx.environmentRepo
+          .addRepositories(input.projectId, [source.configuration])
+          .catch(notFound),
+        success: true,
+      };
+    }),
+  detachEnvironment: write
+    .input(z.object({ environmentId: z.string().uuid(), projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.environmentRepo.get(input.projectId).catch(notFound),
+      success: true,
+    })),
+  /**
    * The project's environment as a one-row list, the shape the directory and
    * location pickers read; without a project, the caller's standalone ones.
    */

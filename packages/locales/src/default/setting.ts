@@ -5364,4 +5364,5 @@ When I am ___, I need ___
     "Runs inside this repository's folder after it's cloned, before the environment's setup command.",
   'environments.form.bootstrapAfterRepositories':
     "Runs at the top of the working directory, after each repository's own setup. Setup for a single repository goes on that repository.",
+  'environments.form.duplicateFolder': 'Another repository already uses this folder.',
 };

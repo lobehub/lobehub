@@ -30,8 +30,9 @@ import * as schema from '../../packages/database/src/schemas';
 import type { LobeChatDatabase } from '../../packages/database/src/type';
 
 /**
- * Projects not yet settled: no environment of their own, or links beside it,
- * or a link to it that is not the enabled default.
+ * Projects not yet settled: no environment of their own, a link to it that is
+ * not the enabled default, or another link beside it that is not one kept for
+ * a folder shared with another project.
  */
 export const SELECT_UNSETTLED_PROJECTS = `
   SELECT p.id, p.name, p.user_id AS "userId", p.workspace_id AS "workspaceId",
@@ -44,7 +45,18 @@ export const SELECT_UNSETTLED_PROJECTS = `
         SELECT 1 FROM project_environments pe
         LEFT JOIN environments e ON e.id = pe.environment_id AND e.project_id = p.id
         WHERE pe.project_id = p.id
-          AND (e.id IS NULL OR pe.is_default = false OR pe.enabled = false)
+          AND (
+            (e.id IS NOT NULL AND (pe.is_default = false OR pe.enabled = false))
+            -- Another environment's link stays only as a non-default one kept
+            -- for a folder this project shares with another project.
+            OR (e.id IS NULL AND (pe.is_default OR NOT EXISTS (
+              SELECT 1 FROM environment_instances i
+              INNER JOIN project_working_directories w
+                ON w.device_id = i.device_id AND w.path = i.working_directory
+               AND w.project_id = p.id
+              WHERE i.environment_id = pe.environment_id AND i.kind = 'device'
+            )))
+          )
       )
       OR NOT EXISTS (
         SELECT 1 FROM project_environments pe

@@ -131,6 +131,25 @@ export class ProjectEnvironmentRepository {
   }
 
   /**
+   * Adds to the environment of a project the caller can manage the
+   * repositories these definitions check out that it does not yet, laid out
+   * side by side. What else they define is not taken.
+   */
+  async addRepositories(
+    projectId: string,
+    from: (EnvironmentConfiguration | null | undefined)[],
+  ): Promise<EnvironmentItem> {
+    const project = await this.projectModel().findManageableById(projectId);
+    if (!project) throw new Error('Project not found or access denied');
+
+    const environment = await ProjectEnvironmentRepository.ensure(this.db, project);
+    const configuration = mergeRepositories(environment.configuration, from);
+    if (configuration === environment.configuration) return environment;
+
+    return this.update(projectId, { configuration });
+  }
+
+  /**
    * Makes a new project's environment, in the caller's transaction. It always
    * makes a new one: a project made from a repository checks that repository
    * out, any other starts with nothing to check out.
@@ -178,8 +197,10 @@ export class ProjectEnvironmentRepository {
    * 3. A device folder of this project's — and of no other project's — that an
    *    other linked environment built is moved to it, so the folder keeps
    *    running. A folder another project also uses stays where it is.
-   * 4. The other links are removed; the environments themselves stay in
-   *    「设置 → 环境」.
+   * 4. The other links are removed — except one whose environment still holds
+   *    a folder this project shares, kept as a non-default link so the folder
+   *    keeps resolving. The environments themselves stay in「设置 → 环境」.
+   * 5. Its name follows the project's.
    */
   static async ensure(
     database: LobeChatDatabase,
@@ -258,30 +279,49 @@ export class ProjectEnvironmentRepository {
         others.map((environment) => environment.configuration),
       );
       const visibility = projectEnvironmentVisibility(project);
-      if (configuration !== own.configuration || own.visibility !== visibility) {
+      // The name follows the project: it is not editable on its own, so a
+      // renamed project brings its environment's name along.
+      if (
+        configuration !== own.configuration ||
+        own.visibility !== visibility ||
+        own.name !== project.name
+      ) {
         [own] = await db
           .update(environments)
-          .set({ configuration, updatedAt: new Date(), visibility })
+          .set({ configuration, name: project.name, updatedAt: new Date(), visibility })
           .where(eq(environments.id, own.id))
           .returning();
       }
 
       if (others.length > 0) {
-        await ProjectEnvironmentRepository.moveFolders(
-          db,
-          project.id,
-          own.id,
-          others.map((environment) => environment.id),
-        );
-        await db.delete(projectEnvironments).where(
-          and(
-            eq(projectEnvironments.projectId, project.id),
-            inArray(
-              projectEnvironments.environmentId,
-              others.map((environment) => environment.id),
-            ),
-          ),
-        );
+        const otherIds = others.map((environment) => environment.id);
+        await ProjectEnvironmentRepository.moveFolders(db, project.id, own.id, otherIds);
+        // A folder this project shares with another one stays in the
+        // environment that built it (moving it would take it from the other
+        // project), and a folder resolves only through an environment its
+        // project links — so that link stays, as a non-default one. Every
+        // other link goes.
+        const kept = await ProjectEnvironmentRepository.foldersHeldBy(db, project.id, otherIds);
+        const dropped = otherIds.filter((id) => !kept.has(id));
+        if (kept.size > 0)
+          await db
+            .update(projectEnvironments)
+            .set({ isDefault: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(projectEnvironments.projectId, project.id),
+                inArray(projectEnvironments.environmentId, [...kept]),
+              ),
+            );
+        if (dropped.length > 0)
+          await db
+            .delete(projectEnvironments)
+            .where(
+              and(
+                eq(projectEnvironments.projectId, project.id),
+                inArray(projectEnvironments.environmentId, dropped),
+              ),
+            );
       }
 
       await db
@@ -308,13 +348,18 @@ export class ProjectEnvironmentRepository {
    * 「设置 → 环境」: its builds live on the execution plane, and dropping the row
    * first would leave storage nobody can name.
    */
-  /** Whether a project's own environment is its only link and published as the project is. */
+  /**
+   * Whether a project already follows the rule: its own environment, named and
+   * published as the project is, is its enabled default link, and any other
+   * link is a non-default one kept for a folder it shares with another project.
+   */
   private static async isSettled(
     db: LobeChatDatabase,
     project: ProjectEnvironmentOwner,
     own: EnvironmentItem,
   ) {
-    if (own.visibility !== projectEnvironmentVisibility(project)) return false;
+    if (own.visibility !== projectEnvironmentVisibility(project) || own.name !== project.name)
+      return false;
 
     const links = await db
       .select({
@@ -325,12 +370,50 @@ export class ProjectEnvironmentRepository {
       .from(projectEnvironments)
       .where(eq(projectEnvironments.projectId, project.id));
 
-    return (
-      links.length === 1 &&
-      links[0].environmentId === own.id &&
-      links[0].isDefault &&
-      links[0].enabled
+    const ownLink = links.find((link) => link.environmentId === own.id);
+    if (!ownLink?.isDefault || !ownLink.enabled) return false;
+
+    const others = links.filter((link) => link.environmentId !== own.id);
+    if (others.length === 0) return true;
+    if (others.some((link) => link.isDefault)) return false;
+
+    const kept = await ProjectEnvironmentRepository.foldersHeldBy(
+      db,
+      project.id,
+      others.map((link) => link.environmentId),
     );
+    return others.every((link) => kept.has(link.environmentId));
+  }
+
+  /**
+   * Which of these environments still hold the instance behind one of this
+   * project's device folders — the ones {@link moveFolders} left in place
+   * because another project uses the same folder.
+   */
+  private static async foldersHeldBy(
+    db: LobeChatDatabase,
+    projectId: string,
+    environmentIds: string[],
+  ): Promise<Set<string>> {
+    if (environmentIds.length === 0) return new Set();
+    const rows = await db
+      .selectDistinct({ environmentId: environmentInstances.environmentId })
+      .from(environmentInstances)
+      .innerJoin(
+        projectWorkingDirectories,
+        and(
+          eq(projectWorkingDirectories.deviceId, environmentInstances.deviceId),
+          eq(projectWorkingDirectories.path, environmentInstances.workingDirectory),
+          eq(projectWorkingDirectories.projectId, projectId),
+        ),
+      )
+      .where(
+        and(
+          inArray(environmentInstances.environmentId, environmentIds),
+          eq(environmentInstances.kind, 'device'),
+        ),
+      );
+    return new Set(rows.map((row) => row.environmentId));
   }
 
   private static async linkedElsewhere(
@@ -394,6 +477,14 @@ export class ProjectEnvironmentRepository {
         ),
       );
     if (folders.length === 0) return;
+    const moved = folders.map((folder) => folder.id);
+
+    // A link may name a moved instance as its default, through a foreign key
+    // on (environment, instance): left as it is, the move would break it.
+    await db
+      .update(projectEnvironments)
+      .set({ defaultInstanceId: null, updatedAt: new Date() })
+      .where(inArray(projectEnvironments.defaultInstanceId, moved));
 
     await db
       .update(environmentInstances)

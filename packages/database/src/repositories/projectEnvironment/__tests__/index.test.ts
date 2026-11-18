@@ -191,6 +191,100 @@ describe('ProjectEnvironmentRepository.ensure (existing projects)', () => {
     expect(rows.find((row) => row.id === shared.id)?.environmentId).toBe(extra.id);
   });
 
+  it('keeps the link to an environment holding a folder shared with another project', async () => {
+    const project = await insertProject('shared-folder');
+    const other = await insertProject('shared-folder-other');
+    const main = await insertEnvironment('main', []);
+    const extra = await insertEnvironment('extra', ['https://github.com/a/extra']);
+    await link(project.id, main.id, { isDefault: true });
+    await link(project.id, extra.id);
+    await link(other.id, extra.id, { isDefault: true });
+    const [device] = await db
+      .insert(devices)
+      .values({ deviceId: 'shared-device', identitySource: 'fallback', platform: 'linux', userId })
+      .returning();
+    const [instance] = await db
+      .insert(environmentInstances)
+      .values({
+        configurationSnapshot: {},
+        deviceId: device.id,
+        environmentId: extra.id,
+        kind: 'device',
+        name: 'shared',
+        workingDirectory: '/work/shared',
+      })
+      .returning();
+    await db.insert(projectWorkingDirectories).values([
+      { deviceId: device.id, name: 'shared', path: '/work/shared', projectId: project.id },
+      { deviceId: device.id, name: 'shared', path: '/work/shared', projectId: other.id },
+    ]);
+
+    const environment = await repo.get(project.id);
+
+    // The folder stays where it was built, and this project still reaches it.
+    const [row] = await db
+      .select()
+      .from(environmentInstances)
+      .where(eq(environmentInstances.id, instance.id));
+    expect(row.environmentId).toBe(extra.id);
+    expect(await linksOf(project.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ environmentId: environment.id, isDefault: true }),
+        expect.objectContaining({ environmentId: extra.id, isDefault: false }),
+      ]),
+    );
+    // Settled as it is: reading again changes nothing.
+    expect((await repo.get(project.id)).id).toBe(environment.id);
+    expect(await linksOf(project.id)).toHaveLength(2);
+  });
+
+  it('moves a folder that a link names as its default instance', async () => {
+    const project = await insertProject('default-instance');
+    const main = await insertEnvironment('main', []);
+    const extra = await insertEnvironment('extra', ['https://github.com/a/extra']);
+    const [device] = await db
+      .insert(devices)
+      .values({ deviceId: 'default-device', identitySource: 'fallback', platform: 'linux', userId })
+      .returning();
+    const [instance] = await db
+      .insert(environmentInstances)
+      .values({
+        configurationSnapshot: {},
+        deviceId: device.id,
+        environmentId: extra.id,
+        kind: 'device',
+        name: 'mine',
+        workingDirectory: '/work/default',
+      })
+      .returning();
+    await link(project.id, main.id, { isDefault: true });
+    await db
+      .insert(projectEnvironments)
+      .values({ defaultInstanceId: instance.id, environmentId: extra.id, projectId: project.id });
+    await db.insert(projectWorkingDirectories).values({
+      deviceId: device.id,
+      name: 'mine',
+      path: '/work/default',
+      projectId: project.id,
+    });
+
+    const environment = await repo.get(project.id);
+
+    const [row] = await db
+      .select()
+      .from(environmentInstances)
+      .where(eq(environmentInstances.id, instance.id));
+    expect(row.environmentId).toBe(environment.id);
+  });
+
+  it("follows the project's name after a rename", async () => {
+    const project = await insertProject('renamed', 'Before');
+    await repo.get(project.id);
+    await db.update(projects).set({ name: 'After' }).where(eq(projects.id, project.id));
+
+    expect((await repo.get(project.id)).name).toBe('After');
+  });
+
   it('is idempotent and changes nothing on a settled project', async () => {
     const project = await insertProject('settled');
     const first = await repo.get(project.id);
@@ -233,6 +327,26 @@ describe('ProjectEnvironmentRepository.update', () => {
 
     expect(await model.update(environment.id, { name: 'renamed' })).toBeUndefined();
     expect(await model.delete(environment.id)).toBeUndefined();
+  });
+});
+
+describe('ProjectEnvironmentRepository.addRepositories', () => {
+  it('adds only the repositories the environment does not check out yet', async () => {
+    const project = await insertProject('adds');
+    await repo.update(project.id, {
+      configuration: { sources: [{ kind: 'git', url: 'https://github.com/a/one' }] },
+    });
+
+    const environment = await repo.addRepositories(project.id, [
+      { sources: [{ kind: 'git', url: 'https://github.com/a/one' }] },
+      { bootstrapCommand: 'ignored', sources: [{ kind: 'git', url: 'https://github.com/a/two' }] },
+    ]);
+
+    expect(environment.configuration.sources).toEqual([
+      { kind: 'git', path: 'one', url: 'https://github.com/a/one' },
+      { kind: 'git', path: 'two', url: 'https://github.com/a/two' },
+    ]);
+    expect(environment.configuration.bootstrapCommand).toBeUndefined();
   });
 });
 
