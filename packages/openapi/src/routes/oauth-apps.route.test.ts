@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { Hono } from 'hono';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * `/api/v1/oauth-apps` over real HTTP: real auth / workspace middlewares,
@@ -333,5 +333,107 @@ describe('ownership', () => {
     const rows = await serverDB.select().from(oidcClients);
     expect(rows).toHaveLength(1);
     expect(rows[0].enabled).toBe(true);
+  });
+});
+
+describe('scopes', () => {
+  const OIDC_DEFAULT = ['openid', 'profile', 'email', 'offline_access'];
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('registers the OIDC scopes by default', async () => {
+    const created = (await json(await createApp())).data;
+
+    expect(created.scopes).toEqual(OIDC_DEFAULT);
+  });
+
+  it('registers requested API scopes when the server offers them', async () => {
+    vi.stubEnv('OIDC_ENABLE_API_SCOPES', '1');
+
+    const res = await createApp({ scopes: ['openid', 'agent:read', 'agent:read', 'chat:write'] });
+    expect(res.status).toBe(201);
+    const created = CreatedOAuthAppSchema.parse((await json(res)).data);
+    expect(created.scopes).toEqual(['openid', 'agent:read', 'chat:write']);
+
+    const got = await json(await call(`/oauth-apps/${created.id}`, { key: KEYS.ownerRead }));
+    expect(got.data.scopes).toEqual(['openid', 'agent:read', 'chat:write']);
+
+    const patched = await call(`/oauth-apps/${created.id}`, {
+      body: { scopes: ['model:invoke'] },
+      key: KEYS.ownerWrite,
+      method: 'PATCH',
+    });
+    expect(patched.status).toBe(200);
+    expect(OAuthAppSchema.parse((await json(patched)).data).scopes).toEqual(['model:invoke']);
+  });
+
+  it('refuses an unknown scope and full access with 400', async () => {
+    vi.stubEnv('OIDC_ENABLE_API_SCOPES', '1');
+
+    for (const scope of ['agent:delete', '*']) {
+      const res = await createApp({ scopes: ['openid', scope] });
+      const body = await json(res);
+
+      expect(res.status).toBe(400);
+      expect(body.code).toBe('validation_error');
+      expect(body.message).toContain('scope.notAllowed');
+    }
+    expect(await serverDB.select().from(oidcClients)).toHaveLength(0);
+
+    const created = (await json(await createApp())).data;
+    const patched = await call(`/oauth-apps/${created.id}`, {
+      body: { scopes: ['nope'] },
+      key: KEYS.ownerWrite,
+      method: 'PATCH',
+    });
+    expect(patched.status).toBe(400);
+    const [row] = await serverDB.select().from(oidcClients);
+    expect(row.scopes).toEqual(OIDC_DEFAULT);
+  });
+
+  it('refuses API scopes while the server does not offer them', async () => {
+    const res = await createApp({ scopes: ['openid', 'agent:read'] });
+    const body = await json(res);
+
+    expect(res.status).toBe(400);
+    expect(body.message).toContain('scope.apiScopesDisabled');
+    expect(await serverDB.select().from(oidcClients)).toHaveLength(0);
+  });
+
+  it('refuses an empty scope list', async () => {
+    expect((await createApp({ scopes: [] })).status).toBe(400);
+  });
+
+  it("cannot change another user's or another workspace's app scopes", async () => {
+    vi.stubEnv('OIDC_ENABLE_API_SCOPES', '1');
+    const personal = (await json(await createApp())).data;
+    const shared = (await json(await createApp({}, KEYS.ownerWs, WORKSPACE))).data;
+
+    const attempts = [
+      call(`/oauth-apps/${personal.id}`, {
+        body: { scopes: ['agent:write'] },
+        key: KEYS.stranger,
+        method: 'PATCH',
+      }),
+      call(`/oauth-apps/${shared.id}`, {
+        body: { scopes: ['agent:write'] },
+        key: KEYS.strangerWs,
+        method: 'PATCH',
+        workspaceId: OTHER_WORKSPACE,
+      }),
+      call(`/oauth-apps/${shared.id}`, {
+        body: { scopes: ['agent:write'] },
+        key: KEYS.memberWs,
+        method: 'PATCH',
+        workspaceId: WORKSPACE,
+      }),
+    ];
+    expect((await Promise.all(attempts)).map((res) => res.status)).toEqual([404, 404, 403]);
+
+    for (const row of await serverDB.select().from(oidcClients)) {
+      expect(row.scopes).toEqual(OIDC_DEFAULT);
+    }
   });
 });

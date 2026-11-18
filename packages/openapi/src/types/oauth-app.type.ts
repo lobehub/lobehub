@@ -9,7 +9,7 @@ import { dateTimeSchema } from './common.type';
  * wildcard / fragment / credentials, de-duplication) and the logo URL rule are
  * enforced by the shared `oauthApp` procedures this API calls, so the REST and
  * in-app paths can never drift apart; a URI they refuse answers 400 with the
- * reason, e.g. `redirectUri.insecure`.
+ * reason, e.g. `redirectUri.insecure` or `scope.notAllowed`.
  */
 const NameSchema = z.string().min(1).max(64).describe('Display name shown on the consent screen.');
 const DescriptionSchema = z.string().max(500).describe('What the application does.');
@@ -22,6 +22,14 @@ const RedirectUrisSchema = z
   .max(MAX_OAUTH_REDIRECT_URIS)
   .describe(
     `Exact-match callback URLs, at most ${MAX_OAUTH_REDIRECT_URIS}. Each must be an absolute https URL (http only for localhost) without wildcard, fragment or credentials. Web apps only; ignored for device apps.`,
+  );
+
+const ScopesSchema = z
+  .array(z.string().max(64))
+  .min(1)
+  .max(64)
+  .describe(
+    'The scopes the app may request, replacing the registered list: the OIDC scopes `openid`, `profile`, `email` and `offline_access`, plus, when the server enables API scopes (`OIDC_ENABLE_API_SCOPES`), API key scopes such as `agent:read`. Full access (`*`) is never an OAuth scope. Defaults to the four OIDC scopes. A scope outside that list answers 400 (`scope.notAllowed`, or `scope.apiScopesDisabled` for an API scope the server does not offer).',
   );
 
 export const OAuthAppTypeSchema = z
@@ -62,6 +70,7 @@ export const CreateOAuthAppRequestSchema = z
     logoUri: LogoUriSchema.optional(),
     name: NameSchema,
     redirectUris: RedirectUrisSchema.optional(),
+    scopes: ScopesSchema.optional(),
     type: OAuthAppTypeSchema.default('device'),
   })
   .strict();
@@ -78,6 +87,7 @@ export const UpdateOAuthAppRequestSchema = z
     logoUri: LogoUriSchema.nullable().optional().describe('`null` removes the logo.'),
     name: NameSchema.optional(),
     redirectUris: RedirectUrisSchema.optional(),
+    scopes: ScopesSchema.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
@@ -96,7 +106,9 @@ export const OAuthAppSchema = z
     logoUri: z.string().nullable(),
     name: z.string(),
     redirectUris: z.array(z.string()),
-    scopes: z.array(z.string()).describe('OIDC scopes the client may request.'),
+    scopes: z
+      .array(z.string())
+      .describe('Scopes the client may request: OIDC scopes and any API scopes it registered.'),
     tokenEndpointAuthMethod: z
       .string()
       .nullable()

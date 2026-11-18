@@ -23,6 +23,8 @@ interface CreateOidcClientParams {
   name: string;
   /** Required for `web` apps, ignored for `device` apps. */
   redirectUris?: string[];
+  /** OAuth scopes the client may request. Defaults to the OIDC scopes. */
+  scopes?: string[];
   type?: OAuthAppType;
 }
 
@@ -32,6 +34,8 @@ interface UpdateOidcClientParams {
   name?: string;
   /** Only meaningful for `web` apps; ignored when the app has no redirect flow. */
   redirectUris?: string[];
+  /** Replaces the OAuth scopes the client may request. */
+  scopes?: string[];
 }
 
 const DEVICE_FLOW_GRANTS = ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'];
@@ -120,7 +124,7 @@ export class OidcClientModel {
             name: params.name,
             redirectUris: isWeb ? (params.redirectUris ?? []) : [],
             responseTypes: isWeb ? ['code'] : [],
-            scopes: DEFAULT_SCOPES,
+            scopes: params.scopes ?? DEFAULT_SCOPES,
             tokenEndpointAuthMethod: isWeb ? 'client_secret_post' : 'none',
           },
         ),

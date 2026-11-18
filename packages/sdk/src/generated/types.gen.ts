@@ -1800,7 +1800,7 @@ export type OAuthApp = {
     name: string;
     redirectUris: Array<string>;
     /**
-     * OIDC scopes the client may request.
+     * Scopes the client may request: OIDC scopes and any API scopes it registered.
      */
     scopes: Array<string>;
     /**
@@ -1839,7 +1839,7 @@ export type CreatedOAuthApp = {
     name: string;
     redirectUris: Array<string>;
     /**
-     * OIDC scopes the client may request.
+     * Scopes the client may request: OIDC scopes and any API scopes it registered.
      */
     scopes: Array<string>;
     /**
@@ -12769,6 +12769,10 @@ export type PostApiV1OauthAppsData = {
          */
         redirectUris?: Array<string>;
         /**
+         * The scopes the app may request, replacing the registered list: the OIDC scopes `openid`, `profile`, `email` and `offline_access`, plus, when the server enables API scopes (`OIDC_ENABLE_API_SCOPES`), API key scopes such as `agent:read`. Full access (`*`) is never an OAuth scope. Defaults to the four OIDC scopes. A scope outside that list answers 400 (`scope.notAllowed`, or `scope.apiScopesDisabled` for an API scope the server does not offer).
+         */
+        scopes?: Array<string>;
+        /**
          * `device`: a public client using the device authorization flow (CLIs, headless devices; no secret). `web`: a confidential client using the authorization-code flow with a client secret.
          */
         type?: 'device' | 'web';
@@ -12971,6 +12975,10 @@ export type PatchApiV1OauthAppsByIdData = {
          * Exact-match callback URLs, at most 20. Each must be an absolute https URL (http only for localhost) without wildcard, fragment or credentials. Web apps only; ignored for device apps.
          */
         redirectUris?: Array<string>;
+        /**
+         * The scopes the app may request, replacing the registered list: the OIDC scopes `openid`, `profile`, `email` and `offline_access`, plus, when the server enables API scopes (`OIDC_ENABLE_API_SCOPES`), API key scopes such as `agent:read`. Full access (`*`) is never an OAuth scope. Defaults to the four OIDC scopes. A scope outside that list answers 400 (`scope.notAllowed`, or `scope.apiScopesDisabled` for an API scope the server does not offer).
+         */
+        scopes?: Array<string>;
     };
     headers?: {
         /**

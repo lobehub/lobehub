@@ -1,3 +1,4 @@
+import { API_KEY_FULL_ACCESS_SCOPE, isValidApiKeyScope } from '@lobechat/const';
 import {
   MAX_OAUTH_REDIRECT_URIS,
   normalizeRedirectUris,
@@ -69,6 +70,52 @@ const redirectUrisSchema = z
     }
   });
 
+/** The OIDC scopes every app may request; also what an app registers by default. */
+const OIDC_APP_SCOPES: ReadonlySet<string> = new Set([
+  'openid',
+  'profile',
+  'email',
+  'offline_access',
+]);
+
+/**
+ * API key scopes (`agent:read`, …) become OAuth scopes only when the server
+ * switches on `OIDC_ENABLE_API_SCOPES` — the same flag that adds them to the
+ * provider's scope catalog. An app may not register one otherwise: the
+ * provider refuses a client whose `scope` names a scope outside its catalog,
+ * which would make the app unusable.
+ */
+const apiScopesEnabled = () => process.env.OIDC_ENABLE_API_SCOPES === '1';
+
+const MAX_OAUTH_APP_SCOPES = 64;
+
+/**
+ * The scopes an app may request, replacing the registered list. Full access
+ * (`*`) is never an OAuth scope: an app names each capability it needs, and
+ * the user sees each one on the consent page.
+ */
+const scopesSchema = z
+  .array(z.string().max(64))
+  .min(1)
+  .max(MAX_OAUTH_APP_SCOPES)
+  .transform((scopes) => [...new Set(scopes.map((scope) => scope.trim()).filter(Boolean))])
+  .superRefine((scopes, ctx) => {
+    if (scopes.length === 0) ctx.addIssue({ code: 'custom', message: 'scope.required' });
+
+    for (const scope of scopes) {
+      if (OIDC_APP_SCOPES.has(scope)) continue;
+
+      const isApiScope = scope !== API_KEY_FULL_ACCESS_SCOPE && isValidApiKeyScope(scope);
+      if (isApiScope && apiScopesEnabled()) continue;
+
+      ctx.addIssue({
+        code: 'custom',
+        message: isApiScope ? 'scope.apiScopesDisabled' : 'scope.notAllowed',
+        params: { scope },
+      });
+    }
+  });
+
 export const oauthAppRouter = router({
   create: oauthAppWriteProcedure
     .input(
@@ -86,6 +133,7 @@ export const oauthAppRouter = router({
         logoUri: logoUriSchema.optional(),
         name: z.string().min(1).max(64),
         redirectUris: redirectUrisSchema.optional(),
+        scopes: scopesSchema.optional(),
         type: z.enum(['device', 'web']).default('device'),
       }),
     )
@@ -137,6 +185,7 @@ export const oauthAppRouter = router({
           logoUri: logoUriSchema.nullable().optional(),
           name: z.string().min(1).max(64).optional(),
           redirectUris: redirectUrisSchema.optional(),
+          scopes: scopesSchema.optional(),
         }),
       }),
     )

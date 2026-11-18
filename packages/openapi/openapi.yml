@@ -6145,7 +6145,8 @@ components:
           type: array
           items:
             type: string
-          description: OIDC scopes the client may request.
+          description: "Scopes the client may request: OIDC scopes and any API scopes it
+            registered."
         tokenEndpointAuthMethod:
           description: "`none` for device apps, `client_secret_post` for web apps."
           type:
@@ -6227,7 +6228,8 @@ components:
           type: array
           items:
             type: string
-          description: OIDC scopes the client may request.
+          description: "Scopes the client may request: OIDC scopes and any API scopes it
+            registered."
         tokenEndpointAuthMethod:
           description: "`none` for device apps, `client_secret_post` for web apps."
           type:
@@ -35344,6 +35346,22 @@ paths:
                     https URL (http only for localhost) without wildcard,
                     fragment or credentials. Web apps only; ignored for device
                     apps.
+                scopes:
+                  minItems: 1
+                  maxItems: 64
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 64
+                  description: "The scopes the app may request, replacing the registered list: the
+                    OIDC scopes `openid`, `profile`, `email` and
+                    `offline_access`, plus, when the server enables API scopes
+                    (`OIDC_ENABLE_API_SCOPES`), API key scopes such as
+                    `agent:read`. Full access (`*`) is never an OAuth scope.
+                    Defaults to the four OIDC scopes. A scope outside that list
+                    answers 400 (`scope.notAllowed`, or
+                    `scope.apiScopesDisabled` for an API scope the server does
+                    not offer)."
                 type:
                   default: device
                   type: string
@@ -35686,6 +35704,22 @@ paths:
                     https URL (http only for localhost) without wildcard,
                     fragment or credentials. Web apps only; ignored for device
                     apps.
+                scopes:
+                  minItems: 1
+                  maxItems: 64
+                  type: array
+                  items:
+                    type: string
+                    maxLength: 64
+                  description: "The scopes the app may request, replacing the registered list: the
+                    OIDC scopes `openid`, `profile`, `email` and
+                    `offline_access`, plus, when the server enables API scopes
+                    (`OIDC_ENABLE_API_SCOPES`), API key scopes such as
+                    `agent:read`. Full access (`*`) is never an OAuth scope.
+                    Defaults to the four OIDC scopes. A scope outside that list
+                    answers 400 (`scope.notAllowed`, or
+                    `scope.apiScopesDisabled` for an API scope the server does
+                    not offer)."
               additionalProperties: false
     delete:
       operationId: oauthApps.delete
