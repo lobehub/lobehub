@@ -1,4 +1,6 @@
+import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { getConnectorCatalog } from '@lobechat/const';
 import { parsePluginEntry, upsertPluginMode } from '@lobechat/types';
@@ -185,9 +187,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const updateSkillPolicy = useCallback(
     async (id: string, mode: SkillPolicyMode) => {
       if (!canEdit || !agentId) return;
-      const plugins = agentByIdSelectors.getAgentConfigById(agentId)(
-        useAgentStore.getState(),
-      )?.plugins;
+      const state = useAgentStore.getState();
+      const plugins = agentByIdSelectors.getAgentConfigById(agentId)(state)?.plugins;
       const patch = isCapabilityTool(id) ? resolveCapabilityConfigPatch(id, mode) : undefined;
       if (patch) {
         // Capabilities have their own source of truth. Remove any old plugin
@@ -198,8 +199,18 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           ...(hasLegacyEntry && { plugins: upsertPluginMode(plugins, id, 'auto') }),
         });
       } else {
+        // Chat has no activator: media generation is offered to the model only when pinned.
+        const pinMediaTool =
+          mode === 'auto' &&
+          (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier) &&
+          chatConfigByIdSelectors.isChatModeById(agentId)(state);
         await updateAgentConfig({
-          plugins: upsertPluginMode(plugins, id, mode, resolveImplicitMode(id, optInIds)),
+          plugins: upsertPluginMode(
+            plugins,
+            id,
+            pinMediaTool ? 'pinned' : mode,
+            resolveImplicitMode(id, optInIds),
+          ),
         });
       }
     },

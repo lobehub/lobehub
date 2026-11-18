@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   composioServers: [] as Pick<ComposioServer, 'identifier' | 'status'>[],
   lobehubEnabled: false,
   lobehubSkillServers: [] as LobehubSkillServer[],
-  mode: 'auto',
+  chatMode: false,
   plugins: [] as { identifier: string; mode: string }[],
   skills: [
     { id: 'market-row', identifier: 'excel-analysis', name: 'Excel Analysis', source: 'market' },
@@ -64,7 +64,7 @@ vi.mock('@/store/agent/selectors', () => ({
   },
   chatConfigByIdSelectors: {
     getSearchModeById: () => () => 'off',
-    getSkillActivateModeById: () => () => mocks.mode,
+    isChatModeById: () => () => mocks.chatMode,
   },
 }));
 vi.mock('@/store/aiInfra', () => ({
@@ -149,7 +149,7 @@ describe('chat input tool picker', () => {
     mocks.lobehubEnabled = false;
     mocks.lobehubSkillServers = [];
     mocks.plugins = [];
-    mocks.mode = 'auto';
+    mocks.chatMode = false;
   });
 
   afterEach(cleanup);
@@ -183,11 +183,25 @@ describe('chat input tool picker', () => {
     expect(leafKeys(result.current.marketItems)).not.toContain('lobe-skills');
   });
 
-  it('does not offer an agent-wide discovery switch on the enabled group', () => {
-    const { result } = renderHook(() => useControls());
-    render(result.current.marketHeader);
-    expect(screen.queryByRole('switch')).toBeNull();
-  });
+  it.each(['lobe-image-generation', 'lobe-video-generation'])(
+    're-enables %s as a pin in Chat mode and on demand in Agent mode',
+    async (id) => {
+      mocks.plugins = [{ identifier: id, mode: 'disabled' }];
+      const { result } = renderHook(() => useControls());
+
+      mocks.chatMode = true;
+      await act(() => result.current.setPolicy(id, 'auto'));
+      expect(mocks.updateConfig).toHaveBeenLastCalledWith({
+        plugins: [{ identifier: id, mode: 'pinned' }],
+      });
+
+      mocks.chatMode = false;
+      await act(() => result.current.setPolicy(id, 'auto'));
+      expect(mocks.updateConfig).toHaveBeenLastCalledWith({
+        plugins: [{ identifier: id, mode: 'auto' }],
+      });
+    },
+  );
 
   it('only shows connectors with connection records and keeps rows needing authorization', () => {
     mocks.composioEnabled = true;
