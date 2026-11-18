@@ -603,10 +603,9 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', { boundDeviceId: DEVICE_ID });
   });
 
-  it('lists device skills in a directory-less run without binding a directory or loading project rules', async () => {
+  it('does not list unselected device skills in a directory-less run', async () => {
     mockGetAgentConfig.mockResolvedValue({
       ...createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
-      // Like project skills, device skills remain discoverable in manual mode.
       chatConfig: { skillActivateMode: 'manual' },
     });
     mockInitWorkspace.mockResolvedValue({
@@ -624,15 +623,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     await service.execAgent(topicRunInput());
 
     const operation = mockCreateOperation.mock.calls[0][0];
-    expect(operation.operationSkillSet?.skills).toEqual([
-      {
-        description: 'Device writing guidance',
-        identifier: 'device:writing',
-        location: '/home/user/.agents/skills/writing/SKILL.md',
-        name: 'writing',
-        source: 'device',
-      },
-    ]);
+    expect(operation.operationSkillSet?.skills).toEqual([]);
     expect(operation.deviceSystemInfo?.workingDirectory).toBeUndefined();
     expect(operation.projectInstructions).toBeUndefined();
     expect(mockUpdateDevice).not.toHaveBeenCalled();

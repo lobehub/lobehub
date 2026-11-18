@@ -590,29 +590,36 @@ describe('skillsRuntime', () => {
       expect(result.success).toBe(false);
     });
 
-    it('still activates the skill when it is not disabled', async () => {
-      mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
-      mocks.findByName.mockImplementation(async (name: string) =>
-        name === 'user-skill'
-          ? {
-              content: '# User skill',
-              id: 'user-skill-id',
-              identifier: 'user-skill-identifier',
-              name: 'user-skill',
-            }
-          : undefined,
-      );
+    it.each([
+      { availableSkillIds: ['user-skill-identifier'], expected: true },
+      { availableSkillIds: [], expected: false },
+    ])(
+      'gates activation on the operation skill list: $availableSkillIds',
+      async ({ availableSkillIds, expected }) => {
+        mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+        mocks.findByName.mockImplementation(async (name: string) =>
+          name === 'user-skill'
+            ? {
+                content: '# User skill',
+                id: 'user-skill-id',
+                identifier: 'user-skill-identifier',
+                name: 'user-skill',
+              }
+            : undefined,
+        );
 
-      const { skillsRuntime } = await import('../skills');
-      const runtime = await skillsRuntime.factory({
-        agentId: 'agent-1',
-        ...createRuntimeContext(),
-      });
+        const { skillsRuntime } = await import('../skills');
+        const runtime = await skillsRuntime.factory({
+          availableSkillIds,
+          agentId: 'agent-1',
+          ...createRuntimeContext(),
+        });
 
-      const result = await runtime.activateSkill({ name: 'user-skill' });
+        const result = await runtime.activateSkill({ name: 'user-skill' });
 
-      expect(result.success).toBe(true);
-    });
+        expect(result.success).toBe(expected);
+      },
+    );
   });
 
   /**

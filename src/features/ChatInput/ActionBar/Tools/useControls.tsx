@@ -1092,6 +1092,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           extraTag: officialTag,
           icon,
           id: skill.identifier,
+          defaultMode: 'disabled',
+          supportedModes: ['pinned', 'disabled'],
           popoverContent,
           searchText: `${title} ${skill.identifier}`,
           title,
@@ -1124,6 +1126,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           },
           icon,
           id: skill.identifier,
+          defaultMode: 'disabled',
+          supportedModes: ['pinned', 'disabled'],
           popoverContent,
           searchText: `${skill.name} ${skill.identifier}`,
           title: skill.name,
@@ -1155,6 +1159,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           },
           icon,
           id: skill.identifier,
+          defaultMode: 'disabled',
+          supportedModes: ['pinned', 'disabled'],
           popoverContent,
           searchText: `${skill.name} ${skill.identifier}`,
           title: skill.name,
@@ -1369,26 +1375,15 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const capabilityDisabledItems = capabilityItems.filter(
     (item) => !checkedSet.has(String(item.key)) && disabledCapabilityIds.has(String(item.key)),
   );
-  // LobeHub's own Agent Skills (Artifacts, …) — the rows the capability rows follow.
-  const builtinAgentSkillIds = useMemo(
-    () => new Set(installedBuiltinSkills.map((skill) => skill.identifier)),
-    [installedBuiltinSkills],
+  // Skills are opt-in; only tools participate in auto-discovery.
+  const skillIds = new Set(
+    [...installedBuiltinSkills, ...marketAgentSkills, ...userAgentSkills].map((s) => s.identifier),
   );
-  const activeSkillItems = allSkillItems.filter(
-    (item) => !checkedSet.has(String(item.key)) && !disabledIdSet.has(String(item.key)),
-  );
-  const isAgentSkillItem = (item: SkillMenuItem) => builtinAgentSkillIds.has(String(item.key));
-  // Capability rows sit after LobeHub's Agent Skills and before the remaining
-  // integrations, so the group still opens with the skills the user installed.
-  const allAutoItems = [
-    ...activeSkillItems.filter((item) => isAgentSkillItem(item)),
-    ...capabilityAutoItems,
-    ...activeSkillItems.filter((item) => !isAgentSkillItem(item)),
-  ];
-  const allDisabledItems = [
-    ...capabilityDisabledItems,
-    ...allSkillItems.filter((item) => disabledIdSet.has(String(item.key))),
-  ];
+  const inactiveItems = allSkillItems.filter((item) => !checkedSet.has(String(item.key)));
+  const isOff = (item: SkillMenuItem) =>
+    skillIds.has(String(item.key)) || disabledIdSet.has(String(item.key));
+  const allAutoItems = [...capabilityAutoItems, ...inactiveItems.filter((item) => !isOff(item))];
+  const allDisabledItems = [...capabilityDisabledItems, ...inactiveItems.filter(isOff)];
   const fixedPinnedItems = fixedItems.filter((item) => !disabledIdSet.has(String(item.key)));
   const fixedDisabledItems = fixedItems.filter((item) => disabledIdSet.has(String(item.key)));
   // Fixed tools lead the pinned section, then pinned capabilities, then every pinned

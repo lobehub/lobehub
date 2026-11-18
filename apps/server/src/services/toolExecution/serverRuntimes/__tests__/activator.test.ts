@@ -87,24 +87,31 @@ describe('activatorRuntime', () => {
       expect(result.success).toBe(false);
     }, 20_000);
 
-    it('still activates the skill when it is not disabled', async () => {
-      mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
-      mocks.findByName.mockImplementation(async (name: string) =>
-        name === 'user-skill' ? userSkillRow() : undefined,
-      );
+    it.each([
+      { availableSkillIds: ['user-skill-identifier'], expected: true },
+      { availableSkillIds: [], expected: false },
+    ])(
+      'gates activation on the operation skill list: $availableSkillIds',
+      async ({ availableSkillIds, expected }) => {
+        mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
+        mocks.findByName.mockImplementation(async (name: string) =>
+          name === 'user-skill' ? userSkillRow() : undefined,
+        );
 
-      const { activatorRuntime } = await import('../activator');
-      const runtime = await activatorRuntime.factory({
-        agentId: 'agent-1',
-        serverDB: {} as never,
-        toolManifestMap: {},
-        userId: 'user-1',
-      });
+        const { activatorRuntime } = await import('../activator');
+        const runtime = await activatorRuntime.factory({
+          availableSkillIds,
+          agentId: 'agent-1',
+          serverDB: {} as never,
+          toolManifestMap: {},
+          userId: 'user-1',
+        });
 
-      const result = await runtime.activateSkill({ name: 'user-skill' });
+        const result = await runtime.activateSkill({ name: 'user-skill' });
 
-      expect(result.success).toBe(true);
-    });
+        expect(result.success).toBe(expected);
+      },
+    );
   });
   describe('activateTools — device picker on a locked run', () => {
     it.each([
