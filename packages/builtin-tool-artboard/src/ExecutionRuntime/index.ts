@@ -10,16 +10,19 @@ import type {
 import {
   ArtboardApiName,
   type ArtboardToolFailure,
+  type ArtboardToolFile,
   type ArtboardToolService,
   type ArtboardToolSnapshot,
   type ArtboardToolState,
   type AskArtboardQuestionParams,
   type CreateArtboardParams,
   type ListArtboardCommentsParams,
+  type ReadArtboardFileParams,
   type ReadArtboardParams,
   type ReplyArtboardCommentParams,
   type ResolveArtboardCommentParams,
   type UpdateArtboardParams,
+  type WriteArtboardFilesParams,
 } from '../types';
 
 interface ArtboardRuntimeContext {
@@ -53,12 +56,10 @@ const failure = (outcome: ArtboardToolFailure): BuiltinServerRuntimeOutput => ({
 
 const formatSource = (board: ArtboardBoardView) => {
   if (board.type === 'decision') return 'decision';
-  const { source } = board;
-  if (!source) return `${board.type} source unavailable`;
-  return source.kind === 'canvas'
-    ? `canvas ${source.canvasId} v${source.version}${source.path ? ` ${source.path}` : ''}`
-    : `image ${source.fileId}`;
+  return board.source ? `file ${board.source.path}` : `${board.type} source unavailable`;
 };
+
+const formatFile = (file: ArtboardToolFile) => `${file.path} (${file.size} B)`;
 
 const formatAnchor = (target: {
   boardId: string | null;
@@ -180,21 +181,38 @@ export class ArtboardExecutionRuntime {
     const outcome = await this.service.read(params);
     if (!outcome.ok) return failure(outcome);
 
-    const { artboard, canvases, staleBoardIds } = outcome;
-    const stale = staleBoardIds.flatMap((boardId) => {
-      const source = artboard.content.boards.find((b) => b.id === boardId)?.source;
-      if (source?.kind !== 'canvas') return [];
-      const latest = canvases[source.canvasId]?.latestVersion;
-      return [
-        `- ${boardId} shows Canvas ${source.canvasId} v${source.version}, latest is v${latest}`,
-      ];
-    });
+    const { artboard, files } = outcome;
     return {
       content: [
         formatBoard(artboard),
-        ...(stale.length ? ['Boards behind their Canvas:', ...stale] : []),
+        'Files:',
+        ...files.map((file) => `- ${file.path} ${file.size} B`),
       ].join('\n'),
-      state: { ...toState(artboard, []), staleBoardIds },
+      state: toState(artboard, []),
+      success: true,
+    };
+  }
+
+  async writeArtboardFiles(params: WriteArtboardFilesParams): Promise<BuiltinServerRuntimeOutput> {
+    const outcome = await this.service.writeFiles(params);
+    if (!outcome.ok) return failure(outcome);
+    const { files } = outcome;
+    const count = `${files.length} file${files.length === 1 ? '' : 's'}`;
+    return {
+      content: files.length
+        ? `Saved ${count} on artboard ${params.id}: ${files.map(formatFile).join(', ')}.`
+        : `Saved no new content on artboard ${params.id}.`,
+      state: { artboardId: params.id, files },
+      success: true,
+    };
+  }
+
+  async readArtboardFile(params: ReadArtboardFileParams): Promise<BuiltinServerRuntimeOutput> {
+    const outcome = await this.service.readFile(params);
+    if (!outcome.ok) return failure(outcome);
+    return {
+      content: outcome.content ?? `${outcome.path} is binary; it has no text to show.`,
+      state: { hash: outcome.hash, path: outcome.path },
       success: true,
     };
   }

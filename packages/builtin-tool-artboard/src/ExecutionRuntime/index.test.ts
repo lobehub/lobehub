@@ -15,7 +15,7 @@ const snapshot = (overrides: Partial<ArtboardToolSnapshot> = {}): ArtboardToolSn
         pageId: 'abp_1',
         rect: { h: 400, w: 640, x: 0, y: 0 },
         roundId: null,
-        source: { canvasId: 'cvs_1', kind: 'canvas', version: 2 },
+        source: { hash: 'a1b2c3d4e5f6a7b8', kind: 'file', path: 'pages/empty.html' },
         title: '空项目',
         type: 'html',
       },
@@ -51,9 +51,11 @@ const service = (overrides: Partial<ArtboardToolService> = {}): ArtboardToolServ
   list: vi.fn(),
   listComments: vi.fn(),
   read: vi.fn(),
+  readFile: vi.fn(),
   replyComment: vi.fn(),
   resolveComment: vi.fn(),
   update: vi.fn(),
+  writeFiles: vi.fn(),
   ...overrides,
 });
 
@@ -179,12 +181,14 @@ describe('ArtboardExecutionRuntime', () => {
     expect(onWorkRegistration).not.toHaveBeenCalled();
   });
 
-  it('reads the board with the boards behind their Canvas', async () => {
+  it('reads the board with the file each board shows and the artboard files', async () => {
     const read = vi.fn().mockResolvedValue({
       artboard: snapshot(),
-      canvases: { cvs_1: { latestVersion: 3, title: '空项目' } },
+      files: [
+        { hash: 'a1b2c3d4e5f6a7b8', path: 'pages/empty.html', size: 2048 },
+        { hash: 'ffeeddccbbaa0099', path: 'shared.css', size: 120 },
+      ],
       ok: true,
-      staleBoardIds: ['brd-1'],
     });
     const result = await new ArtboardExecutionRuntime(service({ read })).readArtboard({
       id: 'art_1',
@@ -194,10 +198,43 @@ describe('ArtboardExecutionRuntime', () => {
     expect(result.content).toContain('revision 1');
     expect(result.content).toContain('- abp_1 "Page 1"');
     expect(result.content).toContain(
-      '- brd-1 on abp_1 in abg_1 "空项目" at (0, 0) 640×400 canvas cvs_1 v2 check: 看到接入入口',
+      '- brd-1 on abp_1 in abg_1 "空项目" at (0, 0) 640×400 file pages/empty.html check: 看到接入入口',
     );
-    expect(result.content).toContain('brd-1 shows Canvas cvs_1 v2, latest is v3');
-    expect(result.state).toMatchObject({ staleBoardIds: ['brd-1'] });
+    expect(result.content).toContain('Files:\n- pages/empty.html 2048 B\n- shared.css 120 B');
+  });
+
+  it('writes artboard files and reports what changed', async () => {
+    const writeFiles = vi.fn().mockResolvedValue({
+      files: [{ hash: 'abc', path: 'pages/empty.html', size: 10 }],
+      ok: true,
+    });
+    const result = await new ArtboardExecutionRuntime(service({ writeFiles })).writeArtboardFiles({
+      edits: [{ newText: 'b', oldText: 'a', path: 'pages/empty.html' }],
+      id: 'art_1',
+    });
+
+    expect(writeFiles).toHaveBeenCalledWith({
+      edits: [{ newText: 'b', oldText: 'a', path: 'pages/empty.html' }],
+      id: 'art_1',
+    });
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('Saved 1 file on artboard art_1: pages/empty.html (10 B).');
+  });
+
+  it('reads one artboard file as text', async () => {
+    const readFile = vi.fn().mockResolvedValue({
+      content: '<h1>空项目</h1>',
+      hash: 'abc',
+      ok: true,
+      path: 'pages/empty.html',
+    });
+    const result = await new ArtboardExecutionRuntime(service({ readFile })).readArtboardFile({
+      id: 'art_1',
+      path: 'pages/empty.html',
+    });
+
+    expect(result.content).toBe('<h1>空项目</h1>');
+    expect(result.state).toEqual({ hash: 'abc', path: 'pages/empty.html' });
   });
 
   it('reads a round with its recommendation and the user’s choice, and a decision branch', async () => {
@@ -253,9 +290,8 @@ describe('ArtboardExecutionRuntime', () => {
           ],
         },
       }),
-      canvases: {},
+      files: [],
       ok: true,
-      staleBoardIds: [],
     });
     const result = await new ArtboardExecutionRuntime(service({ read })).readArtboard({
       id: 'art_1',

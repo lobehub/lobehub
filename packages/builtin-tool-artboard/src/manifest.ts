@@ -22,15 +22,52 @@ const OP_TYPES = [
 
 const sourceSchema = {
   description:
-    'What the board shows. Canvas: {kind:"canvas", canvasId, version?, path?}; version defaults to the latest, path picks a page of a multi-page Canvas. Image: {kind:"image", fileRef} with a file id from <file id> or an image ref from <image ref> in this conversation. A decision board has no source.',
+    'What the board shows: {kind:"file", path} of a file of this artboard, an .html page or an image (png/jpg/webp/gif/svg). Write the file in the same call (files) or before it. A decision board has no source.',
   properties: {
-    canvasId: { type: 'string' },
-    fileRef: { type: 'string' },
-    kind: { enum: ['canvas', 'image'], type: 'string' },
+    kind: { enum: ['file'], type: 'string' },
     path: { type: 'string' },
-    version: { type: 'integer' },
   },
-  required: ['kind'],
+  required: ['kind', 'path'],
+  type: 'object',
+};
+
+const filesSchema = {
+  description:
+    'Files of the artboard, applied before the ops. Paths are relative, like pages/checkout/a.html or shared/base.css; pages reference each other and assets by relative paths. HTML is any HTML you would write for a browser: your own CSS, colors, fonts, inline SVG and scripts. Pages cannot fetch or open network connections; https images, fonts, styles and scripts load.',
+  properties: {
+    deletes: {
+      description: 'Paths to delete. A file a board shows cannot be deleted.',
+      items: { type: 'string' },
+      type: 'array',
+    },
+    edits: {
+      description: 'Exact-text edits: oldText must appear once in the file.',
+      items: {
+        properties: {
+          newText: { type: 'string' },
+          oldText: { type: 'string' },
+          path: { type: 'string' },
+        },
+        required: ['path', 'oldText', 'newText'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+    writes: {
+      description:
+        'Whole files: {path, content} for text (html, css, js, json, svg), or {path, fileRef} to copy an image from <file id> or <image ref> in this conversation.',
+      items: {
+        properties: {
+          content: { type: 'string' },
+          fileRef: { type: 'string' },
+          path: { type: 'string' },
+        },
+        required: ['path'],
+        type: 'object',
+      },
+      type: 'array',
+    },
+  },
   type: 'object',
 };
 
@@ -91,12 +128,13 @@ export const ArtboardManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Create the artboard for a requirement task: groups of boards (Canvases or images), edges for the user journey, and rounds of options for the user to choose from. Without taskId it uses this run's task, or creates a task titled `title` in the current project. One task has at most one artboard.",
+        "Create the artboard for a requirement task: the HTML pages and images it shows (files), groups of boards, edges for the user journey, and rounds of options for the user to choose from. Without taskId it uses this run's task, or creates a task titled `title` in the current project. One task has at most one artboard.",
       name: ArtboardApiName.createArtboard,
       parameters: {
         additionalProperties: false,
         properties: {
           description: { description: 'One line shown on the board card.', type: 'string' },
+          files: filesSchema,
           ops: {
             description: 'Initial content, built with the same ops as updateArtboard.',
             items: opSchema,
@@ -111,27 +149,52 @@ export const ArtboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Apply ops to an artboard. Either every op applies or none does. Pass the revision you last read; a stale revision is refused, so call readArtboard and retry.',
+        'Apply file changes and ops to an artboard. Either everything applies or nothing does. Pass the revision you last read; a stale revision is refused, so call readArtboard and retry.',
       name: ArtboardApiName.updateArtboard,
       parameters: {
         additionalProperties: false,
         properties: {
+          files: filesSchema,
           id: idSchema,
           ops: { items: opSchema, type: 'array' },
           revision: { description: 'Revision from the last read or write.', type: 'integer' },
         },
-        required: ['id', 'revision', 'ops'],
+        required: ['id', 'revision'],
         type: 'object',
       },
     },
     {
       description:
-        'Read an artboard: its pages, rounds with the user’s submitted choices, groups, boards and edges, your open questions, the revision, the phase, and which boards show an older version of their Canvas.',
+        'Read an artboard: its pages, rounds with the user’s submitted choices, groups, boards with the file each shows, edges, your open questions, the revision, the phase, and its files.',
       name: ArtboardApiName.readArtboard,
       parameters: {
         additionalProperties: false,
         properties: { id: idSchema },
         required: ['id'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Change only the files of an artboard: fix a page after a comment without touching the layout. Needs no revision. Every board showing a changed file updates for the user.',
+      name: ArtboardApiName.writeArtboardFiles,
+      parameters: {
+        additionalProperties: false,
+        properties: { ...filesSchema.properties, id: idSchema },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Read one file of an artboard, to edit it with exact text.',
+      name: ArtboardApiName.readArtboardFile,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          id: idSchema,
+          path: { description: 'File path, as listed by readArtboard.', type: 'string' },
+        },
+        required: ['id', 'path'],
         type: 'object',
       },
     },

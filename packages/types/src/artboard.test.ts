@@ -46,13 +46,27 @@ const content = (patch: Partial<ArtboardContent> = {}): ArtboardContent => ({
 });
 
 describe('artboardOpSchema', () => {
-  it('accepts a board with a canvas source and no version', () => {
+  it('accepts a board that shows a file of the artboard', () => {
     const op = {
-      board: { groupId: 'g', source: { canvasId: 'cvs_1', kind: 'canvas' }, title: 'A', x: 0, y: 0 },
+      board: {
+        groupId: 'g',
+        source: { kind: 'file', path: 'pages/a.html' },
+        title: 'A',
+        x: 0,
+        y: 0,
+      },
       ref: 'a',
       type: 'addBoard',
     };
     expect(artboardOpSchema.parse(op)).toEqual(op);
+  });
+
+  it('rejects the Canvas source boards used to take', () => {
+    const op = {
+      board: { source: { canvasId: 'cvs_1', kind: 'canvas' }, title: 'A', x: 0, y: 0 },
+      type: 'addBoard',
+    };
+    expect(artboardOpSchema.safeParse(op).success).toBe(false);
   });
 
   it('accepts a decision board without a source', () => {
@@ -77,7 +91,12 @@ describe('artboardOpSchema', () => {
 
 describe('artboard result line', () => {
   it('round-trips the id and revision', () => {
-    const line = formatArtboardResultLine({ boardCount: 3, groupCount: 2, id: 'art_1', revision: 7 });
+    const line = formatArtboardResultLine({
+      boardCount: 3,
+      groupCount: 2,
+      id: 'art_1',
+      revision: 7,
+    });
     expect(parseArtboardResultLine(`ok\n${line}\n`)).toEqual({ artboardId: 'art_1', revision: 7 });
   });
 });

@@ -8,24 +8,49 @@ export const ArtboardApiName = {
   listArtboardComments: 'listArtboardComments',
   listArtboards: 'listArtboards',
   readArtboard: 'readArtboard',
+  readArtboardFile: 'readArtboardFile',
   replyArtboardComment: 'replyArtboardComment',
   resolveArtboardComment: 'resolveArtboardComment',
   updateArtboard: 'updateArtboard',
+  writeArtboardFiles: 'writeArtboardFiles',
 } as const;
 
 export type ArtboardApiNameType = (typeof ArtboardApiName)[keyof typeof ArtboardApiName];
 
+export interface ArtboardFilesParams {
+  deletes?: unknown[];
+  edits?: unknown[];
+  writes?: unknown[];
+}
+
 export interface CreateArtboardParams {
   description?: string;
+  files?: ArtboardFilesParams;
   ops?: unknown[];
   taskId?: string;
   title: string;
 }
 
 export interface UpdateArtboardParams {
+  files?: ArtboardFilesParams;
   id: string;
-  ops: unknown[];
+  ops?: unknown[];
   revision: number;
+}
+
+export interface WriteArtboardFilesParams extends ArtboardFilesParams {
+  id: string;
+}
+
+export interface ReadArtboardFileParams {
+  id: string;
+  path: string;
+}
+
+export interface ArtboardToolFile {
+  hash: string;
+  path: string;
+  size: number;
 }
 
 export interface ReadArtboardParams {
@@ -82,11 +107,16 @@ export type ArtboardToolWriteOutcome =
 export type ArtboardToolReadOutcome =
   | {
       artboard: ArtboardToolSnapshot;
-      canvases: Record<string, { latestVersion: number; title: string } | null>;
+      files: ArtboardToolFile[];
       ok: true;
-      staleBoardIds: string[];
     }
   | ArtboardToolFailure;
+
+export type ArtboardToolFilesOutcome =
+  { files: ArtboardToolFile[]; ok: true } | ArtboardToolFailure;
+
+export type ArtboardToolFileOutcome =
+  { content: string | null; hash: string; ok: true; path: string } | ArtboardToolFailure;
 
 export type ArtboardToolListOutcome =
   | {
@@ -106,9 +136,11 @@ export interface ArtboardToolService {
   list: () => Promise<ArtboardToolListOutcome>;
   listComments: (params: ListArtboardCommentsParams) => Promise<ArtboardToolCommentsOutcome>;
   read: (params: ReadArtboardParams) => Promise<ArtboardToolReadOutcome>;
+  readFile: (params: ReadArtboardFileParams) => Promise<ArtboardToolFileOutcome>;
   replyComment: (params: ReplyArtboardCommentParams) => Promise<ArtboardToolCommentOutcome>;
   resolveComment: (params: ResolveArtboardCommentParams) => Promise<ArtboardToolCommentOutcome>;
   update: (params: UpdateArtboardParams) => Promise<ArtboardToolWriteOutcome>;
+  writeFiles: (params: WriteArtboardFilesParams) => Promise<ArtboardToolFilesOutcome>;
 }
 
 export interface ArtboardToolState {

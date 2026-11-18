@@ -46,8 +46,9 @@ export interface ArtboardImageBytes {
 }
 
 export type ArtboardFileWrite =
-  | { content: string; fileRef?: never; path: string }
-  | { content?: never; fileRef: string; path: string };
+  | { base64?: never; content: string; fileRef?: never; path: string }
+  | { base64?: never; content?: never; fileRef: string; path: string }
+  | { base64: string; content?: never; fileRef?: never; path: string };
 
 export interface ArtboardFileEdit {
   newText: string;
@@ -198,6 +199,10 @@ export class ArtboardFileService {
             `fileRef "${write.fileRef}" does not match an image you can access. Use a file id from <file id> or an image ref from <image ref> in this conversation.`,
           );
         put(path, image.bytes, contentType);
+        continue;
+      }
+      if (write.base64 !== undefined) {
+        put(path, new Uint8Array(Buffer.from(write.base64, 'base64')), contentType);
         continue;
       }
       if (!isArtboardTextPath(path))

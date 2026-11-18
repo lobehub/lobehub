@@ -1,4 +1,4 @@
-import { artboardOpSchema } from '@lobechat/types';
+import { artboardFileChangesSchema, artboardOpSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -119,6 +119,7 @@ export const artboardRouter = router({
     .input(
       z.object({
         description: z.string().nullish(),
+        files: artboardFileChangesSchema.optional(),
         ops: z.array(artboardOpSchema).max(200).optional(),
         taskId: z.string().nullish(),
         title: z.string().trim().min(1),
@@ -158,6 +159,10 @@ export const artboardRouter = router({
     .input(z.object({ taskId: z.string().nullish(), topicId: z.string().nullish() }))
     .query(({ ctx, input }) => run('list', () => ctx.artboardService.list(input))),
 
+  listFiles: artboardProcedure
+    .input(idInput)
+    .query(({ ctx, input }) => run('listFiles', () => ctx.artboardService.listFiles(input.id))),
+
   listComments: artboardProcedure
     .input(idInput)
     .query(({ ctx, input }) =>
@@ -179,6 +184,17 @@ export const artboardRouter = router({
   read: artboardProcedure
     .input(idInput)
     .query(({ ctx, input }) => run('read', () => ctx.artboardService.read(input.id))),
+
+  readFile: artboardProcedure
+    .input(idInput.extend({ path: z.string().min(1) }))
+    .query(({ ctx, input }) =>
+      run('readFile', async () => {
+        const { bytes, ...file } = await ctx.artboardService.readFile(input.id, input.path);
+        return file.content === undefined
+          ? { ...file, base64: Buffer.from(bytes).toString('base64') }
+          : file;
+      }),
+    ),
 
   reopenComment: artboardProcedureWrite
     .input(commentInput)
@@ -222,8 +238,21 @@ export const artboardRouter = router({
     ),
 
   update: artboardProcedureWrite
-    .input(revisionInput.extend({ ops: z.array(artboardOpSchema).min(1).max(200) }))
+    .input(
+      revisionInput.extend({
+        files: artboardFileChangesSchema.optional(),
+        ops: z.array(artboardOpSchema).max(200).default([]),
+      }),
+    )
     .mutation(({ ctx, input }) =>
-      run('update', () => ctx.artboardService.update(input.id, input.revision, input.ops)),
+      run('update', () =>
+        ctx.artboardService.update(input.id, input.revision, input.ops, input.files),
+      ),
+    ),
+
+  writeFiles: artboardProcedureWrite
+    .input(idInput.extend({ files: artboardFileChangesSchema }))
+    .mutation(({ ctx, input }) =>
+      run('writeFiles', () => ctx.artboardService.writeFiles(input.id, input.files)),
     ),
 });

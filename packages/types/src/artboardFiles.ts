@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const ARTBOARD_FILE_LIMITS = {
   maxFiles: 500,
   maxImageBytes: 10 * 1024 * 1024,
@@ -53,3 +55,28 @@ export const normalizeArtboardFilePath = (path: string): string | undefined => {
   if (!artboardFileContentType(trimmed)) return;
   return trimmed;
 };
+
+const filePathSchema = z
+  .string()
+  .min(1)
+  .max(ARTBOARD_FILE_LIMITS.maxPathLength + 2);
+
+export const artboardFileWriteSchema = z.union([
+  z.object({ content: z.string(), path: filePathSchema }).strict(),
+  z.object({ fileRef: z.string().min(1), path: filePathSchema }).strict(),
+  z.object({ base64: z.string().min(1), path: filePathSchema }).strict(),
+]);
+
+export const artboardFileEditSchema = z
+  .object({ newText: z.string(), oldText: z.string().min(1), path: filePathSchema })
+  .strict();
+
+export const artboardFileChangesSchema = z
+  .object({
+    deletes: z.array(filePathSchema).max(ARTBOARD_FILE_LIMITS.maxFiles).optional(),
+    edits: z.array(artboardFileEditSchema).max(200).optional(),
+    writes: z.array(artboardFileWriteSchema).max(ARTBOARD_FILE_LIMITS.maxFiles).optional(),
+  })
+  .strict();
+
+export type ArtboardFileChangesInput = z.infer<typeof artboardFileChangesSchema>;

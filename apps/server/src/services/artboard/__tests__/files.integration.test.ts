@@ -102,6 +102,16 @@ describe('ArtboardFileService', () => {
     expect(blobs.get(`artboards/${artboardId}/${row.hash}`)).toEqual(shot);
   });
 
+  it('stores a base64 write as its raw bytes', async () => {
+    await service.applyChanges(artboardId, {
+      writes: [{ base64: Buffer.from(shot).toString('base64'), path: 'shots/push.png' }],
+    });
+
+    const [row] = await service.list(artboardId);
+    expect(row).toMatchObject({ contentType: 'image/png', path: 'shots/push.png', size: 4 });
+    expect(blobs.get(`artboards/${artboardId}/${row.hash}`)).toEqual(shot);
+  });
+
   it('refuses an image ref it cannot resolve', async () => {
     const error = await errorOf(
       service.applyChanges(artboardId, { writes: [{ fileRef: 'msg_9.image_1', path: 'a.png' }] }),

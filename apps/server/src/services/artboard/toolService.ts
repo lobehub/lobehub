@@ -3,11 +3,17 @@ import type {
   ArtboardToolService,
   ArtboardToolSnapshot,
 } from '@lobechat/builtin-tool-artboard';
-import { type ArtboardItem, type ArtboardOp, artboardOpSchema } from '@lobechat/types';
+import {
+  artboardFileChangesSchema,
+  type ArtboardItem,
+  type ArtboardOp,
+  artboardOpSchema,
+} from '@lobechat/types';
 import { z } from 'zod';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import type { ArtboardFileChanges } from './files';
 import { type ArtboardContext, ArtboardService, ArtboardServiceError } from './index';
 
 export interface ArtboardToolScope extends ArtboardContext {
@@ -37,6 +43,18 @@ const parseOps = (ops: unknown[] | undefined): ArtboardOp[] => {
   throw new ArtboardServiceError('invalid', `The ops are malformed: ${issues}`);
 };
 
+const parseFiles = (files: unknown): ArtboardFileChanges => {
+  const parsed = artboardFileChangesSchema.safeParse(files ?? {});
+  if (parsed.success) return parsed.data;
+  throw new ArtboardServiceError(
+    'invalid',
+    `The files are malformed: ${parsed.error.issues.map((issue) => `files.${issue.path.join('.')}: ${issue.message}`).join('; ')}. Each write is {path, content} or {path, fileRef}; each edit is {path, oldText, newText}.`,
+  );
+};
+
+const toFiles = (rows: { hash: string; path: string; size: number }[]) =>
+  rows.map(({ hash, path, size }) => ({ hash, path, size }));
+
 const guard = async <T>(action: () => Promise<T>): Promise<T | ArtboardToolFailure> => {
   try {
     return await action();
@@ -65,6 +83,7 @@ export const createArtboardToolService = (
         const result = await service.create(
           {
             description: params.description,
+            files: parseFiles(params.files),
             ops: parseOps(params.ops),
             taskId: params.taskId,
             title: params.title,
@@ -96,12 +115,20 @@ export const createArtboardToolService = (
       })),
     read: (params) =>
       guard(async () => {
-        const result = await service.read(params.id);
+        const [result, files] = await Promise.all([
+          service.read(params.id),
+          service.listFiles(params.id),
+        ]);
+        return { artboard: toSnapshot(result.artboard), files: toFiles(files), ok: true as const };
+      }),
+    readFile: (params) =>
+      guard(async () => {
+        const file = await service.readFile(params.id, params.path);
         return {
-          artboard: toSnapshot(result.artboard),
-          canvases: result.canvases,
+          content: file.content ?? null,
+          hash: file.hash,
           ok: true as const,
-          staleBoardIds: result.staleBoardIds,
+          path: file.path,
         };
       }),
     replyComment: (params) =>
@@ -116,12 +143,22 @@ export const createArtboardToolService = (
       })),
     update: (params) =>
       guard(async () => {
-        const result = await service.update(params.id, params.revision, parseOps(params.ops));
+        const result = await service.update(
+          params.id,
+          params.revision,
+          parseOps(params.ops),
+          parseFiles(params.files),
+        );
         return {
           artboard: toSnapshot(result.artboard),
           changedIds: result.changedIds,
           ok: true as const,
         };
       }),
+    writeFiles: ({ id, ...files }) =>
+      guard(async () => ({
+        files: (await service.writeFiles(id, parseFiles(files))).files,
+        ok: true as const,
+      })),
   };
 };

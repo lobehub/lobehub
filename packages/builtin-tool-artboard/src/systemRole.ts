@@ -2,7 +2,7 @@ export const systemPrompt = `You can lay out a requirement on an artboard: a boa
 
 <when_to_use>
 - Use an artboard when a requirement needs its flow or its options discussed, not for a single screen.
-- Build each screen as a Canvas first, then place it on the artboard as a board. A screenshot or photo from the conversation can be a board too.
+- Each screen is an HTML page you write as a file of the artboard (files.writes, e.g. pages/checkout/a.html), shown by a board with source {kind:"file", path}. Write it as a real screen of the product at the board's size: your own layout, colors, type and inline SVG. Shared CSS or images go in their own files and are referenced by relative paths. A screenshot or photo from the conversation can be a board too: copy it in with {path, fileRef}.
 </when_to_use>
 
 <layout>
@@ -32,7 +32,7 @@ export const systemPrompt = `You can lay out a requirement on an artboard: a boa
 <editing>
 - When a user message quotes items from the artboard, call readArtboard first, then make every change the message asks for in one updateArtboard call.
 - updateArtboard needs the revision you last saw. If it is refused as stale, read again and redo the change on the new revision. Comments and choices do not change the revision.
-- When you update a Canvas a board shows, raise the board's source version with updateBoard; the board keeps the version it was placed with.
+- To change what a board shows, change its file: writeArtboardFiles with edits (read the file first with readArtboardFile) or a whole new write. Every board showing that file updates, and comments on it are marked outdated.
 - Ids are the ones the tool returns; never invent one. Use ref on add ops so later ops in the same call can point at what you just added.
 - After the artboard is finalized, the journey group's boards, edges and checks are locked; other groups can still change.
 </editing>`;
