@@ -53,7 +53,7 @@ const GroupSubmenu = memo<GroupSubmenuProps>(
       styles={SUBMENU_STYLES}
       trigger={['hover', 'click']}
       content={
-        <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 280 }}>
+        <Flexbox gap={2} style={{ maxWidth: 280, minWidth: 240 }}>
           <SubmenuHeader title={label} />
           <div {...stylex.props(styles.list)}>{children}</div>
         </Flexbox>
@@ -62,6 +62,7 @@ const GroupSubmenu = memo<GroupSubmenuProps>(
       <div data-testid={testId}>
         <OptionRow
           arrow
+          compact
           active={active}
           desc={desc}
           hint={hint}
