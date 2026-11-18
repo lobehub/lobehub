@@ -5365,6 +5365,6 @@ When I am ___, I need ___
   'environments.form.topFolder': 'Top of the working directory',
   'environments.form.repositoryOptional':
     'Optional \u2014 an environment can start without a repository and get one later.',
-  'environments.form.extraRepositoriesHint':
-    "The environment checks these out beside the main repository, each in a folder named after it. You can add or remove repositories later in the environment's settings.",
+  'environments.form.layoutHint':
+    "Each repository is checked out in a folder of its own, side by side. You can change them later in the environment's settings.",
 };

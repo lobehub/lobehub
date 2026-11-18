@@ -205,8 +205,6 @@ export default {
     'A project with this name already exists, including in the trash. Choose a different name.',
   'createFromGithub.empty':
     "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
-  'createFromGithub.environmentHint':
-    "The repository becomes this project's environment, so agents can check it out when they work on the project.",
   'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
   'createFromGithub.manageAccess': 'Manage access',
   'createFromGithub.private': 'Private',
@@ -502,14 +500,13 @@ export default {
   'environment.configure': 'Configure environment',
   'settings.environmentIntro':
     'Every conversation in this project runs in this environment: its repositories are cloned, the setup command runs, and its variables are set.',
-  'createFromGithub.advanced': 'Advanced: add more repositories',
-  'createFromGithub.advancedWithCount': 'Advanced: more repositories ({{count}})',
-  'createFromGithub.extraRepositoriesHint':
-    "The project's environment checks these out beside the main repository, each in a folder named after it. You can add or remove repositories later in the project's settings.",
-  'createFromGithub.extraRepositoriesLabel': 'More repositories',
-  'createFromGithub.extraUrlLabel': 'Or paste another repository URL',
   'createFromGithub.addRepository': 'Add',
   'createFromGithub.removeRepository': 'Remove',
   'createFromGithub.openIntegrations': 'Open GitHub settings',
   'environment.none': 'No environment \u2014 start in an empty folder',
+  'createFromGithub.repositoriesTitle': 'Repositories',
+  'createFromGithub.addAnother': 'Add repository',
+  'createFromGithub.alreadyAdded': 'This repository is already added.',
+  'createFromGithub.layoutHint':
+    "Each repository is checked out in a folder of its own, side by side. You can change them later in the project's settings.",
 };
