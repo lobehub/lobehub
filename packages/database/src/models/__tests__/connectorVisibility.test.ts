@@ -518,6 +518,35 @@ describe('connector visibility — write paths', () => {
     expect(myPrivateSlack.visibility).toBe('private');
   });
 
+  it('lets only one of two concurrent shares of one identifier take the shared slot', async () => {
+    const mine = await insertConnector({ identifier: 'notion', visibility: 'private' });
+    const theirs = await insertConnector({
+      identifier: 'notion',
+      userId: mate,
+      visibility: 'private',
+    });
+
+    const results = await Promise.all([
+      new ConnectorModel(serverDB, owner, workspaceId).changeVisibilityUnlessHeld(
+        mine.id,
+        'notion',
+        'public',
+      ),
+      new ConnectorModel(serverDB, mate, workspaceId).changeVisibilityUnlessHeld(
+        theirs.id,
+        'notion',
+        'public',
+      ),
+    ]);
+
+    expect(results.filter((result) => 'changed' in result)).toHaveLength(1);
+    const shared = await serverDB
+      .select({ id: userConnectors.id })
+      .from(userConnectors)
+      .where(eq(userConnectors.visibility, 'public'));
+    expect(shared).toHaveLength(1);
+  });
+
   it('moves an agent connector into the base scope within its own visibility', async () => {
     const model = new ConnectorModel(serverDB, owner, workspaceId);
     const myPrivate = await insertConnector({ identifier: 'notion', visibility: 'private' });

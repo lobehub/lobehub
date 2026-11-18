@@ -77,6 +77,7 @@ describe('connectorRouter visibility', () => {
       createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'created' } }),
       findById: vi.fn(),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
+      changeVisibilityUnlessHeld: vi.fn().mockResolvedValue({ changed: true }),
       getLinkModel: () => ({ listByConnectorIds: linksOf }),
       update: vi.fn(),
     };
@@ -316,10 +317,24 @@ describe('connectorRouter visibility', () => {
 
       await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
 
-      expect(connectorModelMock.update).toHaveBeenCalledWith(
+      expect(connectorModelMock.changeVisibilityUnlessHeld).toHaveBeenCalledWith(
         CONNECTOR_ID,
-        expect.objectContaining({ visibility: 'private' }),
+        'my-mcp',
+        'private',
       );
+    });
+
+    it('refuses when the destination slot was taken meanwhile', async () => {
+      // Regression: two members sharing private connectors of one identifier
+      // at once both passed the separate slot lookup and both became shared
+      connectorModelMock.findById.mockResolvedValue(row({ visibility: 'private' }));
+      vi.spyOn(mocks, 'getConnectorMemberManage').mockResolvedValue('all_members');
+      connectorModelMock.changeVisibilityUnlessHeld.mockResolvedValue({ holder: { id: 'other' } });
+
+      await expect(
+        member().update({ id: CONNECTOR_ID, patch: { visibility: 'public' } }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(connectorModelMock.update).not.toHaveBeenCalled();
     });
 
     it('lets the member who linked a Composio account make it private', async () => {
@@ -329,9 +344,10 @@ describe('connectorRouter visibility', () => {
 
       await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
 
-      expect(connectorModelMock.update).toHaveBeenCalledWith(
+      expect(connectorModelMock.changeVisibilityUnlessHeld).toHaveBeenCalledWith(
         CONNECTOR_ID,
-        expect.objectContaining({ visibility: 'private' }),
+        'my-mcp',
+        'private',
       );
     });
 
@@ -363,9 +379,10 @@ describe('connectorRouter visibility', () => {
 
       await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
 
-      expect(connectorModelMock.update).toHaveBeenCalledWith(
+      expect(connectorModelMock.changeVisibilityUnlessHeld).toHaveBeenCalledWith(
         CONNECTOR_ID,
-        expect.objectContaining({ visibility: 'private' }),
+        'my-mcp',
+        'private',
       );
     });
 
@@ -392,9 +409,10 @@ describe('connectorRouter visibility', () => {
 
       await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
 
-      expect(connectorModelMock.update).toHaveBeenCalledWith(
+      expect(connectorModelMock.changeVisibilityUnlessHeld).toHaveBeenCalledWith(
         CONNECTOR_ID,
-        expect.objectContaining({ visibility: 'private' }),
+        'my-mcp',
+        'private',
       );
     });
 

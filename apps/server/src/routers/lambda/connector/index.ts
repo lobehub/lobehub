@@ -613,10 +613,27 @@ const connectorCoreRouter = router({
       // authorizer, or mount the row on an agent past `mountToAgent`'s checks.
       // Untouched when the patch omits metadata.
       const metadata = withServerOwnedMetadata(patch.metadata, target.metadata);
+      // The destination slot is claimed under the identifier lock every
+      // base-row writer takes: two members sharing private connectors of one
+      // identifier at once never both land in the shared slot
+      if (visibility) {
+        const changed = await ctx.connectorModel.changeVisibilityUnlessHeld(
+          input.id,
+          target.identifier,
+          visibility,
+        );
+        if ('holder' in changed)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              visibility === 'public'
+                ? `The workspace already shares a "${target.identifier}" connector`
+                : `You already have a private "${target.identifier}" connector`,
+          });
+      }
       try {
         await ctx.connectorModel.update(input.id, {
           ...patch,
-          ...(visibility && { visibility }),
           ...(patch.metadata === undefined ? {} : { metadata }),
           // A new OAuth client needs a new authorization: the row stays
           // disconnected until the callback connects it, so a client can tell

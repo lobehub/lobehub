@@ -15,6 +15,7 @@ import {
 import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
 import {
   type BaseIdentifierScope,
+  changeBaseVisibilityUnlessHeld,
   claimBaseIdentifier,
   ConnectorIdentifierHeldError,
   moveToBaseUnlessIdentifierHeld,
@@ -361,6 +362,10 @@ export class ConnectorModel {
   moveToBaseUnlessIdentifierHeld = async (id: string, identifier: string) =>
     moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
 
+  /** {@link changeBaseVisibilityUnlessHeld} */
+  changeVisibilityUnlessHeld = (id: string, identifier: string, visibility: ConnectorVisibility) =>
+    changeBaseVisibilityUnlessHeld(this.db, this.baseIdentifierScope(), id, identifier, visibility);
+
   /** See {@link countPrivateConnectorBindings}; zero outside a workspace. */
   countPrivateAgentBindings = (agentId: string): Promise<number> =>
     countPrivateConnectorBindings(this.db, normalizeWorkspaceId(this.workspaceId), agentId);
@@ -624,12 +629,7 @@ export class ConnectorModel {
     });
   };
 
-  /**
-   * {@link resolveAll} / {@link resolveByIdentifiers} as tool sets: a private or
-   * personal row beside the shared one is its own set with its own prefix
-   * (`toolIdentifier`, see {@link pickConnectorToolSets}). MCP discovery and
-   * execution route by it; other callers keep one row per identifier.
-   */
+  /** The run's rows as tool sets, each with its prefix (`toolIdentifier`, {@link pickConnectorToolSets}). */
   resolveToolSets = async (
     runTarget: ConnectorRunTargetInput = {},
     identifiers?: string[],
