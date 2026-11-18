@@ -1,29 +1,40 @@
 // @vitest-environment node
-import { FileSource } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { customEmojis, emojiPacks, files, userEmojiPacks, users, workspaces } from '..';
+import {
+  customEmojis,
+  emojiPacks,
+  files,
+  globalFiles,
+  userEmojiPacks,
+  users,
+  workspaces,
+} from '..';
 
 const serverDB = await getTestDB();
 const ownerId = 'emoji-schema-owner';
 const otherId = 'emoji-schema-other';
 const workspaceId = 'emoji-schema-workspace';
 
-const createFile = async (userId = ownerId) => {
-  const [file] = await serverDB
-    .insert(files)
-    .values({
-      fileType: 'image/png',
-      name: 'doge.png',
-      size: 1024,
-      source: FileSource.CustomEmoji,
-      url: 'files/doge.png',
-      userId,
-    })
-    .returning();
-  return file;
+const hashId = 'emoji-schema-hash';
+
+/** The uploader's blob plus their own `files` row for it, as an upload leaves them. */
+const createImage = async (userId = ownerId) => {
+  await serverDB
+    .insert(globalFiles)
+    .values({ creator: userId, fileType: 'image/png', hashId, size: 1024, url: 'files/doge.png' })
+    .onConflictDoNothing();
+  await serverDB.insert(files).values({
+    fileHash: hashId,
+    fileType: 'image/png',
+    name: 'doge.png',
+    size: 1024,
+    url: 'files/doge.png',
+    userId,
+  });
+  return hashId;
 };
 
 const createPack = async (values: Partial<typeof emojiPacks.$inferInsert> = {}) => {
@@ -45,15 +56,16 @@ afterEach(async () => {
   await serverDB.delete(emojiPacks).where(eq(emojiPacks.workspaceId, workspaceId));
   await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
   await serverDB.delete(users).where(inArray(users.id, [ownerId, otherId]));
+  await serverDB.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
 });
 
 describe('emoji schema', () => {
   it('generates prefixed ids for packs and emojis', async () => {
     const pack = await createPack();
-    const file = await createFile();
+    const fileHash = await createImage();
     const [emoji] = await serverDB
       .insert(customEmojis)
-      .values({ fileId: file.id, name: 'doge', packId: pack.id, userId: ownerId })
+      .values({ fileHash, name: 'doge', packId: pack.id, userId: ownerId })
       .returning();
 
     expect(pack.id).toMatch(/^epk_/);
@@ -94,37 +106,55 @@ describe('emoji schema', () => {
   it('keeps names unique among live emojis in one pack', async () => {
     const pack = await createPack();
     const other = await createPack();
-    const file = await createFile();
+    const fileHash = await createImage();
     const [first] = await serverDB
       .insert(customEmojis)
-      .values({ fileId: file.id, name: 'doge', packId: pack.id })
+      .values({ fileHash, name: 'doge', packId: pack.id })
       .returning();
 
     await expect(
-      serverDB.insert(customEmojis).values({ fileId: file.id, name: 'doge', packId: pack.id }),
+      serverDB.insert(customEmojis).values({ fileHash, name: 'doge', packId: pack.id }),
     ).rejects.toThrow();
     // Another pack may reuse the name and the same image.
-    await serverDB.insert(customEmojis).values({ fileId: file.id, name: 'doge', packId: other.id });
+    await serverDB.insert(customEmojis).values({ fileHash, name: 'doge', packId: other.id });
 
     await serverDB
       .update(customEmojis)
       .set({ removedAt: new Date() })
       .where(eq(customEmojis.id, first.id));
-    await serverDB.insert(customEmojis).values({ fileId: file.id, name: 'doge', packId: pack.id });
+    await serverDB.insert(customEmojis).values({ fileHash, name: 'doge', packId: pack.id });
   });
 
-  it('keeps workspace emojis when their uploader is deleted', async () => {
+  it('keeps workspace emojis and their image when the uploader is deleted', async () => {
     const pack = await createPack({ scope: 'workspace', userId: null, workspaceId });
-    const file = await createFile(ownerId);
+    const fileHash = await createImage(otherId);
     const [emoji] = await serverDB
       .insert(customEmojis)
-      .values({ fileId: file.id, name: 'doge', packId: pack.id, userId: otherId })
+      .values({ fileHash, name: 'doge', packId: pack.id, userId: otherId })
       .returning();
 
     await serverDB.delete(users).where(eq(users.id, otherId));
 
+    // The uploader's own `files` row goes with the account; the blob the emoji uses stays.
     const [kept] = await serverDB.select().from(customEmojis).where(eq(customEmojis.id, emoji.id));
-    expect(kept.userId).toBeNull();
+    expect(kept).toMatchObject({ fileHash, userId: null });
+    const ownRows = await serverDB.select().from(files).where(eq(files.fileHash, fileHash));
+    expect(ownRows).toHaveLength(0);
+    const [blob] = await serverDB
+      .select()
+      .from(globalFiles)
+      .where(eq(globalFiles.hashId, fileHash));
+    expect(blob).toBeDefined();
+  });
+
+  it('refuses to drop a blob an emoji still uses', async () => {
+    const pack = await createPack();
+    const fileHash = await createImage();
+    await serverDB.insert(customEmojis).values({ fileHash, name: 'doge', packId: pack.id });
+
+    await expect(
+      serverDB.delete(globalFiles).where(eq(globalFiles.hashId, fileHash)),
+    ).rejects.toThrow();
   });
 
   it('adds a pack to a person once and drops it with the pack', async () => {

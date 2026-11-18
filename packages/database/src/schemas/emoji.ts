@@ -10,11 +10,12 @@ import {
   text,
   uniqueIndex,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz } from './_helpers';
-import { files } from './file';
+import { globalFiles } from './file';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -82,9 +83,13 @@ export const customEmojis = pgTable(
       .notNull(),
     /** Uploader. Cleared when the account is deleted, so workspace emojis outlive them. */
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    /** Image with `source = 'custom-emoji'`; several emojis may share one blob by file hash. */
-    fileId: text('file_id')
-      .references(() => files.id, { onDelete: 'cascade' })
+    /**
+     * The image, by content hash. It points at the shared blob rather than a `files` row: those
+     * belong to one person and go with their account, while a workspace emoji outlives its
+     * uploader. File cleanup keeps any blob an emoji still references; `restrict` backs that up.
+     */
+    fileHash: varchar('file_hash', { length: 64 })
+      .references(() => globalFiles.hashId, { onDelete: 'restrict' })
       .notNull(),
     /** Shortcode without colons, e.g. `doge` for `:doge:`. Unique among live emojis in a pack. */
     name: text('name').notNull(),
@@ -102,7 +107,7 @@ export const customEmojis = pgTable(
   },
   (t) => [
     index('custom_emojis_pack_id_sort_order_idx').on(t.packId, t.sortOrder),
-    index('custom_emojis_file_id_idx').on(t.fileId),
+    index('custom_emojis_file_hash_idx').on(t.fileHash),
     uniqueIndex('custom_emojis_pack_id_name_unique')
       .on(t.packId, t.name)
       .where(sql`${t.removedAt} IS NULL`),

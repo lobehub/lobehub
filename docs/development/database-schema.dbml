@@ -2252,7 +2252,7 @@ table custom_emojis {
   id text [pk, not null]
   pack_id text [not null]
   user_id text
-  file_id text [not null]
+  file_hash varchar(64) [not null]
   name text [not null]
   keywords jsonb [not null, default: `[]`]
   bound_emojis jsonb [not null, default: `[]`]
@@ -2267,7 +2267,7 @@ table custom_emojis {
 
   indexes {
     (pack_id, sort_order) [name: 'custom_emojis_pack_id_sort_order_idx']
-    file_id [name: 'custom_emojis_file_id_idx']
+    file_hash [name: 'custom_emojis_file_hash_idx']
     (pack_id, name) [name: 'custom_emojis_pack_id_name_unique', unique]
   }
 }
