@@ -29,6 +29,7 @@
   "InvalidProviderAPIKey": "{{provider}} API Key is incorrect or empty, please check your {{provider}} API Key and try again",
   "InvalidRequestFormat": "Sorry, the upstream provider rejected the request as malformed. Please check the input or try a different model.",
   "InvalidVertexCredentials": "Vertex authentication failed. Please check your credentials and try again.",
+  "LlmStepTimeout": "The model took too long on this step and was stopped before it finished. Try a lower reasoning effort, or split the work into smaller requests.",
   "LobeHubModelDeprecated": "The selected model is no longer available. Ask the bot or agent owner to select an available model, then try again.",
   "LocationNotSupportError": "We're sorry, your current location does not support this model service. This may be due to regional restrictions or the service not being available. Please confirm if the current location supports using this service, or try using a different location.",
   "ModelEmptyCompletion": "The model provider returned an empty response. Even without visible content, this request may still incur charges. You can retry or switch models and try again.",
