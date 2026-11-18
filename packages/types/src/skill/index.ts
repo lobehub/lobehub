@@ -203,3 +203,27 @@ export interface SkillImportResult {
   skill: SkillItem;
   status: SkillImportStatus;
 }
+
+export interface GitHubSkillSelection {
+  path: string;
+  /** Installed row and revision observed during discovery, or null for a new skill. */
+  revision: string | null;
+}
+
+export interface GitHubSkillCandidate extends GitHubSkillSelection {
+  description: string;
+  name: string;
+  status: 'new' | 'update' | 'unchanged' | 'conflict' | 'forbidden' | 'invalid';
+}
+
+export interface GitHubSkillBatchInput {
+  commit: string;
+  gitUrl: string;
+  scope: string;
+  selections: GitHubSkillSelection[];
+}
+
+export interface GitHubSkillOutcome {
+  path: string;
+  status: SkillImportStatus | 'failed' | 'conflict' | 'forbidden';
+}
