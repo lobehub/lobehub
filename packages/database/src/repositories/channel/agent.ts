@@ -130,12 +130,16 @@ export const requireChannelAgent = async (
   return { name: shared.name, title: shared.title };
 };
 
-/** Called under the Channel lock after the caller's admin role has been checked. */
+/**
+ * Called under the Channel lock after the caller's admin role has been checked. `invitedBy` is the
+ * caller's own member, kept so the join line names who added the Agent.
+ */
 export const addAgentMember = async (
   tx: Transaction,
   channel: ChannelItem,
   userId: string,
   input: ChannelAddAgentInput,
+  invitedBy: string,
 ): Promise<ChannelMemberItem> => {
   if (channel.peerUserId)
     throw new ChannelError('BAD_REQUEST', 'A conversation between two people has no Agents');
@@ -176,6 +180,7 @@ export const addAgentMember = async (
       channelId: channel.id,
       config: memberEnvironment(input.config),
       description: input.description,
+      metadata: { invitedBy },
       name: input.name?.trim() || agentDisplayName(agent, 'Agent'),
     })
     .returning();
