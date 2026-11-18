@@ -18,9 +18,9 @@ describe('DENSITY_TOKENS', () => {
     expect(DENSITY_TOKENS.loose.headerActionSmallSize).toEqual({ blockSize: 28, size: 16 });
   });
 
-  it('sizes tree rows from the control height in compact and keeps the pierre default in loose', () => {
+  it('sizes tree rows from the control height', () => {
     expect(DENSITY_TOKENS.compact.treeItemHeight).toBe(28);
-    expect(DENSITY_TOKENS.loose.treeItemHeight).toBe(30);
+    expect(DENSITY_TOKENS.loose.treeItemHeight).toBe(32);
   });
 
   it('uses 36px rows in loose', () => {

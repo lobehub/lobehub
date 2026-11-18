@@ -36,7 +36,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import dynamic from '@/libs/next/dynamic';
@@ -45,6 +44,7 @@ import { inboxKeys } from '@/libs/swr/keys';
 import { useHomeStore } from '@/store/home';
 import { homeNotificationSelectors } from '@/store/home/selectors';
 import type { InboxNavigationCount } from '@/store/home/slices/notification/projection';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { useNavigationCounts } from './useNavigationCounts';
 
@@ -124,6 +124,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 };
 
 const InboxModalContent = memo(() => {
+  const headerActionSize = useHeaderActionSize(true);
   const { i18n, t } = useTranslation('notification');
   const workspaceId = useActiveWorkspaceId();
   const [navigationFilter, setNavigationFilter] = useState(ALL_FILTER);
@@ -332,7 +333,7 @@ const InboxModalContent = memo(() => {
               <ActionIcon
                 icon={MoreHorizontalIcon}
                 loading={bulkAction === 'archive'}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                size={headerActionSize}
                 title={t('more', { ns: 'common' })}
               />
             </DropdownMenu>

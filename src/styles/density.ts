@@ -43,13 +43,11 @@ type DensityScale = Omit<
 > & {
   headerIconSize: number;
   headerSmallIconSize: number;
-  treeItemHeight?: number;
 };
 
 const withDerivedTokens = ({
   headerIconSize,
   headerSmallIconSize,
-  treeItemHeight,
   ...scale
 }: DensityScale): DensityTokens => ({
   ...scale,
@@ -57,7 +55,7 @@ const withDerivedTokens = ({
   headerActionSmallSize: { blockSize: scale.iconBox, size: headerSmallIconSize },
   headerChevronSize: headerSmallIconSize,
   sectionHeaderHeight: scale.controlHeight,
-  treeItemHeight: treeItemHeight ?? scale.controlHeight,
+  treeItemHeight: scale.controlHeight,
 });
 
 // The px values also live in density.stylex.ts and densityTheme.ts as --lobe-density-* CSS
@@ -102,7 +100,6 @@ export const DENSITY_TOKENS: Record<InterfaceDensity, DensityTokens> = {
     rowHeight: 36,
     sectionGap: 16,
     toolbarHeight: 40,
-    treeItemHeight: 30,
   }),
 };
 

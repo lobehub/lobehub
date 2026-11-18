@@ -147,3 +147,10 @@ html[data-density='compact'] .lobe-select__option {
   font-size: var(--lobe-density-font-size);
   line-height: 20px;
 }
+
+html[data-density='compact'] .lobe-select[data-size='middle'],
+html[data-density='compact'] .lobe-tabs__tab {
+  height: var(--lobe-density-control-height);
+  min-height: var(--lobe-density-control-height);
+  font-size: var(--lobe-density-font-size);
+}
