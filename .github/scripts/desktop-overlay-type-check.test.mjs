@@ -86,3 +86,26 @@ test('every pull request gets the overlay check, not only desktop builds', async
   assert.doesNotMatch(String(job.if ?? ''), /trigger:build-desktop|release\//);
   assert.ok([workflow.on.pull_request.types].flat().includes('opened'));
 });
+
+for (const path of [
+  '../actions/overlay-type-check/action.yml',
+  '../actions/desktop-build-setup/action.yml',
+]) {
+  test(`${path} installs from a cached pnpm store`, async () => {
+    const { runs } = await load(path);
+    const cache = stepUsing(runs, 'actions/cache@v4');
+    const install = runs.steps.find((step) =>
+      /pnpm install --node-linker=hoisted/.test(step.run ?? ''),
+    );
+
+    assert.ok(cache, 'the store is cached');
+    assert.match(String(cache.with.path), /pnpm-store/);
+    assert.ok(
+      runs.steps.indexOf(cache) < runs.steps.indexOf(install),
+      'the store is restored before install',
+    );
+    // The overlay root has no lockfile, so the store path must be passed explicitly.
+    assert.match(String(install.run), /--store-dir "\$RUNNER_TEMP\/pnpm-store"/);
+    assert.match(String(install.run), /--prefer-offline/);
+  });
+}
