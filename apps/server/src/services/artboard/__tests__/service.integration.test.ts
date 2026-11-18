@@ -5,7 +5,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import type { ArtboardOp } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
 import {
@@ -322,6 +322,16 @@ describe('ArtboardService.create', () => {
       source: { kind: 'file', path: 'shots/home.png' },
       type: 'image',
     });
+  });
+
+  it('hands the viewer a signed base URL for the artboard files', async () => {
+    vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');
+    const { artboard } = await createJourney();
+
+    const { fileBaseUrl } = await service().get(artboard.id);
+
+    expect(fileBaseUrl).toMatch(/^\/artboard-files\/[\w-]+\.[\w-]+\/$/);
+    vi.unstubAllEnvs();
   });
 
   it('refuses a board type that does not match its file', async () => {

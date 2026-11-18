@@ -23,6 +23,7 @@ import {
   type ArtboardQuestionInput,
 } from './comments';
 import { artboardConflict, ArtboardServiceError, guardArtboard, requireRowId } from './errors';
+import { artboardFileBasePath } from './fileAccess';
 import {
   type ArtboardBlobStore,
   type ArtboardFileChanges,
@@ -76,6 +77,7 @@ export interface ArtboardReadResult {
 
 export interface ArtboardViewResult {
   artboard: ArtboardItem;
+  fileBaseUrl: string | null;
 }
 
 export interface ArtboardFinalizeResult {
@@ -316,7 +318,10 @@ export class ArtboardService {
   }
 
   async get(id: string): Promise<ArtboardViewResult> {
-    return { artboard: await this.item(await this.require(id)) };
+    return {
+      artboard: await this.item(await this.require(id)),
+      fileBaseUrl: artboardFileBasePath(id) ?? null,
+    };
   }
 
   async getRevision(id: string): Promise<number> {

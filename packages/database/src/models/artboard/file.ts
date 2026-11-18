@@ -21,6 +21,19 @@ export class ArtboardFileModel {
 
   withTransaction = (tx: Transaction) => new ArtboardFileModel(tx, this.userId, this.workspaceId);
 
+  static findForServing = async (
+    db: ArtboardDatabase,
+    artboardId: string,
+    path: string,
+  ): Promise<ArtboardFileRow | undefined> => {
+    const [row] = await db
+      .select()
+      .from(artboardFiles)
+      .where(and(eq(artboardFiles.artboardId, artboardId), eq(artboardFiles.path, path)))
+      .limit(1);
+    return row;
+  };
+
   private accessible = () =>
     accessibleArtboardIds(this.db, { userId: this.userId, workspaceId: this.workspaceId });
 
