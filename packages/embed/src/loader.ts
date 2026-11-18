@@ -72,9 +72,19 @@ const STYLE = `
 .panel[data-open="true"] { display: block; }
 .panel iframe { width: 100%; height: 100%; border: 0; display: block; }
 .left { left: 20px; } .right { right: 20px; }
+.close {
+  position: fixed; top: 12px; width: 40px; height: 40px; border: none; border-radius: 50%;
+  display: none; align-items: center; justify-content: center; cursor: pointer; z-index: 1;
+  background: rgba(0,0,0,.56); color: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.28);
+}
+.close[hidden] { display: none; }
+.close:focus-visible { outline: 2px solid #1677ff; outline-offset: 2px; }
 @media (max-width: 480px) {
   .panel { inset: 0; width: 100%; height: 100%; border-radius: 0; }
   .panel[data-open="true"] + .launcher { display: none; }
+  /* The fullscreen panel hides the launcher, so it needs its own escape hatch:
+     a host-side close that still works when the iframe is blocked or fails to load. */
+  .panel[data-open="true"] ~ .close:not([hidden]) { display: flex; }
 }
 `;
 
@@ -116,7 +126,16 @@ export const createLobeHubEmbed = (options: LobeHubEmbedOptions): LobeHubEmbed =
   launcher.setAttribute('aria-expanded', 'false');
   launcher.innerHTML = CHAT_ICON;
 
-  shadow.append(panel, launcher);
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = `close ${side}`;
+  closeButton.dataset.lobehubEmbedClose = '';
+  closeButton.title = 'Close';
+  closeButton.setAttribute('aria-label', 'Close');
+  closeButton.hidden = true;
+  closeButton.innerHTML = CLOSE_ICON;
+
+  shadow.append(panel, launcher, closeButton);
   document.body.append(root);
 
   const post = (message: HostToEmbedMessage) => {
@@ -189,6 +208,7 @@ export const createLobeHubEmbed = (options: LobeHubEmbedOptions): LobeHubEmbed =
     panel.dataset.open = String(next);
     launcher.setAttribute('aria-expanded', String(next));
     launcher.innerHTML = next ? CLOSE_ICON : CHAT_ICON;
+    closeButton.hidden = !next;
     emit({ type: next ? 'open' : 'close' });
   };
 
@@ -197,6 +217,7 @@ export const createLobeHubEmbed = (options: LobeHubEmbedOptions): LobeHubEmbed =
   const toggle = () => setOpen(!isOpen);
 
   launcher.addEventListener('click', toggle);
+  closeButton.addEventListener('click', close);
 
   if (options.open) open();
 

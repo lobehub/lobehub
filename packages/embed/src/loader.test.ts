@@ -44,6 +44,22 @@ describe('createLobeHubEmbed', () => {
     expect(getShadow().querySelector('iframe')).toBe(iframe);
   });
 
+  it('keeps a host-side close control so the fullscreen panel always has an escape', () => {
+    const embed = createLobeHubEmbed({ agent: 'my-bot', host: HOST });
+    const closeButton = getShadow().querySelector<HTMLButtonElement>('[data-lobehub-embed-close]')!;
+
+    expect(closeButton.hidden).toBe(true);
+
+    embed.open();
+    // Below 480px the panel covers the viewport and hides the launcher, so this
+    // button stays outside the iframe: a blocked or failed frame cannot trap the visitor.
+    expect(closeButton.hidden).toBe(false);
+
+    closeButton.click();
+    expect(embed.isOpen).toBe(false);
+    expect(closeButton.hidden).toBe(true);
+  });
+
   it('repeats init to the LobeHub origin until the conversation answers ready', () => {
     vi.useFakeTimers();
     try {
