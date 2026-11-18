@@ -26,6 +26,8 @@ export enum FileSource {
   Canvas = 'canvas',
   /** Attachment sent in a public agent's conversation; shared with the conversation, not the library. */
   ChatAttachment = 'chat-attachment',
+  /** Image behind a custom emoji (`custom_emojis.file_id`); lives in emoji packs, not the library. */
+  CustomEmoji = 'custom-emoji',
   ImageGeneration = 'image_generation',
   /** Audio recording owned by a meeting (`meetings.audio_file_id`), not the resource library. */
   Meeting = 'meeting',
@@ -64,6 +66,7 @@ export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Meeting,
   FileSource.ToolResult,
   FileSource.ChatAttachment,
+  FileSource.CustomEmoji,
   FileSource.Skill,
 ];
 
