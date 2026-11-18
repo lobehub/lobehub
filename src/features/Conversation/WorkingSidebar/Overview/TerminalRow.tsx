@@ -17,9 +17,7 @@ export const TerminalRow = memo(() => {
 
   return (
     <OverviewRow
-      weak
       icon={SquareTerminalIcon}
-      iconSize={15}
       trailing={<ChevronRight />}
       value={t('terminalPanel.title')}
       onClick={() => toggleTerminalPanel(true)}

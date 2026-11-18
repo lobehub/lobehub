@@ -27,6 +27,7 @@ import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import { isArtifactPage } from '../Layout/Body/PageSection/group';
 import { docsFilePath, docsPagePath, DRIVE_PATH, LIBRARY_INDEX_PATH } from '../paths';
@@ -103,7 +104,7 @@ const styles = stylex.create({
     gap: '16px',
     alignItems: 'center',
     width: '100%',
-    paddingBlock: '10px',
+    paddingBlock: `calc((${sidebarRow.listRowHeight} - 28px) / 2)`,
     paddingInline: '12px',
     borderWidth: 0,
     borderBlockEndWidth: '1px',
@@ -114,13 +115,13 @@ const styles = stylex.create({
   },
   tab: {
     cursor: 'pointer',
-    paddingBlock: '6px',
+    paddingBlock: `calc((${sidebarRow.controlHeight} - 20px) / 2)`,
     paddingInline: 0,
     borderWidth: 0,
     borderBlockEndWidth: '2px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: 'transparent',
-    fontSize: '14px',
+    fontSize: sidebarRow.textFontSize,
     color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
     backgroundColor: 'transparent',
   },

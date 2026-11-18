@@ -16,6 +16,7 @@ import { useSingleton } from '@/hooks/useSingleton';
 import { useClientDataSWR } from '@/libs/swr';
 import { discardOwnedWorktree, keepOwnedWorktree } from '@/services/ownedWorktree';
 import { topicService } from '@/services/topic';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import {
   findRemovedWorktree,
@@ -26,7 +27,12 @@ import { OverviewRow } from './OverviewRow';
 
 const styles = stylex.create({
   // Lines up with the row's text, past its icon.
-  reason: { paddingInlineStart: '36px', paddingInlineEnd: '8px', wordBreak: 'break-word' },
+  actions: { paddingInline: sidebarRow.paddingInline },
+  reason: {
+    paddingInlineStart: `calc(${sidebarRow.paddingInline} + ${sidebarRow.iconBox} + ${sidebarRow.gap})`,
+    paddingInlineEnd: sidebarRow.paddingInline,
+    wordBreak: 'break-word',
+  },
 });
 
 /**
@@ -178,7 +184,6 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
           <OverviewRow
             icon={TriangleAlertIcon}
             iconColor={cssVar.colorWarning}
-            iconSize={14}
             title={entry.path}
             value={
               entry.cleanup?.state === 'failed'
@@ -197,7 +202,12 @@ const KeptWorktreeRows = memo<KeptWorktreeRowsProps>(({ entries, onChange, topic
                 {entry.cleanup.reason}
               </Text>
             )}
-          <Flexbox horizontal gap={4} justify={'flex-end'} paddingInline={8}>
+          <Flexbox
+            horizontal
+            className={stylex.props(styles.actions).className}
+            gap={4}
+            justify={'flex-end'}
+          >
             {entry.cleanup?.state === 'failed' && entry.cleanup.reason && (
               <Button
                 size={'small'}
@@ -250,7 +260,6 @@ export const RemovedWorktreeRow = memo<{ entry: OwnedWorktree }>(({ entry }) => 
   return (
     <OverviewRow
       icon={GitBranchIcon}
-      iconSize={14}
       title={t('workingPanel.overview.keptWorktree.removedHint')}
       value={t('workingPanel.overview.keptWorktree.removed', { branch: entry.branch ?? '' })}
     />

@@ -3,7 +3,7 @@
 import { Flexbox, Icon, ImageSelect, Select, Tabs } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
+import { Ban, Gauge, Monitor, Moon, Mouse, Rows3, Rows4, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -151,6 +151,33 @@ const Common = memo(() => {
         ),
         minWidth: undefined,
         name: 'animationMode',
+        valueProp: 'activeKey',
+      },
+      {
+        children: (
+          <Tabs
+            items={[
+              {
+                icon: <Icon icon={Rows4} size={16} />,
+                key: 'compact',
+                label: t('settingAppearance.density.compact'),
+              },
+              {
+                icon: <Icon icon={Rows3} size={16} />,
+                key: 'loose',
+                label: t('settingAppearance.density.loose'),
+              },
+            ]}
+          />
+        ),
+        desc: t('settingAppearance.density.desc'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-density'}>
+            {t('settingAppearance.density.title')}
+          </SettingsSearchAnchor>
+        ),
+        minWidth: undefined,
+        name: 'interfaceDensity',
         valueProp: 'activeKey',
       },
       {

@@ -341,7 +341,10 @@ describe('AgentDocumentsGroup', () => {
     expect(header.contains(settings)).toBe(false);
     fireEvent.click(header);
     expect(header).toHaveAttribute('aria-expanded', 'false');
-    expect(settings).toBeVisible();
+    // The action stays mounted and focusable while collapsed; the compact header
+    // only reveals it on hover / focus-within.
+    expect(settings).toBeInTheDocument();
+    expect(settings).toBeEnabled();
     fireEvent.click(header);
     expect(header).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(header);

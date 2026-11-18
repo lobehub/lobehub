@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   createStaticStyles,
+  cx,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
@@ -12,6 +13,7 @@ import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentDocumentSort } from '@/store/global/initialState';
+import { sidebarRow } from '@/styles/density.stylex';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
@@ -23,12 +25,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 11px;
     font-weight: 500;
   `,
+  compactToolbar: css`
+    flex-shrink: 0;
+    gap: 4px;
+    height: ${sidebarRow.toolbarHeight};
+    padding-inline: ${sidebarRow.toolbarPaddingInlineStart} ${sidebarRow.toolbarPaddingInlineEnd};
+  `,
+  compactTitle: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    font-size: ${sidebarRow.labelFontSize};
+    font-weight: ${sidebarRow.labelFontWeight};
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
 }));
 
 const SORT_FIELDS = ['name', 'createdAt', 'updatedAt'] as const;
 const SORT_ORDERS = ['asc', 'desc'] as const;
 
 interface Props {
+  compact?: boolean;
   onCreateDocument: () => void;
   onCreateFolder: () => void;
   onSortChange: (sort: AgentDocumentSort) => void;
@@ -37,7 +58,7 @@ interface Props {
 }
 
 const DocumentExplorerToolbar = memo<Props>(
-  ({ onCreateDocument, onCreateFolder, onSortChange, onUploadFiles, sort }) => {
+  ({ compact, onCreateDocument, onCreateFolder, onSortChange, onUploadFiles, sort }) => {
     const { t } = useTranslation('chat');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const createMenuItems = useMemo<DropdownItem[]>(
@@ -108,13 +129,19 @@ const DocumentExplorerToolbar = memo<Props>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.toolbar}
+        className={cx(styles.toolbar, compact && styles.compactToolbar)}
         distribution={'space-between'}
       >
-        <Text className={styles.title} type={'secondary'}>
-          {t('workingPanel.resources.filter.documents')}
-        </Text>
-        <Flexbox horizontal align={'center'}>
+        {compact ? (
+          <span className={styles.compactTitle}>
+            {t('workingPanel.resources.filter.documents')}
+          </span>
+        ) : (
+          <Text className={styles.title} type={'secondary'}>
+            {t('workingPanel.resources.filter.documents')}
+          </Text>
+        )}
+        <Flexbox horizontal align={'center'} gap={compact ? 4 : undefined}>
           <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
             <ActionIcon
               icon={ArrowDownUpIcon}

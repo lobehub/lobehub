@@ -1,20 +1,21 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Button, Empty, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
+import { Button, Center, Empty, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { GlobeIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
+import { GlobeIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import {
   useFetchGitAheadBehind,
   useFetchGitPullRequestActivity,
   useFetchGitPullRequestDetail,
   useFetchGitPullRequestMergeContext,
 } from '@/store/device';
+import { sidebarRow } from '@/styles/density.stylex';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
-import { OverviewRow } from '../Overview/OverviewRow';
 import { sectionProps } from '../Overview/sectionStyles';
 import { resolvePullRequestActionLock } from './actionLock';
 import Header from './Header';
@@ -27,7 +28,11 @@ import { usePullRequestActions } from './usePullRequestActions';
 const styles = stylex.create({
   root: { flex: '1', minHeight: '0' },
   scroll: { overflow: 'hidden', flex: '1', minHeight: '0' },
-  scrollContent: { paddingBlockStart: '0', paddingBlockEnd: '10px' },
+  scrollContent: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: sidebarRow.paneBlockEnd,
+    paddingInline: sidebarRow.paneInline,
+  },
   viewport: { overflowX: 'hidden' },
 });
 
@@ -66,7 +71,6 @@ const PullRequest = memo<PullRequestProps>(
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
-    const { t: tCommon } = useTranslation('common');
     const readPath = repositoryPath ?? workingDirectory;
     const {
       data,
@@ -134,17 +138,13 @@ const PullRequest = memo<PullRequestProps>(
     const externalUrl = detail?.url ?? url;
     const loadError = (error: unknown, onRetry: () => void) => (
       <Flexbox {...sectionProps()}>
-        <OverviewRow
-          danger
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorError}
-          title={error instanceof Error ? error.message : undefined}
-          value={t('workingPanel.pr.error.load')}
-          trailing={
-            <Button icon={<Icon icon={RefreshCwIcon} size={12} />} size={'small'} onClick={onRetry}>
-              {tCommon('retry')}
-            </Button>
-          }
+        <AsyncError
+          align={'start'}
+          details={error instanceof Error ? error.message : undefined}
+          error={error}
+          title={t('workingPanel.pr.error.load')}
+          variant={'inline'}
+          onRetry={onRetry}
         />
       </Flexbox>
     );
@@ -153,28 +153,29 @@ const PullRequest = memo<PullRequestProps>(
 
     if (data?.status === 'gh-missing')
       return (
-        <Empty
-          description={t('workingPanel.pr.ghMissing.desc')}
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorWarning}
-          title={t('workingPanel.pr.ghMissing.title')}
-          action={
-            <Flexbox horizontal gap={6}>
-              <Button size={'small'} type={'primary'} onClick={() => void mutate()}>
-                {t('workingPanel.pr.ghMissing.retry')}
-              </Button>
-              {externalUrl && (
-                <Button
-                  icon={<Icon icon={GlobeIcon} size={12} />}
-                  size={'small'}
-                  onClick={() => openTrustedExternalUrl(externalUrl)}
-                >
-                  {t('workingPanel.pr.ghMissing.open')}
+        <Center paddingBlock={24}>
+          <Empty
+            description={t('workingPanel.pr.ghMissing.desc')}
+            icon={TriangleAlertIcon}
+            iconColor={cssVar.colorWarning}
+            title={t('workingPanel.pr.ghMissing.title')}
+            action={
+              <Flexbox horizontal gap={6}>
+                <Button type={'primary'} onClick={() => void mutate()}>
+                  {t('workingPanel.pr.ghMissing.retry')}
                 </Button>
-              )}
-            </Flexbox>
-          }
-        />
+                {externalUrl && (
+                  <Button
+                    icon={<Icon icon={GlobeIcon} size={12} />}
+                    onClick={() => openTrustedExternalUrl(externalUrl)}
+                  >
+                    {t('workingPanel.pr.ghMissing.open')}
+                  </Button>
+                )}
+              </Flexbox>
+            }
+          />
+        </Center>
       );
 
     if (!detail) return loadError(fetchError, () => void mutate());
