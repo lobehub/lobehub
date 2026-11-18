@@ -1,9 +1,9 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { ActionIcon, Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { TriangleAlertIcon, XIcon } from 'lucide-react';
-import { memo } from 'react';
+import { TriangleAlertIcon } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -18,9 +18,9 @@ import { OverviewRow, rowStyles } from './OverviewRow';
 import { sectionStyles } from './sectionStyles';
 
 interface PullRequestRowProps {
+  /** Better Coding Experience: the row's "⋯" menu, after the CI pill. */
+  actions?: ReactNode;
   onClick: () => void;
-  /** Better Coding Experience: remove the PR from the topic's lists. */
-  onDismiss?: () => void;
   pullRequest: DeviceGitLinkedPullRequest;
   /** Defaults to `#number title`. */
   tooltip?: string;
@@ -30,7 +30,7 @@ interface PullRequestRowProps {
 
 /** One pull request under the repository card's Changes row: state, number, title, CI. */
 const PullRequestRow = memo<PullRequestRowProps>(
-  ({ onClick, onDismiss, pullRequest, tooltip, unvouched }) => {
+  ({ actions, onClick, pullRequest, tooltip, unvouched }) => {
     const { t } = useTranslation('chat');
     const ciStatus = pullRequest.ciStatus;
     const ci = getCiVisual(ciStatus);
@@ -67,18 +67,7 @@ const PullRequestRow = memo<PullRequestRowProps>(
                       )
                     : null}
                 </span>
-                {onDismiss && (
-                  <ActionIcon
-                    aria-label={t('workingPanel.overview.pr.dismiss')}
-                    icon={XIcon}
-                    size={'small'}
-                    title={t('workingPanel.overview.pr.dismiss')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDismiss();
-                    }}
-                  />
-                )}
+                {actions}
               </>
             }
             value={

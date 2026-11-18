@@ -18,8 +18,8 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { electronSystemService } from '@/services/electron/system';
 import { useGitRemoteBranches } from '@/store/device';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { rowStyles } from '../Overview/OverviewRow';
 import PrHead, { headStyles, PrStatePill, PrTitle } from './Head';
@@ -37,6 +37,7 @@ interface HeaderProps {
 const Header = memo<HeaderProps>(
   ({ actionsDisabled, activityLoaded = true, detail, deviceId, onAction, workingDirectory }) => {
     const { t } = useTranslation('chat');
+    const openOnGithubLabel = t('workingPanel.pr.menu.openOnGithub');
     const canChangeBase = detail.viewerCanWrite && detail.state === 'open';
     const [basePickerOpen, setBasePickerOpen] = useState(false);
     const { data: remoteBranches } = useGitRemoteBranches(
@@ -57,8 +58,6 @@ const Header = memo<HeaderProps>(
             },
           }))
       : [{ disabled: true, key: 'loading', label: t('workingPanel.review.baseRef.loading') }];
-
-    const openOnGithub = () => void electronSystemService.openExternalLink(detail.url);
 
     const menuItems: DropdownItem[] = [
       {
@@ -97,10 +96,11 @@ const Header = memo<HeaderProps>(
         actions={
           <>
             <ActionIcon
+              aria-label={openOnGithubLabel}
               icon={ExternalLinkIcon}
               size={'small'}
-              title={t('workingPanel.pr.menu.openOnGithub')}
-              onClick={openOnGithub}
+              title={openOnGithubLabel}
+              onClick={() => openTrustedExternalUrl(detail.url)}
             />
             <DropdownMenu items={menuItems} placement={'bottomRight'}>
               <ActionIcon icon={EllipsisIcon} size={'small'} />

@@ -730,7 +730,24 @@ export interface TopicPullRequestWork {
  * when an installation the viewer can see tracks the repository — that is the
  * confirmed source; without it the client probes the execution device.
  */
+/**
+ * The pull request's Auto-fix: whether its failing CI and review feedback
+ * wake the agent of {@link ownerTopicId}. Only that conversation may switch it.
+ */
+export interface TopicPullRequestAutoFix {
+  changeRequestId: string;
+  enabled: boolean;
+  /** Wakes allowed before Auto-fix stops on its own; turning it back on starts over. */
+  maxWakes: number;
+  /** The conversation it wakes, when it is not this one and the viewer can open it. */
+  ownerTopic: { agentId: string | null; id: string; title: string | null } | null;
+  /** The conversation it wakes; `null` when none is linked. */
+  ownerTopicId: string | null;
+  wakeCount: number;
+}
+
 export interface TopicPullRequestScmState {
+  autoFix: TopicPullRequestAutoFix;
   ciStatus: 'failure' | 'pending' | 'success' | 'unknown' | null;
   isDraft: boolean;
   mergedAt: Date | null;

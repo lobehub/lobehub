@@ -39,6 +39,7 @@ interface LocalFilePreviewKeyParams {
   resourceScope?: 'workspace';
   /** Topic scope when the previewed file lives in the topic's cloud sandbox. */
   sandboxTopicId?: string;
+  topicId?: string;
   workingDirectory: string;
 }
 
@@ -554,6 +555,7 @@ export const localFileKeys = {
       filePath,
       resourceScope,
       sandboxTopicId,
+      topicId,
       workingDirectory,
     }: LocalFilePreviewKeyParams) => [
       'localFile:preview',
@@ -563,6 +565,7 @@ export const localFileKeys = {
       accept ?? 'any',
       allowExternalFile ? 'external' : 'workspace',
       resourceScope ?? 'single-file',
+      ...(deviceId && topicId ? [topicId] : []),
     ],
   ),
   projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [

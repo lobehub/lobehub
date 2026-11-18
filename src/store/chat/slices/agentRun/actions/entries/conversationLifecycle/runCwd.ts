@@ -189,11 +189,6 @@ export const resolveSendRunCwd = async ({
   agencyConfig: LobeAgentAgencyConfig | undefined;
   chatConfig: LobeAgentChatConfig | undefined;
   currentDeviceId: string | undefined;
-  /**
-   * The directory the composer prepared for a topic this send creates (a
-   * worktree made just before sending). Outranks the staged project directory
-   * and any handoff source: it is where the user chose to start.
-   */
   draftWorkingDirectory?: WorkingDirConfig;
   existingTopic: Pick<ChatTopic, 'metadata'> | undefined;
   heterogeneousProvider: HeterogeneousProviderConfig | undefined;
@@ -281,7 +276,7 @@ export const resolveSendRunCwd = async ({
     agentWorkingDirectoryConfig,
     existingTopic,
     inheritedTopic:
-      !stagedDirectoryPath && !draftWorkingDirectory && resolvesRunCwd ? inheritedTopic : undefined,
+      !draftWorkingDirectory && !stagedDirectoryPath && resolvesRunCwd ? inheritedTopic : undefined,
     resolvePath: resolveWorkingDirPath,
     runMachine: { deviceId: runCwdDeviceId, target: runEffectiveTarget },
   });

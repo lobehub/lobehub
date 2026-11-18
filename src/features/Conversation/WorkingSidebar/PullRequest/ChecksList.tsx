@@ -6,7 +6,7 @@ import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { electronSystemService } from '@/services/electron/system';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { OverviewRow } from '../Overview/OverviewRow';
 import { formatCheckDuration, getCheckVisual, TONE_COLOR } from './prVisual';
@@ -26,6 +26,7 @@ const ChecksList = memo<ChecksListProps>(({ checks }) => {
   return (
     <div {...stylex.props(styles.list)}>
       {checks.map((check, index) => {
+        const { detailsUrl } = check;
         const visual = getCheckVisual(check.status);
         const duration =
           check.status === 'pending' && !check.startedAt
@@ -46,14 +47,10 @@ const ChecksList = memo<ChecksListProps>(({ checks }) => {
                   <span>{t('workingPanel.pr.check.optional')}</span>
                 )}
                 {duration && <span {...stylex.props(styles.duration)}>{duration}</span>}
-                {check.detailsUrl && <Icon icon={ExternalLinkIcon} size={12} />}
+                {detailsUrl && <Icon icon={ExternalLinkIcon} size={12} />}
               </>
             }
-            onClick={
-              check.detailsUrl
-                ? () => void electronSystemService.openExternalLink(check.detailsUrl!)
-                : undefined
-            }
+            onClick={detailsUrl ? () => openTrustedExternalUrl(detailsUrl) : undefined}
           />
         );
       })}

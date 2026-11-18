@@ -40,7 +40,7 @@ export const agentMenuConnectors = (
 export const useAgentMenuConnectors = (agentId?: string): ConnectorWithTools[] => {
   const inWorkspace = !!useActiveWorkspaceId();
   const privateAgent = useAgentStore(
-    (s) => !!agentId && s.agentMap[agentId]?.visibility === 'private',
+    (s) => !!agentId && s.agentMap?.[agentId]?.visibility === 'private',
   );
   const connectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
 
@@ -81,7 +81,7 @@ export const useUnpinDeletedConnector = (agentId?: string) => {
         agentId,
         inWorkspace: !!getActiveWorkspaceId(),
         privateAgent:
-          !!agentId && useAgentStore.getState().agentMap[agentId]?.visibility === 'private',
+          !!agentId && useAgentStore.getState().agentMap?.[agentId]?.visibility === 'private',
       };
       const connectors = connectorSelectors.userMcpConnectors(useToolStore.getState());
       if (agentStillLoadsIdentifier(connectors, deleted, context)) return;

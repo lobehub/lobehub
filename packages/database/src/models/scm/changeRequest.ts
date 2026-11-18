@@ -338,6 +338,8 @@ export class ScmChangeRequestModel {
           eq(scmChangeRequests.state, 'open'),
           eq(scmChangeRequests.isDraft, false),
           lt(scmChangeRequests.wakeCount, maxWakes),
+          // Auto-fix turned off for this pull request: nothing will wake it.
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') <> 'false'`,
           ownedByScope(scope),
         ),
       )
@@ -626,27 +628,84 @@ export class ScmChangeRequestModel {
       return row ?? null;
     });
 
-  /** Fill in links that are still null. Never overwrites a link already set. */
+  /**
+   * Fill in links that are still null. Never overwrites a link already set.
+   *
+   * The null check lives in the UPDATE itself (`COALESCE`), not in a read
+   * first: a concurrent `pull_request` ingest filling a link between a
+   * read-modify-write's two statements would otherwise be overwritten.
+   * `guard` narrows the same statement further (e.g. a scope fence); a row
+   * that fails it is untouched. Returns the row after the update, `null`
+   * when it does not exist or the guard refused it.
+   */
   static attachLinks = async (
     db: LobeChatDatabase,
     id: string,
     links: ScmChangeRequestLinks,
+    guard?: SQL,
   ): Promise<ScmChangeRequestItem | null> => {
-    const existing = await ScmChangeRequestModel.findById(db, id);
-    if (!existing) return null;
-
-    const set: Partial<ScmChangeRequestLinks> = {};
+    const set: Record<string, SQL> = {};
     for (const key of ['acceptanceId', 'installationId', 'taskId', 'topicId', 'workId'] as const) {
-      if (!existing[key] && links[key]) set[key] = links[key];
+      if (links[key]) {
+        set[key] = sql`coalesce(${scmChangeRequests[key]}, ${links[key]})`;
+      }
     }
-    if (Object.keys(set).length === 0) return existing;
+    if (Object.keys(set).length === 0) return ScmChangeRequestModel.findById(db, id);
 
     const [row] = await db
       .update(scmChangeRequests)
       .set({ ...set, updatedAt: new Date() })
-      .where(eq(scmChangeRequests.id, id))
+      .where(and(eq(scmChangeRequests.id, id), guard))
       .returning();
-    return row;
+    return row ?? null;
+  };
+
+  /**
+   * Backfill the row for a pull request a Work registration just tied to a
+   * conversation — but only when the row lives in the Work's own scope.
+   * Provider events re-resolve links on every `pull_request` delivery, so
+   * this covers the gap between the last delivery and the next: a review or
+   * a failing check in between would otherwise find no conversation to
+   * wake. Fill-only like the event path; a link already set is never
+   * replaced.
+   */
+  static attachPullRequestWork = async (
+    db: LobeChatDatabase,
+    params: {
+      number: number;
+      repoFullName: string;
+      scope: { userId: string; workspaceId?: string | null };
+      topicId?: string | null;
+      workId: string;
+    },
+  ): Promise<void> => {
+    const row = await ScmChangeRequestModel.findByIdentityIgnoringCase(
+      db,
+      'github',
+      params.repoFullName,
+      params.number,
+    );
+    if (!row) return;
+
+    // A row routed to another scope learns nothing: its `topicId` is looked
+    // up under the row's owner when a wake fires, so a foreign conversation
+    // would occupy a fill-only slot the right link can never take. The check
+    // rides inside the UPDATE — a row re-routed between our read and write
+    // is refused, not written.
+    await ScmChangeRequestModel.attachLinks(
+      db,
+      row.id,
+      {
+        topicId: params.topicId,
+        workId: params.workId,
+      },
+      and(
+        eq(scmChangeRequests.userId, params.scope.userId),
+        params.scope.workspaceId == null
+          ? isNull(scmChangeRequests.workspaceId)
+          : eq(scmChangeRequests.workspaceId, params.scope.workspaceId),
+      ),
+    );
   };
 
   /**
@@ -888,8 +947,10 @@ export class ScmChangeRequestModel {
    * Redis there is no debounce, so two webhooks landing together both read
    * the same `wakeCount` and a read-modify-write would lose one increment.
    * A conditional `UPDATE … WHERE wake_count < max` lets exactly one of them
-   * through per remaining slot. Returns the new count, or `null` when the
-   * cap is already spent.
+   * through per remaining slot. The same condition holds the pull request's
+   * Auto-fix switch: a wake that read the row before the person turned it
+   * off, and was still building its prompt, is refused here. Returns the
+   * new count, or `null` when the cap is spent or Auto-fix is off.
    */
   static reserveWake = async (
     db: LobeChatDatabase,
@@ -914,7 +975,13 @@ export class ScmChangeRequestModel {
         updatedAt: now,
         wakeCount: sql`${scmChangeRequests.wakeCount} + 1`,
       })
-      .where(and(eq(scmChangeRequests.id, id), lt(scmChangeRequests.wakeCount, max)))
+      .where(
+        and(
+          eq(scmChangeRequests.id, id),
+          lt(scmChangeRequests.wakeCount, max),
+          sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') <> 'false'`,
+        ),
+      )
       .returning({ wakeCount: scmChangeRequests.wakeCount });
 
     return reserved?.wakeCount ?? null;
@@ -969,6 +1036,44 @@ export class ScmChangeRequestModel {
         updatedAt: new Date(),
       })
       .where(eq(scmChangeRequests.id, id));
+  };
+
+  /**
+   * Turn Auto-fix on or off for one change request the scope owns — the
+   * tenant whose conversation it wakes. Atomic on the metadata bag, like
+   * every other writer here. Turning it off drops a wake the debounce window
+   * is still holding, so an opt-out is never followed by a run; turning it
+   * back on from off starts the wake count over, since the person asked the
+   * agent to keep fixing. Returns `null` when the scope does not own the row.
+   */
+  static setAutoFix = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    id: string,
+    enabled: boolean,
+  ): Promise<{ autoFix: boolean; wakeCount: number } | null> => {
+    const wasOff = sql`coalesce(${scmChangeRequests.metadata} ->> 'autoFix', '') = 'false'`;
+    const flag = sql`${JSON.stringify({ autoFix: enabled })}::jsonb`;
+
+    const [updated] = await db
+      .update(scmChangeRequests)
+      .set(
+        enabled
+          ? {
+              metadata: sql`${scmChangeRequests.metadata} || ${flag}`,
+              updatedAt: new Date(),
+              wakeCount: sql`case when ${wasOff} then 0 else ${scmChangeRequests.wakeCount} end`,
+            }
+          : {
+              metadata: sql`(${scmChangeRequests.metadata} - 'pendingWake') || ${flag}`,
+              updatedAt: new Date(),
+            },
+      )
+      .where(and(eq(scmChangeRequests.id, id), ownedByScope(scope)))
+      .returning({ metadata: scmChangeRequests.metadata, wakeCount: scmChangeRequests.wakeCount });
+
+    if (!updated) return null;
+    return { autoFix: updated.metadata?.autoFix !== false, wakeCount: updated.wakeCount };
   };
 
   /** Hand a reserved wake back when the run never started. */

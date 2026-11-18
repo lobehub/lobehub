@@ -14,6 +14,7 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeftRightIcon,
   MoreHorizontalIcon,
@@ -27,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import AddAgentMemberModal from '@/features/AddAgentMemberModal';
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
@@ -38,6 +40,21 @@ import { directoryAgentName } from '../WorkingDirectories/useDirectoryAgent';
 import { openEditMemberModal } from './EditMemberModal';
 
 type ProjectMember = NonNullable<ProjectDetail['agents']>[number];
+
+const styles = stylex.create({
+  agentLink: {
+    display: 'flex',
+    flex: '1',
+    gap: 12,
+    alignItems: 'center',
+    minWidth: 0,
+    color: 'inherit',
+  },
+  name: {
+    textDecorationLine: { default: 'none', [stylex.when.ancestor(':hover')]: 'underline' },
+    textUnderlineOffset: 3,
+  },
+});
 
 const rowStyle = (index: number) =>
   index ? { borderTop: `1px solid ${cssVar.colorBorderSecondary}` } : undefined;
@@ -189,31 +206,36 @@ export function ProjectMemberSettings({ detail }: { detail: ProjectDetail }) {
               padding={16}
               style={rowStyle(index)}
             >
-              <AgentAvatar
-                agentId={member.agent.id}
-                avatar={member.agent.avatar}
-                background={member.agent.backgroundColor ?? undefined}
-                shape={'circle'}
-                size={36}
-                title={name}
-              />
-              <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-                <Flexbox horizontal align="center" gap={8}>
-                  <Text ellipsis weight={500}>
-                    {name}
+              <WorkspaceLink
+                to={`/agent/${member.agent.id}/profile`}
+                {...stylex.props(stylex.defaultMarker(), styles.agentLink)}
+              >
+                <AgentAvatar
+                  agentId={member.agent.id}
+                  avatar={member.agent.avatar}
+                  background={member.agent.backgroundColor ?? undefined}
+                  shape={'circle'}
+                  size={36}
+                  title={name}
+                />
+                <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+                  <Flexbox horizontal align="center" gap={8}>
+                    <Text ellipsis weight={500}>
+                      <span {...stylex.props(styles.name)}>{name}</span>
+                    </Text>
+                    {isCoordinator ? (
+                      <Tag color="primary">{t('directories.coordinator')}</Tag>
+                    ) : member.binding.role ? (
+                      <Tag>{member.binding.role}</Tag>
+                    ) : null}
+                  </Flexbox>
+                  <Text ellipsis fontSize={12} type="secondary">
+                    {isCoordinator
+                      ? t('members.coordinatorResponsibility')
+                      : member.binding.responsibility || t('members.noResponsibility')}
                   </Text>
-                  {isCoordinator ? (
-                    <Tag color="primary">{t('directories.coordinator')}</Tag>
-                  ) : member.binding.role ? (
-                    <Tag>{member.binding.role}</Tag>
-                  ) : null}
                 </Flexbox>
-                <Text ellipsis fontSize={12} type="secondary">
-                  {isCoordinator
-                    ? t('members.coordinatorResponsibility')
-                    : member.binding.responsibility || t('members.noResponsibility')}
-                </Text>
-              </Flexbox>
+              </WorkspaceLink>
               {isCoordinator && canManage && replaceButton(member)}
               {!isCoordinator && canManage && (
                 <>
