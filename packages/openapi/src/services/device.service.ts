@@ -57,6 +57,8 @@ const UNAVAILABLE_ERRORS = new Set([
  * What the device's `runCommand` reports (`RunCommandState`), read
  * defensively: older clients send the raw snake_case shell result, or less.
  */
+const OUTPUT_FILE = z.object({ truncated: z.boolean().optional() }).optional();
+
 const RunCommandStateSchema = z
   .object({
     commandId: z.string(),
@@ -69,7 +71,12 @@ const RunCommandStateSchema = z
     stdout: z.string(),
     success: z.boolean(),
   })
-  .partial();
+  .partial()
+  .extend({
+    // what the device kept inline is a head/tail preview when these say so
+    output_files: z.object({ stderr: OUTPUT_FILE, stdout: OUTPUT_FILE }).partial().optional(),
+    outputFiles: z.object({ stderr: OUTPUT_FILE, stdout: OUTPUT_FILE }).partial().optional(),
+  });
 
 const toDevice = (item: DeviceListItem): DeviceResponse => ({
   architecture: item.architecture ?? null,
@@ -400,6 +407,14 @@ export class DeviceRestService extends BaseService {
     ].join(' ');
 
     const result = await this.runOnDevice(id, command, 'Read the git log', 30_000);
+    // a cut-down preview would parse into a history with a silent gap in the middle
+    if (result.truncated) {
+      throw new ApiException(
+        413,
+        'payload_too_large',
+        'This git history is larger than the device returns inline; request fewer commits with `limit`',
+      );
+    }
     // an unknown ref or a directory that is no repository exits non-zero
     if (!result.success || result.running || result.exitCode !== 0) {
       throw new ApiException(
@@ -559,6 +574,9 @@ export class DeviceRestService extends BaseService {
 
     return {
       exitCode: parsed.exitCode ?? parsed.exit_code ?? null,
+      truncated: [parsed.outputFiles, parsed.output_files].some(
+        (files) => !!files?.stdout?.truncated || !!files?.stderr?.truncated,
+      ),
       output: parsed.output ?? parsed.stdout ?? result.content ?? '',
       running: parsed.running ?? false,
       shellId: parsed.commandId ?? parsed.shell_id ?? null,

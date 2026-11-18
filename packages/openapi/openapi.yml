@@ -42143,6 +42143,21 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Payload too large
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "422":
           content:
             application/json:
@@ -42231,8 +42246,9 @@ paths:
             default: 20
             type: integer
             minimum: 1
-            maximum: 100
-          description: Commits to return, newest first.
+            maximum: 50
+          description: Commits to return, newest first (1–50). A history too large for the
+            device’s output budget answers 413; ask for fewer.
         - in: query
           name: ref
           schema:
@@ -42832,6 +42848,11 @@ paths:
                           - "null"
                       success:
                         type: boolean
+                      truncated:
+                        type: boolean
+                        description: True when the output was too large and `output` / `stdout` /
+                          `stderr` hold only its head and tail; the full output
+                          stays on the device.
                     required:
                       - exitCode
                       - output
@@ -42840,6 +42861,7 @@ paths:
                       - stderr
                       - stdout
                       - success
+                      - truncated
                   message:
                     type: string
                   success:

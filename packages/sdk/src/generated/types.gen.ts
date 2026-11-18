@@ -15482,7 +15482,7 @@ export type GetApiV1DevicesByIdGitLogData = {
          */
         path: string;
         /**
-         * Commits to return, newest first.
+         * Commits to return, newest first (1–50). A history too large for the device’s output budget answers 413; ask for fewer.
          */
         limit?: number;
         /**
@@ -15510,6 +15510,10 @@ export type GetApiV1DevicesByIdGitLogErrors = {
      * Resource not found
      */
     404: ApiError;
+    /**
+     * Payload too large
+     */
+    413: ApiError;
     /**
      * Unprocessable content
      */
@@ -15864,6 +15868,10 @@ export type PostApiV1DevicesByIdCommandsResponses = {
             stderr: string | null;
             stdout: string | null;
             success: boolean;
+            /**
+             * True when the output was too large and `output` / `stdout` / `stderr` hold only its head and tail; the full output stays on the device.
+             */
+            truncated: boolean;
         };
         message?: string;
         success: true;

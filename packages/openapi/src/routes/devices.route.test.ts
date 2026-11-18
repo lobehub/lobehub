@@ -377,7 +377,7 @@ describe('reading devices', () => {
     const cases = [
       `/devices/${DEVICE.ownerPersonal}/git/status`,
       `/devices/${DEVICE.ownerPersonal}/git/log?path=${REPO}&ref=--upload-pack=evil`,
-      `/devices/${DEVICE.ownerPersonal}/git/log?path=${REPO}&limit=1000`,
+      `/devices/${DEVICE.ownerPersonal}/git/log?path=${REPO}&limit=51`,
       `/devices/${DEVICE.ownerPersonal}/files`,
       `/devices/${DEVICE.ownerPersonal}?metricsWindowMs=10`,
     ];
@@ -653,6 +653,26 @@ describe('git', () => {
     expect(gateway.listProjectDirectory).not.toHaveBeenCalled();
   });
 
+  it('refuses to return a git history the device cut to a preview', async () => {
+    gateway.executeToolCall.mockResolvedValue({
+      ...commandState('head…[omitted]…tail'),
+      state: {
+        ...commandState('head…[omitted]…tail').state,
+        outputFiles: {
+          stderr: { path: '/tmp/e', size: 0, truncated: false },
+          stdout: { path: '/tmp/o', size: 29_400, truncated: true },
+        },
+      },
+    });
+
+    const res = await call(`/devices/${DEVICE.ownerPersonal}/git/log?path=${REPO}&limit=50`, {
+      key: KEYS.read,
+    });
+
+    expect(res.status).toBe(413);
+    expect((await json(res)).message).toContain('limit');
+  });
+
   it('answers 422 when git exits non-zero, though the device says the shell ran', async () => {
     gateway.executeToolCall.mockResolvedValue({
       content: "fatal: bad revision 'nope'",
@@ -737,6 +757,7 @@ describe('commands', () => {
       stderr: null,
       stdout: 'hello\n',
       success: true,
+      truncated: false,
     });
     const [params, toolCall, timeout] = gateway.executeToolCall.mock.calls[0];
     expect(params).toEqual({

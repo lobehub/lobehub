@@ -162,7 +162,7 @@ DeviceRoutes.get(
   routeDoc({
     data: DeviceGitLogSchema,
     description: 'Recent commits of a git working directory on the device, newest first.',
-    errors: [400, 404, 422, 503],
+    errors: [400, 404, 413, 422, 503],
     summary: 'Get git log',
     tags: TAGS,
   }),

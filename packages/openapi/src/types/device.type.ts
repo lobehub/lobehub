@@ -227,9 +227,11 @@ export const DeviceGitLogQuerySchema = DeviceGitQuerySchema.extend({
     .number()
     .int()
     .min(1)
-    .max(100)
+    .max(50)
     .default(20)
-    .describe('Commits to return, newest first.'),
+    .describe(
+      'Commits to return, newest first (1–50). A history too large for the device’s output budget answers 413; ask for fewer.',
+    ),
   ref: z
     .string()
     .max(255)
@@ -356,6 +358,11 @@ export const DeviceCommandResultSchema = z.object({
   stderr: z.string().nullable(),
   stdout: z.string().nullable(),
   success: z.boolean(),
+  truncated: z
+    .boolean()
+    .describe(
+      'True when the output was too large and `output` / `stdout` / `stderr` hold only its head and tail; the full output stays on the device.',
+    ),
 });
 
 export type DeviceResponse = z.infer<typeof DeviceSchema>;
