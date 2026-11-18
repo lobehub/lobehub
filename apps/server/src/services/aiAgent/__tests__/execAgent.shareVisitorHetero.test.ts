@@ -9,13 +9,18 @@ const {
   mockGetScopedOnlineDevices,
   mockGetUserSettings,
   mockMessageCreate,
+  mockDispatchHeteroAgent,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
+  mockDispatchHeteroAgent: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetScopedOnlineDevices: vi.fn(),
   mockGetUserSettings: vi.fn(),
   mockMessageCreate: vi.fn(),
 }));
+
+// The share gate runs before dispatch; record what the dispatch is handed.
+vi.mock('../pipeline/heteroDispatch', () => ({ dispatchHeteroAgent: mockDispatchHeteroAgent }));
 
 vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
   getScopedOnlineDevices: mockGetScopedOnlineDevices,
@@ -272,5 +277,12 @@ describe('AiAgentService.execAgent - share visitors and heterogeneous agents', (
       (e: unknown) => e as { message?: string },
     );
     expect(error?.message).not.toBe('ShareHeteroDeviceUnavailable');
+    // The dispatch does not look at online devices, so it must be handed the
+    // device the gate picked, or it reports the device as unavailable.
+    expect(mockDispatchHeteroAgent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ requestedDeviceId: 'device-2' }),
+    );
   });
 });

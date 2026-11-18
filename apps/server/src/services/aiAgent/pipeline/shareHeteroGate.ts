@@ -42,6 +42,10 @@ export interface AssertShareHeteroAllowedParams {
  * which would hold creator credentials in a box the visitor's prompt
  * controls. An offline or unset device is a clear refusal the visitor can
  * retry, instead of a failed turn counted against the topic.
+ *
+ * Returns the device the share run goes to, so the dispatch routes there too:
+ * an `auto` Agent's single online device is found only here, because the
+ * dispatch does not look at online devices.
  */
 export const assertShareHeteroAllowed = async ({
   agencyConfig,
@@ -53,7 +57,7 @@ export const assertShareHeteroAllowed = async ({
   shareGate,
   trigger,
   workspaceId,
-}: AssertShareHeteroAllowedParams) => {
+}: AssertShareHeteroAllowedParams): Promise<string | undefined> => {
   if (!shareGate) return;
   const type = heterogeneousType ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
   if (!type) return;
@@ -64,7 +68,7 @@ export const assertShareHeteroAllowed = async ({
     });
 
   // Online devices are passed in so an `auto` Agent with one online device
-  // resolves to it, exactly as the dispatch will.
+  // resolves to it.
   const onlineDeviceIds = (await getScopedOnlineDevices(db, ownerUserId, workspaceId))
     .filter((device) => device.online)
     .map((device) => device.deviceId);
@@ -83,4 +87,6 @@ export const assertShareHeteroAllowed = async ({
       code: 'PRECONDITION_FAILED',
       message: ChatErrorType.ShareHeteroDeviceUnavailable,
     });
+
+  return plan.deviceId;
 };

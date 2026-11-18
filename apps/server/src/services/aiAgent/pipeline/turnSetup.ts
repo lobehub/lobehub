@@ -555,8 +555,8 @@ export const setupTurn = async (
   // Share visitors run Claude Code / Codex only on the granted device. Checked
   // against the agent-level config before any row is written, and re-asserted
   // once a reused topic's pinned model and device are applied.
-  const assertShareHetero = (runModel: string) =>
-    assertShareHeteroAllowed({
+  const assertShareHetero = async (runModel: string) => {
+    const shareDeviceId = await assertShareHeteroAllowed({
       agencyConfig: agentConfig.agencyConfig,
       db: deps.db,
       heterogeneousType: heterogeneousProvider?.type,
@@ -567,6 +567,14 @@ export const setupTurn = async (
       trigger,
       workspaceId: deps.workspaceId,
     });
+    // Route the dispatch to the device the gate selected (an `auto` Agent's
+    // single online device), which the dispatch would not find on its own.
+    if (shareDeviceId && !resolvedRequestedDeviceId && !isFixedExecutionTargetSelection) {
+      resolvedRequestedDeviceId = shareDeviceId;
+      effectiveRequestedDeviceId = shareDeviceId;
+      topicBoundDeviceId = shareDeviceId;
+    }
+  };
   await assertShareHetero(model);
 
   const assertProjectDirectoryAccess = () => {
