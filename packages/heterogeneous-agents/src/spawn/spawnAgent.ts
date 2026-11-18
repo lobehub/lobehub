@@ -781,6 +781,8 @@ const spawnCliAgent = async (
         const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);
         return live.send(plan.stdin, sendOptions?.uuid);
       },
+      // Uploaded images go in as image blocks of the same stream-json message.
+      supportsSteerImageAttachments: true as const,
     }),
     kill: (signal: NodeJS.Signals = 'SIGINT') => {
       killedByUs = true;
