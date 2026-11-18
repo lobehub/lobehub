@@ -804,6 +804,8 @@ export class TaskModel {
         : data;
       const updated = await scoped.update(id, writeData);
       if (!updated) return null;
+      // The status picker and other actor-logged edits land here, not in `updateStatus`.
+      this.announceStatusChange(updated, before.status);
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];
 

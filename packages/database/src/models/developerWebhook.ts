@@ -108,12 +108,49 @@ export class WebhookEndpointModel {
     if (value.enabled === false)
       patch.disabledReason = sql`CASE WHEN ${webhookEndpoints.enabled} THEN ${'manual' satisfies WebhookDisabledReason} ELSE ${webhookEndpoints.disabledReason} END`;
 
-    const [row] = await this.db
-      .update(webhookEndpoints)
-      .set(patch)
-      .where(and(eq(webhookEndpoints.id, id), this.ownership()))
-      .returning(endpointViewColumns);
-    return row;
+    // Queued deliveries are sent to the endpoint's current URL. Moving the endpoint
+    // must not carry payloads queued under the old destination (and possibly events
+    // it no longer subscribes to) to the new one, so they are settled in the same write.
+    if (value.url === undefined) {
+      const [row] = await this.db
+        .update(webhookEndpoints)
+        .set(patch)
+        .where(and(eq(webhookEndpoints.id, id), this.ownership()))
+        .returning(endpointViewColumns);
+      return row;
+    }
+
+    return this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ url: webhookEndpoints.url })
+        .from(webhookEndpoints)
+        .where(and(eq(webhookEndpoints.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!current) return undefined;
+
+      const [row] = await tx
+        .update(webhookEndpoints)
+        .set(patch)
+        .where(eq(webhookEndpoints.id, id))
+        .returning(endpointViewColumns);
+      if (current.url !== value.url)
+        await tx
+          .update(webhookDeliveries)
+          .set({
+            error: 'Not sent: the endpoint URL changed',
+            nextAttemptAt: null,
+            status: 'failed' satisfies WebhookDeliveryStatus,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(webhookDeliveries.endpointId, id),
+              inArray(webhookDeliveries.status, ['pending', 'retrying']),
+            ),
+          );
+      return row;
+    });
   };
 
   rotateSecret = async (

@@ -8,7 +8,7 @@ import {
   instrumentDatabaseEvents,
   setDatabaseEventListener,
 } from '../../events';
-import { users, webhookEndpoints, workspaces } from '../../schemas';
+import { users, webhookDeliveries, webhookEndpoints, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { WebhookDeliveryWorkerModel, WebhookEndpointModel } from '../developerWebhook';
 import { GoalModel } from '../goal';
@@ -148,6 +148,35 @@ describe('WebhookEndpointModel', () => {
     });
   });
 
+  it('settles queued deliveries when the URL changes, so they never reach the new one', async () => {
+    const model = new WebhookEndpointModel(serverDB, userId);
+    const endpoint = await model.create(endpointInput());
+    const envelope = {
+      createdAt: new Date().toISOString(),
+      data: { message: 'hi', webhookId: endpoint.id },
+      id: 'evt_queued',
+      type: 'webhook.test',
+      workspaceId: null,
+    } as const;
+    const queued = await model.createDelivery(endpoint, envelope);
+    const delivered = await model.createDelivery(endpoint, { ...envelope, id: 'evt_done' });
+    await serverDB
+      .update(webhookDeliveries)
+      .set({ status: 'succeeded' })
+      .where(eq(webhookDeliveries.id, delivered.id));
+
+    // Same URL (or no URL in the patch) leaves the queue alone.
+    await model.update(endpoint.id, { description: 'x', url: endpoint.url });
+    expect((await model.findDelivery(endpoint.id, queued.id))?.status).toBe('pending');
+
+    await model.update(endpoint.id, { url: 'https://moved.example.com/hook' });
+    expect(await model.findDelivery(endpoint.id, queued.id)).toMatchObject({
+      error: 'Not sent: the endpoint URL changed',
+      status: 'failed',
+    });
+    expect((await model.findDelivery(endpoint.id, delivered.id))?.status).toBe('succeeded');
+  });
+
   it('lists deliveries of an endpoint newest first, only for its owner', async () => {
     const model = new WebhookEndpointModel(serverDB, userId);
     const endpoint = await model.create(endpointInput());
@@ -212,6 +241,22 @@ describe('domain events announced by models', () => {
         },
       ],
     ]);
+  });
+
+  it('task.status_changed from an actor-logged edit (the status picker)', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Picked' });
+    const listener = capture();
+
+    await tasks.updateWithLog(task.id, { status: 'running' }, { userId });
+    await tasks.updateWithLog(task.id, { description: 'no status change' } as never, { userId });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][3]).toMatchObject({
+      previousStatus: task.status,
+      status: 'running',
+      taskId: task.id,
+    });
   });
 
   it('task.status_changed from deferred completion, CAS batches and bulk updates', async () => {
