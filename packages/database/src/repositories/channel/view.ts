@@ -1,4 +1,9 @@
-import { channelMessageEditedAt, channelMessageReceipt, channelMessageVia } from '@lobechat/types';
+import {
+  channelMessageDeletedAt,
+  channelMessageEditedAt,
+  channelMessageReceipt,
+  channelMessageVia,
+} from '@lobechat/types';
 import {
   and,
   asc,
@@ -36,7 +41,7 @@ import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
 
-const publicMessageColumns = {
+export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
   senderAgentAvatar: agents.avatar,
   senderAgentName: agents.name,
@@ -55,7 +60,7 @@ type MessageRow = typeof channelMessages.$inferSelect & {
   senderUsername: string | null;
 };
 
-const publicMessage = (row: MessageRow, fileIds: string[]) => {
+export const publicMessage = (row: MessageRow, fileIds: string[]) => {
   const {
     senderAgentAvatar,
     senderAgentName,
@@ -75,6 +80,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
     receipt: (() => {
@@ -460,8 +466,11 @@ export const readChannelView = async (
     : [];
   const quotes = new Map(
     quoted.map((row) => {
-      const { author, content, id, sequence, threadId } = publicMessage(row, []);
-      return [id, { author, content: content.slice(0, 240), id, sequence, threadId }] as const;
+      const { author, content, deletedAt, id, sequence, threadId } = publicMessage(row, []);
+      return [
+        id,
+        { author, content: content.slice(0, 240), deletedAt, id, sequence, threadId },
+      ] as const;
     }),
   );
   const files = await fileIdsByMessage(tx, [

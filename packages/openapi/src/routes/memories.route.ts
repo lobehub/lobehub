@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
-import { describeRoute } from 'hono-openapi';
+import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { MemoryController } from '../controllers/memory.controller';
 import { requireAuth } from '../middleware/auth';
@@ -10,7 +11,14 @@ import {
   requireAnyPermissionWithApiKeyScope,
   requireApiKeyScope,
 } from '../middleware/permission-check';
-import { MemoryCategoryParamSchema, MemoryEntryPathParamSchema } from '../types/memory.type';
+import { DeletedResourceSchema, DeletedResourcesSchema } from '../types/common.type';
+import {
+  MemoryCategoryEntriesSchema,
+  MemoryCategoryParamSchema,
+  MemoryEntryPathParamSchema,
+  MemoryPersonaSchema,
+  MemoryPersonaVersionSchema,
+} from '../types/memory.type';
 
 /**
  * User memory routes.
@@ -38,7 +46,9 @@ const memoryRead = requireApiKeyScope('user:read');
 /** GET /api/v1/memories/persona */
 MemoryRoutes.get(
   '/persona',
-  describeRoute({
+  routeDoc({
+    data: MemoryPersonaSchema.nullable(),
+    description: '`data` is null until a persona has been written.',
     operationId: 'getMemoryPersona',
     summary: 'Get the current persona document',
     tags: ['memories'],
@@ -51,7 +61,8 @@ MemoryRoutes.get(
 /** GET /api/v1/memories/persona/versions */
 MemoryRoutes.get(
   '/persona/versions',
-  describeRoute({
+  routeDoc({
+    data: z.array(MemoryPersonaVersionSchema),
     operationId: 'listMemoryPersonaVersions',
     summary: 'List persona document versions',
     tags: ['memories'],
@@ -64,7 +75,10 @@ MemoryRoutes.get(
 /** DELETE /api/v1/memories — purge everything and allow re-extraction. */
 MemoryRoutes.delete(
   '/',
-  describeRoute({
+  routeDoc({
+    data: DeletedResourcesSchema,
+    description:
+      'Removes every memory, the persona and the per-topic extraction status; `count` is the number of memories removed.',
     operationId: 'deleteAllMemories',
     summary: 'Delete all memory entries',
     tags: ['memories'],
@@ -77,7 +91,13 @@ MemoryRoutes.delete(
 /** DELETE /api/v1/memories/:category/:id */
 MemoryRoutes.delete(
   '/:category/:id',
-  describeRoute({ operationId: 'deleteMemoryEntry', tags: ['memories'] }),
+  routeDoc({
+    data: DeletedResourceSchema,
+    errors: [404],
+    operationId: 'deleteMemoryEntry',
+    summary: 'Delete a memory entry',
+    tags: ['memories'],
+  }),
   requireAuth,
   memoryWrite,
   zValidator('param', MemoryEntryPathParamSchema),
@@ -87,7 +107,14 @@ MemoryRoutes.delete(
 /** GET /api/v1/memories/:category */
 MemoryRoutes.get(
   '/:category',
-  describeRoute({ operationId: 'listMemoryCategory', tags: ['memories'] }),
+  routeDoc({
+    data: MemoryCategoryEntriesSchema,
+    description:
+      'Every identity, or the newest entries of the other categories; the array shape follows `category`.',
+    operationId: 'listMemoryCategory',
+    summary: 'List the entries of a memory category',
+    tags: ['memories'],
+  }),
   requireAuth,
   memoryRead,
   zValidator('param', MemoryCategoryParamSchema),

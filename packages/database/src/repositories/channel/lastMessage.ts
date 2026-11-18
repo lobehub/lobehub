@@ -5,6 +5,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { channelMessages, channelThreads } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
+import { messageStands } from './tombstone';
 
 /** Characters of the latest message a Channel list item carries as its preview. */
 const LIST_PREVIEW_LENGTH = 200;
@@ -50,6 +51,7 @@ export const channelLastMessages = async (
     .where(
       and(
         inArray(channelMessages.channelId, channelIds),
+        messageStands(),
         or(isNull(channelMessages.threadId), notTrashed(channelThreads.isDeleted)),
       ),
     )

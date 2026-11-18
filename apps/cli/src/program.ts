@@ -36,6 +36,7 @@ import { registerNotifyCommand } from './commands/notify';
 import { registerLegacyPluginCommand } from './commands/plugin';
 import { registerProjectCommand } from './commands/project';
 import { registerProviderCommand } from './commands/provider';
+import { registerQuotaCommand } from './commands/quota';
 import { registerReadCommand } from './commands/read';
 import { registerRecallCommand } from './commands/recall';
 import { registerSearchCommand } from './commands/search';
@@ -91,6 +92,7 @@ export function createProgram() {
   registerManCommand(program);
   registerConnectCommand(program);
   registerDeviceCommand(program);
+  registerQuotaCommand(program);
   registerStatusCommand(program);
   registerDoctorCommand(program);
   registerDocCommand(program);

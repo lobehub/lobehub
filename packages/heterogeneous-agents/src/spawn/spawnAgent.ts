@@ -181,6 +181,8 @@ export interface SpawnAgentHandle {
    * collect for error reporting. The pipeline does not consume stderr.
    */
   stderr: NodeJS.ReadableStream;
+  /** The live session accepts uploaded images with their follow-up message. */
+  supportsSteerImageAttachments?: true;
 }
 
 /**

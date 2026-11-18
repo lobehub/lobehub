@@ -1473,85 +1473,29 @@ describe('StreamingExecutor actions', () => {
       );
     });
 
-    it('should use excludeDefaultToolIds (not skipDefaultTools) in manual mode for builtin agents', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = createUserMessage();
-
-      const generateToolsDetailed = vi.fn().mockReturnValue({
-        enabledManifests: [],
-        enabledToolIds: [],
-        tools: [],
-      });
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig({ skillActivateMode: 'manual' }),
-        isBuiltinAgent: true,
-        plugins: [],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed,
-      } as any);
-
-      result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      expect(generateToolsDetailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          // Must NOT use skipDefaultTools for builtin agents in manual mode
-          skipDefaultTools: undefined,
-          // Must use excludeDefaultToolIds to only exclude discovery tools
-          excludeDefaultToolIds: expect.arrayContaining(['lobe-activator', 'lobe-skill-store']),
-        }),
-      );
-    });
-
-    it('should use excludeDefaultToolIds in manual mode for regular agents', () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = createUserMessage();
-
-      const generateToolsDetailed = vi.fn().mockReturnValue({
-        enabledManifests: [],
-        enabledToolIds: [],
-        tools: [],
-      });
-
-      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
-        agentConfig: createMockAgentConfig(),
-        chatConfig: createMockChatConfig({ skillActivateMode: 'manual' }),
-        isBuiltinAgent: false,
-        plugins: [],
-      });
-      vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
-        generateToolsDetailed,
-      } as any);
-
-      result.current.internal_createAgentState({
-        messages: [userMessage],
-        parentMessageId: userMessage.id,
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
-
-      expect(generateToolsDetailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          skipDefaultTools: undefined,
-          excludeDefaultToolIds: expect.arrayContaining(['lobe-activator', 'lobe-skill-store']),
-        }),
-      );
-    });
+    it.each([true, false])(
+      'keeps manual-mode tools callable while omitting the activator (builtin: %s)',
+      (isBuiltinAgent) => {
+        const chatConfig = createMockChatConfig({ skillActivateMode: 'manual' });
+        const plugins = ['lobe-skill-store'];
+        vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+          agentConfig: createMockAgentConfig({ plugins }),
+          chatConfig,
+          isBuiltinAgent,
+          plugins,
+        });
+        useAiInfraStore.setState({ isInitAiProviderRuntimeState: false });
+        const userMessage = createUserMessage();
+        const { agentConfig } = useChatStore.getState().internal_createAgentState({
+          agentId: TEST_IDS.SESSION_ID,
+          messages: [userMessage],
+          parentMessageId: userMessage.id,
+        });
+        expect(agentConfig.enabledToolIds).toContain('lobe-skill-store');
+        expect(agentConfig.enabledToolIds).toContain('lobe-skills');
+        expect(agentConfig.enabledToolIds).not.toContain('lobe-activator');
+      },
+    );
 
     it('should not set excludeDefaultToolIds in auto mode', () => {
       act(() => {

@@ -245,9 +245,19 @@ export const contextEngineering = async ({
   let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
   if (isLobeToolsEnabled) {
     const toolState = getToolStoreState();
+    // Disabled tools and connectors the agent has off are in neither set: the
+    // engine dropped their manifests, so listing them would only invite an
+    // activation that cannot succeed.
+    const disabledIdSet = new Set(disabledPluginIds ?? []);
     const availableTools = toolSelectors
       .availableToolsForDiscovery(toolState, { agentId, topicId })
-      .filter((tool) => !enabledToolSet.has(tool.identifier));
+      // A connector row's tool set is disabled with its connector
+      .filter(
+        (tool) =>
+          !enabledToolSet.has(tool.identifier) &&
+          !disabledIdSet.has(tool.identifier) &&
+          !disabledIdSet.has(tool.connectorIdentifier ?? tool.identifier),
+      );
 
     if (availableTools.length > 0) {
       toolDiscoveryConfig = { availableTools };
@@ -282,6 +292,7 @@ export const contextEngineering = async ({
       },
       agentId,
       disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       // The Profile panel edits `activeAgentId` / `activeGroupId`, not the
       // builder agent that is answering.
       editingAgentId: tools?.includes(AgentBuilderIdentifier)

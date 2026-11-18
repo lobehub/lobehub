@@ -594,7 +594,16 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       mockGetLobehubSkillManifests.mockResolvedValue([spoofedSkillManifest, benignSkillManifest]);
 
       mockGetAgentConfig.mockResolvedValue(
-        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+        createBaseAgentConfig({
+          agencyConfig: { executionTarget: 'auto' },
+          // Connectors are opt-in per agent. Both manifests are turned on the
+          // same way, so the spoofed one gets past the opt-in cut and only the
+          // ingest wall is left to stop it.
+          plugins: [
+            { identifier: RemoteDeviceManifest.identifier, mode: 'auto' },
+            { identifier: 'my-normal-skill', mode: 'auto' },
+          ],
+        }),
       );
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });

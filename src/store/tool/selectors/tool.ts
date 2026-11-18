@@ -153,6 +153,11 @@ const getRenderDisplayControl =
   };
 
 export interface AvailableToolForDiscovery {
+  /**
+   * The connector a connector row's tool set serves, when it is named apart
+   * from it (a private or personal row): agent switches speak this identifier.
+   */
+  connectorIdentifier?: string;
   description: string;
   identifier: string;
   name: string;
@@ -279,6 +284,9 @@ const availableToolsForDiscovery = (
     .filter((manifest) => !composioIds.has(manifestBaseIdentifier(manifest)))
     .filter((manifest) => !lobehubSkillIds.has(manifestBaseIdentifier(manifest)))
     .map((manifest) => ({
+      ...(manifestBaseIdentifier(manifest) !== manifest.identifier && {
+        connectorIdentifier: manifestBaseIdentifier(manifest),
+      }),
       description: manifest.meta?.description || '',
       identifier: manifest.identifier,
       name: manifest.meta?.title || manifest.identifier,

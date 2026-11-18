@@ -74,7 +74,9 @@ describe('resolveToolRules', () => {
     expect(resolved.allowExplicitActivation).toBe(true);
     expect(resolved.rules['my-plugin']).toBe(true);
     expect(resolved.rules['scope-plugin']).toBe(true);
-    expect(resolved.rules['lobe-agent']).toBe(true);
+    expect(resolved.rules['lobe-activator']).toBe(true);
+    expect(resolved.rules['lobe-agent']).toBeUndefined();
+    expect(resolved.rules['lobe-skill-store']).toBeUndefined();
     for (const id of groupSupervisorToolIds) {
       expect(resolved.rules[id]).toBe(true);
       expect(resolved.defaultToolIds).toContain(id);

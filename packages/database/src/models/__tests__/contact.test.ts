@@ -377,6 +377,18 @@ describe('external contacts of a workspace', () => {
     await expect(bobInTeam().list()).rejects.toThrow('Not a member of this workspace');
   });
 
+  it('lists the workspaces I am an external contact of, while a member is paired with me', async () => {
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+    await inviteBob();
+    expect(await bobModel.listExternalWorkspaces()).toEqual([
+      { avatar: null, id: teamId, name: 'Team' },
+    ]);
+    // Members are never external, and the workspace goes once no member is paired with me.
+    expect(await aliceModel.listExternalWorkspaces()).toEqual([]);
+    await aliceInTeam.removeUser(bob);
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+  });
+
   it('lets the invitation lapse once the inviter leaves the workspace', async () => {
     const { requestId } = await carolInTeam.sendRequest(bob);
     await serverDB
@@ -523,5 +535,41 @@ describe('contact edge cases', () => {
     const [own] = await aliceModel.search('alice-helper');
 
     expect(own).toMatchObject({ agent: { agentId: aliceAgent }, relation: 'self', type: 'agent' });
+  });
+});
+
+describe('answering an invitation after the caller joined', () => {
+  it('refuses the invitation once the invitee is already a member', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    // Bob became a member by another route before answering, so the invitation is moot.
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId: bob, workspaceId: teamId });
+
+    await expect(bobInTeam().acceptRequest(requestId)).rejects.toThrow(
+      'Already a member of this workspace',
+    );
+  });
+
+  it('only a member of the workspace may open themselves to an external contact', async () => {
+    // In the personal space there is nothing to open: the caller is not a member of a team.
+    await expect(aliceModel.openTo(bob)).rejects.toThrow('Only members open themselves');
+  });
+
+  it('refuses an invitation whose sender is no longer a member', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    await serverDB.delete(workspaceMembers).where(eq(workspaceMembers.userId, alice));
+
+    await expect(bobModel.acceptRequest(requestId)).rejects.toThrow('Request not found');
+  });
+});
+
+describe('removing an external contact who is not one', () => {
+  it('refuses a member, and a person the workspace never paired', async () => {
+    // Carol is a member of the team, not an external contact.
+    await expect(aliceInTeam.removeExternal(carol)).rejects.toThrow('External contact not found');
+    await expect(aliceInTeam.removeExternal('contact-test-missing')).rejects.toThrow(
+      'External contact not found',
+    );
   });
 });
