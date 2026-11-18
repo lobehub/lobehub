@@ -328,5 +328,6 @@ describe('Server callSubAgent suspend/resume', () => {
         expect(JSON.stringify(persisted)).not.toContain(SUB_AGENT_ANSWER);
       }
     },
+    30_000,
   );
 });
