@@ -382,6 +382,9 @@ importers:
 
   ../../packages/device-gateway-client:
     dependencies:
+      '@lobechat/business-const':
+        specifier: workspace:*
+        version: link:../business/const
       '@lobechat/types':
         specifier: workspace:*
         version: link:../types
@@ -686,6 +689,9 @@ importers:
 
   ../../packages/types:
     dependencies:
+      '@lobechat/business-const':
+        specifier: workspace:*
+        version: link:../business/const
       '@lobehub/market-sdk':
         specifier: file:../../apps/desktop/../../vendor/lobehub-market-sdk-0.41.0-cpc.2.tgz
         version: file:../../vendor/lobehub-market-sdk-0.41.0-cpc.2.tgz(supports-color@9.4.0)(zod@4.6.5)
