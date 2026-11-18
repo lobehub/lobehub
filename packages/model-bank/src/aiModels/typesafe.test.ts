@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { typeSafeModels } from './typesafe';
 
 describe('typeSafeModels', () => {
-  it('publishes Jev 1.14 as an enabled decision model', () => {
+  it('publishes Jev 1.14 as an enabled, vendor-priced decision model', () => {
     expect(typeSafeModels).toEqual([
       expect.objectContaining({
         displayName: 'Jev 1.14',
         enabled: true,
         id: 'jev-1.14.0',
+        isOfficial: true,
         pricing: {
           currency: 'USD',
           units: [
