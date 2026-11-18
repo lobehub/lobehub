@@ -160,7 +160,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.listThreads,
       description:
-        "List the Threads of the current Channel, newest first: each Thread's root (what it is about), its latest message, and your latest reply there with its status (queued, running, completed, failed, cancelled, silent), when it started, steps taken and, for a running reply your requester asked for, its latest steps. Use it to know what you are working on in parallel before reporting progress, stopping or steering. Default 10, maximum 20.",
+        "List the Threads of the current Channel, newest first: each Thread's root (what it is about), its latest message, and your latest reply there with its status (queued, running, completed, failed, cancelled, silent), when it started, steps taken and, for a running reply your requester asked for, its latest steps. Use it to know what you are working on in parallel before reporting progress, stopping or steering. Default 10, maximum 20; pass before from nextBefore to read older Threads when hasMore is true.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -168,6 +168,11 @@ export const ChannelManifest: BuiltinToolManifest = {
           activeOnly: {
             type: 'boolean',
             description: 'Only Threads where you have a queued or running reply.',
+          },
+          before: {
+            type: 'string',
+            description:
+              'Exclusive cursor: the last threadId of the previous page (nextBefore). Omit for the newest page.',
           },
           limit: {
             type: 'integer',

@@ -514,6 +514,8 @@ export interface ChannelSentPersonMessage {
 export interface ChannelListThreadsParams {
   /** Only Threads where you (the calling Agent) have a queued or running reply. */
   activeOnly?: boolean;
+  /** Exclusive cursor: the threadId a previous page ended on (`nextBefore`). */
+  before?: string;
   limit?: number;
 }
 
@@ -558,6 +560,8 @@ export interface ChannelThreadSummary {
 
 export interface ChannelThreadPage {
   hasMore: boolean;
+  /** Cursor for the next older page: the last threadId here. `null` when this is the last page. */
+  nextBefore: string | null;
   threads: ChannelThreadSummary[];
 }
 

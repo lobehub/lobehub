@@ -21,7 +21,7 @@ import {
   channelMessageVia,
   RequestTrigger,
 } from '@lobechat/types';
-import { and, count, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -341,6 +341,20 @@ export class ChannelHistoryRepository {
   ): Promise<ChannelThreadPage> => {
     const limit = integer(params.limit, 10, 1, 20);
     return this.read(operationId, async (tx, channelId, manifest) => {
+      // The cursor is a threadId, so a caller pages by `nextBefore` without holding a snapshot.
+      // `createdAt` alone is not unique (a bulk open writes several Threads in one millisecond),
+      // so the ordering and the filter both fall back to the id.
+      let cursor: { createdAt: Date; id: string } | undefined;
+      if (params.before) {
+        const [row] = await tx
+          .select({ createdAt: channelThreads.createdAt, id: channelThreads.id })
+          .from(channelThreads)
+          .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.id, params.before)))
+          .limit(1);
+        if (!row) throw new ChannelError('BAD_REQUEST', 'before must be a Thread of this Channel');
+        cursor = row;
+      }
+
       const selfJobs = params.activeOnly
         ? await tx
             .selectDistinct({ threadId: channelJobs.threadId })
@@ -354,7 +368,7 @@ export class ChannelHistoryRepository {
             )
         : undefined;
       const activeIds = selfJobs?.map((job) => job.threadId).filter((id): id is string => !!id);
-      if (activeIds && !activeIds.length) return { hasMore: false, threads: [] };
+      if (activeIds && !activeIds.length) return { hasMore: false, nextBefore: null, threads: [] };
 
       const rows = await tx
         .select({ root: channelMessages.content, thread: channelThreads })
@@ -371,11 +385,21 @@ export class ChannelHistoryRepository {
             eq(channelThreads.channelId, channelId),
             notTrashed(channelThreads.isDeleted),
             activeIds ? inArray(channelThreads.id, activeIds) : undefined,
+            cursor
+              ? or(
+                  lt(channelThreads.createdAt, cursor.createdAt),
+                  and(
+                    eq(channelThreads.createdAt, cursor.createdAt),
+                    lt(channelThreads.id, cursor.id),
+                  ),
+                )
+              : undefined,
           ),
         )
-        .orderBy(desc(channelThreads.createdAt))
+        .orderBy(desc(channelThreads.createdAt), desc(channelThreads.id))
         .limit(limit + 1);
       const page = rows.slice(0, limit);
+      const nextBefore = rows.length > limit ? (page.at(-1)?.thread.id ?? null) : null;
 
       const threads: ChannelThreadSummary[] = [];
       for (const { root, thread } of page) {
@@ -404,7 +428,7 @@ export class ChannelHistoryRepository {
           threadId: thread.id,
         });
       }
-      return { hasMore: rows.length > limit, threads };
+      return { hasMore: rows.length > limit, nextBefore, threads };
     });
   };
 

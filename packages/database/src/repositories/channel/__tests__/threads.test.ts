@@ -101,6 +101,36 @@ describe('Channel Threads from a run', () => {
     expect(active.threads.map((thread) => thread.threadId)).toEqual([a.threadId]);
   });
 
+  it('pages older Threads from nextBefore and stops at the last page', async () => {
+    const state = await setup();
+    for (const title of ['Work 0', 'Work 1', 'Work 2', 'Work 3']) {
+      const root = await state.say(title);
+      await state.run({ rootMessageId: root.id });
+    }
+    const main = await state.run();
+    const ids = (page: { threads: { threadId: string }[] }) =>
+      page.threads.map((thread) => thread.threadId);
+
+    const first = await state.history.listThreads(main.operationId, { limit: 2 });
+    expect(first.threads).toHaveLength(2);
+    expect(first.hasMore).toBe(true);
+    // The cursor is the last Thread of the page, so a repeat call pages from where this one ended.
+    expect(first.nextBefore).toBe(first.threads.at(-1)!.threadId);
+
+    const second = await state.history.listThreads(main.operationId, {
+      before: first.nextBefore!,
+      limit: 2,
+    });
+    expect(second.threads).toHaveLength(2);
+    expect(ids(second).filter((id) => ids(first).includes(id))).toEqual([]);
+    expect(second.hasMore).toBe(false);
+    expect(second.nextBefore).toBeNull();
+
+    await expect(
+      state.history.listThreads(main.operationId, { before: 'cht_missing' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('reads another Thread live, past the run’s own cutoff', async () => {
     const state = await setup();
     const root = await state.say('Investigate');
