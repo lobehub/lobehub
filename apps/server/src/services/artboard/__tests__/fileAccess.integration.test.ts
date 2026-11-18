@@ -1,6 +1,4 @@
 // @vitest-environment node
-import { createHash } from 'node:crypto';
-
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
@@ -39,16 +37,9 @@ const store: ArtboardBlobStore = {
 };
 
 const html = '<!doctype html><link rel="stylesheet" href="../a.css"><h1 style="color:#f50">Hi</h1>';
-const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 
-const serve = (token: string, path: string, headers: Record<string, string> = {}) =>
-  serveArtboardFile({
-    db,
-    path,
-    request: new Request(`https://app.test/artboard-files/${token}/${path}`, { headers }),
-    storeFor: () => store,
-    token,
-  });
+const serve = (token: string, path: string) =>
+  serveArtboardFile({ db, path, storeFor: () => store, token });
 
 beforeEach(async () => {
   vi.stubEnv('KEY_VAULTS_SECRET', 'test-secret');
@@ -60,10 +51,9 @@ beforeEach(async () => {
     { id: otherArtboardId, title: 'B', userId },
   ]);
   await new ArtboardFileService({
-    db,
     resolveImage: async () => undefined,
+    resolveImport: async () => undefined,
     store,
-    userId,
   }).applyChanges(artboardId, {
     writes: [
       { content: html, path: 'pages/home.html' },
@@ -117,15 +107,16 @@ describe('serveArtboardFile', () => {
     expect(ARTBOARD_FILE_CSP).toMatch(/^sandbox allow-scripts/);
     expect(ARTBOARD_FILE_CSP).toContain("connect-src 'none'");
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(response.headers.get('etag')).toBe(`"${sha(html)}"`);
+    expect(response.headers.get('cache-control')).toBe('private, no-cache');
   });
 
-  it('answers 304 when the browser already has this content', async () => {
+  it('answers 404 under the sandbox CSP for a path nothing was written to', async () => {
     const token = signArtboardFileToken(artboardId, Date.now())!;
 
-    const response = await serve(token, 'pages/home.html', { 'if-none-match': `"${sha(html)}"` });
+    const response = await serve(token, 'pages/not-yet.html');
 
-    expect(response.status).toBe(304);
+    expect(response.status).toBe(404);
+    expect(response.headers.get('content-security-policy')).toBe(ARTBOARD_FILE_CSP);
   });
 
   it('does not serve another artboard with a token for this one', async () => {

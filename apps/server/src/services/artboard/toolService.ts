@@ -48,7 +48,7 @@ const parseFiles = (files: unknown): ArtboardFileChanges => {
   if (parsed.success) return parsed.data;
   throw new ArtboardServiceError(
     'invalid',
-    `The files are malformed: ${parsed.error.issues.map((issue) => `files.${issue.path.join('.')}: ${issue.message}`).join('; ')}. Each write is {path, content} or {path, fileRef}; each edit is {path, oldText, newText}.`,
+    `The files are malformed: ${parsed.error.issues.map((issue) => `files.${issue.path.join('.')}: ${issue.message}`).join('; ')}. Each write is {path, content}, {path, fileRef} or {path, fromCanvas: {canvasId}}; each edit is {path, oldText, newText}.`,
   );
 };
 
@@ -124,12 +124,7 @@ export const createArtboardToolService = (
     readFile: (params) =>
       guard(async () => {
         const file = await service.readFile(params.id, params.path);
-        return {
-          content: file.content ?? null,
-          hash: file.hash,
-          ok: true as const,
-          path: file.path,
-        };
+        return { content: file.content ?? null, ok: true as const, path: file.path };
       }),
     replyComment: (params) =>
       guard(async () => ({
@@ -157,8 +152,8 @@ export const createArtboardToolService = (
       }),
     writeFiles: ({ id, ...files }) =>
       guard(async () => ({
-        files: (await service.writeFiles(id, parseFiles(files))).files,
         ok: true as const,
+        paths: (await service.writeFiles(id, parseFiles(files))).files,
       })),
   };
 };

@@ -13,7 +13,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 
 import { ARTBOARD_TOOL_IDENTIFIER, ArtboardService, describeArtboard } from '..';
-import { artboardBlobKey, createFileServiceArtboardBlobStore } from '../files';
+import { artboardFileKey, createFileServiceArtboardBlobStore } from '../files';
 import { ARTBOARD_SOURCE_CONCURRENCY } from '../sources';
 import { buildArtboardPublishBundle } from './bundle';
 import { type ArtboardShareOwner, unpublishArtboardWork } from './offline';
@@ -32,8 +32,8 @@ export interface ArtboardPublishFileRow extends ArtboardPublishFileRef {
 export interface ArtboardPublishDeps {
   listFiles: (id: string) => Promise<ArtboardPublishFileRow[]>;
   loadArtboard: (id: string) => Promise<ArtboardItem>;
-  /** Bytes of one artboard blob, or undefined when the object store can no longer read it. */
-  readFile: (id: string, hash: string) => Promise<Uint8Array | undefined>;
+  /** Bytes of one artboard file, or undefined when the object store can no longer read it. */
+  readFile: (id: string, path: string) => Promise<Uint8Array | undefined>;
 }
 
 export interface ArtboardPublishState {
@@ -56,11 +56,11 @@ const createDefaultDeps = ({
     listFiles: (id) => artboards.listFiles(id),
     loadArtboard: async (id) => (await artboards.get(id)).artboard,
     // Only reached after listFiles(id) checked the artboard is visible to this user.
-    readFile: async (id, hash) => {
+    readFile: async (id, path) => {
       try {
-        return await store.read(artboardBlobKey(id, hash));
+        return await store.read(artboardFileKey(id, path));
       } catch (error) {
-        console.error('[artboard:publish] file unreadable', id, hash, error);
+        console.error('[artboard:publish] file unreadable', id, path, error);
         return;
       }
     },
@@ -121,19 +121,16 @@ export class ArtboardPublishService {
     );
     if (missing) throw precondition(`Board "${missing.title}" has no file to publish`);
 
+    // A board whose file is missing is published as is; the viewer shows it as missing.
     const rows = await this.deps.listFiles(id);
-    const paths = new Set(rows.map((row) => row.path));
-    for (const { source, title } of artboard.content.boards)
-      if (source && !paths.has(source.path))
-        throw precondition(`Board "${title}" points at "${source.path}", which is gone`);
 
     const viewerUrl = await getArtboardViewerUrl(ARTBOARD_VIEWER_MAJOR);
     if (!viewerUrl) throw precondition('The publication host has no compatible artboard viewer');
 
     const files = await pMap(
       rows,
-      async ({ contentType, hash, path }) => {
-        const bytes = await this.deps.readFile(id, hash);
+      async ({ contentType, path }) => {
+        const bytes = await this.deps.readFile(id, path);
         if (!bytes) throw precondition(`Artboard file "${path}" can no longer be read`);
         return { bytes, contentType, path };
       },

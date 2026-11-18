@@ -70,10 +70,11 @@ export const toArtboardContent = (
 ): ArtboardContent => {
   const groupRects = new Map(structure.groups.map((group) => [group.id, group.rect]));
 
-  const sourceOf = (board: ArtboardStructure['boards'][number]): ArtboardBoardSource | null => {
-    const hash = board.sourcePath ? hashes.get(board.sourcePath) : undefined;
-    return board.sourcePath && hash ? { hash, kind: 'file', path: board.sourcePath } : null;
-  };
+  // A board may point at a file not written yet, or one deleted since: hash null, nothing to show.
+  const sourceOf = (board: ArtboardStructure['boards'][number]): ArtboardBoardSource | null =>
+    board.sourcePath
+      ? { hash: hashes.get(board.sourcePath) ?? null, kind: 'file', path: board.sourcePath }
+      : null;
 
   return {
     boards: structure.boards.map((board) => ({

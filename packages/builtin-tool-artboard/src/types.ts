@@ -112,11 +112,11 @@ export type ArtboardToolReadOutcome =
     }
   | ArtboardToolFailure;
 
-export type ArtboardToolFilesOutcome =
-  { files: ArtboardToolFile[]; ok: true } | ArtboardToolFailure;
+/** Paths written or deleted. */
+export type ArtboardToolFilesOutcome = { ok: true; paths: string[] } | ArtboardToolFailure;
 
 export type ArtboardToolFileOutcome =
-  { content: string | null; hash: string; ok: true; path: string } | ArtboardToolFailure;
+  { content: string | null; ok: true; path: string } | ArtboardToolFailure;
 
 export type ArtboardToolListOutcome =
   | {

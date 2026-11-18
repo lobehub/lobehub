@@ -22,7 +22,6 @@ import {
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   text,
   uniqueIndex,
   uuid,
@@ -266,26 +265,6 @@ export const artboardEdges = pgTable(
       .where(sql`${t.acceptanceFlowEdgeId} IS NOT NULL`),
     index('artboard_edges_user_id_idx').on(t.userId),
     index('artboard_edges_workspace_id_idx')
-      .on(t.workspaceId)
-      .where(sql`${t.workspaceId} IS NOT NULL`),
-  ],
-);
-
-export const artboardFiles = pgTable(
-  'artboard_files',
-  {
-    artboardId: artboardRef(),
-    path: text('path').notNull(),
-    hash: text('hash').notNull(),
-    size: integer('size').notNull(),
-    contentType: text('content_type').notNull(),
-    ...ownerColumns,
-    ...timestamps,
-  },
-  (t) => [
-    primaryKey({ columns: [t.artboardId, t.path] }),
-    index('artboard_files_user_id_idx').on(t.userId),
-    index('artboard_files_workspace_id_idx')
       .on(t.workspaceId)
       .where(sql`${t.workspaceId} IS NOT NULL`),
   ],

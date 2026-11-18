@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
+
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import type { ArtboardOp } from '@lobechat/types';
@@ -19,14 +21,24 @@ const topicId = 'tpc_artboard_comments';
 
 const db: LobeChatDatabase = await getTestDB();
 
-const sources: ArtboardSourceResolver = { imageBytes: async () => undefined };
+const sources: ArtboardSourceResolver = {
+  imageBytes: async () => undefined,
+  importPage: async () => undefined,
+};
 
 const blobs = new Map<string, Uint8Array>();
 const fileStore: ArtboardBlobStore = {
   delete: async (keys) => {
     for (const key of keys) blobs.delete(key);
   },
-  list: async (prefix) => [...blobs.keys()].filter((key) => key.startsWith(prefix)),
+  list: async (prefix) =>
+    [...blobs]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, bytes]) => ({
+        etag: createHash('md5').update(bytes).digest('hex'),
+        key,
+        size: bytes.byteLength,
+      })),
   presignWrite: async (key) => ({ url: `memory://${key}` }),
   read: async (key) => blobs.get(key) ?? new Uint8Array(),
   write: async (key, bytes) => {

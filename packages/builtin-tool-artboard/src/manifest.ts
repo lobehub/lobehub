@@ -36,7 +36,7 @@ const filesSchema = {
     'Files of the artboard, applied before the ops. Paths are relative, like pages/checkout/a.html or shared/base.css; pages reference each other and assets by relative paths. HTML is any HTML you would write for a browser: your own CSS, colors, fonts, inline SVG and scripts. Pages cannot fetch or open network connections; https images, fonts, styles and scripts load.',
   properties: {
     deletes: {
-      description: 'Paths to delete. A file a board shows cannot be deleted.',
+      description: 'Paths to delete. Boards showing a deleted file show it as missing.',
       items: { type: 'string' },
       type: 'array',
     },
@@ -55,11 +55,16 @@ const filesSchema = {
     },
     writes: {
       description:
-        'Whole files: {path, content} for text (html, css, js, json, svg), or {path, fileRef} to copy an image from <file id> or <image ref> in this conversation.',
+        'Whole files: {path, content} for text (html, css, js, json, svg), {path, fileRef} to copy an image from <file id> or <image ref> in this conversation, or {path, fromCanvas: {canvasId, version?}} to copy a Canvas page in (its assets land next to it).',
       items: {
         properties: {
           content: { type: 'string' },
           fileRef: { type: 'string' },
+          fromCanvas: {
+            properties: { canvasId: { type: 'string' }, version: { type: 'integer' } },
+            required: ['canvasId'],
+            type: 'object',
+          },
           path: { type: 'string' },
         },
         required: ['path'],
@@ -176,7 +181,7 @@ export const ArtboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Change only the files of an artboard: fix a page after a comment without touching the layout. Needs no revision. Every board showing a changed file updates for the user.',
+        'Write, edit or delete files of an artboard without touching the layout; needs no revision. Use it to fill in the boards one per call after laying them out, and to fix a page after a comment. Each board showing a written file updates for the user as it lands.',
       name: ArtboardApiName.writeArtboardFiles,
       parameters: {
         additionalProperties: false,

@@ -56,10 +56,10 @@ const failure = (outcome: ArtboardToolFailure): BuiltinServerRuntimeOutput => ({
 
 const formatSource = (board: ArtboardBoardView) => {
   if (board.type === 'decision') return 'decision';
-  return board.source ? `file ${board.source.path}` : `${board.type} source unavailable`;
+  if (!board.source) return `${board.type} source unavailable`;
+  // The board shows nothing until the file exists: tell the agent so it writes it.
+  return `file ${board.source.path}${board.source.hash ? '' : ' (missing: write it)'}`;
 };
-
-const formatFile = (file: ArtboardToolFile) => `${file.path} (${file.size} B)`;
 
 const formatAnchor = (target: {
   boardId: string | null;
@@ -196,13 +196,13 @@ export class ArtboardExecutionRuntime {
   async writeArtboardFiles(params: WriteArtboardFilesParams): Promise<BuiltinServerRuntimeOutput> {
     const outcome = await this.service.writeFiles(params);
     if (!outcome.ok) return failure(outcome);
-    const { files } = outcome;
-    const count = `${files.length} file${files.length === 1 ? '' : 's'}`;
+    const { paths } = outcome;
+    const count = `${paths.length} file${paths.length === 1 ? '' : 's'}`;
     return {
-      content: files.length
-        ? `Saved ${count} on artboard ${params.id}: ${files.map(formatFile).join(', ')}.`
+      content: paths.length
+        ? `Saved ${count} on artboard ${params.id}: ${paths.join(', ')}.`
         : `Saved no new content on artboard ${params.id}.`,
-      state: { artboardId: params.id, files },
+      state: { artboardId: params.id, paths },
       success: true,
     };
   }
@@ -212,7 +212,7 @@ export class ArtboardExecutionRuntime {
     if (!outcome.ok) return failure(outcome);
     return {
       content: outcome.content ?? `${outcome.path} is binary; it has no text to show.`,
-      state: { hash: outcome.hash, path: outcome.path },
+      state: { path: outcome.path },
       success: true,
     };
   }

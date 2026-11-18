@@ -1,11 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-import { normalizeArtboardFilePath } from '@lobechat/types';
+import { artboardFileContentType, normalizeArtboardFilePath } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 
-import { ArtboardFileModel } from '@/database/models/artboard/file';
+import { artboards } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { artboardBlobKey, type ArtboardBlobStore } from './files';
+import { type ArtboardBlobStore, artboardFileKey } from './files';
 
 const DOMAIN = 'lobehub:artboard-file:v1';
 
@@ -64,7 +65,6 @@ const notFound = () => new Response('Not found', { headers: baseHeaders, status:
 interface ServeArtboardFileParams {
   db: LobeChatDatabase;
   path: string;
-  request: Request;
   storeFor: (owner: { userId: string; workspaceId: string | null }) => ArtboardBlobStore;
   token: string;
 }
@@ -72,7 +72,6 @@ interface ServeArtboardFileParams {
 export const serveArtboardFile = async ({
   db,
   path,
-  request,
   storeFor,
   token,
 }: ServeArtboardFileParams): Promise<Response> => {
@@ -80,20 +79,25 @@ export const serveArtboardFile = async ({
   const normalized = normalizeArtboardFilePath(path);
   if (!artboardId || !normalized) return notFound();
 
-  const row = await ArtboardFileModel.findForServing(db, artboardId, normalized);
-  if (!row) return notFound();
+  // The token is the capability; the owner only picks whose storage holds the folder.
+  const [owner] = await db
+    .select({ userId: artboards.userId, workspaceId: artboards.workspaceId })
+    .from(artboards)
+    .where(eq(artboards.id, artboardId))
+    .limit(1);
+  if (!owner) return notFound();
 
-  const etag = `"${row.hash}"`;
+  const bytes = await storeFor(owner)
+    .read(artboardFileKey(artboardId, normalized))
+    .catch(() => undefined);
+  if (!bytes) return notFound();
+
+  // The board URL carries ?v=<ETag>, so a changed file is a new URL; this one must not be reused.
   const headers = {
     ...baseHeaders,
     'Cache-Control': 'private, no-cache',
-    'Content-Type': row.contentType,
-    'ETag': etag,
+    'Content-Type': artboardFileContentType(normalized)!,
   };
-  if (request.headers.get('if-none-match') === etag)
-    return new Response(null, { headers, status: 304 });
-
-  const bytes = await storeFor(row).read(artboardBlobKey(artboardId, row.hash));
   // Object-store reads are backed by a plain ArrayBuffer, never a SharedArrayBuffer.
   return new Response(bytes as Uint8Array<ArrayBuffer>, { headers, status: 200 });
 };

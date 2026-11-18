@@ -51,7 +51,8 @@ const coordinate = z.number().finite();
 const size = z.number().finite().positive();
 
 export const artboardBoardSourceSchema = z.object({
-  hash: z.string().min(1),
+  /** Version tag of the file (its object ETag); null while the file does not exist. */
+  hash: z.string().min(1).nullable(),
   kind: z.literal('file'),
   path: z.string().min(1),
 });

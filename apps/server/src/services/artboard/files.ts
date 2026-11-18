@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import {
   ARTBOARD_FILE_LIMITS,
   artboardFileContentType,
@@ -9,9 +7,6 @@ import {
 } from '@lobechat/types';
 import pMap from 'p-map';
 
-import { ArtboardFileModel } from '@/database/models/artboard/file';
-import type { ArtboardFileRow } from '@/database/models/artboard/types';
-import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { FileService } from '@/server/services/file';
 
 import { ArtboardServiceError } from './errors';
@@ -21,10 +16,17 @@ export interface ArtboardBlobUpload {
   url: string;
 }
 
+export interface ArtboardStoredObject {
+  /** Object ETag without quotes; changes whenever the content does. */
+  etag: string;
+  key: string;
+  size: number;
+}
+
 export interface ArtboardBlobStore {
   delete: (keys: string[]) => Promise<void>;
-  list: (prefix: string) => Promise<string[]>;
-  /** A signed PUT the client uploads one blob to, for files too large for a request body. */
+  list: (prefix: string) => Promise<ArtboardStoredObject[]>;
+  /** A signed PUT the client uploads one file to, for files too large for a request body. */
   presignWrite: (key: string) => Promise<ArtboardBlobUpload>;
   read: (key: string) => Promise<Uint8Array>;
   write: (key: string, bytes: Uint8Array, contentType: string) => Promise<void>;
@@ -39,7 +41,7 @@ export const createFileServiceArtboardBlobStore = (
     delete: async (keys) => {
       await service().deleteFiles(keys);
     },
-    list: (prefix) => service().listFileKeys(prefix),
+    list: (prefix) => service().listFileObjects(prefix),
     // Private: board files are only ever served through the token route.
     presignWrite: (key) => service().createPreSignedUpload(key, { private: true }),
     read: (key) => service().getFileByteArray(key),
@@ -54,22 +56,24 @@ export interface ArtboardImageBytes {
   contentType: string;
 }
 
-type OneOf<T extends string> = {
-  [K in Exclude<'base64' | 'content' | 'fileRef' | 'hash', T>]?: never;
+/** A Canvas to copy in; without `version`, its latest one. */
+export interface ArtboardImportSource {
+  canvasId: string;
+  version?: number;
+}
+
+type Only<K extends string> = {
+  [P in Exclude<'base64' | 'content' | 'fileRef' | 'fromCanvas' | 'uploaded', K>]?: never;
 };
 
 export type ArtboardFileWrite =
-  | (OneOf<'content'> & { content: string; path: string })
-  | (OneOf<'fileRef'> & { fileRef: string; path: string })
-  | (OneOf<'base64'> & { base64: string; path: string })
-  /** A blob the client already PUT to a URL from prepareUploads, named by its sha256. */
-  | (OneOf<'hash'> & { hash: string; path: string });
-
-export interface ArtboardFileUploadRequest {
-  hash: string;
-  path: string;
-  size: number;
-}
+  | (Only<'content'> & { content: string; path: string })
+  | (Only<'fileRef'> & { fileRef: string; path: string })
+  | (Only<'base64'> & { base64: string; path: string })
+  /** Already PUT to the URL from prepareUploads; the write only records the change. */
+  | (Only<'uploaded'> & { path: string; uploaded: true })
+  /** A copy of a Canvas page: it does not follow the Canvas afterwards. */
+  | (Only<'fromCanvas'> & { fromCanvas: ArtboardImportSource; path: string });
 
 export interface ArtboardFileEdit {
   newText: string;
@@ -83,7 +87,9 @@ export interface ArtboardFileChanges {
   writes?: ArtboardFileWrite[];
 }
 
-export interface ArtboardChangedFile {
+export interface ArtboardFileEntry {
+  contentType: string;
+  /** The object's ETag. */
   hash: string;
   path: string;
   size: number;
@@ -93,53 +99,51 @@ export interface ArtboardFileContent {
   bytes: Uint8Array;
   content?: string;
   contentType: string;
-  hash: string;
   path: string;
 }
 
+export interface ArtboardFileUploadRequest {
+  path: string;
+  size: number;
+}
+
+export interface ArtboardImportedPage {
+  /** Files the entry loads, by path relative to the entry's directory. */
+  assets: { bytes: Uint8Array; path: string }[];
+  entry: Uint8Array;
+}
+
 interface ArtboardFileServiceDeps {
-  db: LobeChatDatabase;
   resolveImage: (fileRef: string) => Promise<ArtboardImageBytes | undefined>;
+  /**
+   * A copy of a Canvas or Work version: its HTML entry plus the files it loads by relative path.
+   * Undefined when it does not exist, has no HTML, or the user cannot read it.
+   */
+  resolveImport: (source: ArtboardImportSource) => Promise<ArtboardImportedPage | undefined>;
   store: ArtboardBlobStore;
-  userId: string;
-  workspaceId?: string;
 }
 
-interface PendingFile extends ArtboardChangedFile {
-  bytes?: Uint8Array;
-  contentType: string;
-  /** The blob is already in the store under its hash (a presigned upload). */
-  stored?: boolean;
-}
-
-export interface PreparedArtboardFiles {
-  /** Hash each edited or deleted file had when it was read; commit refuses if it moved on. */
-  basis: Map<string, string>;
-  changed: ArtboardChangedFile[];
+/** What a set of changes will write and delete, checked against the limits but not yet stored. */
+export interface ArtboardFilePlan {
   deletes: string[];
-  upserts: PendingFile[];
-}
-
-export interface ArtboardCommittedFiles {
-  /** Every file path of the artboard after the write. */
-  paths: ReadonlySet<string>;
-  /** Paths whose content changed or that were deleted. */
-  touched: ReadonlySet<string>;
+  /** Paths already uploaded through a signed URL. */
+  uploaded: string[];
+  writes: Map<string, Uint8Array>;
 }
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
-
 const invalid = (message: string): never => {
   throw new ArtboardServiceError('invalid', message);
 };
 
-export const artboardBlobKey = (artboardId: string, hash: string) =>
-  `artboards/${artboardId}/${hash}`;
+const artboardPrefix = (artboardId: string) => `artboards/${artboardId}/`;
 
-const artboardBlobPrefix = (artboardId: string) => `artboards/${artboardId}/`;
+export const artboardFilesPrefix = (artboardId: string) => `${artboardPrefix(artboardId)}files/`;
+
+export const artboardFileKey = (artboardId: string, path: string) =>
+  `${artboardFilesPrefix(artboardId)}${path}`;
 
 const requirePath = (path: string) =>
   normalizeArtboardFilePath(path) ??
@@ -147,13 +151,15 @@ const requirePath = (path: string) =>
     `"${path}" is not a valid artboard file path: use a relative path (no "..") of letters, digits and -_.@ ending in a known extension (html, css, js, json, svg, png, jpg, webp, gif, woff2…).`,
   );
 
-const requireHash = (hash: string) =>
-  /^[\da-f]{64}$/.test(hash) ? hash : invalid(`"${hash}" is not a lowercase sha256 hex digest.`);
-
 const sizeLimitOf = (path: string) =>
   isArtboardImagePath(path)
     ? ARTBOARD_FILE_LIMITS.maxImageBytes
     : ARTBOARD_FILE_LIMITS.maxTextFileBytes;
+
+const assertSize = (path: string, size: number) => {
+  if (size > sizeLimitOf(path))
+    invalid(`"${path}" is ${size} bytes; the limit is ${sizeLimitOf(path)}.`);
+};
 
 const countOccurrences = (text: string, part: string) => {
   if (!part) return 0;
@@ -169,95 +175,65 @@ const countOccurrences = (text: string, part: string) => {
 
 const BLOB_CONCURRENCY = 6;
 
+/**
+ * An artboard's files are a plain folder in object storage, keyed by path. Nothing ties them to
+ * the boards: a board may point at a path that is not written yet, and a file may be deleted while
+ * a board still shows it.
+ */
 export class ArtboardFileService {
-  private model: ArtboardFileModel;
+  constructor(private deps: ArtboardFileServiceDeps) {}
 
-  constructor(private deps: ArtboardFileServiceDeps) {
-    this.model = new ArtboardFileModel(deps.db, deps.userId, deps.workspaceId);
+  async list(artboardId: string): Promise<ArtboardFileEntry[]> {
+    const prefix = artboardFilesPrefix(artboardId);
+    const objects = await this.deps.store.list(prefix);
+    return objects.flatMap(({ etag, key, size }) => {
+      const path = normalizeArtboardFilePath(key.slice(prefix.length));
+      const contentType = path && artboardFileContentType(path);
+      return path && contentType ? [{ contentType, hash: etag, path, size }] : [];
+    });
   }
-
-  list = (artboardId: string): Promise<ArtboardFileRow[]> => this.model.list(artboardId);
 
   async read(artboardId: string, path: string): Promise<ArtboardFileContent> {
     const normalized = requirePath(path);
-    const row = (await this.model.list(artboardId)).find((file) => file.path === normalized);
-    if (!row)
+    const bytes = await this.deps.store.read(artboardFileKey(artboardId, normalized)).catch(() => {
       throw new ArtboardServiceError(
         'not_found',
-        `Artboard "${artboardId}" has no file "${path}".`,
+        `Artboard "${artboardId}" has no file "${normalized}".`,
       );
-    const bytes = await this.deps.store.read(artboardBlobKey(artboardId, row.hash));
+    });
     return {
       bytes,
-      ...(isArtboardTextPath(row.path) ? { content: decoder.decode(bytes) } : {}),
-      contentType: row.contentType,
-      hash: row.hash,
-      path: row.path,
+      ...(isArtboardTextPath(normalized) ? { content: decoder.decode(bytes) } : {}),
+      contentType: artboardFileContentType(normalized)!,
+      path: normalized,
     };
   }
 
-  async readBlob(artboardId: string, hash: string) {
-    return this.deps.store.read(artboardBlobKey(artboardId, hash));
-  }
-
-  /**
-   * Signed PUT URLs for files too large to send in a request body. Content this artboard already
-   * stores needs no upload. The bytes are only trusted once a `{path, hash}` write reads them
-   * back and checks the hash.
-   */
-  async prepareUploads(
-    artboardId: string,
-    requests: ArtboardFileUploadRequest[],
-  ): Promise<{ uploads: (ArtboardBlobUpload & { path: string })[] }> {
-    const stored = new Set((await this.model.list(artboardId)).map((row) => row.hash));
-    const pending = new Map<string, string>();
-    for (const request of requests) {
-      const path = requirePath(request.path);
-      const hash = requireHash(request.hash);
-      if (request.size > sizeLimitOf(path))
-        invalid(`"${path}" is ${request.size} bytes; the limit is ${sizeLimitOf(path)}.`);
-      if (!stored.has(hash) && !pending.has(hash)) pending.set(hash, path);
-    }
-    const uploads = await pMap(
-      [...pending],
-      async ([hash, path]) => ({
-        path,
-        ...(await this.deps.store.presignWrite(artboardBlobKey(artboardId, hash))),
-      }),
-      { concurrency: BLOB_CONCURRENCY },
-    );
-    return { uploads };
-  }
-
-  async prepare(
-    artboardId: string,
-    changes: ArtboardFileChanges,
-    tx?: Transaction,
-  ): Promise<PreparedArtboardFiles> {
-    const existing = await (tx ? this.model.withTransaction(tx) : this.model).list(artboardId);
-    const files = new Map<string, Pick<PendingFile, 'contentType' | 'hash' | 'path' | 'size'>>(
-      existing.map((row) => [row.path, row]),
-    );
-    const pending = new Map<string, PendingFile>();
+  /** Validate the changes and compute every file they write. Stores nothing. */
+  async prepare(artboardId: string, changes: ArtboardFileChanges): Promise<ArtboardFilePlan> {
+    const existing = new Map((await this.list(artboardId)).map((file) => [file.path, file.size]));
+    const sizes = new Map(existing);
+    const writes = new Map<string, Uint8Array>();
+    const uploaded: string[] = [];
     const deletes: string[] = [];
-    const basis = new Map<string, string>();
-    const readFrom = (path: string) => {
-      const row = existing.find((file) => file.path === path);
-      if (row && !pending.has(path) && !basis.has(path)) basis.set(path, row.hash);
-    };
 
-    const put = (path: string, bytes: Uint8Array, contentType: string, stored = false) => {
-      if (bytes.byteLength > sizeLimitOf(path))
-        invalid(`"${path}" is ${bytes.byteLength} bytes; the limit is ${sizeLimitOf(path)}.`);
-      const hash = sha256(bytes);
-      const file = { bytes, contentType, hash, path, size: bytes.byteLength, stored };
-      pending.set(path, file);
-      files.set(path, file);
+    const put = (path: string, bytes: Uint8Array) => {
+      assertSize(path, bytes.byteLength);
+      writes.set(path, bytes);
+      sizes.set(path, bytes.byteLength);
     };
 
     for (const write of changes.writes ?? []) {
       const path = requirePath(write.path);
-      const contentType = artboardFileContentType(path)!;
+      if (write.uploaded) {
+        if (!existing.has(path))
+          invalid(
+            `"${path}" was not uploaded: get a URL from prepareFileUploads and PUT the file first.`,
+          );
+        assertSize(path, existing.get(path)!);
+        uploaded.push(path);
+        continue;
+      }
       if (write.fileRef !== undefined) {
         if (!isArtboardImagePath(path))
           invalid(`"${path}" takes text content; only image paths can be written from a fileRef.`);
@@ -267,41 +243,38 @@ export class ArtboardFileService {
             'source_denied',
             `fileRef "${write.fileRef}" does not match an image you can access. Use a file id from <file id> or an image ref from <image ref> in this conversation.`,
           );
-        put(path, image.bytes, contentType);
+        put(path, image.bytes);
         continue;
       }
-      if (write.hash !== undefined) {
-        const hash = requireHash(write.hash);
-        const bytes = await this.deps.store
-          .read(artboardBlobKey(artboardId, hash))
-          .catch(() =>
-            invalid(
-              `"${path}" was not uploaded: get a URL from prepareFileUploads and PUT the bytes first.`,
-            ),
+      if (write.fromCanvas !== undefined) {
+        const page = await this.deps.resolveImport(write.fromCanvas);
+        if (!page)
+          throw new ArtboardServiceError(
+            'source_denied',
+            `Canvas "${write.fromCanvas.canvasId}" was not found, cannot be read, or this server has no Canvas runtime to bundle it with.`,
           );
-        if (sha256(bytes) !== hash)
-          invalid(`The bytes uploaded for "${path}" do not match its hash ${hash}.`);
-        put(path, bytes, contentType, true);
+        put(path, page.entry);
+        // Assets sit next to the page so its relative references keep working.
+        const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
+        for (const asset of page.assets) put(requirePath(`${dir}${asset.path}`), asset.bytes);
         continue;
       }
       if (write.base64 !== undefined) {
-        put(path, new Uint8Array(Buffer.from(write.base64, 'base64')), contentType);
+        put(path, new Uint8Array(Buffer.from(write.base64, 'base64')));
         continue;
       }
       if (!isArtboardTextPath(path))
-        invalid(`"${path}" is binary; write it from a fileRef instead of text content.`);
-      put(path, encoder.encode(write.content ?? ''), contentType);
+        invalid(`"${path}" is binary; write it from a fileRef or base64 instead of text content.`);
+      put(path, encoder.encode(write.content ?? ''));
     }
 
     for (const change of changes.edits ?? []) {
       const path = requirePath(change.path);
       if (!isArtboardTextPath(path)) invalid(`"${path}" is not a text file and cannot be edited.`);
-      const current = pending.get(path);
-      const known = files.get(path);
-      if (!known) invalid(`Artboard has no file "${path}" to edit.`);
-      readFrom(path);
+      const pending = writes.get(path);
+      if (!pending && !existing.has(path)) invalid(`Artboard has no file "${path}" to edit.`);
       const text = decoder.decode(
-        current?.bytes ?? (await this.deps.store.read(artboardBlobKey(artboardId, known!.hash))),
+        pending ?? (await this.deps.store.read(artboardFileKey(artboardId, path))),
       );
       const count = countOccurrences(text, change.oldText);
       if (count !== 1)
@@ -310,101 +283,79 @@ export class ArtboardFileService {
             ? `The text to replace was not found in "${path}". Read the file and copy the exact text.`
             : `The text to replace appears ${count} times in "${path}"; include more surrounding text so it appears once.`,
         );
-      put(
-        path,
-        encoder.encode(text.replace(change.oldText, () => change.newText)),
-        known!.contentType,
-      );
+      put(path, encoder.encode(text.replace(change.oldText, () => change.newText)));
     }
 
     for (const raw of changes.deletes ?? []) {
       const path = requirePath(raw);
-      if (!files.has(path)) invalid(`Artboard has no file "${path}" to delete.`);
-      readFrom(path);
-      files.delete(path);
-      pending.delete(path);
+      writes.delete(path);
+      sizes.delete(path);
       deletes.push(path);
     }
 
-    if (files.size > ARTBOARD_FILE_LIMITS.maxFiles)
+    if (sizes.size > ARTBOARD_FILE_LIMITS.maxFiles)
       invalid(
-        `An artboard holds at most ${ARTBOARD_FILE_LIMITS.maxFiles} files; this would make ${files.size}.`,
+        `An artboard holds at most ${ARTBOARD_FILE_LIMITS.maxFiles} files; this would make ${sizes.size}.`,
       );
-    const total = [...files.values()].reduce((sum, file) => sum + file.size, 0);
+    const total = [...sizes.values()].reduce((sum, size) => sum + size, 0);
     if (total > ARTBOARD_FILE_LIMITS.maxTotalBytes)
       invalid(
         `The artboard's files would total ${total} bytes; the limit is ${ARTBOARD_FILE_LIMITS.maxTotalBytes}.`,
       );
 
-    const upserts = [...pending.values()];
+    return { deletes, uploaded, writes };
+  }
+
+  /** Every path a plan changes or deletes. */
+  static touched = (plan: ArtboardFilePlan) => [
+    ...plan.writes.keys(),
+    ...plan.uploaded,
+    ...plan.deletes,
+  ];
+
+  async apply(artboardId: string, plan: ArtboardFilePlan): Promise<string[]> {
     await pMap(
-      upserts.filter((file) => !file.stored),
-      (file) =>
+      [...plan.writes],
+      ([path, bytes]) =>
         this.deps.store.write(
-          artboardBlobKey(artboardId, file.hash),
-          file.bytes!,
-          file.contentType,
+          artboardFileKey(artboardId, path),
+          bytes,
+          artboardFileContentType(path)!,
         ),
       { concurrency: BLOB_CONCURRENCY },
     );
-
-    return {
-      basis,
-      changed: upserts.map(({ hash, path, size }) => ({ hash, path, size })),
-      deletes,
-      upserts,
-    };
-  }
-
-  /**
-   * Write the prepared rows. Locks the artboard row first, so concurrent commits on one artboard
-   * apply one at a time; an edit or delete whose file changed since prepare() read it fails with
-   * `conflict` instead of silently overwriting the other write.
-   */
-  async commit(
-    artboardId: string,
-    prepared: PreparedArtboardFiles,
-    tx: Transaction,
-  ): Promise<ArtboardCommittedFiles> {
-    const model = this.model.withTransaction(tx);
-    if (!(await model.lockArtboard(artboardId)))
-      throw new ArtboardServiceError('not_found', `Artboard "${artboardId}" was not found.`);
-    const current = new Map((await model.list(artboardId)).map((row) => [row.path, row.hash]));
-    for (const [path, hash] of prepared.basis)
-      if (current.get(path) !== hash)
-        throw new ArtboardServiceError(
-          'conflict',
-          `"${path}" changed since it was read. Read the file again, then retry the change.`,
-        );
-
-    await model.upsert(
-      artboardId,
-      prepared.upserts.map(({ contentType, hash, path, size }) => ({
-        contentType,
-        hash,
-        path,
-        size,
-      })),
-    );
-    await model.delete(artboardId, prepared.deletes);
-    const paths = new Set(current.keys());
-    const touched = new Set(prepared.deletes);
-    for (const { hash, path } of prepared.upserts) {
-      if (current.get(path) !== hash) touched.add(path);
-      paths.add(path);
-    }
-    for (const path of prepared.deletes) paths.delete(path);
-    return { paths, touched };
+    if (plan.deletes.length)
+      await this.deps.store.delete(plan.deletes.map((path) => artboardFileKey(artboardId, path)));
+    return [...plan.writes.keys(), ...plan.uploaded];
   }
 
   async applyChanges(artboardId: string, changes: ArtboardFileChanges) {
-    const prepared = await this.prepare(artboardId, changes);
-    await this.deps.db.transaction((tx) => this.commit(artboardId, prepared, tx));
-    return prepared.changed;
+    return this.apply(artboardId, await this.prepare(artboardId, changes));
+  }
+
+  /** Signed PUT URLs, one per path, for files too large to send in a request body. */
+  async prepareUploads(
+    artboardId: string,
+    requests: ArtboardFileUploadRequest[],
+  ): Promise<{ uploads: (ArtboardBlobUpload & { path: string })[] }> {
+    const paths = requests.map((request) => {
+      const path = requirePath(request.path);
+      assertSize(path, request.size);
+      return path;
+    });
+    const uploads = await pMap(
+      paths,
+      async (path) => ({
+        path,
+        ...(await this.deps.store.presignWrite(artboardFileKey(artboardId, path))),
+      }),
+      { concurrency: BLOB_CONCURRENCY },
+    );
+    return { uploads };
   }
 
   async removeAll(artboardId: string) {
-    const keys = await this.deps.store.list(artboardBlobPrefix(artboardId));
-    if (keys.length) await this.deps.store.delete(keys);
+    const objects = await this.deps.store.list(artboardPrefix(artboardId));
+    if (objects.length) await this.deps.store.delete(objects.map((object) => object.key));
   }
 }

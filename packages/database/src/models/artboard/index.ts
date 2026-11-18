@@ -149,6 +149,16 @@ export class ArtboardModel {
     return row;
   };
 
+  /** Move updatedAt without a revision bump: the files changed, the structure did not. */
+  touch = async (id: string): Promise<ArtboardRow | undefined> => {
+    const [row] = await this.db
+      .update(artboards)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(artboards.id, id), this.scope()))
+      .returning();
+    return row;
+  };
+
   update = async (id: string, params: UpdateArtboardParams): Promise<ArtboardRow> => {
     const { expectedRevision, ...fields } = params;
     const [row] = await this.db

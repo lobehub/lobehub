@@ -2,7 +2,6 @@ import type {
   artboardBoards,
   artboardComments,
   artboardEdges,
-  artboardFiles,
   artboardGroups,
   artboardPages,
   artboardRounds,
@@ -22,4 +21,3 @@ export type ArtboardEdgeRow = typeof artboardEdges.$inferSelect;
 export type NewArtboardEdgeRow = typeof artboardEdges.$inferInsert;
 export type ArtboardCommentRow = typeof artboardComments.$inferSelect;
 export type NewArtboardCommentRow = typeof artboardComments.$inferInsert;
-export type ArtboardFileRow = typeof artboardFiles.$inferSelect;

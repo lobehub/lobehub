@@ -41,6 +41,7 @@ const shotBytes = new Uint8Array([137, 80, 78, 71]);
 const sources: ArtboardSourceResolver = {
   imageBytes: async (fileRef) =>
     fileRef === 'msg_1.image_1' ? { bytes: shotBytes, contentType: 'image/png' } : undefined,
+  importPage: async () => undefined,
 };
 
 const blobs = new Map<string, Uint8Array>();
@@ -48,15 +49,25 @@ const fileStore: ArtboardBlobStore = {
   delete: async (keys) => {
     for (const key of keys) blobs.delete(key);
   },
-  list: async (prefix) => [...blobs.keys()].filter((key) => key.startsWith(prefix)),
+  list: async (prefix) =>
+    [...blobs]
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, bytes]) => ({ etag: sha(bytes), key, size: bytes.byteLength })),
   presignWrite: async (key) => ({ url: `memory://${key}` }),
-  read: async (key) => blobs.get(key) ?? new Uint8Array(),
+  read: async (key) => {
+    const bytes = blobs.get(key);
+    if (!bytes) throw new Error(`NoSuchKey ${key}`);
+    return bytes;
+  },
   write: async (key, bytes) => {
     blobs.set(key, bytes);
   },
 };
 
-const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+// The object store's ETag: MD5 of the bytes for a single-part upload.
+function sha(content: string | Uint8Array) {
+  return createHash('md5').update(content).digest('hex');
+}
 
 const emptyHtml = '<!doctype html><body style="background:#111;color:#eee">空项目</body>';
 const ingestHtml = '<!doctype html><svg width="40" height="40"><circle r="20" fill="#f50"/></svg>';
@@ -280,22 +291,29 @@ describe('ArtboardService.create', () => {
     expect(error.data.artboardId).toBe(first.artboard.id);
   });
 
-  it('refuses a board whose file the artboard does not have', async () => {
-    const missing = await errorOf(
-      service().create(
-        {
-          files: baseFiles,
-          ops: [
-            { group: { kind: 'references', title: '参考' }, ref: 'o', type: 'addGroup' },
-            fileBoard('x', 'pages/missing.html', 0, 'o'),
-          ],
-          title: '画板',
-        },
-        context,
-      ),
+  it('lays a board out before its file exists, then fills it in once the file is written', async () => {
+    const { artboard } = await service().create(
+      {
+        ops: [
+          { group: { kind: 'references', title: '参考' }, ref: 'o', type: 'addGroup' },
+          fileBoard('x', 'pages/later.html', 0, 'o'),
+        ],
+        title: '画板',
+      },
+      context,
     );
-    expect(missing).toMatchObject({ code: 'invalid', data: { opIndex: 1 } });
-    expect(missing.message).toContain('pages/missing.html');
+    expect(artboard.content.boards[0].source).toEqual({
+      hash: null,
+      kind: 'file',
+      path: 'pages/later.html',
+    });
+
+    await service().writeFiles(artboard.id, {
+      writes: [{ content: '<p>later</p>', path: 'pages/later.html' }],
+    });
+
+    const { artboard: filled } = await service().read(artboard.id);
+    expect(filled.content.boards[0].source?.hash).toBe(sha('<p>later</p>'));
   });
 
   it('copies an image ref into the artboard and shows it as an image board', async () => {
@@ -453,7 +471,10 @@ describe('ArtboardService.update and read', () => {
     const [board] = artboard.content.boards;
     const thread = await service().addComment(artboard.id, { clientId: 'c1', content: 'hi' });
     await db.insert(users).values({ id: 'artboard_stranger' });
-    const stranger = new ArtboardService(db, 'artboard_stranger', undefined, { sources });
+    const stranger = new ArtboardService(db, 'artboard_stranger', undefined, {
+      fileStore,
+      sources,
+    });
 
     try {
       const attempts = [
@@ -514,17 +535,18 @@ describe('ArtboardService.update and read', () => {
     expect(after.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
   });
 
-  it('refuses to delete a file a board still shows', async () => {
+  it('deletes a file a board shows; the board then shows it as missing', async () => {
     const { artboard } = await createJourney();
 
-    const error = await errorOf(
-      service().writeFiles(artboard.id, { deletes: ['pages/empty.html'] }),
-    );
+    await service().writeFiles(artboard.id, { deletes: ['pages/empty.html'] });
 
-    expect(error.code).toBe('invalid');
-    expect(error.message).toContain('pages/empty.html');
+    const { artboard: after } = await service().read(artboard.id);
+    expect(after.content.boards[0].source).toEqual({
+      hash: null,
+      kind: 'file',
+      path: 'pages/empty.html',
+    });
     expect((await service().listFiles(artboard.id)).map((file) => file.path)).toEqual([
-      'pages/empty.html',
       'pages/ingest.html',
     ]);
   });
@@ -761,7 +783,7 @@ describe('ArtboardService comments', () => {
 describe('ArtboardService agent questions', () => {
   const agentId = 'agt_artboard_service';
   const asAgent = () =>
-    new ArtboardService(db, userId, undefined, { context: { agentId }, sources });
+    new ArtboardService(db, userId, undefined, { context: { agentId }, fileStore, sources });
 
   beforeEach(async () => {
     await db.insert(agents).values({ id: agentId, userId });
@@ -893,7 +915,7 @@ describe('ArtboardService.finalize', () => {
     const notes = await service().writeFiles(artboard.id, {
       writes: [{ content: '<p>notes</p>', path: 'pages/notes.html' }],
     });
-    expect(notes.files.map((file) => file.path)).toEqual(['pages/notes.html']);
+    expect(notes.files).toEqual(['pages/notes.html']);
   });
 
   it('collapses a decision board into conditioned edges between the screens around it', async () => {

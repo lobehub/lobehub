@@ -2,8 +2,14 @@ export const systemPrompt = `You can lay out a requirement on an artboard: a boa
 
 <when_to_use>
 - Use an artboard when a requirement needs its flow or its options discussed, not for a single screen.
-- Each screen is an HTML page you write as a file of the artboard (files.writes, e.g. pages/checkout/a.html), shown by a board with source {kind:"file", path}. Write it as a real screen of the product at the board's size: your own layout, colors, type and inline SVG. Shared CSS or images go in their own files and are referenced by relative paths. A screenshot or photo from the conversation can be a board too: copy it in with {path, fileRef}.
+- Each screen is an HTML page you write as a file of the artboard (e.g. pages/checkout/a.html), shown by a board with source {kind:"file", path}. Write it as a real screen of the product at the board's size: your own layout, colors, type and inline SVG. Shared CSS or images go in their own files and are referenced by relative paths. A screenshot or photo from the conversation can be a board too: copy it in with {path, fileRef}. An existing Canvas can be copied in with {path, fromCanvas: {canvasId}}.
 </when_to_use>
+
+<order>
+- Lay out first, then fill in: one createArtboard (or updateArtboard) call with every page, group, edge and board, each board's source pointing at the path its file will have. Do not write the files in that call.
+- Then write the files with writeArtboardFiles, one board per call (shared CSS and images first, then the pages that use them). The user sees each board appear as its file lands.
+- A board whose file is not written yet shows as missing; readArtboard marks it "(missing: write it)". Write it, or point the board at another path.
+</order>
 
 <layout>
 - An artboard has pages; each page is its own canvas with its own coordinates. Everything lands on the first page unless you pass pageId.

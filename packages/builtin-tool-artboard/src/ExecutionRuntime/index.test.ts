@@ -203,11 +203,33 @@ describe('ArtboardExecutionRuntime', () => {
     expect(result.content).toContain('Files:\n- pages/empty.html 2048 B\n- shared.css 120 B');
   });
 
-  it('writes artboard files and reports what changed', async () => {
-    const writeFiles = vi.fn().mockResolvedValue({
-      files: [{ hash: 'abc', path: 'pages/empty.html', size: 10 }],
+  it('tells the agent which boards point at a file not written yet', async () => {
+    const base = snapshot();
+    const read = vi.fn().mockResolvedValue({
+      artboard: {
+        ...base,
+        content: {
+          ...base.content,
+          boards: [
+            {
+              ...base.content.boards[0],
+              source: { hash: null, kind: 'file', path: 'pages/empty.html' },
+            },
+          ],
+        },
+      },
+      files: [],
       ok: true,
     });
+    const result = await new ArtboardExecutionRuntime(service({ read })).readArtboard({
+      id: 'art_1',
+    });
+
+    expect(result.content).toContain('file pages/empty.html (missing: write it)');
+  });
+
+  it('writes artboard files and reports what changed', async () => {
+    const writeFiles = vi.fn().mockResolvedValue({ ok: true, paths: ['pages/empty.html'] });
     const result = await new ArtboardExecutionRuntime(service({ writeFiles })).writeArtboardFiles({
       edits: [{ newText: 'b', oldText: 'a', path: 'pages/empty.html' }],
       id: 'art_1',
@@ -218,13 +240,13 @@ describe('ArtboardExecutionRuntime', () => {
       id: 'art_1',
     });
     expect(result.success).toBe(true);
-    expect(result.content).toBe('Saved 1 file on artboard art_1: pages/empty.html (10 B).');
+    expect(result.content).toBe('Saved 1 file on artboard art_1: pages/empty.html.');
+    expect(result.state).toEqual({ artboardId: 'art_1', paths: ['pages/empty.html'] });
   });
 
   it('reads one artboard file as text', async () => {
     const readFile = vi.fn().mockResolvedValue({
       content: '<h1>空项目</h1>',
-      hash: 'abc',
       ok: true,
       path: 'pages/empty.html',
     });
@@ -234,7 +256,7 @@ describe('ArtboardExecutionRuntime', () => {
     });
 
     expect(result.content).toBe('<h1>空项目</h1>');
-    expect(result.state).toEqual({ hash: 'abc', path: 'pages/empty.html' });
+    expect(result.state).toEqual({ path: 'pages/empty.html' });
   });
 
   it('reads a round with its recommendation and the user’s choice, and a decision branch', async () => {

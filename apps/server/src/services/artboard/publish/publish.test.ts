@@ -107,14 +107,12 @@ describe('ArtboardPublishService', () => {
     expect(site.publishArtboardSite).not.toHaveBeenCalled();
   });
 
-  it('names the board whose file is no longer in the artboard', async () => {
+  it('publishes a board whose file is missing; the viewer shows it as missing', async () => {
     const boards = [htmlBoard('a', 'pages/gone.html', 'Pricing')];
 
-    await expect(service(boards).publish('art_1')).rejects.toMatchObject({
-      code: 'PRECONDITION_FAILED',
-      message: expect.stringContaining('Pricing'),
-    });
-    expect(site.publishArtboardSite).not.toHaveBeenCalled();
+    await service(boards).publish('art_1');
+
+    expect(site.publishArtboardSite).toHaveBeenCalledTimes(1);
   });
 
   it('ships every artboard file once, then records the share', async () => {

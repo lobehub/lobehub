@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "867b4aee-ed0a-4592-973e-47164ea9ea01",
+  "id": "f294c337-4d8a-47be-a8ed-7fe5bcbff964",
   "policies": {},
   "prevId": "4caccfb8-4b95-4149-b512-2d72e1ba77de",
   "roles": {},
@@ -11016,20 +11016,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "source_work_version_id": {
-          "name": "source_work_version_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "source_path": {
           "name": "source_path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source_file_id": {
-          "name": "source_file_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -11157,22 +11145,6 @@
           "method": "btree",
           "with": {}
         },
-        "artboard_boards_source_work_version_id_idx": {
-          "name": "artboard_boards_source_work_version_id_idx",
-          "columns": [
-            {
-              "expression": "source_work_version_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"artboard_boards\".\"source_work_version_id\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "artboard_boards_user_id_idx": {
           "name": "artboard_boards_user_id_idx",
           "columns": [
@@ -11268,37 +11240,15 @@
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
-        },
-        "artboard_boards_source_work_version_id_work_versions_id_fk": {
-          "name": "artboard_boards_source_work_version_id_work_versions_id_fk",
-          "tableFrom": "artboard_boards",
-          "tableTo": "work_versions",
-          "columnsFrom": ["source_work_version_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "artboard_boards_source_file_id_files_id_fk": {
-          "name": "artboard_boards_source_file_id_files_id_fk",
-          "tableFrom": "artboard_boards",
-          "tableTo": "files",
-          "columnsFrom": ["source_file_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "artboard_boards_single_source_check": {
-          "name": "artboard_boards_single_source_check",
-          "value": "num_nonnulls(\"artboard_boards\".\"source_work_version_id\", \"artboard_boards\".\"source_file_id\") <= 1"
-        },
         "artboard_boards_decision_no_source_check": {
           "name": "artboard_boards_decision_no_source_check",
-          "value": "\"artboard_boards\".\"type\" <> 'decision' OR num_nonnulls(\"artboard_boards\".\"source_work_version_id\", \"artboard_boards\".\"source_file_id\", \"artboard_boards\".\"source_path\") = 0"
+          "value": "\"artboard_boards\".\"type\" <> 'decision' OR \"artboard_boards\".\"source_path\" IS NULL"
         }
       },
       "isRLSEnabled": false
@@ -11932,147 +11882,6 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.artboard_files": {
-      "name": "artboard_files",
-      "schema": "",
-      "columns": {
-        "artboard_id": {
-          "name": "artboard_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "hash": {
-          "name": "hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "size": {
-          "name": "size",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content_type": {
-          "name": "content_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "accessed_at": {
-          "name": "accessed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "artboard_files_user_id_idx": {
-          "name": "artboard_files_user_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "artboard_files_workspace_id_idx": {
-          "name": "artboard_files_workspace_id_idx",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"artboard_files\".\"workspace_id\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "artboard_files_artboard_id_artboards_id_fk": {
-          "name": "artboard_files_artboard_id_artboards_id_fk",
-          "tableFrom": "artboard_files",
-          "tableTo": "artboards",
-          "columnsFrom": ["artboard_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "artboard_files_user_id_users_id_fk": {
-          "name": "artboard_files_user_id_users_id_fk",
-          "tableFrom": "artboard_files",
-          "tableTo": "users",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "artboard_files_workspace_id_workspaces_id_fk": {
-          "name": "artboard_files_workspace_id_workspaces_id_fk",
-          "tableFrom": "artboard_files",
-          "tableTo": "workspaces",
-          "columnsFrom": ["workspace_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "artboard_files_artboard_id_path_pk": {
-          "name": "artboard_files_artboard_id_path_pk",
-          "columns": ["artboard_id", "path"]
-        }
-      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

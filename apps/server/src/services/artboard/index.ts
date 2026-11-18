@@ -27,12 +27,13 @@ import { artboardFileBasePath } from './fileAccess';
 import {
   type ArtboardBlobStore,
   type ArtboardFileChanges,
+  type ArtboardFilePlan,
   ArtboardFileService,
   type ArtboardFileUploadRequest,
   createFileServiceArtboardBlobStore,
 } from './files';
 import { buildJourneyFlow } from './finalize';
-import { applyArtboardOps } from './ops';
+import { applyArtboardOps, assertJourneyFilesKept } from './ops';
 import {
   ARTBOARD_SOURCE_CONCURRENCY,
   type ArtboardSourceResolver,
@@ -126,13 +127,11 @@ export class ArtboardService {
       options.sources ??
       createArtboardSourceResolver(db, { ...options.context, userId, workspaceId });
     this.files = new ArtboardFileService({
-      db,
       resolveImage: (fileRef) => this.sources.imageBytes(fileRef),
+      resolveImport: (source) => this.sources.importPage(source),
       store:
         options.fileStore ??
         createFileServiceArtboardBlobStore(() => new FileService(db, userId, workspaceId)),
-      userId,
-      workspaceId,
     });
   }
 
@@ -208,7 +207,7 @@ export class ArtboardService {
         );
     }
 
-    const { changedIds, row } = await guardArtboard(() =>
+    const { changedIds, files, row } = await guardArtboard(() =>
       this.db.transaction(async (tx) => {
         const created = await this.artboards.withTransaction(tx).create({
           description: input.description ?? null,
@@ -217,17 +216,17 @@ export class ArtboardService {
           title: input.title,
           topicId: context.topicId ?? null,
         });
-        const files = await this.files.prepare(created.id, input.files ?? {}, tx);
-        const committed = await this.files.commit(created.id, files, tx);
+        // Validated before the row commits; stored after, since only then does the id exist.
+        const files = await this.files.prepare(created.id, input.files ?? {});
         const changed = await applyArtboardOps(
           this.structure.withTransaction(tx),
           created,
           input.ops ?? [],
-          committed,
         );
-        return { changedIds: changed, row: created };
+        return { changedIds: changed, files, row: created };
       }),
     );
+    await this.files.apply(row.id, files);
 
     const task = existingTask ?? (await this.createTaskFor(row, input, context));
     const attached = existingTask ? row : ((await this.artboards.setTask(row.id, task.id)) ?? row);
@@ -267,37 +266,40 @@ export class ArtboardService {
   ): Promise<ArtboardWriteResult> {
     const row = await this.require(id);
     if (row.revision !== revision) throw artboardConflict();
-    const files = await this.files.prepare(id, changes);
+    const files = await this.prepareFiles(row, changes);
 
-    const { changedIds, next } = await guardArtboard(() =>
+    const { changedIds } = await guardArtboard(() =>
       this.db.transaction(async (tx) => {
-        // Files first: the revision bump then stamps the row's final updatedAt.
-        const committed = await this.files.commit(id, files, tx);
-        const bumped = await this.artboards
-          .withTransaction(tx)
-          .update(id, { expectedRevision: revision });
-        const changed = await applyArtboardOps(
-          this.structure.withTransaction(tx),
-          row,
-          ops,
-          committed,
-        );
-        return { changedIds: changed, next: bumped };
+        await this.artboards.withTransaction(tx).update(id, { expectedRevision: revision });
+        const changed = await applyArtboardOps(this.structure.withTransaction(tx), row, ops);
+        return { changedIds: changed };
       }),
     );
-    return { artboard: await this.item(next), changedIds };
+    const next = await this.storeFiles(id, files);
+    return { artboard: await this.item(next ?? (await this.require(id))), changedIds };
   }
 
   async writeFiles(id: string, changes: ArtboardFileChanges) {
-    const row = await this.require(id);
-    const files = await this.files.prepare(id, changes);
-    await guardArtboard(() =>
-      this.db.transaction(async (tx) => {
-        const committed = await this.files.commit(id, files, tx);
-        await applyArtboardOps(this.structure.withTransaction(tx), row, [], committed);
-      }),
-    );
-    return { files: files.changed };
+    const plan = await this.prepareFiles(await this.require(id), changes);
+    await this.storeFiles(id, plan);
+    return { files: ArtboardFileService.touched(plan) };
+  }
+
+  /** Validate file changes; a finalized journey keeps the files its boards show. */
+  private async prepareFiles(row: ArtboardRow, changes: ArtboardFileChanges) {
+    const plan = await this.files.prepare(row.id, changes);
+    const touched = ArtboardFileService.touched(plan);
+    if (row.phase === 'finalized' && touched.length) {
+      const structure = await this.structure.getStructure(row.id);
+      if (structure) assertJourneyFilesKept(row, structure, touched);
+    }
+    return plan;
+  }
+
+  /** Store the files, then move updatedAt so open boards reload (writes do not bump revision). */
+  private async storeFiles(id: string, plan: ArtboardFilePlan) {
+    await this.files.apply(id, plan);
+    return this.artboards.touch(id);
   }
 
   async listFiles(id: string) {

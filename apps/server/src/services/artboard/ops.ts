@@ -19,7 +19,6 @@ import type {
 } from '@/database/models/artboard/structure';
 
 import { failArtboard, toArtboardServiceError } from './errors';
-import type { ArtboardCommittedFiles } from './files';
 import {
   EMPTY_GROUP_RECT,
   rectsOverlap,
@@ -57,7 +56,6 @@ class Draft {
     private model: ArtboardStructureModel,
     private artboard: ArtboardOpTarget,
     structure: ArtboardStructure,
-    private files: ReadonlySet<string>,
   ) {
     this.pages = [...structure.pages];
     this.rounds = [...structure.rounds];
@@ -93,34 +91,7 @@ class Draft {
   }
 
   private sourcePath(source: ArtboardBoardSourceInput | undefined) {
-    if (!source) return undefined;
-    const path = sourcePathOf(source);
-    if (!this.files.has(path))
-      failArtboard(
-        'invalid',
-        `Board source "${source.path}" is not a file of this artboard. Write the file first (files.writes), then point the board at its path.`,
-      );
-    return path;
-  }
-
-  assertSourcesExist() {
-    for (const board of this.boards)
-      if (board.sourcePath && !this.files.has(board.sourcePath))
-        failArtboard(
-          'invalid',
-          `Board "${board.title}" (${board.id}) still shows "${board.sourcePath}"; point it at another file or remove it before deleting the file.`,
-        );
-  }
-
-  /** A finalized journey is what the feature is accepted against: its screens stay as they are. */
-  assertJourneyFilesKept(touched: ReadonlySet<string>) {
-    if (this.artboard.phase !== 'finalized') return;
-    for (const board of this.boards)
-      if (board.sourcePath && touched.has(board.sourcePath) && this.inJourney(board.groupId))
-        failArtboard(
-          'locked',
-          `The journey is finalized; "${board.sourcePath}" (shown by journey board "${board.title}") can no longer change. Write the change to a new file instead.`,
-        );
+    return source ? sourcePathOf(source) : undefined;
   }
 
   private inJourney(groupId: string | null | undefined) {
@@ -517,17 +488,43 @@ class Draft {
   }
 }
 
+/**
+ * A finalized journey is what the feature is accepted against: the files its boards show stay as
+ * they are. Throws `locked` when `touched` includes one.
+ */
+export const assertJourneyFilesKept = (
+  artboard: ArtboardOpTarget,
+  structure: Pick<ArtboardStructure, 'boards' | 'groups'>,
+  touched: Iterable<string>,
+) => {
+  if (artboard.phase !== 'finalized') return;
+  const journeyIds = new Set(structure.groups.filter((g) => g.kind === 'journey').map((g) => g.id));
+  const shown = new Map(
+    structure.boards.flatMap((board) =>
+      board.sourcePath && board.groupId && journeyIds.has(board.groupId)
+        ? [[board.sourcePath, board.title] as const]
+        : [],
+    ),
+  );
+  for (const path of touched) {
+    const title = shown.get(path);
+    if (title !== undefined)
+      failArtboard(
+        'locked',
+        `The journey is finalized; "${path}" (shown by journey board "${title}") can no longer change. Write the change to a new file instead.`,
+      );
+  }
+};
+
 export const applyArtboardOps = async (
   model: ArtboardStructureModel,
   artboard: ArtboardOpTarget,
   ops: ArtboardOp[],
-  files: ArtboardCommittedFiles,
 ): Promise<string[]> => {
   const structure = await model.getStructure(artboard.id);
   if (!structure) return failArtboard('not_found', `Artboard "${artboard.id}" was not found.`);
 
-  const draft = new Draft(model, artboard, structure, files.paths);
-  draft.assertJourneyFilesKept(files.touched);
+  const draft = new Draft(model, artboard, structure);
   for (const [index, op] of ops.entries()) {
     try {
       await draft.apply(op);
@@ -535,7 +532,6 @@ export const applyArtboardOps = async (
       throw toArtboardServiceError(error, index);
     }
   }
-  draft.assertSourcesExist();
   await draft.flushLayout();
   return draft.changed;
 };

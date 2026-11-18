@@ -11,6 +11,12 @@ let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
+// Board files live in object storage; these tests write none, so the folder is always empty.
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function FileService() {
+    return { listFileObjects: async () => [] };
+  }),
+}));
 
 describe('artboardRouter', () => {
   let userId: string;
