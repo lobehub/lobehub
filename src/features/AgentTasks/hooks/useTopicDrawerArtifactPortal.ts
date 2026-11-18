@@ -7,6 +7,12 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+/** Portal views the run drawer can host in place of its conversation. */
+const DRAWER_HOSTED_VIEW_TYPES = new Set<PortalViewType>([
+  PortalViewType.Artifact,
+  PortalViewType.FilePreview,
+]);
+
 interface ResolveTopicDrawerPortalHostViewTypeOptions {
   currentViewType: PortalViewType | null;
   parentViewType: PortalViewType | null;
@@ -20,7 +26,8 @@ export const resolveTopicDrawerPortalHostViewType = ({
 }: ResolveTopicDrawerPortalHostViewTypeOptions): PortalViewType | null => {
   if (
     showArtifactPortal &&
-    currentViewType === PortalViewType.Artifact &&
+    currentViewType &&
+    DRAWER_HOSTED_VIEW_TYPES.has(currentViewType) &&
     (parentViewType === PortalViewType.TaskDetail || parentViewType === PortalViewType.TaskResult)
   ) {
     return parentViewType;
@@ -30,7 +37,10 @@ export const resolveTopicDrawerPortalHostViewType = ({
 };
 
 /**
- * Whether the visible artifact belongs to the conversation hosted by the open run drawer.
+ * Whether the visible portal view was opened from the conversation hosted by
+ * the open run drawer: an artifact from one of its messages, or a file preview
+ * opened from it. The drawer floats over the page's portal host, so these
+ * render inside the drawer instead of behind it.
  */
 export const useTopicDrawerArtifactPortal = () => {
   const [topicId, agentId] = useTaskStore((s) => [
@@ -45,13 +55,12 @@ export const useTopicDrawerArtifactPortal = () => {
   }, [agentId, topicId]);
 
   return useChatStore((s) => {
-    if (
-      !chatKey ||
-      !chatPortalSelectors.showStandalonePortal(s) ||
-      !chatPortalSelectors.showArtifactUI(s)
-    ) {
-      return false;
-    }
+    if (!chatKey || !chatPortalSelectors.showStandalonePortal(s)) return false;
+
+    if (chatPortalSelectors.showFilePreview(s))
+      return chatPortalSelectors.previewFileSourceTopicId(s) === topicId;
+
+    if (!chatPortalSelectors.showArtifactUI(s)) return false;
 
     const artifactMessageId = chatPortalSelectors.artifactMessageId(s);
     if (!artifactMessageId) return false;

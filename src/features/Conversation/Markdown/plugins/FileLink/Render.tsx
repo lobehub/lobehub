@@ -12,11 +12,11 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { EntityLinkRender, parseLobeLink } from '@/features/EntityLink';
-import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
+import { useOpenConversationFilePreview } from '../../../hooks/useOpenConversationFilePreview';
 import { useConversationStore } from '../../../store';
 import type { MarkdownElementProps } from '../type';
 import { fileLinkMarker } from './markers.stylex';
@@ -123,7 +123,7 @@ OwnedFileLabel.displayName = 'FileLinkOwnedFileLabel';
 
 const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
   const { fileId, linkHref, linkLabel, linkScope, proxyHref } = node?.properties || {};
-  const openFilePreview = useChatStore((s) => s.openFilePreview);
+  const openFilePreview = useOpenConversationFilePreview();
   // A share reader previews and copies the public proxy, not the owner's page.
   const isShareVisitor = useConversationStore((s) => isShareVisitorContext(s.context));
   const { t } = useTranslation('common');
