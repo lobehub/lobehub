@@ -2,6 +2,7 @@ import { ClipboardCheckIcon, FolderClosedIcon } from 'lucide-react';
 import { lazy } from 'react';
 
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import ProjectHomeSkeleton from '@/components/Skeleton/ProjectHome';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
@@ -32,10 +33,12 @@ export const projectDirectoriesRouteMeta = routeMeta({
   titleKey: 'project:settings.title',
 });
 
+// The home is a centered composer page, not a detail surface: its skeleton keeps
+// the title/subtitle and the tray + card instead of an avatar header and pills.
 export const projectHomeRouteMeta = routeMeta({
   DynamicMeta: ProjectSectionDynamicMeta,
   icon: FolderClosedIcon,
-  Skeleton: createSurfaceSkeleton('detail'),
+  Skeleton: ProjectHomeSkeleton,
   titleKey: 'project:sections.home',
 });
 
