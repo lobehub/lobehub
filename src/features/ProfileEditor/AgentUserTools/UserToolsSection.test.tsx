@@ -168,51 +168,30 @@ describe('UserToolsSection — Workspace/User tool count', () => {
     expect(labelText()).toContain('· 1');
   });
 
-  it('does not count pinned Skill Store in auto activation mode', () => {
-    mocks.agentConfig = {
-      chatConfig: { skillActivateMode: 'auto' },
-      plugins: [{ identifier: 'lobe-skill-store', mode: 'pinned' }],
-    };
-    mocks.toolState.builtinTools = [
-      {
-        hidden: true,
-        identifier: 'lobe-skill-store',
-        manifest: {
-          api: [],
+  it.each(['auto', 'manual'] as const)(
+    'counts a pinned Skill Store in %s mode',
+    (skillActivateMode) => {
+      mocks.agentConfig = {
+        chatConfig: { skillActivateMode },
+        plugins: [{ identifier: 'lobe-skill-store', mode: 'pinned' }],
+      };
+      mocks.toolState.builtinTools = [
+        {
+          hidden: true,
           identifier: 'lobe-skill-store',
-          meta: { title: 'Skill Store' },
-          systemRole: '',
+          manifest: {
+            api: [],
+            identifier: 'lobe-skill-store',
+            meta: { title: 'Skill Store' },
+            systemRole: '',
+          },
+          type: 'builtin',
         },
-        type: 'builtin',
-      },
-    ];
+      ];
 
-    renderSection();
+      renderSection();
 
-    expect(labelText()).toContain('· 0');
-  });
-
-  it('counts pinned Skill Store in manual activation mode', () => {
-    mocks.agentConfig = {
-      chatConfig: { skillActivateMode: 'manual' },
-      plugins: [{ identifier: 'lobe-skill-store', mode: 'pinned' }],
-    };
-    mocks.toolState.builtinTools = [
-      {
-        hidden: true,
-        identifier: 'lobe-skill-store',
-        manifest: {
-          api: [],
-          identifier: 'lobe-skill-store',
-          meta: { title: 'Skill Store' },
-          systemRole: '',
-        },
-        type: 'builtin',
-      },
-    ];
-
-    renderSection();
-
-    expect(labelText()).toContain('· 1');
-  });
+      expect(labelText()).toContain('· 1');
+    },
+  );
 });

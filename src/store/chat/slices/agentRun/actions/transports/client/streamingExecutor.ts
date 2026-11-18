@@ -291,9 +291,7 @@ export class StreamingExecutorActionImpl {
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
       { hasOversizedFiles: hasPreviewableFiles(messages) },
     );
-    // When skillActivateMode is 'manual':
-    // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
-    // (skills, web-browsing, sandbox, memory, etc.) remain available for all agents.
+    // Manual mode omits the activator and keeps explicit pins and runtime tools.
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
 
     const toolsDetailed = toolsEngine.generateToolsDetailed({

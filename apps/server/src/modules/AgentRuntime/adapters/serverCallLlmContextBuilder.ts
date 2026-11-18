@@ -135,6 +135,7 @@ export const buildServerCallLlmContext = async ({
       },
       agentId,
       disabledPluginIds: state.world?.disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       editingAgentId: state.origin?.editingAgentId,
       editingGroupId,
       enabledToolIds: resolved.enabledToolIds,

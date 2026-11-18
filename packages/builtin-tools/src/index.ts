@@ -63,13 +63,12 @@ import { type LobeBuiltinTool } from '@lobechat/types';
 import { resolveCloudSandboxInPageScope } from './pageScope';
 
 /**
- * Default tool IDs that will always be added to the tools list.
+ * Default candidates evaluated by the tool enable rules.
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
  */
 export const defaultToolIds = [
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
   WebBrowsingManifest.identifier,
   KnowledgeBaseManifest.identifier,
   AttachmentsManifest.identifier,
@@ -79,31 +78,16 @@ export const defaultToolIds = [
   CloudSandboxManifest.identifier,
   AgentDocumentsManifest.identifier,
   TaskManifest.identifier,
+  // A runtime media fallback can enable this candidate even without a user pin.
   LobeAgentManifest.identifier,
   CanvasManifest.identifier,
 ];
 
 /**
- * Tool IDs that are always enabled regardless of user selection.
- * These are core system tools that the agent needs to function properly.
- *
- * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
- * sub-agent dispatch, multimodal fallback) should be available on every agent-mode turn,
- * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
- * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
- * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
- * from the defaults before the enable checker runs, so they end up disabled there.
- *
- * This list is also the source for builtin entries in the chat-input Tools popover.
- * They default to pinned but can be explicitly disabled per agent; entries represented by
- * the activation mode control itself are excluded from that menu.
+ * Builtins enabled by default in Agent mode. The activator loads other tools
+ * on demand, and Skills loads skill instructions. Manual mode omits the activator.
  */
-export const alwaysOnToolIds = [
-  LobeAgentManifest.identifier,
-  LobeActivatorManifest.identifier,
-  SkillsManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
 /**
  * Runtime tools represented by the skill activation mode control itself. They remain part
@@ -116,10 +100,7 @@ export const activationModeControlledToolIds = [LobeActivatorManifest.identifier
  * These are the tool/skill discovery tools that should be disabled when user wants precise control.
  * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.
  */
-export const manualModeExcludeToolIds = [
-  LobeActivatorManifest.identifier,
-  SkillStoreManifest.identifier,
-];
+export const manualModeExcludeToolIds = [LobeActivatorManifest.identifier];
 
 /**
  * Tool IDs allowed when the agent runs in chat mode
@@ -192,7 +173,6 @@ export const runtimeManagedToolIds = [
   LocalSystemManifest.identifier,
   MemoryManifest.identifier,
   RemoteDeviceManifest.identifier,
-  LobeAgentManifest.identifier,
   WebBrowsingManifest.identifier,
 ];
 
@@ -347,7 +327,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: SkillStoreManifest.identifier,
     manifest: SkillStoreManifest,
     type: 'builtin',
@@ -620,7 +599,6 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
     // Context-aware: hides the `callSubAgent` API inside group / sub-agent runs.

@@ -579,9 +579,7 @@ describe('toolEngineering', () => {
         provider: 'openai',
       });
 
-      // lobe-agent is always-on (alwaysOnToolIds), so it rides along with user tools.
-      expect(result.enabledToolIds).toEqual(['search', 'lobe-web-browsing', 'lobe-agent']);
-      expect(result.enabledToolIds).toHaveLength(3);
+      expect(result.enabledToolIds).toEqual(['search', 'lobe-web-browsing']);
     });
 
     it('should enable lobe-agent when it is injected into runtime plugin ids', () => {
@@ -615,36 +613,25 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds.includes('lobe-attachments')).toBe(flag);
     });
 
-    it('should enable lobe-agent by default since it is always-on', () => {
-      const toolsEngine = createAgentToolsEngine({
-        model: 'deepseek-chat',
-        provider: 'deepseek',
-      });
+    it('makes Lobe Agent callable after discovery and honors an explicit disable', () => {
+      const model = { model: 'deepseek-chat', provider: 'deepseek' };
+      const activation = {
+        ...model,
+        context: { isExplicitActivation: true },
+        skipDefaultTools: true,
+        toolIds: ['lobe-agent'],
+      };
+      const engine = createAgentToolsEngine(model);
 
-      const result = toolsEngine.generateToolsDetailed({
-        model: 'deepseek-chat',
-        provider: 'deepseek',
-        toolIds: [],
-      });
+      expect(engine.generateToolsDetailed({ ...model, toolIds: [] }).enabledToolIds).not.toContain(
+        'lobe-agent',
+      );
+      expect(engine.generateToolsDetailed(activation).enabledToolIds).toEqual(['lobe-agent']);
 
-      expect(result.enabledToolIds).toContain('lobe-agent');
-    });
-
-    it('should honor an explicit disabled policy for an always-on builtin tool', () => {
       mockCurrentAgentDisabledPlugins = ['lobe-agent'];
-
-      const toolsEngine = createAgentToolsEngine({
-        model: 'deepseek-chat',
-        provider: 'deepseek',
-      });
-
-      const result = toolsEngine.generateToolsDetailed({
-        model: 'deepseek-chat',
-        provider: 'deepseek',
-        toolIds: [],
-      });
-
-      expect(result.enabledToolIds).not.toContain('lobe-agent');
+      expect(
+        createAgentToolsEngine(model).generateToolsDetailed(activation).enabledToolIds,
+      ).toEqual([]);
     });
 
     it('should keep agent-mode defaults and mark every tool incompatible when the model cannot call functions', () => {

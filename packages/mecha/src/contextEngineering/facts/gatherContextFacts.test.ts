@@ -103,7 +103,16 @@ describe('gatherContextFacts', () => {
       expect(facts.step.planTodo?.todos?.items.map((t) => t.text)).toEqual(['from history']);
     });
 
-    it('does not read the plan document without lobe-agent', async () => {
+    it('keeps an existing topic plan available before Lobe Agent is activated', async () => {
+      const facts = await gatherContextFacts(
+        request({ discoverableTools: [{ identifier: 'lobe-agent' }] }),
+        providers,
+      );
+
+      expect(facts.step.planTodo?.plan?.goal).toBe('Ship it');
+    });
+
+    it('does not read the plan document when Lobe Agent is unavailable', async () => {
       const getPlanDocument = vi.fn(providers.getPlanDocument);
       const facts = await gatherContextFacts(request(), { getPlanDocument });
 

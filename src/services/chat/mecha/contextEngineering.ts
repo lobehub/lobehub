@@ -288,6 +288,7 @@ export const contextEngineering = async ({
       },
       agentId,
       disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       // The Profile panel edits `activeAgentId` / `activeGroupId`, not the
       // builder agent that is answering.
       editingAgentId: tools?.includes(AgentBuilderIdentifier)

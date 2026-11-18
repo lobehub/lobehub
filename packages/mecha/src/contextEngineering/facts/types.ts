@@ -93,6 +93,8 @@ export interface ContextFactRequest {
   agentId?: string;
   /** Plugin identifiers the agent explicitly disabled (tri-state entries). */
   disabledPluginIds?: string[];
+  /** Tools offered for activation in the current step. */
+  discoverableTools?: ReadonlyArray<{ identifier: string }>;
   /** Agent being edited in the Profile panel, when the agent builder is active. */
   editingAgentId?: string;
   /** Group being edited in the group Profile panel, when the group builder is active. */

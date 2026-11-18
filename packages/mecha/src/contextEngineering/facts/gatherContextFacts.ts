@@ -276,7 +276,8 @@ const gatherPlanTodo = async (
   // document is a best-effort mirror the run keeps with `lobe-agent`.
   const messageTodos = extractTodosFromMessages(request.messages);
   const canReadPlan =
-    request.enabledToolIds.includes(LobeAgentIdentifier) &&
+    (request.enabledToolIds.includes(LobeAgentIdentifier) ||
+      request.discoverableTools?.some((tool) => tool.identifier === LobeAgentIdentifier)) &&
     !!request.topicId &&
     !!providers.getPlanDocument;
   const planDoc = canReadPlan
