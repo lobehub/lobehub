@@ -146,6 +146,27 @@ describe('direct Channel identity', () => {
     expect(await listed()).toMatchObject({ content: '  Root line\nmore', thread: null });
   });
 
+  // An acknowledgement raised a desktop notification that read as the work being done.
+  it('marks an Agent’s acknowledgement as the newest message, until its answer lands', async () => {
+    const agent = await createAgent();
+    const repository = new ChannelRepository(db, fixture.ownerId, fixture.workspaceId);
+    const { channel } = await repository.create({ agentId: agent.id, title: 'Direct' });
+    const message = await repository.send(channel.id, sendInput);
+    const [job] = await jobsOf(db, message.id);
+    const listed = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.lastMessage;
+    expect(await listed()).toMatchObject({ content: 'Hello', opening: false });
+
+    await execution.open(channel.id, job.id, { ack: 'On it, checking the logs first.' });
+    expect(await listed()).toMatchObject({
+      content: 'On it, checking the logs first.',
+      opening: true,
+    });
+
+    await publish(channel.id, message.id);
+    expect(await listed()).toMatchObject({ content: 'Answer', opening: false });
+  });
+
   // A list row only knew a reply was in progress once its conversation was opened.
   it('lists the main-conversation replies still pending', async () => {
     const agent = await createAgent();

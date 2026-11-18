@@ -45,7 +45,8 @@ const OPENING_THREAD_READ_CONCURRENCY = 3;
 export const channelThreadReference = (threadId: string) => `<#${threadId}>`;
 
 /** Request key of the acknowledgement a job posted before its run. */
-export const openingRequestKey = (jobId: string) => `opening:${jobId}`;
+export const OPENING_REQUEST_KEY_PREFIX = 'opening:';
+export const openingRequestKey = (jobId: string) => `${OPENING_REQUEST_KEY_PREFIX}${jobId}`;
 
 /** Another Agent the same request asked to answer, in parallel with this one. */
 export interface ChannelCoAddressedAgent {

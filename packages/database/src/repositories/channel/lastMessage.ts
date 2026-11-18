@@ -14,6 +14,7 @@ import type { LobeChatDatabase } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { isAgentAuthored } from './author';
+import { OPENING_REQUEST_KEY_PREFIX } from './opening';
 import { messageStands } from './tombstone';
 
 /** Characters of the latest message a Channel list item carries as its preview. */
@@ -46,6 +47,7 @@ const attachmentsByMessage = async (db: LobeChatDatabase, messageIds: string[]) 
  * preview stopped at the main conversation reads as nothing new. Trashed Threads are skipped.
  * A Thread is named by its title, else the first line of the message it branched from. The
  * sender and attachments come along, so a list can read "Me: [Image]".
+ * `opening` marks an Agent's acknowledgement posted before its run, which announces nothing.
  */
 export const channelLastMessages = async (
   db: LobeChatDatabase,
@@ -63,6 +65,7 @@ export const channelLastMessages = async (
       content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
       createdAt: channelMessages.createdAt,
       id: channelMessages.id,
+      opening: sql<boolean>`coalesce(${channelMessages.requestKey} like ${`${OPENING_REQUEST_KEY_PREFIX}%`}, false)`,
       routingStatus: channelMessages.routingStatus,
       threadId: channelMessages.threadId,
       threadTitle: sql<string | null>`coalesce(
@@ -115,6 +118,7 @@ export const channelLastMessages = async (
           },
           content: row.content,
           createdAt: row.createdAt,
+          opening: row.opening,
           thread: row.threadId ? { id: row.threadId, title: row.threadTitle } : null,
         },
       ];

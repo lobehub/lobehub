@@ -698,6 +698,11 @@ export interface ChannelLastMessage {
   content: string;
   createdAt: Date;
   /**
+   * An Agent's acknowledgement posted before its run ("got it, checking the logs first"): not
+   * a result, so it raises no desktop notification.
+   */
+  opening?: boolean;
+  /**
    * The Thread it was posted in, named by its title or else the first line of its root message;
    * null for the main conversation.
    */
