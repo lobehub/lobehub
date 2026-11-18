@@ -1,7 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { DeviceModel } from '../../models/device';
-import type { DeviceItem } from '../../schemas';
 import { agents } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { removeDeviceFromAgents } from '../../utils/agencyConfigDevices';
@@ -23,7 +22,7 @@ export class DeviceRemovalRepository {
    * Remove a personal device. Only the caller's personal agents can have
    * picked it. Returns the removed rows.
    */
-  removePersonalDevice = async (deviceId: string): Promise<DeviceItem[]> =>
+  removePersonalDevice = async (deviceId: string) =>
     this.db.transaction(async (trx) => {
       const removed = await new DeviceModel(trx as LobeChatDatabase, this.userId).delete(deviceId);
       if (removed.length > 0) {
@@ -41,7 +40,7 @@ export class DeviceRemovalRepository {
    * the workspace may have picked it, private ones included. Returns the
    * removed rows, or `undefined` without a current workspace.
    */
-  removeWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
+  removeWorkspaceDevice = async (deviceId: string) => {
     const workspaceId = this.workspaceId;
     if (!workspaceId) return;
 
