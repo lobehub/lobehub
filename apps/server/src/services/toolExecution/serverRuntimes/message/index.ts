@@ -42,6 +42,7 @@ import {
   resolveMessengerKeyTarget,
 } from '@/server/services/bot/messageTarget';
 import { platformRegistry } from '@/server/services/bot/platforms';
+import { isBotUnusableForSending } from '@/server/services/bot/platforms/selfWebhook';
 import {
   wechatLegacyTokenKey,
   wechatPendingPushKey,
@@ -50,7 +51,7 @@ import {
 import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
 import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
-import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
 import { wechatInstallationKey } from '@/server/services/messenger/installations/wechat';
@@ -182,7 +183,8 @@ const resolveCredentials = async (
   const statuses = await Promise.all(
     enabled.map((p) => getBotRuntimeStatus(platform, p.applicationId)),
   );
-  const usable = enabled.find((_, i) => statuses[i].status !== BOT_RUNTIME_STATUSES.failed);
+  // A bot that only fails to hand inbound messages to this server can still send.
+  const usable = enabled.find((_, i) => !isBotUnusableForSending(statuses[i]));
   if (!usable) {
     throw new Error(
       `Every enabled ${platform} bot is in a failed state (App ID: ${enabled

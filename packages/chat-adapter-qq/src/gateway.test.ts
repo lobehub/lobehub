@@ -251,6 +251,39 @@ describe('QQGatewayConnection', () => {
       expect(body.t).toBe('GROUP_AT_MESSAGE_CREATE');
       expect(body.d.content).toBe('hello');
     });
+
+    it('reports each forward outcome, so a dropped message is not silent', async () => {
+      const refused = Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED' },
+      });
+      vi.mocked(fetch)
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }))
+        .mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }))
+        .mockRejectedValueOnce(refused);
+      const onForwardResult = vi.fn();
+      const { connectPromise, ws } = await connectAndGetWs({ onForwardResult });
+
+      ws.simulateMessage({ op: QQ_WS_OP_CODES.HELLO, d: { heartbeat_interval: 45000 } });
+      await vi.advanceTimersByTimeAsync(10);
+      ws.simulateMessage(createReadyPayload());
+      await connectPromise;
+
+      for (const [index, id] of ['msg_1', 'msg_2', 'msg_3'].entries()) {
+        ws.simulateMessage({
+          d: { author: { id: 'user_1' }, content: 'hello', group_openid: 'group_1', id },
+          op: QQ_WS_OP_CODES.DISPATCH,
+          s: index + 2,
+          t: 'GROUP_AT_MESSAGE_CREATE',
+        });
+        await vi.advanceTimersByTimeAsync(10);
+      }
+
+      expect(onForwardResult.mock.calls.map(([result]) => result)).toEqual([
+        { ok: true, status: 200 },
+        { ok: false, status: 502 },
+        { error: refused, ok: false },
+      ]);
+    });
   });
 
   describe('reconnection', () => {

@@ -10,6 +10,7 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 
 import { warnAttachmentFailures } from '../attachmentDelivery';
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -314,6 +315,7 @@ class SlackSocketModeClient implements PlatformClient {
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private gateway: SlackSocketModeConnection | null = null;
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   /** Lazy-cached SlackApi — keeps no state but avoids repeated allocs. */
@@ -378,12 +380,23 @@ class SlackSocketModeClient implements PlatformClient {
       this.bot = bot;
       await bot.initialize();
 
-      const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/slack/${this.applicationId}`;
+      const webhookUrl = buildSelfWebhookUrl(this.id, this.applicationId, this.context.appUrl);
+
+      this.forwardMonitor?.dispose();
+      const forwardMonitor = new SelfWebhookForwardMonitor({
+        applicationId: this.applicationId,
+        platform: this.id,
+        redisClient: this.context.redisClient,
+        ttlMs: runtimeStatusTtlMs,
+        webhookUrl,
+      });
+      this.forwardMonitor = forwardMonitor;
 
       this.gateway = new SlackSocketModeConnection({
         abortSignal: this.abort.signal,
         appToken: this.config.credentials.appToken,
         durationMs,
+        onForwardResult: forwardMonitor.record,
         signingSecret: this.config.credentials.signingSecret,
         webhookUrl,
       });
@@ -443,6 +456,8 @@ class SlackSocketModeClient implements PlatformClient {
     this.abort.abort();
     this.gateway?.close();
     this.gateway = null;
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
     if (this.bot) {
       await this.bot.shutdown().catch(() => {});
       this.bot = null;

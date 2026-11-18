@@ -17,6 +17,7 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 
 import { warnAttachmentFailures } from '../attachmentDelivery';
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import {
   type BotCredentialErrorCode,
   type BotPlatformRuntimeContext,
@@ -279,6 +280,7 @@ abstract class DingTalkClientBase implements PlatformClient {
 class DingTalkGatewayClient extends DingTalkClientBase {
   private abort = new AbortController();
   private bot: ChatBot<any> | null = null;
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
 
@@ -323,9 +325,24 @@ class DingTalkGatewayClient extends DingTalkClientBase {
 
       const adapter = (bot as any).adapters.get('dingtalk') as DingTalkAdapter;
       const waitUntil = options?.waitUntil ?? ((task: Promise<any>) => task.catch(() => {}));
-      const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/dingtalk/${this.applicationId}`;
+      const webhookUrl = buildSelfWebhookUrl(this.id, this.applicationId, this.context.appUrl);
 
-      await adapter.startGatewayListener({ waitUntil }, durationMs, this.abort.signal, webhookUrl);
+      this.forwardMonitor?.dispose();
+      const forwardMonitor = new SelfWebhookForwardMonitor({
+        applicationId: this.applicationId,
+        platform: this.id,
+        redisClient: this.context.redisClient,
+        ttlMs: runtimeStatusTtlMs,
+        webhookUrl,
+      });
+      this.forwardMonitor = forwardMonitor;
+
+      await adapter.startGatewayListener(
+        { onForwardResult: forwardMonitor.record, waitUntil },
+        durationMs,
+        this.abort.signal,
+        webhookUrl,
+      );
 
       if (!options) {
         this.refreshTimer = setTimeout(() => {
@@ -374,6 +391,8 @@ class DingTalkGatewayClient extends DingTalkClientBase {
       this.refreshTimer = null;
     }
     this.abort.abort();
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
     if (this.bot) {
       await this.bot.shutdown().catch(() => {});
       this.bot = null;

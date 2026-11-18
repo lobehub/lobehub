@@ -18,6 +18,7 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 
 import { warnAttachmentFailures } from '../attachmentDelivery';
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import { stripMarkdown } from '../stripMarkdown';
 import {
   type BotCredentialErrorCode,
@@ -489,6 +490,7 @@ class FeishuWSClientImpl implements PlatformClient {
   private context: BotPlatformRuntimeContext;
   private domain: 'lark' | 'feishu';
   private gateway: FeishuWSConnection | null = null;
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private bot: ChatBot<any> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
@@ -562,12 +564,27 @@ class FeishuWSClientImpl implements PlatformClient {
       this.bot = bot;
       await bot.initialize();
 
-      const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/${this.config.platform}/${this.applicationId}`;
+      const webhookUrl = buildSelfWebhookUrl(
+        this.config.platform,
+        this.applicationId,
+        this.context.appUrl,
+      );
+
+      this.forwardMonitor?.dispose();
+      const forwardMonitor = new SelfWebhookForwardMonitor({
+        applicationId: this.applicationId,
+        platform: this.id,
+        redisClient: this.context.redisClient,
+        ttlMs: runtimeStatusTtlMs,
+        webhookUrl,
+      });
+      this.forwardMonitor = forwardMonitor;
 
       this.gateway = new FeishuWSConnection({
         appId: this.config.applicationId,
         appSecret: this.config.credentials.appSecret,
         domain: this.domain,
+        onForwardResult: forwardMonitor.record,
         verificationToken: this.config.credentials.verificationToken,
         webhookUrl,
       });
@@ -623,6 +640,8 @@ class FeishuWSClientImpl implements PlatformClient {
     }
     this.gateway?.close();
     this.gateway = null;
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
     if (this.bot) {
       await this.bot.shutdown().catch(() => {});
       this.bot = null;

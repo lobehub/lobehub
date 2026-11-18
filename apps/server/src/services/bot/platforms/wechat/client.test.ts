@@ -16,6 +16,10 @@ vi.mock('../publicUrlFetch', async () => ({
   }),
 }));
 
+// The loopback prefers INTERNAL_APP_URL (see ../selfWebhook); leave it unset so
+// the client falls back to the app URL in its runtime context.
+vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: undefined, INTERNAL_APP_URL: undefined } }));
+
 const mockCreateWechatAdapter = vi.hoisted(() => vi.fn());
 const mockGetUpdates = vi.hoisted(() => vi.fn());
 const mockStartTyping = vi.hoisted(() => vi.fn());

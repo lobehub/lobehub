@@ -13,7 +13,6 @@ import debug from 'debug';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
-import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
@@ -24,6 +23,7 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -52,14 +52,6 @@ export interface WeComGatewayListenerOptions {
   durationMs?: number;
   waitUntil?: (task: Promise<any>) => void;
 }
-
-/**
- * Base URL the connection forwards inbound frames to — its own server. Server-to-server calls use
- * `INTERNAL_APP_URL` when set (it bypasses the public CDN / proxy, and in Docker the public URL may
- * not resolve from inside the container), else the public `APP_URL`.
- */
-export const resolveSelfWebhookBase = (appUrl?: string): string =>
-  (appEnv.INTERNAL_APP_URL || appUrl || appEnv.APP_URL || '').trim().replace(/\/+$/, '');
 
 /** `wecom:single:<userid>` / `wecom:group:<chatid>` → `{ type, id }`. */
 export const decodeWeComThreadId = (platformThreadId: string): WeComThreadId => {
@@ -109,6 +101,8 @@ class WeComClient implements PlatformClient {
   readonly applicationId: string;
 
   private connection: WeComLongConnection | null = null;
+  /** Watches `connection`'s forwarding to the webhook route; retired with it. */
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private generation = 0;
   private pending: WeComLongConnection | null = null;
   private readonly config: BotProviderConfig;
@@ -155,6 +149,15 @@ class WeComClient implements PlatformClient {
         statusOptions,
       ).catch(() => {});
 
+    const webhookUrl = buildSelfWebhookUrl(this.id, this.applicationId, this.context.appUrl);
+    const forwardMonitor = new SelfWebhookForwardMonitor({
+      applicationId: this.applicationId,
+      platform: this.id,
+      redisClient: this.context.redisClient,
+      ttlMs,
+      webhookUrl,
+    });
+
     const connection = new WeComLongConnection({
       botId: this.applicationId,
       log: (message, ...args) => log(message, ...args),
@@ -168,8 +171,9 @@ class WeComClient implements PlatformClient {
         this.retireConnection(connection);
         void reportFailure(error);
       },
+      onForwardResult: forwardMonitor.record,
       secret: this.config.credentials.secret,
-      webhookUrl: `${resolveSelfWebhookBase(this.context.appUrl)}/api/agent/webhooks/wecom/${this.applicationId}`,
+      webhookUrl,
     });
 
     this.pending = connection;
@@ -177,6 +181,7 @@ class WeComClient implements PlatformClient {
       await connection.start();
     } catch (error) {
       connection.stop();
+      forwardMonitor.dispose();
       if (generation !== this.generation) return;
       this.pending = null;
       await reportFailure(error);
@@ -185,11 +190,13 @@ class WeComClient implements PlatformClient {
     if (generation !== this.generation) {
       // Stopped (integration disabled / deleted) or restarted while subscribing.
       connection.stop();
+      forwardMonitor.dispose();
       return;
     }
     this.pending = null;
 
     this.connection = connection;
+    this.forwardMonitor = forwardMonitor;
     registerWeComConnection(connection);
 
     if (options?.waitUntil) {
@@ -258,6 +265,7 @@ class WeComClient implements PlatformClient {
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
     this.connection = null;
+    this.disposeForwardMonitor();
   }
 
   private closeConnection(): void {
@@ -268,6 +276,12 @@ class WeComClient implements PlatformClient {
       this.connection.stop();
       this.connection = null;
     }
+    this.disposeForwardMonitor();
+  }
+
+  private disposeForwardMonitor(): void {
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
   }
 
   // --- Runtime Operations ---

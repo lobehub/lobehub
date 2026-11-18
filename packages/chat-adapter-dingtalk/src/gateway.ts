@@ -7,6 +7,15 @@ import { DINGTALK_STREAM_FRAME_TYPES, DINGTALK_STREAM_TOPICS } from './types';
 
 export type GatewayLogger = (...args: any[]) => void;
 
+/** Outcome of one callback forwarded to the webhook route. */
+export interface GatewayForwardResult {
+  /** Set when no answer came back (connection refused, DNS failure, timeout). */
+  error?: unknown;
+  ok: boolean;
+  /** HTTP status of the answer, when there was one. */
+  status?: number;
+}
+
 const noop: GatewayLogger = () => {};
 
 const RECONNECT_BASE_DELAY_MS = 1000;
@@ -35,6 +44,11 @@ export interface DingTalkGatewayOptions {
   durationMs?: number;
   /** Optional logger function (defaults to no-op) */
   log?: GatewayLogger;
+  /**
+   * Outcome of each robot message POSTed to `webhookUrl`. A failure there drops the message while
+   * the stream stays connected, so the host surfaces it.
+   */
+  onForwardResult?: (result: GatewayForwardResult) => void;
   /** Protocol-level ping interval; a socket that misses one pong window is replaced */
   pingIntervalMs?: number;
   /** Topics to subscribe to; defaults to robot message callbacks */
@@ -338,8 +352,25 @@ export class DingTalkStreamConnection {
       },
       method: 'POST',
       signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
-    }).catch((err) => {
-      this.log('Failed to forward callback %s to webhook: %O', messageId, err);
-    });
+    }).then(
+      (response) => {
+        if (!response.ok) {
+          this.log('Webhook answered %d to forwarded callback %s', response.status, messageId);
+        }
+        this.reportForward({ ok: response.ok, status: response.status });
+      },
+      (err) => {
+        this.log('Failed to forward callback %s to webhook: %O', messageId, err);
+        this.reportForward({ error: err, ok: false });
+      },
+    );
+  }
+
+  private reportForward(result: GatewayForwardResult): void {
+    try {
+      this.options.onForwardResult?.(result);
+    } catch (err) {
+      this.log('onForwardResult threw: %O', err);
+    }
   }
 }

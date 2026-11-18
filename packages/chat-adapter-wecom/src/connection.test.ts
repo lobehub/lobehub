@@ -118,6 +118,35 @@ describe('WeComLongConnection — inbound forwarding', () => {
     expect(JSON.parse(init.body as string).headers.req_id).toBe('req-1');
   });
 
+  it('reports each forward outcome, so a dropped message is not silent', async () => {
+    const onForwardResult = vi.fn();
+    const refused = Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ECONNREFUSED' },
+    });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('ok'))
+      .mockResolvedValueOnce(new Response('Invalid signature', { status: 401 }))
+      .mockRejectedValueOnce(refused);
+    const { connection, socket } = setup({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      onForwardResult,
+    });
+    active = connection;
+    await connection.start();
+
+    for (const reqId of ['req-1', 'req-2', 'req-3']) {
+      socket().serverSend(inbound(reqId));
+      await flush();
+    }
+
+    expect(onForwardResult.mock.calls.map(([result]) => result)).toEqual([
+      { ok: true, status: 200 },
+      { ok: false, status: 401 },
+      { error: refused, ok: false },
+    ]);
+  });
+
   it('does not forward events', async () => {
     const { connection, fetchImpl, socket } = setup();
     active = connection;

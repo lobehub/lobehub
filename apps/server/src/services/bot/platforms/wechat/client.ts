@@ -19,6 +19,7 @@ import {
 } from '@/server/services/gateway/runtimeStatus';
 
 import { warnAttachmentFailures } from '../attachmentDelivery';
+import { buildSelfWebhookUrl, SelfWebhookForwardMonitor } from '../selfWebhook';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
@@ -68,6 +69,12 @@ function resolveWechatApplicationId(config: BotProviderConfig, botToken: string)
   return config.applicationId || config.credentials.botId || botToken.slice(0, 8);
 }
 
+/** Where one poll loop hands its messages: this server's webhook route, watched for drops. */
+interface WechatForwardTarget {
+  monitor: SelfWebhookForwardMonitor;
+  url: string;
+}
+
 class WechatGatewayClient implements PlatformClient {
   readonly id = 'wechat';
   readonly applicationId: string;
@@ -76,6 +83,7 @@ class WechatGatewayClient implements PlatformClient {
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private api: WechatApiClient;
+  private forwardMonitor: SelfWebhookForwardMonitor | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
   /** Cached context tokens per user ID for replies */
@@ -101,7 +109,17 @@ class WechatGatewayClient implements PlatformClient {
     const durationMs = options?.durationMs ?? DEFAULT_DURATION_MS;
     const runtimeStatusTtlMs = durationMs + CONNECTED_STATUS_TTL_BUFFER_MS;
     const waitUntil = options?.waitUntil ?? ((task: Promise<any>) => task.catch(() => {}));
-    const webhookUrl = `${(this.context.appUrl || '').trim()}/api/agent/webhooks/wechat/${this.applicationId}`;
+    const webhookUrl = buildSelfWebhookUrl(this.id, this.applicationId, this.context.appUrl);
+    this.forwardMonitor?.dispose();
+    const forwardMonitor = new SelfWebhookForwardMonitor({
+      applicationId: this.applicationId,
+      platform: this.id,
+      redisClient: this.context.redisClient,
+      ttlMs: runtimeStatusTtlMs,
+      webhookUrl,
+    });
+    this.forwardMonitor = forwardMonitor;
+    const forward: WechatForwardTarget = { monitor: forwardMonitor, url: webhookUrl };
     await updateBotRuntimeStatus(
       {
         applicationId: this.applicationId,
@@ -112,12 +130,12 @@ class WechatGatewayClient implements PlatformClient {
     );
 
     try {
-      const cursor = await this.primePolling(webhookUrl);
+      const cursor = await this.primePolling(forward);
 
       if (this.abort.signal.aborted || this.stopped) return;
 
       // Start the long-polling loop in background
-      const pollTask = this.pollLoop(durationMs, webhookUrl, cursor);
+      const pollTask = this.pollLoop(durationMs, forward, cursor);
       waitUntil(pollTask);
 
       // When called from GatewayManager (no explicit options), schedule auto-refresh
@@ -170,6 +188,8 @@ class WechatGatewayClient implements PlatformClient {
       this.refreshTimer = null;
     }
     this.abort.abort();
+    this.forwardMonitor?.dispose();
+    this.forwardMonitor = null;
     await updateBotRuntimeStatus(
       {
         applicationId: this.applicationId,
@@ -184,7 +204,7 @@ class WechatGatewayClient implements PlatformClient {
 
   private async pollLoop(
     durationMs: number,
-    webhookUrl: string,
+    forward: WechatForwardTarget,
     initialCursor?: string,
   ): Promise<void> {
     const endTime = Date.now() + durationMs;
@@ -203,7 +223,7 @@ class WechatGatewayClient implements PlatformClient {
           cursor = response.get_updates_buf;
         }
 
-        await this.processUpdates(response.msgs, webhookUrl);
+        await this.processUpdates(response.msgs, forward);
       } catch (err: any) {
         if (this.abort.signal.aborted) break;
 
@@ -233,7 +253,7 @@ class WechatGatewayClient implements PlatformClient {
    * Start with a short-lived probe request so connection setup doesn't report
    * success before WeChat long-polling has had a chance to come online.
    */
-  private async primePolling(webhookUrl: string): Promise<string | undefined> {
+  private async primePolling(forward: WechatForwardTarget): Promise<string | undefined> {
     const probeAbort = new AbortController();
     const timer = setTimeout(() => {
       probeAbort.abort();
@@ -243,7 +263,7 @@ class WechatGatewayClient implements PlatformClient {
       const signal = AbortSignal.any([this.abort.signal, probeAbort.signal]);
       const response = await this.api.getUpdates(undefined, signal);
 
-      await this.processUpdates(response.msgs, webhookUrl);
+      await this.processUpdates(response.msgs, forward);
       return response.get_updates_buf || undefined;
     } catch (err) {
       if (this.abort.signal.aborted || probeAbort.signal.aborted) {
@@ -259,7 +279,7 @@ class WechatGatewayClient implements PlatformClient {
 
   private async processUpdates(
     msgs: WechatRawMessage[] | undefined,
-    webhookUrl: string,
+    forward: WechatForwardTarget,
   ): Promise<void> {
     if (!msgs || msgs.length === 0) return;
 
@@ -273,18 +293,21 @@ class WechatGatewayClient implements PlatformClient {
       await this.persistContextToken(msg.from_user_id, msg.context_token);
 
       // Forward to webhook
-      await this.forwardToWebhook(webhookUrl, msg);
+      await this.forwardToWebhook(forward, msg);
     }
   }
 
   /**
    * Forward a polled message to the webhook endpoint for Chat SDK processing.
    */
-  private async forwardToWebhook(webhookUrl: string, msg: WechatRawMessage): Promise<void> {
+  private async forwardToWebhook(
+    forward: WechatForwardTarget,
+    msg: WechatRawMessage,
+  ): Promise<void> {
     try {
       log('WechatBot appId=%s forwarding msg from %s', this.applicationId, msg.from_user_id);
       const webhookToken = this.config.credentials.webhookToken?.trim();
-      const response = await fetch(webhookUrl, {
+      const response = await fetch(forward.url, {
         body: JSON.stringify(msg),
         headers: {
           ...(webhookToken ? { Authorization: `Bearer ${webhookToken}` } : {}),
@@ -296,8 +319,10 @@ class WechatGatewayClient implements PlatformClient {
       if (!response.ok) {
         log('WechatBot appId=%s webhook forward failed: %d', this.applicationId, response.status);
       }
+      void forward.monitor.record({ ok: response.ok, status: response.status });
     } catch (err) {
       log('WechatBot appId=%s webhook forward error: %O', this.applicationId, err);
+      void forward.monitor.record({ error: err, ok: false });
     }
   }
 

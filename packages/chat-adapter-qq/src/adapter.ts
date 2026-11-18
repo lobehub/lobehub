@@ -20,6 +20,7 @@ import { QQApiClient } from './api';
 import { signWebhookResponse } from './crypto';
 import { isQQActiveRateLimited, isQQDuplicateReply, isQQPassiveExpired } from './errors';
 import { QQFormatConverter } from './format-converter';
+import type { GatewayForwardResult } from './gateway';
 import { QQGatewayConnection } from './gateway';
 import {
   createMemoryQQPassiveStore,
@@ -33,8 +34,8 @@ import type {
   QQAdapterConfig,
   QQAttachment,
   QQRawMessage,
-  QQThreadId,
   QQSendMessageResponse,
+  QQThreadId,
   QQWebhookEventData,
   QQWebhookPayload,
 } from './types';
@@ -232,7 +233,10 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
    * preserving compatibility with the existing handleWebhook() pipeline.
    */
   async startGatewayListener(
-    options: { waitUntil: (task: Promise<any>) => void },
+    options: {
+      onForwardResult?: (result: GatewayForwardResult) => void;
+      waitUntil: (task: Promise<any>) => void;
+    },
     durationMs: number,
     abortSignal: AbortSignal,
     webhookUrl: string,
@@ -241,6 +245,7 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       abortSignal,
       durationMs,
       log: (msg: string, ...rest: any[]) => this.logger.info(msg, ...rest),
+      onForwardResult: options.onForwardResult,
       webhookUrl,
     });
 

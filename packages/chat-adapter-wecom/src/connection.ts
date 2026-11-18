@@ -24,6 +24,15 @@ const SOCKET_OPEN = 1;
 /** Refused re-subscribes in a row before a running connection gives up (official SDK default). */
 const MAX_RESUBSCRIBE_FAILURES = 5;
 
+/** Outcome of one frame forwarded to the webhook route. */
+export interface WeComForwardResult {
+  /** Set when no answer came back (connection refused, DNS failure, timeout). */
+  error?: unknown;
+  ok: boolean;
+  /** HTTP status of the answer, when there was one. */
+  status?: number;
+}
+
 export interface WeComConnectionOptions {
   /** Stops the connection when aborted. */
   abortSignal?: AbortSignal;
@@ -46,6 +55,11 @@ export interface WeComConnectionOptions {
   onDisplaced?: () => void;
   /** A reconnect was refused (credentials revoked, bot deleted). The connection has stopped. */
   onFatalError?: (error: Error) => void;
+  /**
+   * Outcome of each inbound frame POSTed to `webhookUrl`: the status it answered, or what `fetch`
+   * threw. A failure there drops the message while the socket stays healthy, so the host surfaces it.
+   */
+  onForwardResult?: (result: WeComForwardResult) => void;
   /** How long after a message its req_id still accepts a passive reply (platform: 24h). */
   replyWindowMs?: number;
   secret: string;
@@ -125,9 +139,12 @@ export class WeComLongConnection {
   readonly botId: string;
 
   private readonly options: Required<
-    Omit<WeComConnectionOptions, 'abortSignal' | 'onDisplaced' | 'onFatalError'>
+    Omit<WeComConnectionOptions, 'abortSignal' | 'onDisplaced' | 'onFatalError' | 'onForwardResult'>
   > &
-    Pick<WeComConnectionOptions, 'abortSignal' | 'onDisplaced' | 'onFatalError'>;
+    Pick<
+      WeComConnectionOptions,
+      'abortSignal' | 'onDisplaced' | 'onFatalError' | 'onForwardResult'
+    >;
 
   private authenticated = false;
   private authFailures = 0;
@@ -511,6 +528,7 @@ export class WeComLongConnection {
   private async forward(frame: WeComFrame): Promise<void> {
     const body = JSON.stringify(frame);
     const timestamp = String(this.options.now());
+    let result: WeComForwardResult;
     try {
       const res = await this.options.fetchImpl(this.options.webhookUrl, {
         body,
@@ -525,9 +543,12 @@ export class WeComLongConnection {
       if (!res.ok) {
         this.options.log('WeCom bot %s: webhook forward returned %d', this.botId, res.status);
       }
+      result = { ok: res.ok, status: res.status };
     } catch (error) {
       this.options.log('WeCom bot %s: webhook forward failed: %O', this.botId, error);
+      result = { error, ok: false };
     }
+    this.options.onForwardResult?.(result);
   }
 
   // ------------------------------------------------------------------

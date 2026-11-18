@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { INBOUND_FORWARD_FAILED_ERROR_CODE, SelfWebhookForwardMonitor } from '../selfWebhook';
 import { FeishuWSConnection } from './gateway';
+
+const { updateBotRuntimeStatus } = vi.hoisted(() => ({
+  updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/server/services/gateway/runtimeStatus', () => ({
+  BOT_RUNTIME_STATUSES: { connected: 'connected', failed: 'failed' },
+  updateBotRuntimeStatus,
+}));
 
 // ---- Mock @larksuiteoapi/node-sdk ----
 
@@ -32,6 +41,8 @@ vi.mock('@larksuiteoapi/node-sdk', () => {
 
 // ---- Tests ----
 
+const onForwardResult = vi.fn();
+
 describe('FeishuWSConnection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,6 +62,7 @@ describe('FeishuWSConnection', () => {
       appId: 'cli_test',
       appSecret: 'test_secret',
       domain: 'feishu',
+      onForwardResult,
       webhookUrl: 'http://localhost:3000/api/agent/webhooks/feishu/test_app',
     });
   }
@@ -103,6 +115,74 @@ describe('FeishuWSConnection', () => {
       expect(body.schema).toBe('2.0');
       expect(body.header.event_type).toBe('im.message.receive_v1');
       expect(body.event).toEqual(eventData);
+      expect(onForwardResult).toHaveBeenCalledWith({ ok: true, status: 200 });
+    });
+
+    // #23215: an unreachable loopback used to end in a debug-only log line,
+    // so every message vanished while the bot looked connected.
+    it('reports a forward the server never answered', async () => {
+      const refused = Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED' },
+      });
+      vi.mocked(fetch).mockRejectedValueOnce(refused);
+      const conn = createConnection();
+      await conn.start();
+
+      await capturedEventHandlers['im.message.receive_v1']({ message: { chat_id: 'oc_test' } });
+
+      expect(onForwardResult).toHaveBeenCalledWith({ error: refused, ok: false });
+    });
+
+    it('turns an unreachable loopback into an error log and a failed bot status', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }),
+      );
+      const webhookUrl = 'https://lobe.tailnet.example/api/agent/webhooks/feishu/cli_test';
+      const monitor = new SelfWebhookForwardMonitor({
+        applicationId: 'cli_test',
+        platform: 'feishu',
+        webhookUrl,
+      });
+      const conn = new FeishuWSConnection({
+        appId: 'cli_test',
+        appSecret: 'test_secret',
+        domain: 'feishu',
+        onForwardResult: monitor.record,
+        webhookUrl,
+      });
+      await conn.start();
+
+      await capturedEventHandlers['im.message.receive_v1']({ message: { chat_id: 'oc_test' } });
+      await vi.waitFor(() => expect(updateBotRuntimeStatus).toHaveBeenCalled());
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^\[bot-platform:feishu\] Dropped an inbound event for cli_test: forwarding it to https:\/\/lobe\.tailnet\.example\/api\/agent\/webhooks\/feishu\/cli_test failed \(ECONNREFUSED\); 1 dropped in a row\./,
+        ),
+      );
+      expect(updateBotRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          applicationId: 'cli_test',
+          errorCode: INBOUND_FORWARD_FAILED_ERROR_CODE,
+          platform: 'feishu',
+          status: 'failed',
+        }),
+        expect.anything(),
+      );
+      expect(monitor.consecutiveFailures).toBe(1);
+    });
+
+    it('reports a forward the webhook route rejected', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response('Invalid verification token', { status: 401 }),
+      );
+      const conn = createConnection();
+      await conn.start();
+
+      await capturedEventHandlers['im.message.receive_v1']({ message: { chat_id: 'oc_test' } });
+
+      expect(onForwardResult).toHaveBeenCalledWith({ ok: false, status: 401 });
     });
   });
 
