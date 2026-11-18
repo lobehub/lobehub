@@ -1,8 +1,9 @@
 import type { Context } from 'hono';
 
-import { type ApiKeyScope, hasApiKeyScope, isFullAccessApiKey } from '@/const/apiKeyScope';
+import { type ApiKeyScope, hasApiKeyScope } from '@/const/apiKeyScope';
 
 import { BaseController } from '../common/base.controller';
+import { getCredentialScopes, isScopeRestrictedCredential } from '../middleware/permission-check';
 import { UserService } from '../services';
 import type {
   CreateUserRequest,
@@ -18,10 +19,9 @@ import type {
 export class UserController extends BaseController {
   /** Session / OIDC callers and full-access keys hold every scope implicitly. */
   private callerHasScope(c: Context, scope: ApiKeyScope): boolean {
-    if (c.get('authType') !== 'apikey') return true;
+    if (!isScopeRestrictedCredential(c)) return true;
 
-    const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
-    return isFullAccessApiKey(scopes) || hasApiKeyScope(scopes, scope);
+    return hasApiKeyScope(getCredentialScopes(c), scope);
   }
 
   /**

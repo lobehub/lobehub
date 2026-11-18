@@ -561,3 +561,36 @@ export const requiredApiKeyScopeForTrpc = (
 
   return scopes.length > 0 ? { scopes } : { open: true };
 };
+
+// ---------------------------------------------------------------------------
+// OAuth projection: API key scope → OAuth scope
+// ---------------------------------------------------------------------------
+
+/**
+ * The API key scopes an OAuth client may request, spelled exactly as the key
+ * scopes (`agent:read`, `model:invoke`, …) so one catalog governs both
+ * credentials. Full access (`*`) is not an OAuth scope: a third-party app always
+ * names what it needs, and the user sees each capability on the consent page.
+ */
+export const OAUTH_API_SCOPES = API_KEY_SCOPES.filter(
+  (scope): scope is Exclude<ApiKeyScope, typeof API_KEY_FULL_ACCESS_SCOPE> =>
+    scope !== API_KEY_FULL_ACCESS_SCOPE,
+);
+
+export type OAuthApiScope = (typeof OAUTH_API_SCOPES)[number];
+
+const OAUTH_API_SCOPE_SET: ReadonlySet<string> = new Set(OAUTH_API_SCOPES);
+
+export const isOAuthApiScope = (scope: string): scope is OAuthApiScope =>
+  OAUTH_API_SCOPE_SET.has(scope);
+
+/**
+ * Picks the API capability scopes out of an OAuth `scope` value (space
+ * separated, as carried by an access token). OIDC scopes such as `openid` or
+ * `offline_access` are not capabilities and are dropped.
+ */
+export const apiScopesFromOAuthScope = (scope?: string | null): OAuthApiScope[] => {
+  if (!scope) return [];
+
+  return [...new Set(scope.split(' ').filter(isOAuthApiScope))];
+};

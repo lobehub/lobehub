@@ -23,6 +23,7 @@ import {
   isAcceptanceReviewClient,
   isAcceptanceReviewIssued,
 } from './acceptanceReview';
+import { CLIENT_CREDENTIALS_OWNER_CLAIM, CLIENT_CREDENTIALS_WORKSPACE_CLAIM } from './openPlatform';
 
 const log = debug('oidc-jwt');
 
@@ -162,12 +163,21 @@ const verifyJwt = async (token: string, publicKeys: JWK_RSA_Public[]) => {
   throw signatureError ?? new Error('No RSA key available for JWT verification');
 };
 
+export interface ValidateOIDCJWTOptions {
+  /**
+   * Accept `client_credentials` tokens, which act as the user that owns their
+   * client. Only the public REST API opts in: it narrows every such token to
+   * its registered scopes, which other transports do not enforce.
+   */
+  allowClientCredentials?: boolean;
+}
+
 /**
  * Validate OIDC JWT Access Token
  * @param token - JWT access token
  * @returns Parsed token payload and user information
  */
-export const validateOIDCJWT = async (token: string) => {
+export const validateOIDCJWT = async (token: string, options: ValidateOIDCJWTOptions = {}) => {
   log('Starting OIDC JWT token validation');
 
   // JWKS / signing key retrieval is an infrastructure concern (misconfigured
@@ -182,9 +192,28 @@ export const validateOIDCJWT = async (token: string) => {
 
     log('JWT validation successful, payload: %O', payload);
 
-    const userId = payload.sub;
     const clientId = payload.client_id;
     const aud = payload.aud;
+
+    // A client_credentials token has the client, not a person, as its subject;
+    // it acts as the owner the provider signed into it.
+    const owner = payload[CLIENT_CREDENTIALS_OWNER_CLAIM];
+    const clientCredentials = typeof owner === 'string' && owner.length > 0;
+    if (!clientCredentials && payload.sub && payload.sub === clientId) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Client tokens without an owner are not accepted',
+      });
+    }
+    if (clientCredentials && !options.allowClientCredentials) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'Client credentials tokens are only accepted by the public API',
+      });
+    }
+
+    const userId = clientCredentials ? (owner as string) : payload.sub;
+    const workspaceClaim = payload[CLIENT_CREDENTIALS_WORKSPACE_CLAIM];
 
     if (!userId) {
       throw new TRPCError({
@@ -214,12 +243,15 @@ export const validateOIDCJWT = async (token: string) => {
       tokenData: {
         aud,
         client_id: clientId,
+        clientCredentials,
         exp: payload.exp,
         iat: payload.iat,
         jti: payload.jti,
         purpose: payload.purpose as string | undefined,
         scope: payload.scope,
         sub: userId,
+        workspaceId:
+          clientCredentials && typeof workspaceClaim === 'string' ? workspaceClaim : undefined,
       },
       userId,
     };

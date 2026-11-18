@@ -49,6 +49,24 @@ export interface PermissionCheckOptions {
 }
 
 /**
+ * Scopes the request's credential is narrowed to: an API key's scopes (`null`
+ * = full access) or, for OAuth tokens, the API scopes the token carries.
+ * `undefined` means the credential is not narrowed by scopes at all (session
+ * auth, first-party OAuth tokens that requested no API scope).
+ */
+export const getCredentialScopes = (c: Context): string[] | null | undefined =>
+  c.get('apiKeyScopes') as string[] | null | undefined;
+
+/** Is this request limited to a scope list (a restricted key or a scoped token)? */
+export const isScopeRestrictedCredential = (c: Context): boolean => {
+  const scopes = getCredentialScopes(c);
+  return scopes !== undefined && !isFullAccessApiKey(scopes);
+};
+
+const credentialLabel = (c: Context) =>
+  c.get('authType') === 'apikey' ? 'this API key' : 'this access token';
+
+/**
  * Create a permission check middleware factory
  * @param options - Permission check configuration
  * @returns Hono middleware function
@@ -69,10 +87,9 @@ const assertApiKeyScopesAllow = (
   operator: 'AND' | 'OR',
   apiKeyScope?: ApiKeyScope,
 ) => {
-  if (c.get('authType') !== 'apikey') return;
+  if (!isScopeRestrictedCredential(c)) return;
 
-  const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
-  if (isFullAccessApiKey(scopes)) return;
+  const scopes = getCredentialScopes(c);
 
   const requiredScopes = apiKeyScope
     ? [apiKeyScope]
@@ -88,8 +105,10 @@ const assertApiKeyScopesAllow = (
       cause: { missingScopes: missing, requiredPermissions: permissionCodes },
       message:
         missing.length > 0
-          ? `insufficient_scope: this API key is missing required scope(s): ${missing.join(', ')}`
-          : 'insufficient_scope: this operation is not available to restricted API keys',
+          ? `insufficient_scope: ${credentialLabel(c)} is missing required scope(s): ${missing.join(', ')}`
+          : c.get('authType') === 'apikey'
+            ? 'insufficient_scope: this operation is not available to restricted API keys'
+            : 'insufficient_scope: this operation is not available to scoped access tokens',
     });
   }
 };
@@ -252,13 +271,13 @@ export const requireAnyPermissionWithApiKeyScope = (
  */
 export const requireApiKeyScope = (scope: ApiKeyScope) => {
   return async (c: Context, next: Next) => {
-    if (c.get('authType') !== 'apikey') return next();
+    if (!isScopeRestrictedCredential(c)) return next();
 
-    const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
-    if (!isFullAccessApiKey(scopes) && !hasApiKeyScope(scopes, scope)) {
+    const scopes = getCredentialScopes(c);
+    if (!hasApiKeyScope(scopes, scope)) {
       throw new HTTPException(403, {
         cause: { missingScopes: [scope] },
-        message: `insufficient_scope: this API key is missing required scope '${scope}'`,
+        message: `insufficient_scope: ${credentialLabel(c)} is missing required scope '${scope}'`,
       });
     }
 

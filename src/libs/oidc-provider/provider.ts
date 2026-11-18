@@ -30,6 +30,13 @@ import { stampClientLastUsed } from './clientLastUsed';
 import { defaultClaims, defaultClients, defaultScopes } from './config';
 import { getOIDCCookieKeys } from './cookies';
 import { createInteractionPolicy } from './interaction-policy';
+import {
+  createExtraTokenClaims,
+  createRegistrationFeature,
+  getOpenPlatformFlags,
+  openPlatformClientMetadata,
+  openPlatformScopes,
+} from './openPlatform';
 
 const logProvider = debug('lobe-oidc:provider');
 
@@ -73,6 +80,8 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
   const jwks = getJWKS();
 
   const cookieKeys = getOIDCCookieKeys();
+
+  const openPlatform = getOpenPlatformFlags();
 
   const configuration: Configuration = {
     // 11. Database adapter
@@ -122,6 +131,12 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     // Added: ensure ID Token includes claims for all scopes, not just openid scope
     conformIdTokenClaims: false,
 
+    // Owner stamps on dynamically registered clients (see `openPlatform`)
+    extraClientMetadata: openPlatformClientMetadata(),
+
+    // A client_credentials token carries the user/workspace its client acts as
+    extraTokenClaims: createExtraTokenClaims(db),
+
     // 7. Cookie configuration
     cookies: {
       keys: cookieKeys,
@@ -132,7 +147,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     // 5. Features configuration
     features: {
       backchannelLogout: { enabled: true },
-      clientCredentials: { enabled: false },
+      clientCredentials: { enabled: openPlatform.clientCredentials },
       devInteractions: { enabled: false },
       deviceFlow: {
         charset: 'base-20',
@@ -162,6 +177,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
         },
       },
       introspection: { enabled: true },
+      registration: createRegistrationFeature(db, openPlatform),
       resourceIndicators: {
         defaultResource: (ctx, client) => defaultResourceFor(client?.clientId, API_AUDIENCE),
         enabled: true,
@@ -372,7 +388,7 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
     // arrives as `/oidc/jwks` and the provider answers 404.
     routes: { ...OIDC_ROUTES },
     // 3. Scopes definition
-    scopes: defaultScopes,
+    scopes: [...defaultScopes, ...openPlatformScopes(openPlatform)],
 
     // 8. Token TTL
     ttl: {

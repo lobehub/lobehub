@@ -122,7 +122,9 @@ describe('OpenAPI auth middleware', () => {
       userId: 'oidc-user',
     });
     expect(response.status).toBe(200);
-    expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token');
+    expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token', {
+      allowClientCredentials: true,
+    });
     expect(mockAssertOIDCUserActive).toHaveBeenCalledWith(mockServerDB, 'oidc-user');
   });
 

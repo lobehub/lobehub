@@ -35,6 +35,23 @@ vi.mock('@/database/models/oidcClient', () => ({
   }),
 }));
 
+const { mockFlags, mockIssueRegistrationToken } = vi.hoisted(() => ({
+  mockFlags: vi.fn(),
+  mockIssueRegistrationToken: vi.fn(),
+}));
+
+vi.mock('@/libs/oidc-provider/openPlatform', () => ({
+  getOpenPlatformFlags: mockFlags,
+  issueRegistrationToken: mockIssueRegistrationToken,
+}));
+
+const offFlags = {
+  apiScopes: false,
+  clientCredentials: false,
+  dynamicRegistration: false,
+  registrationApproval: false,
+};
+
 const { oauthAppRouter } = await import('../oauthApp');
 
 const webApp = {
@@ -207,6 +224,41 @@ describe('oauthAppRouter', () => {
       mockRotateSecret.mockResolvedValue(undefined);
 
       await expect(caller().rotateSecret({ id: 'lca_app' })).rejects.toThrow();
+    });
+  });
+
+  describe('createRegistrationToken', () => {
+    it('refuses while dynamic registration is switched off', async () => {
+      mockFlags.mockReturnValue(offFlags);
+
+      await expect(caller().createRegistrationToken()).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+      });
+      expect(mockIssueRegistrationToken).not.toHaveBeenCalled();
+    });
+
+    it('issues a token owned by the caller and their workspace', async () => {
+      mockFlags.mockReturnValue({ ...offFlags, dynamicRegistration: true });
+      const expiresAt = new Date('2026-11-19T00:00:00Z');
+      mockIssueRegistrationToken.mockResolvedValue({ expiresAt, token: 'iat_plain' });
+
+      const result = await oauthAppRouter
+        .createCaller({ ...ctx, workspaceId: 'ws-1' })
+        .createRegistrationToken();
+
+      expect(mockIssueRegistrationToken).toHaveBeenCalledWith(ctx.serverDB, {
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      });
+      expect(result).toEqual({ expiresAt, token: 'iat_plain' });
+    });
+  });
+
+  describe('openPlatform', () => {
+    it('reports which capabilities the server enabled', async () => {
+      mockFlags.mockReturnValue({ ...offFlags, apiScopes: true });
+
+      await expect(caller().openPlatform()).resolves.toEqual({ ...offFlags, apiScopes: true });
     });
   });
 });

@@ -11,6 +11,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { OidcClientModel } from '@/database/models/oidcClient';
+import { getOpenPlatformFlags, issueRegistrationToken } from '@/libs/oidc-provider/openPlatform';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -95,6 +96,26 @@ export const oauthAppRouter = router({
       return { ...stripSecret(client), clientSecret: secret };
     }),
 
+  /**
+   * Mints a single-use initial access token for RFC 7591 dynamic registration.
+   * The client it registers belongs to the caller (and the current workspace),
+   * exactly like an app created on this page. Returned once, never stored in
+   * plaintext anywhere the caller can read it back.
+   */
+  createRegistrationToken: oauthAppWriteProcedure.mutation(async ({ ctx }) => {
+    if (!getOpenPlatformFlags().dynamicRegistration) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Dynamic client registration is not enabled on this server',
+      });
+    }
+
+    return issueRegistrationToken(ctx.serverDB, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  }),
+
   delete: oauthAppWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -109,6 +130,18 @@ export const oauthAppRouter = router({
   list: oauthAppProcedure.query(async ({ ctx }) => {
     const clients = await ctx.oidcClientModel.list();
     return clients.map(stripSecret);
+  }),
+
+  /** Which OAuth open platform capabilities the server has switched on. */
+  openPlatform: oauthAppProcedure.query(() => {
+    const flags = getOpenPlatformFlags();
+
+    return {
+      apiScopes: flags.apiScopes,
+      clientCredentials: flags.clientCredentials,
+      dynamicRegistration: flags.dynamicRegistration,
+      registrationApproval: flags.registrationApproval,
+    };
   }),
 
   rotateSecret: oauthAppWriteProcedure

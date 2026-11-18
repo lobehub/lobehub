@@ -8,6 +8,9 @@ import {
 class OAuthAppService {
   create = (params: CreateOAuthAppParams) => lambdaClient.oauthApp.create.mutate(params);
 
+  /** A single-use initial access token for RFC 7591 dynamic registration. */
+  createRegistrationToken = () => lambdaClient.oauthApp.createRegistrationToken.mutate();
+
   delete = (id: string) => lambdaClient.oauthApp.delete.mutate({ id });
 
   /** `undefined` when the app does not exist or is not visible to the caller. */
@@ -15,6 +18,9 @@ class OAuthAppService {
     (await lambdaClient.oauthApp.getById.query({ id })) as OAuthAppItem | undefined;
 
   list = async () => (await lambdaClient.oauthApp.list.query()) as OAuthAppItem[];
+
+  /** Which OAuth open platform capabilities the server switched on. */
+  getOpenPlatform = () => lambdaClient.oauthApp.openPlatform.query();
 
   rotateSecret = (id: string) => lambdaClient.oauthApp.rotateSecret.mutate({ id });
 
