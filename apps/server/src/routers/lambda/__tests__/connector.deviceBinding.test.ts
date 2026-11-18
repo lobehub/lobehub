@@ -75,6 +75,7 @@ describe('connectorRouter device binding by visibility', () => {
     mocks.findWorkspaceDeviceById.mockImplementation(async (id: string) => devices.get(id));
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'created' }),
+      changeVisibilityUnlessHeld: vi.fn().mockResolvedValue({ changed: true }),
       createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'created' } }),
       findById: vi.fn(),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
@@ -172,9 +173,11 @@ describe('connectorRouter device binding by visibility', () => {
 
       await member().update({ id: CONNECTOR_ID, patch: { visibility: 'public' } });
 
-      expect(connectorModelMock.update).toHaveBeenCalledWith(
+      // The share claims the shared slot under the identifier lock
+      expect(connectorModelMock.changeVisibilityUnlessHeld).toHaveBeenCalledWith(
         CONNECTOR_ID,
-        expect.objectContaining({ visibility: 'public' }),
+        expect.any(String),
+        'public',
       );
     });
 
@@ -183,9 +186,14 @@ describe('connectorRouter device binding by visibility', () => {
 
       await member().update({ id: CONNECTOR_ID, patch: { metadata: {}, visibility: 'public' } });
 
+      expect(connectorModelMock.changeVisibilityUnlessHeld).toHaveBeenCalledWith(
+        CONNECTOR_ID,
+        expect.any(String),
+        'public',
+      );
       expect(connectorModelMock.update).toHaveBeenCalledWith(
         CONNECTOR_ID,
-        expect.objectContaining({ metadata: {}, visibility: 'public' }),
+        expect.objectContaining({ metadata: {} }),
       );
     });
   });
