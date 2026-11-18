@@ -1626,7 +1626,7 @@ export default class HeterogeneousAgentCtr {
           },
         },
         mcpConfigPath: intervention?.tmpConfigPath,
-        permissionMode: intervention && params.permissionMode,
+        permissionMode: intervention ? params.permissionMode : undefined,
         promptInput,
         resumeSessionId: session.agentSessionId,
       });
