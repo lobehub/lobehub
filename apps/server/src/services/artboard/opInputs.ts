@@ -15,12 +15,6 @@ export const sourcePathOf = (source: ArtboardBoardSourceInput) =>
   normalizeArtboardFilePath(source.path) ??
   failArtboard('invalid', `"${source.path}" is not a valid artboard file path.`);
 
-export const sourceColumns = (path: string | undefined) => ({
-  sourceFileId: null,
-  sourcePath: path ?? null,
-  sourceWorkVersionId: null,
-});
-
 export const sourceHashKey = (
   board: Pick<ArtboardBoardRow, 'sourcePath'>,
   hashes: ReadonlyMap<string, string>,

@@ -27,7 +27,7 @@ import {
   toPageRect,
   wrapBoards,
 } from './layout';
-import { boardTypeOf, resolveOpRefs, sourceColumns, sourcePathOf } from './opInputs';
+import { boardTypeOf, resolveOpRefs, sourcePathOf } from './opInputs';
 
 export interface ArtboardOpTarget {
   id: string;
@@ -330,7 +330,7 @@ class Draft {
       y: board.y,
     };
     const row = await this.model.createBoard(this.artboard.id, {
-      ...sourceColumns(sourcePath),
+      sourcePath: sourcePath ?? null,
       expected: board.expected ?? null,
       groupId: group?.id ?? null,
       pageId: page.id,
@@ -399,7 +399,7 @@ class Draft {
     const expected = carriesCheck ? (patch.expected ?? board.expected) : null;
 
     const values = {
-      ...(sourcePath === undefined ? {} : { ...sourceColumns(sourcePath), type }),
+      ...(sourcePath === undefined ? {} : { sourcePath, type }),
       ...(patch.title === undefined ? {} : { title: patch.title }),
       ...(expected === board.expected ? {} : { expected }),
       ...((group?.id ?? null) === board.groupId ? {} : { groupId: group?.id ?? null }),
