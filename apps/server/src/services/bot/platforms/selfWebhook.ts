@@ -100,9 +100,9 @@ const buildStatusMessage = (result: SelfWebhookForwardResult, reason: string): s
  * - a dropped event is an error-level log line with the target URL, the reason and how many were
  *   dropped in a row — the first one at once, later ones at most once per
  *   `FORWARD_FAILURE_REPORT_INTERVAL_MS`;
- * - the bot's runtime status turns `failed` with an explanation, re-written on every drop: an event
- *   can be forwarded before the client's own `connected` write lands, and that write must not hide
- *   the failure. The first event that gets through again returns it to `connected`.
+ * - the bot's runtime status turns `failed` with an explanation, re-written on every drop. The
+ *   client's own `connected` write goes through `markConnected`, which keeps a drop recorded while
+ *   the connection was starting. The first event that gets through again returns it to `connected`.
  */
 export class SelfWebhookForwardMonitor {
   private consecutive = 0;
@@ -127,6 +127,29 @@ export class SelfWebhookForwardMonitor {
    */
   dispose(): void {
     this.disposed = true;
+  }
+
+  /**
+   * The client's own `connected` write once its connection is up. It joins the queue of drop
+   * reports instead of racing them: an event can be forwarded — and dropped — while the
+   * connection is still starting (WeChat's readiness probe forwards what it receives), and an
+   * unconditional `connected` after that would hide the drop until the next one.
+   *
+   * Skipped when a drop was already recorded (the `failed` status stands) or after `dispose()`
+   * (a stop owns the status). Unlike `record`, a failing write rejects, so `start()` still fails
+   * when the status cannot be stored.
+   */
+  markConnected(): Promise<void> {
+    const { applicationId, platform, redisClient, ttlMs } = this.options;
+    const write = this.writes.then(async () => {
+      if (this.disposed || this.consecutive > 0) return;
+      await updateBotRuntimeStatus(
+        { applicationId, platform, status: BOT_RUNTIME_STATUSES.connected },
+        { redisClient: redisClient as any, ttlMs },
+      );
+    });
+    this.writes = write.catch(() => {});
+    return write;
   }
 
   /** Record one forwarded event. Never throws; resolves once the status write settled. */

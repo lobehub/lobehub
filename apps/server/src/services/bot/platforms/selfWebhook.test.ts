@@ -236,6 +236,68 @@ describe('SelfWebhookForwardMonitor', () => {
     expect(statusWrites().map((params) => params.status)).toEqual(['failed']);
   });
 
+  describe('markConnected', () => {
+    it('writes connected when nothing was dropped', async () => {
+      await createMonitor().markConnected();
+
+      expect(statusWrites()).toEqual([
+        { applicationId: 'cli_app', platform: 'feishu', status: 'connected' },
+      ]);
+      expect(updateBotRuntimeStatus.mock.calls[0][1]).toEqual({
+        redisClient: undefined,
+        ttlMs: 1000,
+      });
+    });
+
+    // An event forwarded while the connection is still starting (WeChat's
+    // readiness probe) used to be hidden by the client's own connected write.
+    it('keeps the failed status of a drop recorded while the connection was starting', async () => {
+      const monitor = createMonitor();
+
+      void monitor.record({ ok: false, status: 502 });
+      await monitor.markConnected();
+
+      expect(statusWrites().map((params) => params.status)).toEqual(['failed']);
+    });
+
+    it('waits for a drop write still in flight instead of racing it', async () => {
+      let releaseDrop!: () => void;
+      updateBotRuntimeStatus.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (releaseDrop = resolve)),
+      );
+      const monitor = createMonitor();
+
+      void monitor.record({ error: refused(), ok: false });
+      let settled = false;
+      const connected = monitor.markConnected().then(() => (settled = true));
+      await vi.waitFor(() => expect(updateBotRuntimeStatus).toHaveBeenCalledTimes(1));
+      expect(settled).toBe(false);
+      releaseDrop();
+      await connected;
+
+      expect(statusWrites().map((params) => params.status)).toEqual(['failed']);
+    });
+
+    it('does not overwrite the status once disposed', async () => {
+      const monitor = createMonitor();
+
+      monitor.dispose();
+      await monitor.markConnected();
+
+      expect(updateBotRuntimeStatus).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the write fails, so start() still fails, and keeps reporting afterwards', async () => {
+      updateBotRuntimeStatus.mockRejectedValueOnce(new Error('redis down'));
+      const monitor = createMonitor();
+
+      await expect(monitor.markConnected()).rejects.toThrow('redis down');
+
+      await monitor.record({ error: refused(), ok: false });
+      expect(statusWrites().at(-1)?.status).toBe('failed');
+    });
+  });
+
   it('never throws when the status write fails', async () => {
     updateBotRuntimeStatus.mockRejectedValueOnce(new Error('redis down'));
 

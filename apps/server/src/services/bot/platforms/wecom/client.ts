@@ -213,14 +213,8 @@ class WeComClient implements PlatformClient {
       this.scheduleRefresh(durationMs);
     }
 
-    await updateBotRuntimeStatus(
-      {
-        applicationId: this.applicationId,
-        platform: this.id,
-        status: BOT_RUNTIME_STATUSES.connected,
-      },
-      statusOptions,
-    );
+    // Through the monitor: a frame dropped while subscribing keeps the bot `failed`.
+    await forwardMonitor.markConnected();
     log('WeCom bot %s connected', this.applicationId);
   }
 

@@ -356,6 +356,15 @@ describe('persistent-connection forward failures', () => {
         ),
       );
       expect(console.error).toHaveBeenCalledWith(expect.stringContaining('(ECONNREFUSED)'));
+      // The status a reader gets afterwards: the client's own `connected` write
+      // must not land on top (WeChat drops the message during its readiness probe).
+      const writes = h.updateBotRuntimeStatus.mock.calls
+        .map(([params]) => params)
+        .filter((params) => params.applicationId === config.applicationId);
+      expect(writes.at(-1)).toMatchObject({
+        errorCode: 'inbound_forward_failed',
+        status: 'failed',
+      });
     },
   );
 });

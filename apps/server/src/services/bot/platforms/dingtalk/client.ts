@@ -359,14 +359,8 @@ class DingTalkGatewayClient extends DingTalkClientBase {
         }, durationMs);
       }
 
-      await updateBotRuntimeStatus(
-        {
-          applicationId: this.applicationId,
-          platform: this.id,
-          status: BOT_RUNTIME_STATUSES.connected,
-        },
-        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
-      );
+      // Through the monitor: an event dropped while starting keeps the bot `failed`.
+      await forwardMonitor.markConnected();
 
       log('DingTalk bot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
     } catch (error) {
