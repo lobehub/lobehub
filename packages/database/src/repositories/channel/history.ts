@@ -21,7 +21,8 @@ import {
   channelMessageVia,
   RequestTrigger,
 } from '@lobechat/types';
-import { and, count, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -342,17 +343,23 @@ export class ChannelHistoryRepository {
     const limit = integer(params.limit, 10, 1, 20);
     return this.read(operationId, async (tx, channelId, manifest) => {
       // The cursor is a threadId, so a caller pages by `nextBefore` without holding a snapshot.
-      // `createdAt` alone is not unique (a bulk open writes several Threads in one millisecond),
-      // so the ordering and the filter both fall back to the id.
-      let cursor: { createdAt: Date; id: string } | undefined;
+      // The comparison stays in SQL against the stored row: Postgres keeps microseconds while a
+      // JS `Date` stops at milliseconds, so reading the timestamp out and binding it back would
+      // round the cursor down and skip the Threads that share its millisecond. `createdAt` alone
+      // is not unique either (a bulk open writes several Threads at once), hence the id tie-break.
+      let cursorScope: SQL | undefined;
       if (params.before) {
         const [row] = await tx
-          .select({ createdAt: channelThreads.createdAt, id: channelThreads.id })
+          .select({ id: channelThreads.id })
           .from(channelThreads)
           .where(and(eq(channelThreads.channelId, channelId), eq(channelThreads.id, params.before)))
           .limit(1);
         if (!row) throw new ChannelError('BAD_REQUEST', 'before must be a Thread of this Channel');
-        cursor = row;
+        cursorScope = sql`(
+          SELECT ${channelThreads.createdAt}, ${channelThreads.id}
+          FROM ${channelThreads}
+          WHERE ${channelThreads.id} = ${row.id}
+        )`;
       }
 
       const selfJobs = params.activeOnly
@@ -385,14 +392,8 @@ export class ChannelHistoryRepository {
             eq(channelThreads.channelId, channelId),
             notTrashed(channelThreads.isDeleted),
             activeIds ? inArray(channelThreads.id, activeIds) : undefined,
-            cursor
-              ? or(
-                  lt(channelThreads.createdAt, cursor.createdAt),
-                  and(
-                    eq(channelThreads.createdAt, cursor.createdAt),
-                    lt(channelThreads.id, cursor.id),
-                  ),
-                )
+            cursorScope
+              ? sql`(${channelThreads.createdAt}, ${channelThreads.id}) < ${cursorScope}`
               : undefined,
           ),
         )

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -129,6 +129,35 @@ describe('Channel Threads from a run', () => {
     await expect(
       state.history.listThreads(main.operationId, { before: 'cht_missing' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('pages past Threads that share the cursor’s millisecond', async () => {
+    const state = await setup();
+    const stamped: string[] = [];
+    for (const title of ['Work 0', 'Work 1', 'Work 2']) {
+      const root = await state.say(title);
+      const run = await state.run({ rootMessageId: root.id });
+      stamped.push(run.threadId!);
+    }
+    const main = await state.run();
+    // Postgres keeps microseconds while a JS `Date` stops at milliseconds: three Threads stamped
+    // inside one millisecond used to make the cursor round down and skip its own bucket.
+    const micros = ['00:00:00.123100', '00:00:00.123200', '00:00:00.123300'];
+    for (const [index, threadId] of stamped.entries())
+      await db.execute(
+        sql`update channel_threads set created_at = ${`2026-01-01 ${micros[index]}+00`}::timestamptz where id = ${threadId}`,
+      );
+
+    const seen: string[] = [];
+    let before: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const result = await state.history.listThreads(main.operationId, { before, limit: 1 });
+      seen.push(...result.threads.map((thread) => thread.threadId));
+      if (!result.hasMore) break;
+      before = result.nextBefore!;
+    }
+    expect(new Set(seen).size).toBe(seen.length);
+    expect([...seen].sort()).toEqual([...stamped].sort());
   });
 
   it('reads another Thread live, past the run’s own cutoff', async () => {
