@@ -1,6 +1,7 @@
 import {
   getMcpServerFingerprint,
   hasMcpUiResource,
+  isLocalMcpServer,
   isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   withListingUiMeta,
@@ -507,7 +508,10 @@ export class DeviceMcpRuntime {
         !fromApp &&
         !fromEntrypoint &&
         hasMcpUiResource(raw.content) && {
-          mcpUi: { server: await getMcpServerFingerprint(params) },
+          mcpUi: {
+            ...(isLocalMcpServer(params) && { local: true }),
+            server: await getMcpServerFingerprint(params),
+          },
         }),
     };
     return {

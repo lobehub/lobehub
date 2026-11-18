@@ -1,3 +1,5 @@
+import { isLoopbackHostname } from '@lobechat/const/mcpApp';
+
 import { APP_IFRAME_ALLOW, injectCsp } from './utils';
 
 /**
@@ -106,14 +108,16 @@ export const buildExternalFrameDocument = (url: string): string =>
     ].join('; '),
   );
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-
 /**
  * Whether an MCP-UI external page may render: https, or http on this machine
- * (a local MCP server's page); never LobeHub's own origin or a URL with
- * credentials.
+ * when a local MCP server served it (`allowLoopbackHttp`); never LobeHub's own
+ * origin or a URL with credentials.
  */
-export const isRenderableExternalUrl = (url: string, hostOrigin: string): boolean => {
+export const isRenderableExternalUrl = (
+  url: string,
+  hostOrigin: string,
+  allowLoopbackHttp = false,
+): boolean => {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -122,7 +126,7 @@ export const isRenderableExternalUrl = (url: string, hostOrigin: string): boolea
   }
   if (parsed.origin === hostOrigin || parsed.username || parsed.password) return false;
   if (parsed.protocol === 'https:') return true;
-  return parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase());
+  return parsed.protocol === 'http:' && allowLoopbackHttp && isLoopbackHostname(parsed.hostname);
 };
 
 export const isAppFrameNavigatedNotice = (data: unknown): data is McpAppFrameNavigatedNotice =>

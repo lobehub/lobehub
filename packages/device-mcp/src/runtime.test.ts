@@ -702,3 +702,68 @@ describe('DeviceMcpRuntime stdio session reuse (T-801 stateful MCP servers)', ()
     expect(b.disconnect).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('DeviceMcpRuntime MCP-UI embedded views', () => {
+  const card = {
+    resource: { mimeType: 'text/html', text: '<button>Go</button>', uri: 'ui://card/1' },
+    type: 'resource',
+  };
+  const setup = () => {
+    const instance = {
+      ...makeClientInstance('ui'),
+      getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
+      isToolHiddenFromModel: vi.fn().mockResolvedValue(false),
+    };
+    instance.callTool.mockResolvedValue({
+      content: [{ text: 'Card ready', type: 'text' }, card],
+      isError: false,
+    });
+    mcpClientMocks.mockReturnValue(instance);
+    return new DeviceMcpRuntime({
+      getMediaUrl: async (key) => key,
+      uploadMedia: vi.fn(async ({ path }: { path: string }) => path),
+    } as any);
+  };
+
+  beforeEach(() => {
+    mcpClientMocks.mockReset();
+  });
+
+  it('marks a result embedding a ui:// view, local for a loopback server, without HTML in its text', async () => {
+    const result = await setup().runTool(
+      { name: 'cards', type: 'http', url: 'http://localhost:4000/mcp' },
+      'show_card',
+      {},
+      { mcpApps: true },
+    );
+
+    expect(result.state?.mcpUi).toEqual({ local: true, server: expect.any(String) });
+    expect(result.content).toContain('<resource type="ui" uri="ui://card/1"');
+    expect(result.content).not.toContain('<button>');
+  });
+
+  it('does not mark a remote server as local', async () => {
+    const result = await setup().runTool(
+      { name: 'cards', type: 'http', url: 'https://mcp.example.com/mcp' },
+      'show_card',
+      {},
+      { mcpApps: true },
+    );
+
+    expect(result.state?.mcpUi).toEqual({ server: expect.any(String) });
+  });
+
+  it.each([
+    ['the mcp_apps flag is off', {}],
+    ["a view's own call", { fromApp: true, mcpApps: true }],
+  ])('does not mark it when %s', async (_, options) => {
+    const result = await setup().runTool(
+      { name: 'cards', type: 'http', url: 'http://localhost:4000/mcp' },
+      'show_card',
+      {},
+      options,
+    );
+
+    expect(result.state?.mcpUi).toBeUndefined();
+  });
+});

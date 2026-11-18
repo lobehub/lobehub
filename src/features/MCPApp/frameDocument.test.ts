@@ -105,11 +105,13 @@ describe('buildExternalFrameDocument (MCP-UI text/uri-list)', () => {
 describe('isRenderableExternalUrl', () => {
   const host = 'https://app.lobehub.com';
 
-  it('accepts https anywhere and http on this machine only', () => {
+  it('accepts https anywhere, and loopback http only from a local MCP server', () => {
     expect(isRenderableExternalUrl('https://widgets.example.com/a', host)).toBe(true);
-    expect(isRenderableExternalUrl('http://localhost:39742/page', host)).toBe(true);
-    expect(isRenderableExternalUrl('http://127.0.0.1/page', host)).toBe(true);
-    expect(isRenderableExternalUrl('http://widgets.example.com/a', host)).toBe(false);
+    expect(isRenderableExternalUrl('http://localhost:39742/page', host, true)).toBe(true);
+    expect(isRenderableExternalUrl('http://127.0.0.1/page', host, true)).toBe(true);
+    // A remote server must not make every viewer's browser request localhost
+    expect(isRenderableExternalUrl('http://localhost:39742/page', host)).toBe(false);
+    expect(isRenderableExternalUrl('http://widgets.example.com/a', host, true)).toBe(false);
   });
 
   it("refuses LobeHub's own origin, credentials and other schemes", () => {

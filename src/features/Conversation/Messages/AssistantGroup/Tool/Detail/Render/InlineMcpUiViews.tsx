@@ -1,6 +1,6 @@
 import type { McpUiEmbeddedResource } from '@lobechat/const/mcpApp';
 import { Flexbox } from '@lobehub/ui';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import McpUiResourceView, {
   buildMcpUiFrameDocument,
@@ -27,9 +27,13 @@ export const InlineMcpUiViews = ({
   // An external page this host refuses (LobeHub's own origin, plain http
   // elsewhere) renders nothing: with none left, the plain result shows
   const renderable = resources.filter(
-    (resource) => !!buildMcpUiFrameDocument(resource, window.location.origin),
+    (resource) =>
+      !!buildMcpUiFrameDocument(resource, window.location.origin, props.allowLoopbackHttp),
   );
-  if (!renderable.length) return fallback;
+  // Views that left their document were dropped: with all of them gone, so is the card's body
+  const [dropped, setDropped] = useState<ReadonlySet<string>>(() => new Set());
+  if (renderable.every((resource, index) => dropped.has(`${index}:${resource.uri}`)))
+    return fallback;
 
   return (
     <Flexbox gap={8} width={'100%'}>
@@ -39,6 +43,7 @@ export const InlineMcpUiViews = ({
           host={{ agentId, canSendMessage, sendMessage }}
           key={`${index}:${resource.uri}`}
           resource={resource}
+          onDropped={() => setDropped((keys) => new Set(keys).add(`${index}:${resource.uri}`))}
         />
       ))}
     </Flexbox>

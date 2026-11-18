@@ -52,9 +52,20 @@ const decodeBase64 = (value: string): string | undefined => {
 
 const readBody = (resource: ResourceBlock['resource']): string | undefined => {
   if (typeof resource.text === 'string') return resource.text;
-  if (typeof resource.blob === 'string') return decodeBase64(resource.blob);
+  // Base64 is 4/3 the decoded size: an oversized body is refused before decoding
+  if (
+    typeof resource.blob === 'string' &&
+    resource.blob.length <= (MCP_UI_RESOURCE_MAX_LENGTH * 4) / 3
+  )
+    return decodeBase64(resource.blob);
   return undefined;
 };
+
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+/** Whether a hostname names this machine. */
+export const isLoopbackHostname = (hostname: string): boolean =>
+  LOOPBACK_HOSTNAMES.has(hostname.toLowerCase()) || /^127(?:\.\d{1,3}){3}$/.test(hostname);
 
 /** The first http(s) URL of a `text/uri-list` (RFC 2483: `#` lines are comments). */
 export const firstUriListUrl = (list: string): string | undefined => {
@@ -89,27 +100,55 @@ export const parseMcpUiResource = (block: unknown): McpUiEmbeddedResource | unde
   return undefined;
 };
 
+// A stored result's content never changes: parse (and decode) each array once
+const parsed = new WeakMap<unknown[], McpUiEmbeddedResource[]>();
+
 /** Every renderable view among a tool result's content blocks, in order. */
-export const getMcpUiResources = (content: unknown): McpUiEmbeddedResource[] =>
-  Array.isArray(content)
-    ? content.flatMap((block) => {
-        const resource = parseMcpUiResource(block);
-        return resource ? [resource] : [];
-      })
-    : [];
+export const getMcpUiResources = (content: unknown): McpUiEmbeddedResource[] => {
+  if (!Array.isArray(content)) return [];
+  let resources = parsed.get(content);
+  if (!resources) {
+    resources = content.flatMap((block) => {
+      const resource = parseMcpUiResource(block);
+      return resource ? [resource] : [];
+    });
+    parsed.set(content, resources);
+  }
+  return resources;
+};
 
 /** Whether a tool result's content carries at least one renderable view. */
 export const hasMcpUiResource = (content: unknown): boolean =>
-  Array.isArray(content) && content.some((block) => !!parseMcpUiResource(block));
+  getMcpUiResources(content).length > 0;
 
 /**
- * What the model reads for an embedded `ui://` block: which view was shown,
- * never its HTML. The view is for the user; the server's text blocks are what
- * it tells the model.
+ * What the model (and a plain result card) reads for an embedded `ui://`
+ * block: which view it is, never its HTML; an external page keeps its URL. The
+ * view is for the user; the server's text blocks are what it tells the model.
+ * Applies whether or not the views render (`mcp_apps`): an HTML document is
+ * noise in model context either way.
  */
 export const describeMcpUiResourceBlock = (block: unknown): string | undefined => {
   if (!isUiResourceBlock(block)) return;
+  const attr = (name: string, value: unknown) =>
+    typeof value === 'string' ? ` ${name}="${value.replaceAll('"', '')}"` : '';
   const { mimeType, uri } = block.resource;
-  const type = typeof mimeType === 'string' ? ` mimeType="${mimeType.replaceAll('"', '')}"` : '';
-  return `<resource type="ui" uri="${(uri as string).replaceAll('"', '')}"${type} />`;
+  const view = parseMcpUiResource(block);
+  return `<resource type="ui"${attr('uri', uri)}${attr('mimeType', mimeType)}${attr('url', view?.kind === 'url' ? view.url : undefined)} />`;
+};
+
+/**
+ * Whether an MCP server runs on the machine that reaches it (stdio, or http on
+ * a loopback host). Only such a server's views may load plain-http loopback
+ * pages: a remote server must not make every viewer's browser request
+ * `http://localhost/…`.
+ */
+export const isLocalMcpServer = (params: { type?: string; url?: string }): boolean => {
+  if (params.type === 'stdio') return true;
+  if (params.type !== 'http' || !params.url) return false;
+  try {
+    return isLoopbackHostname(new URL(params.url).hostname);
+  } catch {
+    return false;
+  }
 };

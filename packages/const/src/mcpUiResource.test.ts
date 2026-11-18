@@ -5,6 +5,7 @@ import {
   firstUriListUrl,
   getMcpUiResources,
   hasMcpUiResource,
+  isLocalMcpServer,
   MCP_UI_RESOURCE_MAX_LENGTH,
   parseMcpUiResource,
 } from './mcpUiResource';
@@ -61,6 +62,9 @@ describe('parseMcpUiResource', () => {
       parseMcpUiResource(html({ text: 'a'.repeat(MCP_UI_RESOURCE_MAX_LENGTH + 1) })),
     ).toBeUndefined();
     expect(parseMcpUiResource(html({ blob: '%%%not-base64' }))).toBeUndefined();
+    expect(
+      parseMcpUiResource(html({ blob: 'A'.repeat(MCP_UI_RESOURCE_MAX_LENGTH * 2) })),
+    ).toBeUndefined();
     expect(parseMcpUiResource({ text: 'x', type: 'text' })).toBeUndefined();
   });
 });
@@ -99,9 +103,30 @@ describe('describeMcpUiResourceBlock', () => {
     expect(summary).not.toContain('secret');
   });
 
+  it('keeps the URL of an external page', () => {
+    expect(
+      describeMcpUiResourceBlock(
+        html({ mimeType: 'text/uri-list', text: 'https://example.com/w' }),
+      ),
+    ).toBe(
+      '<resource type="ui" uri="ui://demo/card" mimeType="text/uri-list" url="https://example.com/w" />',
+    );
+  });
+
   it('leaves other resources to the default serializer', () => {
     expect(
       describeMcpUiResourceBlock({ resource: { text: 'x', uri: 'file:///a' }, type: 'resource' }),
     ).toBeUndefined();
+  });
+});
+
+describe('isLocalMcpServer', () => {
+  it('is true for stdio and loopback http servers only', () => {
+    expect(isLocalMcpServer({ type: 'stdio' })).toBe(true);
+    expect(isLocalMcpServer({ type: 'http', url: 'http://localhost:39742/mcp' })).toBe(true);
+    expect(isLocalMcpServer({ type: 'http', url: 'http://127.0.0.2:80/mcp' })).toBe(true);
+    expect(isLocalMcpServer({ type: 'http', url: 'https://mcp.example.com/mcp' })).toBe(false);
+    expect(isLocalMcpServer({ type: 'http', url: 'not a url' })).toBe(false);
+    expect(isLocalMcpServer({ type: 'cloud' })).toBe(false);
   });
 });

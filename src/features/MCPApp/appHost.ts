@@ -8,8 +8,6 @@ import { toCallToolResult } from './utils';
 import { type AppViewContext, createAppViewActions } from './viewActions';
 import { withoutStoredMedia } from './viewToolResult';
 
-export { type AppViewContext, getMcpAppLinkId, MAX_PENDING_TOOL_APPROVALS } from './viewActions';
-
 export const MAX_APP_VIEW_HEIGHT = 2000;
 export interface ConnectAppViewOptions {
   getContext: () => AppViewContext;

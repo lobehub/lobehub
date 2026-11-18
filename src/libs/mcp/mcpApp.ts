@@ -48,6 +48,11 @@ export interface McpAppToolState {
 export interface McpUiToolState {
   /** As {@link McpAppToolState.deviceId}: only that desktop serves the views. */
   deviceId?: string;
+  /**
+   * The server runs on the machine that reached it (`isLocalMcpServer`): only
+   * then may its views load plain-http loopback pages.
+   */
+  local?: boolean;
   /** As {@link McpAppToolState.server}: the views' tool calls reach no other server. */
   server?: string;
 }
@@ -151,7 +156,11 @@ export const getMcpUiFromState = (
   state: unknown,
 ): (McpUiToolState & { resources: McpUiEmbeddedResource[] }) | undefined => {
   const inner = unwrapMcpToolState(state) as
-    | { content?: unknown; mcpApp?: unknown; mcpUi?: { deviceId?: unknown; server?: unknown } }
+    | {
+        content?: unknown;
+        mcpApp?: unknown;
+        mcpUi?: { deviceId?: unknown; local?: unknown; server?: unknown };
+      }
     | undefined;
   const marker = inner?.mcpUi;
   if (!marker || typeof marker !== 'object' || getMcpAppFromState(state)) return;
@@ -161,6 +170,7 @@ export const getMcpUiFromState = (
 
   return {
     ...(typeof marker.deviceId === 'string' && { deviceId: marker.deviceId }),
+    ...(marker.local === true && { local: true }),
     resources,
     ...(typeof marker.server === 'string' && { server: marker.server }),
   };

@@ -727,7 +727,11 @@ describe('MCPService', () => {
           toolName: 'show_card',
         });
 
-        expect(result.state.mcpUi).toEqual({ server: await getMcpServerFingerprint(mockParams) });
+        // A stdio server runs here: its views may load loopback pages
+        expect(result.state.mcpUi).toEqual({
+          local: true,
+          server: await getMcpServerFingerprint(mockParams),
+        });
         expect(result.state.mcpApp).toBeUndefined();
         expect(result.state.content).toContainEqual(card);
         expect(result.content).toContain('<resource type="ui" uri="ui://card/1"');
@@ -737,6 +741,7 @@ describe('MCPService', () => {
       it.each([
         ['the mcp_apps flag is off', { mcpApps: false }],
         ["a view's own call", { fromApp: true, mcpApps: true }],
+        ['an entrypoint call', { fromEntrypoint: true, mcpApps: true }],
       ])('does not mark it when %s', async (_, options) => {
         mockClient.getToolUiResourceUri.mockResolvedValue(undefined);
         mockClient.callTool.mockResolvedValue({ content: [card], isError: false });

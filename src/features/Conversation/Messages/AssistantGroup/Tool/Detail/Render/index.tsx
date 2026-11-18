@@ -119,6 +119,7 @@ const ToolRender = memo<ToolRenderProps>(
     if (mcpUi && canServeMcpAppHere(mcpUi, currentDeviceId) && showCustomToolRender && plugin) {
       return (
         <McpUiViews
+          allowLoopbackHttp={!!mcpUi.local}
           apiName={plugin.apiName}
           arguments={plugin.arguments}
           fallback={fallback}

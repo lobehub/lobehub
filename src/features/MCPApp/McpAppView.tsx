@@ -13,17 +13,13 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useToolStore } from '@/store/tool';
 import { sx } from '@/styles/sx';
 
-import {
-  type AppViewContext,
-  type AppViewSession,
-  connectAppView,
-  getAppViewPhase,
-} from './appHost';
+import { type AppViewSession, connectAppView, getAppViewPhase } from './appHost';
 import { buildHostContext } from './bridge';
 import { availableDisplayModes, requestedDisplayMode, resolveDisplayMode } from './displayMode';
 import { buildAppFrameDocument, VIEW_FRAME_SANDBOX } from './frameDocument';
 import { retireAppFrame } from './frameRetire';
 import { APP_IFRAME_ALLOW, buildAppCsp, pickAppResource } from './utils';
+import type { AppViewContext } from './viewActions';
 
 const DEFAULT_HEIGHT = 320;
 

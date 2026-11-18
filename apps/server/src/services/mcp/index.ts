@@ -3,6 +3,7 @@ import {
   getMcpAppEntrypoints,
   getMcpServerFingerprint,
   hasMcpUiResource,
+  isLocalMcpServer,
   isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
@@ -435,10 +436,19 @@ export class MCPService {
             ...(preferredModelDisplayMode && { preferredModelDisplayMode }),
             server: await getMcpServerFingerprint(clientParams),
           };
-        } else if (mcpApps && !result.isError && !fromApp && hasMcpUiResource(result.content)) {
+        } else if (
+          mcpApps &&
+          !result.isError &&
+          !fromApp &&
+          !fromEntrypoint &&
+          hasMcpUiResource(result.content)
+        ) {
           // MCP-UI: the result embeds its own `ui://` view (no resource to read
           // back); its calls reach this server only
-          processedResult.state.mcpUi = { server: await getMcpServerFingerprint(clientParams) };
+          processedResult.state.mcpUi = {
+            ...(isLocalMcpServer(clientParams) && { local: true }),
+            server: await getMcpServerFingerprint(clientParams),
+          };
         }
 
         log('MCP tool call completed: %O', {

@@ -53,19 +53,24 @@ const styles = stylex.create({
 export const buildMcpUiFrameDocument = (
   resource: McpUiEmbeddedResource,
   hostOrigin: string,
+  allowLoopbackHttp = false,
 ): string | undefined => {
   if (resource.kind === 'html') return buildAppFrameDocument(resource.html, buildAppCsp(undefined));
-  return isRenderableExternalUrl(resource.url, hostOrigin)
+  return isRenderableExternalUrl(resource.url, hostOrigin, allowLoopbackHttp)
     ? buildExternalFrameDocument(resource.url)
     : undefined;
 };
 
 export interface McpUiResourceViewProps {
+  /** A local MCP server served the view: a plain-http loopback page may load. */
+  allowLoopbackHttp?: boolean;
   apiName: string;
   /** Raw JSON arguments of the tool call. */
   arguments?: string;
   host: Pick<AppViewContext, 'agentId' | 'canSendMessage' | 'sendMessage'>;
   identifier: string;
+  /** The view left its document and was dropped. */
+  onDropped?: () => void;
   /** This desktop's own MCP process produced the result: the view's calls run there. */
   onThisDevice?: boolean;
   resource: McpUiEmbeddedResource;
@@ -83,10 +88,12 @@ export interface McpUiResourceViewProps {
  */
 const McpUiResourceView = memo<McpUiResourceViewProps>(
   ({
+    allowLoopbackHttp = false,
     apiName,
     arguments: args,
     host,
     identifier,
+    onDropped,
     onThisDevice = false,
     resource,
     result,
@@ -101,7 +108,7 @@ const McpUiResourceView = memo<McpUiResourceViewProps>(
     const { agentId, canSendMessage, sendMessage } = host;
 
     // A string: the effects below compare it by value, so no memo is needed
-    const srcDoc = buildMcpUiFrameDocument(resource, window.location.origin);
+    const srcDoc = buildMcpUiFrameDocument(resource, window.location.origin, allowLoopbackHttp);
     // The document whose view left it, so the wrapper dropped the view
     const [droppedDoc, setDroppedDoc] = useState<string>();
     const navigated = !!srcDoc && droppedDoc === srcDoc;
@@ -119,6 +126,11 @@ const McpUiResourceView = memo<McpUiResourceViewProps>(
       t,
     });
     const sessionRef = useRef<McpUiViewSession>(undefined);
+    const latestOnDropped = useLatest(onDropped);
+
+    useEffect(() => {
+      if (navigated) latestOnDropped.current?.();
+    }, [latestOnDropped, navigated]);
 
     useEffect(() => {
       const target = iframeRef.current?.contentWindow;

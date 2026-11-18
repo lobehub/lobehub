@@ -669,6 +669,25 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     expect(result?.state).toEqual({ content: [] });
   });
 
+  it('records this desktop on MCP-UI views, and offers none when its id is unknown', async () => {
+    plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
+    const marked = () =>
+      serializeMcpIpcPayload({
+        content: 'ok',
+        state: { content: [], mcpUi: { local: true, server: 'srv' } },
+        success: true,
+      });
+    ipcCall.mockResolvedValueOnce(marked());
+
+    const result = await mcpService.invokeMcpToolCall(refresh, localView);
+    expect(result?.state?.mcpUi).toEqual({ deviceId: 'this-desktop', local: true, server: 'srv' });
+
+    resolveGatewayDeviceId.mockResolvedValueOnce(undefined);
+    ipcCall.mockResolvedValueOnce(marked());
+    const unresolved = await mcpService.invokeMcpToolCall(refresh, localView);
+    expect(unresolved?.state).toEqual({ content: [] });
+  });
+
   // Its tool list was read here over IPC; the server relay connects from the
   // server, which can't reach this machine's localhost / LAN
   it('runs conversation calls to localhost / LAN http servers here, where their tools were listed', async () => {

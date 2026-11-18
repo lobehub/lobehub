@@ -37,6 +37,7 @@ import {
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
+import { toModelContent } from './modelContent';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
 import { withoutDeviceReplay } from './serverRuntimes/withoutDeviceReplay';
 import {
@@ -141,22 +142,6 @@ const getThrownErrorText = (error: unknown): string => {
   } catch {
     return 'Unknown tool execution error';
   }
-};
-
-/**
- * What the model reads of a server MCP call. A result with an MCP App view
- * (or embedded MCP-UI views, whose HTML is the user's) gives its text only: MCP Apps keeps `structuredContent` and `_meta` for the
- * view, out of model context. Any other result (no view, an error, a failed
- * view lookup) keeps its serialized form, `structuredContent` included, but
- * never `_meta`: protocol metadata, where an Apps-aware server keeps what only
- * its views may see.
- */
-const toModelContent = (result: any): string => {
-  if (result?.state?.mcpApp || result?.state?.mcpUi) return result.content;
-  if (!result?.state || typeof result.state !== 'object') return JSON.stringify(result);
-
-  const { _meta, ...state } = result.state;
-  return JSON.stringify({ ...result, state });
 };
 
 export class ToolExecutionService {
