@@ -62,14 +62,31 @@ const imageSourceSchema = z.object({
   kind: z.literal('image'),
 });
 
+// A hosted HTML deployment (`dep_…`), pinned at one release. Its content lives with the
+// hosting service, not in this database.
+const deploymentSourceSchema = z.object({
+  deploymentId: z.string().min(1),
+  kind: z.literal('deployment'),
+  releaseId: z.string().min(1),
+  revision: z.number().int().positive(),
+});
+
 export const artboardBoardSourceSchema = z.discriminatedUnion('kind', [
   canvasSourceSchema,
+  deploymentSourceSchema,
   imageSourceSchema,
 ]);
 export type ArtboardBoardSource = z.infer<typeof artboardBoardSourceSchema>;
+export type ArtboardDeploymentSource = z.infer<typeof deploymentSourceSchema>;
 
 export const artboardBoardSourceInputSchema = z.discriminatedUnion('kind', [
   canvasSourceSchema.extend({ version: z.number().int().positive().optional() }),
+  // `deployment` is a `dep_…` id or its share link; `revision` defaults to the latest release.
+  z.object({
+    deployment: z.string().min(1),
+    kind: z.literal('deployment'),
+    revision: z.number().int().positive().optional(),
+  }),
   z.object({ fileRef: z.string().min(1), kind: z.literal('image') }),
 ]);
 export type ArtboardBoardSourceInput = z.infer<typeof artboardBoardSourceInputSchema>;

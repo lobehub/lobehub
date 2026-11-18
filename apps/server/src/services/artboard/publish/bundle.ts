@@ -5,13 +5,19 @@ import {
   type CanvasPublishFile,
 } from '@lobechat/types';
 
-import { canvasSitePrefix, imageSitePath } from './snapshot';
+import { canvasSitePrefix, deploymentSitePath, imageSitePath } from './snapshot';
 
 export interface ArtboardPublishCanvasBundle {
   bundle: CanvasPublishBundle;
   canvasId: string;
   entry: string;
   version: number;
+}
+
+export interface ArtboardPublishDeployment {
+  deploymentId: string;
+  html: string;
+  revision: number;
 }
 
 export interface ArtboardPublishImage {
@@ -22,6 +28,7 @@ export interface ArtboardPublishImage {
 
 export interface ArtboardPublishBundleInput {
   canvases: ArtboardPublishCanvasBundle[];
+  deployments?: ArtboardPublishDeployment[];
   images: ArtboardPublishImage[];
   snapshot: ArtboardPublishSnapshot;
   viewerUrl: string;
@@ -74,12 +81,19 @@ const canvasFiles = ({ bundle, canvasId, entry, version }: ArtboardPublishCanvas
 
 export const buildArtboardPublishBundle = ({
   canvases,
+  deployments = [],
   images,
   snapshot,
   viewerUrl,
 }: ArtboardPublishBundleInput): CanvasPublishBundle => ({
   files: [
     ...canvases.flatMap(canvasFiles),
+    ...deployments.map((page): CanvasPublishFile => ({
+      content: page.html,
+      contentType: 'text/html; charset=utf-8',
+      encoding: 'utf8',
+      path: `/${deploymentSitePath(page.deploymentId, page.revision)}`,
+    })),
     ...images.map((image): CanvasPublishFile => ({
       content: Buffer.from(image.bytes).toString('base64'),
       contentType: image.contentType,

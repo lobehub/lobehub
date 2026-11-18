@@ -156,7 +156,11 @@ const FinalizeContent = ({ artboardId }: { artboardId: string }) => {
                   </Text>
                   <Tag size={'small'}>
                     {item.title}
-                    {item.source?.kind === 'canvas' ? ` · v${item.source.version}` : ''}
+                    {item.source?.kind === 'canvas'
+                      ? ` · v${item.source.version}`
+                      : item.source?.kind === 'deployment'
+                        ? ` · v${item.source.revision}`
+                        : ''}
                   </Tag>
                 </Flexbox>
               ))}

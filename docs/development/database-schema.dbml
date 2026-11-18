@@ -1268,12 +1268,16 @@ table artboard_boards {
   source_work_version_id uuid
   source_path text
   source_file_id text
+  source_deployment_id text
+  source_deployment_release_id text
+  source_deployment_revision integer
   metadata jsonb
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    
     
     
     artboard_id [name: 'artboard_boards_artboard_id_idx']

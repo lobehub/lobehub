@@ -16,6 +16,7 @@ import type {
 } from '@/database/models/artboard/structure';
 
 import { ArtboardServiceError, guardArtboard, requireRowId, requireText } from './errors';
+import { sourceVersionKey } from './opInputs';
 import { isThreadUnread, toCommentThreadView, toCommentView } from './view';
 
 export interface ArtboardCommentInput {
@@ -54,7 +55,7 @@ export class ArtboardCommentService {
   }
 
   private view(structure: ArtboardStructure) {
-    const versions = new Map(structure.boards.map((b) => [b.id, b.sourceWorkVersionId]));
+    const versions = new Map(structure.boards.map((b) => [b.id, sourceVersionKey(b)]));
     return (thread: ArtboardCommentThread): ArtboardCommentThreadView => {
       const recorded = thread.root.metadata?.sourceVersionId;
       const { boardId } = thread.root;
@@ -125,7 +126,7 @@ export class ArtboardCommentService {
         groupId: input.groupId ?? null,
         metadata: {
           anchorSpace: board ? 'board' : group ? 'group' : 'page',
-          ...(board?.sourceWorkVersionId ? { sourceVersionId: board.sourceWorkVersionId } : {}),
+          ...(board && sourceVersionKey(board) ? { sourceVersionId: sourceVersionKey(board) } : {}),
         },
         pageId: input.pageId ?? board?.pageId ?? group?.pageId ?? structure.pages[0].id,
       }),

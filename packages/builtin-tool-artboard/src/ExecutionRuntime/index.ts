@@ -55,9 +55,17 @@ const formatSource = (board: ArtboardBoardView) => {
   if (board.type === 'decision') return 'decision';
   const { source } = board;
   if (!source) return `${board.type} source unavailable`;
-  return source.kind === 'canvas'
-    ? `canvas ${source.canvasId} v${source.version}${source.path ? ` ${source.path}` : ''}`
-    : `image ${source.fileId}`;
+  switch (source.kind) {
+    case 'canvas': {
+      return `canvas ${source.canvasId} v${source.version}${source.path ? ` ${source.path}` : ''}`;
+    }
+    case 'deployment': {
+      return `deployment ${source.deploymentId} v${source.revision}`;
+    }
+    case 'image': {
+      return `image ${source.fileId}`;
+    }
+  }
 };
 
 const formatAnchor = (target: {

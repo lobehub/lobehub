@@ -78,6 +78,27 @@ describe('snapshotToBoard', () => {
     expect(artboard.content.boards.map((board) => board.expected)).toEqual([null, null, null]);
   });
 
+  it('frames a published page release like a canvas page', () => {
+    const { artboard, canvasSrc } = snapshotToBoard({
+      ...snapshot,
+      boards: [
+        {
+          groupId: null,
+          id: 'brd_page',
+          pageId: 'pg_1',
+          rect,
+          roundId: null,
+          source: { kind: 'deployment', src: 'deployments/dep_page/r2/index.html' },
+          title: 'Pricing',
+          type: 'html',
+        },
+      ],
+    });
+
+    expect(artboard.content.boards[0].source).toMatchObject({ kind: 'deployment' });
+    expect(canvasSrc).toEqual({ brd_page: 'deployments/dep_page/r2/index.html' });
+  });
+
   it('keys image and canvas sources by board so the view can find the site file', () => {
     const { artboard, canvasSrc, imageUrls } = snapshotToBoard(snapshot);
     const sources = Object.fromEntries(

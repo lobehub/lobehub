@@ -7,11 +7,14 @@ import { useBoard } from '../BoardContext';
 import { chooseOption } from '../data/actions';
 import { useJourneyView } from '../Verify/useJourneyView';
 import { type BoardCapabilities, BoardCapabilitiesProvider } from '../Viewport/capabilities';
+import DeploymentFrame from './DeploymentFrame';
 
-const renderCanvas: BoardCapabilities['renderCanvas'] = ({ source }) =>
-  source?.kind === 'canvas' ? (
-    <CanvasFrame canvasId={source.canvasId} path={source.path} version={source.version} />
-  ) : null;
+const renderCanvas: BoardCapabilities['renderCanvas'] = ({ source, title }) => {
+  if (source?.kind === 'canvas')
+    return <CanvasFrame canvasId={source.canvasId} path={source.path} version={source.version} />;
+  if (source?.kind === 'deployment') return <DeploymentFrame source={source} title={title} />;
+  return null;
+};
 
 const AppBoardCapabilities = ({ children }: { children: ReactNode }) => {
   const board = useBoard();
