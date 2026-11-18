@@ -1,4 +1,4 @@
-import { channelMessageDeletedAt, channelMessageEditedAt } from '@lobechat/types';
+import { channelMessageDeletedAt, channelMessageEditedAt, contactCardOf } from '@lobechat/types';
 import { and, count, eq } from 'drizzle-orm';
 
 import { channelMessageFiles, channelMessages } from '../../schemas';
@@ -30,6 +30,9 @@ export const editMessage = async (
   // Agent replies have no userId, so this also keeps them read-only.
   if (message.routingStatus === 'reply' || message.userId !== userId)
     throw new ChannelError('FORBIDDEN', 'Only the author can edit a message');
+  // A card's text is the server's description of it, not something its sender wrote.
+  if (contactCardOf(message.metadata))
+    throw new ChannelError('CONFLICT', 'A contact card cannot be edited');
   assertThreadOpen(await findThread(tx, channelId, message.threadId));
 
   const next = content.trim();

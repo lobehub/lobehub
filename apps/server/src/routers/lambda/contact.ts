@@ -11,6 +11,7 @@ import { ContactModel } from '@/database/models/contact';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
+import { resolveCardRequestSource } from '@/server/services/contact/cardSource';
 import { openContactConversation } from '@/server/services/contact/conversation';
 import {
   notifyContactRequestAfterResponse,
@@ -72,11 +73,24 @@ export const contactRouter = router({
     .input(
       z.object({
         message: z.string().max(CONTACT_REQUEST_MESSAGE_MAX_LENGTH).optional(),
+        /** The Channel message whose contact card the caller is adding them from. */
+        source: z
+          .object({ channelId: z.string().regex(/^chn_[\dA-Za-z]{12}$/), messageId: z.uuid() })
+          .optional(),
         userId,
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.contactModel.sendRequest(input.userId, input.message);
+      const source =
+        input.source &&
+        (await resolveCardRequestSource({
+          ...input.source,
+          addresseeId: input.userId,
+          db: ctx.serverDB,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }));
+      const result = await ctx.contactModel.sendRequest(input.userId, input.message, source);
       // Their pending request is the one answered: they asked, in the active scope.
       if (result.status === 'accepted')
         await openContactConversation({

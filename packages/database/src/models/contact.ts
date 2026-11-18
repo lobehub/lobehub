@@ -1,9 +1,12 @@
 import type {
   ContactAgentItem,
   ContactAgentProfile,
+  ContactCard,
+  ContactCardTarget,
   ContactItem,
   ContactRelation,
   ContactRequestItem,
+  ContactRequestSource,
   ContactSearchResult,
   ContactUserItem,
   ContactUserProfile,
@@ -37,6 +40,10 @@ const userProfileColumns = {
 };
 
 const owners = alias(users, 'contact_agent_owner');
+const sharers = alias(users, 'contact_request_sharer');
+
+/** People whose card the caller may share: someone they can already reach in this scope. */
+const SHAREABLE_PERSON_RELATIONS = new Set<ContactRelation>(['self', 'contact', 'member']);
 
 /** Who the caller is in the active scope. */
 type ScopeRole = 'personal' | 'member' | 'external';
@@ -450,6 +457,8 @@ export class ContactModel {
   sendRequest = async (
     addresseeId: string,
     message?: string,
+    /** How the caller found them; the caller verified it. Kept only on a new request. */
+    source?: ContactRequestSource,
   ): Promise<{ requestId: string; status: 'accepted' | 'pending' }> => {
     if (addresseeId === this.userId)
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'You cannot add yourself' });
@@ -506,6 +515,7 @@ export class ContactModel {
           addresseeId,
           message: message?.trim() || null,
           requesterId: this.userId,
+          source: source ?? null,
           workspaceId: this.workspaceId,
         })
         .returning({ id: userContactRequests.id });
@@ -544,6 +554,10 @@ export class ContactModel {
         id: userContactRequests.id,
         message: userContactRequests.message,
         requesterId: userContactRequests.requesterId,
+        sharerAvatar: sharers.avatar,
+        sharerFullName: sharers.fullName,
+        sharerId: sharers.id,
+        sharerUsername: sharers.username,
         user: userProfileColumns,
         workspaceAvatar: workspaces.avatar,
         workspaceId: workspaces.id,
@@ -555,6 +569,10 @@ export class ContactModel {
         sql`${users.id} = CASE WHEN ${userContactRequests.requesterId} = ${this.userId} THEN ${userContactRequests.addresseeId} ELSE ${userContactRequests.requesterId} END`,
       )
       .leftJoin(workspaces, eq(workspaces.id, userContactRequests.workspaceId))
+      .leftJoin(
+        sharers,
+        eq(sharers.id, sql<string>`${userContactRequests.source} ->> 'sharedById'`),
+      )
       .where(and(eq(userContactRequests.status, 'pending'), scope))
       .orderBy(desc(userContactRequests.createdAt));
 
@@ -563,6 +581,18 @@ export class ContactModel {
       direction: row.requesterId === this.userId ? 'outgoing' : 'incoming',
       id: row.id,
       message: row.message,
+      // A sharer who deleted their account leaves no source to show.
+      source: row.sharerId
+        ? {
+            sharedBy: {
+              avatar: row.sharerAvatar,
+              fullName: row.sharerFullName,
+              id: row.sharerId,
+              username: row.sharerUsername,
+            },
+            type: 'card' as const,
+          }
+        : null,
       user: row.user,
       workspace: row.workspaceId
         ? { avatar: row.workspaceAvatar, id: row.workspaceId, name: row.workspaceName ?? '' }
@@ -854,6 +884,57 @@ export class ContactModel {
       )
       .orderBy(desc(agentShares.createdAt));
     return rows.map(toAgentProfile);
+  };
+
+  // ── Contact cards ─────────────────────────────────────────────────────
+
+  /**
+   * The contact card the caller may share for `target`, resolved now. A person must be someone
+   * the caller already reaches here: themselves, a contact or a fellow member. An Agent must be
+   * the caller's own, this workspace's, or in this scope's address book, and shared by link: the
+   * card hands its share to everyone who reads it, so an unshared Agent is refused rather than
+   * shared on the caller's behalf.
+   */
+  resolveCard = async (target: ContactCardTarget): Promise<ContactCard> => {
+    if (target.type === 'user') {
+      if (!SHAREABLE_PERSON_RELATIONS.has(await this.relationTo(target.userId)))
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'CONTACT_NOT_SHAREABLE' });
+      const user = await this.findUser(target.userId);
+      if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
+      return { type: 'user', user };
+    }
+
+    const role = await this.scopeRole();
+    const [row] = await this.db
+      .select({
+        ...agentProfileColumns,
+        agentOwnerId: agents.userId,
+        agentWorkspaceId: agents.workspaceId,
+        inAddressBook: exists(
+          this.db
+            .select({ id: userContacts.id })
+            .from(userContacts)
+            .where(and(this.agentEntryWhere(), eq(userContacts.agentId, agents.id))),
+        ).mapWith(Boolean),
+      })
+      .from(agents)
+      .leftJoin(
+        agentShares,
+        and(eq(agentShares.agentId, agents.id), eq(agentShares.visibility, 'link')),
+      )
+      .leftJoin(owners, eq(owners.id, agents.userId))
+      .where(and(eq(agents.id, target.agentId), notTrashed(agents.isDeleted)))
+      .limit(1);
+    const reachable =
+      row &&
+      role !== 'external' &&
+      (row.agentOwnerId === this.userId ||
+        (!!this.workspaceId && row.agentWorkspaceId === this.workspaceId) ||
+        row.inAddressBook);
+    if (!reachable) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+    if (!row.shareId)
+      throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'AGENT_NOT_SHARED' });
+    return { agent: toAgentProfile({ ...row, shareId: row.shareId }), type: 'agent' };
   };
 
   // ── Search ────────────────────────────────────────────────────────────

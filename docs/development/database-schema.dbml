@@ -1918,6 +1918,7 @@ table user_contact_requests {
   addressee_id text [not null]
   workspace_id text
   message text
+  source jsonb
   status text [not null, default: 'pending']
   responded_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
