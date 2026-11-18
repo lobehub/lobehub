@@ -15,8 +15,8 @@ import { type TopicItemDropdownMenuProps, useTopicItemDropdownMenu } from './use
  * one would flow into `cloneElement` below and break the row's memo anyway.
  */
 const TopicItemContextMenu = memo<PropsWithChildren<TopicItemDropdownMenuProps>>(
-  ({ children, fav, id, status, title }) => {
-    const { dropdownMenu } = useTopicItemDropdownMenu({ fav, id, status, title });
+  ({ children, fav, id, onRename, status, title }) => {
+    const { dropdownMenu } = useTopicItemDropdownMenu({ fav, id, onRename, status, title });
 
     const menuRef = useRef(dropdownMenu);
     useEffect(() => {

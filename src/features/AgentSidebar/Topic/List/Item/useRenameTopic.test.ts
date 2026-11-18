@@ -7,6 +7,7 @@ import { useRenameTopic } from './useRenameTopic';
 
 const mocks = vi.hoisted(() => ({
   allowed: true,
+  autoRenameTopicTitle: vi.fn(),
   openRenameModal: vi.fn(),
   refreshProjectTopics: vi.fn(),
   toastError: vi.fn(),
@@ -19,7 +20,10 @@ vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameMo
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.allowed }) }));
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (s: object) => unknown) =>
-    selector({ updateTopicTitle: mocks.updateTopicTitle }),
+    selector({
+      autoRenameTopicTitle: mocks.autoRenameTopicTitle,
+      updateTopicTitle: mocks.updateTopicTitle,
+    }),
 }));
 vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectoryStore: {
@@ -70,6 +74,17 @@ describe('useRenameTopic', () => {
     await renameTo('New');
 
     expect(mocks.toastError).toHaveBeenCalledWith('manageOnlyCreator');
+  });
+
+  it('generates a title with the topic agent and refreshes the project', async () => {
+    const { result } = renderHook(() => useRenameTopic('tpc_1', 'Old', 'agt_1'), {
+      wrapper: projectWrapper,
+    });
+
+    await act(() => result.current.autoRename());
+
+    expect(mocks.autoRenameTopicTitle).toHaveBeenCalledWith('tpc_1', 'agt_1');
+    expect(mocks.refreshProjectTopics).toHaveBeenCalledWith('proj_1');
   });
 
   it('opens nothing without edit permission', () => {

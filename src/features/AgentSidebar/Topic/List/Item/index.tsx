@@ -58,6 +58,7 @@ import { useTopicListScope } from '../../TopicListScope';
 import { useScopedTopic } from '../../useScopedTopics';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
+import InlineTitleEditor from './InlineTitleEditor';
 import {
   getCiVisual,
   getPullRequestState,
@@ -346,18 +347,19 @@ const TopicItemRow = memo<TopicItemRowProps>(
       void navRef.current.navigateToTopic(id);
     }, [id, navRef]);
 
-    // Double clicking the row renames the topic, like the context menu's
-    // Rename. The first click of the pair has already switched to the topic.
-    const { canRename, openRename } = useRenameTopic(id, title);
-    const handleDoubleClick = useCallback(
-      (event: MouseEvent) => {
-        // The trailing actions (complete, archive, more) stop click propagation
-        // but not double clicks; a fast double click on them must not rename.
-        if ((event.target as HTMLElement).closest('[data-nav-item-actions]')) return;
-        openRename();
-      },
-      [openRename],
-    );
+    // Double clicking the row, or the menu's Rename, turns the title into an
+    // input in place. The first click of a double click has already switched
+    // to the topic.
+    const [editing, setEditing] = useState(false);
+    const { autoRename, canRename, saveTitle } = useRenameTopic(id, title, activeAgentId);
+    const startEditing = useCallback(() => setEditing(true), []);
+    const stopEditing = useCallback(() => setEditing(false), []);
+    const handleDoubleClick = useCallback((event: MouseEvent) => {
+      // The trailing actions (complete, archive, more) stop click propagation
+      // but not double clicks; a fast double click on them must not rename.
+      if ((event.target as HTMLElement).closest('[data-nav-item-actions]')) return;
+      setEditing(true);
+    }, []);
 
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
@@ -625,7 +627,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       );
 
     const navItem = (
-      <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
+      <TopicItemContextMenu fav={fav} id={id} status={status} title={title} onRename={startEditing}>
         <NavItem
           draggable
           titleMarquee
@@ -643,6 +645,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
               showInlineArchive={!shouldShowRunningIcon}
               status={status}
               title={title}
+              onRename={startEditing}
             />
           )}
           extra={
@@ -682,7 +685,15 @@ const TopicItemRow = memo<TopicItemRowProps>(
         style={{ position: 'relative' }}
         {...hoverPrefetchHandlers}
       >
-        {metaCard ? (
+        {editing ? (
+          <InlineTitleEditor
+            icon={leadingIconNode}
+            title={title}
+            onAutoRename={autoRename}
+            onClose={stopEditing}
+            onSave={saveTitle}
+          />
+        ) : metaCard ? (
           <Popover
             arrow={false}
             content={<MetaHoverCard metadata={metadata} title={title} topicId={id} />}

@@ -60,6 +60,11 @@ export interface TopicItemDropdownMenuProps {
   completionLabel?: string;
   fav?: boolean;
   id?: string;
+  /**
+   * Starts renaming in place. Hosts with a row to edit in (the sidebar row) pass
+   * it; other hosts fall back to the rename modal.
+   */
+  onRename?: () => void;
   status?: ChatTopicStatus | null;
   title: string;
 }
@@ -68,6 +73,7 @@ export const useTopicItemDropdownMenu = ({
   completionLabel,
   fav,
   id,
+  onRename,
   status,
   title,
 }: TopicItemDropdownMenuProps) => {
@@ -119,22 +125,15 @@ export const useTopicItemDropdownMenu = ({
     { showHotkey: false },
   );
 
-  const [
-    autoRenameTopicTitle,
-    duplicateTopic,
-    removeTopic,
-    favoriteTopic,
-    markTopicCompleted,
-    unmarkTopicCompleted,
-  ] = useChatStore((s) => [
-    s.autoRenameTopicTitle,
-    s.duplicateTopic,
-    s.removeTopic,
-    s.favoriteTopic,
-    s.markTopicCompleted,
-    s.unmarkTopicCompleted,
-  ]);
-  const { openRename } = useRenameTopic(id, title);
+  const [duplicateTopic, removeTopic, favoriteTopic, markTopicCompleted, unmarkTopicCompleted] =
+    useChatStore((s) => [
+      s.duplicateTopic,
+      s.removeTopic,
+      s.favoriteTopic,
+      s.markTopicCompleted,
+      s.unmarkTopicCompleted,
+    ]);
+  const { autoRename, openRename } = useRenameTopic(id, title, activeAgentId);
 
   const isCompleted = status === 'completed';
   const toggleCompleted = useCallback(async () => {
@@ -198,10 +197,7 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={Wand2} />,
         key: 'autoRename',
         label: t('actions.autoRename'),
-        onClick: async () => {
-          await autoRenameTopicTitle(id, scopedTopic?.agentId ?? undefined);
-          if (scope) await refresh();
-        },
+        onClick: autoRename,
         sfSymbol: 'wand.and.stars',
       },
       {
@@ -209,7 +205,7 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={PencilLine} />,
         key: 'rename',
         label: t('rename', { ns: 'common' }),
-        onClick: openRename,
+        onClick: onRename ?? openRename,
         sfSymbol: 'pencil',
       },
       {
@@ -388,7 +384,6 @@ export const useTopicItemDropdownMenu = ({
   }, [
     routeTopicId,
     scope,
-    scopedTopic,
     refresh,
     id,
     fav,
@@ -403,12 +398,13 @@ export const useTopicItemDropdownMenu = ({
     appOrigin,
     bugReportItem,
     enableTopicBugReport,
-    autoRenameTopicTitle,
+    autoRename,
     duplicateTopic,
     favoriteMenuItem,
     favoriteTopic,
     toggleCompleted,
     removeTopic,
+    onRename,
     openRename,
     openTopicInNewWindow,
     openTopicInPortal,
