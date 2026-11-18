@@ -1,5 +1,6 @@
 import type { Message } from 'chat';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
 import {
@@ -40,6 +41,8 @@ const log = debug('bot-platform:webhook:client');
 
 /** Inbound attachments are downloaded on demand, each capped at this size. */
 const MAX_INBOUND_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+/** Inbound attachments downloaded at once for one message. */
+const INBOUND_ATTACHMENT_DOWNLOAD_CONCURRENCY = 3;
 
 export const toCallbackTarget = (
   applicationId: string,
@@ -117,14 +120,16 @@ class BotWebhookClient implements PlatformClient {
   /**
    * Download inbound attachments from the URLs the developer sent. Each one goes through
    * the SSRF-guarded public fetch (private addresses are refused) under a size cap; a
-   * failed download drops that attachment rather than the whole message.
+   * failed download drops that attachment rather than the whole message. Downloads run a
+   * few at a time, so one message cannot open a burst of outbound requests.
    */
   async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
     const attachments = ((message as any).attachments ?? []) as Array<{
       raw?: BotWebhookInboundAttachment;
     }>;
-    const sources = await Promise.all(
-      attachments.map(async ({ raw }): Promise<AttachmentSource | undefined> => {
+    const sources = await pMap(
+      attachments,
+      async ({ raw }): Promise<AttachmentSource | undefined> => {
         if (!raw?.url) return undefined;
         const buffer = await fetchCappedBuffer(raw.url, { limit: MAX_INBOUND_ATTACHMENT_BYTES });
         if (!buffer) {
@@ -137,7 +142,8 @@ class BotWebhookClient implements PlatformClient {
           name: raw.name || `${raw.type}`,
           size: buffer.length,
         };
-      }),
+      },
+      { concurrency: INBOUND_ATTACHMENT_DOWNLOAD_CONCURRENCY },
     );
     const files = sources.filter((source): source is AttachmentSource => Boolean(source));
     return files.length > 0 ? files : undefined;
