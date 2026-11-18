@@ -344,6 +344,13 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
   },
   {
+    anchor: 'appearance-density',
+    descKey: 'settingAppearance.density.desc',
+    keywords: ['density', 'compact', 'loose', 'spacing', 'row height', 'sidebar'],
+    labelKey: 'settingAppearance.density.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
     anchor: 'appearance-context-menu',
     descKey: 'settingAppearance.contextMenuMode.desc',
     keywords: ['context menu', 'right click'],

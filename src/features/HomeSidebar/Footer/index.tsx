@@ -37,6 +37,8 @@ import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selec
 
 type FooterMenuItems = NonNullable<DropdownItem[]>;
 
+const FOOTER_ICON_SIZE = { blockSize: 24, size: 14 };
+
 /**
  * Wrap each clickable menu item with a unified click tracker, preserving any
  * existing onClick. Skips dividers and items without a key. Used to measure
@@ -275,16 +277,16 @@ const Footer = memo(() => {
                 aria-label={t('userPanel.help')}
                 data-billboard-anchor=""
                 icon={CircleHelp}
-                size={16}
+                size={FOOTER_ICON_SIZE}
               />
             </DropdownMenu>
             {!footer.hideGitHub && (
               <a aria-label={'GitHub'} href={GITHUB} rel="noopener noreferrer" target={'_blank'}>
-                <ActionIcon icon={GithubIcon} size={16} title={'GitHub'} />
+                <ActionIcon icon={GithubIcon} size={FOOTER_ICON_SIZE} title={'GitHub'} />
               </a>
             )}
             <WorkspaceLink to="/eval">
-              <ActionIcon icon={FlaskConical} size={16} title="Evaluation Lab" />
+              <ActionIcon icon={FlaskConical} size={FOOTER_ICON_SIZE} title="Evaluation Lab" />
             </WorkspaceLink>
           </Flexbox>
           <ThemeButton placement={'topCenter'} size={16} />
@@ -296,14 +298,18 @@ const Footer = memo(() => {
             placement="topLeft"
             onOpenChange={handleMenuOpenChange}
           >
-            <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
+            <ActionIcon
+              aria-label={t('userPanel.help')}
+              icon={CircleHelp}
+              size={FOOTER_ICON_SIZE}
+            />
           </DropdownMenu>
           {isDevMode && (
             <WorkspaceLink to="/settings">
               <ActionIcon
                 aria-label={t(settingLabelKey)}
                 icon={SettingsIcon}
-                size={16}
+                size={FOOTER_ICON_SIZE}
                 title={t(settingLabelKey)}
               />
             </WorkspaceLink>

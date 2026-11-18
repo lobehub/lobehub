@@ -1512,6 +1512,11 @@ export default {
   'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.density.compact': 'Compact',
+  'settingAppearance.density.desc':
+    'Row height and spacing in the sidebars. Compact fits more on screen; Loose gives each row more room.',
+  'settingAppearance.density.loose': 'Loose',
+  'settingAppearance.density.title': 'Interface Density',
   'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.font.antialiasing.desc':
     'Render text with grayscale antialiasing for a thinner, crisper look. Turn off to use the system default rendering. Only affects macOS.',

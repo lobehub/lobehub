@@ -37,6 +37,7 @@ import {
   useProjectEnvironments,
 } from '@/store/projectWorkingDirectory';
 import type { SandboxEnvironment } from '@/store/sandbox';
+import { useDensityTokens } from '@/styles/density';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
@@ -102,6 +103,7 @@ export function ProjectWorkingDirectories({
   shared,
 }: ProjectWorkingDirectoriesProps) {
   const { t } = useTranslation(['project', 'common']);
+  const { pageTitleFontSize } = useDensityTokens();
   const navigate = useWorkspaceAwareNavigate();
   const linkedRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
@@ -331,7 +333,7 @@ export function ProjectWorkingDirectories({
     <Flexbox gap={16}>
       <Flexbox gap={8}>
         <Flexbox horizontal align="center" gap={12} justify="space-between" wrap="wrap">
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('settings.environments')}
           </Text>
           {actions}

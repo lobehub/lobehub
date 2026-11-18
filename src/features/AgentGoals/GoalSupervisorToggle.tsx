@@ -2,9 +2,9 @@
 
 import { ActionIcon } from '@lobehub/ui';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useHeaderActionSize } from '@/styles/density';
 
 /** Fits the 28px header control without crowding it. */
 const AVATAR_SIZE = 20;
@@ -36,6 +36,7 @@ const GoalSupervisorToggle = ({
   onToggle,
 }: GoalSupervisorToggleProps) => {
   const meta = useAgentDisplayMeta(agentId);
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   if (hideWhenExpanded && expand) return null;
 
@@ -50,7 +51,7 @@ const GoalSupervisorToggle = ({
       aria-label={title}
       data-testid={'goal-supervisor-toggle'}
       icon={<AssigneeAvatar agentId={agentId} size={AVATAR_SIZE} />}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={headerActionSmallSize}
       title={title}
       onClick={onToggle}
     />

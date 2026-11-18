@@ -7,13 +7,14 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { withSuspense } from '@/components/withSuspense';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { usePermission } from '@/hooks/usePermission';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+import { useHeaderActionSize } from '@/styles/density';
 
 interface ShareButtonProps {
   mobile?: boolean;
@@ -28,6 +29,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
   const workspaceId = useActiveWorkspaceId();
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   // Hide share button when no topic exists (no messages sent yet)
   if (!topicId) return null;
@@ -41,7 +43,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
     <ActionIcon
       disabled={!canShare}
       icon={Share2}
-      size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={mobile ? MOBILE_HEADER_ICON_SIZE : headerActionSmallSize}
       title={canShare ? t('share') : reason}
       tooltipProps={{
         placement: 'bottom',

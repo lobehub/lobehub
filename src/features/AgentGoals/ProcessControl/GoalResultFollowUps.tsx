@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useDensityTokens } from '@/styles/density';
 
 import { createGoalModal } from '../CreateGoalModal';
 import {
@@ -49,14 +50,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const SectionTitle = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => (
-  <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-    <Text fontSize={16} weight={600}>
-      {children}
-    </Text>
-    {extra}
-  </Flexbox>
-);
+export const SectionTitle = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => {
+  const { pageTitleFontSize } = useDensityTokens();
+  return (
+    <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+      <Text fontSize={pageTitleFontSize} weight={600}>
+        {children}
+      </Text>
+      {extra}
+    </Flexbox>
+  );
+};
 
 /** A group inside a section — one step below `SectionTitle`, same row grammar. */
 export const GroupLabel = ({ children, extra }: { children: ReactNode; extra?: ReactNode }) => (

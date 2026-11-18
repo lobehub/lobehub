@@ -11,13 +11,13 @@ import {
   cx,
   Flexbox,
   Spin,
-  Text,
 } from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
@@ -36,6 +36,7 @@ interface AgentProps {
 
 const Agent = memo<AgentProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { isRevalidating } = useFetchAgentList();
   // Keep the label registry warm so the per-item "Labels" submenu opens populated.
   useFetchAgentLabels();
@@ -121,11 +122,9 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
     <AccordionItem value={itemKey}>
       <ContextMenuTrigger items={dropdownMenu}>
         <AccordionHeader>
-          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <AccordionTrigger style={sectionTriggerStyle}>
             <Flexbox horizontal align="center" gap={4}>
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {t('navPanel.agent')}
-              </Text>
+              <SectionTitle>{t('navPanel.agent')}</SectionTitle>
               {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>

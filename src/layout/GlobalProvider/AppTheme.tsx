@@ -22,6 +22,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { compactDensityTheme } from '@/styles/densityTheme';
 import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 import { resolveLang } from '@/utils/client/switchLang';
@@ -60,10 +61,11 @@ const AppTheme = memo<AppThemeProps>(
     customFontFamily,
   }) => {
     const language = useGlobalStore(systemStatusSelectors.language);
-    const [primaryColor, neutralColor, fontAntialiasing] = useUserStore((s) => [
+    const [primaryColor, neutralColor, fontAntialiasing, interfaceDensity] = useUserStore((s) => [
       userGeneralSettingsSelectors.primaryColor(s),
       userGeneralSettingsSelectors.neutralColor(s),
       userGeneralSettingsSelectors.fontAntialiasing(s),
+      userGeneralSettingsSelectors.interfaceDensity(s),
     ]);
     const [userFontFamily, userFontFamilyCode] = useUserStore((s) => [
       preferenceSelectors.fontFamily(s),
@@ -127,6 +129,14 @@ const AppTheme = memo<AppThemeProps>(
       if (fontAntialiasing) delete document.documentElement.dataset.fontAntialiasing;
       else document.documentElement.dataset.fontAntialiasing = 'off';
     }, [fontAntialiasing]);
+
+    useEffect(() => {
+      document.documentElement.dataset.density = interfaceDensity;
+      if (interfaceDensity !== 'compact') return;
+      const classes = stylex.props(compactDensityTheme).className?.split(' ') ?? [];
+      document.documentElement.classList.add(...classes);
+      return () => document.documentElement.classList.remove(...classes);
+    }, [interfaceDensity]);
 
     return (
       <ConfigProvider
