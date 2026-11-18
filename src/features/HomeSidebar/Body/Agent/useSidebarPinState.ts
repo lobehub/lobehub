@@ -50,3 +50,28 @@ export const useSidebarPinState = (input: SidebarPinStateInput): SidebarPinState
 
   return resolveSidebarPinState(input, { isWorkspace, myPinnedIds });
 };
+
+export interface SidebarRowMarks {
+  showLock: boolean;
+  showPin: boolean;
+}
+
+/**
+ * Which markers a sidebar row draws.
+ *
+ * - The lock marks a private row, except inside a private folder: the folder
+ *   header already carries it and only private rows can live there.
+ * - The pin marks a pinned row, except under a "Pinned" / "Pinned for team"
+ *   header, which already names the pin and its scope. Lists without such
+ *   headers (personal mode, the All Agents drawer) keep the row pin.
+ */
+export const resolveSidebarRowMarks = (
+  { isMyPinned, isPrivate, isTeamPinned }: SidebarPinState,
+  {
+    inPrivateFolder = false,
+    pinnedByHeader = false,
+  }: { inPrivateFolder?: boolean; pinnedByHeader?: boolean } = {},
+): SidebarRowMarks => ({
+  showLock: isPrivate && !inPrivateFolder,
+  showPin: (isMyPinned || isTeamPinned) && !pinnedByHeader,
+});

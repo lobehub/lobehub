@@ -89,6 +89,8 @@ export const useGroupDropdownMenu = ({
       : null;
     const publishItem = showPublishAction
       ? {
+          // States the folder's lock in words, readable without a tooltip.
+          desc: t('navPanel.currentlyPrivate'),
           disabled: !canEdit,
           icon: <Icon icon={GlobeIcon} />,
           key: 'publishToWorkspace',

@@ -492,6 +492,9 @@ export const useAgentDropdownMenu = ({
               ...(showPublishAction
                 ? [
                     {
+                      // The row's lock is icon-only; this states it in words
+                      // where touch users, who get no tooltip, can read it.
+                      desc: t('navPanel.currentlyPrivate', { ns: 'common' }),
                       icon: <Icon icon={GlobeIcon} />,
                       key: 'publishToWorkspace',
                       label: t('agent.publishToWorkspace', {

@@ -6,11 +6,16 @@ import { LockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+interface PrivateLockIconProps {
+  /** Omit to take the default icon size, matching a folder's leading icon. */
+  size?: number;
+}
+
 /**
  * Marks a private Agent / chat group / folder in the merged workspace Agents
  * section, where private and shared rows are listed together.
  */
-const PrivateLockIcon = memo(() => {
+const PrivateLockIcon = memo<PrivateLockIconProps>(({ size }) => {
   const { t } = useTranslation('common');
   const label = t('navPanel.privateTooltip');
 
@@ -27,7 +32,7 @@ const PrivateLockIcon = memo(() => {
           verticalAlign: 'middle',
         }}
       >
-        <Icon icon={LockIcon} size={12} />
+        <Icon icon={LockIcon} size={size} />
       </span>
     </Tooltip>
   );

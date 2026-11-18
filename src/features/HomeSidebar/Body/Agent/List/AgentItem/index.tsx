@@ -19,9 +19,10 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import { useAgentModal } from '../../ModalProvider';
-import { useSidebarPinState } from '../../useSidebarPinState';
+import { resolveSidebarRowMarks, useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
 import PrivateLockIcon from '../PrivateLockIcon';
+import { useSidebarRowMarksScope } from '../rowMarksContext';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
@@ -144,23 +145,23 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
 
   // In a workspace the row's column is the team pin (public) or the creator's
   // own pin (private); the member's own pins live in their preference.
-  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
-  const showPinIcon = isTeamPinned || isMyPinned;
+  const pinState = useSidebarPinState({ id, pinned, visibility });
+  const { showLock, showPin } = resolveSidebarRowMarks(pinState, useSidebarRowMarksScope());
 
-  // Memoize pin icon
-  // The lock sits with the pin in the fixed trailing slot rather than after
-  // the title, where a long name or role tag would truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon || isPrivate ? (
-        <>
-          {isPrivate && <PrivateLockIcon />}
-          {showPinIcon && (
-            <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
-          )}
-        </>
+      showPin ? (
+        <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
       ) : undefined,
-    [isPrivate, showPinIcon],
+    [showPin],
+  );
+
+  // The lock leads the title: the trailing slot is faded and covered by the
+  // row actions on hover, which hid the lock exactly when its tooltip was
+  // wanted, and it kept "who can see this" apart from the pin.
+  const navSlots = useMemo(
+    () => (showLock ? { titlePrefix: <PrivateLockIcon size={12} /> } : undefined),
+    [showLock],
   );
 
   // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
@@ -243,6 +244,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
         extra={pinIcon}
         icon={avatarIcon}
         key={id}
+        slots={navSlots}
         style={style}
         title={
           roleTag ? (
