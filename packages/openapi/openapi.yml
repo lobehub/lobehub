@@ -12831,6 +12831,13 @@ paths:
       description: "**API key scopes:** `agent:write`."
     delete:
       operationId: agents.delete
+      description: >-
+        Moves the agent, its sessions and the topics under it to the recycle bin
+        (`GET /trash`), from where `POST /trash/restore` brings them back. An
+        agent that is missing or already in the bin answers 404.
+
+
+        **API key scopes:** `agent:write`.
       summary: Delete an agent
       tags:
         - agents
@@ -12911,6 +12918,21 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "429":
           content:
             application/json:
@@ -12953,7 +12975,6 @@ paths:
             minLength: 1
           required: true
         - $ref: "#/components/parameters/WorkspaceId"
-      description: "**API key scopes:** `agent:write`."
   /api/v1/agents/{id}/duplicate:
     post:
       operationId: agents.createDuplicate
@@ -43555,6 +43576,13 @@ paths:
       description: "**API key scopes:** `chat:write`."
     delete:
       operationId: topics.delete
+      description: >-
+        Moves the topic and its messages to the recycle bin (`GET /trash`), from
+        where `POST /trash/restore` brings them back. A topic that is missing or
+        already in the bin answers 404.
+
+
+        **API key scopes:** `chat:write`.
       summary: Delete a topic
       tags:
         - topics
@@ -43692,7 +43720,6 @@ paths:
             minLength: 1
           required: true
         - $ref: "#/components/parameters/WorkspaceId"
-      description: "**API key scopes:** `chat:write`."
   /api/v1/topics/{topicId}/threads:
     get:
       operationId: topics.listThreads

@@ -172,6 +172,8 @@ export class Agents extends HeyApiClient {
     /**
      * Delete an agent
      *
+     * Moves the agent, its sessions and the topics under it to the recycle bin (`GET /trash`), from where `POST /trash/restore` brings them back. An agent that is missing or already in the bin answers 404.
+     *
      * **API key scopes:** `agent:write`.
      */
     public delete<ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AgentsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AgentsByIdResponses, DeleteApiV1AgentsByIdErrors, ThrowOnError> {
@@ -2700,6 +2702,8 @@ export class Topics extends HeyApiClient {
     
     /**
      * Delete a topic
+     *
+     * Moves the topic and its messages to the recycle bin (`GET /trash`), from where `POST /trash/restore` brings them back. A topic that is missing or already in the bin answers 404.
      *
      * **API key scopes:** `chat:write`.
      */

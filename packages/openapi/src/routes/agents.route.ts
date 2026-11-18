@@ -144,7 +144,14 @@ AgentRoutes.patch(
  */
 AgentRoutes.delete(
   '/:id',
-  routeDoc({ data: DeletedResourceSchema, summary: 'Delete an agent', tags: ['agents'] }),
+  routeDoc({
+    data: DeletedResourceSchema,
+    description:
+      'Moves the agent, its sessions and the topics under it to the recycle bin (`GET /trash`), from where `POST /trash/restore` brings them back. An agent that is missing or already in the bin answers 404.',
+    errors: [404],
+    summary: 'Delete an agent',
+    tags: ['agents'],
+  }),
   requireAuth,
   requireAnyPermission(
     getAllScopePermissions('AGENT_DELETE'),

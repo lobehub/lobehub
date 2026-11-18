@@ -1,10 +1,12 @@
 import { and, count, desc, eq, ilike, inArray, isNull, not, or, sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
+import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import type { FileItem, KnowledgeBaseItem, NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
+import { TrashService } from '@/server/services/trash';
 import { isWorkspacePrimaryOwner } from '@/server/services/workspacePermission';
 
 import { BaseService } from '../common/base.service';
@@ -294,7 +296,7 @@ export class AgentService extends BaseService {
       });
 
       if (!targetAgent) {
-        throw this.createBusinessError(`Agent ID ${request.agentId} not found`);
+        throw this.createNotFoundError(`Agent ID ${request.agentId} not found`);
       }
 
       if (request.migrateSessionTo) {
@@ -316,15 +318,24 @@ export class AgentService extends BaseService {
           from: request.agentId,
           to: request.migrateSessionTo,
         });
+      }
 
-        // After migration, delete the agent itself directly; sessions have been transferred so cascade delete is not needed
-        await this.db
-          .delete(agents)
-          .where(and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)));
-      } else {
-        // No migration: reuse AgentModel.delete, which cascades deletion of associated sessions, messages, topics, etc.
-        const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
-        await agentModel.delete(request.agentId);
+      // Recycle bin, as the app's own delete: the agent, its session shells and
+      // every topic still under it are stamped, not dropped, so the deletion
+      // shows up in `GET /trash` and can be restored. The FK cascade only runs
+      // when the bin is purged.
+      const trashed = await new TrashService(this.db, this.userId, this.workspaceId).trashAgent(
+        request.agentId,
+      );
+      if (!trashed) throw this.createNotFoundError(`Agent ID ${request.agentId} not found`);
+
+      // A pending handover would move ownership of trashed content; void it,
+      // as the app does.
+      if (this.workspaceId) {
+        await new ResourceTransferRequestModel(this.db, this.workspaceId).invalidateForResources(
+          'agent',
+          [request.agentId],
+        );
       }
 
       this.log('info', 'agent deleted successfully', { agentId: request.agentId });

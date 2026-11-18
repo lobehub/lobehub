@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
-import { agents, users } from '@/database/schemas';
+import { agents, trashItems, users } from '@/database/schemas';
 
 const db = await getTestDB();
 
@@ -19,6 +19,7 @@ vi.mock('../middleware/auth', () => ({
 }));
 
 const { default: AgentRoutes } = await import('./agents.route');
+const { default: TrashRoutes } = await import('./trash.route');
 const { AgentDetailSchema, AgentListSchema, AgentSchema } = await import('../types/agent.type');
 const { DeletedResourceSchema } = await import('../types/common.type');
 
@@ -31,6 +32,7 @@ const request = (path: string, init: { body?: unknown; method?: string } = {}) =
     c.set('userId' as never, USER as never);
     await next();
   });
+  app.route('/trash', TrashRoutes);
   app.route('/', AgentRoutes);
 
   return app.request(path, {
@@ -44,6 +46,7 @@ const request = (path: string, init: { body?: unknown; method?: string } = {}) =
 const json = async (res: Response) => ((await res.json()) as { data: any }).data;
 
 beforeEach(async () => {
+  await db.delete(trashItems);
   await db.delete(agents);
   await db.delete(users);
   await db.insert(users).values({ id: USER });
@@ -160,7 +163,28 @@ describe('agent detail and deletion', () => {
     const deleted = await json(res);
     expect(deleted).toEqual({ deleted: true, id: agent.id });
     expect(() => DeletedResourceSchema.parse(deleted)).not.toThrow();
-    expect(await db.select().from(agents).where(eq(agents.id, agent.id))).toHaveLength(0);
+    expect((await request(`/${agent.id}`)).status).toBe(404);
+    expect((await request(`/${agent.id}`, { method: 'DELETE' })).status).toBe(404);
+  });
+
+  it('moves a deleted agent to the trash, from where it restores', async () => {
+    const agent = await json(await request('/', { body: { title: 'Binned' }, method: 'POST' }));
+    expect((await request(`/${agent.id}`, { method: 'DELETE' })).status).toBe(200);
+
+    // Stamped, not dropped: the row is still there for a restore.
+    const [row] = await db.select().from(agents).where(eq(agents.id, agent.id));
+    expect(row.deletedAt).toBeTruthy();
+
+    const bin = await json(await request('/trash'));
+    const item = bin.items.find((entry: any) => entry.resourceId === agent.id);
+    expect(item).toMatchObject({ resourceType: 'agent', title: 'Binned' });
+
+    const restored = await request('/trash/restore', { body: { ids: [item.id] }, method: 'POST' });
+    expect(restored.status).toBe(200);
+    expect((await json(restored)).restored.map((entry: any) => entry.resourceId)).toEqual([
+      agent.id,
+    ]);
+    expect((await request(`/${agent.id}`)).status).toBe(200);
   });
 });
 

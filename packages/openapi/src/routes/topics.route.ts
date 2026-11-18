@@ -113,6 +113,8 @@ TopicsRoutes.delete(
   '/:id',
   routeDoc({
     data: DeletedResourceSchema,
+    description:
+      'Moves the topic and its messages to the recycle bin (`GET /trash`), from where `POST /trash/restore` brings them back. A topic that is missing or already in the bin answers 404.',
     errors: [404],
     summary: 'Delete a topic',
     tags: ['topics'],

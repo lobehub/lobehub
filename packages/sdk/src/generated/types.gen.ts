@@ -3824,6 +3824,10 @@ export type DeleteApiV1AgentsByIdErrors = {
      */
     403: ApiError;
     /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
      * Rate limit exceeded
      */
     429: ApiError;

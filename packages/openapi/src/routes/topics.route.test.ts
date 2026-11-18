@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
-import { messages, threads, topics, users } from '@/database/schemas';
+import { messages, threads, topics, trashItems, users } from '@/database/schemas';
 
 import { DeletedResourceSchema } from '../types/common.type';
 import { TopicListSchema, TopicSchema, TopicThreadListSchema } from '../types/topic.type';
@@ -21,6 +21,7 @@ vi.mock('../middleware/auth', () => ({
 }));
 
 const { default: TopicRoutes } = await import('./topics.route');
+const { default: TrashRoutes } = await import('./trash.route');
 
 const USER = 'topic-route-user';
 const TOPIC = 'tpc_topic_route';
@@ -31,6 +32,7 @@ const request = (path: string, init: { body?: unknown; method?: string } = {}) =
     c.set('userId' as never, USER as never);
     await next();
   });
+  app.route('/trash', TrashRoutes);
   app.route('/', TopicRoutes);
 
   return app.request(path, {
@@ -44,6 +46,7 @@ const request = (path: string, init: { body?: unknown; method?: string } = {}) =
 const json = async (res: Response) => ((await res.json()) as { data: any }).data;
 
 beforeEach(async () => {
+  await db.delete(trashItems);
   await db.delete(users);
   await db.insert(users).values({ email: 'topic@example.com', id: USER });
   await db.insert(topics).values({
@@ -97,5 +100,20 @@ describe('topic routes answer their documented payloads', () => {
     expect(DeletedResourceSchema.parse(await json(res))).toEqual({ deleted: true, id: TOPIC });
 
     expect((await request(`/${TOPIC}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await request(`/${TOPIC}`)).status).toBe(404);
+  });
+
+  it('DELETE /:id moves the topic to the trash, from where it restores', async () => {
+    expect((await request(`/${TOPIC}`, { method: 'DELETE' })).status).toBe(200);
+
+    const bin = await json(await request('/trash'));
+    const item = bin.items.find((entry: any) => entry.resourceId === TOPIC);
+    expect(item).toMatchObject({ resourceType: 'topic', title: 'Route topic' });
+
+    const restored = await request('/trash/restore', { body: { ids: [item.id] }, method: 'POST' });
+    expect(restored.status).toBe(200);
+    expect((await json(restored)).restored.map((entry: any) => entry.resourceId)).toEqual([TOPIC]);
+    const topic = await json(await request(`/${TOPIC}`));
+    expect(topic).toMatchObject({ id: TOPIC, title: 'Route topic' });
   });
 });
