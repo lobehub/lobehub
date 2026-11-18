@@ -193,8 +193,13 @@ const handBackClaimedRun = async (
  * `LEASE_EXPIRED_ERROR` is the existing vocabulary for exactly that. Settling it
  * as an unrecoverable failure instead would open a decision gate for work that
  * only needs another attempt.
+ *
+ * The runner reuses it for a leftover run that blocks a new one (see
+ * `taskRunner/runConflict`), so both paths classify a dead run the same way.
  */
-const resolveOrphanedRunError = (row: OrphanedRunningTopic): string => {
+export const resolveOrphanedRunError = (
+  row: Pick<OrphanedRunningTopic, 'completionReason' | 'operationError' | 'operationStatus'>,
+): string => {
   // `agent_operations.error` holds the raw `state.error`, so the message can sit
   // nested — a provider failure is `{ errorType, error: { message } }`. Read it
   // the way the completion hook does, or a real quota / provider failure would
