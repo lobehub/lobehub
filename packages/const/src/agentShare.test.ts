@@ -113,21 +113,45 @@ describe('resolveShareAllowedSkillIds', () => {
 });
 
 describe('isAgentShareModelRestrictionExempt', () => {
+  const driver = (type: string) => ({ heterogeneousProvider: { type } });
+
   it('exempts Claude Code and Codex agents, which run no provider model', () => {
     expect(
-      isAgentShareModelRestrictionExempt({ heterogeneousProvider: { type: 'claude-code' } }),
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: driver('claude-code'),
+        provider: 'claude-code',
+      }),
     ).toBe(true);
-    expect(isAgentShareModelRestrictionExempt({ heterogeneousProvider: { type: 'codex' } })).toBe(
-      true,
-    );
+    expect(
+      isAgentShareModelRestrictionExempt({ agencyConfig: driver('codex'), provider: 'codex' }),
+    ).toBe(true);
   });
 
   it('keeps LobeHub agents and runtimes a visitor cannot run restricted', () => {
     expect(isAgentShareModelRestrictionExempt(undefined)).toBe(false);
-    expect(isAgentShareModelRestrictionExempt(null)).toBe(false);
-    expect(isAgentShareModelRestrictionExempt({ heterogeneousProvider: null })).toBe(false);
+    expect(isAgentShareModelRestrictionExempt({ agencyConfig: null, provider: 'lobehub' })).toBe(
+      false,
+    );
     expect(
-      isAgentShareModelRestrictionExempt({ heterogeneousProvider: { type: 'openclaw' } }),
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: { heterogeneousProvider: null },
+        provider: 'claude-code',
+      }),
+    ).toBe(false);
+    expect(
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: driver('openclaw'),
+        provider: 'openclaw',
+      }),
+    ).toBe(false);
+  });
+
+  it('checks a real provider saved next to a Claude Code driver', () => {
+    expect(
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: driver('claude-code'),
+        provider: 'openai',
+      }),
     ).toBe(false);
   });
 });

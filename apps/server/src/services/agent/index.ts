@@ -38,6 +38,17 @@ import { type UpdateAgentResult } from './type';
 const log = debug('lobe-agent:service');
 
 /**
+ * Whether a config patch can change what a shared agent's model restriction sees: the model
+ * selection itself, or the driver that exempts it. Clearing a Claude Code driver turns the
+ * stored selection back into a native one, so it is checked under the same lock.
+ */
+const touchesShareModel = (value: PartialDeep<AgentItem>): boolean =>
+  'model' in value ||
+  'provider' in value ||
+  value.agencyConfig === null ||
+  (!!value.agencyConfig && 'heterogeneousProvider' in value.agencyConfig);
+
+/**
  * Agent config with required id field.
  * Used when returning agent config from database (id is always present).
  */
@@ -119,7 +130,8 @@ export class AgentService {
    * A Claude Code / Codex agent is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
    * creator's device and calls none of `provider`'s models. The decision reads the effective
    * driver, the stored one merged with the patch, so switching back to LobeHub
-   * (`heterogeneousProvider: null`) is checked as usual.
+   * (`heterogeneousProvider: null`) is checked as usual, and a real provider saved next to the
+   * driver is checked too, since clearing the driver would make it the native selection.
    */
   async assertShareModelAllowed(agentId: string, patch: PartialDeep<AgentItem> = {}) {
     if (!AGENT_SHARE_ALLOWED_PROVIDERS) return;
@@ -134,12 +146,24 @@ export class AgentService {
           ? null
           : { ...agent.agencyConfig, ...patch.agencyConfig }
         : agent.agencyConfig;
-    if (isAgentShareModelRestrictionExempt(effectiveAgencyConfig as AgentItem['agencyConfig']))
+    const provider = 'provider' in patch ? patch.provider : agent.provider;
+    if (
+      isAgentShareModelRestrictionExempt({
+        agencyConfig: effectiveAgencyConfig as AgentItem['agencyConfig'],
+        provider,
+      })
+    )
+      return;
+    // Moving between two heterogeneous drivers clears the old one first and writes the new
+    // one second. The cleared row keeps only the runtime stamp, which names no chat provider.
+    if (
+      !effectiveAgencyConfig?.heterogeneousProvider &&
+      isAgentShareModelRestrictionExempt({ agencyConfig: agent.agencyConfig, provider })
+    )
       return;
 
     const selection = await this.resolveModelSelection({ ...agent, ...patch });
-    const { provider } = selection;
-    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(provider)) {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(selection.provider)) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message: `Shared agents only support models from: ${AGENT_SHARE_ALLOWED_PROVIDERS.join(', ')}. Switch providers or turn off sharing first.`,
@@ -389,11 +413,7 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
     replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
-    if (
-      AGENT_SHARE_ALLOWED_PROVIDERS &&
-      !this.workspaceId &&
-      ('model' in value || 'provider' in value)
-    ) {
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && !this.workspaceId && touchesShareModel(value)) {
       return this.withShareModelLock(agentId, (service) =>
         service.saveAgentConfig(agentId, value, replaceWorkingDirDeviceIds),
       );
@@ -406,7 +426,7 @@ export class AgentService {
     value: PartialDeep<AgentItem>,
     replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
-    if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && touchesShareModel(value)) {
       const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
         agentId,
       );

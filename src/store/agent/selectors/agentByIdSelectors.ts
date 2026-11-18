@@ -218,7 +218,10 @@ const isAgentHeterogeneousById =
 const isAgentShareModelRestrictionExemptById =
   (agentId: string) =>
   (s: AgentStoreState): boolean =>
-    isAgentShareModelRestrictionExempt(getAgencyConfigById(agentId)(s));
+    isAgentShareModelRestrictionExempt({
+      agencyConfig: getAgencyConfigById(agentId)(s),
+      provider: agentSelectors.getAgentConfigById(agentId)(s)?.provider,
+    });
 
 /**
  * Get full agent data by agentId

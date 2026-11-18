@@ -264,7 +264,14 @@ export const isAgentShareVisitorHeteroType = (type?: string | null): boolean =>
  * it is exempt. Every other driver, including heterogeneous runtimes a visitor
  * cannot run, stays restricted. Server save/publish checks and every client hint
  * must use this one predicate so they never disagree.
+ *
+ * `provider` must still be a runtime stamp: a real provider saved next to the driver
+ * would become the agent's native model the moment the driver is cleared, so it is
+ * checked like any other selection.
  */
-export const isAgentShareModelRestrictionExempt = (
-  agencyConfig?: { heterogeneousProvider?: { type?: string } | null } | null,
-): boolean => isAgentShareVisitorHeteroType(agencyConfig?.heterogeneousProvider?.type);
+export const isAgentShareModelRestrictionExempt = (config?: {
+  agencyConfig?: { heterogeneousProvider?: { type?: string } | null } | null;
+  provider?: string | null;
+}): boolean =>
+  isAgentShareVisitorHeteroType(config?.agencyConfig?.heterogeneousProvider?.type) &&
+  isAgentShareVisitorHeteroType(config?.provider);
