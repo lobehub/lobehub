@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createLobeHub } from '@lobehub/sdk';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,43 +31,7 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
-const { mockSdk } = vi.hoisted(() => ({
-  mockSdk: { knowledgeBases: { listFiles: vi.fn() } },
-}));
-
-/** A `GET /knowledge-bases/{id}/files` page wrapped in the success envelope. */
-const filePage = (files: unknown[], next: string | null = null) => ({
-  data: {
-    data: { files, hasMore: !!next, nextCursor: next, total: files.length, totalSize: '0' },
-    success: true,
-  },
-});
-
-const restFile = (id: string, extra: Record<string, unknown> = {}) => ({
-  chunking: { count: 3, error: null, status: 'success' },
-  createdAt: '2026-01-01T00:00:00.000Z',
-  embedding: null,
-  fileType: 'application/pdf',
-  id,
-  knowledgeBases: [],
-  metadata: null,
-  name: `${id}.pdf`,
-  parentId: null,
-  size: 2048,
-  source: null,
-  updatedAt: new Date().toISOString(),
-  url: `https://s3.example.com/${id}.pdf`,
-  users: [],
-  visibility: 'private',
-  ...extra,
-});
-
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../api/sdk', () => ({ getSdkClient: vi.fn(async () => mockSdk) }));
-
-// The SDK's real `paginate`, walking the mocked list method page by page.
-const sdkPager = createLobeHub({ apiKey: 'sk-lh-test' });
-Object.assign(mockSdk, { paginate: sdkPager.paginate.bind(sdkPager) });
 describe('file command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -77,7 +40,6 @@ describe('file command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    mockSdk.knowledgeBases.listFiles.mockReset();
     for (const group of [mockTrpcClient.file, mockTrpcClient.upload]) {
       for (const method of Object.values(group)) {
         for (const fn of Object.values(method)) {
@@ -147,74 +109,15 @@ describe('file command', () => {
       expect(consoleSpy).toHaveBeenCalledWith('No files found.');
     });
 
-    it('should list a library through the REST API', async () => {
-      mockSdk.knowledgeBases.listFiles.mockResolvedValue(filePage([restFile('f1')]));
+    it('should filter by knowledge base ID', async () => {
+      mockTrpcClient.file.getFiles.query.mockResolvedValue([]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'file', 'list', '--kb-id', 'kb1']);
 
-      expect(mockSdk.knowledgeBases.listFiles).toHaveBeenCalledWith(
-        expect.objectContaining({ path: { id: 'kb1' }, query: { limit: 30 } }),
+      expect(mockTrpcClient.file.getFiles.query).toHaveBeenCalledWith(
+        expect.objectContaining({ knowledgeBaseId: 'kb1' }),
       );
-      expect(mockTrpcClient.file.getFiles.query).not.toHaveBeenCalled();
-      expect(consoleSpy).toHaveBeenCalledTimes(2); // header + 1 row
-      expect(consoleSpy.mock.calls[1][0]).toContain('f1.pdf');
-      expect(consoleSpy.mock.calls[1][0]).toContain('2KB');
-    });
-
-    it('should walk cursor pages until --limit is reached', async () => {
-      mockSdk.knowledgeBases.listFiles
-        .mockResolvedValueOnce(filePage([restFile('f1'), restFile('f2')], 'c2'))
-        .mockResolvedValueOnce(filePage([restFile('f3')], 'c3'));
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'file', 'list', '--kb-id', 'kb1', '-L', '3']);
-
-      expect(mockSdk.knowledgeBases.listFiles).toHaveBeenCalledTimes(2);
-      expect(mockSdk.knowledgeBases.listFiles).toHaveBeenLastCalledWith(
-        expect.objectContaining({ path: { id: 'kb1' }, query: { cursor: 'c2', limit: 1 } }),
-      );
-      expect(consoleSpy).toHaveBeenCalledTimes(4); // header + 3 rows
-    });
-
-    it('should keep a library listing with --json on tRPC so the printed rows do not change', async () => {
-      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
-      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
-      mockTrpcClient.file.getFiles.query.mockResolvedValue([
-        {
-          chunkingStatus: 'success',
-          id: 'f1',
-          knowledgeBaseId: 'kb1',
-          url: 'https://s3.example.com/f1.pdf',
-          userId: 'u1',
-        },
-      ]);
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'file',
-        'list',
-        '--kb-id',
-        'kb1',
-        '--json',
-        'id,chunkingStatus,userId,appUrl',
-      ]);
-
-      expect(mockSdk.knowledgeBases.listFiles).not.toHaveBeenCalled();
-      expect(mockTrpcClient.file.getFiles.query).toHaveBeenCalledWith({
-        knowledgeBaseId: 'kb1',
-        limit: 30,
-      });
-      expect(JSON.parse(consoleSpy.mock.calls[0][0])).toEqual([
-        {
-          appUrl: 'https://app.lobehub.com/resource/library/kb1/file/f1',
-          chunkingStatus: 'success',
-          id: 'f1',
-          userId: 'u1',
-        },
-      ]);
     });
   });
 

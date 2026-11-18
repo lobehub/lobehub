@@ -158,6 +158,17 @@ describe('provider command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created provider'));
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('my-provider'));
     });
+
+    it('should keep the English duplicate message tRPC gave', async () => {
+      mockSdk.providers.create.mockRejectedValue(
+        new LobeHubAPIError(409, { code: 'conflict', message: 'Provider "dup" 已存在' }),
+      );
+
+      const program = createProgram();
+      await expect(
+        program.parseAsync(['node', 'test', 'provider', 'create', '--id', 'dup', '-n', 'Dup']),
+      ).rejects.toThrow('Provider "dup" already exists');
+    });
   });
 
   describe('edit', () => {

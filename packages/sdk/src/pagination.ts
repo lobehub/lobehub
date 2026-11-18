@@ -21,9 +21,9 @@ export type PaginateOptions<M extends AnyFn> = NonNullable<Parameters<M>[0]>;
 
 export interface PaginateLimits {
   /**
-   * Stop after this many items. Each request then asks for no more than the
-   * items still wanted (`query.limit` caps the page size), so a "first N"
-   * read never fetches a full page it throws away.
+   * Stop after this many items. With a `query.limit`, the last request asks
+   * only for the items still wanted, so a "first N" read never fetches a full
+   * page it throws away; without one, pages keep the server's default size.
    */
   maxItems?: number;
 }
@@ -64,9 +64,9 @@ export async function* paginate<M extends AnyFn>(
   if (remaining <= 0) return;
 
   while (true) {
-    const limit = Number.isFinite(remaining)
-      ? Math.min(pageLimit ?? remaining, remaining)
-      : pageLimit;
+    // Only lower a page size the caller chose: inventing one from `maxItems`
+    // could exceed an endpoint's cap, where the server default would not.
+    const limit = pageLimit === undefined ? undefined : Math.min(pageLimit, remaining);
     const { data } = await method({
       ...base,
       client,

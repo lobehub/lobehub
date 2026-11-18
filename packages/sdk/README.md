@@ -146,7 +146,7 @@ for await (const agent of lobehub.paginate(lobehub.agents.list, { query: { limit
 
 The method can be passed unbound; query parameters other than `cursor` are sent with every page.
 
-To read only the first N items, pass `maxItems`: iteration stops there, and each page asks for no more than the items still wanted:
+To read only the first N items, pass `maxItems`: iteration stops there, and with a `query.limit` the last page asks only for the items still wanted:
 
 ```ts
 for await (const goal of lobehub.paginate(

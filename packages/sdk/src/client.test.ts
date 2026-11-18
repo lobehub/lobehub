@@ -292,7 +292,7 @@ describe('paginate', () => {
     ]);
   });
 
-  it('uses maxItems as the page size when the query sets none, and sends nothing for 0', async () => {
+  it('keeps the server page size without a query limit, and sends nothing for maxItems 0', async () => {
     const { fetch, requests } = mockFetch(() =>
       json(envelope({ agents: [{ id: 'a1' }], hasMore: false, nextCursor: null, total: 1 })),
     );
@@ -305,7 +305,7 @@ describe('paginate', () => {
       // drain
     }
 
-    expect(requests.map((request) => new URL(request.url).search)).toEqual(['?limit=5']);
+    expect(requests.map((request) => new URL(request.url).search)).toEqual(['']);
   });
 
   it('reads the generic `items` array of newer endpoints', async () => {

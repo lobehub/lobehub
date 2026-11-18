@@ -31,21 +31,6 @@ function formatFileType(fileType: string): string {
   return parts.length > 1 ? parts[1] : fileType;
 }
 
-/**
- * `POST|DELETE /knowledge-bases/{id}/files/batch` takes file ids only; the
- * tRPC procedures also resolve a document (`docs_…`) to its mirror file, so a
- * batch that names a document keeps going through tRPC.
- */
-const namesDocument = (ids: string[]) => ids.some((id) => id.startsWith('docs_'));
-
-/** Per-file failures of a REST batch: report each one and exit non-zero. */
-function reportBatchFailures(failed: { fileId: string; reason: string }[]): boolean {
-  if (failed.length === 0) return false;
-  for (const { fileId, reason } of failed) log.error(`${fileId}: ${reason}`);
-  process.exit(1);
-  return true;
-}
-
 export function registerKbCommand(program: Command) {
   const kb = program
     .command('kb')
@@ -257,20 +242,11 @@ export function registerKbCommand(program: Command) {
     .description('Add files to a knowledge base')
     .requiredOption('--ids <ids...>', 'File IDs to add')
     .action(async (knowledgeBaseId: string, options: { ids: string[] }) => {
-      if (namesDocument(options.ids)) {
-        const client = await getTrpcClient();
-        await client.knowledgeBase.addFilesToKnowledgeBase.mutate({
-          ids: options.ids,
-          knowledgeBaseId,
-        });
-      } else {
-        const sdk = await getSdkClient();
-        const { data } = await sdk.knowledgeBases.addFiles({
-          body: { fileIds: options.ids },
-          path: { id: knowledgeBaseId },
-        });
-        if (reportBatchFailures(data.data.failed)) return;
-      }
+      const client = await getTrpcClient();
+      await client.knowledgeBase.addFilesToKnowledgeBase.mutate({
+        ids: options.ids,
+        knowledgeBaseId,
+      });
       console.log(
         `${pc.green('✓')} Added ${options.ids.length} file(s) to knowledge base ${pc.bold(knowledgeBaseId)}`,
       );
@@ -293,20 +269,11 @@ export function registerKbCommand(program: Command) {
         }
       }
 
-      if (namesDocument(options.ids)) {
-        const client = await getTrpcClient();
-        await client.knowledgeBase.removeFilesFromKnowledgeBase.mutate({
-          ids: options.ids,
-          knowledgeBaseId,
-        });
-      } else {
-        const sdk = await getSdkClient();
-        const { data } = await sdk.knowledgeBases.removeFiles({
-          body: { fileIds: options.ids },
-          path: { id: knowledgeBaseId },
-        });
-        if (reportBatchFailures(data.data.failed)) return;
-      }
+      const client = await getTrpcClient();
+      await client.knowledgeBase.removeFilesFromKnowledgeBase.mutate({
+        ids: options.ids,
+        knowledgeBaseId,
+      });
       console.log(
         `${pc.green('✓')} Removed ${options.ids.length} file(s) from knowledge base ${pc.bold(knowledgeBaseId)}`,
       );

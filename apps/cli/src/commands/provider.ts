@@ -111,16 +111,24 @@ export function registerProviderCommand(program: Command) {
       }) => {
         const sdk = await getSdkClient();
 
-        const { data } = await sdk.providers.create({
-          body: {
-            description: options.description || undefined,
-            id: options.id,
-            logo: options.logo || undefined,
-            name: options.name,
-            source: (options.source || 'custom') as 'builtin' | 'custom',
-            // `--sdk-type` has no provider column: tRPC dropped it as well.
-          },
-        });
+        const { data } = await sdk.providers
+          .create({
+            body: {
+              description: options.description || undefined,
+              id: options.id,
+              logo: options.logo || undefined,
+              name: options.name,
+              source: (options.source || 'custom') as 'builtin' | 'custom',
+              // `--sdk-type` has no provider column: tRPC dropped it as well.
+            },
+          })
+          .catch((error: unknown) => {
+            // REST words its conflict in Chinese; keep the message tRPC gave.
+            if (error instanceof LobeHubAPIError && error.status === 409) {
+              throw new Error(`Provider "${options.id}" already exists`);
+            }
+            throw error;
+          });
         console.log(`${pc.green('✓')} Created provider ${pc.bold(data.data.id || options.id)}`);
       },
     );
