@@ -162,7 +162,14 @@ export async function findContextByAgent(
             ELSE ''
           END
         `.as('content'),
-        description: documents.description,
+        // Context rendering never reads `description`, and across thousands of
+        // progressive rows it is a large share of the bytes; keep it on `always` rows.
+        description: sql<string | null>`
+          CASE
+            WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.description}
+            ELSE NULL
+          END
+        `.as('description'),
         editorData: sql<Record<string, any> | null>`
           CASE
             WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.editorData}
@@ -200,7 +207,7 @@ export async function findContextByAgent(
         ...(options?.excludeProgressive
           ? [
               or(
-                ne(agentDocuments.policyLoad, PolicyLoad.PROGRESSIVE),
+                eq(agentDocuments.policyLoad, PolicyLoad.ALWAYS),
                 eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
               ),
             ]

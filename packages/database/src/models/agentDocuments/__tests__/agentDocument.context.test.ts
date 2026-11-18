@@ -73,14 +73,22 @@ describe('AgentDocumentModel.findContextByAgent', () => {
     ]);
   });
 
-  it('leaves out progressive documents but keeps folders when asked', async () => {
+  it('loads description only for always documents', async () => {
+    await serverDB
+      .update(documents)
+      .set({ description: 'summary' })
+      .where(eq(documents.userId, userId));
+
+    const rows = await model.findContextByAgent(agentId);
+
+    expect(rows.find((row) => row.filename === 'style.md')?.description).toBe('summary');
+    expect(rows.find((row) => row.filename === 'notes.md')?.description).toBeNull();
+  });
+
+  it('keeps only always documents and folders when asked', async () => {
     const rows = await model.findContextByAgent(agentId, { excludeProgressive: true });
 
-    expect(rows.map((row) => row.filename).sort()).toEqual([
-      '.tool-results',
-      'paused.md',
-      'style.md',
-    ]);
+    expect(rows.map((row) => row.filename).sort()).toEqual(['.tool-results', 'style.md']);
     expect(rows.find((row) => row.filename === 'style.md')).toMatchObject({
       content: 'Always follow the style guide.',
       policyLoad: PolicyLoad.ALWAYS,
