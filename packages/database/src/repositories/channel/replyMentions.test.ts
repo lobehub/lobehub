@@ -46,6 +46,19 @@ describe('findTextMentions', () => {
     expect(findTextMentions('`` @Pi', members)).toEqual(['pi']);
   });
 
+  it('ignores link and image destinations but reads link text', () => {
+    expect(findTextMentions('[profile](https://example.com/@Pi)', members)).toEqual([]);
+    expect(findTextMentions('![@Pi](https://example.com/@Pilot.png)', members)).toEqual([]);
+    expect(findTextMentions('[ask @Pi](https://example.com)', members)).toEqual(['pi']);
+    expect(findTextMentions('[x][ref]\n\n[ref]: https://example.com/@Pi', members)).toEqual([]);
+  });
+
+  it('ignores the address of a bare or bracketed link', () => {
+    expect(findTextMentions('见 https://example.com/@Pi 的主页', members)).toEqual([]);
+    expect(findTextMentions('<https://example.com/@Pilot>', members)).toEqual([]);
+    expect(findTextMentions('www.example.com/@Pi', members)).toEqual([]);
+  });
+
   it('lists each member once, in order of appearance', () => {
     expect(findTextMentions('@Pilot @Arvin Xu @Pilot', members)).toEqual(['pilot', 'arvin']);
   });

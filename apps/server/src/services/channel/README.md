@@ -253,10 +253,10 @@ chosen Agents (`ChannelMessagingService`).
   from that run continues the exchange (`hops + 1`) up to three asks; the answering Agent's run (`requestByAgent`) cannot pass the question on. `deliverRelayReceipt` skips Agent-written requests.
 - **@mentions in replies.** An Agent's published reply has its `@Name` text turned into real
   mentions (`ChannelExecutionRepository.deliverReplyMentions`, called from
-  `ChannelCoordinator.complete`): matched against active members like the timeline highlight,
-  code ignored the way the timeline renders it (fenced blocks, indented blocks and code spans of
-  any backtick length, including ones that wrap lines), the replying Agent itself skipped. People are notified; each mentioned Agent is
-  queued on the reply for the same requester and follows the Thread. The reply records the
+  `ChannelCoordinator.complete`): the reply is parsed as Markdown (remark + GFM) and only its
+  text nodes are matched against active members, like the timeline highlight. Code, link and
+  image destinations, HTML and an autolink's own address never count; the replying Agent itself
+  is skipped. People are notified; each mentioned Agent is queued on the reply for the same requester and follows the Thread. The reply records the
   Agent-to-Agent hops since a person spoke (`metadata.mentionHops`); past
   `MAX_REPLY_MENTION_HOPS` (3) the mentions are still recorded but wake no one. A conversation
   between two Agents only records them; its exchange has its own limit.
