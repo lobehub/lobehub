@@ -34,8 +34,8 @@ import SubscriptionAccounts from '../subscription-accounts';
 import SystemTools from '../system-tools';
 import Tools from '../tools';
 import Trash from '../trash';
-import Webhooks from '../webhooks';
 import Webhook from '../webhook';
+import Webhooks from '../webhooks';
 
 export const componentMap = {
   [SettingsTabs.Advanced]: Advanced,

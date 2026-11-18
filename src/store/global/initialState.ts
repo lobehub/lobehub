@@ -112,8 +112,8 @@ export enum SettingsTabs {
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
-  Webhooks = 'webhooks',
   Webhook = 'webhook',
+  Webhooks = 'webhooks',
 }
 
 /**

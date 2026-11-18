@@ -2,9 +2,8 @@ import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { CreateTopicParams, ModelTimingContext } from '../../models/topic';
-import { agentOperations, messageGroups, messages, topics } from '../../schemas';
 import { announceTopicCreated } from '../../models/topic/create';
-import { messageGroups, messages, topics } from '../../schemas';
+import { agentOperations, messageGroups, messages, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { copyMessagesInDatabase } from '../../utils/copyMessagesInDatabase';
 import { idGenerator } from '../../utils/idGenerator';
