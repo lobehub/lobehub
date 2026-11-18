@@ -134,10 +134,7 @@ const BoardLabel = ({
     recommended,
     tag: tagWidth(recommendedText),
     title: textWidth(board.title, BOARD_LABEL_FONT) + (image ? ICON_WIDTH : 0),
-    trail:
-      (version ? textWidth(version, 11) + 6 : 0) +
-      (locked ? LOCK_WIDTH : 0) +
-      (statusTag ? STATUS_TAG_WIDTH : 0),
+    trail: (locked ? LOCK_WIDTH : 0) + (statusTag ? STATUS_TAG_WIDTH : 0),
   });
   const badge = layout.badge && (
     <RecommendBadge k={k} label={recommendedText} width={board.rect.w} />

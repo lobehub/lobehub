@@ -159,7 +159,7 @@ class Draft {
     this.touch(roundId);
   }
 
-  async apply(raw: ResolvedArtboardOp) {
+  async apply(raw: ArtboardOp) {
     const ref = 'ref' in raw ? raw.ref : undefined;
     if (ref && this.refs.has(ref))
       failArtboard('invalid', `ref "${ref}" is used twice in this batch`);
@@ -167,7 +167,7 @@ class Draft {
     if (ref && createdId) this.refs.set(ref, createdId);
   }
 
-  private async run(op: ResolvedArtboardOp): Promise<string | void> {
+  private async run(op: ArtboardOp): Promise<string | void> {
     switch (op.type) {
       case 'addPage': {
         const sortOrder = Math.max(...this.pages.map((p) => p.sortOrder)) + 1;

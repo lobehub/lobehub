@@ -15,9 +15,9 @@ export const sourcePathOf = (source: ArtboardBoardSourceInput) =>
   normalizeArtboardFilePath(source.path) ??
   failArtboard('invalid', `"${source.path}" is not a valid artboard file path.`);
 
-export const sourceColumns = (path: string) => ({
+export const sourceColumns = (path: string | undefined) => ({
   sourceFileId: null,
-  sourcePath: path,
+  sourcePath: path ?? null,
   sourceWorkVersionId: null,
 });
 

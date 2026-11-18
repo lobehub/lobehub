@@ -94,5 +94,6 @@ export const serveArtboardFile = async ({
     return new Response(null, { headers, status: 304 });
 
   const bytes = await storeFor(row).read(artboardBlobKey(artboardId, row.hash));
-  return new Response(bytes, { headers, status: 200 });
+  // Object-store reads are backed by a plain ArrayBuffer, never a SharedArrayBuffer.
+  return new Response(bytes as Uint8Array<ArrayBuffer>, { headers, status: 200 });
 };
