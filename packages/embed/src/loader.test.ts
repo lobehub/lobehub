@@ -55,7 +55,7 @@ describe('createLobeHubEmbed', () => {
       embed.on('ready', onReady);
 
       iframe.dispatchEvent(new Event('load'));
-      vi.advanceTimersByTime(500);
+      vi.advanceTimersByTime(1000);
       const init = wrapEmbedMessage({ theme: 'auto', type: 'init' });
       expect(source.postMessage).toHaveBeenCalledTimes(3);
       expect(source.postMessage).toHaveBeenCalledWith(init, HOST);
@@ -67,7 +67,7 @@ describe('createLobeHubEmbed', () => {
       window.dispatchEvent(
         new MessageEvent('message', { data: ready, origin: HOST, source: source as any }),
       );
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(2000);
       expect(source.postMessage).toHaveBeenCalledTimes(3);
       expect(onReady).toHaveBeenCalledTimes(1);
 

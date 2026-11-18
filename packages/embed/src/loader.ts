@@ -45,9 +45,9 @@ export interface LobeHubEmbed {
   toggle: () => void;
 }
 
-const HANDSHAKE_INTERVAL_MS = 250;
-/** ~30s: covers a cold route chunk on a slow connection. */
-const HANDSHAKE_MAX_ATTEMPTS = 120;
+const HANDSHAKE_INTERVAL_MS = 500;
+/** 2 minutes: covers a cold route chunk on a slow connection. */
+const HANDSHAKE_MAX_ATTEMPTS = 240;
 
 const CHAT_ICON =
   '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>';

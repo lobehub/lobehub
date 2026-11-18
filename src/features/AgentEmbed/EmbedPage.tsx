@@ -2,7 +2,7 @@
 
 import { Center, Empty, Flexbox } from '@lobehub/ui';
 import { MessageSquareOff } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -19,7 +19,12 @@ import { getEmbedHostBridge } from './hostBridge';
 const AgentEmbedPage = memo(() => {
   const { t } = useTranslation('agent');
   const { slugOrId = '' } = useParams<{ slugOrId: string }>();
-  const bridge = getEmbedHostBridge();
+  // Started after mount: it seeds the host's theme into the theme provider,
+  // which must not update while this page renders. The loader keeps repeating
+  // `init` until the bridge answers, so a late start loses nothing.
+  useEffect(() => {
+    getEmbedHostBridge();
+  }, []);
 
   if (!AGENT_EMBED_CHAT_SUPPORTED) {
     return (
@@ -36,11 +41,11 @@ const AgentEmbedPage = memo(() => {
   return (
     <Flexbox height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       <AgentEmbedChat
-        framed={bridge.framed}
+        framed={window.parent !== window}
         slugOrId={slugOrId}
-        onClose={() => bridge.emit({ type: 'close' })}
-        onMessageSent={(topicId) => bridge.emit({ topicId, type: 'messageSent' })}
-        onTopicCreated={(topicId) => bridge.emit({ topicId, type: 'topicCreated' })}
+        onClose={() => getEmbedHostBridge().emit({ type: 'close' })}
+        onMessageSent={(topicId) => getEmbedHostBridge().emit({ topicId, type: 'messageSent' })}
+        onTopicCreated={(topicId) => getEmbedHostBridge().emit({ topicId, type: 'topicCreated' })}
       />
     </Flexbox>
   );

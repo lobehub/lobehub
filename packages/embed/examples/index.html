@@ -31,6 +31,10 @@
         </p>
       </div>
       <div class="card">
+        <p>
+          This page: <code id="page-origin"></code><br />
+          Conversation frame: <code id="frame-url">not opened yet</code>
+        </p>
         <h3>Host controls</h3>
         <p>
           <button data-theme="light">Light</button>
@@ -51,6 +55,14 @@
         document.getElementById('log').textContent += `${new Date().toLocaleTimeString()}  ${line}\n`;
       };
 
+      document.getElementById('page-origin').textContent = location.origin;
+      const showFrameUrl = () => {
+        const frame = document
+          .querySelector('[data-lobehub-embed]')
+          ?.shadowRoot?.querySelector('iframe');
+        if (frame) document.getElementById('frame-url').textContent = frame.src;
+      };
+
       document.getElementById('snippet').textContent =
         `<script src="${host}/embed.js" data-agent="${agent}" async><\/script>`;
 
@@ -63,6 +75,7 @@
         for (const event of ['open', 'close', 'ready', 'messageSent', 'topicCreated']) {
           embed.on(event, (payload) => log(`${event} ${JSON.stringify(payload)}`));
         }
+        embed.on('open', showFrameUrl);
         document.querySelectorAll('[data-theme]').forEach((button) =>
           button.addEventListener('click', () => {
             embed.setTheme(button.dataset.theme);
