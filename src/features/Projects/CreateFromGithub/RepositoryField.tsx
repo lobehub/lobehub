@@ -3,12 +3,13 @@ import { Github } from '@lobehub/icons';
 import { ActionIcon, Button, Flexbox, Icon, Input, Popover, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon, XIcon } from 'lucide-react';
+import { ArrowRightIcon, ChevronDownIcon, ChevronRightIcon, XIcon } from 'lucide-react';
 import { type ClipboardEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
+import { useScmRepositories } from './useScmRepositories';
 
 /** A repository picked for the new project or environment. */
 export interface PickedRepository {
@@ -41,18 +42,18 @@ const styles = stylex.create({
 
 const sameRepository = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-interface RepositoryPickerProps {
-  onConnect: () => void;
+interface PasteRepositoryProps {
+  /** Above the input; none where the surrounding section already says what it is. */
+  label?: string;
   onPick: (repository: PickedRepository) => void;
   picked: PickedRepository[];
 }
 
 /**
- * Where a repository comes from: the list the connected GitHub App can read,
- * or a pasted URL. Pasting a whole URL adds it at once; a typed one is added
- * with Enter or the button, so a half-typed path is never picked.
+ * A pasted repository URL. Pasting a whole URL adds it at once; a typed one is
+ * added with Enter or the button, so a half-typed path is never picked.
  */
-const RepositoryPicker = ({ onConnect, onPick, picked }: RepositoryPickerProps) => {
+const PasteRepository = ({ label, onPick, picked }: PasteRepositoryProps) => {
   const { t } = useTranslation('project');
   const [url, setUrl] = useState('');
   const parsed = parseGithubRepository(url);
@@ -74,48 +75,133 @@ const RepositoryPicker = ({ onConnect, onPick, picked }: RepositoryPickerProps) 
   };
 
   return (
+    <Flexbox gap={6}>
+      {label && (
+        <Text fontSize={13} weight={500}>
+          {label}
+        </Text>
+      )}
+      <Flexbox horizontal gap={8}>
+        <Input
+          aria-invalid={invalid}
+          placeholder={t('createFromGithub.urlPlaceholder')}
+          style={invalid ? { borderColor: cssVar.colorError } : undefined}
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          onPaste={handlePaste}
+          onPressEnter={() => add()}
+        />
+        <Button disabled={!parsed || taken(parsed.fullName)} onClick={() => add()}>
+          {t('createFromGithub.addRepository')}
+        </Button>
+      </Flexbox>
+      {invalid && (
+        <Text fontSize={12} type={'danger'}>
+          {t('createFromGithub.urlInvalid')}
+        </Text>
+      )}
+      {parsed && taken(parsed.fullName) && (
+        <Text fontSize={12} type={'secondary'}>
+          {t('createFromGithub.alreadyAdded')}
+        </Text>
+      )}
+    </Flexbox>
+  );
+};
+
+const toPicked = (repo: ScmRepositoryListItem): PickedRepository => ({
+  defaultBranch: repo.defaultBranch ?? undefined,
+  fullName: repo.fullName,
+  url: repo.htmlUrl,
+});
+
+interface RepositoryPickerProps {
+  onConnect: () => void;
+  onPick: (repository: PickedRepository) => void;
+  picked: PickedRepository[];
+}
+
+/** The main pick: the list the connected GitHub App can read, or a pasted URL. */
+const RepositoryPicker = ({ onConnect, onPick, picked }: RepositoryPickerProps) => {
+  const { t } = useTranslation('project');
+  return (
     <Flexbox gap={12}>
       <RepositoryList
         picked={picked.map((item) => item.fullName)}
         onConnect={onConnect}
-        onSelect={(repo: ScmRepositoryListItem) =>
-          onPick({
-            defaultBranch: repo.defaultBranch ?? undefined,
-            fullName: repo.fullName,
-            url: repo.htmlUrl,
-          })
-        }
+        onSelect={(repo) => onPick(toPicked(repo))}
       />
-      <Flexbox gap={6}>
-        <Text fontSize={13} weight={500}>
-          {t('createFromGithub.urlLabel')}
-        </Text>
-        <Flexbox horizontal gap={8}>
-          <Input
-            aria-invalid={invalid}
-            placeholder={t('createFromGithub.urlPlaceholder')}
-            style={invalid ? { borderColor: cssVar.colorError } : undefined}
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onPaste={handlePaste}
-            onPressEnter={() => add()}
-          />
-          <Button disabled={!parsed || taken(parsed.fullName)} onClick={() => add()}>
-            {t('createFromGithub.addRepository')}
-          </Button>
-        </Flexbox>
-        {invalid && (
-          <Text fontSize={12} type={'danger'}>
-            {t('createFromGithub.urlInvalid')}
-          </Text>
-        )}
-        {parsed && taken(parsed.fullName) && (
-          <Text fontSize={12} type={'secondary'}>
-            {t('createFromGithub.alreadyAdded')}
-          </Text>
-        )}
-      </Flexbox>
+      <PasteRepository label={t('createFromGithub.urlLabel')} picked={picked} onPick={onPick} />
     </Flexbox>
+  );
+};
+
+interface GithubRepositoryButtonProps {
+  onConnect: () => void;
+  onOpenChange: (open: boolean) => void;
+  onPick: (repository: PickedRepository) => void;
+  open: boolean;
+  picked: PickedRepository[];
+}
+
+/**
+ * The connected list, a click away: a popover once GitHub can list
+ * repositories, otherwise the step that would make it — connect, open the
+ * settings, or grant access. Nothing while loading or after a failed load; the
+ * paste box beside it still works.
+ */
+const GithubRepositoryButton = ({
+  onConnect,
+  onOpenChange,
+  onPick,
+  open,
+  picked,
+}: GithubRepositoryButtonProps) => {
+  const { t } = useTranslation('project');
+  const { state } = useScmRepositories();
+
+  if (state === 'loading' || state === 'error') return null;
+
+  if (state !== 'ready')
+    return (
+      <Button
+        icon={<Icon icon={ArrowRightIcon} />}
+        iconPosition={'end'}
+        size={'small'}
+        type={'text'}
+        onClick={onConnect}
+      >
+        {t(
+          state === 'disconnected'
+            ? 'createFromGithub.connect'
+            : state === 'unconfigured'
+              ? 'createFromGithub.openIntegrations'
+              : 'createFromGithub.manageAccess',
+        )}
+      </Button>
+    );
+
+  return (
+    <Popover
+      open={open}
+      placement={'bottomLeft'}
+      trigger={'click'}
+      content={
+        <div {...stylex.props(styles.popover)}>
+          <RepositoryList
+            hideGuide
+            picked={picked.map((item) => item.fullName)}
+            onConnect={onConnect}
+            onSelect={(repo) => onPick(toPicked(repo))}
+          />
+        </div>
+      }
+      onOpenChange={onOpenChange}
+    >
+      <Button icon={<Github size={14} />} size={'small'}>
+        {t('createFromGithub.chooseFromGithub')}
+      </Button>
+    </Popover>
   );
 };
 
@@ -255,23 +341,18 @@ export const AdvancedRepositories = ({
             />
           ))}
           {value.length < MAX_REPOSITORIES && (
-            <Flexbox horizontal>
-              <Popover
-                open={adding}
-                placement={'bottomLeft'}
-                trigger={'click'}
-                content={
-                  <div {...stylex.props(styles.popover)}>
-                    <RepositoryPicker picked={value} onConnect={onConnect} onPick={toggle} />
-                  </div>
-                }
-                onOpenChange={setAdding}
-              >
-                <Button icon={<Icon icon={PlusIcon} />} size={'small'}>
-                  {t('createFromGithub.addAnother')}
-                </Button>
-              </Popover>
-            </Flexbox>
+            <>
+              <PasteRepository picked={value} onPick={toggle} />
+              <Flexbox horizontal>
+                <GithubRepositoryButton
+                  open={adding}
+                  picked={value}
+                  onConnect={onConnect}
+                  onOpenChange={setAdding}
+                  onPick={toggle}
+                />
+              </Flexbox>
+            </>
           )}
         </Flexbox>
       )}
