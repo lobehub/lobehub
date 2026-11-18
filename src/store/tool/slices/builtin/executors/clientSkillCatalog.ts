@@ -19,9 +19,10 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 /** Bind both name lookup and the fallback catalog to the calling agent, not the active tab. */
 export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
-  const { agentId } = ctx;
-  const plugins = agentId
-    ? agentSelectors.getAgentConfigById(agentId)(getAgentStoreState())?.plugins
+  const { agentId, subAgentId } = ctx;
+  const profileAgentId = subAgentId ?? agentId;
+  const plugins = profileAgentId
+    ? agentSelectors.getAgentConfigById(profileAgentId)(getAgentStoreState())?.plugins
     : undefined;
   const messages = agentId
     ? (getChatStoreState().dbMessagesMap[
@@ -30,6 +31,7 @@ export const clientSkillCatalog = (ctx: BuiltinToolContext) => {
           documentId: ctx.documentId ?? undefined,
           groupId: ctx.groupId,
           scope: (ctx.scope ?? undefined) as MessageMapScope | undefined,
+          subAgentId,
           threadId: ctx.threadId ?? undefined,
           topicId: ctx.topicId,
         })

@@ -13,10 +13,20 @@ vi.mock('@/services/skill', () => ({
     readResource: async (id: string) => ({ content: `Reference for ${id}` }),
   },
 }));
-vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({ agentMap: {} }) }));
+vi.mock('@/store/agent', () => ({
+  getAgentStoreState: () => ({
+    agentMap: {
+      member: { plugins: ['member-skill'] },
+      supervisor: { plugins: ['supervisor-skill'] },
+    },
+  }),
+}));
 vi.mock('@/store/chat', () => ({
   getChatStoreState: () => ({
     dbMessagesMap: {
+      group_agent_group_topic_member: [
+        { metadata: { selectedSkillIds: ['selected-skill'] }, role: 'user' },
+      ],
       main_agent_topic: [{ metadata: { selectedSkillIds: ['main-skill'] }, role: 'user' }],
       page_agent_doc: [
         {
@@ -35,6 +45,23 @@ vi.mock('@/store/chat', () => ({
 }));
 
 describe('Web Skills conversation selection', () => {
+  it('uses the group member profile and selections from its conversation', async () => {
+    const context = {
+      agentId: 'supervisor',
+      groupId: 'group',
+      messageId: 'message',
+      scope: 'group_agent',
+      subAgentId: 'member',
+      topicId: 'topic',
+    };
+    const read = (id: string) =>
+      skillsExecutor.invoke('readReference', { id, path: 'guide.md' }, context);
+
+    expect(await read('member-skill')).toMatchObject({ success: true });
+    expect(await read('supervisor-skill')).toMatchObject({ success: false });
+    expect(await read('selected-skill')).toMatchObject({ success: true });
+  });
+
   it.each([
     { scope: 'task', topicId: 'topic' },
     { documentId: 'doc', scope: 'page' },
