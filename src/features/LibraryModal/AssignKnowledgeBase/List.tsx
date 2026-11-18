@@ -83,7 +83,12 @@ export const List = memo<ListProps>(({ defaultKind }) => {
   // A new library is created for this agent, so it is attached as soon as it exists.
   const { open: openCreateLibrary } = useCreateNewModal();
   const createLibrary = () =>
-    openCreateLibrary({ onSuccess: (id) => void addKnowledgeBaseToAgent(id) });
+    // Created in the tab's scope, so a library made from the Private tab stays private and
+    // remains in this list once attached.
+    openCreateLibrary({
+      onSuccess: (id) => void addKnowledgeBaseToAgent(id),
+      visibility: effectiveVisibility,
+    });
 
   const kindEmpty = (kind === 'library' ? libraryCount : fileCount) === 0;
 
