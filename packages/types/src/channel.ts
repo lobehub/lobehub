@@ -564,6 +564,12 @@ export interface ChannelLastMessage {
   thread: { id: string; title: string | null } | null;
 }
 
+/** The newest message in a Thread that @mentions the caller. */
+export interface ChannelThreadMention {
+  createdAt: Date;
+  threadId: string;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -625,6 +631,12 @@ export interface ChannelListItem {
    */
   sharedAgentHandle?: string | null;
   status: ChannelStatus;
+  /**
+   * The newest @mention of the caller in each Thread from the last 30 days, read or not; set by
+   * the Channel list. The read position cannot tell whether one was seen, so the client's
+   * per-Thread reads decide.
+   */
+  threadMentions?: ChannelThreadMention[];
   title: string;
   /** Main-channel messages the caller has not read; set by the Channel list. */
   unreadCount?: number;
