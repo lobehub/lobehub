@@ -25,7 +25,7 @@ npm view @lobehub/cli@latest version gitHead dist.integrity --json --registry=ht
 
 Node must satisfy the package's actual `engines.node`. Query the selected channel too when it differs from stable. Save the registry responses and inspection notes as evidence. Query the confirmed target explicitly; only an explicit version-not-found response proves absence. Do not suppress stderr and call a failed lookup a free version.
 
-After confirming version and tag, initialize a unique durable directory. Set `TARGET` to the confirmed version; do not copy an example version from this document:
+Resolve the target/tag under the standing `0.0.x` increment / `latest` default, or the explicit decision for a non-default case. Initialize a unique durable directory. Set `TARGET` to the actual resolved version; do not copy an example version:
 
 ```bash
 REPO_ROOT="$PWD"
@@ -34,19 +34,30 @@ RELEASE_DIR="$HOME/.local/share/lobehub/cli-releases/$TARGET-$(date -u +%Y%m%dT%
 node "$SKILL_DIR/scripts/release.mjs" init "$RELEASE_DIR"
 ```
 
-Fill `release.json` using [record.md](record.md). Do not mark anything passed yet. The record and report stay outside Git. If a baseline is unavailable, persist the blocked record rather than continuing into a guessed release.
+Fill `release.json` using [record.md](record.md). Do not mark anything passed yet. The record and report stay outside Git. Missing historical provenance does not prevent preparing a current candidate with an explicitly labeled repository comparison.
+
+Before the first build, retain the read-only preflight and resolve findings:
+
+```bash
+node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" doctor -- \
+  node "$SKILL_DIR/scripts/release.mjs" doctor "$REPO_ROOT"
+```
+
+`doctor` checks Node, required local executables, CLI dependency declarations (including workspace packages), root report dependencies, tool versions and each workspace's actual lockfile policy. It never installs, logs in, changes caches or approves gates. It is not a complete root/build dependency audit: review the remaining scope below. Capture all required environment repairs in one authorization request before building. Preserve the failed preflight and rerun after an approved repair.
 
 ## Baseline and scope
 
-Verify a full baseline SHA and the evidence connecting it to the published package. Check `git merge-base --is-ancestor`. A previous record must have a matching registry integrity and a `VERIFIED` result, not just a filename/version match. Preserve its source patch:
+Choose a full comparison SHA and check `git merge-base --is-ancestor`. Prefer an evidenced published baseline. A previous release record must have matching registry integrity and a `VERIFIED` result, not just a filename/version match. Preserve its source patch:
 
 - Metadata/format-only patches: inspect and account for them explicitly in release notes.
-- Behavior-changing patches: reconstruct the actual old source snapshot for comparison; `baselineSHA..HEAD` alone would omit them. If reconstruction is unavailable, block the complete summary.
+- Behavior-changing patches: reconstruct the actual old source snapshot for comparison; `baselineSHA..HEAD` alone would omit them. If reconstruction is unavailable, do not claim a complete npm-package summary.
 
-For a prerelease, include both stable and selected-channel comparisons when different. After provenance is established:
+If old provenance cannot be recovered, select the previous CLI version-sync commit or another defensible repository reference. Set `comparison.kind` to `repository-reference`, explain the choice/limitations and keep historical `baseline` UNKNOWN. A known conflict remains FAIL and must be resolved. Set `scope` from the actual repository comparison, not from an invented npm source binding. Do not repeatedly request unavailable artifacts from another machine.
+
+For a prerelease, include both stable and selected-channel comparisons when different. Then run:
 
 ```bash
-node "$SKILL_DIR/scripts/release.mjs" scope "$REPO_ROOT" "$BASE_SHA" > "$RELEASE_DIR/scope.json"
+node "$SKILL_DIR/scripts/release.mjs" scope "$REPO_ROOT" "$COMPARISON_SHA" > "$RELEASE_DIR/scope.json"
 ```
 
 The helper matches manifest `name`, not arbitrary text mentioning a package, and considers dependencies at both revisions. Its conservative closure includes dev/build dependencies. Inspect reachability to narrow it; absence from a direct import scan is not proof a transitive dependency is unreachable. Also inspect root/build configuration outside that closure as applicable.
@@ -72,16 +83,20 @@ node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" bundle-tests -- \
 
 Replace the path placeholder with existing source/test paths from the reviewed release scope, including shared packages. Do not blindly pass deleted files, or omit related tests because only a source file changed. Review all lint autofixes. Do not pipe checks to `tail`/`head`; output truncation must not hide exit status. Inspect logs from their recorded locations.
 
-If dependencies are missing, use pnpm with the committed locks for both root and CLI workspaces, preferably `--frozen-lockfile`. No silent lock regeneration. A type failure remains a failed run, even if apparently pre-existing. Ask before environment repair (including removing generated caches), retain the failed receipt, explain the repair, and record the new run separately. An isolated clean environment is preferable to modifying an active developer environment.
+Read the actual workspace policy before installation. This repository currently has `lockfile: false` in both root and CLI workspaces: do not require a nonexistent committed lock or claim a frozen install. Record resolved dependency versions after an approved install; ranges may resolve differently even with unchanged manifests. Where a workspace enables a committed lock, use `--frozen-lockfile`; do not silently regenerate it. Environment repair happens before the first candidate build, not after smoke.
+
+Use a realpath TMPDIR (for example, a directory under the durable record) to avoid macOS `/var` versus `/private/var` fixture mismatches. Run heavy tests and the full type gate sequentially when resources are constrained. Keep failures and replacement receipts; do not retry until green without explaining the observed failure.
+
+A type failure remains a failed run, even if apparently pre-existing. For stale Next generated types, prefer an approved clean environment or a maintained repository generation command. Do not exclude routes, delete caches to hide failures or write one-off scripts against Next's internal APIs. If no supported repair is available, report that specific blocker while other independent checks continue.
 
 ## Acceptance and compatibility
 
-Before new execution, build a coverage table in `report.md`:
+Immediately after the change summary, build a coverage table in `report.md` and inspect reusable reports before the long build/test phase. Do not defer this until the user asks to publish:
 
 | Changed outcome / PR | Required surface | Acceptance evidence and inspected result | Candidate compatibility | Backend environment / deployed evidence |
 | -------------------- | ---------------- | ---------------------------------------- | ----------------------- | --------------------------------------- |
 
-Inspect report contents and required artifacts, not just whether a PR has a link. Check later changes to relevant code, dependencies, configuration and environment. Note why evidence remains valid. Reuse completed acceptance; run only gaps under the acceptance skill. An unverified UI outcome cannot be relabeled a CLI-only check.
+Open the linked report and inspect its contents and required artifacts, not just whether a PR has a link. Read-only evidence collection needs no repeated approval. Check later changes to relevant code, dependencies, configuration and environment. Note why evidence remains valid. Reuse completed acceptance; run only gaps under the acceptance skill. An unverified UI outcome cannot be relabeled a CLI-only check.
 
 For each required server contract, name the target backend and prove it is available there. Deployment metadata identifying the relevant revision or a successful real contract interaction can support this. A merge SHA alone cannot. State self-hosted compatibility requirements without implying all installations have upgraded.
 
@@ -128,16 +143,18 @@ Create a disposable directory **outside** the repo. Inspect runtime dependency i
 
 ```bash
 SMOKE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/lh-cli-smoke.XXXXXX")"
+SMOKE_DIR="$(cd "$SMOKE_DIR" && pwd -P)"
+mkdir -p "$SMOKE_DIR/home" "$SMOKE_DIR/tmp"
 node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" install -- \
   npm install --prefix "$SMOKE_DIR" --no-audit --no-fund --registry=https://registry.npmjs.org "$TARBALL"
 node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" smoke-version -- \
-  env LOBEHUB_CLI_HOME="$SMOKE_DIR/home" "$SMOKE_DIR/node_modules/.bin/lh" --version
+  env -i PATH="$PATH" HOME="$SMOKE_DIR/home" TMPDIR="$SMOKE_DIR/tmp" LOBEHUB_CLI_HOME="$SMOKE_DIR/home/.lobehub" "$SMOKE_DIR/node_modules/.bin/lh" --version
 node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" smoke-help -- \
-  env LOBEHUB_CLI_HOME="$SMOKE_DIR/home" "$SMOKE_DIR/node_modules/.bin/lh" --help
+  env -i PATH="$PATH" HOME="$SMOKE_DIR/home" TMPDIR="$SMOKE_DIR/tmp" LOBEHUB_CLI_HOME="$SMOKE_DIR/home/.lobehub" "$SMOKE_DIR/node_modules/.bin/lh" --help
 node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" smoke-lobe -- \
-  env LOBEHUB_CLI_HOME="$SMOKE_DIR/home" "$SMOKE_DIR/node_modules/.bin/lobe" --version
+  env -i PATH="$PATH" HOME="$SMOKE_DIR/home" TMPDIR="$SMOKE_DIR/tmp" LOBEHUB_CLI_HOME="$SMOKE_DIR/home/.lobehub" "$SMOKE_DIR/node_modules/.bin/lobe" --version
 node "$SKILL_DIR/scripts/release.mjs" run "$RELEASE_DIR" smoke-lobehub -- \
-  env LOBEHUB_CLI_HOME="$SMOKE_DIR/home" "$SMOKE_DIR/node_modules/.bin/lobehub" --version
+  env -i PATH="$PATH" HOME="$SMOKE_DIR/home" TMPDIR="$SMOKE_DIR/tmp" LOBEHUB_CLI_HOME="$SMOKE_DIR/home/.lobehub" "$SMOKE_DIR/node_modules/.bin/lobehub" --version
 ```
 
 Exercise changed command registration/manuals and applicable offline report rendering. For changed native dependencies, exercise actual native terminal behavior in an approved isolated environment; installation alone is not that check. Record actual runtime/platform limits; one macOS smoke is not Linux/Windows verification. Feature acceptance still needs actual affected outcomes, not help output.
@@ -146,8 +163,8 @@ Bind these checks to the recorded tarball. If anything changes after packing, us
 
 ## Handoff and later verification
 
-Complete the record/report and invoke `handoff` as described in `SKILL.md`. It prints one human-only command with concrete paths. Transfer the whole directory unchanged when publishing elsewhere; on the destination, the human runs `node <transferred-directory>/tools/humanPublish.mjs`. Internal references are relative so the seal survives transfer.
+Run `node "$SKILL_DIR/scripts/release.mjs" status "$RELEASE_DIR"` to see artifact, preparation, registry and repository-sync status separately. Complete the record/report and invoke `handoff` as described in `SKILL.md`. Never fall back to a bare publish command when the guarded entry cannot be prepared. It prints one human-only command with concrete paths. Transfer the whole directory unchanged when publishing elsewhere; on the destination, the human runs `node <transferred-directory>/tools/humanPublish.mjs`. Internal references are relative so the seal survives transfer.
 
 The publisher authenticates independently and handles 2FA. A failed identity check happens before any publish attempt. Once an actual publish is attempted, `publish-attempt.json` prevents blind reruns, even after a nonzero exit or interruption. There is no force/retry bypass. Investigate and resolve registry state first; only a conclusively rejected attempt permits a newly prepared handoff.
 
-After the user reports publication, run read-only `verify`. Each invocation creates a new `verification/<timestamp>.json` with timestamped attempts, observed version/full integrity/tags and final state. Preserve earlier pending/failed observations. If visibility is delayed, keep the existing artifact and wait; never rebuild or publish again just to make the query succeed.
+After any reported human publication attempt, run read-only `verify`, even for an unsealed record or UNKNOWN preparation gates. It checks the artifact's identity, not publication eligibility, and records `preparationSeal: ABSENT` when no handoff exists. An existing seal must match; corrupt/missing sealed evidence is not an unsealed fallback. Each invocation creates a new `verification/<timestamp>.json` with timestamped attempts, observed version/full integrity/tags and final state. It never rewrites gates or creates a handoff. Do not implement a second polling loop. Preserve earlier pending/failed observations. If visibility is delayed, keep the existing artifact and wait; never rebuild or publish again just to make the query succeed.

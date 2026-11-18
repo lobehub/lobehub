@@ -11,16 +11,19 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { inspectEnvironment } from './doctor.mjs';
 import {
   createRecord,
   digest,
   handoffDigest,
   localFile,
   readJson,
+  requireArtifact,
   requireReady,
 } from './record.mjs';
 import { assertUnpublished, waitForPublication } from './registry.mjs';
 import { collectScope } from './scope.mjs';
+import { releaseStatus } from './status.mjs';
 
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const json = (file, value, options) =>
@@ -61,7 +64,7 @@ async function main() {
   const [action, directoryArg, ...args] = process.argv.slice(2);
   if (!directoryArg)
     throw new Error(
-      'Usage: release.mjs init|scope|run|pack|stamp|handoff|verify <directory> [arguments]',
+      'Usage: release.mjs init|doctor|scope|status|run|pack|stamp|handoff|verify <directory> [arguments]',
     );
   const directory = path.resolve(directoryArg);
   if (action === 'init') {
@@ -80,6 +83,12 @@ async function main() {
     );
     return;
   }
+  if (action === 'doctor') {
+    const result = await inspectEnvironment(directory);
+    console.info(JSON.stringify(result, null, 2));
+    if (result.state !== 'PASS') process.exitCode = 1;
+    return;
+  }
   if (action === 'scope') {
     console.info(JSON.stringify(collectScope(directory, args[0]), null, 2));
     return;
@@ -92,6 +101,10 @@ async function main() {
   }
   const recordPath = path.join(directory, 'release.json');
   const record = readJson(recordPath);
+  if (action === 'status') {
+    console.info(JSON.stringify(await releaseStatus(record, directory), null, 2));
+    return;
+  }
   if (action === 'pack') {
     if (
       existsSync(path.join(directory, 'handoff.json')) ||
@@ -176,10 +189,13 @@ async function main() {
     return;
   }
   if (action === 'verify') {
-    requireReady(record, directory);
-    const seal = readJson(path.join(directory, 'handoff.json'));
-    if (seal.digest !== handoffDigest(record, directory))
-      throw new Error('Handoff changed; cannot verify against a different preparation');
+    requireArtifact(record, directory);
+    const sealed = existsSync(path.join(directory, 'handoff.json'));
+    if (sealed) {
+      const seal = readJson(path.join(directory, 'handoff.json'));
+      if (seal.digest !== handoffDigest(record, directory))
+        throw new Error('Handoff changed; cannot verify against a different preparation');
+    }
     mkdirSync(path.join(directory, 'verification'), { recursive: true });
     const resultPath = path.join(directory, 'verification', `${Date.now()}.json`);
     const persist = (result) =>
@@ -188,11 +204,13 @@ async function main() {
         version: record.version,
         tag: record.tag,
         expectedIntegrity: record.artifact.integrity,
+        preparationSeal: sealed ? 'MATCHED' : 'ABSENT',
+        note: 'Registry identity only; does not approve preparation gates or product acceptance.',
       });
     const result = await waitForPublication(record, { onAttempt: persist });
     persist(result);
     console.info(
-      `${result.state}: ${record.package}@${record.version}\nRecord: ${resultPath}\nRepository sync: ${record.repositorySync?.state ?? 'NOT_REQUESTED'} (separate from npm publication)`,
+      `${result.state}: ${record.package}@${record.version}\nPreparation seal: ${sealed ? 'MATCHED' : 'ABSENT (not publication approval)'}\nRecord: ${resultPath}\nRepository sync: ${record.repositorySync?.state ?? 'NOT_REQUESTED'} (separate from npm publication)`,
     );
     if (result.state !== 'VERIFIED') process.exitCode = 1;
     return;

@@ -21,7 +21,7 @@ const EXEMPTIBLE = new Set(['acceptance', 'backend']);
 
 export function createRecord() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     package: '@lobehub/cli',
     registry: REGISTRY,
     version: '',
@@ -33,6 +33,7 @@ export function createRecord() {
       sourceSha: '',
       provenance: '',
     },
+    comparison: { sourceSha: '', kind: '', reason: '' },
     source: { sha: '', patch: 'release-input.patch' },
     artifact: { path: '', sha256: '', integrity: '', size: 0, platform: '', node: '' },
     gates: Object.fromEntries(GATES.map((id) => [id, { status: 'UNKNOWN', evidence: [] }])),
@@ -100,6 +101,28 @@ function readableFile(directory, ref, allowEmpty = false) {
   return file;
 }
 
+// Publication eligibility and registry identity are separate questions. This
+// synchronous validator also serves the existing human-only publication chain.
+export function requireArtifact(record, directory) {
+  if (
+    ![1, 2].includes(record.schemaVersion) ||
+    record.package !== '@lobehub/cli' ||
+    record.registry !== REGISTRY
+  )
+    throw new Error('Unsupported schema, package or registry');
+  parseVersion(record.version);
+  if (!['latest', 'next', 'beta'].includes(record.tag)) throw new Error('Invalid release tag');
+  const artifact = record.artifact;
+  const bytes = readFileSync(readableFile(directory, artifact?.path));
+  if (
+    artifact.sha256 !== digest(bytes) ||
+    artifact.integrity !== `sha512-${digest(bytes, 'sha512', 'base64')}` ||
+    artifact.size !== bytes.length
+  )
+    throw new Error('Tarball checksum, integrity or size changed');
+  if (!artifact.node || !artifact.platform) throw new Error('Missing tested runtime/platform');
+}
+
 export function validateRecord(record, directory) {
   const errors = [];
   const check = (label, fn) => {
@@ -111,7 +134,7 @@ export function validateRecord(record, directory) {
   };
   check('release', () => {
     if (
-      record.schemaVersion !== 1 ||
+      ![1, 2].includes(record.schemaVersion) ||
       record.package !== '@lobehub/cli' ||
       record.registry !== REGISTRY
     ) {
@@ -128,24 +151,43 @@ export function validateRecord(record, directory) {
     parseVersion(record.baseline?.version);
     parseVersion(record.baseline?.stableVersion);
   });
-  check('baseline provenance', () => {
-    if (
-      !['npm-gitHead', 'release-record', 'verified-release-ref'].includes(
-        record.baseline?.provenance,
-      )
-    ) {
-      throw new Error(
-        'Require npm gitHead, a verified release record or a verified release reference; never a guessed bump commit',
-      );
-    }
-    if (!/^[\da-f]{40}$/.test(record.baseline?.sourceSha))
-      throw new Error('Missing baseline source SHA');
-  });
+  const repositoryComparison =
+    record.schemaVersion === 2 && record.comparison?.kind === 'repository-reference';
+  if (record.schemaVersion === 2) {
+    check('comparison', () => {
+      const comparison = record.comparison;
+      if (!/^[\da-f]{40}$/.test(comparison?.sourceSha)) throw new Error('Missing comparison SHA');
+      if (!['repository-reference', 'verified-release'].includes(comparison.kind))
+        throw new Error('Choose a repository reference or verified release');
+      if (!comparison.reason?.trim())
+        throw new Error('Explain the comparison basis and limitations');
+      if (!repositoryComparison && comparison.sourceSha !== record.baseline?.sourceSha)
+        throw new Error('Verified comparison must match the published baseline');
+    });
+  }
+  const unverifiedHistory = repositoryComparison && record.gates?.baseline?.status === 'UNKNOWN';
+  if (!unverifiedHistory)
+    check('baseline provenance', () => {
+      if (
+        !['npm-gitHead', 'release-record', 'verified-release-ref'].includes(
+          record.baseline?.provenance,
+        )
+      ) {
+        throw new Error(
+          'Require npm gitHead, a verified release record or a verified release reference; never a guessed bump commit',
+        );
+      }
+      if (!/^[\da-f]{40}$/.test(record.baseline?.sourceSha))
+        throw new Error('Missing baseline source SHA');
+    });
   check('source', () => {
     if (!/^[\da-f]{40}$/.test(record.source?.sha)) throw new Error('Missing candidate source SHA');
     readableFile(directory, record.source?.patch, true);
   });
   for (const id of GATES) {
+    // Missing historical provenance limits the changelog claim, not the current
+    // candidate's quality. Schema 1 seals retain their original requirements.
+    if (id === 'baseline' && unverifiedHistory) continue;
     check(id, () => {
       const gate = record.gates?.[id];
       if (gate?.status === 'EXEMPT' && EXEMPTIBLE.has(id) && gate.reason?.trim()) return;
@@ -175,18 +217,7 @@ export function validateRecord(record, directory) {
       }
     });
   }
-  check('artifact', () => {
-    const artifact = record.artifact;
-    const bytes = readFileSync(readableFile(directory, artifact?.path));
-    if (
-      artifact.sha256 !== digest(bytes) ||
-      artifact.integrity !== `sha512-${digest(bytes, 'sha512', 'base64')}` ||
-      artifact.size !== bytes.length
-    ) {
-      throw new Error('Tarball checksum, integrity or size changed');
-    }
-    if (!artifact.node || !artifact.platform) throw new Error('Missing tested runtime/platform');
-  });
+  check('artifact', () => requireArtifact(record, directory));
   return errors;
 }
 
