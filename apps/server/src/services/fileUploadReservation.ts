@@ -15,7 +15,7 @@ const matchesReservation = (
 ) =>
   upload?.size === params.size && upload.multipartPartSize === (params.multipartPartSize ?? null);
 
-const isMissingObject = (error: unknown) => {
+export const isMissingObject = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
   const value = error as { $metadata?: { httpStatusCode?: number }; name?: string };
   return value.name === 'NotFound' || value.$metadata?.httpStatusCode === 404;

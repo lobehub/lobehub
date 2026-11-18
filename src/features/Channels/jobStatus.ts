@@ -61,6 +61,13 @@ export const unresolvedFailures = <T extends ChannelReplyJob>(jobs: T[]) => {
   });
 };
 
+/**
+ * The header's failures: the main conversation's own. Its view also carries replies still at
+ * work in threads, and one of those must not hide, then bring back, a main-timeline failure.
+ */
+export const mainTimelineFailures = <T extends ChannelReplyJob>(jobs: T[]) =>
+  unresolvedFailures(jobs.filter((job) => !job.threadId));
+
 /** What a member is busy with now: a running reply first, then the next queued one. */
 export const memberCurrentJob = <T extends ChannelReplyJob>(jobs: T[], memberId: string) => {
   const own = jobs.filter((job) => job.memberId === memberId);
@@ -85,17 +92,6 @@ export const conversationReplies = (detail: ChannelDetail, threadId: string | nu
 export const hasReplyActivity = (detail: ChannelDetail, threadId: string | null) => {
   const { jobs, receiving } = conversationReplies(detail, threadId);
   return jobs.length > 0 || receiving;
-};
-
-/**
- * What a direct conversation's header says about its one Agent: "typing" while it works, or the
- * reply it is `waiting` on when blocked or stopping. Null when nothing is pending.
- */
-export const directReplyStatus = (detail: ChannelDetail) => {
-  const { jobs, receiving } = conversationReplies(detail, null);
-  const job = jobs[0] && memberCurrentJob(jobs, jobs[0].memberId);
-  if (!job) return receiving ? { jobs } : null;
-  return channelJobTone(job) === 'working' ? { jobs } : { jobs, waiting: job };
 };
 
 /**

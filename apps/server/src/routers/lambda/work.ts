@@ -12,12 +12,31 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
+import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
 import { deleteCanvas } from '@/server/services/canvas/delete';
-import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
+import {
+  isBetterCodingExperienceEnabled,
+  linkPushedPullRequests,
+  linkTopicPullRequest,
+  listTopicPullRequestsWithStatus,
+  parsePullRequestUrl,
+  registerShellWorksForLocalRun,
+  resolveShellPullRequestLinking,
+  setTopicPullRequestDismissed,
+} from '@/server/services/workRegistration';
+
+import { assertCanUseTopicTargets } from './_helpers/conversationResourceGuard';
+
+const topicGuardCtx = (ctx: {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}) => ({ db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId });
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -26,6 +45,7 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
   return opts.next({
     ctx: {
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       workModel: new WorkModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -272,8 +292,129 @@ export const workRouter = router({
         anchorMessageId: input.anchorMessageId,
         messageIds: input.messageIds,
         messageModel: ctx.messageModel,
+        pullRequestLinking: await resolveShellPullRequestLinking({
+          db: ctx.serverDB,
+          topicId: input.topicId,
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId,
+        }),
         topicId: input.topicId,
         workModel: ctx.workModel,
       }),
     ),
+
+  // Better Coding Experience: the GitHub pull requests a topic's Work rows
+  // link, with the GitHub App's state where an installation tracks the repo.
+  listTopicPullRequests: workProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ ctx, input }) =>
+      listTopicPullRequestsWithStatus({
+        db: ctx.serverDB,
+        topicId: input.topicId,
+        topicModel: ctx.topicModel,
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  // Better Coding Experience: link the pull requests a `git push` tool call
+  // updated, right after it ran. The push itself is re-read from the persisted
+  // tool message; see `linkPushedPullRequests` for what the device may add.
+  linkPushedPullRequests: skillWorkProcedureWrite
+    .input(
+      z.object({
+        pullRequests: z
+          .array(
+            z.object({
+              headRefName: z.string().min(1).max(255),
+              headRepoFullName: z.string().max(255).optional(),
+              isDraft: z.boolean().optional(),
+              number: z.number().int().positive(),
+              state: z.string().max(32).optional(),
+              title: z.string().max(1024).optional(),
+              url: z.string().url().max(2048),
+            }),
+          )
+          .max(10),
+        toolCallId: z.string().min(1).max(255),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      linkPushedPullRequests({
+        db: ctx.serverDB,
+        devicePullRequests: input.pullRequests,
+        messageModel: ctx.messageModel,
+        toolCallId: input.toolCallId,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  // Better Coding Experience: keep a PR on the topic itself — found on the
+  // topic's own branch at run end (`branch`), or pasted by the person
+  // (`manual`). A topic link only drives the topic's PR lists: unlike a Work
+  // row it is never read by the SCM links, so a client-named PR cannot make a
+  // merge accept a delivery or a CI failure wake the agent.
+  linkTopicPullRequest: workProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        headRefName: z.string().max(255).optional(),
+        source: z.enum(['branch', 'manual']),
+        title: z.string().max(1024).optional(),
+        topicId: z.string().min(1),
+        url: z.string().max(2048),
+        /** Branch matches only: the PR's head lives in the repo the topic pushes to. */
+        vouched: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Same gate as topic.updateTopicMetadata: `use` access to the conversation.
+      await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
+      const parsed = parsePullRequestUrl(input.url);
+      if (!parsed) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Not a GitHub pull request URL' });
+      }
+      if (!(await isBetterCodingExperienceEnabled(ctx.serverDB, ctx.userId))) {
+        return { identifier: parsed.identifier, linked: false };
+      }
+      const linked = await linkTopicPullRequest(ctx.topicModel, input.topicId, {
+        ...(input.headRefName ? { headRefName: input.headRefName } : {}),
+        identifier: parsed.identifier,
+        source: input.source,
+        ...(input.title ? { title: input.title } : {}),
+        url: parsed.url,
+        // The person vouches for what they link by hand.
+        vouched: input.source === 'manual' ? true : !!input.vouched,
+      });
+      return { identifier: parsed.identifier, linked };
+    }),
+
+  // Better Coding Experience: remove a PR from the topic's lists (or bring it
+  // back). Its Work rows stay; only the topic's view of them changes.
+  setTopicPullRequestDismissed: workProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        dismissed: z.boolean(),
+        identifier: z.string().regex(/^[\w.-]+\/[\w.-]+#\d+$/),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(topicGuardCtx(ctx), [input.topicId]);
+      return {
+        updated: await setTopicPullRequestDismissed(
+          ctx.topicModel,
+          input.topicId,
+          input.identifier,
+          input.dismissed,
+        ),
+      };
+    }),
 });

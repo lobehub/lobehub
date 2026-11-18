@@ -16,7 +16,13 @@ import {
   spawnTraeAcpAgent,
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
-import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
+import { buildAntigravityArgs } from './antigravity';
+import {
+  type ClaudeCodeControlRequest,
+  type ClaudeCodeControlRequestHandle,
+  ClaudeCodeLiveInput,
+  resolveClaudeCodeLiveRuntimeEnd,
+} from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
@@ -92,8 +98,6 @@ export interface SpawnAgentOptions {
    * events still carry the conventional shape.
    */
   operationId: string;
-  /** (Devin ACP only) Global `--permission-mode` value, placed before `acp`. */
-  permissionMode?: string;
   /**
    * User prompt. A plain string is sugar for a single text block; the array
    * form supports mixed text + image content blocks (URL / path / base64).
@@ -151,10 +155,18 @@ export interface SpawnAgentHandle {
   /** Spawned child PID, undefined if spawn failed pre-PID. */
   pid: number | undefined;
   /**
-   * (Claude Code `liveInput` only) Deliver a user message into the running
-   * session; Claude Code reads it at its next tool boundary, or starts a turn
-   * for it when idle. Resolves false once input has closed — the caller then
-   * runs the message as a new turn instead.
+   * (Claude Code `liveInput` only) Write a stream-json `control_request` into
+   * the running session; `undefined` once input has closed.
+   */
+  sendControlRequest?: (
+    request: ClaudeCodeControlRequest,
+  ) => ClaudeCodeControlRequestHandle | undefined;
+  /**
+   * (Claude Code `liveInput`, native Codex) Deliver a user message into the
+   * running session; Claude Code reads it at its next tool boundary, or starts
+   * a turn for it when idle; Codex adds it to the active turn (`turn/steer`).
+   * Resolves false once the session takes no input — the caller then runs the
+   * message as a new turn instead.
    */
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
   /**
@@ -390,6 +402,9 @@ export const buildQoderArgs = ({
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'antigravity': {
+      return buildAntigravityArgs(params);
+    }
     case 'amp': {
       return buildAmpArgs(params);
     }
@@ -686,19 +701,13 @@ const spawnCliAgent = async (
         if (code === 0 && !killedByUs) events.push(...pipeline.validateCompletion());
         sawErrorEvent ||= events.some((event) => event.type === 'error');
         for (const event of events) queue.push(event);
-        // Only a clean exit after a finished turn ends the run here: a crash
-        // after a result is a failure, not a completion. Print mode exits 1
-        // when its last turn was an error result, which an interrupt is.
-        const lastTurn = live?.lastTurn;
-        const cleanExit =
-          code === 0 || (lastTurn?.aborted === true && code === 1 && signal === null);
-        if (lastTurn && cleanExit && !killedByUs && !sawErrorEvent) {
-          const end = lastTurn.aborted
-            ? { kind: 'aborted', reason: 'interrupted', terminalReason: lastTurn.terminalReason }
-            : { reason: 'complete' };
-          for (const event of pipeline.completeRuntime({ ...end, transport: 'cli-live' }))
-            queue.push(event);
-        }
+        const liveEnd = resolveClaudeCodeLiveRuntimeEnd(live?.lastTurn, {
+          code,
+          killedByHost: killedByUs,
+          sawError: sawErrorEvent,
+          signal,
+        });
+        if (liveEnd) for (const event of pipeline.completeRuntime(liveEnd)) queue.push(event);
         // Kimi Code reports usage only via its on-disk session wire log, so
         // it can only be collected now that the process has exited. The hook
         // is a no-op for every other agent type.
@@ -764,6 +773,7 @@ const spawnCliAgent = async (
     exit,
     ...(live && {
       interruptTurn: () => live.interrupt(),
+      sendControlRequest: (request: ClaudeCodeControlRequest) => live.sendControlRequest(request),
       sendUserMessage: async (prompt: AgentPromptInput, sendOptions?: { uuid?: string }) => {
         if (!live.isOpen) return false;
         const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);

@@ -20,6 +20,7 @@ export interface ToolManifest {
   $schema?: string;
   api: LobeChatPluginApi[];
   author?: string;
+  connectorLinks?: { connectorId: string; param: string };
   createdAt?: string;
   gateway?: string;
   homepage?: string;
@@ -28,6 +29,7 @@ export interface ToolManifest {
    * MCP Apps: tools the server keeps from the model (`_meta.ui.visibility`
    * without "model"). Only its views may call them; never part of `api`.
    */
+  mcpAppEntrypoints?: { toolName: string; title: string; icon?: string }[];
   mcpAppOnlyApi?: LobeChatPluginApi[];
   /** MCP Apps: tools in `api` the server's views may not call (no "app"). */
   mcpModelOnlyTools?: string[];
@@ -43,11 +45,21 @@ export interface ToolManifest {
 export const ToolManifestSchema = z.object({
   $schema: z.string().optional(),
   api: z.array(LobeChatPluginApiSchema),
+  connectorLinks: z.object({ connectorId: z.string(), param: z.string() }).optional(),
   author: z.string().optional(),
   createdAt: z.string().optional(),
   gateway: z.string().optional(),
   homepage: z.string().optional(),
   identifier: z.string(),
+  mcpAppEntrypoints: z
+    .array(
+      z.object({
+        toolName: z.string(),
+        title: z.string(),
+        icon: z.string().optional(),
+      }),
+    )
+    .optional(),
   mcpAppOnlyApi: z.array(LobeChatPluginApiSchema).optional(),
   mcpModelOnlyTools: z.array(z.string()).optional(),
   meta: MetaSchema,

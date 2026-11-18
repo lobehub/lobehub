@@ -463,9 +463,9 @@ docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
   "update agents set agency_config = '{\"executionTarget\":\"local\",\"heterogeneousProvider\":{\"type\":\"claude-code\",\"command\":\"claude\"}}'::jsonb where id='<agentId>';"
 ```
 
-Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
-cache, so the renderer still shows the pre-write value (generic M6). Clear
-`lobechat-swr-cache*` + `lobehub-local-data` through
+Then cold-load: a plain reload keeps serving the agent config from its persisted
+replica, so the renderer still shows the pre-write value (generic M6). Clear
+`lobehub-local-data` (and the `replica:*` localStorage rows) through
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
 
@@ -490,6 +490,11 @@ client's real request window (fetch wrapper on the batch URL) against the seeded
 timestamps before suspecting the query.
 
 #### P16 · Cold SWR cache: clearing then reloading is undone by the outgoing page
+
+> The tiered SWR cache this entry describes has been removed: SWR persists nothing,
+> and persisted server data lives in replicas (`query-projections` in
+> `lobehub-local-data`, plus `replica:*` localStorage rows). Clear those at
+> document start the same way to force a cold first load.
 
 **applies-to:** surface=web, electron · runtime=any · phase=fixture
 
@@ -2019,8 +2024,9 @@ breaks the Electron renderer outright — the local database adapter registered 
 HTML loading screen stays up forever. The symptom reads as "the phase under test never
 appears", i.e. exactly like the product defect you were looking for.
 
-**Works:** use the stall only on the web entry, where it holds `CacheHydrationGate`
-for its full `HYDRATION_TIMEOUT` (about 8s) — ample for a screenshot plus
+**Works:** use the stall only on the web entry, where it held the former
+`CacheHydrationGate` for its full `HYDRATION_TIMEOUT` (about 8s; the gate is removed,
+so route loaders now wait at most `PRE_PAINT_HYDRATE_TIMEOUT` instead) — ample for a screenshot plus
 `getBoundingClientRect` / `getComputedStyle` measurements over the same CDP
 connection. For desktop, do not stall storage: observe the natural boot with the
 in-page sampler above. Either way, disarm with

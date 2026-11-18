@@ -54,6 +54,28 @@ export const TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS: string[] = [...CHANNEL_MES
  * `TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS` via `resolveUnsupportedMessageApis`.
  */
 export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
+  // DingTalk robots can only send: no history, search, edit, delete, reaction,
+  // pin, member or channel-listing API → prompt uses pre-injected history.
+  dingtalk: [
+    MessageApiName.createPoll,
+    MessageApiName.createThread,
+    MessageApiName.deleteMessage,
+    MessageApiName.editMessage,
+    MessageApiName.getChannelInfo,
+    MessageApiName.getMemberInfo,
+    MessageApiName.getReactions,
+    MessageApiName.listChannels,
+    MessageApiName.listPins,
+    MessageApiName.listThreads,
+    MessageApiName.pinMessage,
+    MessageApiName.reactToMessage,
+    MessageApiName.readDocument,
+    MessageApiName.readMessages,
+    MessageApiName.replyToThread,
+    MessageApiName.searchMessages,
+    MessageApiName.sendDirectMessage,
+    MessageApiName.unpinMessage,
+  ],
   // Discord implements the full surface — no entry needed, but keep it explicit.
   // Discord has no document API — `readDocument` is Feishu/Lark only.
   discord: [MessageApiName.readDocument],
@@ -160,6 +182,9 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
+  // WeCom AI bots only answer on their own long connection; the message tool has no service for
+  // them (no REST API, no history), so every channel operation is unsupported.
+  wecom: [...CHANNEL_MESSAGE_APIS],
 };
 
 /**

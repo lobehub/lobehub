@@ -4,6 +4,7 @@ import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
+import { resolveShareVisitorDeviceAccess } from '@/server/services/aiAgent/shareGate/deviceAccess';
 
 import { type AgentInterventionDispatchContext } from '../aiAgent';
 import type { resolveLinkShareOrThrow } from './guards';
@@ -31,6 +32,7 @@ export const createShareRunScope = async (
 
   const shareGate: AgentShareGate = {
     agentId: share.agentId,
+    canUseDevice: await resolveShareVisitorDeviceAccess(db, share.shareConfig, visitorUserId),
     shareConfig: share.shareConfig,
     // See `AgentShareGate.shareId`'s JSDoc — the share instance this run is
     // authorized against, and the token every later revalidation compares.

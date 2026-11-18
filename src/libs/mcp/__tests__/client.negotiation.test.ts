@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from '../client';
 import { startNegotiationServers } from './fixtures/negotiationServers';
@@ -19,6 +19,9 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
   };
   beforeEach(async () => {
     servers = await startNegotiationServers();
+    // The fixtures listen on loopback, which the server's SSRF-safe MCP fetch
+    // refuses by default; allow exactly it, so these runs go through that fetch.
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '127.0.0.1');
   });
 
   it('keeps separate legacy sessions for fresh clients', async () => {
@@ -40,6 +43,7 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
   afterEach(async () => {
     await Promise.all(clients.splice(0).map((client) => client.disconnect()));
     await servers.close();
+    vi.unstubAllEnvs();
   });
 
   it.each([

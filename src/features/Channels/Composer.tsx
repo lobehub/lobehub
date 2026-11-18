@@ -160,7 +160,7 @@ export function Composer({
     );
   };
   const send = async () => {
-    const value = String(editor.getDocument('markdown') || '').trim();
+    const value = String(editor.getDocument('markdown', { format: false }) || '').trim();
     const fileIds = attachments.readyFileIds();
     if (sending.current || !fileIds || (!value && !fileIds.length)) return;
     const document = editor.getDocument('json');
@@ -357,7 +357,7 @@ export function Composer({
                       label: String(option.label),
                       metadata: option.metadata,
                     });
-                    // Choosing someone outside the Channel brings them in right away.
+                    // Choosing someone outside the Channel asks, then brings them in right away.
                     if (option.metadata?.type === 'channel-invite')
                       invites.invite(option.metadata as ChannelMentionInvite);
                     // Leave the decorator's cursor node before the next @ is typed.
@@ -376,7 +376,7 @@ export function Composer({
                   const document = JSON.stringify(json);
                   if (document !== previousDocument.current) {
                     previousDocument.current = document;
-                    setContent(String(editor.getDocument('markdown') || ''));
+                    setContent(String(editor.getDocument('markdown', { format: false }) || ''));
                     draft.save();
                   }
                 }}

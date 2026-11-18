@@ -270,6 +270,14 @@ describe('thinkingResolver', () => {
       ).toMatchObject({ thinkingBudget: undefined, thinkingLevel: 'high' });
     });
 
+    it('passes the xhigh thinkingLevel through for Gemini 4 Hydrogen', () => {
+      expect(resolveGoogleThinkingConfig('gemini-4-hydrogen', { thinkingLevel: 'xhigh' })).toEqual({
+        includeThoughts: true,
+        thinkingBudget: undefined,
+        thinkingLevel: 'xhigh',
+      });
+    });
+
     describe('gemini-pro (legacy unversioned model)', () => {
       const model = 'gemini-pro';
 

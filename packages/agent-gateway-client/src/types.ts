@@ -39,6 +39,12 @@ export type AgentStreamEventType =
   | 'tool_end'
   | 'tool_execute'
   /**
+   * Snapshot of one background task a heterogeneous agent's tool started
+   * (Claude Code `run_in_background` Bash, Monitor). Persisted on that tool
+   * message's `pluginState.backgroundTask`.
+   */
+  | 'background_task'
+  /**
    * Server → executor client: run one LLM attempt for a model provider only
    * the user's device can reach, and upload its protocol chunks back over
    * HTTP (`/api/agent/llm-relay/:callId/chunks`). See {@link LlmExecuteData}.
@@ -199,6 +205,8 @@ export interface StreamStartAssistantMessage {
  * ends and the queued message vanishes from both the tray and the chat.
  */
 export interface StreamStartParentMessage {
+  /** Agent the row was persisted under (the executing agent). Absent from older servers. */
+  agentId?: string | null;
   content: string;
   /** Server creation time (epoch ms). Absent from older servers. */
   createdAt?: number;
@@ -239,6 +247,12 @@ export interface StepCompleteData {
   phase: string;
   reason?: string;
   reasonDetail?: string;
+  /**
+   * On `phase: 'user_message'`: the steer user message a heterogeneous run
+   * just read from its live session. Shown at once, ahead of the reply it
+   * opens. Absent from older servers and for replays that delivered nothing.
+   */
+  steerMessage?: StreamStartParentMessage;
 }
 
 /**

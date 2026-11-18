@@ -9,9 +9,15 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 
 export const BACK_BUTTON_ID = 'lobe-back-button';
 
-const BackButton = memo<ActionIconProps & { to?: string }>(({ to = '/', onClick, ...rest }) => {
+interface BackButtonProps extends ActionIconProps {
+  /** Go to the literal `to` without applying the active workspace prefix. */
+  escape?: boolean;
+  to?: string;
+}
+
+const BackButton = memo<BackButtonProps>(({ to = '/', escape, onClick, ...rest }) => {
   const activeSlug = useActiveWorkspaceSlug();
-  const resolvedTo = buildWorkspaceAwarePath(to, activeSlug);
+  const resolvedTo = buildWorkspaceAwarePath(to, activeSlug, { escape });
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event as never);

@@ -1,3 +1,4 @@
+import { goalDecisionIslandKey, goalSignOffIslandKey } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
 import { useMemo } from 'react';
 import { useLocation } from 'react-router';
@@ -59,13 +60,13 @@ export const selectIslandGoalItems = (
       .filter((decision) => decision.goalId !== portalGoalId)
       .map((decision) => ({
         decision,
-        key: `goal-decision:${decision.decisionId}`,
+        key: goalDecisionIslandKey(decision.decisionId),
         type: 'decision' as const,
       })),
     ...data.signOffs
       .filter((signOff) => signOff.goalId !== portalGoalId)
       .map((signOff) => ({
-        key: `goal-sign-off:${signOff.acceptanceId}`,
+        key: goalSignOffIslandKey(signOff.acceptanceId),
         signOff,
         type: 'signOff' as const,
       })),

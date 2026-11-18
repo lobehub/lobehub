@@ -11,7 +11,6 @@ import {
   Icon,
   Skeleton,
   toast,
-  Tooltip,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
@@ -31,22 +30,18 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import {
-  getCiVisual,
-  getPullRequestState,
-  PR_STATE_VISUAL,
-} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import ThreadListSection from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/ThreadListSection';
 import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
+import type { TopicPullRequestView } from '@/features/TopicPullRequests/pullRequestView';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { gitService } from '@/services/git';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors } from '@/store/chat/selectors';
+import { dbMessageSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   useFetchGitAheadBehind,
   useFetchGitBranch,
@@ -58,16 +53,20 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
+import { toLinkedPullRequest } from '../PullRequest/useSidebarPullRequests';
+import { BackgroundTasksSection } from './BackgroundTasks';
 import DeviceStatusSection from './DeviceStatusSection';
+import KeptWorktreeRows, { RemovedWorktreeRow, useTopicWorktrees } from './KeptWorktreeRows';
+import { LinkPullRequestRow } from './LinkPullRequestRow';
 import {
   collectChangeStats,
   isLinkedWorktreeCheckout,
-  shouldShowCiLabel,
   shouldShowGitSkeleton,
 } from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
+import PullRequestRow from './PullRequestRow';
 import { sectionStyles } from './sectionStyles';
 import { TerminalRow } from './TerminalRow';
 
@@ -87,10 +86,21 @@ interface OverviewProps {
   /** Routes file / git RPCs; empty for "This device", which reads over IPC. */
   deviceId?: string;
   environmentAvailable: boolean;
+  /** Better Coding Experience: remove one of {@link pullRequests} from the topic. */
+  onDismissPullRequest?: (pullRequest: TopicPullRequestView) => Promise<void>;
+  /** Better Coding Experience: link a PR by URL; resolves to its `owner/repo#n`. */
+  onLinkPullRequest?: (url: string) => Promise<string | undefined>;
+  /** Better Coding Experience: open one of {@link pullRequests}. */
+  onOpenPullRequest?: (pullRequest: TopicPullRequestView) => void;
   onOpenTab: (tab: string) => void;
   onRefreshPullRequest: () => Promise<unknown>;
   /** Parent-owned so the Overview row and the on-demand PR tab cannot disagree. */
   pullRequest?: DeviceGitLinkedPullRequest | null;
+  /**
+   * Better Coding Experience: every PR the topic's Work rows link, listed
+   * under Changes in place of the single branch PR.
+   */
+  pullRequests?: TopicPullRequestView[];
   repoType?: string;
   sourcePath?: string;
   /** The bound machine whose live status to show, local desktop included. */
@@ -106,9 +116,13 @@ const Overview = memo<OverviewProps>(
     agentId,
     deviceId,
     environmentAvailable,
+    onDismissPullRequest,
+    onLinkPullRequest,
+    onOpenPullRequest,
     onOpenTab,
     onRefreshPullRequest,
     pullRequest,
+    pullRequests,
     repoType,
     sourcePath,
     statusDeviceId,
@@ -120,12 +134,22 @@ const Overview = memo<OverviewProps>(
     const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
     const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
     const topicId = useChatStore((s) => s.activeTopicId);
+    const topicStatus = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.status);
+    const topicMetadata = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.metadata);
     const threadId = useChatStore((s) => s.activeThreadId);
     const works = useChatStore((s) =>
       getAllWorkSummaries(dbMessageSelectors.activeDbMessages(s), threadId),
     );
 
-    const gitPath = active && repoType ? workingDirectory : undefined;
+    const topicWorktrees = useTopicWorktrees({
+      metadata: topicMetadata,
+      status: topicStatus,
+      topicId: topicId ?? undefined,
+      workingDirectory,
+    });
+    // A worktree the cleanup removed has no folder left to read git from.
+    const worktreeRemoved = !!topicWorktrees.removed;
+    const gitPath = active && repoType && !worktreeRemoved ? workingDirectory : undefined;
     const isGithub = repoType === 'github';
     const {
       data: branchData,
@@ -249,10 +273,6 @@ const Overview = memo<OverviewProps>(
       }
     }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
 
-    const ciStatus = pullRequest?.ciStatus;
-    const ci = pullRequest ? getCiVisual(ciStatus) : undefined;
-    const prVisual = pullRequest ? PR_STATE_VISUAL[getPullRequestState(pullRequest)] : undefined;
-
     const showAhead = !!aheadBehind?.hasUpstream && aheadBehind.ahead > 0;
     const showBehind = !!aheadBehind?.hasUpstream && aheadBehind.behind > 0;
 
@@ -277,6 +297,39 @@ const Overview = memo<OverviewProps>(
           )
         }
       />
+    );
+
+    // Better Coding Experience PRs are server records: they stay listed with
+    // their last known state even when the working directory cannot be read.
+    const pullRequestRows = pullRequests ? (
+      <>
+        {pullRequests.map((view) => (
+          <PullRequestRow
+            key={view.identifier}
+            pullRequest={toLinkedPullRequest(view)}
+            tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
+            unvouched={!view.vouched}
+            onClick={() => onOpenPullRequest?.(view)}
+            onDismiss={
+              onDismissPullRequest &&
+              (() =>
+                void onDismissPullRequest(view).then(
+                  () =>
+                    toast.info(
+                      t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
+                    ),
+                  () =>
+                    toast.error(
+                      t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
+                    ),
+                ))
+            }
+          />
+        ))}
+        {onLinkPullRequest && <LinkPullRequestRow onLink={onLinkPullRequest} />}
+      </>
+    ) : (
+      pullRequest && <PullRequestRow pullRequest={pullRequest} onClick={() => onOpenTab('pr')} />
     );
 
     const gitRows = (
@@ -385,36 +438,7 @@ const Overview = memo<OverviewProps>(
           onClick={() => onOpenTab('review')}
         />
 
-        {pullRequest && prVisual && ci && (
-          <Tooltip title={`#${pullRequest.number} ${pullRequest.title}`}>
-            <div>
-              <OverviewRow
-                icon={prVisual.icon}
-                iconColor={prVisual.color}
-                trailing={
-                  <span
-                    className={sectionStyles.pill}
-                    style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
-                  >
-                    <Icon icon={ci.icon} size={12} />
-                    {shouldShowCiLabel(ciStatus)
-                      ? t(
-                          `workingPanel.overview.ci.${ciStatus as 'failure' | 'pending'}` as 'workingPanel.overview.ci.failure',
-                        )
-                      : null}
-                  </span>
-                }
-                value={
-                  <>
-                    <span className={rowStyles.num}>#{pullRequest.number}</span>
-                    {pullRequest.title}
-                  </>
-                }
-                onClick={() => onOpenTab('pr')}
-              />
-            </div>
-          </Tooltip>
-        )}
+        {pullRequestRows}
       </>
     );
 
@@ -424,21 +448,24 @@ const Overview = memo<OverviewProps>(
           <Skeleton.Text rows={3} />
         </div>
       ) : gitError ? (
-        <OverviewRow
-          danger
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorError}
-          value={t('workingPanel.overview.environmentError')}
-          trailing={
-            <Button
-              icon={<Icon icon={RefreshCwIcon} size={12} />}
-              size={'small'}
-              onClick={() => void refreshGit()}
-            >
-              {tCommon('retry')}
-            </Button>
-          }
-        />
+        <>
+          <OverviewRow
+            danger
+            icon={TriangleAlertIcon}
+            iconColor={cssVar.colorError}
+            value={t('workingPanel.overview.environmentError')}
+            trailing={
+              <Button
+                icon={<Icon icon={RefreshCwIcon} size={12} />}
+                size={'small'}
+                onClick={() => void refreshGit()}
+              >
+                {tCommon('retry')}
+              </Button>
+            }
+          />
+          {pullRequests && pullRequestRows}
+        </>
       ) : (
         gitRows
       )
@@ -457,7 +484,17 @@ const Overview = memo<OverviewProps>(
               onClick={() => onOpenTab('files')}
             />
             <Flexbox className={sectionStyles.section}>
-              {workspaceSection}
+              {/* A worktree the archive cleanup kept for its uncommitted work. */}
+              <KeptWorktreeRows
+                entries={topicWorktrees.entries}
+                topicId={topicId ?? undefined}
+                onChange={topicWorktrees.mutate}
+              />
+              {topicWorktrees.removed ? (
+                <RemovedWorktreeRow entry={topicWorktrees.removed} />
+              ) : (
+                workspaceSection
+              )}
               {/* Outside the git rows: a dev server runs in plain folders too. */}
               {tunnelsEnabled && deviceId && (
                 <PortSwitcher
@@ -520,6 +557,9 @@ const Overview = memo<OverviewProps>(
             title={t('workingPanel.overview.emptyTitle')}
           />
         )}
+
+        {/* Claude Code background tasks; async subagents stay in the thread list below. */}
+        <BackgroundTasksSection deviceId={deviceId} outputReadable={environmentAvailable} />
 
         {/* Thread rows open in the Portal; the list labels itself as subagents and
             sits in its own section so the resource rows below aren't grouped under it. */}

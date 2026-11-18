@@ -116,6 +116,11 @@ declare module 'verification:component' {
     tooltip?: string;
     waveform: number[];
   }>;
+  export const AttachmentThumbs: ComponentType<{
+    attachments: Array<{ id: string; name: string; url: string }>;
+    size: 'chip' | 'comment';
+  }>;
+  export const VideoEvidencePlayer: ComponentType<{ frameMaxHeight?: string; src: string }>;
   export const OptionRow: ComponentType<{
     active: boolean;
     desc: string;

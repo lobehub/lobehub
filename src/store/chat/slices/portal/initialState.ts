@@ -14,6 +14,7 @@ export enum PortalViewType {
   AcceptanceCheck = 'acceptanceCheck',
   AgentDetail = 'agentDetail',
   Artifact = 'artifact',
+  Browser = 'browser',
   DashboardWidget = 'dashboardWidget',
   Document = 'document',
   FilePreview = 'filePreview',
@@ -107,6 +108,16 @@ export type PortalViewData =
   | { acceptanceId: string; checkId: string; type: PortalViewType.AcceptanceCheck }
   | { agentId: string; type: PortalViewType.AgentDetail }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
+  /**
+   * The desktop side browser, for hosts without the working sidebar. `sessionId`
+   * names the retained guest page; `request` navigates it once and is then dropped,
+   * so returning to the view keeps wherever the user browsed to.
+   */
+  | {
+      request?: { nonce: number; url: string };
+      sessionId: string;
+      type: PortalViewType.Browser;
+    }
   | { runId?: string; type: PortalViewType.DashboardWidget; widgetId: string }
   | { agentDocumentId?: string; documentId: string; type: PortalViewType.Document }
   | { type: PortalViewType.Notebook }

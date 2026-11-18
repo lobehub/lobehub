@@ -53,13 +53,13 @@ const skill = (name: string): ProjectSkillItem => ({
   previewRoot: '/repo',
   scope: 'project',
   skillDir: `/repo/.agents/skills/${name}`,
-  source: 'agents',
+  source: '.agents/skills',
 });
 
 const scan = (...names: string[]): ListProjectSkillsResult => ({
   root: '/repo',
   skills: names.map(skill),
-  source: 'agents',
+  source: '.agents/skills',
 });
 
 describe('useProjectSkills after a reload', () => {
@@ -79,7 +79,11 @@ describe('useProjectSkills after a reload', () => {
   });
 
   it('paints the cached scan before the fresh scan answers, then replaces it', async () => {
-    listProjectSkills().mockResolvedValue(scan('alpha', 'beta'));
+    const initialScan = scan('alpha', 'beta');
+    initialScan.skills[0].disableModelInvocation = true;
+    initialScan.skills[1].scope = 'device';
+    initialScan.skills[1].disableModelInvocation = false;
+    listProjectSkills().mockResolvedValue(initialScan);
     const first = renderHook(() => useProjectSkills('/repo'), { wrapper });
     await waitFor(() =>
       expect(first.result.current.items.map((i) => i.name)).toEqual(['alpha', 'beta']),
@@ -101,6 +105,12 @@ describe('useProjectSkills after a reload', () => {
       expect(reloaded.result.current.items.map((i) => i.name)).toEqual(['alpha', 'beta']),
     );
     expect(reloaded.result.current.isLoading).toBe(false);
+    expect(reloaded.result.current.projectItems).toMatchObject([
+      { disableModelInvocation: true, name: 'alpha' },
+    ]);
+    expect(reloaded.result.current.deviceItems).toMatchObject([
+      { disableModelInvocation: false, name: 'beta' },
+    ]);
 
     await act(async () => release(scan('alpha', 'beta', 'gamma')));
     await waitFor(() =>

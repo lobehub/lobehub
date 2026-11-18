@@ -62,6 +62,24 @@ export const getPluginMode = (
   return entry ? parsePluginEntry(entry).mode : 'auto';
 };
 
+/**
+ * Library skills — the ones a user installs from the market or authors
+ * themselves — are opt-in per agent. The agent's profile is where one is
+ * turned on, so a library skill the agent has no entry for is `'disabled'`
+ * there, not the implicit `'auto'` every other plugin kind resolves to.
+ * Builtin skills, tools and connectors keep {@link getPluginMode}.
+ */
+export const LIBRARY_SKILL_IMPLICIT_MODE: AgentPluginMode = 'disabled';
+
+/** A library skill's mode for this agent; see {@link LIBRARY_SKILL_IMPLICIT_MODE}. */
+export const getLibrarySkillMode = (
+  plugins: AgentPluginEntry[] | undefined,
+  identifier: string,
+): AgentPluginMode => {
+  const entry = plugins?.find((item) => parsePluginEntry(item).identifier === identifier);
+  return entry ? parsePluginEntry(entry).mode : LIBRARY_SKILL_IMPLICIT_MODE;
+};
+
 const getPluginIdsByMode = (
   plugins: AgentPluginEntry[] | undefined,
   mode: AgentPluginMode,
@@ -73,6 +91,14 @@ const getPluginIdsByMode = (
 
 export const getPinnedPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
   getPluginIdsByMode(plugins, 'pinned');
+
+/**
+ * Identifiers carrying an explicit `{ mode: 'auto' }` entry. Only library
+ * skills persist one (see {@link LIBRARY_SKILL_IMPLICIT_MODE}); for everything
+ * else `'auto'` is the absence of an entry.
+ */
+export const getAutoPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
+  getPluginIdsByMode(plugins, 'auto');
 
 export const getDisabledPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
   getPluginIdsByMode(plugins, 'disabled');
@@ -90,20 +116,24 @@ export const getActivePluginIds = (plugins: AgentPluginEntry[] | undefined): str
  * Sets `identifier`'s mode, upgrading only that one entry. Every other entry
  * — including untouched legacy strings — is returned unchanged.
  *
- * `'auto'` is the implicit default for an identifier absent from `plugins`
- * altogether, so setting it explicitly removes any existing entry instead of
- * persisting a redundant `{ identifier, mode: 'auto' }` record — this mirrors
- * the pre-tri-state behavior where unpinning spliced the id out of the array.
+ * `implicitMode` is what an identifier absent from `plugins` resolves to —
+ * `'auto'` for everything but a library skill
+ * ({@link LIBRARY_SKILL_IMPLICIT_MODE}). Setting that mode removes any existing
+ * entry instead of persisting a redundant record, which mirrors the
+ * pre-tri-state behavior where unpinning spliced the id out of the array. Every
+ * other mode is written explicitly, so a library skill set to `'auto'` keeps a
+ * `{ identifier, mode: 'auto' }` entry.
  */
 export const upsertPluginMode = (
   plugins: AgentPluginEntry[] | undefined,
   identifier: string,
   mode: AgentPluginMode,
+  implicitMode: AgentPluginMode = 'auto',
 ): AgentPluginEntry[] => {
   const list = plugins ? [...plugins] : [];
   const index = list.findIndex((item) => parsePluginEntry(item).identifier === identifier);
 
-  if (mode === 'auto') {
+  if (mode === implicitMode) {
     if (index !== -1) list.splice(index, 1);
     return list;
   }

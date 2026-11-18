@@ -26,7 +26,6 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { FavoriteIcon } from '@/features/Favorites';
 import { toFavoritePath } from '@/features/Favorites/path';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -41,6 +40,8 @@ import {
   suppressNextClick,
 } from '../sortableRow';
 import FavoriteItem from './FavoriteItem';
+import FavoriteItemIcon from './FavoriteItemIcon';
+import { useTaskFavoritesRefresh } from './useTaskFavoritesRefresh';
 
 const styles = stylex.create({
   overlay: {
@@ -86,6 +87,7 @@ SortableFavoriteItem.displayName = 'SortableFavoriteItem';
 const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => {
   const { t } = useTranslation('common');
   const reorderFavorites = useHomeStore((s) => s.reorderFavorites);
+  useTaskFavoritesRefresh();
   const { pathname } = useActiveLocation();
   const currentPath = toFavoritePath(pathname, useActiveWorkspaceSlug());
 
@@ -136,7 +138,8 @@ const SortableFavoriteList = memo<{ items: FavoriteItemType[] }>(({ items }) => 
           {activeItem ? (
             <div {...stylex.props(styles.overlay)}>
               <NavItem
-                icon={<FavoriteIcon icon={activeItem.icon} type={activeItem.type} />}
+                compact
+                icon={<FavoriteItemIcon item={activeItem} />}
                 // The card itself is the surface: no hover tint on top of the white.
                 style={{ backgroundColor: 'transparent' }}
                 title={activeItem.title}

@@ -1,7 +1,7 @@
 import type { ChannelPublicMessage } from '@lobechat/types';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChannelThreadDraft } from './threadDraft';
@@ -18,6 +18,12 @@ const draft = (id = 'root'): ChannelThreadDraft => ({
 });
 const setup = (entry = '/channels/channel') =>
   renderHook(({ channelId }) => useThreadPanel(channelId), {
+    initialProps: { channelId: 'channel' },
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(MemoryRouter, { initialEntries: [entry] }, children),
+  });
+const setupWithLocation = (entry: string) =>
+  renderHook(({ channelId }) => ({ location: useLocation(), panel: useThreadPanel(channelId) }), {
     initialProps: { channelId: 'channel' },
     wrapper: ({ children }: { children: ReactNode }) =>
       createElement(MemoryRouter, { initialEntries: [entry] }, children),
@@ -134,22 +140,35 @@ describe('Local thread preview', () => {
 describe('Thread opened as the page', () => {
   afterEach(() => cleanup());
 
-  it('shows a sidebar thread link as the page, not beside the Channel', () => {
-    const { result } = setup('/channels/channel?thread=t1&view=page');
-    expect(result.current.pageThreadId).toBe('t1');
-    expect(result.current.threadId).toBeNull();
+  it.each(['/channels/channel/threads/t1', '/acme/project/p1/channels/channel/threads/t1'])(
+    'shows the thread at %s as the page, not beside the Channel',
+    (entry) => {
+      const { result } = setup(entry);
+      expect(result.current.pageThreadId).toBe('t1');
+      expect(result.current.threadId).toBeNull();
+      expect(result.current.legacyPageUrl).toBeNull();
+    },
+  );
+
+  it('expands a side panel into the thread path and closes back to the Channel', () => {
+    const { result } = setupWithLocation('/acme/project/p1/channels/channel');
+    act(() => result.current.panel.openThread('t1'));
+    expect(result.current.panel.threadId).toBe('t1');
+    expect(result.current.panel.pageThreadId).toBeNull();
+    act(() => result.current.panel.openPage('t1'));
+    expect(result.current.location.pathname).toBe('/acme/project/p1/channels/channel/threads/t1');
+    expect(result.current.location.search).toBe('');
+    expect(result.current.panel.pageThreadId).toBe('t1');
+    expect(result.current.panel.threadId).toBeNull();
+    act(() => result.current.panel.close());
+    expect(result.current.location.pathname).toBe('/acme/project/p1/channels/channel');
+    expect(result.current.panel.pageThreadId).toBeNull();
+    expect(result.current.panel.threadId).toBeNull();
   });
 
-  it('expands a side panel into the page and closes back to the Channel', () => {
-    const { result } = setup();
-    act(() => result.current.openThread('t1'));
-    expect(result.current.threadId).toBe('t1');
-    expect(result.current.pageThreadId).toBeNull();
-    act(() => result.current.openPage('t1'));
-    expect(result.current.pageThreadId).toBe('t1');
-    expect(result.current.threadId).toBeNull();
-    act(() => result.current.close());
-    expect(result.current.pageThreadId).toBeNull();
-    expect(result.current.threadId).toBeNull();
+  it('points an old `?thread=…&view=page` link at the thread path', () => {
+    const { result } = setup('/acme/channels/channel?thread=t1&view=page');
+    expect(result.current.legacyPageUrl).toBe('/acme/channels/channel/threads/t1');
+    expect(setup('/channels/channel?thread=t1').result.current.legacyPageUrl).toBeNull();
   });
 });

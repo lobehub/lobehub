@@ -8,6 +8,7 @@ import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
 import { carriedClasses, globalRulesChanged } from '../plan/globalRules';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
+import type { ShapeBook } from '../plan/shapes';
 import { packageFile } from '../source/aliases';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
@@ -54,6 +55,7 @@ export const synthesize = async (
   scope: ScopeFile[],
   roots: Record<Side, string>,
   config: ProjectConfig,
+  shapes?: ShapeBook,
 ): Promise<Synthesis> => {
   const extractions: Synthesis['extractions'] = {};
   const plans: FilePlan[] = [];
@@ -75,7 +77,7 @@ export const synthesize = async (
       });
     };
     const pair = { base: await read('base'), head: await read('head') };
-    const plan = planFile(file, pair.base, pair.head, config);
+    const plan = planFile(file, pair.base, pair.head, { ...config, shapes });
     attachCounterparts(plan, { code, extractions: pair, real: config.realComponents });
     markUnchangedChains(plan, pair, {
       aliases: config.aliases,

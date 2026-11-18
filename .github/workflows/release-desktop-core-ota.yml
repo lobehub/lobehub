@@ -288,6 +288,31 @@ jobs:
           steps-json: ${{ toJSON(steps) }}
           job-status: ${{ job.status }}
 
+  overlay-type-check:
+    name: Overlay type check
+    needs: [gate]
+    if: needs.gate.outputs.requires_full_release == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
+      - name: Type check overlaid sources
+        if: steps.overlay-token.outputs.token != ''
+        uses: ./.github/actions/overlay-type-check
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          overlay-ref: ${{ needs.gate.outputs.cloud_ref }}
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
+
   build-core:
     name: Build core (${{ matrix.platform }})
     needs: [gate]
@@ -418,7 +443,7 @@ jobs:
 
   publish:
     name: Publish core (${{ inputs.channel }})
-    needs: [gate, build-core]
+    needs: [gate, build-core, overlay-type-check]
     if: needs.gate.outputs.requires_full_release == 'false'
     runs-on: ubuntu-latest
     outputs:

@@ -3,26 +3,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 
-const { createChannelWorktree, executions, execAgent, getScopedOnlineDevices, notifyChannel } =
-  vi.hoisted(() => ({
-    createChannelWorktree: vi.fn(),
-    executions: {
-      accepted: vi.fn(),
-      assignWorktree: vi.fn(),
-      candidates: vi.fn(),
-      heartbeat: vi.fn(),
-      claim: vi.fn(),
-      finishDispatch: vi.fn(),
-      input: vi.fn(),
-      primaryReply: vi.fn(),
-      recentContext: vi.fn(),
-      worktreeCandidate: vi.fn(),
-      worktreeUnavailable: vi.fn(),
-    },
-    execAgent: vi.fn(),
-    getScopedOnlineDevices: vi.fn(),
-    notifyChannel: vi.fn(),
-  }));
+const {
+  createChannelWorktree,
+  executions,
+  execAgent,
+  getScopedOnlineDevices,
+  notifyChannel,
+  openChannelReply,
+  resolveChannelRoutedDevice,
+  routedPresence,
+} = vi.hoisted(() => ({
+  createChannelWorktree: vi.fn(),
+  executions: {
+    accepted: vi.fn(),
+    assignWorktree: vi.fn(),
+    candidates: vi.fn(),
+    heartbeat: vi.fn(),
+    claim: vi.fn(),
+    finishDispatch: vi.fn(),
+    input: vi.fn(),
+    coAddressed: vi.fn(),
+    openingReply: vi.fn(),
+    primaryReply: vi.fn(),
+    recentContext: vi.fn(),
+    worktreeCandidate: vi.fn(),
+    worktreeUnavailable: vi.fn(),
+  },
+  execAgent: vi.fn(),
+  getScopedOnlineDevices: vi.fn(),
+  notifyChannel: vi.fn(),
+  openChannelReply: vi.fn(),
+  resolveChannelRoutedDevice: vi.fn(),
+  routedPresence: { isOnline: vi.fn(), prefetch: vi.fn() },
+}));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
     constructor() {
@@ -47,6 +60,11 @@ vi.mock('./ChannelRoutingService', () => ({
 }));
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+vi.mock('./replyOpening', () => ({ openChannelReply }));
+vi.mock('./routedDevice', () => ({
+  createRoutedDevicePresence: () => routedPresence,
+  resolveChannelRoutedDevice,
+}));
 vi.mock('./worktree', () => ({ createChannelWorktree }));
 
 const coordinator = (count = 3, recovering = false, members: unknown[] = []) => {
@@ -84,6 +102,8 @@ describe('Channel concurrent startup', () => {
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
+    executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     executions.claim.mockImplementation(async (_channelId, id: string) => ({
@@ -107,6 +127,45 @@ describe('Channel concurrent startup', () => {
     }));
   });
   afterEach(() => vi.restoreAllMocks());
+
+  // A Channel binds no device by default: an unbound run keeps the Agent's own settings and the
+  // requester's device for it, while a device picked in the Channel pins the run there.
+  it.each([
+    ['no device picked', { agencyConfig: { boundDeviceId: 'mac', executionTarget: 'device' } }],
+    [
+      'a device picked in the Channel',
+      { agencyConfig: { boundDeviceId: 'mac' }, deviceId: 'dev-2', workingDirectory: '/repo' },
+    ],
+  ])('dispatches with %s', async (_, environment) => {
+    const claim = executions.claim.getMockImplementation()!;
+    executions.claim.mockImplementation(async (...args: Parameters<typeof claim>) => {
+      const claimed = await claim(...args);
+      return {
+        ...claimed,
+        job: { ...claimed.job, executionConfig: { runtime: 'codex', ...environment } },
+      };
+    });
+
+    await coordinator(1).advance('channel');
+
+    const [params] = execAgent.mock.calls[0];
+    if ('deviceId' in environment) {
+      expect(params).toMatchObject({ deviceId: 'dev-2', snapshotFollowsCallerDevice: false });
+      expect(params.agentConfigSnapshot.agencyConfig).toEqual({
+        boundDeviceId: 'dev-2',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+        workingDirByDevice: { 'dev-2': '/repo' },
+      });
+    } else {
+      expect(params).toMatchObject({ deviceId: undefined, snapshotFollowsCallerDevice: true });
+      expect(params).not.toHaveProperty('disableLocalSystem');
+      expect(params.agentConfigSnapshot.agencyConfig).toEqual({
+        boundDeviceId: 'mac',
+        executionTarget: 'device',
+      });
+    }
+  });
 
   it('notifies the claimed reply state before runtime startup resolves', async () => {
     const gate = Promise.withResolvers<{ success: boolean }>();
@@ -190,6 +249,46 @@ describe('Channel concurrent startup', () => {
     expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'channel');
   });
 
+  it('reads requester presence before claiming an Agent with no device picked in the Channel', async () => {
+    executions.candidates.mockResolvedValue({
+      heads: [{ id: 'job-0', memberId: 'agent', requesterMemberId: 'person', status: 'queued' }],
+      inFlight: [],
+    });
+    const query = (rows: unknown[]) => {
+      const result = Object.assign(Promise.resolve(rows), { from: vi.fn(), where: vi.fn() });
+      result.from.mockReturnValue(result);
+      result.where.mockReturnValue(result);
+      return result;
+    };
+    const select = vi
+      .fn()
+      .mockReturnValueOnce(query([{ id: 'channel', workspaceId: 'workspace' }]))
+      .mockReturnValueOnce(query([{ config: {}, id: 'agent' }]))
+      .mockReturnValueOnce(query([{ userId: 'requester' }]));
+    getScopedOnlineDevices.mockResolvedValue([{ deviceId: 'agent-device', online: false }]);
+    executions.claim.mockResolvedValue(null);
+
+    await new ChannelCoordinator({ select } as never).advance('channel');
+
+    // Outside the channel lock, before the claim resolves the routed device.
+    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester');
+    expect(routedPresence.prefetch.mock.invocationCallOrder[0]).toBeLessThan(
+      executions.claim.mock.invocationCallOrder[0],
+    );
+    const [, , options] = executions.claim.mock.calls[0];
+    // The requester's devices never join the pool a Channel-picked device is checked against.
+    expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+    expect(options.onlineDeviceIds).toEqual([]);
+    const run = {
+      agentId: 'agt',
+      executionConfig: {},
+      userId: 'requester',
+      workspaceId: 'workspace',
+    };
+    await options.routedDevice(run);
+    expect(resolveChannelRoutedDevice).toHaveBeenCalledWith(expect.anything(), run, routedPresence);
+  });
+
   it('does not dispatch a blocked job or prevent other Agents from starting', async () => {
     executions.claim.mockResolvedValueOnce(null);
     await coordinator().advance('channel');
@@ -212,6 +311,40 @@ describe('Channel concurrent startup', () => {
     const [{ prompt }] = execAgent.mock.calls[0];
     expect(prompt).toContain('<channel_reply from="Coder" type="agent"');
     expect(prompt).toContain('Fixed in the tokenizer.');
+  });
+
+  it('opens the reply before claiming it, and continues from the acknowledgement', async () => {
+    const order: string[] = [];
+    openChannelReply.mockImplementation(async () => {
+      order.push('open');
+    });
+    const claim = executions.claim.getMockImplementation()!;
+    executions.claim.mockImplementation(async (...args: Parameters<typeof claim>) => {
+      order.push('claim');
+      return claim(...args);
+    });
+    executions.openingReply.mockResolvedValue('收到，我先翻一下昨天的报错日志。');
+    await coordinator(1).advance('channel');
+
+    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0');
+    expect(order).toEqual(['open', 'claim']);
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain('<channel_opening');
+    expect(prompt).toContain('收到，我先翻一下昨天的报错日志。');
+  });
+
+  it('tells the run which other Agents the request asked, by name and role', async () => {
+    executions.coAddressed.mockResolvedValue([
+      { name: 'Alien', title: 'Growth engineer' },
+      { name: null, title: '数据分析师' },
+    ]);
+    await coordinator(1).advance('channel');
+
+    expect(executions.coAddressed).toHaveBeenCalledWith('channel', 'job-0');
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain(
+      'This request also asked Alien (Growth engineer), 数据分析师 to answer.',
+    );
   });
 
   describe('a job waiting on its directory', () => {

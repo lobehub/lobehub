@@ -66,8 +66,10 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { getFollowUpMode } from '../../lifecycle/followUpMode';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
+import { steerQueuedFollowUps } from './clientSteer';
 import { buildRunManifestMap } from './discoverableManifests';
 import { clientInterventionAudits } from './interventionAudits';
 
@@ -726,7 +728,20 @@ export class StreamingExecutorActionImpl {
       );
       // Accumulate activated skills from activateSkill messages
       const activatedSkills = selectActivatedSkillsFromMessages(currentDBMessages);
-      const hasQueuedMessages = (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
+      // Steer joins what can join right here; Queue lets the run finish first.
+      const followUpMode = getFollowUpMode();
+      if (followUpMode === 'steer') {
+        const steered = await steerQueuedFollowUps(this.#get, {
+          context,
+          contextKey,
+          nextContext,
+          operationId,
+          state,
+        });
+        if (steered) ({ nextContext, state } = steered);
+      }
+      const hasQueuedMessages =
+        followUpMode !== 'queue' && (this.#get().queuedMessages[contextKey]?.length ?? 0) > 0;
       const stepContext = computeStepContext({
         activatedSkills,
         activatedToolIds,

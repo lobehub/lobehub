@@ -9,6 +9,8 @@ import type {
   GitDeleteBranchResult,
   GitFileRevertResult,
   GitLinkedPullRequestResult,
+  GitOwnedWorktreeCleanupResult,
+  GitOwnedWorktreeRestoreResult,
   GitPullRequestAction,
   GitPullRequestActionResult,
   GitPullRequestActivity,
@@ -63,6 +65,7 @@ export default class GitController extends ControllerModule {
     branch: string;
     path: string;
     pullRequestNumber?: number;
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPullRequestResult> {
     const { getLinkedPullRequest: computeLinkedPullRequest } = await loadGit();
     return computeLinkedPullRequest(payload);
@@ -155,9 +158,13 @@ export default class GitController extends ControllerModule {
   }
 
   @IpcMethod()
-  async getGitAheadBehind(dirPath: string): Promise<GitAheadBehind> {
+  async getGitAheadBehind(
+    payload: string | { branch?: string; path: string },
+  ): Promise<GitAheadBehind> {
     const { getGitAheadBehind: computeGitAheadBehind } = await loadGit();
-    return computeGitAheadBehind(dirPath);
+    // Older renderers send the bare path; newer ones may name a branch.
+    if (typeof payload === 'string') return computeGitAheadBehind(payload);
+    return computeGitAheadBehind(payload.path, { branch: payload.branch });
   }
 
   @IpcMethod()
@@ -165,6 +172,7 @@ export default class GitController extends ControllerModule {
     branch: string;
     create?: boolean;
     path: string;
+    startPoint?: string;
   }): Promise<GitCheckoutResult> {
     const { checkoutGitBranch: runCheckoutGitBranch } = await loadGit();
     return runCheckoutGitBranch(payload);
@@ -198,21 +206,58 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async addGitWorktree(payload: {
     branch: string;
+    ownerToken?: string;
     path: string;
+    startPoint?: string;
     worktreePath: string;
   }): Promise<GitAddWorktreeResult> {
     const { addGitWorktree: runAddGitWorktree } = await loadGit();
     return runAddGitWorktree(payload);
   }
 
+  /**
+   * Remove a worktree the app created for a conversation (archived or trashed),
+   * or with `discard` the one the user chose to drop with its changes. The
+   * guards run in `local-file-shell`; the root is this machine's own.
+   */
   @IpcMethod()
-  async pullGitBranch(payload: { path: string }): Promise<GitPullResult> {
+  async cleanupOwnedWorktree(payload: {
+    discard?: boolean;
+    ownerToken?: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeCleanupResult> {
+    const { cleanupOwnedWorktree } = await loadGit();
+    const { discard, ownerToken, sourcePath, worktreePath } = payload;
+    return cleanupOwnedWorktree({
+      discard: discard === true,
+      ownerToken,
+      sourcePath,
+      worktreePath,
+    });
+  }
+
+  /** Check a cleaned-up worktree out again at its path, for a restored conversation. */
+  @IpcMethod()
+  async restoreOwnedWorktree(payload: {
+    branch: string;
+    ownerToken?: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeRestoreResult> {
+    const { restoreOwnedWorktree } = await loadGit();
+    const { branch, ownerToken, sourcePath, worktreePath } = payload;
+    return restoreOwnedWorktree({ branch, ownerToken, sourcePath, worktreePath });
+  }
+
+  @IpcMethod()
+  async pullGitBranch(payload: { branch?: string; path: string }): Promise<GitPullResult> {
     const { pullGitBranch: runPullGitBranch } = await loadGit();
     return runPullGitBranch(payload);
   }
 
   @IpcMethod()
-  async pushGitBranch(payload: { path: string }): Promise<GitPushResult> {
+  async pushGitBranch(payload: { branch?: string; path: string }): Promise<GitPushResult> {
     const { pushGitBranch: runPushGitBranch } = await loadGit();
     return runPushGitBranch(payload);
   }

@@ -75,6 +75,7 @@ const TaskProperties = memo(() => {
   const setTaskLabels = useTaskStore((s) => s.setTaskLabels);
   const projectId = useTaskStore(taskDetailSelectors.activeTaskProjectId);
   const hasParent = !!useTaskStore(taskDetailSelectors.activeTaskParent);
+  const subtaskCount = useTaskStore(taskDetailSelectors.activeTaskSubtaskCount);
   // The picker renders nothing while the Projects lab is off, which would leave
   // the group's title standing over an empty row.
   const enableProjects = useUserStore(labPreferSelectors.enableProjects);
@@ -252,6 +253,7 @@ const TaskProperties = memo(() => {
           <ProjectSelector
             fullWidth
             disabledReason={hasParent ? t('taskProject.inheritedFromParent') : undefined}
+            subtaskCount={subtaskCount}
             taskIdentifier={taskId}
             value={projectId}
           >

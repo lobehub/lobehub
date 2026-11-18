@@ -658,6 +658,27 @@ describe('GatewayHttpClient', () => {
       expect(body.deviceId).toBe('device-1');
     });
 
+    it('sends the client the caller picked for the device', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+
+      await client.executeMcpCall({
+        apiName: 'echo',
+        arguments: '{}',
+        clientKinds: ['cli'],
+        deviceId: 'device-1',
+        identifier: 'echo-mcp',
+        params: { args: [], command: 'echo-mcp', name: 'echo-mcp', type: 'stdio' },
+        userId: 'user-1',
+      });
+
+      const body = JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string);
+      expect(body.clientKinds).toEqual(['cli']);
+      expect(body.toolCall.clientKinds).toBeUndefined();
+    });
+
     it('should surface non-ok responses as a failed result', async () => {
       mockFetch({
         ok: false,

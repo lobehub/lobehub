@@ -132,6 +132,7 @@ export const execAgentTurn = async (
     steer,
     trigger,
     cronJobId,
+    webhookThread,
     taskId,
     evalContext,
     evalRuntime,
@@ -259,6 +260,7 @@ export const execAgentTurn = async (
     agentConfig,
     agentSlug,
     assistantAgentId,
+    autoSkillIds,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
@@ -278,6 +280,7 @@ export const execAgentTurn = async (
         appContext,
         chatConfigOverride,
         agentConfigSnapshot: params.agentConfigSnapshot,
+        snapshotFollowsCallerDevice: params.snapshotFollowsCallerDevice,
         identifier,
         instructions,
         modelOverride,
@@ -443,6 +446,7 @@ export const execAgentTurn = async (
         createdThreadId,
         externalOrigin,
         cronJobId,
+        webhookThread,
         files,
         modelOverride,
         operationTaskId,
@@ -503,6 +507,7 @@ export const execAgentTurn = async (
           }
         : appContext,
     assistantMessageId: turn.assistantMessageId,
+    autoSkillIds,
     botContext,
     botPlatformContext,
     canUseDevice,
@@ -526,48 +531,72 @@ export const execAgentTurn = async (
     userMessageMetadata: turn.userMessageId ? turn.requestTriggerMetadata : undefined,
   };
 
+  // Every caller that is not the plain composer (bots, group members,
+  // sub-agents, evals, share visitors, …): only a plain send may answer before
+  // its init (`agent_deferred_init`) or device dispatch
+  // (`agent_deferred_hetero_dispatch`) has run.
+  const hasOrchestration = !!(
+    appContext?.agentSignal ||
+    appContext?.groupId ||
+    appContext?.isSubAgent ||
+    botContext ||
+    botPlatformContext ||
+    continuationOperationId ||
+    discordContext ||
+    evalContext ||
+    evalRuntime ||
+    params.reservedOperationId ||
+    params.topicStartOwnerOperationId ||
+    parentOperationId ||
+    shareGate
+  );
+
   if (isHeteroAgent) {
-    const heteroResult = await dispatchHeteroAgent(
-      {
-        bindTopicWorkingDirectory: (p) =>
-          bindTopicWorkingDirectory({ topicModel: deps.topicModel }, p),
-        db: deps.db,
-        getMarketService: (options) => deps.getMarketService(runFacts, options),
-        messageModel: deps.messageModel,
-        resolveDeviceWorkspaceId: deps.resolveDeviceWorkspaceId,
-        topicModel: deps.topicModel,
-        userId: deps.userId,
-        withholdGatewayToken: deps.withholdGatewayToken,
-        workspaceId: deps.workspaceId,
-      },
-      runContext,
-      {
-        canManageAgent,
-        effectiveRequestedDeviceId: turn.effectiveRequestedDeviceId,
-        heteroType: turn.heteroType,
-        heterogeneousProvider: turn.heterogeneousProvider,
-        hooks,
-        isPublicWorkspaceAgent,
-        localDeviceId,
-        maxSteps,
-        memberDeviceOverride,
-        operationTaskId,
-        // The hetero run settles its fee on `heteroFinish` under this id, so the
-        // fee moves to it as soon as the durable operation row exists.
-        onOperationCreated: async (operationId) => {
-          await bindRunFee(runFee, deps.userId, operationId);
-          await params.onOperationCreated?.(operationId);
+    const heteroResult = await traceSendStage('hetero_dispatch', () =>
+      dispatchHeteroAgent(
+        {
+          bindTopicWorkingDirectory: (p) =>
+            bindTopicWorkingDirectory({ topicModel: deps.topicModel }, p),
+          db: deps.db,
+          getMarketService: (options) => deps.getMarketService(runFacts, options),
+          messageModel: deps.messageModel,
+          resolveDeviceWorkspaceId: deps.resolveDeviceWorkspaceId,
+          topicModel: deps.topicModel,
+          userId: deps.userId,
+          withholdGatewayToken: deps.withholdGatewayToken,
+          workspaceId: deps.workspaceId,
         },
-        reservedOperationId: params.reservedOperationId,
-        parentOperationId,
-        pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
-        pinnedHeterogeneousTopicSources: turn.pinnedHeterogeneousTopicSources,
-        requestTrigger: requestTriggerMetadata.trigger,
-        requestedDeviceId: turn.requestedDeviceId,
-        runAttachments,
-        selfMessageIds,
-        topicStartOwnerOperationId: params.topicStartOwnerOperationId,
-      },
+        runContext,
+        {
+          canManageAgent,
+          effectiveRequestedDeviceId: turn.effectiveRequestedDeviceId,
+          hasOrchestration,
+          heteroType: turn.heteroType,
+          heterogeneousProvider: turn.heterogeneousProvider,
+          hooks,
+          isPublicWorkspaceAgent,
+          localDeviceId,
+          maxSteps,
+          memberDeviceOverride,
+          operationTaskId,
+          // The hetero run settles its fee on `heteroFinish` under this id, so the
+          // fee moves to it as soon as the durable operation row exists.
+          markTopicRunning: params.markTopicRunning,
+          onOperationCreated: async (operationId) => {
+            await bindRunFee(runFee, deps.userId, operationId);
+            await params.onOperationCreated?.(operationId);
+          },
+          reservedOperationId: params.reservedOperationId,
+          parentOperationId,
+          pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
+          pinnedHeterogeneousTopicSources: turn.pinnedHeterogeneousTopicSources,
+          requestTrigger: requestTriggerMetadata.trigger,
+          requestedDeviceId: turn.requestedDeviceId,
+          runAttachments,
+          selfMessageIds,
+          topicStartOwnerOperationId: params.topicStartOwnerOperationId,
+        },
+      ),
     );
     // A returned dispatch is the run's from here: `heteroFinish` settles a
     // started run and a refused dispatch settles its error through the same
@@ -674,21 +703,7 @@ export const execAgentTurn = async (
   const deferInit = await shouldDeferOperationInit(
     {
       autoStart,
-      hasOrchestration: !!(
-        appContext?.agentSignal ||
-        appContext?.groupId ||
-        appContext?.isSubAgent ||
-        botContext ||
-        botPlatformContext ||
-        continuationOperationId ||
-        discordContext ||
-        evalContext ||
-        evalRuntime ||
-        params.reservedOperationId ||
-        params.topicStartOwnerOperationId ||
-        parentOperationId ||
-        shareGate
-      ),
+      hasOrchestration,
       queueRuntimeEnabled: appEnv.enableQueueAgentRuntime === true,
       request: initRequest,
       trigger,
@@ -789,8 +804,10 @@ export const execAgentTurn = async (
         approvalClaim,
         approvalSourceOperationId,
         approvalSourceToolMessageIds,
+        autoSkillIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
+        markTopicRunning: params.markTopicRunning,
         // From here the run's completion releases the slot and settles the
         // fee; a run that never started (failed, or created without
         // auto-start) gives both back.

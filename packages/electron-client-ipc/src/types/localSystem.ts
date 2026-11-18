@@ -457,6 +457,16 @@ export interface RunCommandParams {
    * registries and forges and nothing else.
    */
   sandboxNetwork?: boolean;
+  /**
+   * The directory a sandboxed command may write to, when it differs from
+   * `cwd`. Ignored unless `sandbox` is true; absent means the fence is `cwd`.
+   * Skill scripts set it: they run from the device's shared skill cache, which
+   * must stay out of the fence (a fenced run could otherwise plant code that a
+   * later unfenced run executes), so the fence is the run's working directory
+   * instead. Host-owned like `sandbox` — both injection sites strip a
+   * model-supplied value.
+   */
+  sandboxRoot?: string;
   timeout?: number;
   topicId?: string;
 }
@@ -757,10 +767,12 @@ export interface ResolveSkillResourcePathResult {
 }
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 export interface ProjectSkillItem {
   description?: string;
+  /** SKILL.md declares that the model must not invoke this skill automatically. */
+  disableModelInvocation?: boolean;
   /** Total number of regular files under `skillDir` (recursive, including `SKILL.md`). */
   fileCount: number;
   /**
@@ -794,8 +806,8 @@ export interface ListProjectSkillsResult {
 }
 
 export interface InitWorkspaceParams {
-  /** Working directory used to resolve the project root. */
-  scope: string;
+  /** Working directory; omitted to discover only device-level skills. */
+  scope?: string;
 }
 
 /**
@@ -818,6 +830,7 @@ export interface WorkspaceInstructionsItem {
  */
 export interface InitWorkspaceResult {
   instructions: WorkspaceInstructionsItem[];
-  root: string;
+  /** Absent for a device-only scan; no working directory is selected implicitly. */
+  root?: string;
   skills: ProjectSkillItem[];
 }

@@ -5,8 +5,8 @@ import {
   channelJobStatus,
   channelJobTone,
   directAvatarState,
-  directReplyStatus,
   hasReplyActivity,
+  mainTimelineFailures,
   memberCurrentJob,
   memberJobStatus,
   replyActivityJobs,
@@ -163,39 +163,16 @@ describe('Channel task tone', () => {
   });
 });
 
-describe('directReplyStatus', () => {
-  const job = (patch: Partial<ChannelPublicJob> = {}) =>
-    ({
-      id: 'job_1',
-      memberId: 'mem_cook',
-      publicationRevoked: false,
-      status: 'running',
-      threadId: null,
-      writerHeld: false,
-      ...patch,
-    }) as ChannelPublicJob;
-  const detail = (jobs: ChannelPublicJob[], messages: unknown[] = []) =>
-    ({ channel: { agentId: 'agt_cook', id: 'chn_cook' }, jobs, members: [], messages }) as never;
+describe('mainTimelineFailures', () => {
+  const job = (patch: Partial<ChannelPublicJob>) =>
+    ({ memberId: 'a', publicationRevoked: false, threadId: null, ...patch }) as ChannelPublicJob;
 
-  it('is typing while the Agent replies or prepares', () => {
-    expect(directReplyStatus(detail([job()]))?.waiting).toBeUndefined();
-    expect(
-      directReplyStatus(detail([job({ blockedCode: undefined, status: 'queued' })]))?.waiting,
-    ).toBeUndefined();
-  });
-
-  it('is typing while a sent message is still being routed', () => {
-    expect(directReplyStatus(detail([], [{ routingStatus: 'pending' }]))).toEqual({ jobs: [] });
-  });
-
-  it('names what a blocked reply waits on instead of typing', () => {
-    const blocked = job({ blockedCode: 'device_offline', status: 'queued' });
-    expect(directReplyStatus(detail([blocked]))?.waiting).toBe(blocked);
-  });
-
-  it('ignores thread replies and settled conversations', () => {
-    expect(directReplyStatus(detail([job({ threadId: 'thr_1' })]))).toBeNull();
-    expect(directReplyStatus(detail([job({ status: 'completed' })]))).toBeNull();
+  it('keeps a main failure while the same Agent works in a thread', () => {
+    const jobs = [
+      job({ id: 'thread-running', status: 'running', threadId: 'thr_1' }),
+      job({ id: 'main-failed', status: 'failed' }),
+    ];
+    expect(mainTimelineFailures(jobs).map((entry) => entry.id)).toEqual(['main-failed']);
   });
 });
 

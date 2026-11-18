@@ -3,6 +3,7 @@
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
+import { serverOnlyToolIds } from '@lobechat/builtin-tools/serverOnly';
 import {
   createEnableChecker,
   type LobeToolManifest,
@@ -173,6 +174,9 @@ export const createAgentToolsEngine = (
     disabledPluginIds: [
       ...agentSelectors.currentAgentDisabledPlugins(agentState),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
+      // This engine serves runs the browser executes; server-only tools have nothing to run here.
+      ...serverOnlyToolIds,
+      // This engine serves runs the browser executes; server-only tools have nothing to run here.
     ],
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
     hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),

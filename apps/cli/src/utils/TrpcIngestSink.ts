@@ -14,7 +14,17 @@ import type { IngestAck, IngestSink } from './BatchIngester';
  * The CLI authenticates using the `LOBEHUB_JWT` env var (operation-scoped JWT
  * injected by the server before spawning the sandbox / desktop process).
  */
+const withoutBackgroundTasks = (events: AgentStreamEvent[]) =>
+  events.filter((event) => event.type !== 'background_task');
+
 export class TrpcIngestSink implements IngestSink {
+  /**
+   * Cleared once the server refused a batch for carrying `background_task`
+   * events: a server that predates them rejects the whole batch at input
+   * validation, so they are dropped for the rest of the run instead.
+   */
+  private sendBackgroundTasks = true;
+
   constructor(
     private readonly client: TrpcClient,
     private readonly agentType: LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType,
@@ -53,6 +63,23 @@ export class TrpcIngestSink implements IngestSink {
   }
 
   async ingest(events: AgentStreamEvent[]): Promise<IngestAck> {
+    const sendable = this.sendBackgroundTasks ? events : withoutBackgroundTasks(events);
+    // Filtering emptied the batch, and an older server refuses an empty one:
+    // nothing is left to deliver, so it counts as delivered.
+    if (sendable.length === 0 && events.length > 0) return { accepted: true };
+    try {
+      return await this.send(sendable);
+    } catch (error) {
+      const code = (error as { data?: { code?: string } } | null)?.data?.code;
+      const hasTasks = sendable.some((event) => event.type === 'background_task');
+      if (code !== 'BAD_REQUEST' || !hasTasks) throw error;
+      this.sendBackgroundTasks = false;
+      const rest = withoutBackgroundTasks(sendable);
+      return rest.length > 0 ? this.send(rest) : { accepted: true };
+    }
+  }
+
+  private async send(events: AgentStreamEvent[]): Promise<IngestAck> {
     const ack = (await this.client.aiAgent.heteroIngest.mutate({
       agentType: this.agentType,
       assistantMessageId: this.assistantMessageId,

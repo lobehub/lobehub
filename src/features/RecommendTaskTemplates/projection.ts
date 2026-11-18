@@ -82,9 +82,6 @@ const DAILY_RECOMMEND_VERSION = 2;
  * seed + count + locale. localStorage so the home cards paint on the first
  * frame of a reload; every refresh mints a seed, so old rows are evicted past
  * the cap.
- *
- * The name deliberately matches no `CACHE_TIERS` pattern (`taskTemplate:`), so
- * the replica's SWR sync key is never persisted a second time by the SWR tier.
  */
 export const dailyRecommendResource = defineReplica<DailyRecommendParams, TaskTemplate[]>({
   key: dailyRecommendKey,

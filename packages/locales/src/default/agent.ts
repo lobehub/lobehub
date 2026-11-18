@@ -8,6 +8,7 @@ export default {
   'channel.quickSetup.link.openBotFather': 'Open BotFather',
   'channel.quickSetup.link.openBotSettings': 'Open bot settings',
   'channel.quickSetup.link.openConsole': 'Open developer console',
+  'channel.quickSetup.link.openAdminConsole': 'Open admin console',
   'channel.quickSetup.link.createLineAccount': 'Create Official Account',
   'channel.quickSetup.link.openLineAccountManager': 'Open Official Account Manager',
   'channel.quickSetup.link.openSlackApp': 'Open app settings',
@@ -61,9 +62,11 @@ export default {
     'In the Developer Portal, click New Application and name it.',
   'channel.quickSetup.discord.credentials.title': 'Copy the Application ID and Public Key',
   'channel.quickSetup.discord.credentials.desc': 'Both are on General Information.',
-  'channel.quickSetup.discord.bot.title': 'Get the bot token and allow message content',
-  'channel.quickSetup.discord.bot.desc':
-    'On the Bot page, Reset Token and copy it, then turn on Message Content Intent.',
+  'channel.quickSetup.discord.bot.title': 'Get the bot token',
+  'channel.quickSetup.discord.bot.desc': 'On the Bot page, click Reset Token and copy it.',
+  'channel.quickSetup.discord.intent.title': 'Turn on Message Content Intent',
+  'channel.quickSetup.discord.intent.desc':
+    "On the Bot page, under Privileged Gateway Intents, turn on Message Content Intent and save. Without it, the bot can't read messages.",
   'channel.quickSetup.discord.invite.title': 'Invite the bot to your server',
   'channel.quickSetup.discord.invite.desc':
     "The invite link already carries the permissions the bot needs. For a private channel, also add the bot in that channel's Settings → Permissions.",
@@ -80,6 +83,36 @@ export default {
     'On the QQ Open Platform, create a bot and finish its basic setup.',
   'channel.quickSetup.qq.credentials.title': 'Copy the App ID and App Secret',
   'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
+  'channel.quickSetup.wecom.access.title': 'Get permission to create long-connection bots',
+  'channel.quickSetup.wecom.access.desc':
+    'Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console, and to add them to Bot Creation Permission too if the organization restricts it.',
+  'channel.quickSetup.wecom.create.title': 'Create an AI bot in API mode',
+  'channel.quickSetup.wecom.create.desc':
+    'In the admin console, go to Smart Zone → AI Bots and click Create, or open Workbench → AI Bots in the WeCom app. Choose to create it in API mode.',
+  'channel.quickSetup.wecom.connection.title': 'Choose long connection and set the visible range',
+  'channel.quickSetup.wecom.connection.desc':
+    'On the API settings page, set the connection method to Use long connection, then set the visible range: only members in it can find and use the bot. Leave the rest as is.',
+  'channel.quickSetup.wecom.credentials.title': 'Copy the BotID and Secret',
+  'channel.quickSetup.wecom.credentials.desc':
+    'The page generates the BotID and Secret. Copy them into the fields below and keep the Secret somewhere safe before you save the bot settings.',
+  'channel.quickSetup.wecom.usage.title': 'Use it in direct and group chats',
+  'channel.quickSetup.wecom.usage.desc':
+    "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External, interconnected, and upstream/downstream groups aren't supported.",
+  'channel.quickSetup.dingtalk.create.title': 'Create an internal app',
+  'channel.quickSetup.dingtalk.create.desc':
+    'In the DingTalk developer console, create an internal app, then copy the Client ID and Client Secret from Credentials & Basic Info.',
+  'channel.quickSetup.dingtalk.robot.title': 'Add the robot and choose Stream mode',
+  'channel.quickSetup.dingtalk.robot.desc':
+    'Under App Capabilities, add Robot, fill in its details and set the message receiving mode to Stream mode.',
+  'channel.quickSetup.dingtalk.robotWebhook.title': 'Add the robot and choose HTTP callback',
+  'channel.quickSetup.dingtalk.robotWebhook.desc':
+    'Under App Capabilities, add Robot, fill in its details, set the message receiving mode to HTTP callback, and paste the Webhook URL shown here after saving as the message receiving address.',
+  'channel.quickSetup.dingtalk.permissions.title': 'Grant the robot send permission',
+  'channel.quickSetup.dingtalk.permissions.desc':
+    'Under Permissions, request qyapi_robot_sendmsg so the bot can reply in single and group chats.',
+  'channel.quickSetup.dingtalk.publish.title': 'Publish a version',
+  'channel.quickSetup.dingtalk.publish.desc':
+    'Under Version Management, publish and choose who can see the robot. Internal apps go live without review.',
   'channel.quickSetup.line.account.title': 'Create a LINE Official Account',
   'channel.quickSetup.line.account.desc':
     'Sign in with your LINE Business ID and create the account the bot speaks as.',
@@ -149,6 +182,8 @@ export default {
   'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite Chat App',
   'channel.platform.default.description':
     'Let people reach this agent from {{name}} without switching apps—ideal for anyone who wants help close at hand.',
+  'channel.platform.dingtalk.description':
+    'Answer questions and assist work in single chats and group @-mentions—ideal for teams that collaborate in DingTalk.',
   'channel.platform.discord.description':
     'Support communities in servers and DMs—ideal for moderators, member support, and always-on help.',
   'channel.platform.feishu.description':
@@ -161,6 +196,8 @@ export default {
     'Provide help in direct and group chats—ideal for customer service, communities, and official accounts.',
   'channel.platform.qq.description':
     'Serve users in private, group, and guild chats—ideal for Chinese communities, support, and fan groups.',
+  'channel.platform.wecom.description':
+    'Answer colleagues in WeCom direct chats and in internal group chats when they @-mention the bot—ideal for teams that already work in WeCom.',
   'channel.platform.slack.description':
     'Answer questions and run agent workflows in channels or DMs—ideal for teams that live in Slack.',
   'channel.platform.telegram.description':
@@ -213,9 +250,25 @@ export default {
     'The bot session has expired. Save the bot again to reconnect it.',
   'channel.connectionError.upstream_unavailable':
     'The platform service is temporarily unavailable. LobeHub will try again later.',
+  'channel.connectionError.webhook_mode_required':
+    'This deployment can only connect this platform in Webhook mode. Switch the connection mode to Webhook and update the callback address in the platform console.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
+  'channel.dingtalk.clientId': 'Client ID (AppKey)',
+  'channel.dingtalk.clientIdHint':
+    'From the DingTalk developer console → your internal app → Credentials & Basic Info. Formerly called AppKey.',
+  'channel.dingtalk.clientIdPlaceholder': 'e.g. dingxxxxxxxxxxxxxxxx',
+  'channel.dingtalk.clientSecret': 'Client Secret (AppSecret)',
+  'channel.dingtalk.clientSecretHint':
+    'Shown next to the Client ID. Formerly called AppSecret. It will be encrypted and stored securely.',
+  'channel.dingtalk.description':
+    'Connect this agent to a DingTalk robot for single chats and group @-mentions.',
+  'channel.dingtalk.identifierInvalid':
+    'Use only letters, digits, hyphens and underscores. Copy the value from the DingTalk developer console without spaces.',
+  'channel.dingtalk.robotCode': 'RobotCode',
+  'channel.dingtalk.robotCodeHint':
+    "Optional. An internal-app robot's RobotCode is its Client ID, which is used when this is blank. Fill it in only if the robot page shows a different code.",
   'channel.feishu.description': 'Connect this agent to Feishu for private and group chats.',
   'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.feishu.webhookMigrationDesc':
@@ -306,6 +359,11 @@ export default {
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.qq.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket under Connection options on the Connect tab.',
+  'channel.wecom.botId': 'BotID',
+  'channel.wecom.botIdHint': 'The BotID of your WeCom AI bot (API mode).',
+  'channel.wecom.secret': 'Secret',
+  'channel.wecom.secretHint':
+    "The bot's long-connection Secret. A bot can be connected in only one place at a time: saving here takes over a connection it has elsewhere, and connecting it elsewhere later disconnects it here.",
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
@@ -800,6 +858,8 @@ export default {
   'channel.userIdMissingDesc':
     "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in on the Access tab.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
+  'channel.userIdHint.dingtalk':
+    'Your DingTalk user ID (staff ID). Find it in the DingTalk admin console \u2192 Contacts \u2192 member details, or send /whoami to the bot in a direct message.',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
@@ -898,6 +958,16 @@ export default {
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
+  'share.settings.permissions.deviceAccess': 'Execution environment',
+  'share.settings.permissions.deviceAccessHint':
+    'Lets visitors use this Agent’s execution environment to run commands and read or write files there.',
+  'share.settings.permissions.deviceAccessOption.all': 'All visitors',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'Specific visitors',
+  'share.settings.permissions.deviceAccessOption.none': 'No visitors',
+  'share.settings.permissions.deviceAllowEmailsHint':
+    'Matches the visitor’s verified account email. No one can use it until you add one.',
+  'share.settings.permissions.deviceAllowEmailsPlaceholder':
+    'Enter the visitors’ account emails, then press Enter',
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and what the visitor gets to see back.',
   'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
@@ -1016,6 +1086,11 @@ export default {
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
+  'share.visitor.profile.lobotFallback.description':
+    'If Lobot is not installed yet, download it to chat with this Agent from your desktop, or keep chatting in the browser.',
+  'share.visitor.profile.lobotFallback.download': 'Download Lobot',
+  'share.visitor.profile.lobotFallback.title': 'Lobot didn’t open',
+  'share.visitor.profile.openInLobot': 'Open in Lobot',
   'share.visitor.profile.metrics.conversations': 'Topics',
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',
@@ -1202,4 +1277,125 @@ export default {
   'share.settings.profile.unsaved':
     'You have unsaved changes. Visitors will only see them after you save.',
   'share.settings.profile.upToDate': 'Visitors see the saved content.',
+  'webhook.actions.delete': 'Delete',
+  'webhook.actions.deliveries': 'Recent calls',
+  'webhook.actions.edit': 'Edit',
+  'webhook.actions.more': 'More',
+  'webhook.actions.pause': 'Pause webhook',
+  'webhook.actions.resume': 'Resume webhook',
+  'webhook.actions.rotate': 'Generate new key',
+  'webhook.actions.test': 'Send test',
+  'webhook.actions.usage': 'How to call',
+  'webhook.autoApproveTag': 'Auto-approve',
+  'webhook.untitledAgent': 'Untitled agent',
+  'webhook.wakes': 'Wakes {{agent}}',
+  'webhook.identifier': 'Identifier {{identifier}}',
+  'webhook.renamed': 'Renamed',
+  'webhook.actions.rename': 'Rename',
+  'webhook.channel.readOnly':
+    'Results are posted to this Channel. What it runs is changed with the lh CLI or by asking the Agent; here you can rename or delete it.',
+  'webhook.cancel': 'Cancel',
+  'webhook.create': 'Create webhook',
+  'webhook.created.done': 'Done',
+  'webhook.created.title': 'Webhook created',
+  'webhook.created.tryIt': 'Try it now',
+  'webhook.defaultName': 'Webhook',
+  'webhook.delete.content':
+    'The URL of "{{name}}" stops working at once, and its calls no longer wake this agent. This cannot be undone.',
+  'webhook.delete.done': 'Webhook deleted',
+  'webhook.delete.failed': "Couldn't delete the webhook. Try again",
+  'webhook.delete.ok': 'Delete',
+  'webhook.delete.title': 'Delete this webhook?',
+  'webhook.deliveries.columns.receivedAt': 'Received',
+  'webhook.deliveries.columns.request': 'Request',
+  'webhook.deliveries.columns.status': 'Result',
+  'webhook.deliveries.columns.topic': 'Topic',
+  'webhook.deliveries.empty': 'No calls yet. Send a test to see one here.',
+  'webhook.deliveries.loadMore': 'Load more',
+  'webhook.deliveries.purged': 'Content expired',
+  'webhook.deliveries.reason.agent_start_failed': "The agent couldn't start. It will be retried",
+  'webhook.deliveries.reason.feature_disabled': 'Webhooks are turned off for this account',
+  'webhook.deliveries.reason.insufficient_budget': 'Not enough credits to run the agent',
+  'webhook.deliveries.reason.target_removed': 'The agent was removed',
+  'webhook.deliveries.reason.topic_busy': 'Waiting for the topic to finish its current run',
+  'webhook.deliveries.reason.unknown': 'Not run',
+  'webhook.deliveries.reason.wake_cap': 'Skipped: over 30 runs in 10 minutes',
+  'webhook.deliveries.reason.webhook_paused': 'Skipped: the webhook was paused',
+  'webhook.deliveries.reason.webhook_removed': 'The webhook was deleted',
+  'webhook.deliveries.refresh': 'Refresh',
+  'webhook.deliveries.status.failed': 'Failed',
+  'webhook.deliveries.status.ignored': 'Skipped',
+  'webhook.deliveries.status.pending': 'Waiting',
+  'webhook.deliveries.status.processed': 'Ran',
+  'webhook.deliveries.test': 'Test',
+  'webhook.deliveries.thread': 'Thread: {{thread}}',
+  'webhook.deliveries.title': 'Recent calls',
+  'webhook.deliveries.untitledTopic': 'Untitled topic',
+  'webhook.desc':
+    'Give this agent a URL. When any system sends a request to it, the agent runs with what was sent: alerts, CI results, form submissions, anything.',
+  'webhook.empty.desc':
+    'Create a webhook, give its URL and key to the system that should notify this agent, and each call starts a run. No signing or special format needed.',
+  'webhook.empty.title': 'Let other systems wake this agent',
+  'webhook.endpoint.copy': 'Copy URL',
+  'webhook.endpoint.label': 'Webhook URL',
+  'webhook.form.autoApprove.label': 'Auto-approve tool calls',
+  'webhook.form.autoApprove.offHint':
+    'Runs follow your tool approval settings; a call that needs approval waits in the topic until you answer it.',
+  'webhook.form.autoApprove.onHint':
+    'Runs from this webhook use tools without waiting for approval, so anyone with the URL can make the agent act. Tools marked to always ask still wait.',
+  'webhook.form.create': 'Create webhook',
+  'webhook.form.createFailed': "Couldn't create the webhook. Try again",
+  'webhook.form.createTitle': 'Create webhook',
+  'webhook.form.editTitle': 'Edit webhook',
+  'webhook.form.instructions.hint':
+    "Sent with every call. The agent treats the request's content as data, never as instructions.",
+  'webhook.form.instructions.label': 'What should the agent do?',
+  'webhook.form.instructions.placeholder':
+    'For example: Summarize the failure and open an issue if it is new.',
+  'webhook.form.name.label': 'Name',
+  'webhook.form.name.placeholder': 'For example: CI alerts',
+  'webhook.form.save': 'Save',
+  'webhook.form.saveFailed': "Couldn't save the webhook. Try again",
+  'webhook.form.saved': 'Webhook saved',
+  'webhook.form.topicMode.label': 'Topic',
+  'webhook.form.topicMode.newHint':
+    'Each run starts a new topic. Calls that arrive while others are waiting are handled together in one run. A caller can add ?thread=<key> to keep related calls in one topic.',
+  'webhook.form.topicMode.reuseHint':
+    'Every call continues one shared topic, so the agent sees the earlier calls.',
+  'webhook.instructionsPreview': 'Task: {{instructions}}',
+  'webhook.lastCall': 'Last call {{time}}',
+  'webhook.noCalls': 'No calls yet',
+  'webhook.paused': 'Webhook paused. Calls are refused until you resume it',
+  'webhook.resumed': 'Webhook resumed',
+  'webhook.rotate.content':
+    'The current key stops working right away. The URL stays the same: give every system that calls it the new key.',
+  'webhook.rotate.ok': 'Generate new key',
+  'webhook.rotate.title': 'Generate a new key?',
+  'webhook.test.failed': "Couldn't send the test. Try again",
+  'webhook.test.paused': 'Resume the webhook before sending a test',
+  'webhook.test.sent': 'Test sent. The agent will run shortly',
+  'webhook.topicMode.new': 'New topic',
+  'webhook.topicMode.reuse': 'One shared topic',
+  'webhook.updateFailed': "Couldn't update the webhook. Try again",
+  'webhook.usage.json': 'Send JSON',
+  'webhook.usage.notes':
+    'Send the key as "Authorization: Bearer <key>"; it is shown once, when the webhook is created or given a new key. Any body works: JSON, a form or plain text, up to 256 KB. Retries with the same Idempotency-Key run once. Calls are limited per workspace, or per personal space: 120 a minute for each member, across all its webhooks and event subscriptions.',
+  'webhook.usage.simple': 'The simplest call',
+  'webhook.usage.thread': 'Keep a thread in one topic, safe to retry',
+  'webhook.endpoint.hint': 'Calls go to this URL. It never changes.',
+  'webhook.key.label': 'Key',
+  'webhook.key.newTitle': 'New key',
+  'webhook.key.onceHint':
+    'Copy this key now: it won\'t be shown again. Callers send it as "Authorization: Bearer <key>". Anyone with it can wake the agent; if it leaks, generate a new one.',
+  'webhook.topic.continues': 'Continues "{{title}}"',
+  'webhook.topic.pickedGone': "The picked topic was deleted · calls use the webhook's own topic",
+  'webhook.topic.empty': 'No matching topics',
+  'webhook.topic.hint':
+    'Pick one of your topics with this agent, or let the webhook keep a topic of its own.',
+  'webhook.topic.label': 'Continue in',
+  'webhook.topic.loadFailed': "Couldn't load topics",
+  'webhook.topic.own': "The webhook's own topic",
+  'webhook.topic.ownHint': 'Started on the first call',
+  'webhook.topic.searchPlaceholder': 'Search your topics with this agent',
+  'webhook.topic.untitled': 'Untitled topic',
 } as const;

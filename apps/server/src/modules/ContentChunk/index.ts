@@ -1,6 +1,7 @@
 import { type NewChunkItem, type NewUnstructuredChunkItem } from '@/database/schemas';
 import { knowledgeEnv } from '@/envs/knowledge';
-import { ChunkingLoader } from '@/libs/document-loaders';
+import { chunkContentInWorker } from '@/server/services/fileParse';
+import { isSharedLimitFailure } from '@/server/services/fileParse/failure';
 
 import { type ChunkingService } from './rules';
 import { ChunkingRuleParser } from './rules';
@@ -18,11 +19,9 @@ interface ChunkResult {
 }
 
 export class ContentChunk {
-  private chunkingClient: ChunkingLoader;
   private chunkingRules: Record<string, ChunkingService[]>;
 
   constructor() {
-    this.chunkingClient = new ChunkingLoader();
     this.chunkingRules = ChunkingRuleParser.parse(knowledgeEnv.FILE_TYPE_CHUNKING_RULES || '');
   }
 
@@ -47,6 +46,9 @@ export class ContentChunk {
           }
         }
       } catch (error) {
+        // A limit every service meets on the same bytes (input size, xlsx ZIP structure) would
+        // refuse the next one too. One service's own failure leaves the next one its turn.
+        if (isSharedLimitFailure(error)) throw error;
         // If this is the last service, throw the error
         if (service === services.at(-1)) throw error;
         // Otherwise continue to next service
@@ -63,7 +65,9 @@ export class ContentChunk {
   }
 
   private chunkByDefault = async (filename: string, content: Uint8Array): Promise<ChunkResult> => {
-    const res = await this.chunkingClient.partitionContent(filename, content);
+    // Parsing and splitting run on the shared worker; this thread keeps the routing and the
+    // result mapping (and, in ChunkService, every database write).
+    const res = await chunkContentInWorker(filename, content);
 
     const documents = res.map((item, index) => ({
       id: item.id,
