@@ -183,8 +183,9 @@ describe('lh artboard skill init', () => {
     const skill = await readFile(skillPath('SKILL.md'), 'utf8');
     expect(skill).toContain('lh man artboard');
     expect(skill).toContain('lh artboard ops');
+    expect(skill).toContain('lh artboard files write');
     expect(skill).not.toMatch(
-      /lh artboard (?!create|update|read|list|ops|push|files|cat|--help|skill)[a-z]/,
+      /lh artboard (?!create|update|read|list|ops|push|files (?:list|read|write|rm)\b|--help|skill)[a-z]/,
     );
     expect(skill).not.toMatch(/listArtboardComments|replyArtboardComment|askArtboardQuestion/);
   });

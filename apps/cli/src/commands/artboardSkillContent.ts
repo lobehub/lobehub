@@ -25,6 +25,7 @@ Run \`lh man artboard\` for the exact flags and \`lh artboard ops\` for the shap
 - \`lh artboard push <id> <dir>\` uploads the folder as files of the artboard and skips files that did not change; point each board at its page with source \`{"kind":"file","path":"pages/checkout/a.html"}\`;
 - a page cannot fetch or open network connections; https images, fonts, styles and scripts load;
 - to change a screen, edit the file and push again: every board showing it updates and comments on it are marked outdated;
+- to change one file without a push, \`lh artboard files write <id> <path> --from <file>\` replaces it (or reads it from stdin); \`lh artboard files list <id>\`, \`lh artboard files read <id> <path>\` and \`lh artboard files rm <id> <path>\` list, print and remove files. A file a board shows cannot be removed, and \`push --prune\` keeps it;
 - a screenshot of the current product can be an image board: put it in the folder and point a board at it.
 
 A board of type "decision" needs no source.

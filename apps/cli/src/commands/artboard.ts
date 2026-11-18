@@ -1,12 +1,17 @@
 import fs from 'node:fs';
+import { buffer } from 'node:stream/consumers';
 
-import { type ArtboardContent, formatArtboardResultLine } from '@lobechat/types';
+import {
+  type ArtboardContent,
+  formatArtboardResultLine,
+  normalizeArtboardFilePath,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { outputJson } from '../utils/format';
 import { registerArtboardOpsCommand } from './artboardOps';
-import { pushArtboardDir } from './artboardPush';
+import { pushArtboardDir, toLocalArtboardFile, writeArtboardFiles } from './artboardPush';
 import { registerArtboardSkillCommand } from './artboardSkill';
 
 interface BoardLike {
@@ -154,27 +159,55 @@ export const registerArtboardCommand = (program: Command) => {
       );
       for (const skipped of result.skipped)
         console.log(`skipped ${skipped}: not a file a board can serve`);
+      for (const kept of result.kept)
+        console.log(`kept ${kept.path}: shown by board "${kept.title}"`);
     });
 
-  artboard
-    .command('files <id>')
+  const files = artboard
+    .command('files')
+    .description('List, read, write and remove artboard files');
+
+  files
+    .command('list <id>')
     .description('List the files of the artboard')
     .option('--json', 'Print structured JSON')
     .action(async (id: string, options: { json?: boolean }) => {
       const client = await getTrpcClient();
-      const files = await client.artboard.listFiles.query({ id });
-      if (options.json) return outputJson(files);
-      for (const file of files) console.log(`${file.path}  ${file.size} B`);
+      const list = await client.artboard.listFiles.query({ id });
+      if (options.json) return outputJson(list);
+      for (const file of list) console.log(`${file.path}  ${file.size} B`);
     });
 
-  artboard
-    .command('cat <id> <path>')
+  files
+    .command('read <id> <path>')
     .description('Print one text file of the artboard')
     .action(async (id: string, path: string) => {
       const client = await getTrpcClient();
       const file = await client.artboard.readFile.query({ id, path });
       if (file.content === undefined) throw new Error(`${file.path} is binary`);
       process.stdout.write(file.content);
+    });
+
+  files
+    .command('write <id> <path>')
+    .description('Write one file of the artboard from stdin, or from a local file with --from')
+    .option('--from <file>', 'Local file to upload instead of stdin')
+    .action(async (id: string, path: string, options: { from?: string }) => {
+      const normalized = normalizeArtboardFilePath(path);
+      if (!normalized) throw new Error(`${path} is not a file a board can serve`);
+      const bytes = options.from ? fs.readFileSync(options.from) : await buffer(process.stdin);
+      const client = await getTrpcClient();
+      await writeArtboardFiles(client.artboard, id, [toLocalArtboardFile(normalized, bytes)]);
+      console.log(`wrote ${normalized}  ${bytes.byteLength} B`);
+    });
+
+  files
+    .command('rm <id> <paths...>')
+    .description('Delete files of the artboard; a file a board shows cannot be deleted')
+    .action(async (id: string, paths: string[]) => {
+      const client = await getTrpcClient();
+      await client.artboard.writeFiles.mutate({ files: { deletes: paths }, id });
+      for (const path of paths) console.log(`deleted ${path}`);
     });
 
   artboard

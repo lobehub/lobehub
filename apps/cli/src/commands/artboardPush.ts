@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { isArtboardTextPath, normalizeArtboardFilePath } from '@lobechat/types';
+import {
+  type ArtboardContent,
+  isArtboardTextPath,
+  normalizeArtboardFilePath,
+} from '@lobechat/types';
 
 interface RemoteFile {
   hash: string;
@@ -10,10 +14,24 @@ interface RemoteFile {
   size: number;
 }
 
-type FileWrite = { base64: string; path: string } | { content: string; path: string };
+type FileWrite =
+  | { base64: string; path: string }
+  | { content: string; path: string }
+  | { hash: string; path: string };
 
-interface ArtboardFilesApi {
+export interface ArtboardFilesApi {
   listFiles: { query: (input: { id: string }) => Promise<RemoteFile[]> };
+  prepareFileUploads: {
+    mutate: (input: {
+      files: { hash: string; path: string; size: number }[];
+      id: string;
+    }) => Promise<{ uploads: { headers?: Record<string, string>; path: string; url: string }[] }>;
+  };
+  read: {
+    query: (input: {
+      id: string;
+    }) => Promise<{ artboard: { content: Pick<ArtboardContent, 'boards'> } }>;
+  };
   writeFiles: {
     mutate: (input: {
       files: { deletes?: string[]; writes?: FileWrite[] };
@@ -22,14 +40,104 @@ interface ArtboardFilesApi {
   };
 }
 
+export interface LocalArtboardFile {
+  bytes: Buffer;
+  hash: string;
+  path: string;
+}
+
 export interface ArtboardPushResult {
   deleted: string[];
+  /** Remote files missing locally that `--prune` left alone because a board shows them. */
+  kept: { path: string; title: string }[];
   skipped: string[];
   unchanged: string[];
   uploaded: string[];
 }
 
-const BATCH_BYTES = 4 * 1024 * 1024;
+/**
+ * Encoded JSON size of one writeFiles request. Vercel rejects bodies over 4.5 MB
+ * and tRPC can batch other calls into the same request, so stay at 2 MB like
+ * the web client's message write batcher.
+ */
+const BATCH_BYTES = 2 * 1024 * 1024;
+
+const encodedBytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
+
+export const toLocalArtboardFile = (relative: string, bytes: Buffer): LocalArtboardFile => ({
+  bytes,
+  hash: createHash('sha256').update(bytes).digest('hex'),
+  path: relative,
+});
+
+const putBlob = async (
+  file: LocalArtboardFile,
+  upload: { headers?: Record<string, string>; url: string },
+) => {
+  const response = await fetch(upload.url, {
+    body: file.bytes,
+    headers: upload.headers,
+    method: 'PUT',
+  }).catch((error: unknown) => {
+    throw new Error(`Upload of ${file.path} failed: ${(error as Error)?.message ?? String(error)}`);
+  });
+  if (!response.ok)
+    throw new Error(`Upload of ${file.path} failed: ${response.status} ${response.statusText}`);
+};
+
+/**
+ * Writes files to an artboard in requests of at most 2 MB encoded. A file too
+ * large for one request is PUT to storage through a presigned URL first and
+ * then committed by its hash.
+ */
+export const writeArtboardFiles = async (
+  api: Pick<ArtboardFilesApi, 'prepareFileUploads' | 'writeFiles'>,
+  id: string,
+  files: LocalArtboardFile[],
+) => {
+  const envelope = encodedBytes({ files: { writes: [] }, id });
+  const writes: FileWrite[] = [];
+  const large: LocalArtboardFile[] = [];
+  for (const file of files) {
+    const write: FileWrite = isArtboardTextPath(file.path)
+      ? { content: file.bytes.toString('utf8'), path: file.path }
+      : { base64: file.bytes.toString('base64'), path: file.path };
+    if (envelope + encodedBytes(write) > BATCH_BYTES) large.push(file);
+    else writes.push(write);
+  }
+
+  if (large.length) {
+    const { uploads } = await api.prepareFileUploads.mutate({
+      files: large.map((file) => ({
+        hash: file.hash,
+        path: file.path,
+        size: file.bytes.byteLength,
+      })),
+      id,
+    });
+    const byPath = new Map(uploads.map((upload) => [upload.path, upload]));
+    for (const file of large) {
+      const upload = byPath.get(file.path);
+      if (upload) await putBlob(file, upload);
+      writes.push({ hash: file.hash, path: file.path });
+    }
+  }
+
+  let batch: FileWrite[] = [];
+  let batchBytes = envelope;
+  for (const write of writes) {
+    // +1 for the comma between array items
+    const bytes = encodedBytes(write) + 1;
+    if (batch.length && batchBytes + bytes > BATCH_BYTES) {
+      await api.writeFiles.mutate({ files: { writes: batch }, id });
+      batch = [];
+      batchBytes = envelope;
+    }
+    batch.push(write);
+    batchBytes += bytes;
+  }
+  if (batch.length) await api.writeFiles.mutate({ files: { writes: batch }, id });
+};
 
 const listLocal = (root: string, dir = root): string[] =>
   fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -39,11 +147,6 @@ const listLocal = (root: string, dir = root): string[] =>
     return entry.isFile() ? [path.relative(root, full).split(path.sep).join('/')] : [];
   });
 
-const toWrite = (relative: string, bytes: Buffer): FileWrite =>
-  isArtboardTextPath(relative)
-    ? { content: bytes.toString('utf8'), path: relative }
-    : { base64: bytes.toString('base64'), path: relative };
-
 export const pushArtboardDir = async (
   api: ArtboardFilesApi,
   id: string,
@@ -51,11 +154,15 @@ export const pushArtboardDir = async (
   options: { prune?: boolean },
 ): Promise<ArtboardPushResult> => {
   const remote = new Map((await api.listFiles.query({ id })).map((file) => [file.path, file.hash]));
-  const result: ArtboardPushResult = { deleted: [], skipped: [], unchanged: [], uploaded: [] };
+  const result: ArtboardPushResult = {
+    deleted: [],
+    kept: [],
+    skipped: [],
+    unchanged: [],
+    uploaded: [],
+  };
   const local = new Set<string>();
-  const batches: FileWrite[][] = [];
-  let batch: FileWrite[] = [];
-  let batchBytes = 0;
+  const changed: LocalArtboardFile[] = [];
 
   for (const relative of listLocal(dir).sort()) {
     const normalized = normalizeArtboardFilePath(relative);
@@ -64,29 +171,37 @@ export const pushArtboardDir = async (
       continue;
     }
     local.add(normalized);
-    const bytes = fs.readFileSync(path.join(dir, relative));
-    if (remote.get(normalized) === createHash('sha256').update(bytes).digest('hex')) {
+    const file = toLocalArtboardFile(normalized, fs.readFileSync(path.join(dir, relative)));
+    if (remote.get(normalized) === file.hash) {
       result.unchanged.push(normalized);
       continue;
     }
-    if (batch.length && batchBytes + bytes.byteLength > BATCH_BYTES) {
-      batches.push(batch);
-      batch = [];
-      batchBytes = 0;
-    }
-    batch.push(toWrite(normalized, bytes));
-    batchBytes += bytes.byteLength;
+    changed.push(file);
     result.uploaded.push(normalized);
   }
-  if (batch.length) batches.push(batch);
 
-  for (const writes of batches) await api.writeFiles.mutate({ files: { writes }, id });
+  await writeArtboardFiles(api, id, changed);
 
   if (options.prune) {
-    const deletes = [...remote.keys()].filter((file) => !local.has(file));
-    if (deletes.length) {
-      await api.writeFiles.mutate({ files: { deletes }, id });
-      result.deleted = deletes;
+    const missing = [...remote.keys()].filter((file) => !local.has(file));
+    if (missing.length) {
+      // The server refuses to delete a file a board shows; keep those instead of failing the prune.
+      const { artboard } = await api.read.query({ id });
+      const shownBy = new Map<string, string>();
+      for (const board of artboard.content.boards)
+        if (board.source && !shownBy.has(board.source.path))
+          shownBy.set(board.source.path, board.title);
+
+      const deletes: string[] = [];
+      for (const file of missing) {
+        const title = shownBy.get(file);
+        if (title === undefined) deletes.push(file);
+        else result.kept.push({ path: file, title });
+      }
+      if (deletes.length) {
+        await api.writeFiles.mutate({ files: { deletes }, id });
+        result.deleted = deletes;
+      }
     }
   }
   return result;

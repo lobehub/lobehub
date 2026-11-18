@@ -17,22 +17,43 @@ const put = (relative: string, content: string | Buffer) => {
   fs.writeFileSync(file, content);
 };
 
-const client = (remote: { hash: string; path: string; size: number }[]) => {
+const client = (
+  remote: { hash: string; path: string; size: number }[],
+  options: {
+    boards?: { source: { hash: string; kind: 'file'; path: string } | null; title: string }[];
+    uploads?: { headers?: Record<string, string>; path: string; url: string }[];
+  } = {},
+) => {
   const writeFiles = vi.fn(async ({ files }: { files: { writes?: { path: string }[] } }) => ({
     files: (files.writes ?? []).map((write) => ({ hash: 'h', path: write.path, size: 1 })),
   }));
+  const prepareFileUploads = vi.fn(async () => ({ uploads: options.uploads ?? [] }));
+  const read = vi.fn(async () => ({ artboard: { content: { boards: options.boards ?? [] } } }));
   return {
-    api: { listFiles: { query: vi.fn(async () => remote) }, writeFiles: { mutate: writeFiles } },
+    api: {
+      listFiles: { query: vi.fn(async () => remote) },
+      prepareFileUploads: { mutate: prepareFileUploads },
+      read: { query: read },
+      writeFiles: { mutate: writeFiles },
+    },
+    prepareFileUploads,
+    read,
     writeFiles,
   };
 };
 
+const fetchMock = vi.fn();
+
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'artboard-push-'));
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+  vi.stubGlobal('fetch', fetchMock);
 });
 
 afterEach(() => {
   fs.rmSync(dir, { force: true, recursive: true });
+  vi.unstubAllGlobals();
 });
 
 describe('pushArtboardDir', () => {
@@ -59,6 +80,7 @@ describe('pushArtboardDir', () => {
     });
     expect(result).toEqual({
       deleted: [],
+      kept: [],
       skipped: [],
       unchanged: ['pages/same.html'],
       uploaded: ['pages/home.html', 'shots/a.png'],
@@ -96,13 +118,89 @@ describe('pushArtboardDir', () => {
     expect(result.deleted).toEqual(['old.html']);
   });
 
-  it('splits a large push into several requests', async () => {
-    put('a.html', 'a'.repeat(3 * 1024 * 1024));
-    put('b.html', 'b'.repeat(3 * 1024 * 1024));
-    const { api, writeFiles } = client([]);
+  it('keeps a board shown file on prune and deletes the unused one', async () => {
+    put('index.html', '<p>hi</p>');
+    const remote = [
+      { hash: sha('<p>hi</p>'), path: 'index.html', size: 9 },
+      { hash: 'x', path: 'old.html', size: 1 },
+      { hash: 'y', path: 'pages/shown.html', size: 1 },
+    ];
+    const { api, writeFiles } = client(remote, {
+      boards: [
+        { source: { hash: 'y', kind: 'file', path: 'pages/shown.html' }, title: '首页' },
+        { source: null, title: 'Pick one' },
+      ],
+    });
+
+    const result = await pushArtboardDir(api, 'art_1', dir, { prune: true });
+
+    expect(writeFiles).toHaveBeenCalledTimes(1);
+    expect(writeFiles.mock.calls[0][0]).toEqual({ files: { deletes: ['old.html'] }, id: 'art_1' });
+    expect(result.deleted).toEqual(['old.html']);
+    expect(result.kept).toEqual([{ path: 'pages/shown.html', title: '首页' }]);
+  });
+
+  it('keeps every request under 2 MB encoded and sends a large image through a presigned PUT', async () => {
+    const image = Buffer.alloc(6 * 1024 * 1024, 7);
+    put('shots/big.png', image);
+    // Quotes double when JSON-escaped: 700 KB on disk, 1.4 MB in the request.
+    put('pages/a.html', '"'.repeat(700 * 1024));
+    put('pages/b.html', '"'.repeat(700 * 1024));
+    put('pages/c.html', '<p>c</p>');
+    put('shots/small.png', Buffer.alloc(600 * 1024, 1));
+    const headers = { 'Content-Type': 'image/png' };
+    const { api, prepareFileUploads, writeFiles } = client([], {
+      uploads: [{ headers, path: 'shots/big.png', url: 'https://s3.test/blob' }],
+    });
+
+    const result = await pushArtboardDir(api, 'art_1', dir, {});
+
+    for (const [input] of writeFiles.mock.calls)
+      expect(Buffer.byteLength(JSON.stringify(input))).toBeLessThanOrEqual(2 * 1024 * 1024);
+    expect(prepareFileUploads).toHaveBeenCalledWith({
+      files: [{ hash: sha(image), path: 'shots/big.png', size: image.byteLength }],
+      id: 'art_1',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://s3.test/blob');
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual(headers);
+    expect(Buffer.from(init.body).equals(image)).toBe(true);
+    const writes = writeFiles.mock.calls.flatMap(([input]) => input.files.writes ?? []);
+    expect(writes).toContainEqual({ hash: sha(image), path: 'shots/big.png' });
+    expect(writes.map((write) => write.path).sort()).toEqual([
+      'pages/a.html',
+      'pages/b.html',
+      'pages/c.html',
+      'shots/big.png',
+      'shots/small.png',
+    ]);
+    expect(result.uploaded).toHaveLength(5);
+  });
+
+  it('commits a blob the server already stores without uploading it again', async () => {
+    const image = Buffer.alloc(3 * 1024 * 1024, 9);
+    put('shots/big.png', image);
+    const { api, writeFiles } = client([], { uploads: [] });
 
     await pushArtboardDir(api, 'art_1', dir, {});
 
-    expect(writeFiles).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(writeFiles.mock.calls[0][0]).toEqual({
+      files: { writes: [{ hash: sha(image), path: 'shots/big.png' }] },
+      id: 'art_1',
+    });
+  });
+
+  it('names the file whose presigned upload was refused and commits nothing for it', async () => {
+    put('shots/big.png', Buffer.alloc(3 * 1024 * 1024, 3));
+    fetchMock.mockResolvedValue(new Response('denied', { status: 403, statusText: 'Forbidden' }));
+    const { api, writeFiles } = client([], {
+      uploads: [{ path: 'shots/big.png', url: 'https://s3.test/blob' }],
+    });
+
+    await expect(pushArtboardDir(api, 'art_1', dir, {})).rejects.toThrow(/shots\/big\.png.*403/);
+    expect(writeFiles).not.toHaveBeenCalled();
   });
 });
