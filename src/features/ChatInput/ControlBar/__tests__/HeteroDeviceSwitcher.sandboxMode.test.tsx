@@ -236,14 +236,14 @@ describe('HeteroDeviceSwitcher — first level', () => {
     expect(screen.queryByText('heteroAgent.executionTarget.devicesGroup')).toBeNull();
   });
 
-  it('keeps a description line under no device, auto and the sandbox group', () => {
+  it('shows the first-level rows by title only', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.getByText('heteroAgent.executionTarget.noneDesc')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.executionTarget.autoDesc')).toBeTruthy();
-    expect(screen.getByTestId('sandbox-group').textContent).toContain(
-      'heteroAgent.executionTarget.sandboxGroupDesc',
-    );
+    expect(screen.getByText('heteroAgent.executionTarget.none')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.executionTarget.auto')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.executionTarget.noneDesc')).toBeNull();
+    expect(screen.queryByText('heteroAgent.executionTarget.autoDesc')).toBeNull();
+    expect(screen.getByTestId('sandbox-group').textContent).not.toContain('Desc');
   });
 
   it('puts the sandboxes in a submenu after auto and before the device groups', () => {
