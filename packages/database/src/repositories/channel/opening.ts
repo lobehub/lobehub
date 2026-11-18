@@ -1,5 +1,6 @@
 import type { ChannelContextMessage } from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, lt, ne } from 'drizzle-orm';
+import pMap from 'p-map';
 
 import type { ChannelJobItem } from '../../schemas';
 import {
@@ -35,6 +36,9 @@ const OPENING_CONTEXT_LIMIT = 6;
  * by where each sits on the timeline, so the choice stays about what was just being discussed.
  */
 const OPENING_THREAD_LIMIT = 5;
+
+/** Threads described at once; each reads two messages. */
+const OPENING_THREAD_READ_CONCURRENCY = 3;
 
 /** Thread reference a message carries, shown by clients as the Thread's chip. */
 export const channelThreadReference = (threadId: string) => `<#${threadId}>`;
@@ -529,8 +533,9 @@ const describeThreads = async (
   channelId: string,
   threads: Awaited<ReturnType<typeof recentOpenThreads>>,
 ): Promise<ChannelOpeningThread[]> =>
-  Promise.all(
-    threads.map(async (thread) => {
+  pMap(
+    threads,
+    async (thread) => {
       const [[root], [last]] = await Promise.all([
         db
           .select({ content: channelMessages.content })
@@ -562,7 +567,8 @@ const describeThreads = async (
         ...(root?.content && { root: root.content }),
         ...(typeof title === 'string' && title && { title }),
       };
-    }),
+    },
+    { concurrency: OPENING_THREAD_READ_CONCURRENCY },
   );
 
 /**
