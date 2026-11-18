@@ -515,6 +515,7 @@ export const shareKeys = {
     'share:pageDocument',
     documentId,
   ]),
+  goal: def('share:goal', (shareId: string) => ['share:goal', shareId]),
   topic: def('share:topic', (id: string) => ['share:topic', id]),
 };
 

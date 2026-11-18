@@ -9,11 +9,16 @@ const OG_IMAGE_URL = 'https://lobehub.com/assets/cao-og.webp';
 const TWITTER_SITE = '@lobehub';
 
 type DescriptionKey =
-  'artifactDescription' | 'fileDescription' | 'pageDescription' | 'topicDescription';
+  | 'artifactDescription'
+  | 'fileDescription'
+  | 'goalDescription'
+  | 'pageDescription'
+  | 'topicDescription';
 
 const FALLBACK_DESCRIPTION: Record<DescriptionKey, string> = {
   artifactDescription: `An artifact shared from ${BRANDING_NAME}.`,
   fileDescription: `A file shared from ${BRANDING_NAME}.`,
+  goalDescription: `A goal shared from ${BRANDING_NAME}.`,
   pageDescription: `A page shared from ${BRANDING_NAME}.`,
   topicDescription: `A conversation shared from ${BRANDING_NAME}.`,
 };

@@ -89,6 +89,10 @@ export const shareRoutes: RouteObject[] = [
         path: 'share/file/:id',
       },
       {
+        element: lazyElement(() => import('./features/goal/SharedGoalView')),
+        path: 'share/goal/:id',
+      },
+      {
         element: <ExitShare />,
         path: '*',
       },

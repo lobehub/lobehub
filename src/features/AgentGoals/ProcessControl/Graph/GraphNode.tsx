@@ -4,7 +4,7 @@ import type { GoalNodeStatus } from '@lobechat/types';
 import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { FileBox, Info, type LucideIcon, Repeat2, ShieldCheck } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, use } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
@@ -12,12 +12,12 @@ import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
 
 import type { GoalGraphNodeKind } from '../../Experiments/model';
-import AssigneeProfileAvatar from '../AssigneeProfileAvatar';
 import { coordinatorNodeTitleKey } from '../coordinatorCopy';
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
 import { TASK_HOLD_VISUALS } from '../taskHold';
 import { useElapsed } from '../useElapsed';
+import { AssigneeAvatarContext } from './assigneeSlot';
 import { experimentStatusVisual } from './experimentStatus';
 
 /**
@@ -317,6 +317,7 @@ const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
 RunningClock.displayName = 'GoalGraphRunningClock';
 
 const GraphNodeView = memo<NodeProps>(({ data }) => {
+  const renderAssignee = use(AssigneeAvatarContext);
   const { t } = useTranslation('chat');
   const nodeData = data as GraphNodeData;
   const { dim, highlighted, isGate, mainline, running, selected, stale, subtitle, view } = nodeData;
@@ -392,9 +393,9 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
               </Tooltip>
             )}
             {/* Top-right corner: who is doing this Task, with their profile on hover. */}
-            {isTask && view.assigneeAgentId && (
+            {isTask && view.assigneeAgentId && renderAssignee && (
               <span style={{ display: 'inline-flex', marginInlineStart: 'auto' }}>
-                <AssigneeProfileAvatar agentId={view.assigneeAgentId} size={16} />
+                {renderAssignee({ agentId: view.assigneeAgentId, size: 16 })}
               </span>
             )}
           </div>
