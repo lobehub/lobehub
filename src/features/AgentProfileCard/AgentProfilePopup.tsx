@@ -11,7 +11,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { BookOpen, FileText, Settings, SquareTerminal, UserRound } from 'lucide-react';
+import { BookOpen, FileText, Settings, SquareTerminal, UserRound, X } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,8 +35,20 @@ import {
   type AgentProfilePreview as AgentPreview,
   useAgentProfileDetail,
 } from './useAgentProfileDetail';
+import { useAutoClosePopup } from './useAutoClosePopup';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  closeButton: css`
+    position: absolute;
+    z-index: 1;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+
+    background: ${cssVar.colorBgElevated};
+  `,
+  content: css`
+    position: relative;
+  `,
   footer: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -80,6 +92,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const [open, setOpen] = useState(false);
+    const { detached, triggerProps } = useAutoClosePopup({ open, setOpen });
     const [loading, setLoading] = useState(false);
     const { allowed: canEditContent } = usePermission('edit_own_content');
     const { canEditResource: canEditAgent, isAccessResolved: isAgentAccessResolved } =
@@ -271,10 +284,22 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         open={open}
         placement={placement ?? (trigger === 'hover' ? 'top' : 'right')}
         trigger={trigger}
+        triggerProps={triggerProps}
         content={
-          <div role="presentation" onClick={stopCardClick}>
-            {content}
-          </div>
+          // A hidden or unmounted trigger takes the whole popover with it (see useAutoClosePopup).
+          detached ? null : (
+            <div className={styles.content} role="presentation" onClick={stopCardClick}>
+              {content}
+              <ActionIcon
+                aria-label={t('close', { ns: 'common' })}
+                className={styles.closeButton}
+                icon={X}
+                size={'small'}
+                title={t('close', { ns: 'common' })}
+                onClick={() => setOpen(false)}
+              />
+            </div>
+          )
         }
         styles={{
           content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
