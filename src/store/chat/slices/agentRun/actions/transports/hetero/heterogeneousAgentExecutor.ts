@@ -907,12 +907,12 @@ export const executeHeterogeneousAgent = async (
     batchMutate: (
       messageService as { batchMutate?: (operations: MessageBatchOperation[]) => Promise<any> }
     ).batchMutate,
+    beforeBatch: () => pendingCreateLedger.retryNew(),
     createMessage: messageService.createMessage,
     onCreated: get().internal_confirmClientMessages,
     updateMessage: messageService.updateMessage,
     updateToolMessage: messageService.updateToolMessage,
   });
-
   /** Failed-create retry ledger + the FK-parent barrier for straight-through writes. */
   const pendingCreateLedger = createPendingCreateLedger({
     createMessage: messageService.createMessage,

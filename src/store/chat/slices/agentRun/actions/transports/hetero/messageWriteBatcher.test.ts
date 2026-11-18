@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createMessageWriteBatcher } from './messageWriteBatcher';
+import {
+  createMessageWriteBatcher,
+  HETERO_MESSAGE_WRITE_BATCH_MAX_BYTES,
+} from './messageWriteBatcher';
 
 const createDeps = () => ({
   batchMutate: vi.fn().mockResolvedValue({ results: [], success: true }),
@@ -172,6 +175,71 @@ describe('createMessageWriteBatcher', () => {
 
     expect(deps.batchMutate).toHaveBeenCalledTimes(1);
     expect(deps.batchMutate.mock.calls[0][0]).toHaveLength(50);
+  });
+
+  /**
+   * Production failure: while one request was in flight the queue grew past 200
+   * operations, the next flush sent the whole backlog, and the router rejected it
+   * (400), so every create in it was lost and their children hit
+   * `messages_parent_id_messages_id_fk`.
+   */
+  it('splits a backlog that piled up behind an in-flight request', async () => {
+    const deps = createDeps();
+    let release!: () => void;
+    deps.batchMutate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ results: [], success: true });
+        }),
+    );
+    const batcher = createMessageWriteBatcher(deps);
+
+    batcher.enqueueCreateMessage(createRow('first'));
+    const firstFlush = batcher.flush('test');
+    await vi.waitFor(() => expect(deps.batchMutate).toHaveBeenCalledTimes(1));
+
+    for (let i = 0; i < 260; i += 1) batcher.enqueueUpdateMessage(`msg-${i}`, { content: 'x' });
+    release();
+    await firstFlush;
+    await batcher.flush('test');
+
+    const sizes = deps.batchMutate.mock.calls.map((call) => call[0].length);
+    expect(sizes).toEqual([1, 50, 50, 50, 50, 50, 10]);
+  });
+
+  it('splits by serialized size so a request body stays under the budget', async () => {
+    const deps = createDeps();
+    const batcher = createMessageWriteBatcher(deps);
+    const content = 'x'.repeat(HETERO_MESSAGE_WRITE_BATCH_MAX_BYTES / 2);
+
+    batcher.enqueueUpdateMessage('msg-a', { content });
+    batcher.enqueueUpdateMessage('msg-b', { content });
+    batcher.enqueueUpdateMessage('msg-c', { content: 'small' });
+    await batcher.flush('test');
+
+    const ids = deps.batchMutate.mock.calls.map((call) => call[0].map((op: any) => op.id));
+    expect(ids).toEqual([['msg-a'], ['msg-b', 'msg-c']]);
+  });
+
+  it('runs beforeBatch ahead of every batch and keeps flushing when it throws', async () => {
+    const order: string[] = [];
+    const deps = {
+      ...createDeps(),
+      beforeBatch: vi.fn().mockImplementation(async () => {
+        order.push('before');
+        if (order.length === 1) throw new Error('retry failed');
+      }),
+    };
+    deps.batchMutate.mockImplementation(async (ops: any[]) => {
+      order.push(`batch:${ops.length}`);
+      return { results: [], success: true };
+    });
+    const batcher = createMessageWriteBatcher(deps);
+
+    for (let i = 0; i < 51; i += 1) batcher.enqueueUpdateMessage(`msg-${i}`, { content: 'x' });
+    await batcher.flush('test');
+
+    expect(order).toEqual(['before', 'batch:50', 'before', 'batch:1']);
   });
 
   it('falls back to per-op writes when batchMutate is unavailable', async () => {
