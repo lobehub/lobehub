@@ -74,3 +74,24 @@ describe('buildNewTopicMetadata — project directory', () => {
     expect(metadata?.workingDirectoryConfig).toEqual({ path: '/code/lobehub' });
   });
 });
+
+describe('buildNewTopicMetadata — Claude Code permission mode', () => {
+  it('is born with the mode the composer chip showed', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: {
+          initialTopicMetadata: { heteroPermissionMode: 'plan', workingDirectory: '/code/d' },
+        } as any,
+      }),
+    ).toMatchObject({ heteroPermissionMode: 'plan', workingDirectory: '/code/d' });
+  });
+
+  it('keeps the mode inside a project directory too', () => {
+    expect(
+      buildNewTopicMetadata({
+        appContext: { initialTopicMetadata: { heteroPermissionMode: 'default' } } as any,
+        projectDirectory: { path: '/code/lobehub' },
+      }),
+    ).toMatchObject({ heteroPermissionMode: 'default', workingDirectory: '/code/lobehub' });
+  });
+});
