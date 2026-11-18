@@ -1871,8 +1871,9 @@ export default {
   'serviceModel.systemRecommended': 'System recommended',
   'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
-  'serviceModel.tier.embedding.desc': 'Memory retrieval',
-  'serviceModel.tier.embedding.title': 'Embedding Model',
+  'serviceModel.tier.embedding.desc':
+    'Embeds memories for semantic search. Not used for files or knowledge bases (set via the DEFAULT_FILES_CONFIG env var)',
+  'serviceModel.tier.embedding.title': 'Memory Embedding Model',
   'serviceModel.tier.flash.desc':
     'Frequent tasks such as naming, translation, compression and memory',
   'serviceModel.tier.flash.title': 'Flash Model',

@@ -1312,8 +1312,6 @@
   "serviceModel.desc": "LobeHubがバックグラウンドタスクに使用するモデルです。デフォルトではシステムの推奨に従い、新しいモデルが登場すると自動的にアップグレードされます。",
   "serviceModel.off": "オフ",
   "serviceModel.systemRecommended": "システム推奨",
-  "serviceModel.tier.embedding.desc": "メモリの検索",
-  "serviceModel.tier.embedding.title": "埋め込みモデル",
   "serviceModel.tier.flash.desc": "命名、翻訳、圧縮、メモリなど頻繁に行われるタスク",
   "serviceModel.tier.flash.title": "フラッシュモデル",
   "serviceModel.tier.main.desc": "執筆や推論など品質が重視されるタスク",

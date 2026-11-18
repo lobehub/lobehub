@@ -1312,8 +1312,6 @@
   "serviceModel.desc": "النماذج التي يستخدمها LobeHub للمهام الخلفية. تتبع توصية النظام افتراضيًا وتُحدَّث تلقائيًا عند وصول نماذج جديدة.",
   "serviceModel.off": "معطّل",
   "serviceModel.systemRecommended": "موصى به من النظام",
-  "serviceModel.tier.embedding.desc": "استرجاع الذاكرة",
-  "serviceModel.tier.embedding.title": "نموذج التضمين",
   "serviceModel.tier.flash.desc": "المهام المتكررة مثل التسمية والترجمة والضغط والذاكرة",
   "serviceModel.tier.flash.title": "النموذج السريع",
   "serviceModel.tier.main.desc": "المهام الحساسة للجودة مثل الكتابة والاستدلال",
