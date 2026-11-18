@@ -72,7 +72,7 @@ Every event has `type` and `sequence_number`.
 | `response.function_call_arguments.delta` / `.done`                                                         | `delta` / `arguments`, `item_id`, `output_index`    |
 | `response.reasoning_summary_text.delta` / `.done`                                                          | `delta` / `text`, `item_id`, `output_index`         |
 
-The stream ends after `response.completed`, `response.failed`, or `response.incomplete`. A `/responses` stream has no event ids and cannot be resumed; if it drops, read the result with a new request using `previous_response_id`, or use `/runs` once it ships.
+The stream ends after `response.completed`, `response.failed`, or `response.incomplete`. A `/responses` stream has no event ids and cannot be resumed, and there is no read endpoint for a finished response: re-sending with `previous_response_id` **starts a new Agent turn** on the same topic, so it repeats tool side effects instead of replaying the dropped output. If the connection drops, the run still finishes on the server and its reply lands in the Agent's topic, which you can open in the app. A replayable stream arrives with `/runs` ([#23253](https://github.com/lobehub/lobehub/pull/23253)): `GET /runs/{id}/events` serves stored events, each with an `id` you can resume after.
 
 When the model calls one of your function tools, the response ends with a `function_call` output item. Run the tool yourself, then send a new request with `previous_response_id` and a `function_call_output` item carrying the same `call_id`.
 

@@ -73,7 +73,7 @@ data: {"type":"response.completed","sequence_number":31,"response":{"id":"resp_�
 | `response.function_call_arguments.delta` / `.done`                                                     | `delta` / `arguments`、`item_id`、`output_index`   |
 | `response.reasoning_summary_text.delta` / `.done`                                                      | `delta` / `text`、`item_id`、`output_index`        |
 
-流在 `response.completed`、`response.failed` 或 `response.incomplete` 之后结束。`/responses` 流没有事件 id，无法恢复；如果连接中断，请用 `previous_response_id` 发起新请求读取结果，或在 `/runs` 上线后改用 `/runs`。
+流在 `response.completed`、`response.failed` 或 `response.incomplete` 之后结束。`/responses` 流没有事件 id，无法恢复；已结束的响应也没有读取端点——用 `previous_response_id` 重新发起请求**会开启新的一轮 Agent 运行**（topic 相同），重复工具副作用而不是重放中断掉的输出。连接中断时，运行仍会在服务端跑完，回复写进该 Agent 的 topic，可在应用内查看。可重放的流随 `/runs`（[#23253](https://github.com/lobehub/lobehub/pull/23253)）提供：`GET /runs/{id}/events` 返回已存储的事件，每条带 `id`，可据此续读。
 
 当模型调用你的某个函数工具时，响应以一个 `function_call` 输出项结束。请自行执行该工具，然后携带 `previous_response_id` 和一个使用相同 `call_id` 的 `function_call_output` 项发送新请求。
 
