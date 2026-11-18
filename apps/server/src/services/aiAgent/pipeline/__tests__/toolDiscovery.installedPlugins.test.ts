@@ -141,6 +141,14 @@ const ON = { autoSkillIds: [FEISHU] };
 const MANUAL = { chatConfig: { skillActivateMode: 'manual' } };
 
 describe('discoverTools — installed plugins are opt-in per agent', () => {
+  it('only offers a configurable builtin to discovery when this agent opted in', async () => {
+    const id = 'lobe-skill-store';
+    expect((await run()).toolManifestMap[id]).toBeUndefined();
+    const on = await run({ autoSkillIds: [id] });
+    expect(availableToolIds(on.toolManifestMap, on.toolsResult.enabledToolIds)).toContain(id);
+    expect(on.toolsResult.enabledToolIds).not.toContain(id);
+  });
+
   it('keeps an installed plugin the agent never turned on out of the run', async () => {
     const result = await run();
 
@@ -154,6 +162,8 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
 
   it.each([
     { label: 'turned on', options: ON },
+    { label: 'turned on with an old manual preference', options: { ...ON, ...MANUAL } },
+    { label: 'pinned with an old manual preference', options: { ...MANUAL, plugins: [FEISHU] } },
     { label: 'pinned', options: { plugins: [FEISHU] } },
   ])(
     'offers an installed plugin the agent $label to the activator without enabling it',
@@ -177,9 +187,6 @@ describe('discoverTools — installed plugins are opt-in per agent', () => {
   );
 
   it.each([
-    // Manual mode has no activator, so on is the only way to reach the model.
-    { label: 'the agent turned on, in manual mode', options: { ...ON, ...MANUAL } },
-    { label: 'the agent pinned, in manual mode', options: { ...MANUAL, plugins: [FEISHU] } },
     // The turn brings the plugin in itself, whatever the agent's switch says.
     { label: 'the turn @-mentions', options: { selectedToolIds: [FEISHU] } },
   ])('enables a plugin $label directly', async ({ options }) => {

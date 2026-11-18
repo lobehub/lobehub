@@ -23,7 +23,10 @@ const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
         const filtered = item.children.filter((child) => {
           if (!child) return false;
           const key = String(child.key || '').toLowerCase();
-          return key.includes(lower);
+          return (
+            key.includes(lower) ||
+            ('searchText' in child && String(child.searchText).toLowerCase().includes(lower))
+          );
         });
         if (filtered.length === 0) return null;
         return { ...item, children: filtered };
@@ -60,9 +63,10 @@ interface PopoverContentProps {
   items: ItemType[];
   onClose?: () => void;
   onOpenStore: () => void;
+  toolsOnly?: boolean;
 }
 
-const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose }) => {
+const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose, toolsOnly }) => {
   const { t } = useTranslation('setting');
   const navigate = useWorkspaceAwareNavigate();
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -79,7 +83,7 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
       <div className={styles.header} onClick={stopPropagation}>
         <SearchBar
           allowClear
-          placeholder={t('tools.search')}
+          placeholder={t(toolsOnly ? 'tools.picker.search' : 'tools.search')}
           size="small"
           style={{ flex: 1 }}
           value={searchKeyword}
@@ -111,7 +115,9 @@ const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose 
           <div className={toolsListStyles.itemIcon}>
             <Icon icon={Settings} size={SKILL_ICON_SIZE} />
           </div>
-          <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
+          <div className={toolsListStyles.itemContent}>
+            {t(toolsOnly ? 'tools.picker.management' : 'tools.plugins.management')}
+          </div>
           <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
         </div>
       </div>

@@ -1,18 +1,15 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
-import { createStaticStyles, cx, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useDensityTokens } from '@/styles/density';
 import { sidebarRow } from '@/styles/density.stylex';
 
 export interface SkillListItem {
   description?: string;
-  /** Manual invocation only, as declared by the skill; not a disabled state. */
-  disableModelInvocation?: boolean;
   /**
    * Optional file tree for skills that bundle markdown/script assets. When
    * empty or omitted the row stays atomic (no chevron, no expansion).
@@ -307,7 +304,6 @@ const SkillRow = memo<SkillRowProps>(
     onToggle,
     reserveChevronSlot,
   }) => {
-    const { t } = useTranslation('chat');
     const density = useDensityTokens();
     const slotStyle = {
       flexShrink: 0,
@@ -394,11 +390,6 @@ const SkillRow = memo<SkillRowProps>(
           </Tooltip>
         ) : (
           nameNode
-        )}
-        {item.disableModelInvocation && (
-          <Tag size={'small'} style={{ flexShrink: 0 }}>
-            {t('workingPanel.skills.manualOnly')}
-          </Tag>
         )}
       </Flexbox>
     );

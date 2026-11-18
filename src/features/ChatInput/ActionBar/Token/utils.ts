@@ -1,4 +1,3 @@
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import type { LobeAgentChatConfig, RuntimeEnvMode } from '@lobechat/types';
 
 interface ToolContextRefreshKeyOptions {
@@ -11,13 +10,8 @@ interface ToolContextRefreshKeyOptions {
   memoryEnabled?: boolean;
   runtimeMode?: RuntimeEnvMode;
   searchMode?: LobeAgentChatConfig['searchMode'];
-  skillActivateMode?: LobeAgentChatConfig['skillActivateMode'];
   useModelBuiltinSearch?: boolean;
 }
-
-export const getToolExcludeDefaultToolIds = (
-  skillActivateMode?: LobeAgentChatConfig['skillActivateMode'],
-) => (skillActivateMode === 'manual' ? manualModeExcludeToolIds : undefined);
 
 export const getToolContextRefreshKey = ({
   agentId,
@@ -29,7 +23,6 @@ export const getToolContextRefreshKey = ({
   memoryEnabled,
   runtimeMode,
   searchMode,
-  skillActivateMode,
   useModelBuiltinSearch,
 }: ToolContextRefreshKeyOptions) =>
   [
@@ -37,7 +30,6 @@ export const getToolContextRefreshKey = ({
     enableAgentMode === false ? 'chat' : 'agent',
     searchMode || 'auto',
     useModelBuiltinSearch ? 'model-search' : 'app-search',
-    skillActivateMode || 'auto',
     memoryEnabled ? 'memory-on' : 'memory-off',
     hasEnabledKnowledgeBases ? 'knowledge-on' : 'knowledge-off',
     runtimeMode || 'none',

@@ -2,6 +2,11 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import {
+  getUnselectedBuiltinToolIds,
+  getUserDisabledToolIds,
+  isOnDemandBuiltinTool,
+} from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import { serverOnlyToolIds } from '@lobechat/builtin-tools/serverOnly';
 import {
@@ -16,8 +21,9 @@ import {
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
   getActivePluginIds,
-  getDisabledPluginIds,
+  getOptedInPluginIds,
   type LobeAgentChatConfig,
+  resolveToolMode,
   type ToolManifest,
   type WorkingModel,
 } from '@lobechat/types';
@@ -189,15 +195,23 @@ export const createAgentToolsEngine = (
     agent: {
       chatConfig,
       plugins: applyAgentConnectorActivation(
-        options.runAgent?.enabledPluginIds ?? getActivePluginIds(agent.plugins),
+        options.runAgent?.enabledPluginIds ??
+          getActivePluginIds(agent.plugins).filter(
+            (id) => resolveToolMode(chatConfig) !== 'agent' || !isOnDemandBuiltinTool(id),
+          ),
         connectors,
       ),
     },
     // Feature-flagged tools (e.g. builtin-dashboard) leave the pool while their
     // flag is off for this user.
     disabledPluginIds: [
-      ...getDisabledPluginIds(agent.plugins),
+      ...getUserDisabledToolIds(agent.plugins, chatConfig),
       ...connectors.offIds,
+      ...getUnselectedBuiltinToolIds([
+        ...getOptedInPluginIds(agent.plugins),
+        ...(options.runAgent?.enabledPluginIds ?? []),
+        ...(pluginIds ?? []),
+      ]),
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
       ...serverOnlyToolIds,

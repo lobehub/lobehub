@@ -409,6 +409,10 @@ describe('recent direct-provider models', () => {
 
   it.each([
     ['openai', 'gpt-6-astra', 'gpt6ReasoningEffort'],
+    ['azure', 'gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['azure', 'gpt-6.2-sol', 'gpt6ReasoningEffort'],
+    ['openrouter', 'openai/gpt-6.2-astra', 'gpt6ReasoningEffort'],
+    ['openrouter', 'openai/gpt-6.2-sol', 'gpt6ReasoningEffort'],
     ['google', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['vertexai', 'gemini-3.8-flash', 'thinkingLevel3'],
     ['google', 'gemini-4-carbon', 'thinkingLevel3'],
@@ -428,6 +432,33 @@ describe('recent direct-provider models', () => {
       type: 'chat',
     });
     expect(model?.settings?.extendParams).toContain(reasoningParam);
+  });
+});
+
+describe('GPT-6.2 reseller cards', () => {
+  it.each([
+    ['azure', 'gpt-6.2-astra', 'gpt-6.2-astra'],
+    ['azure', 'gpt-6.2-sol', 'gpt-6.2-sol'],
+    ['openrouter', 'openai/gpt-6.2-astra', 'gpt-6.2-astra'],
+    ['openrouter', 'openai/gpt-6.2-sol', 'gpt-6.2-sol'],
+  ])('prices %s/%s at the official OpenAI list price', (providerId, id, officialId) => {
+    const official = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'openai' && entry.id === officialId,
+    );
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === providerId && entry.id === id,
+    );
+    expect(official?.isOfficial).toBe(true);
+    expect(model?.isOfficial).toBeUndefined();
+    expect(model?.pricing).toEqual(official?.pricing);
+    expect(model?.contextWindowTokens).toBe(official?.contextWindowTokens);
+  });
+
+  it.each(['gpt-6.2-astra', 'gpt-6.2-sol'])('deploys azure/%s under its model id', (id) => {
+    const model = LOBE_DEFAULT_MODEL_LIST.find(
+      (entry) => entry.providerId === 'azure' && entry.id === id,
+    );
+    expect(model?.config?.deploymentName).toBe(id);
   });
 });
 

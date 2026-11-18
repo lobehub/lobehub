@@ -1,5 +1,6 @@
 'use client';
 
+import { isOnDemandBuiltinTool } from '@lobechat/builtin-tools';
 import { getConnectorCatalog } from '@lobechat/const';
 import { parsePluginEntry, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
@@ -263,7 +264,7 @@ const AgentTool = memo<AgentToolProps>(
         // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
           plugins:
-            shouldEnable && connectorIds.has(pluginId)
+            shouldEnable && (connectorIds.has(pluginId) || isOnDemandBuiltinTool(pluginId))
               ? upsertConnectorEnabled(config?.plugins, pluginId, true)
               : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
@@ -570,11 +571,16 @@ const AgentTool = memo<AgentToolProps>(
             />
           ),
           key: item.identifier,
+          searchText: t(`tools.builtins.${item.identifier}.title` as any, {
+            defaultValue: item.meta?.title || item.identifier,
+          }),
           label: (
             <ToolItem
               checked={isToolEnabled(item.identifier)}
               id={item.identifier}
-              label={item.meta?.title}
+              label={t(`tools.builtins.${item.identifier}.title` as any, {
+                defaultValue: item.meta?.title || item.identifier,
+              })}
               onUpdate={async () => {
                 setUpdating(true);
                 await handleToggleTool(item.identifier);
@@ -905,9 +911,10 @@ const AgentTool = memo<AgentToolProps>(
     const setPluginEnabled = (pluginId: string, enabled: boolean) => {
       if (!canEdit || !effectiveAgentId) return;
       return updateAgentConfigById(effectiveAgentId, {
-        plugins: connectorIds.has(pluginId)
-          ? upsertConnectorEnabled(config?.plugins, pluginId, enabled)
-          : upsertPluginMode(config?.plugins, pluginId, enabled ? 'pinned' : 'disabled'),
+        plugins:
+          connectorIds.has(pluginId) || isOnDemandBuiltinTool(pluginId)
+            ? upsertConnectorEnabled(config?.plugins, pluginId, enabled)
+            : upsertPluginMode(config?.plugins, pluginId, enabled ? 'pinned' : 'disabled'),
       });
     };
 
@@ -963,6 +970,7 @@ const AgentTool = memo<AgentToolProps>(
           popupRender={() => (
             <PopoverContent
               items={pickerItems}
+              toolsOnly={kind === 'tools'}
               onClose={() => setDropdownOpen(false)}
               onOpenStore={() => {
                 setDropdownOpen(false);

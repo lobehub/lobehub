@@ -58,7 +58,13 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
-import { type LobeBuiltinTool } from '@lobechat/types';
+import {
+  type AgentPluginEntry,
+  getDisabledPluginIds,
+  type LobeAgentChatConfig,
+  type LobeBuiltinTool,
+  resolveToolMode,
+} from '@lobechat/types';
 
 import { resolveCloudSandboxInPageScope } from './pageScope';
 
@@ -85,15 +91,21 @@ export const defaultToolIds = [
 
 /**
  * Builtins enabled by default in Agent mode. The activator loads other tools
- * on demand, and Skills loads skill instructions. Manual mode omits the activator.
+ * on demand, and Skills loads skill instructions.
  */
 export const alwaysOnToolIds = [LobeActivatorManifest.identifier, SkillsManifest.identifier];
 
-/**
- * Runtime tools represented by the skill activation mode control itself. They remain part
- * of the engine defaults but should not appear as independently configurable tool rows.
- */
-export const activationModeControlledToolIds = [LobeActivatorManifest.identifier];
+/** Ignore stale picker preferences for fixed infrastructure in ordinary Agent mode.
+ * Only use for saved user choices, never for a share allowlist or runtime exclusion. */
+export const getUserDisabledToolIds = (
+  plugins: AgentPluginEntry[] | undefined,
+  chatConfig?: Pick<LobeAgentChatConfig, 'toolMode' | 'enableAgentMode'> | null,
+) => {
+  const disabled = getDisabledPluginIds(plugins);
+  return resolveToolMode(chatConfig) === 'agent'
+    ? disabled.filter((id) => !alwaysOnToolIds.includes(id))
+    : disabled;
+};
 
 /**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.
@@ -625,6 +637,25 @@ export const builtinTools: LobeBuiltinTool[] = builtinToolRegistry.map((tool) =>
   tags: tool.manifest?.meta?.tags,
   title: tool.manifest?.meta?.title,
 }));
+
+// A saved pin on a user-selectable tool predates on-demand loading. Runtime additions
+// (mentions, media fallback, exact toolsets) are not user preferences and bypass this filter.
+export const onDemandBuiltinToolIds = builtinTools
+  .filter(
+    (tool) =>
+      (tool.discoverable !== false || tool.identifier === AuvManifest.identifier) &&
+      !alwaysOnToolIds.includes(tool.identifier) &&
+      !runtimeManagedToolIds.includes(tool.identifier),
+  )
+  .map((tool) => tool.identifier);
+const onDemandBuiltinIds = new Set(onDemandBuiltinToolIds);
+
+/** An installed tool is not permission to offer it to every agent. */
+export const getUnselectedBuiltinToolIds = (available: Iterable<string>) => {
+  const allowed = new Set(available);
+  return onDemandBuiltinToolIds.filter((id) => !allowed.has(id));
+};
+export const isOnDemandBuiltinTool = (identifier: string) => onDemandBuiltinIds.has(identifier);
 
 const recommendedBuiltinIds = new Set(
   RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Builtin).map((s) => s.id),

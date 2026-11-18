@@ -2,7 +2,6 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import { Icon, Popover, toast, Upload } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -13,6 +12,7 @@ import {
   Settings2Icon,
   TargetIcon,
   TypeIcon,
+  WrenchIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, Suspense, useCallback, useMemo, useRef } from 'react';
@@ -22,7 +22,7 @@ import { openAttachKnowledgeModal } from '@/features/LibraryModal';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -202,9 +202,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     ],
   );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
-  const skillActivateMode = useAgentStore((s) =>
-    chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
-  );
 
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
@@ -227,12 +224,10 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const closeDropdown = useCallback(() => close(), [close]);
   const skillsMenuItem = useSkillsMenuItem(closeDropdown);
   const {
-    autoCount: skillAutoCount,
     isPolicyMenuOpen: isSkillPolicyMenuOpen,
     marketFooter: skillMarketFooter,
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
-    pinnedCount: skillPinnedCount,
   } = useToolsControls({ closeDropdown });
 
   const handleToggleParams = useCallback(() => {
@@ -311,11 +306,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       },
     ];
 
-    // In auto mode every installed skill is callable, so show pinned + auto.
-    // In manual mode only the pinned ones are active, so show pinned only.
-    const activeSkillCount =
-      skillActivateMode === 'auto' ? skillPinnedCount + skillAutoCount : skillPinnedCount;
-
     const toolsItems: ActionDropdownMenuItems =
       isAgentModeEnabled && enableFC
         ? [
@@ -326,9 +316,9 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
               extra: <SubmenuChevron />,
               footer: skillMarketFooter,
               header: skillMarketHeader,
-              icon: SkillsIcon,
+              icon: WrenchIcon,
               key: 'tools',
-              label: renderLabelWithCount(tSetting('tools.picker.title'), activeSkillCount),
+              label: tSetting('tools.picker.title'),
             } as ActionDropdownMenuItems[number],
           ]
         : [];
@@ -447,9 +437,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     knowledgeEnabledCount,
     setShowTypoBar,
     showTypoBar,
-    skillActivateMode,
-    skillAutoCount,
-    skillPinnedCount,
     knowledgeItems,
     knowledgeFooter,
     t,
