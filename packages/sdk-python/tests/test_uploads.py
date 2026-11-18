@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import List
 
 import pytest
 
 from lobehub import AsyncLobeHub, LobeHub
 
-from .conftest import API_KEY, MockServer, Reply, envelope
+from .conftest import API_KEY, MockServer, Reply, api_error, envelope
 
 FILE = {"file": {"id": "file_1", "name": "report.pdf", "url": "https://files/report.pdf"}}
 
@@ -86,3 +87,15 @@ def test_upload_batch_refuses_a_list_mixing_files_and_text(server: MockServer, t
     with pytest.raises(TypeError, match="mixes files"):
         client.files.upload_batch({"files": [first, "b.txt"]})  # type: ignore[list-item]
     assert server.requests == []
+
+
+def test_a_retried_upload_resends_the_file_object_bytes(server: MockServer, sleeps: List[float]) -> None:
+    server.reply(Reply(503, api_error("service_unavailable")), Reply(201, envelope({"successful": []})))
+    client = LobeHub(api_key=API_KEY, base_url=server.base_url)
+
+    client.files.upload_batch({"files": [io.BytesIO(b"HELLO")]}, idempotency_key="k1")
+
+    assert len(server.requests) == 2 and len(sleeps) == 1
+    assert [request.multipart()[1] for request in server.requests] == [
+        [("files", "file", "application/octet-stream", b"HELLO")]
+    ] * 2

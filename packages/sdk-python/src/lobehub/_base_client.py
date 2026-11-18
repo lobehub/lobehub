@@ -24,7 +24,7 @@ from ._errors import (
     parse_retry_after,
 )
 from ._response import BinaryResponse
-from ._uploads import split_multipart
+from ._uploads import MultipartParts, split_multipart
 from ._version import __version__
 
 #: An OIDC access token, or a function returning the current one (called before every request).
@@ -172,7 +172,7 @@ class BaseClient:
         query: Optional[Mapping[str, Any]],
         headers: Optional[Mapping[str, Optional[str]]],
         json: Any,
-        multipart: Optional[Mapping[str, Any]],
+        multipart: Optional[MultipartParts],
         extra_headers: Optional[Mapping[str, str]],
         extra_query: Optional[Mapping[str, object]],
         extra_body: Optional[Mapping[str, object]],
@@ -191,7 +191,7 @@ class BaseClient:
         }
         content: Dict[str, Any] = {}
         if multipart is not None:
-            data, files = split_multipart({**multipart, **(extra_body or {})})
+            data, files = multipart
             content = {"data": data, "files": files}
         elif extra_body is not None:
             # Fields the spec does not (yet) describe ride along with the typed body.
@@ -227,6 +227,14 @@ class BaseClient:
         if kind == "envelope" and isinstance(body, dict) and "data" in body:
             return body["data"]
         return body
+
+    @staticmethod
+    def _split_multipart(
+        multipart: Optional[Mapping[str, Any]], extra_body: Optional[Mapping[str, object]]
+    ) -> Optional[MultipartParts]:
+        # Read file sources once, before the retry loop: a file object is at EOF after
+        # the first read, so re-reading it per attempt would resend an empty file.
+        return None if multipart is None else split_multipart({**multipart, **(extra_body or {})})
 
     def _retry_delay(self, attempt: int, response: Optional[httpx.Response]) -> Optional[float]:
         """Seconds to wait before the next attempt, or None to give up and return `response`."""
@@ -265,6 +273,7 @@ class SyncAPIClient(BaseClient):
     ) -> httpx.Response:
         """Send with retries; raise `APIError` for a non-2xx answer. A `stream` answer is left unread."""
         retries_allowed = self.max_retries if max_retries is None else max_retries
+        parts = self._split_multipart(multipart, extra_body)
         attempt = 0
         while True:
             request = self._build_request(
@@ -275,7 +284,7 @@ class SyncAPIClient(BaseClient):
                 query=query,
                 headers=headers,
                 json=json,
-                multipart=multipart,
+                multipart=parts,
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
@@ -283,9 +292,16 @@ class SyncAPIClient(BaseClient):
                 accept=accept,
             )
             can_retry = attempt < (max(0, retries_allowed) if is_retryable_request(request) else 0)
+            response: Optional[httpx.Response] = None
             try:
                 response = self._http.send(request, stream=True)
+                # Reading the body can fail too (a dropped connection, a read timeout);
+                # it gets the same error mapping and retries as a failed send.
+                if not (stream and response.is_success):
+                    response.read()
             except httpx.TransportError as error:
+                if response is not None:
+                    response.close()
                 failure = connection_error(error, request, self._timeout(timeout))
                 if not can_retry:
                     raise failure from error
@@ -294,11 +310,8 @@ class SyncAPIClient(BaseClient):
                 continue
 
             if response.is_success:
-                if not stream:
-                    response.read()
                 return response
 
-            response.read()
             response.close()
             if can_retry and should_retry_status(request, response):
                 delay = self._retry_delay(attempt, response)
@@ -366,6 +379,7 @@ class AsyncAPIClient(BaseClient):
         accept: Optional[str] = None,
     ) -> httpx.Response:
         retries_allowed = self.max_retries if max_retries is None else max_retries
+        parts = self._split_multipart(multipart, extra_body)
         attempt = 0
         while True:
             request = self._build_request(
@@ -376,7 +390,7 @@ class AsyncAPIClient(BaseClient):
                 query=query,
                 headers=headers,
                 json=json,
-                multipart=multipart,
+                multipart=parts,
                 extra_headers=extra_headers,
                 extra_query=extra_query,
                 extra_body=extra_body,
@@ -384,9 +398,14 @@ class AsyncAPIClient(BaseClient):
                 accept=accept,
             )
             can_retry = attempt < (max(0, retries_allowed) if is_retryable_request(request) else 0)
+            response = None
             try:
                 response = await self._http.send(request, stream=True)
+                if not (stream and response.is_success):
+                    await response.aread()
             except httpx.TransportError as error:
+                if response is not None:
+                    await response.aclose()
                 failure = connection_error(error, request, self._timeout(timeout))
                 if not can_retry:
                     raise failure from error
@@ -395,11 +414,8 @@ class AsyncAPIClient(BaseClient):
                 continue
 
             if response.is_success:
-                if not stream:
-                    await response.aread()
                 return response
 
-            await response.aread()
             await response.aclose()
             if can_retry and should_retry_status(request, response):
                 delay = self._retry_delay(attempt, response)

@@ -226,3 +226,38 @@ def test_retry_after_accepts_an_http_date(server: MockServer) -> None:
     with pytest.raises(RateLimitError) as caught:
         make(server, max_retries=0).agent_groups.list()
     assert caught.value.retry_after is not None and caught.value.retry_after > 60
+
+
+class _DroppedBody(httpx.SyncByteStream):
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        yield b'{"data":'
+        raise httpx.ReadTimeout("read timed out")
+
+
+def test_a_body_read_failure_is_retried_and_raises_an_sdk_error(sleeps: List[float]) -> None:
+    attempts: List[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(request)
+        return httpx.Response(200, stream=_DroppedBody())
+
+    client = LobeHub(
+        api_key=API_KEY, http_client=httpx.Client(transport=httpx.MockTransport(handler)), max_retries=1
+    )
+    with pytest.raises(APITimeoutError):
+        client.users.me()
+    assert len(attempts) == 2 and len(sleeps) == 1
+
+
+@pytest.mark.anyio
+async def test_async_body_read_failure_recovers_on_retry(sleeps: List[float]) -> None:
+    class Dropping(httpx.AsyncByteStream):
+        async def __aiter__(self):  # type: ignore[no-untyped-def]
+            yield b'{"data":'
+            raise httpx.ReadError("connection reset")
+
+    replies = [httpx.Response(200, stream=Dropping()), httpx.Response(200, json={"data": {"id": "user_1"}})]
+    transport = httpx.MockTransport(lambda request: replies.pop(0))
+    client = AsyncLobeHub(api_key=API_KEY, http_client=httpx.AsyncClient(transport=transport))
+    assert (await client.users.me())["id"] == "user_1"  # type: ignore[typeddict-item]
+    assert len(sleeps) == 1

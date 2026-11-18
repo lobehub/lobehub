@@ -78,9 +78,11 @@ def _form_value(value: object) -> str:
     return str(value)
 
 
-def split_multipart(
-    body: Mapping[str, Any],
-) -> Tuple[Dict[str, Union[str, List[str]]], List[Tuple[str, UploadFile]]]:
+MultipartParts = Tuple[Dict[str, Union[str, List[str]]], List[Tuple[str, UploadFile]]]
+"""Form fields and `(field, file)` parts, ready for httpx's `data=` and `files=`."""
+
+
+def split_multipart(body: Mapping[str, Any]) -> MultipartParts:
     """Split a multipart body into form fields and files (lists send one part per file)."""
     data: Dict[str, Union[str, List[str]]] = {}
     files: List[Tuple[str, UploadFile]] = []

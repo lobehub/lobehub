@@ -24,7 +24,7 @@ from typing import (
 import httpx
 from typing_extensions import Self
 
-from ._errors import connection_error
+from ._errors import LobeHubError, connection_error
 
 if TYPE_CHECKING:
     from .generated.types import ResponseObject, ResponseStreamEvent
@@ -227,7 +227,10 @@ class _ResponseEvents:
     def _transform(self, event: ServerSentEvent) -> Optional[ResponseStreamEvent]:
         if not event.data or event.data == "[DONE]":
             return None
-        parsed = cast("ResponseStreamEvent", json.loads(event.data))
+        try:
+            parsed = cast("ResponseStreamEvent", json.loads(event.data))
+        except json.JSONDecodeError as error:
+            raise LobeHubError(f"Malformed stream event data: {event.data[:200]!r}") from error
         if parsed.get("type") in TERMINAL_EVENTS and "response" in parsed:
             self._final = cast("ResponseObject", parsed["response"])  # type: ignore[typeddict-item]
         return parsed

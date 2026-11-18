@@ -11,6 +11,7 @@ from lobehub import (
     APITimeoutError,
     AsyncLobeHub,
     LobeHub,
+    LobeHubError,
     PermissionDeniedError,
     ServerSentEvent,
 )
@@ -185,3 +186,12 @@ async def test_async_stream_dropped_mid_body_raises_api_connection_error() -> No
         async for event in client.stream_events("GET", "/api/v1/runs/run_1/events"):
             data.append(event.data)
     assert data == ["1"]
+
+
+def test_a_malformed_event_raises_a_lobehub_error(server: MockServer) -> None:
+    server.reply(Reply(chunks=[b"event: response.created\ndata: {not json\n\n"]))
+    stream = LobeHub(api_key=API_KEY, base_url=server.base_url).responses.stream(
+        {"model": "agt_1", "input": "x"}
+    )
+    with pytest.raises(LobeHubError, match="Malformed stream event"):
+        list(stream)
