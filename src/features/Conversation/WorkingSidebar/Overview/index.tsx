@@ -59,6 +59,7 @@ import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
 import PullRequestRow from './PullRequestRow';
+import PullRequestRowMenu from './PullRequestRowMenu';
 import { sectionProps, sectionStyles } from './sectionStyles';
 import { TerminalRow } from './TerminalRow';
 
@@ -302,21 +303,27 @@ const Overview = memo<OverviewProps>(
             pullRequest={toLinkedPullRequest(view)}
             tooltip={`${view.repoFullName}#${view.number} ${view.title}`}
             unvouched={!view.vouched}
-            onClick={() => onOpenPullRequest?.(view)}
-            onDismiss={
-              onDismissPullRequest &&
-              (() =>
-                void onDismissPullRequest(view).then(
-                  () =>
-                    toast.info(
-                      t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
-                    ),
-                  () =>
-                    toast.error(
-                      t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
-                    ),
-                ))
+            actions={
+              <PullRequestRowMenu
+                topicId={topicId}
+                view={view}
+                onDismiss={
+                  onDismissPullRequest &&
+                  (() =>
+                    void onDismissPullRequest(view).then(
+                      () =>
+                        toast.info(
+                          t('workingPanel.overview.pr.dismissed', { name: `#${view.number}` }),
+                        ),
+                      () =>
+                        toast.error(
+                          t('workingPanel.overview.pr.dismissFailed', { name: `#${view.number}` }),
+                        ),
+                    ))
+                }
+              />
             }
+            onClick={() => onOpenPullRequest?.(view)}
           />
         ))}
         {onLinkPullRequest && <LinkPullRequestRow onLink={onLinkPullRequest} />}
