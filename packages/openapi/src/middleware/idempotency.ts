@@ -34,22 +34,59 @@ const isReplayable = (response: Response) => {
   );
 };
 
+/**
+ * Responses are stored as base64 so that binary answers (`POST /audio/speech`
+ * returns MP3/AAC/Opus bytes) replay byte for byte instead of being decoded and
+ * re-encoded as UTF-8 text, which replaces invalid sequences.
+ */
+const encodeBody = async (response: Response) =>
+  Buffer.from(await response.arrayBuffer()).toString('base64');
+
+const decodeBody = (record: IdempotentResponseRecord) => {
+  // Records written before responses were stored as base64 stay readable.
+  if (record.encoding !== 'base64') return record.body;
+  // `Uint8Array.from` copies out of Node's pooled Buffer, so the whole array
+  // buffer belongs to this response.
+  return Uint8Array.from(Buffer.from(record.body, 'base64')).buffer;
+};
+
 const replay = (c: Context, record: IdempotentResponseRecord) => {
   const headers = new Headers({ [IDEMPOTENT_REPLAYED_HEADER]: 'true' });
   if (record.contentType) headers.set('Content-Type', record.contentType);
-  return c.body(record.body, record.status as never, Object.fromEntries(headers));
+  return c.body(decodeBody(record), record.status as never, Object.fromEntries(headers));
+};
+
+/**
+ * The authorization a request carried. Narrowing a credential's scopes is an
+ * authorization change, and this middleware runs before route guards, so the
+ * snapshot is part of who a stored response belongs to: a key restricted after
+ * its first request must not be answered from that key's earlier, privileged
+ * result — it gets its own key space and runs through the guards instead.
+ */
+const authorizationOf = (c: Context) => {
+  const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+  // `undefined` = not API-key auth, where the token's own grants bound it.
+  if (scopes === undefined) return 'token';
+  // `null` = full-access key, which is not the same key space as any scope set.
+  return scopes === null ? 'all' : JSON.stringify([...scopes].sort());
 };
 
 /**
  * Who a stored response belongs to, beyond the user: the credential that sent
- * the request and the workspace it resolved to. This middleware runs before
- * route guards, so a replay must never cross either — another (possibly
- * scope-restricted) API key of the same user, or the same key in another
- * workspace, gets its own key space instead of the first caller's response.
+ * the request, the workspace it resolved to, and the authorization it carried.
+ * This middleware runs before route guards, so a replay must never cross any of
+ * them — another (possibly scope-restricted) API key of the same user, the same
+ * key in another workspace, or the same key after its scopes were narrowed,
+ * each gets its own key space instead of the first caller's response.
  */
 const principalOf = (c: Context) => {
   const apiKeyId = (c.get('authData') as { apiKeyId?: number | string } | null)?.apiKeyId;
-  return [c.get('authType') ?? '', apiKeyId ?? '', c.get('workspaceId') ?? ''].join(':');
+  return [
+    c.get('authType') ?? '',
+    apiKeyId ?? '',
+    c.get('workspaceId') ?? '',
+    authorizationOf(c),
+  ].join(':');
 };
 
 /**
@@ -122,8 +159,9 @@ export const idempotencyMiddleware = async (c: Context, next: Next) => {
       // The handler already ran: a failed write must not turn its answer into an error.
       stored = await redisService.openapi
         .completeIdempotency(owned, {
-          body: await c.res.clone().text(),
+          body: await encodeBody(c.res.clone()),
           contentType: c.res.headers.get('Content-Type'),
+          encoding: 'base64',
           status: c.res.status,
         })
         .then(() => true)

@@ -63,6 +63,11 @@ export interface RateLimitWindow {
 export interface IdempotentResponseRecord {
   body: string;
   contentType: string | null;
+  /**
+   * How `body` was serialized. `base64` keeps binary answers (audio, images)
+   * byte-exact; records without it are plain text written before that change.
+   */
+  encoding?: 'base64';
   status: number;
 }
 

@@ -37,17 +37,19 @@ let created = 0;
 
 interface Caller {
   apiKeyId?: string;
+  scopes?: string[] | null;
   userId?: string | null;
   workspaceId?: string;
 }
 
-const createApp = ({ apiKeyId = 'key-1', userId = 'user-1', workspaceId }: Caller = {}) => {
+const createApp = ({ apiKeyId = 'key-1', scopes, userId = 'user-1', workspaceId }: Caller = {}) => {
   const app = new Hono();
   app.use('*', async (c, next) => {
     c.set('userId', userId);
     c.set('authType', 'apikey');
     c.set('authData', { apiKeyId });
     c.set('workspaceId', workspaceId);
+    c.set('apiKeyScopes', scopes);
     await next();
   });
   app.use('*', idempotencyMiddleware);
@@ -57,6 +59,12 @@ const createApp = ({ apiKeyId = 'key-1', userId = 'user-1', workspaceId }: Calle
     return c.json({ data: { id: `item_${created}`, ...body }, success: true }, 201);
   });
   app.post('/fail', (c) => c.json({ success: false }, 500));
+  // Synthesized audio is raw bytes: 0x00 and 0xFF sequences are not valid UTF-8.
+  app.post('/audio', (c) =>
+    c.body(Buffer.from([0x49, 0x44, 0x33, 0x00, 0x80, 0xff, 0xfe]), 200, {
+      'Content-Type': 'audio/mpeg',
+    }),
+  );
   app.post('/stream', (c) => streamSSE(c, async (stream) => stream.writeSSE({ data: 'x' })));
   app.post('/slow', async (c) => {
     // A concurrent replay arrives while this one is still in flight.
@@ -128,6 +136,44 @@ describe('idempotencyMiddleware', () => {
     expect(otherWorkspace.headers.get('Idempotent-Replayed')).toBeNull();
     expect(await otherKey.json()).not.toEqual(await first.json());
     expect(created).toBe(3);
+  });
+
+  it('replays for the same credential holding the same scopes in any order', async () => {
+    await createApp({ scopes: ['api-keys:read', 'messages:write'] }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+    const retry = await createApp({ scopes: ['messages:write', 'api-keys:read'] }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+
+    expect(retry.headers.get('Idempotent-Replayed')).toBe('true');
+    expect(created).toBe(1);
+  });
+
+  it('never replays a response cached before the credential was narrowed', async () => {
+    // A full-access key caches a privileged answer, then is restricted; the
+    // replay must miss the cache and run the route's current guards instead.
+    await createApp({ scopes: null }).request('/items', post({ name: 'a' }, 'k1'));
+    const narrowed = await createApp({ scopes: ['api-keys:read'] }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+
+    expect(narrowed.headers.get('Idempotent-Replayed')).toBeNull();
+    expect(created).toBe(2);
+  });
+
+  it('replays binary responses byte for byte', async () => {
+    const first = await createApp().request('/audio', post({}, 'k-audio'));
+    const retry = await createApp().request('/audio', post({}, 'k-audio'));
+
+    expect(retry.headers.get('Idempotent-Replayed')).toBe('true');
+    expect(retry.headers.get('Content-Type')).toContain('audio/mpeg');
+    expect(new Uint8Array(await retry.arrayBuffer())).toEqual(
+      new Uint8Array(await first.arrayBuffer()),
+    );
   });
 
   it('answers 422 idempotency_conflict when the key is reused for a different request', async () => {
