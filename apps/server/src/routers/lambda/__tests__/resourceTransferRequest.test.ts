@@ -317,7 +317,13 @@ describe('resourceTransferRequestRouter', () => {
   });
 
   describe('decline / cancel', () => {
+    const initiatorCaller = resourceTransferRequestRouter.createCaller({
+      ...ctx,
+      userId: initiatorId,
+    });
+
     it('decline resolves through the model as the recipient', async () => {
+      mockFindById.mockResolvedValue(pendingRequest);
       mockDecline.mockResolvedValue({ ...pendingRequest, status: 'declined' });
 
       const result = await caller.decline({ requestId: 'req-1' });
@@ -327,16 +333,19 @@ describe('resourceTransferRequestRouter', () => {
     });
 
     it('cancel maps an already-resolved request to CONFLICT', async () => {
+      mockFindById.mockResolvedValue({ ...pendingRequest, status: 'declined' });
       mockCancel.mockRejectedValue(new Error(TRANSFER_REQUEST_NOT_PENDING));
 
-      await expect(caller.cancel({ requestId: 'req-1' })).rejects.toMatchObject({
+      await expect(initiatorCaller.cancel({ requestId: 'req-1' })).rejects.toMatchObject({
         code: 'CONFLICT',
       });
     });
 
     it('maps an expired request to BAD_REQUEST on cancel and decline', async () => {
+      mockFindById.mockResolvedValue({ ...pendingRequest, status: 'expired' });
+
       mockCancel.mockRejectedValue(new Error(TRANSFER_REQUEST_EXPIRED));
-      await expect(caller.cancel({ requestId: 'req-1' })).rejects.toMatchObject({
+      await expect(initiatorCaller.cancel({ requestId: 'req-1' })).rejects.toMatchObject({
         code: 'BAD_REQUEST',
       });
 
@@ -344,6 +353,27 @@ describe('resourceTransferRequestRouter', () => {
       await expect(caller.decline({ requestId: 'req-1' })).rejects.toMatchObject({
         code: 'BAD_REQUEST',
       });
+    });
+
+    it('hides a missing request, or one the caller is not party to, behind NOT_FOUND', async () => {
+      mockFindById.mockResolvedValue(undefined);
+      await expect(caller.decline({ requestId: 'req-x' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      await expect(initiatorCaller.cancel({ requestId: 'req-x' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+
+      // The recipient cannot cancel, and the initiator cannot decline.
+      mockFindById.mockResolvedValue(pendingRequest);
+      await expect(caller.cancel({ requestId: 'req-1' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      await expect(initiatorCaller.decline({ requestId: 'req-1' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockCancel).not.toHaveBeenCalled();
+      expect(mockDecline).not.toHaveBeenCalled();
     });
   });
 

@@ -321,6 +321,13 @@ export const resourceTransferRequestRouter = router({
 
   /** Initiator withdraws a pending request. */
   cancel: transferRequestProcedure.input(requestIdInput).mutation(async ({ ctx, input }) => {
+    // Same shape for "missing" and "not yours" as accept: without this, the
+    // state transition below matches nothing and reads as "already resolved".
+    const existing = await ctx.transferRequestModel.findById(input.requestId);
+    if (!existing || existing.initiatorId !== ctx.userId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Transfer request not found' });
+    }
+
     try {
       const request = await ctx.transferRequestModel.cancel(input.requestId, ctx.userId);
       return { data: request, success: true };
@@ -351,6 +358,12 @@ export const resourceTransferRequestRouter = router({
 
   /** Recipient declines; the resource stays with its owner. */
   decline: transferRequestProcedure.input(requestIdInput).mutation(async ({ ctx, input }) => {
+    // Same shape for "missing" and "not yours" as accept.
+    const existing = await ctx.transferRequestModel.findById(input.requestId);
+    if (!existing || existing.recipientId !== ctx.userId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Transfer request not found' });
+    }
+
     try {
       const request = await ctx.transferRequestModel.decline(input.requestId, ctx.userId);
       // Best-effort: the outcome notice must not fail the decline.

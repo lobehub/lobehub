@@ -83,13 +83,13 @@ const RESOLUTIONS = [
   {
     action: 'decline',
     description:
-      'Recipient declines; ownership stays where it is. 409 when the request is no longer pending or is not addressed to the caller.',
+      'Recipient declines; ownership stays where it is. 404 when the request does not exist or is not addressed to the caller; 409 when it is no longer pending.',
     summary: 'Decline a transfer request',
   },
   {
     action: 'cancel',
     description:
-      'Initiator withdraws a pending request. 409 when the request is no longer pending or was not started by the caller.',
+      'Initiator withdraws a pending request. 404 when the request does not exist or was not started by the caller; 409 when it is no longer pending.',
     summary: 'Cancel a transfer request',
   },
 ] as const;

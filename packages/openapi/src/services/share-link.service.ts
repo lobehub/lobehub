@@ -2,6 +2,7 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
 import { marketDeploymentsRouter } from '@/business/server/lambda-routers/marketDeployments';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { agentShareRouter } from '@/server/routers/lambda/agentShare';
@@ -65,6 +66,13 @@ export class ShareLinkRestService extends BaseService {
 
     switch (resourceType) {
       case 'topic': {
+        // Reading a link needs the topic itself to be visible to the caller,
+        // as enabling and disabling do: a missing or foreign topic is 404, not
+        // an empty `enabled: false` link.
+        const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
+          resourceId,
+        );
+        if (!topic) throw this.createNotFoundError('Topic not found');
         return this.topicLink(resourceId);
       }
       case 'agent': {

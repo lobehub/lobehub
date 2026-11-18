@@ -243,8 +243,18 @@ describe('handover lifecycle', () => {
       key: KEYS.stranger,
       method: 'POST',
     });
-    expect(stranger.status).toBe(409);
-    expect(missing.status).toBe(409);
+    expect(stranger.status).toBe(404);
+    expect(missing.status).toBe(404);
+
+    // Cancelling is the initiator's: anyone else, or an unknown id, reads as 404.
+    for (const [id, key] of [
+      [request.id, KEYS.recipient],
+      [request.id, KEYS.stranger],
+      ['00000000-0000-4000-8000-000000000000', KEYS.owner],
+    ] as const) {
+      const res = await call(`/transfer-requests/${id}/cancel`, { key, method: 'POST' });
+      expect(res.status).toBe(404);
+    }
 
     const stillPending = await json(await call('/transfer-requests', { key: KEYS.recipient }));
     expect(stillPending.data.items[0]).toMatchObject({ id: request.id, status: 'pending' });
@@ -264,6 +274,18 @@ describe('handover lifecycle', () => {
       method: 'POST',
     });
     expect((await json(cancelled)).data).toEqual({ id: second.id, status: 'cancelled' });
+
+    // A request that exists but was already answered is a conflict, not a 404.
+    const again = await call(`/transfer-requests/${first.id}/decline`, {
+      key: KEYS.recipient,
+      method: 'POST',
+    });
+    expect(again.status).toBe(409);
+    const recancel = await call(`/transfer-requests/${second.id}/cancel`, {
+      key: KEYS.owner,
+      method: 'POST',
+    });
+    expect(recancel.status).toBe(409);
 
     const [agent] = await serverDB.select().from(agents).where(eq(agents.id, AGENT));
     expect(agent.userId).toBe(OWNER);

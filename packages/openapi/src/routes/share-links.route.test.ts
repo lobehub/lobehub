@@ -223,11 +223,18 @@ describe('topic share links', () => {
     expect(res.status).toBe(404);
   });
 
-  it("never reveals another user's link", async () => {
+  it("never reveals another user's link: their topic reads as 404", async () => {
     await enable('topic', TOPIC);
 
     const res = await call(`/share-links/topic/${TOPIC}`, { key: KEYS.stranger });
-    expect((await json(res)).data).toMatchObject({ enabled: false, shareId: null, url: null });
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(await json(res))).not.toContain('/share/t/');
+  });
+
+  it('answers 404 when reading the link of a topic that does not exist', async () => {
+    const res = await call('/share-links/topic/tpc_does_not_exist', { key: KEYS.ownerRead });
+
+    expect(res.status).toBe(404);
   });
 
   it('keeps workspace topics inside the workspace', async () => {
