@@ -161,7 +161,7 @@ describe('library skills', () => {
   });
 
   it('resolves the explicit mode of a library skill the agent has an entry for', () => {
-    expect(getLibrarySkillMode(['excalidraw'], 'excalidraw')).toBe('pinned');
+    expect(getLibrarySkillMode(['excalidraw'], 'excalidraw')).toBe('auto');
     expect(getLibrarySkillMode([{ identifier: 'excalidraw', mode: 'auto' }], 'excalidraw')).toBe(
       'auto',
     );

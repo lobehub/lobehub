@@ -62,22 +62,15 @@ export const getPluginMode = (
   return entry ? parsePluginEntry(entry).mode : 'auto';
 };
 
-/**
- * Library skills — the ones a user installs from the market or authors
- * themselves — are opt-in per agent. The agent's profile is where one is
- * turned on, so a library skill the agent has no entry for is `'disabled'`
- * there, not the implicit `'auto'` every other plugin kind resolves to.
- * Builtin skills, tools and connectors keep {@link getPluginMode}.
- */
-export const LIBRARY_SKILL_IMPLICIT_MODE: AgentPluginMode = 'disabled';
+/** Profile-managed skills are off without an entry and loaded on demand when on. */
+export const LIBRARY_SKILL_IMPLICIT_MODE = 'disabled' as const;
 
-/** A library skill's mode for this agent; see {@link LIBRARY_SKILL_IMPLICIT_MODE}. */
 export const getLibrarySkillMode = (
   plugins: AgentPluginEntry[] | undefined,
   identifier: string,
-): AgentPluginMode => {
+): 'auto' | 'disabled' => {
   const entry = plugins?.find((item) => parsePluginEntry(item).identifier === identifier);
-  return entry ? parsePluginEntry(entry).mode : LIBRARY_SKILL_IMPLICIT_MODE;
+  return entry && parsePluginEntry(entry).mode !== 'disabled' ? 'auto' : 'disabled';
 };
 
 /**
