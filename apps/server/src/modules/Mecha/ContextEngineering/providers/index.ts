@@ -8,6 +8,7 @@ import {
   agentDocumentChangesByMessage,
   type AgentDocumentIndexSnapshot,
   agentDocumentsFromSnapshot,
+  reusablePinnedAgentDocumentIndex,
 } from '@lobechat/context-engine/agent-document';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
@@ -108,6 +109,15 @@ export const createServerContextFactProviders = ({
     let pending = agentDocumentIndexes.get(agentId);
     if (!pending) {
       pending = (async () => {
+        // A later step of a run renders the index from the snapshot its first
+        // step pinned, so it needs no progressive document. Skip reading them:
+        // an agent can hold over 10k, and every step used to read them all.
+        const pinned = documentIndexTurn
+          ? reusablePinnedAgentDocumentIndex({
+              messages: documentIndexTurn.messages,
+              pinned: state.binding?.agentDocumentIndex,
+            })
+          : undefined;
         const docs = toAgentContextDocuments(
           await new AgentDocumentsService(
             db,
@@ -115,8 +125,9 @@ export const createServerContextFactProviders = ({
             workspaceId,
             undefined,
             documentAccessScope,
-          ).getAgentContextDocuments(agentId),
+          ).getAgentContextDocuments(agentId, { excludeProgressive: !!pinned }),
         );
+        if (pinned) return { docs, snapshot: pinned };
         if (!documentIndexTurn) return { docs };
         try {
           const snapshot = await resolveServerAgentDocumentIndex({
