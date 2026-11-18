@@ -21,8 +21,8 @@ The contract lives in the public package [`@lobechat/widget-spec`](https://githu
 ## Lifecycle
 
 1. **Draft**: save a version (`script`, `runtime`, `outputType`, `manifest`, `view`, optional `changeNote`). Saving runs nothing.
-2. **Dry run**: execute that exact version once in the sandbox and read its real output and logs. If a draft declares credentials (`manifest.env`) or network hosts (`manifest.network.allow`), the user has to approve that exact version first.
-3. **Publish**: make a version live. A version is only published after it has succeeded in a dry run. When the widget has no schedule of its own, publishing adopts `manifest.schedule`.
+2. **Dry run**: execute that exact version once in the sandbox and read its real output and logs. If a draft declares credentials (`manifest.env`) or network hosts (`manifest.network.allow`), the user has to approve it first. The user can approve just that version, or grant standing access: later drafts whose connectors and hosts all fall inside the grant then run without asking again.
+3. **Publish**: make a version live. A version is only published after its exact content has produced a usable output (`succeeded` or `partial`) in a run. When the widget has no schedule of its own, publishing adopts `manifest.schedule`.
 4. **Runs**: the scheduler, a manual refresh or a preview executes the live version. Each run ends `succeeded`, `partial`, `failed` or `timeout`.
 
 ## The package
@@ -58,7 +58,8 @@ The zod schemas are authoritative. JSON Schema covers every field, type, enum, l
 - params must have unique names, and a param must not share its name with an `env` entry;
 - a `select` param needs `options`, and a param's `default` / `value` must fit its type;
 - `series` names and `table` column keys must be unique;
-- a layout tree has a node limit (`WIDGET_LAYOUT_LIMITS`).
+- a layout tree has a node limit (`WIDGET_LAYOUT_LIMITS`);
+- a preset's `sample.type` must equal `widget.outputType`, a `data` preset needs `view.layout`, and locale copy may only label params the widget declares.
 
 ## Version content
 
@@ -131,14 +132,14 @@ Network access is **off** by default. `network.allow` lists the hostnames the sa
 
 Never write a token, password or key into the script, manifest, title or description. Instead, declare what the script needs, and read it from the environment at run time:
 
-| Field         | Rules                                                                                                                                               |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | Required. A shell identifier (`^[A-Za-z_]\w*$`), e.g. `GITHUB_TOKEN`.                                                                               |
-| `connector`   | The connector that supplies the secret, e.g. `github`. LobeHub looks it up in the agent's connectors, then the workspace's, then the user's own.    |
-| `field`       | For a connector that holds several headers: which header to read, e.g. `DD-API-KEY`. Matched case-insensitively.                                    |
-| `inject`      | `{ host, header?, prefix? }`. Where a Market connector's token is sent (see below). `host` is a hostname or `*.domain`, or a list of 1 – 5 of them. |
-| `required`    | When `true` and the secret cannot be resolved, the run fails with `MISSING_ENV` instead of starting.                                                |
-| `description` | ≤ 500 characters, shown to the user.                                                                                                                |
+| Field         | Rules                                                                                                                                                                                                                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Required. A shell identifier (`^[A-Za-z_]\w*$`), e.g. `GITHUB_TOKEN`.                                                                                                                                                                                                                                                               |
+| `connector`   | The connector that supplies the secret, e.g. `github`. A connector owned by the widget's agent wins. Otherwise the widget's own scope decides: a personal widget uses its owner's personal connectors, and a workspace or project widget uses the workspace's. A workspace widget never falls back to anyone's personal connectors. |
+| `field`       | For a connector that holds several headers: which header to read, e.g. `DD-API-KEY`. Matched case-insensitively.                                                                                                                                                                                                                    |
+| `inject`      | `{ host, header?, prefix? }`. Where a Market connector's token is sent (see below). `host` is a hostname or `*.domain`, or a list of 1 – 5 of them.                                                                                                                                                                                 |
+| `required`    | When `true` and the secret cannot be resolved, the run fails with `MISSING_ENV` instead of starting.                                                                                                                                                                                                                                |
+| `description` | ≤ 500 characters, shown to the user.                                                                                                                                                                                                                                                                                                |
 
 There are two kinds of connector:
 
@@ -179,7 +180,7 @@ Every `succeeded` run of the live version adds its numbers to the widget's long-
 - `kind` is `gauge` (default; a level, such as stars) or `counter` (a running total).
 - `unit` is at most 50 characters. It falls back to the stat's own `unit`.
 - Previews, `partial` runs and stale runs never write points.
-- A metric key is bound to the content of the version that first wrote it: its script, runtime, output type, manifest and view. After a version with different content is published, LobeHub refuses to append to that key ("Widget metric source changed"). Give the new version a new `metric.key`.
+- A metric key is bound to the content of the version that first wrote it: its script, runtime, output type, manifest and view, so even a title or `view.size` edit counts. The default key `value` is bound the same way. Once a version with different content is live, its runs that would record into that key **fail** with `METRIC_PUBLICATION_FAILED`. Whenever you publish changed content on a widget that already has a trend, give it a new `metric.key`.
 
 ## View
 

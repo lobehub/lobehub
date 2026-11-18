@@ -20,8 +20,8 @@ Widget 是一段由 LobeHub 在隔离沙箱中运行的小脚本。脚本向 std
 ## 生命周期
 
 1. **草稿**：保存一个版本（`script`、`runtime`、`outputType`、`manifest`、`view`，可选 `changeNote`）。保存时不会执行任何东西。
-2. **试运行**：在沙箱里把这个版本执行一次，拿到真实的输出和日志。如果草稿声明了凭据（`manifest.env`）或网络主机（`manifest.network.allow`），必须先由用户批准这个版本。
-3. **发布**：让某个版本上线。只有试运行成功过的版本才能发布。如果 Widget 自己还没有调度，发布时会采用 `manifest.schedule`。
+2. **试运行**：在沙箱里把这个版本执行一次，拿到真实的输出和日志。如果草稿声明了凭据（`manifest.env`）或网络主机（`manifest.network.allow`），必须先由用户批准。用户可以只批准这个版本，也可以授予长期许可：之后连接器和主机都在许可范围内的草稿，就不会再次询问。
+3. **发布**：让某个版本上线。只有完全相同的内容在某次运行中产出过可用输出（`succeeded` 或 `partial`）的版本才能发布。如果 Widget 自己还没有调度，发布时会采用 `manifest.schedule`。
 4. **运行**：调度器、手动刷新或预览会执行线上版本。每次运行的结果是 `succeeded`、`partial`、`failed` 或 `timeout`。
 
 ## 包
@@ -57,7 +57,8 @@ validate(draft); // true / false，错误在 validate.errors
 - param 名字必须唯一，且不能和任何 `env` 项同名；
 - `select` 类型的 param 必须有 `options`，param 的 `default` / `value` 必须符合它的类型；
 - `series` 的名字和 `table` 的列 key 必须唯一；
-- 布局树有节点数上限（`WIDGET_LAYOUT_LIMITS`）。
+- 布局树有节点数上限（`WIDGET_LAYOUT_LIMITS`）；
+- 预设的 `sample.type` 必须等于 `widget.outputType`，`data` 预设必须有 `view.layout`，各语言文案只能给 Widget 声明过的 param 加标签。
 
 ## 版本内容
 
@@ -130,14 +131,14 @@ validate(draft); // true / false，错误在 validate.errors
 
 不要把 token、密码或密钥写进脚本、manifest、标题或描述。应当声明脚本需要什么，运行时从环境变量读取：
 
-| 字段            | 规则                                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`        | 必填，合法的 shell 标识符（`^[A-Za-z_]\w*$`），例如 `GITHUB_TOKEN`。                                                   |
-| `connector`   | 提供密钥的连接器，例如 `github`。LobeHub 依次在 Agent、工作区、用户个人的连接器中查找。                                                 |
-| `field`       | 连接器保存了多个 header 时，指定读取哪一个，例如 `DD-API-KEY`，不区分大小写。                                                       |
-| `inject`      | `{ host, header?, prefix? }`：Market 连接器的 token 发往哪里（见下文）。`host` 是主机名或 `*.domain`，也可以是 1 – 5 个这样的值组成的列表。 |
-| `required`    | 为 `true` 时，如果解析不到密钥，运行不会启动，直接以 `MISSING_ENV` 失败。                                                        |
-| `description` | ≤ 500 字符，展示给用户。                                                                                         |
+| 字段            | 规则                                                                                                                                           |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | 必填，合法的 shell 标识符（`^[A-Za-z_]\w*$`），例如 `GITHUB_TOKEN`。                                                                                        |
+| `connector`   | 提供密钥的连接器，例如 `github`。Widget 所属 Agent 自己的连接器优先；否则由 Widget 自身的范围决定：个人 Widget 使用其所有者的个人连接器，工作区或项目 Widget 使用工作区的连接器。工作区 Widget 永远不会回退到任何人的个人连接器。 |
+| `field`       | 连接器保存了多个 header 时，指定读取哪一个，例如 `DD-API-KEY`，不区分大小写。                                                                                            |
+| `inject`      | `{ host, header?, prefix? }`：Market 连接器的 token 发往哪里（见下文）。`host` 是主机名或 `*.domain`，也可以是 1 – 5 个这样的值组成的列表。                                      |
+| `required`    | 为 `true` 时，如果解析不到密钥，运行不会启动，直接以 `MISSING_ENV` 失败。                                                                                             |
+| `description` | ≤ 500 字符，展示给用户。                                                                                                                              |
 
 连接器分两类：
 
@@ -178,7 +179,7 @@ validate(draft); // true / false，错误在 validate.errors
 - `kind` 可以是 `gauge`（默认，表示水位，例如 Star 数）或 `counter`（累计值）。
 - `unit` 最多 50 个字符，不写时使用 stat 自己的 `unit`。
 - 预览、`partial` 运行和过期运行都不会写入数据点。
-- 指标 key 绑定在第一次写入它的版本内容上（脚本、运行时、输出类型、manifest 和 view）。内容不同的版本发布后，LobeHub 会拒绝继续往这个 key 追加（"Widget metric source changed"），要给新版本换一个新的 `metric.key`。
+- 指标 key 绑定在第一次写入它的版本内容上（脚本、运行时、输出类型、manifest 和 view），所以只改标题或 `view.size` 也算内容变化；默认 key `value` 同样如此。内容不同的版本上线后，它那些要写入这个 key 的运行会以 `METRIC_PUBLICATION_FAILED` **失败**。只要在已有趋势的 Widget 上发布了改动过的内容，就要换一个新的 `metric.key`。
 
 ## View
 

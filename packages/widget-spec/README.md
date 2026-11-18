@@ -25,7 +25,7 @@ console.log(JSON.stringify({ type: 'stat', value: (await r.json()).stargazers_co
 parseWidgetOutput('{"type":"stat","value":42}', draft.outputType); // { ok: true, … }
 ```
 
-The zod schemas are authoritative. JSON Schema carries every field, type, enum, length and pattern, but not the cross-field rules (a param named like an env requirement, a `select` param without options, duplicate series names, layout node limits); those are only enforced by zod and by LobeHub.
+The zod schemas are authoritative. JSON Schema carries every field, type, enum, length and pattern, but not the cross-field rules (a param named like an env requirement, a `select` param without options, duplicate series names, layout node limits, a preset's sample matching its output type); those are only enforced by zod and by LobeHub.
 
 The full field reference, runtime rules and an example widget are in [`docs/development/widget-spec.mdx`](../../docs/development/widget-spec.mdx).
 
@@ -38,3 +38,5 @@ pnpm --filter @lobechat/widget-spec pack       # build dist/ and pack exactly wh
 ```
 
 `schema/` is committed and checked against the zod schemas by the tests and by `prepack`. Inside the monorepo the package resolves to `src/`; the packed package exports the bundled `dist/` (with the widget types inlined from the private `@lobechat/types`) through `publishConfig`, and depends only on `zod`.
+
+Publish with `pnpm publish` (or `pnpm pack`): `npm publish` ignores `publishConfig.exports` and would ship `exports` pointing at the unpacked `src/`. A release workflow that uses npm must rewrite `package.json` first, as `release-sdk.yml` does.

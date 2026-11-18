@@ -67,8 +67,9 @@ export const WIDGET_JSON_SCHEMA_NAMES = Object.keys(
  *
  * The zod schema stays authoritative: cross-field rules — a param named like
  * an env requirement, a select without options, unique series names, layout
- * node limits — cannot be expressed in JSON Schema and are only enforced
- * when LobeHub validates the content.
+ * node limits, a preset's sample matching its output type — cannot be
+ * expressed in JSON Schema and are only enforced when LobeHub validates the
+ * content.
  */
 export const widgetJsonSchema = (name: WidgetJsonSchemaName): Record<string, unknown> => {
   const { description, schema, title } = WIDGET_JSON_SCHEMA_SOURCES[name];
