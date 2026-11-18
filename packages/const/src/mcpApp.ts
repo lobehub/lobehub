@@ -5,6 +5,7 @@ import { sha256Hex } from './sha256';
 
 export * from './mcpAppEntrypoints';
 export * from './mcpUiMeta';
+export * from './mcpUiResource';
 
 /** Maximum text/serialized structured context accepted from a single App view. */
 export const MCP_APP_CONTEXT_MAX_LENGTH = 32_768;

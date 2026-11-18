@@ -38,7 +38,6 @@ export interface ToolManifest {
   settings?: ToolManifestSettings;
   systemRole?: string;
   type?: ToolManifestType;
-  ui?: { height?: number; mode?: 'iframe' | 'module'; url: string; width?: number };
   version?: string;
 }
 
@@ -67,13 +66,5 @@ export const ToolManifestSchema = z.object({
   settings: ToolManifestSettingsSchema.optional(),
   systemRole: z.string().optional(),
   type: z.enum(['default', 'standalone', 'markdown', 'builtin', 'mcp']).optional(),
-  ui: z
-    .object({
-      height: z.number().optional(),
-      mode: z.enum(['iframe', 'module']).optional(),
-      url: z.string(),
-      width: z.number().optional(),
-    })
-    .optional(),
   version: z.string().optional(),
 });

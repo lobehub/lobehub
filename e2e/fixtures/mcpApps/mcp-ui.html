@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MCP-UI fixture</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+      }
+      body {
+        margin: 0;
+        padding: 14px 16px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 15px;
+      }
+      .muted {
+        opacity: 0.65;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 10px 0;
+      }
+      button {
+        padding: 5px 10px;
+        border: 1px solid #8884;
+        border-radius: 6px;
+        font: inherit;
+        background: #8881;
+        color: inherit;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: #1677ff;
+        background: #1677ff;
+        color: #fff;
+      }
+      pre {
+        overflow: auto;
+        max-height: 160px;
+        margin: 0;
+        padding: 8px;
+        border-radius: 6px;
+        background: #8881;
+        font-size: 11px;
+        white-space: pre-wrap;
+      }
+      #details {
+        display: none;
+        margin: 8px 0;
+        padding: 10px;
+        border: 1px dashed #8886;
+        border-radius: 6px;
+      }
+      #details.open {
+        display: block;
+      }
+      .badge {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        background: #52c41a33;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">MCP-UI fixture card</h1>
+    <div class="muted" id="meta">Waiting for render data…</div>
+    <div class="row">
+      <button class="primary" id="tool">Call tool: fixture_mcp_ui_refresh</button>
+      <button id="notify">Notify</button>
+      <button id="intent">Intent</button>
+      <button id="prompt">Prompt</button>
+      <button id="link">Open link</button>
+      <button id="toggle">Toggle details (resize)</button>
+    </div>
+    <div id="details">
+      <strong>Details</strong>
+      <p>
+        This block changes the document height. A ResizeObserver posts
+        <code>ui-size-change</code> and the host resizes the frame.
+      </p>
+      <p>Line 2</p>
+      <p>Line 3</p>
+      <p>Line 4</p>
+    </div>
+    <div class="row">
+      <span class="badge" id="sandbox">sandbox: probing…</span>
+      <span class="badge" id="csp">csp: not probed</span>
+      <button id="probe">Probe blocked fetch</button>
+    </div>
+    <div class="muted">Protocol log</div>
+    <pre id="log"></pre>
+    <script>
+      (() => {
+        const log = (line) => {
+          const el = document.getElementById('log');
+          el.textContent = `${new Date().toISOString().slice(11, 23)} ${line}\n${el.textContent}`;
+        };
+        let seq = 0;
+        let refreshCount = 0;
+        const post = (type, payload) => {
+          const messageId = `fixture-${++seq}`;
+          window.parent.postMessage({ messageId, payload, type }, '*');
+          log(`→ ${type} ${messageId} ${JSON.stringify(payload)}`);
+          return messageId;
+        };
+
+        window.addEventListener('message', (event) => {
+          const data = event.data || {};
+          if (data.type === 'ui-lifecycle-iframe-render-data') {
+            const { renderData } = data.payload || {};
+            document.getElementById('meta').textContent =
+              `theme=${renderData?.theme} locale=${renderData?.locale} toolInput=${JSON.stringify(renderData?.toolInput)}`;
+            document.body.style.background = renderData?.theme === 'dark' ? '#141414' : '#fff';
+            document.body.style.color = renderData?.theme === 'dark' ? '#eee' : '#222';
+          }
+          if (data.type === 'ui-message-response' && data.payload?.response?.content) {
+            const text = data.payload.response.content.map((c) => c.text || '').join(' ');
+            document.getElementById('title').textContent = `MCP-UI fixture card — ${text}`;
+          }
+          log(`← ${data.type} ${JSON.stringify(data.payload ?? {})}`);
+        });
+
+        document.getElementById('tool').onclick = () =>
+          post('tool', { params: { count: ++refreshCount }, toolName: 'fixture_mcp_ui_refresh' });
+        document.getElementById('notify').onclick = () =>
+          post('notify', { message: 'Hello from the MCP-UI fixture card' });
+        document.getElementById('intent').onclick = () =>
+          post('intent', { intent: 'fixture.book', params: { seat: '12A' } });
+        document.getElementById('prompt').onclick = () =>
+          post('prompt', { prompt: 'MCP-UI fixture prompt' });
+        document.getElementById('link').onclick = () =>
+          post('link', { url: 'https://lobehub.com/docs' });
+        document.getElementById('toggle').onclick = () =>
+          document.getElementById('details').classList.toggle('open');
+
+        document.addEventListener('securitypolicyviolation', (event) => {
+          document.getElementById('csp').textContent =
+            `csp: blocked ${event.violatedDirective} ${event.blockedURI}`;
+          log(`csp violation: ${event.violatedDirective} ${event.blockedURI}`);
+        });
+        document.getElementById('probe').onclick = () =>
+          fetch('https://blocked.example.com/probe').catch((error) =>
+            log(`fetch failed: ${error.message}`),
+          );
+
+        // Sandbox probes: an opaque origin has no storage, and the host DOM is out of reach
+        const probes = [];
+        try {
+          void document.cookie;
+          probes.push('cookie=readable');
+        } catch {
+          probes.push('cookie=blocked');
+        }
+        try {
+          void window.localStorage;
+          probes.push('storage=readable');
+        } catch {
+          probes.push('storage=blocked');
+        }
+        try {
+          void window.top.document.title;
+          probes.push('hostDOM=readable');
+        } catch {
+          probes.push('hostDOM=blocked');
+        }
+        probes.push(`origin=${window.origin}`);
+        document.getElementById('sandbox').textContent = `sandbox: ${probes.join(' ')}`;
+        log(`sandbox probe: ${probes.join(' ')}`);
+
+        const report = () => {
+          const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+          window.parent.postMessage({ payload: { height }, type: 'ui-size-change' }, '*');
+        };
+        new ResizeObserver(report).observe(document.documentElement);
+        window.parent.postMessage({ type: 'ui-lifecycle-iframe-ready' }, '*');
+        log('→ ui-lifecycle-iframe-ready');
+      })();
+    </script>
+  </body>
+</html>

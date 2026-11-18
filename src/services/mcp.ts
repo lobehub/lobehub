@@ -130,14 +130,21 @@ const throwIfAborted = (signal?: AbortSignal) => {
  * which desktop that is, so another one falls back to the plain result.
  */
 const markLocalView = async <T>(result: T): Promise<T> => {
-  const state = (result as { state?: { mcpApp?: { deviceId?: string } } } | undefined)?.state;
-  if (!state?.mcpApp) return result;
+  const state = (
+    result as
+      { state?: { mcpApp?: { deviceId?: string }; mcpUi?: { deviceId?: string } } } | undefined
+  )?.state;
+  if (!state?.mcpApp && !state?.mcpUi) return result;
 
   const { getElectronStoreState } = await import('@/store/electron');
   const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
   // Unmarked would read as a view any client can serve: offer none instead
-  if (deviceId) state.mcpApp.deviceId = deviceId;
-  else delete state.mcpApp;
+  for (const key of ['mcpApp', 'mcpUi'] as const) {
+    const view = state[key];
+    if (!view) continue;
+    if (deviceId) view.deviceId = deviceId;
+    else delete state[key];
+  }
 
   return result;
 };

@@ -512,7 +512,11 @@ const runConnectorToolOnBoundDevice = async (
 
   // A view is read from the client that opens the conversation, so a device's
   // result offers none (as agent runs drop it).
-  const { mcpApp: _deviceView, ...state } = (result.state as Record<string, unknown>) ?? {};
+  const {
+    mcpApp: _deviceView,
+    mcpUi: _deviceUi,
+    ...state
+  } = (result.state as Record<string, unknown>) ?? {};
   return {
     content: result.content,
     // A failure keeps its marker and structured details, as agent runs do

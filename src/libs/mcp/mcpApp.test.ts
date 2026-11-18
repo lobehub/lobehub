@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   canServeMcpAppHere,
   getMcpAppFromState,
+  getMcpUiFromState,
   getToolUiResourceUri,
+  hasMcpViewInState,
   isToolVisibleToApp,
   unwrapMcpToolState,
 } from './mcpApp';
@@ -103,5 +105,41 @@ describe('persisted MCP App display preference', () => {
     expect(
       getMcpAppFromState({ mcpApp: { preferredModelDisplayMode: 'pip', resourceUri: 'ui://app' } }),
     ).toEqual({ resourceUri: 'ui://app' });
+  });
+});
+
+describe('getMcpUiFromState (MCP-UI embedded views)', () => {
+  const card = {
+    resource: { mimeType: 'text/html', text: '<b>card</b>', uri: 'ui://card/1' },
+    type: 'resource',
+  };
+
+  it('reads the views of a marked result, from client or server-run envelopes', () => {
+    const state = { content: [{ text: 'hi', type: 'text' }, card], mcpUi: { server: 'srv' } };
+    const expected = {
+      resources: [{ html: '<b>card</b>', kind: 'html', uri: 'ui://card/1' }],
+      server: 'srv',
+    };
+
+    expect(getMcpUiFromState(state)).toEqual(expected);
+    expect(getMcpUiFromState({ content: 'hi', state, success: true })).toEqual(expected);
+    expect(hasMcpViewInState(state)).toBe(true);
+  });
+
+  it('keeps the desktop a local server ran on', () => {
+    expect(
+      getMcpUiFromState({ content: [card], mcpUi: { deviceId: 'dev_1', server: 'srv' } }),
+    ).toMatchObject({ deviceId: 'dev_1' });
+  });
+
+  it('renders none without the marker, without a renderable view, or beside an MCP App', () => {
+    expect(getMcpUiFromState({ content: [card] })).toBeUndefined();
+    expect(
+      getMcpUiFromState({ content: [{ text: 'x', type: 'text' }], mcpUi: {} }),
+    ).toBeUndefined();
+    expect(
+      getMcpUiFromState({ content: [card], mcpApp: { resourceUri: 'ui://app' }, mcpUi: {} }),
+    ).toBeUndefined();
+    expect(hasMcpViewInState({ content: [card] })).toBe(false);
   });
 });

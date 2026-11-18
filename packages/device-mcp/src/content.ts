@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
+import { describeMcpUiResourceBlock } from '@lobechat/const/mcpApp';
+
 import type {
   AudioContent,
   ImageContent,
@@ -164,7 +166,11 @@ export const contentBlocksToMarkdown = async (
           return `<resource type="${item.type}" url="${url}" />`;
         }
         case 'resource': {
-          return `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>`;
+          // An embedded `ui://` view is for the user: the model reads which one, not its HTML
+          return (
+            describeMcpUiResourceBlock(item) ??
+            `<resource type="${item.type}">${JSON.stringify(item.resource)}</resource>`
+          );
         }
         default: {
           return '';

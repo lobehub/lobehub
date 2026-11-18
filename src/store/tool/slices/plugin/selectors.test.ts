@@ -132,33 +132,6 @@ describe('pluginSelectors', () => {
     });
   });
 
-  describe('hasPluginUI', () => {
-    it('should return false when the plugin does not have a UI component', () => {
-      const result = pluginSelectors.isPluginHasUI('non-ui-plugin')(mockState);
-      expect(result).toBe(false);
-    });
-
-    it('should return true when the plugin has a UI component', () => {
-      const stateWithUIPlugin = {
-        ...mockState,
-        installedPlugins: [
-          ...mockState.installedPlugins,
-          {
-            ...mockState.installedPlugins[0],
-            identifier: 'ui-plugin',
-            manifest: {
-              ...mockState.installedPlugins[0].manifest,
-              identifier: 'ui-plugin',
-              ui: true,
-            },
-          },
-        ],
-      } as ToolStoreState;
-      const result = pluginSelectors.isPluginHasUI('ui-plugin')(stateWithUIPlugin);
-      expect(result).toBe(true);
-    });
-  });
-
   describe('isPluginInstalled', () => {
     it('should return true if the plugin is installed', () => {
       const result = pluginSelectors.isPluginInstalled('plugin-1')(mockState);

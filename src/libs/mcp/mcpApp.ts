@@ -8,7 +8,9 @@
 
 import {
   getMcpToolVisibility,
+  getMcpUiResources,
   isMcpToolVisibleTo,
+  type McpUiEmbeddedResource,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
 
@@ -35,6 +37,23 @@ export interface McpAppToolState {
    * view is only read from that server: the identifier may resolve to another
    * one now, which must not get this result's arguments and data.
    */
+  server?: string;
+}
+
+/**
+ * MCP-UI: the result embeds its own `ui://` views as resource content blocks.
+ * The marker says LobeHub may render them (the `mcp_apps` gate was on for the
+ * call) and which server their tool calls reach.
+ */
+export interface McpUiToolState {
+  /** As {@link McpAppToolState.deviceId}: only that desktop serves the views. */
+  deviceId?: string;
+  /**
+   * The server runs on the machine that reached it (`isLocalMcpServer`): only
+   * then may its views load plain-http loopback pages.
+   */
+  local?: boolean;
+  /** As {@link McpAppToolState.server}: the views' tool calls reach no other server. */
   server?: string;
 }
 
@@ -124,6 +143,39 @@ export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined 
  * stable device id, if any).
  */
 export const canServeMcpAppHere = (
-  mcpApp: McpAppToolState,
+  mcpApp: Pick<McpAppToolState, 'deviceId'>,
   currentDeviceId: string | null | undefined,
 ): boolean => !mcpApp.deviceId || mcpApp.deviceId === currentDeviceId;
+
+/**
+ * The embedded MCP-UI views a tool result carries, with the marker the call
+ * stored. A result without the marker (the gate was off, an error, a view
+ * from another device's run) renders as a plain result.
+ */
+export const getMcpUiFromState = (
+  state: unknown,
+): (McpUiToolState & { resources: McpUiEmbeddedResource[] }) | undefined => {
+  const inner = unwrapMcpToolState(state) as
+    | {
+        content?: unknown;
+        mcpApp?: unknown;
+        mcpUi?: { deviceId?: unknown; local?: unknown; server?: unknown };
+      }
+    | undefined;
+  const marker = inner?.mcpUi;
+  if (!marker || typeof marker !== 'object' || getMcpAppFromState(state)) return;
+
+  const resources = getMcpUiResources(inner.content);
+  if (!resources.length) return;
+
+  return {
+    ...(typeof marker.deviceId === 'string' && { deviceId: marker.deviceId }),
+    ...(marker.local === true && { local: true }),
+    resources,
+    ...(typeof marker.server === 'string' && { server: marker.server }),
+  };
+};
+
+/** Whether a tool result renders an interactive view: an MCP App, or embedded MCP-UI views. */
+export const hasMcpViewInState = (state: unknown): boolean =>
+  !!getMcpAppFromState(state) || !!getMcpUiFromState(state);

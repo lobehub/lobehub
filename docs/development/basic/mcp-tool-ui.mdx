@@ -1,0 +1,178 @@
+---
+title: Building MCP Tools with a UI (MCP Apps / MCP-UI)
+description: >-
+  Ship an interactive UI with your MCP tool: declare a ui:// resource and
+  LobeHub renders it in a sandboxed iframe inside the tool card, talking back
+  over postMessage.
+tags:
+  - MCP
+  - MCP Apps
+  - MCP-UI
+  - Tool UI
+  - Plugin Development
+---
+
+# Building MCP Tools with a UI (MCP Apps / MCP-UI)
+
+An MCP tool can come with its own interactive UI. Instead of a plain text result, the conversation shows your HTML inside the tool card, and the UI can call tools, post messages, show notices and resize itself.
+
+LobeHub renders two kinds of tool UI, both identified by a `ui://` URI:
+
+| Kind                    | How the tool declares it                                                                              | Protocol                                                    |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **MCP-UI** (embedded)   | The tool **result** contains a `resource` content block whose `uri` starts with `ui://`               | MCP-UI postMessage messages (`tool`, `intent`, `notify`, …) |
+| **MCP Apps** (SEP-1865) | The tool **definition** sets `_meta.ui.resourceUri`; LobeHub reads the resource with `resources/read` | MCP Apps JSON-RPC (`ui/initialize`, `tools/call`, …)        |
+
+Both run in the same sandbox and follow the same approval rules. This page focuses on MCP-UI embedded resources; MCP Apps follows the [MCP Apps specification](https://github.com/modelcontextprotocol/ext-apps) and its SDK (`@modelcontextprotocol/ext-apps`).
+
+<Callout type={'info'}>
+  Tool UI is behind the `mcp_apps` feature flag (off by default). On a self-hosted deployment set `FEATURE_FLAGS="+mcp_apps"` and restart. With the flag off, the same results render as plain tool results.
+</Callout>
+
+## MCP-UI: embed a `ui://` resource in the tool result
+
+Return a `resource` content block next to your text. Two forms render:
+
+| `mimeType`      | Body (`text`, or base64 `blob`)                                            | Rendering                                       |
+| --------------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
+| `text/html`     | A complete HTML document                                                   | `srcdoc` iframe behind a strict CSP (`rawHtml`) |
+| `text/uri-list` | One URL per line; the first `http(s)` URL is used (`#` lines are comments) | iframe that loads the page (`externalUrl`)      |
+
+Other MCP-UI types (such as `application/vnd.mcp-ui.remote-dom`) are not rendered; the plain result shows instead.
+
+### Server example (TypeScript SDK)
+
+```ts
+import { McpServer } from '@modelcontextprotocol/server';
+
+const server = new McpServer({ name: 'weather-card', version: '1.0.0' });
+
+const html = `<!doctype html>
+<html>
+  <body>
+    <h3 id="title">Weather</h3>
+    <button id="refresh">Refresh</button>
+    <button id="notify">Notify</button>
+    <script>
+      const post = (type, payload) => {
+        const messageId = crypto.randomUUID();
+        window.parent.postMessage({ type, payload, messageId }, '*');
+        return messageId;
+      };
+
+      window.addEventListener('message', (event) => {
+        const { type, payload } = event.data || {};
+        if (type === 'ui-lifecycle-iframe-render-data') {
+          document.body.dataset.theme = payload.renderData.theme;
+        }
+        if (type === 'ui-message-response' && payload.response?.content) {
+          document.getElementById('title').textContent = payload.response.content[0].text;
+        }
+      });
+
+      document.getElementById('refresh').onclick = () =>
+        post('tool', { toolName: 'get_weather', params: { city: 'Paris' } });
+      document.getElementById('notify').onclick = () =>
+        post('notify', { message: 'Saved to favorites' });
+
+      // Report the content height so the card grows and shrinks with it
+      new ResizeObserver(() => {
+        const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+        window.parent.postMessage({ type: 'ui-size-change', payload: { height } }, '*');
+      }).observe(document.documentElement);
+
+      window.parent.postMessage({ type: 'ui-lifecycle-iframe-ready' }, '*');
+    </script>
+  </body>
+</html>`;
+
+server.registerTool(
+  'show_weather_card',
+  { description: 'Show an interactive weather card', inputSchema: {} },
+  async () => ({
+    content: [
+      // What the model reads
+      { type: 'text', text: 'Showed the weather card for Paris.' },
+      // What the user sees
+      { type: 'resource', resource: { uri: 'ui://weather/card', mimeType: 'text/html', text: html } },
+    ],
+  }),
+);
+
+server.registerTool(
+  'get_weather',
+  { description: 'Current weather for a city', inputSchema: {} },
+  async () => ({ content: [{ type: 'text', text: 'Paris: 21°C, sunny' }] }),
+);
+```
+
+If you use `@mcp-ui/server`, `createUIResource({ uri: 'ui://…', content: { type: 'rawHtml', htmlString }, encoding: 'text' })` produces the same block.
+
+An external page instead:
+
+```ts
+{
+  type: 'resource',
+  resource: { uri: 'ui://weather/page', mimeType: 'text/uri-list', text: 'https://widgets.example.com/weather?city=Paris' },
+}
+```
+
+The model never receives the HTML: LobeHub replaces a `ui://` block in the model's copy of the result with `<resource type="ui" uri="ui://weather/card" mimeType="text/html" />`. Put what the model needs to know in a `text` block.
+
+### postMessage protocol
+
+Messages are plain objects posted with `window.parent.postMessage(message, '*')`. Requests may carry a `messageId`; the host then confirms receipt and answers with the result.
+
+**UI → LobeHub**
+
+| `type`                      | `payload`              | What LobeHub does                                                                    | `response`               |
+| --------------------------- | ---------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
+| `tool`                      | `{ toolName, params }` | Calls `toolName` on **the same MCP server**, under the user's tool approval settings | The MCP `CallToolResult` |
+| `prompt`                    | `{ prompt }`           | Asks the user, then posts `prompt` as a message to the conversation                  | `{ sent: boolean }`      |
+| `intent`                    | `{ intent, params? }`  | Asks the user, then posts the intent (name + JSON params) as a message               | `{ sent: boolean }`      |
+| `notify`                    | `{ message }`          | Shows a toast titled with your tool's name (≤ 300 characters, at most one every 2 s) | `{ shown: boolean }`     |
+| `link`                      | `{ url }`              | Asks the user, then opens the `http(s)` URL in a new tab                             | `{ opened: boolean }`    |
+| `ui-size-change`            | `{ height }`           | Sets the frame height (default 320 px, at most 2000 px)                              | —                        |
+| `ui-lifecycle-iframe-ready` | —                      | Sends render data                                                                    | —                        |
+| `ui-request-render-data`    | —                      | Sends render data (with your `messageId`)                                            | —                        |
+
+**LobeHub → UI**
+
+| `type`                            | `payload`                                                   |
+| --------------------------------- | ----------------------------------------------------------- |
+| `ui-message-received`             | `{ messageId }` — the request arrived                       |
+| `ui-message-response`             | `{ messageId, response }` or `{ messageId, error }`         |
+| `ui-lifecycle-iframe-render-data` | `{ renderData: { theme, locale, toolInput, toolOutput? } }` |
+
+`toolInput` is the arguments of the tool call that produced the UI; `toolOutput` is that result's `structuredContent`, when present. Render data is sent again when the user switches between light and dark theme.
+
+Tool calls from the UI reach only the server that rendered it, and only tools it lets views call (an MCP Apps `_meta.ui.visibility` without `"app"` is refused). A call the conversation would stop for approval asks the user here too; a refused call answers with an `isError` result.
+
+## Sandbox and limits
+
+Your UI runs in two nested iframes: a LobeHub wrapper, and your document inside it. Both are sandboxed with `sandbox="allow-scripts allow-forms"`, **without** `allow-same-origin`:
+
+- The document runs on an opaque origin: `document.cookie` and `localStorage` throw, and `window.top` / `window.parent.document` are not reachable. The only way to LobeHub is postMessage.
+- No popups, top-level navigation, downloads or modals (`alert`, `confirm`). Use the `link` and `notify` messages instead.
+- Camera, microphone, geolocation and clipboard-write are off (`allow="camera 'none'; …"`).
+- **`text/html`** documents get this CSP, injected before your first byte: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'`. Inline everything (scripts, styles, `data:` images); `fetch` and external assets are blocked. Need data? Call a tool.
+- An HTML view that navigates away from its document is removed from the card.
+- **`text/uri-list`** pages run under their own server's headers, inside the same opaque-origin sandbox, with no referrer. The wrapper's `frame-src` holds the frame to the page's origin, so links may move between pages of that origin only. URLs must be `https` (or `http` on `localhost` / `127.0.0.1`), may not carry credentials and may not point at LobeHub's own origin.
+- Embedded documents larger than 2 MB are not rendered.
+
+Because the frame has an opaque origin, LobeHub addresses it as `postMessage(message, '*')` on the frame's own window and accepts only messages whose `event.source` is that window and whose `event.origin` is `"null"` (the opaque origin). Your UI should likewise only trust messages from `window.parent`.
+
+## Try it locally
+
+The repository ships a fixture server with MCP-UI tools (`fixture_mcp_ui_card`, `fixture_mcp_ui_external`, `fixture_mcp_ui_refresh`):
+
+```bash
+bun e2e/fixtures/mcpApps/server.mts        # MCP endpoint http://localhost:39742/mcp
+bun e2e/fixtures/mcpApps/model-server.mts  # optional deterministic model
+```
+
+Add `http://localhost:39742/mcp` as a Streamable HTTP MCP server (a self-hosted server needs `SSRF_ALLOW_IP_ADDRESS_LIST=127.0.0.1` to reach a loopback MCP server), enable the plugin on an agent and ask it to call `fixture_mcp_ui_card`. See `e2e/fixtures/mcpApps/README.md`.
+
+## Legacy plugin manifests
+
+The old plugin manifest field `ui: { url, mode, width, height }` is no longer read and was removed from LobeHub's `ToolManifest` type. Ship tool UI as an MCP server with a `ui://` resource instead.
