@@ -6,12 +6,12 @@ import { useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { encodeMobileSelection } from '@/features/Settings/skill/mobileSelection';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
+import { installedMcpSelection } from './installedMcpSelection';
 import { isLegacyMcp } from './isLegacyMcp';
 
 export const InstalledMcp = () => {
@@ -30,16 +30,16 @@ export const InstalledMcp = () => {
     ...connectors.map((item) => ({
       avatar: item.metadata?.avatar as string | undefined,
       identifier: item.identifier,
-      selection: 'mcp-connector' as const,
       title: item.name,
+      value: installedMcpSelection(item.identifier),
     })),
     ...plugins
       .filter((item) => !connectorIds.has(item.identifier))
       .map((item) => ({
         avatar: item.avatar,
         identifier: item.identifier,
-        selection: item.type === 'customPlugin' ? ('mcp-connector' as const) : ('plugin' as const),
         title: item.title,
+        value: installedMcpSelection(item.identifier, item.type),
       })),
   ];
 
@@ -48,8 +48,7 @@ export const InstalledMcp = () => {
       <Text as="h2" fontSize={12} type="secondary">
         {t('plugins.installed')}
       </Text>
-      {entries.map(({ identifier, selection, title, avatar }) => {
-        const value = encodeMobileSelection({ identifier, type: selection });
+      {entries.map(({ identifier, value, title, avatar }) => {
         return (
           <WorkspaceLink key={value} to={'/community/mcp?' + new URLSearchParams({ open: value })}>
             <NavItem

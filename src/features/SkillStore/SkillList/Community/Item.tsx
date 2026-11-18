@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import { installedMcpSelection } from '@/features/CommunityMcp/installedMcpSelection';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
@@ -70,6 +71,12 @@ const Item = memo<DiscoverMcpItem & { marketplace?: boolean }>((props) => {
       s.uninstallMCPPlugin,
       mcpStoreSelectors.getPluginById(identifier)(s),
     ]);
+
+  // Undefined for a connector-backed install, which has no plugin row.
+  const legacyType = useToolStore((s) => {
+    const row = pluginSelectors.installedPlugins(s).find((i) => i.identifier === identifier);
+    return row && (row.source || row.type);
+  });
 
   const installProgress = useToolStore(
     mcpStoreSelectors.getMCPInstallProgress(identifier),
@@ -127,7 +134,7 @@ const Item = memo<DiscoverMcpItem & { marketplace?: boolean }>((props) => {
           title={t('store.actions.settings')}
           onClick={() => {
             const params = new URLSearchParams(location.search);
-            params.set('open', 'plugin:' + identifier);
+            params.set('open', installedMcpSelection(identifier, legacyType));
             navigate({ search: params.toString() });
           }}
         />
