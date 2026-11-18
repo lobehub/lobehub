@@ -1,8 +1,7 @@
 import type { Context } from 'hono';
 
-import { isFullAccessApiKey } from '@/const/apiKeyScope';
-
 import { BaseController } from '../common/base.controller';
+import { isScopeRestrictedCredential } from '../middleware/permission-check';
 import { ProviderService } from '../services/provider.service';
 import type {
   CreateProviderRequest,
@@ -23,9 +22,7 @@ export class ProviderController extends BaseController {
    * through the read endpoints.
    */
   private isRestrictedApiKey(c: Context): boolean {
-    if (c.get('authType') !== 'apikey') return false;
-
-    return !isFullAccessApiKey(c.get('apiKeyScopes') as string[] | null | undefined);
+    return isScopeRestrictedCredential(c);
   }
 
   async handleGetProviders(c: Context): Promise<Response> {

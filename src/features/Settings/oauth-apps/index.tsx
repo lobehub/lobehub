@@ -14,6 +14,7 @@ import { AppDetailSkeleton } from './features/AppDetail';
 import AppListSkeleton from './features/AppListSkeleton';
 import CreateAppButton from './features/CreateAppButton';
 import OAuthApps from './features/OAuthApps';
+import RegistrationTokenButton from './features/RegistrationToken';
 import { useOAuthAppList } from './features/useOAuthAppList';
 
 const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => {
@@ -45,22 +46,30 @@ const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => 
   if (!enableOAuthApps) return <NotFound />;
 
   const canCreate = !params.sub && canEdit && !listEmpty;
+  const showActions = !params.sub && canEdit;
+  // The registration token stays reachable while the empty state owns Create.
+  const actions = showActions && (
+    <Flexbox horizontal gap={8}>
+      <RegistrationTokenButton />
+      {canCreate && <CreateAppButton />}
+    </Flexbox>
+  );
 
   return (
     <>
       {showSettingHeader ? (
-        <SettingHeader extra={canCreate && <CreateAppButton />} title={t('tab.oauthApps')} />
+        <SettingHeader extra={actions} title={t('tab.oauthApps')} />
       ) : (
-        canCreate && (
+        actions && (
           <SettingsPageActions
             // Mobile has no shared header slot; keep Create reachable above the list.
             fallback={
               <Flexbox horizontal justify={'flex-end'}>
-                <CreateAppButton />
+                {actions}
               </Flexbox>
             }
           >
-            <CreateAppButton />
+            {actions}
           </SettingsPageActions>
         )
       )}

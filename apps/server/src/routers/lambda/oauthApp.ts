@@ -11,6 +11,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { OidcClientModel } from '@/database/models/oidcClient';
+import { getOpenPlatformFlags, issueRegistrationToken } from '@/libs/oidc-provider/openPlatform';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
@@ -25,6 +26,27 @@ const oauthAppProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
 });
 
 const oauthAppWriteProcedure = oauthAppProcedure.use(requireWorkspaceRoleWhenScoped('admin'));
+
+/**
+ * A client_credentials app acts as the person who created it, with their
+ * workspace role. Any workspace admin may manage the app, so without this
+ * check one admin could rotate another's secret, or switch the app on, and
+ * mint tokens that act as that other person. Disabling and deleting stay open
+ * to every admin: they only take power away.
+ */
+const assertMachineClientCreator = async (
+  ctx: { oidcClientModel: OidcClientModel; userId: string },
+  id: string,
+) => {
+  const client = await ctx.oidcClientModel.findById(id);
+
+  if (client?.grants?.includes('client_credentials') && client.userId !== ctx.userId) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the creator of a client_credentials app can issue its secret or enable it',
+    });
+  }
+};
 
 /**
  * The stored secret is encrypted and is never a useful thing to ship to a
@@ -95,6 +117,26 @@ export const oauthAppRouter = router({
       return { ...stripSecret(client), clientSecret: secret };
     }),
 
+  /**
+   * Mints a single-use initial access token for RFC 7591 dynamic registration.
+   * The client it registers belongs to the caller (and the current workspace),
+   * exactly like an app created on this page. Returned once, never stored in
+   * plaintext anywhere the caller can read it back.
+   */
+  createRegistrationToken: oauthAppWriteProcedure.mutation(async ({ ctx }) => {
+    if (!getOpenPlatformFlags().dynamicRegistration) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'Dynamic client registration is not enabled on this server',
+      });
+    }
+
+    return issueRegistrationToken(ctx.serverDB, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  }),
+
   delete: oauthAppWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
@@ -111,9 +153,23 @@ export const oauthAppRouter = router({
     return clients.map(stripSecret);
   }),
 
+  /** Which OAuth open platform capabilities the server has switched on. */
+  openPlatform: oauthAppProcedure.query(() => {
+    const flags = getOpenPlatformFlags();
+
+    return {
+      apiScopes: flags.apiScopes,
+      clientCredentials: flags.clientCredentials,
+      dynamicRegistration: flags.dynamicRegistration,
+      registrationApproval: flags.registrationApproval,
+    };
+  }),
+
   rotateSecret: oauthAppWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await assertMachineClientCreator(ctx, input.id);
+
       const clientSecret = await ctx.oidcClientModel.rotateSecret(input.id);
 
       if (!clientSecret) throw new TRPCError({ code: 'NOT_FOUND' });
@@ -124,6 +180,8 @@ export const oauthAppRouter = router({
   setEnabled: oauthAppWriteProcedure
     .input(z.object({ enabled: z.boolean(), id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      if (input.enabled) await assertMachineClientCreator(ctx, input.id);
+
       return ctx.oidcClientModel.setEnabled(input.id, input.enabled);
     }),
 

@@ -29,6 +29,21 @@ const testGrantId = 'test-grant-id';
 const testUserCode = 'test-user-code';
 const testExpires = new Date(Date.now() + 3600 * 1000); // Expires in 1 hour
 
+/** What oidc-provider hands the adapter for an RFC 7591 registration. */
+const registrationPayload = {
+  application_type: 'web',
+  client_id: testClientId,
+  client_name: 'Test Client',
+  client_secret: 'secret',
+  client_uri: 'https://example.com',
+  grant_types: ['authorization_code', 'refresh_token'],
+  lobehub_owner_user_id: testUserId,
+  redirect_uris: ['https://example.com/callback'],
+  response_types: ['code'],
+  scope: 'openid profile email',
+  token_endpoint_auth_method: 'client_secret_basic',
+};
+
 beforeEach(async () => {
   await serverDB.insert(users).values({ id: testUserId }).onConflictDoNothing();
 });
@@ -70,22 +85,10 @@ describe('DrizzleAdapter', () => {
       expect(result?.data).toEqual(payload);
     });
 
-    it('should create new record for Client model', async () => {
+    it('should create new record for a registered Client', async () => {
       const adapter = new DrizzleAdapter('Client', serverDB);
-      const payload = {
-        client_id: testClientId,
-        client_uri: 'https://example.com',
-        application_type: 'web',
-        client_secret: 'secret',
-        grant_types: ['authorization_code', 'refresh_token'],
-        name: 'Test Client',
-        redirectUris: ['https://example.com/callback'],
-        response_types: ['code'],
-        scope: 'openid profile email',
-        token_endpoint_auth_method: 'client_secret_basic',
-      };
 
-      await adapter.upsert(testClientId, payload, 0);
+      await adapter.upsert(testClientId, registrationPayload, 0);
 
       const result = await serverDB.query.oidcClients.findFirst({
         where: eq(oidcClients.id, testClientId),
@@ -93,9 +96,11 @@ describe('DrizzleAdapter', () => {
 
       expect(result).toBeDefined();
       expect(result?.id).toBe(testClientId);
-      expect(result?.name).toBe(payload.name);
-      expect(result?.redirectUris).toEqual(payload.redirectUris);
+      expect(result?.name).toBe('Test Client');
+      expect(result?.redirectUris).toEqual(['https://example.com/callback']);
       expect(result?.scopes).toEqual(['openid', 'profile', 'email']);
+      expect(result?.userId).toBe(testUserId);
+      expect(result?.isFirstParty).toBe(false);
     });
 
     it('should create new record for AccessToken model', async () => {
@@ -166,43 +171,14 @@ describe('DrizzleAdapter', () => {
       expect(result!.expiresAt!.getTime()).toBeLessThan(expectedExpires + 5000);
     });
 
-    it('should update existing Client record', async () => {
+    it('should refuse a Client without an owner', async () => {
       const adapter = new DrizzleAdapter('Client', serverDB);
-      const initialPayload = {
-        client_id: testClientId,
-        client_uri: 'https://initial.com',
-        name: 'Initial Client',
-        redirectUris: ['https://initial.com/callback'],
-        scopes: ['openid'],
-      };
-      const updatedPayload = {
-        ...initialPayload,
-        client_uri: 'https://updated.com',
-        name: 'Updated Client',
-        scopes: ['openid', 'profile'],
-        scope: 'openid profile',
-        redirectUris: ['https://updated.com/callback'],
-      };
+      const { lobehub_owner_user_id: _owner, ...ownerless } = registrationPayload;
 
-      // Initial insert
-      await adapter.upsert(testClientId, initialPayload, 0);
-      let result = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, testClientId),
-      });
-
-      expect(result?.name).toBe('Initial Client');
-      expect(result?.clientUri).toBe('https://initial.com');
-      expect(result?.scopes).toEqual(['openid']);
-
-      // Update
-      await adapter.upsert(testClientId, updatedPayload, 0);
-      result = await serverDB.query.oidcClients.findFirst({
-        where: eq(oidcClients.id, testClientId),
-      });
-      expect(result?.name).toBe('Updated Client');
-      expect(result?.clientUri).toBe('https://updated.com');
-      expect(result?.scopes).toEqual(['openid', 'profile']);
-      expect(result?.redirectUris).toEqual(['https://updated.com/callback']);
+      await expect(adapter.upsert(testClientId, ownerless, 0)).rejects.toThrow(/no owner/);
+      expect(
+        await serverDB.query.oidcClients.findFirst({ where: eq(oidcClients.id, testClientId) }),
+      ).toBeUndefined();
     });
 
     describe('DeviceCode payload accountId protection', () => {
@@ -299,28 +275,17 @@ describe('DrizzleAdapter', () => {
 
     it('should return correct format for Client model', async () => {
       const adapter = new DrizzleAdapter('Client', serverDB);
-      const payload = {
-        client_id: testClientId,
-        client_uri: 'https://example.com',
-        application_type: 'web',
-        client_secret: 'secret',
-        grant_types: ['authorization_code', 'refresh_token'],
-        name: 'Test Client',
-        redirectUris: ['https://example.com/callback'],
-        response_types: ['code'],
-        scope: 'openid profile email',
-        token_endpoint_auth_method: 'client_secret_basic',
-      };
 
-      await adapter.upsert(testClientId, payload, 0);
+      await adapter.upsert(testClientId, registrationPayload, 0);
 
       const result = await adapter.find(testClientId);
 
       expect(result).toBeDefined();
       expect(result.client_id).toBe(testClientId);
-      expect(result.client_secret).toBe(payload.client_secret);
-      expect(result.redirect_uris).toEqual(payload.redirectUris);
-      expect(result.scope).toBe(payload.scope);
+      expect(result.client_name).toBe('Test Client');
+      expect(result.client_secret).toBe(registrationPayload.client_secret);
+      expect(result.redirect_uris).toEqual(registrationPayload.redirect_uris);
+      expect(result.scope).toBe(registrationPayload.scope);
     });
 
     it('should return undefined if record does not exist', async () => {

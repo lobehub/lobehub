@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Button, Flexbox, Text } from '@lobehub/ui';
+import { isOAuthApiScope } from '@lobechat/const';
+import { Block, Button, Flexbox, Tag, Text } from '@lobehub/ui';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +12,7 @@ import OAuthApplicationLogo from '../OAuthApplicationLogo';
 import ThirdPartyNotice from '../ThirdPartyNotice';
 import BuiltinConsent from './BuiltinConsent';
 import ReviewTarget from './ReviewTarget';
+import { scopeDescriptionKey } from './scopeDescription';
 
 interface ClientProps {
   acceptanceReview?: OidcInteractionDetailsResponse['acceptanceReview'];
@@ -25,9 +27,7 @@ interface ClientProps {
  * Get the description for a scope
  */
 function getScopeDescription(scope: string, t: any, reviewKind?: 'acceptance' | 'site'): string {
-  if (scope === 'acceptance:review' && reviewKind === 'site')
-    return t('consent.scope.acceptance-review-site');
-  return t(`consent.scope.${scope.replace(':', '-')}`, scope);
+  return t(scopeDescriptionKey(scope, reviewKind), scope);
 }
 
 const BUILTIN_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile', 'lobehub-market', 'toby']);
@@ -105,8 +105,19 @@ const ConsentClient = memo<ClientProps>(
           </Text>
           <Flexbox gap={4} style={{ marginTop: 8 }} width={'100%'}>
             {scopes.map((scope) => (
-              <Block key={scope} padding={16} variant={'filled'}>
+              <Block
+                horizontal
+                align={'center'}
+                gap={8}
+                justify={'space-between'}
+                key={scope}
+                padding={16}
+                variant={'filled'}
+              >
                 <Text>{getScopeDescription(scope, t, acceptanceReview?.kind)}</Text>
+                {isOAuthApiScope(scope) && (
+                  <Tag style={{ flex: 'none', fontFamily: 'monospace' }}>{scope}</Tag>
+                )}
               </Block>
             ))}
           </Flexbox>

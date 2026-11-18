@@ -7,6 +7,11 @@ import { ApiKeyModel } from '@/database/models/apiKey';
 import { authEnv } from '@/envs/auth';
 import { assertOIDCUserActive } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import {
+  findClientOwner,
+  getOpenPlatformFlags,
+  oauthTokenApiScopes,
+} from '@/libs/oidc-provider/openPlatform';
 import { validateApiKeyFormat } from '@/utils/apiKey';
 import { extractBearerToken } from '@/utils/server/auth';
 
@@ -40,6 +45,10 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
   let apiKeyWorkspaceId: string | null | undefined;
   // capability scopes of the API key (`null` = full-access key)
   let apiKeyScopes: string[] | null = null;
+  // API scopes an OAuth token is narrowed to (`undefined` = not narrowed)
+  let oauthScopes: string[] | undefined;
+  // workspace a client_credentials token is bound to (`null` = personal)
+  let oauthClientWorkspaceId: string | null = null;
 
   // Try Bearer token authentication - check format first to determine type
   if (bearerToken) {
@@ -101,16 +110,43 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
 
       try {
         // Use direct JWT validation instead of OIDCService
-        const tokenInfo = await validateOIDCJWT(bearerToken);
+        // This transport enforces API scopes, so it is the one place scoped
+        // and machine tokens are accepted.
+        const tokenInfo = await validateOIDCJWT(bearerToken, {
+          allowClientCredentials: getOpenPlatformFlags().clientCredentials,
+          allowScopedTokens: true,
+        });
         if (tokenInfo.tokenData?.purpose === 'hetero-operation') {
           throw new Error('Operation tokens are only accepted by heterogeneous model endpoints');
         }
         const db = await getServerDB();
         await assertOIDCUserActive(db, tokenInfo.userId);
 
+        const { clientCredentials, workspaceId } = tokenInfo.tokenData;
+        if (clientCredentials) {
+          // A machine token outlives nothing it was minted from: a client that
+          // was disabled, deleted or moved since then stops working at once.
+          const owner = tokenInfo.clientId
+            ? await findClientOwner(db, tokenInfo.clientId as string)
+            : undefined;
+          if (
+            !owner ||
+            owner.userId !== tokenInfo.userId ||
+            (owner.workspaceId ?? null) !== (workspaceId ?? null)
+          ) {
+            throw new Error('The OAuth client of this token is no longer active');
+          }
+          oauthClientWorkspaceId = owner.workspaceId ?? null;
+        }
+
         userId = tokenInfo.userId;
-        authType = 'oidc';
+        authType = clientCredentials ? 'oauth_client' : 'oidc';
         authData = tokenInfo.tokenData;
+        oauthScopes = oauthTokenApiScopes({
+          clientCredentials,
+          clientId: tokenInfo.clientId as string | undefined,
+          scope: tokenInfo.tokenData.scope as string | undefined,
+        });
 
         log('OIDC authentication successful, userId: %s', userId);
       } catch (error) {
@@ -127,9 +163,18 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
     c.set('authType', authType);
     c.set('authData', authData);
     c.set('authorizationHeader', authorizationHeader);
-    c.set('apiKeyWorkspaceId', authType === 'apikey' ? (apiKeyWorkspaceId ?? null) : undefined);
-    // `undefined` = not API-key auth; `null` = full-access key
-    c.set('apiKeyScopes', authType === 'apikey' ? apiKeyScopes : undefined);
+    // Credentials bound to one workspace (API keys, client_credentials tokens)
+    c.set(
+      'apiKeyWorkspaceId',
+      authType === 'apikey'
+        ? (apiKeyWorkspaceId ?? null)
+        : authType === 'oauth_client'
+          ? oauthClientWorkspaceId
+          : undefined,
+    );
+    // `undefined` = not narrowed by scopes; `null` = full-access key; a list
+    // narrows a restricted API key or an OAuth token to those scopes
+    c.set('apiKeyScopes', authType === 'apikey' ? apiKeyScopes : oauthScopes);
 
     log('Authentication successful - userId: %s, authType: %s', userId, authType);
   } else {

@@ -15,6 +15,11 @@ import { eq, sql } from 'drizzle-orm';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { stampClientLastUsed } from './clientLastUsed';
+import {
+  CLIENT_OWNER_USER_METADATA,
+  CLIENT_OWNER_WORKSPACE_METADATA,
+  CLIENT_PENDING_APPROVAL_METADATA,
+} from './openPlatform';
 
 // Create adapter logging namespace
 const log = debug('lobe-oidc:adapter');
@@ -153,58 +158,41 @@ class OIDCAdapter {
     }
 
     if (this.name === 'Client') {
-      // Special handling for client model, directly use the passed data
-      log('[Client] Upserting client record');
+      // oidc-provider only writes clients through dynamic registration; apps
+      // created on the settings page are inserted by `OidcClientModel`.
+      log('[Client] Inserting dynamically registered client');
+      const ownerUserId = payload[CLIENT_OWNER_USER_METADATA];
+      if (!ownerUserId) {
+        // The owner policy runs on every registration; a client without an
+        // owner could never be managed, disabled or attributed.
+        throw new Error('Dynamically registered client has no owner');
+      }
+
       try {
         const clientSecret = await encryptClientSecret(payload.client_secret);
 
-        await this.db
-          .insert(table)
-          .values({
-            applicationType: payload.application_type,
-            clientSecret,
-            clientUri: payload.client_uri,
-            description: payload.description,
-            grants: payload.grant_types || [],
-            id,
-            isFirstParty: !!payload.isFirstParty,
-            logoUri: payload.logo_uri,
-            name: payload.name,
-            policyUri: payload.policy_uri,
-            redirectUris: payload.redirectUris || [],
-            responseTypes: payload.response_types || [],
-            scopes: Array.isArray(payload.scopes)
-              ? payload.scopes
-              : payload.scope
-                ? payload.scope.split(' ')
-                : [],
-            tokenEndpointAuthMethod: payload.token_endpoint_auth_method,
-            tosUri: payload.tos_uri,
-          } as any)
-          .onConflictDoUpdate({
-            set: {
-              applicationType: payload.application_type,
-              // Left untouched when the payload carries no secret, so an update
-              // that omits it cannot wipe the stored one.
-              ...(clientSecret ? { clientSecret } : {}),
-              clientUri: payload.client_uri,
-              description: payload.description,
-              grants: payload.grant_types || [],
-              isFirstParty: !!payload.isFirstParty,
-              logoUri: payload.logo_uri,
-              name: payload.name,
-              policyUri: payload.policy_uri,
-              redirectUris: payload.redirectUris || [],
-              responseTypes: payload.response_types || [],
-              scopes: payload.scope ? payload.scope.split(' ') : [],
-              tokenEndpointAuthMethod: payload.token_endpoint_auth_method,
-              tosUri: payload.tos_uri,
-            } as any,
-            target: (table as any).id,
-          });
-        log('[Client] Successfully upserted client: %s', id);
+        await this.db.insert(table).values({
+          applicationType: payload.application_type,
+          clientSecret,
+          clientUri: payload.client_uri,
+          enabled: !payload[CLIENT_PENDING_APPROVAL_METADATA],
+          grants: payload.grant_types || [],
+          id,
+          isFirstParty: false,
+          logoUri: payload.logo_uri,
+          name: payload.client_name || id,
+          policyUri: payload.policy_uri,
+          redirectUris: payload.redirect_uris || [],
+          responseTypes: payload.response_types || [],
+          scopes: payload.scope ? String(payload.scope).split(' ') : [],
+          tokenEndpointAuthMethod: payload.token_endpoint_auth_method,
+          tosUri: payload.tos_uri,
+          userId: ownerUserId,
+          workspaceId: payload[CLIENT_OWNER_WORKSPACE_METADATA] || null,
+        } as any);
+        log('[Client] Successfully inserted client: %s', id);
       } catch (error) {
-        log('[Client] ERROR upserting client: %O', error);
+        log('[Client] ERROR inserting client: %O', error);
         throw error;
       }
       return;
@@ -346,6 +334,7 @@ class OIDCAdapter {
         const clientMetadata: Record<string, any> = {
           application_type: model.applicationType,
           client_id: model.id,
+          client_name: model.name,
           client_secret: await decryptClientSecret(model.id, model.clientSecret),
           client_uri: model.clientUri,
           grant_types: model.grants,

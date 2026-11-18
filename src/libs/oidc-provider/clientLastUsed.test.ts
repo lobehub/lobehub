@@ -28,6 +28,15 @@ describe('stampClientLastUsed', () => {
     expect(chain.set).toHaveBeenCalledWith({ lastUsedAt: expect.any(Date) });
   });
 
+  it('stamps a dynamically registered (lcd_) client', async () => {
+    const { db } = createDb();
+
+    stampClientLastUsed(db as any, 'lcd_partner');
+    await flush();
+
+    expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores static first-party clients and missing ids', () => {
     const { db } = createDb();
 

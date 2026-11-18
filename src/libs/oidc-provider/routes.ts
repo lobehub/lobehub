@@ -15,6 +15,7 @@ export const OIDC_ROUTES = {
   end_session: '/oidc/session/end',
   introspection: '/oidc/token/introspection',
   jwks: '/oidc/jwks',
+  registration: '/oidc/reg',
   revocation: '/oidc/token/revocation',
   token: '/oidc/token',
   userinfo: '/oidc/me',

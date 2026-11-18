@@ -11,17 +11,27 @@ const log = debug('lobe-hono:workspace-middleware');
 
 export const OPENAPI_WORKSPACE_HEADER = 'X-Workspace-Id';
 
+/**
+ * API keys and client_credentials tokens belong to one workspace (or to the
+ * personal space) and act there only; a user's session or OAuth sign-in picks
+ * the workspace per request.
+ */
+const isWorkspaceBoundCredential = (c: Context) =>
+  c.get('authType') === 'apikey' || c.get('authType') === 'oauth_client';
+
 const resolveWorkspaceId = (c: Context): string | undefined => {
   const requestedWorkspaceId = c.req.header(OPENAPI_WORKSPACE_HEADER)?.trim() || undefined;
 
-  if (c.get('authType') !== 'apikey') return requestedWorkspaceId;
+  if (!isWorkspaceBoundCredential(c)) return requestedWorkspaceId;
 
   const apiKeyWorkspaceId = c.get('apiKeyWorkspaceId') as string | null | undefined;
+
+  const credential = c.get('authType') === 'apikey' ? 'API Key' : 'OAuth app';
 
   if (!apiKeyWorkspaceId) {
     if (requestedWorkspaceId) {
       throw new HTTPException(403, {
-        message: 'Personal API Key cannot access workspace data',
+        message: `Personal ${credential} cannot access workspace data`,
       });
     }
 
@@ -30,7 +40,7 @@ const resolveWorkspaceId = (c: Context): string | undefined => {
 
   if (requestedWorkspaceId && requestedWorkspaceId !== apiKeyWorkspaceId) {
     throw new HTTPException(403, {
-      message: 'Workspace API Key cannot access a different workspace',
+      message: `Workspace ${credential} cannot access a different workspace`,
     });
   }
 
@@ -110,7 +120,7 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
     });
   }
 
-  if (c.get('authType') === 'apikey' && !(await canUseWorkspaceApiKeys(workspaceId))) {
+  if (isWorkspaceBoundCredential(c) && !(await canUseWorkspaceApiKeys(workspaceId))) {
     throw new HTTPException(403, {
       message: 'Workspace API Key access is not available',
     });

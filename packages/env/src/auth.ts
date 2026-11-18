@@ -114,6 +114,11 @@ declare global {
        * Can be generated using `node scripts/generate-oidc-jwk.mjs`.
        */
       JWKS_KEY?: string;
+
+      OIDC_DYNAMIC_REGISTRATION_REQUIRE_APPROVAL?: string;
+      OIDC_ENABLE_API_SCOPES?: string;
+      OIDC_ENABLE_CLIENT_CREDENTIALS?: string;
+      OIDC_ENABLE_DYNAMIC_REGISTRATION?: string;
     }
   }
 }
@@ -209,6 +214,16 @@ export const getAuthConfig = () => {
       // Generic JWKS key for signing/verifying JWTs
       JWKS_KEY: z.string().optional(),
       ENABLE_OIDC: z.boolean(),
+
+      // OAuth open platform — every switch is off unless set to `1`
+      // Advertise API key scopes (`agent:read`, …) as OAuth scopes and narrow tokens to them
+      OIDC_ENABLE_API_SCOPES: z.boolean(),
+      // RFC 7591 dynamic client registration, gated by an owner-issued initial access token
+      OIDC_ENABLE_DYNAMIC_REGISTRATION: z.boolean(),
+      // Dynamically registered clients start disabled until their owner enables them
+      OIDC_DYNAMIC_REGISTRATION_REQUIRE_APPROVAL: z.boolean(),
+      // client_credentials grant for confidential clients (needs OIDC_ENABLE_API_SCOPES)
+      OIDC_ENABLE_CLIENT_CREDENTIALS: z.boolean(),
 
       // Internal JWT expiration time (e.g., '10s', '1m', '1h')
       INTERNAL_JWT_EXPIRATION: z
@@ -310,6 +325,12 @@ export const getAuthConfig = () => {
 
       JWKS_KEY: process.env.JWKS_KEY,
       ENABLE_OIDC: !!process.env.JWKS_KEY,
+
+      OIDC_ENABLE_API_SCOPES: process.env.OIDC_ENABLE_API_SCOPES === '1',
+      OIDC_ENABLE_DYNAMIC_REGISTRATION: process.env.OIDC_ENABLE_DYNAMIC_REGISTRATION === '1',
+      OIDC_DYNAMIC_REGISTRATION_REQUIRE_APPROVAL:
+        process.env.OIDC_DYNAMIC_REGISTRATION_REQUIRE_APPROVAL === '1',
+      OIDC_ENABLE_CLIENT_CREDENTIALS: process.env.OIDC_ENABLE_CLIENT_CREDENTIALS === '1',
 
       // Internal JWT expiration time
       INTERNAL_JWT_EXPIRATION: process.env.INTERNAL_JWT_EXPIRATION,

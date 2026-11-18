@@ -131,3 +131,69 @@ describe('acceptance review tokens', () => {
     await expect(verifyAcceptanceReviewJWT('t')).rejects.toThrow();
   });
 });
+
+describe('scoped OAuth tokens', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createLocalJWKSetMock.mockReturnValue('public-key-set');
+    decodeProtectedHeaderMock.mockReturnValue({ kid: 'test-key' });
+    importJWKMock.mockResolvedValue('public-key');
+  });
+
+  const verifyAs = (payload: Record<string, unknown>) =>
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: { aud: 'urn:lobehub:chat', sub: 'user-1', ...payload },
+    });
+
+  // The consent page promised only these scopes; a transport that does not
+  // enforce them would hand the app the whole account.
+  it.each([
+    ['a token carrying an API scope', { client_id: 'lca_app', scope: 'openid agent:read' }],
+    ['any token of a dynamically registered client', { client_id: 'lcd_app', scope: 'openid' }],
+  ])('refuses %s unless the caller enforces scopes', async (_label, payload) => {
+    const { validateOIDCJWT } = await import('./jwt');
+
+    verifyAs(payload);
+    await expect(validateOIDCJWT('header.payload.signature')).rejects.toThrow(
+      /only accepted by the public API/,
+    );
+
+    verifyAs(payload);
+    await expect(
+      validateOIDCJWT('header.payload.signature', { allowScopedTokens: true }),
+    ).resolves.toMatchObject({ userId: 'user-1' });
+  });
+
+  it('keeps first-party sign-ins without API scopes working everywhere', async () => {
+    const { validateOIDCJWT } = await import('./jwt');
+    verifyAs({ client_id: 'lobehub-desktop', scope: 'openid profile offline_access' });
+
+    await expect(validateOIDCJWT('header.payload.signature')).resolves.toMatchObject({
+      userId: 'user-1',
+    });
+  });
+
+  it('acts as the owner of a client_credentials token only where allowed', async () => {
+    const { validateOIDCJWT } = await import('./jwt');
+    const machine = { client_id: 'lcd_app', lobehub_owner: 'owner-1', sub: 'lcd_app' };
+
+    verifyAs(machine);
+    await expect(validateOIDCJWT('header.payload.signature')).rejects.toThrow(
+      /only accepted by the public API/,
+    );
+
+    verifyAs(machine);
+    await expect(
+      validateOIDCJWT('header.payload.signature', { allowClientCredentials: true }),
+    ).resolves.toMatchObject({ tokenData: { clientCredentials: true }, userId: 'owner-1' });
+  });
+
+  it('refuses a client-subject token that names no owner', async () => {
+    const { validateOIDCJWT } = await import('./jwt');
+    verifyAs({ client_id: 'lcd_app', sub: 'lcd_app' });
+
+    await expect(
+      validateOIDCJWT('header.payload.signature', { allowClientCredentials: true }),
+    ).rejects.toThrow(/without an owner/);
+  });
+});

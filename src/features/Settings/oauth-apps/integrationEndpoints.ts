@@ -29,6 +29,17 @@ export interface IntegrationEndpoint {
  * differs from the one they were given, and the page origin differs behind a
  * reverse proxy or on desktop.
  */
+const originOf = (issuer: string) => {
+  const normalizedIssuer = issuer.replace(/\/+$/, '');
+  return normalizedIssuer.endsWith(OIDC_ISSUER_PATH)
+    ? normalizedIssuer.slice(0, -OIDC_ISSUER_PATH.length)
+    : normalizedIssuer;
+};
+
+/** Where an RFC 7591 client posts its metadata, derived from the issuer like the rest. */
+export const getRegistrationEndpoint = (issuer: string) =>
+  urlJoin(originOf(issuer), OIDC_ROUTES.registration);
+
 export const getIntegrationEndpoints = (
   issuer: string,
   applicationType?: string | null,

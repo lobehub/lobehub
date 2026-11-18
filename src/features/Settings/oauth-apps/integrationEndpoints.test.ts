@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getIntegrationEndpoints, resolveIssuer } from './integrationEndpoints';
+import {
+  getIntegrationEndpoints,
+  getRegistrationEndpoint,
+  resolveIssuer,
+} from './integrationEndpoints';
 
 describe('getIntegrationEndpoints', () => {
   it('gives a web app the authorization-code endpoints', () => {
@@ -50,6 +54,17 @@ describe('resolveIssuer', () => {
     );
     expect(resolveIssuer(undefined, 'https://my-lobehub.example.com/')).toBe(
       'https://my-lobehub.example.com/oidc',
+    );
+  });
+});
+
+describe('getRegistrationEndpoint', () => {
+  it('sits under the issuer path like the other endpoints', () => {
+    expect(getRegistrationEndpoint('https://app.example.com/oidc')).toBe(
+      'https://app.example.com/oidc/reg',
+    );
+    expect(getRegistrationEndpoint('https://app.example.com/oidc/')).toBe(
+      'https://app.example.com/oidc/reg',
     );
   });
 });

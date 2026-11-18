@@ -156,13 +156,25 @@ describe('OIDCAdapter (DrizzleAdapter)', () => {
   });
 
   describe('upsert Client', () => {
+    const registration = {
+      client_name: 'Partner App',
+      client_secret: 'plain',
+      grant_types: ['client_credentials'],
+      lobehub_owner_user_id: 'user-1',
+      lobehub_owner_workspace_id: 'ws-1',
+      redirect_uris: ['https://partner.example.com/cb'],
+      response_types: [],
+      scope: 'agent:read chat:read',
+      token_endpoint_auth_method: 'client_secret_basic',
+    };
+
     it('encrypts the secret on the way in so find can read it back', async () => {
       mockEncrypt.mockResolvedValue('iv:tag:cipher');
       const { db } = createUpsertDb();
       const insertChain = (db.insert as any)();
       const adapter = new DrizzleAdapter('Client', db as any);
 
-      await adapter.upsert('lca_client_1', { client_secret: 'plain' }, 0);
+      await adapter.upsert('lcd_client_1', registration, 0);
 
       expect(mockEncrypt).toHaveBeenCalledWith('plain');
       expect(insertChain.values).toHaveBeenCalledWith(
@@ -170,16 +182,46 @@ describe('OIDCAdapter (DrizzleAdapter)', () => {
       );
     });
 
-    it('leaves the stored secret alone when the payload carries none', async () => {
+    it('stores a registration with its snake_case metadata and its owner', async () => {
+      mockEncrypt.mockResolvedValue('iv:tag:cipher');
       const { db } = createUpsertDb();
       const insertChain = (db.insert as any)();
       const adapter = new DrizzleAdapter('Client', db as any);
 
-      await adapter.upsert('lca_client_1', { client_id: 'lca_client_1' }, 0);
+      await adapter.upsert('lcd_client_1', { ...registration, isFirstParty: true }, 0);
 
-      expect(mockEncrypt).not.toHaveBeenCalled();
-      const [{ set }] = insertChain.onConflictDoUpdate.mock.calls.at(-1);
-      expect(set).not.toHaveProperty('clientSecret');
+      expect(insertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enabled: true,
+          grants: ['client_credentials'],
+          id: 'lcd_client_1',
+          isFirstParty: false,
+          name: 'Partner App',
+          redirectUris: ['https://partner.example.com/cb'],
+          scopes: ['agent:read', 'chat:read'],
+          userId: 'user-1',
+          workspaceId: 'ws-1',
+        }),
+      );
+    });
+
+    it('stores a registration pending approval as disabled', async () => {
+      const { db } = createUpsertDb();
+      const insertChain = (db.insert as any)();
+      const adapter = new DrizzleAdapter('Client', db as any);
+
+      await adapter.upsert('lcd_client_1', { ...registration, lobehub_pending_approval: true }, 0);
+
+      expect(insertChain.values).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+    });
+
+    it('refuses a registration without an owner', async () => {
+      const { db } = createUpsertDb();
+      const adapter = new DrizzleAdapter('Client', db as any);
+      const { lobehub_owner_user_id: _owner, ...ownerless } = registration;
+
+      await expect(adapter.upsert('lcd_client_1', ownerless, 0)).rejects.toThrow(/no owner/);
+      expect(db.insert).not.toHaveBeenCalled();
     });
   });
 

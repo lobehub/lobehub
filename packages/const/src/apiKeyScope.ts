@@ -62,6 +62,22 @@ export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 
 const API_KEY_SCOPE_SET: ReadonlySet<string> = new Set(API_KEY_SCOPES);
 
+/**
+ * Scopes a key only holds when they are listed on it by name. Full access
+ * (`NULL` or `['*']`) does not imply them on the public REST API, so no key
+ * issued before one was added gains it, and the creator has to tick it on
+ * purpose. A full-access key that also holds one is stored as `['*', '<scope>']`.
+ *
+ * Every scope gate (`hasApiKeyScope` and the REST middlewares) consults this
+ * list, so a scope added here is enforced even for full-access credentials.
+ */
+export const API_KEY_EXPLICIT_SCOPES = [] as const satisfies readonly ApiKeyScope[];
+
+const API_KEY_EXPLICIT_SCOPE_SET: ReadonlySet<string> = new Set<string>(API_KEY_EXPLICIT_SCOPES);
+
+export const isExplicitApiKeyScope = (scope: string): boolean =>
+  API_KEY_EXPLICIT_SCOPE_SET.has(scope);
+
 export const isValidApiKeyScope = (scope: string): scope is ApiKeyScope =>
   API_KEY_SCOPE_SET.has(scope);
 
@@ -73,12 +89,14 @@ export const isFullAccessApiKey = (scopes?: string[] | null): boolean =>
 
 /**
  * Does this scope list satisfy `required`? `x:write` implies `x:read` so a
- * write-capable key never has to double-select the read box.
+ * write-capable key never has to double-select the read box. An explicit
+ * scope is satisfied only by naming it — full access does not count.
  */
 export const hasApiKeyScope = (
   scopes: string[] | null | undefined,
   required: ApiKeyScope,
 ): boolean => {
+  if (isExplicitApiKeyScope(required)) return !!scopes?.includes(required);
   if (isFullAccessApiKey(scopes)) return true;
   if (scopes!.includes(required)) return true;
 
@@ -560,4 +578,37 @@ export const requiredApiKeyScopeForTrpc = (
   ] as ApiKeyScope[];
 
   return scopes.length > 0 ? { scopes } : { open: true };
+};
+
+// ---------------------------------------------------------------------------
+// OAuth projection: API key scope → OAuth scope
+// ---------------------------------------------------------------------------
+
+/**
+ * The API key scopes an OAuth client may request, spelled exactly as the key
+ * scopes (`agent:read`, `model:invoke`, …) so one catalog governs both
+ * credentials. Full access (`*`) is not an OAuth scope: a third-party app always
+ * names what it needs, and the user sees each capability on the consent page.
+ */
+export const OAUTH_API_SCOPES = API_KEY_SCOPES.filter(
+  (scope): scope is Exclude<ApiKeyScope, typeof API_KEY_FULL_ACCESS_SCOPE> =>
+    scope !== API_KEY_FULL_ACCESS_SCOPE,
+);
+
+export type OAuthApiScope = (typeof OAUTH_API_SCOPES)[number];
+
+const OAUTH_API_SCOPE_SET: ReadonlySet<string> = new Set(OAUTH_API_SCOPES);
+
+export const isOAuthApiScope = (scope: string): scope is OAuthApiScope =>
+  OAUTH_API_SCOPE_SET.has(scope);
+
+/**
+ * Picks the API capability scopes out of an OAuth `scope` value (space
+ * separated, as carried by an access token). OIDC scopes such as `openid` or
+ * `offline_access` are not capabilities and are dropped.
+ */
+export const apiScopesFromOAuthScope = (scope?: string | null): OAuthApiScope[] => {
+  if (!scope) return [];
+
+  return [...new Set(scope.split(' ').filter(isOAuthApiScope))];
 };

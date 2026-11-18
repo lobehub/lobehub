@@ -255,6 +255,9 @@ export function defineConfig() {
     '/oidc/.well-known/openid-configuration',
     '/oidc/jwks',
     '/oidc/me',
+    // RFC 7591 registration: a partner's server posts here with an initial access
+    // token the provider checks; it never carries a browser session.
+    '/oidc/reg',
     // The review popup's last page: a code or a refusal for the opener, never a session read.
     '/oidc/acceptance/callback',
     // Interaction details for the consent/login page — must be reachable
