@@ -46,7 +46,7 @@ const RESOLVE_CLI = [
   '    case $lh_bin in /*/node_modules/.bin/lh) [ -x "$lh_bin" ] ;; *) false ;; esac',
   '}',
   'if ! lh_resolve @lobehub/cli; then',
-  '  if lh_latest=$(npm view @lobehub/cli version 2>>"$lh_log" </dev/null) &&',
+  '  if lh_latest=$(npm view @lobehub/cli version --fetch-retries=0 --fetch-timeout=10000 2>>"$lh_log" </dev/null) &&',
   '    lh_resolve "@lobehub/cli@<$lh_latest"; then',
   '    echo "lh: @lobehub/cli@$lh_latest cannot be downloaded from npm yet; using the release before it" >&2',
   '  else',
@@ -263,7 +263,8 @@ describe('preprocessLhCommand in a real shell', () => {
     writeBin(
       path.join(fakeBin, 'npm'),
       [
-        'if [ "$*" = "view @lobehub/cli version" ] && [ -z "$LH_TEST_REGISTRY_DOWN" ]; then',
+        'if [ "$*" = "view @lobehub/cli version --fetch-retries=0 --fetch-timeout=10000" ] &&',
+        '  [ -z "$LH_TEST_REGISTRY_DOWN" ]; then',
         '  echo "$LH_TEST_UNPUBLISHED"',
         'else',
         '  echo "npm error code ECONNRESET" >&2; exit 1',

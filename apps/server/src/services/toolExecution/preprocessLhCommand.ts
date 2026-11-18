@@ -166,6 +166,11 @@ const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", St
  * attempts fail; a fallback prints one line naming the skipped release. npm
  * gets neither the credentials nor stdin, so only the CLI receives the token,
  * and input piped into `lh` still reaches the CLI.
+ *
+ * The fallback's `npm view` gets a single short attempt. When the registry is
+ * down, the first `npx` has already spent npm's whole retry schedule (about a
+ * minute), and repeating it doubled the time to fail past the sandbox's default
+ * 120 s command timeout, so the model saw a timeout instead of npm's error.
  */
 const lhWrapperBody = (envAssignments: string) => [
   '#!/bin/sh',
@@ -175,7 +180,7 @@ const lhWrapperBody = (envAssignments: string) => [
   '    case $lh_bin in /*/node_modules/.bin/lh) [ -x "$lh_bin" ] ;; *) false ;; esac',
   '}',
   'if ! lh_resolve @lobehub/cli; then',
-  '  if lh_latest=$(npm view @lobehub/cli version 2>>"$lh_log" </dev/null) &&',
+  '  if lh_latest=$(npm view @lobehub/cli version --fetch-retries=0 --fetch-timeout=10000 2>>"$lh_log" </dev/null) &&',
   '    lh_resolve "@lobehub/cli@<$lh_latest"; then',
   '    echo "lh: @lobehub/cli@$lh_latest cannot be downloaded from npm yet; using the release before it" >&2',
   '  else',
