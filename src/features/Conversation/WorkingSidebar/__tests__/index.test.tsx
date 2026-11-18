@@ -847,6 +847,20 @@ describe('AgentWorkingSidebar — tab strip', () => {
     expect(tabs[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('does not offer Files for the implicit desktop directory when no folder is selected', () => {
+    agentStore.activeAgentId = 'agent';
+    effectiveConfig.agencyConfig = { executionTarget: 'local' };
+    reviewState.workingDirectory = '/Users/me/Desktop';
+    reviewState.isHomeFallback = true;
+    localStorageState.openTabsByContext = {};
+    globalStore.status.workingSidebarTab = 'overview';
+
+    render(<AgentWorkingSidebar />);
+
+    expect(document.querySelector('button[data-tab-key="files"]')).toBeNull();
+    expect(document.querySelector('button[data-tab-key="skills"]')).not.toBeNull();
+  });
+
   it('opens Claude Code memory by default once a project folder is selected', () => {
     agentStore.activeAgentId = 'agent';
     agentStore.heterogeneousType = 'claude-code';

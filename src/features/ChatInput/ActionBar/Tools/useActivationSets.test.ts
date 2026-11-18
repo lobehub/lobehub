@@ -18,7 +18,9 @@ describe('resolveActivationSets', () => {
   it('lists a connector the agent never turned on under Disabled', () => {
     const { checkedSet, disabledIdSet } = resolve([]);
 
-    expect([...disabledIdSet].sort()).toEqual(['excalidraw', 'gmail', 'linear', 'slack']);
+    expect([...disabledIdSet]).toEqual(
+      expect.arrayContaining(['excalidraw', 'gmail', 'linear', 'slack', 'lobe-skill-store']),
+    );
     expect(checkedSet.size).toBe(0);
   });
 
@@ -34,8 +36,9 @@ describe('resolveActivationSets', () => {
 
     expect(checkedSet.has('gmail')).toBe(false);
     expect(disabledIdSet.has('gmail')).toBe(false);
-    // A builtin tool keeps its pin.
-    expect(checkedSet.has('lobe-image-generation')).toBe(true);
+    // Legacy pins on configurable builtins also mean on demand.
+    expect(checkedSet.has('lobe-image-generation')).toBe(false);
+    expect(disabledIdSet.has('lobe-image-generation')).toBe(false);
   });
 
   it('keeps an explicitly disabled connector under Disabled', () => {
@@ -48,6 +51,6 @@ describe('resolveActivationSets', () => {
     const { optInIds } = resolve([]);
 
     expect(resolveImplicitMode('gmail', optInIds)).toBe('disabled');
-    expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('auto');
+    expect(resolveImplicitMode('lobe-image-generation', optInIds)).toBe('disabled');
   });
 });

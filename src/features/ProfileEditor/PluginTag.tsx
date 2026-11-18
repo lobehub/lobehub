@@ -318,9 +318,13 @@ const PluginTag = memo<PluginTagProps>(
         return {
           availableInWeb,
           avatar: builtinMeta.meta.avatar,
-          description: builtinMeta.meta.description,
+          description: t(`tools.builtins.${identifier}.description` as any, {
+            defaultValue: builtinMeta.meta.description || '',
+          }),
           isInstalled: true,
-          title: builtinMeta.meta.title,
+          title: t(`tools.builtins.${identifier}.title` as any, {
+            defaultValue: builtinMeta.meta.title || identifier,
+          }),
           type: 'builtin' as const,
         };
       }
@@ -382,6 +386,7 @@ const PluginTag = memo<PluginTagProps>(
       allLobehubSkillServers,
       customConnectors,
       marketplaceConnectors,
+      t,
       useAllMetaList,
     ]);
 

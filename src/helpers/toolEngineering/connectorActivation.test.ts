@@ -85,7 +85,7 @@ describe('applyAgentConnectorActivation', () => {
     ).toEqual(['lobe-image-generation', 'library-skill']);
   });
 
-  it('invokes a connector that is on directly in manual mode', () => {
+  it('keeps an opted-in connector discoverable despite a legacy manual preference', () => {
     const connectors = resolveAgentConnectorActivation(
       {
         chatConfig: { skillActivateMode: 'manual' },
@@ -95,7 +95,8 @@ describe('applyAgentConnectorActivation', () => {
       toolState,
     );
 
-    expect(applyAgentConnectorActivation([], connectors)).toEqual(['linear']);
+    expect(connectors.offIds).not.toContain('linear');
+    expect(applyAgentConnectorActivation(['linear'], connectors)).toEqual([]);
   });
 
   it('keeps a connector this turn mentions', () => {

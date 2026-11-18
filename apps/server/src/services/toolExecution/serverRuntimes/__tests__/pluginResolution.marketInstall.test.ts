@@ -233,10 +233,18 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
       expect(restored.enabledToolIds).toContain(IDENTIFIER);
       expect(offeredToolNames(restored.tools)).toContain(TOOL_NAME);
 
-      // Manual mode has no activator, so there the run is offered the tool directly
+      // A legacy manual preference keeps the activator, so the install is still deferred
       const manualRun = await nextRun({ manual: true });
-      expect(manualRun.toolsResult.enabledToolIds).toContain(IDENTIFIER);
-      expect(offeredToolNames(manualRun.tools)).toContain(TOOL_NAME);
+      expect(manualRun.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
+      expect(offeredToolNames(manualRun.tools)).not.toContain(TOOL_NAME);
+      expect(
+        (
+          buildToolDiscoveryConfig(
+            { manifestMap: manualRun.toolManifestMap } as never,
+            manualRun.toolsResult.enabledToolIds,
+          )?.availableTools ?? []
+        ).map((tool) => tool.identifier),
+      ).toContain(IDENTIFIER);
     },
   );
 
