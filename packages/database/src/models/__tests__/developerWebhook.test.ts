@@ -319,6 +319,53 @@ describe('domain events announced by models', () => {
     );
   });
 
+  it('task.status_changed from a direct update (a report rerun resets the task)', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Report' });
+    await tasks.updateStatus(task.id, 'completed');
+    const listener = capture();
+
+    await tasks.update(task.id, { error: null, instruction: 'Rerun', status: 'backlog' });
+    await tasks.update(task.id, { instruction: 'no status in this write' });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][3]).toMatchObject({
+      previousStatus: 'completed',
+      status: 'backlog',
+      taskId: task.id,
+    });
+  });
+
+  it('goal.status_changed when a planning lease starts the goal', async () => {
+    const goals = new GoalModel(serverDB, userId);
+    const goal = await goals.create({ status: 'planning', title: 'Decompose me' } as never);
+    const listener = capture();
+
+    expect(await goals.claimPlanning(goal.id)).toMatchObject({ previousStatus: 'planning' });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][3]).toEqual({
+      goalId: goal.id,
+      previousStatus: 'planning',
+      status: 'running',
+    });
+  });
+
+  it('goal.status_changed once per change, whatever the write path', async () => {
+    const goals = new GoalModel(serverDB, userId);
+    const goal = await goals.create({ title: 'Paths' });
+    const listener = capture();
+
+    await goals.updateStatus(goal.id, 'running');
+    await goals.update(goal.id, { status: 'paused' } as never);
+    await goals.update(goal.id, { title: 'renamed' });
+
+    expect(listener.mock.calls.map(([, , , data]) => data)).toEqual([
+      { goalId: goal.id, previousStatus: goal.status, status: 'running' },
+      { goalId: goal.id, previousStatus: 'running', status: 'paused' },
+    ]);
+  });
+
   it('goal.status_changed', async () => {
     const goals = new GoalModel(serverDB, userId);
     const goal = await goals.create({ title: 'Public API' });

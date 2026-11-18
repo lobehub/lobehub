@@ -147,6 +147,20 @@ export class TaskModel {
   ): Promise<TaskItem | null> {
     if (Object.keys(data).length === 0) return this.findById(id);
 
+    // Every status written through here — the status helpers, actor-logged edits,
+    // direct resets such as a report rerun — is announced once, against the row's
+    // status before the write.
+    if (data.status === undefined || !hasDatabaseEventListener()) return this.writeUpdate(id, data);
+    const before = await this.findById(id);
+    const task = await this.writeUpdate(id, data);
+    if (task && before) this.announceStatusChange(task, before.status);
+    return task;
+  }
+
+  private async writeUpdate(
+    id: string,
+    data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+  ): Promise<TaskItem | null> {
     // A reassignment is not a plain column write: the row being moved away from
     // decides whether the previous assignee's cloud-repo selection has to go,
     // so read it under a lock — a config write landing between the read and the
@@ -348,11 +362,8 @@ export class TaskModel {
     status: string,
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
-    // The prior status is read only when someone listens for the transition.
-    const before = hasDatabaseEventListener() ? await this.findById(id) : null;
-    const task = await this.update(id, { status, ...extra });
-    if (task && before) this.announceStatusChange(task, before.status);
-    return task;
+    // `update` announces the transition.
+    return this.update(id, { status, ...extra });
   }
 
   async updateStatusIfCurrent(
@@ -804,8 +815,6 @@ export class TaskModel {
         : data;
       const updated = await scoped.update(id, writeData);
       if (!updated) return null;
-      // The status picker and other actor-logged edits land here, not in `updateStatus`.
-      this.announceStatusChange(updated, before.status);
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];
 

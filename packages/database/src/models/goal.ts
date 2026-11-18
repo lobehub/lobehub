@@ -13,7 +13,7 @@ import type {
 import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { emitDatabaseEvent } from '../events';
+import { emitDatabaseEvent, hasDatabaseEventListener } from '../events';
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
 import { goalEdges, goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
@@ -352,6 +352,11 @@ export class GoalModel {
     // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
     // ownership always comes from the current row, never that snapshot, and
     // policy edits cannot replace the concurrently written incident ledger.
+    // Every status written through here (`updateStatus` included) is announced once.
+    const before =
+      value.status !== undefined && hasDatabaseEventListener()
+        ? await this.findById(id)
+        : undefined;
     const merged = sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'rolloutState')
       || jsonb_strip_nulls(jsonb_build_object(
         'planningCheckpoint', ${goals.config}->'planningCheckpoint',
@@ -393,6 +398,7 @@ export class GoalModel {
         ),
       )
       .returning();
+    if (row && before) this.announceStatusChange(id, before.status, row.status);
     return row as GoalItem | undefined;
   };
 
@@ -447,6 +453,7 @@ export class GoalModel {
           updatedAt: new Date(now),
         })
         .where(eq(goals.id, id));
+      model.announceStatusChange(id, goal.status, 'running');
       return { ...checkpoint, previousStatus: goal.status };
     });
 
@@ -464,6 +471,17 @@ export class GoalModel {
           sql`${goals.config}->'planningCheckpoint'->>'token' = ${token}`,
         ),
       );
+  };
+
+  /** Announce a status transition to the data layer's event outlet (developer webhooks). */
+  announceStatusChange = (id: string, previousStatus: string | null, status: string) => {
+    if (previousStatus === status) return;
+    emitDatabaseEvent(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
+      'goal.status_changed',
+      { goalId: id, previousStatus, status },
+    );
   };
 
   /**
@@ -492,13 +510,6 @@ export class GoalModel {
       { archivedKeepsStatus: status },
     );
     if (!row && (await this.findById(id))?.archivedAt) throw new GoalArchivedError(id);
-    if (row && existing.status !== status)
-      emitDatabaseEvent(
-        this.db,
-        { userId: this.userId, workspaceId: this.workspaceId },
-        'goal.status_changed',
-        { goalId: id, previousStatus: existing.status ?? null, status },
-      );
     return row;
   };
 
