@@ -145,6 +145,19 @@ describe('gatherContextFacts', () => {
       expect(list).toContain('gmail');
       expect(list).not.toContain('slack');
     });
+
+    it('does not offer a connected Composio service the agent has not turned on', async () => {
+      const listConnectedConnectorIds = vi.fn(async () => ['gmail', 'slack']);
+
+      const facts = await gatherContextFacts(
+        request({ enabledToolIds: ['lobe-creds'], optedInPluginIds: ['gmail'] }),
+        { listConnectedConnectorIds },
+      );
+      const list = facts.variables.COMPOSIO_SERVICES_LIST as string;
+
+      expect(list).toContain('gmail');
+      expect(list).not.toContain('slack');
+    });
   });
 
   describe('document references', () => {

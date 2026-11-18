@@ -128,6 +128,20 @@ describe('UserToolsSection — Workspace/User tool count', () => {
     expect(labelText()).toContain('· 1');
   });
 
+  it('counts a connector turned on with an auto entry and leaves out one turned off', () => {
+    // A connector is two-state: on is an explicit `auto` entry, never a pin.
+    mocks.agentConfig = {
+      plugins: [
+        { identifier: 'gmail', mode: 'auto' },
+        { identifier: 'slack', mode: 'disabled' },
+      ],
+    };
+
+    renderSection();
+
+    expect(labelText()).toContain('· 1');
+  });
+
   it('does not count Web Browsing even when a legacy plugin entry is pinned', () => {
     mocks.agentConfig = {
       plugins: [

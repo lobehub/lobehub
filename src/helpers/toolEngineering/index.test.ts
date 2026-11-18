@@ -4,7 +4,7 @@ import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
 import { WebhookManifest } from '@lobechat/builtin-tool-webhook';
 import type * as ConstModule from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
 
@@ -23,6 +23,13 @@ afterEach(() => {
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
     connectors: [],
+    // The rows behind `installedPluginManifestList`: an installed plugin is a
+    // connector, so the agent's on/off switch applies to it.
+    get installedPlugins() {
+      return mockInstalledPluginManifestList().map((manifest) => ({
+        identifier: manifest.identifier,
+      }));
+    },
     builtinTools: [
       { identifier: AuvManifest.identifier, manifest: AuvManifest, type: 'builtin' as const },
       {
@@ -213,7 +220,13 @@ vi.mock('../isCanUseFC', () => ({
 
 let mockCurrentAgentPlugins: string[] = [];
 let mockCurrentAgentDisabledPlugins: string[] = [];
-let mockCurrentChatConfig: { enableAgentMode?: boolean; memory?: { enabled?: boolean } } = {};
+/** Explicit `auto` entries: what turns a connector on without pinning it. */
+let mockCurrentAgentAutoPlugins: string[] = [];
+let mockCurrentChatConfig: {
+  enableAgentMode?: boolean;
+  memory?: { enabled?: boolean };
+  skillActivateMode?: 'auto' | 'manual';
+} = {};
 let mockImageOutputSupport = false;
 
 vi.mock('@/store/agent', () => ({
@@ -222,6 +235,13 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
+    currentAgentConfig: () => ({
+      plugins: [
+        ...mockCurrentAgentPlugins,
+        ...mockCurrentAgentAutoPlugins.map((identifier) => ({ identifier, mode: 'auto' })),
+        ...mockCurrentAgentDisabledPlugins.map((identifier) => ({ identifier, mode: 'disabled' })),
+      ],
+    }),
     currentAgentDisabledPlugins: () => mockCurrentAgentDisabledPlugins,
     currentAgentPlugins: () => mockCurrentAgentPlugins,
     hasEnabledKnowledgeBases: () => false,
@@ -271,6 +291,7 @@ describe('toolEngineering', () => {
     mockUseApplicationBuiltinSearchTool = true;
     mockCurrentAgentPlugins = [];
     mockCurrentAgentDisabledPlugins = [];
+    mockCurrentAgentAutoPlugins = [];
     mockIsCanUseFC = true;
     mockCurrentChatConfig = {};
     mockImageOutputSupport = false;
@@ -838,16 +859,81 @@ describe('toolEngineering', () => {
         id === 'http-mcp-plugin'
           ? { customParams: { mcp: { type: 'http' } }, identifier: id }
           : undefined;
-      mockCurrentAgentPlugins = ['http-mcp-plugin'];
+      mockCurrentAgentAutoPlugins = ['http-mcp-plugin'];
 
       const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
       const result = toolsEngine.generateToolsDetailed({
+        // A connector that is on is found through the activator.
+        context: { isExplicitActivation: true },
         toolIds: ['http-mcp-plugin'],
         model: 'gpt-4',
         provider: 'openai',
       });
 
       expect(result.enabledToolIds).toContain('http-mcp-plugin');
+    });
+  });
+
+  describe('connectors are opt-in per agent', () => {
+    const connectorManifest = {
+      api: [
+        {
+          description: 'Run the tool',
+          name: 'run',
+          parameters: { properties: {}, required: [], type: 'object' },
+        },
+      ],
+      identifier: 'gmail-mcp',
+      meta: { title: 'Gmail MCP' },
+      type: 'default',
+    } as unknown as ToolManifest;
+
+    const generate = (
+      options: { explicit?: boolean; pluginIds?: string[]; toolIds?: string[] } = {},
+    ) =>
+      createAgentToolsEngine(
+        { model: 'gpt-4', provider: 'openai' },
+        options.pluginIds,
+      ).generateToolsDetailed({
+        context: options.explicit ? { isExplicitActivation: true } : undefined,
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+        toolIds: options.toolIds ?? ['gmail-mcp'],
+      });
+
+    beforeEach(() => {
+      mockInstalledPluginManifestList = () => [connectorManifest];
+    });
+
+    it('keeps a connector the agent never turned on out of reach, even for the activator', () => {
+      expect(generate().enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual([]);
+    });
+
+    it('leaves a connector that is on to the activator instead of invoking it up front', () => {
+      mockCurrentAgentAutoPlugins = ['gmail-mcp'];
+
+      expect(generate().enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
+    });
+
+    it('reads a connector pinned before the two-state switch as on, not invoked up front', () => {
+      mockCurrentAgentPlugins = ['gmail-mcp'];
+
+      expect(generate().enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
+    });
+
+    it('invokes a connector that is on directly when manual mode strips the activator', () => {
+      mockCurrentAgentAutoPlugins = ['gmail-mcp'];
+      mockCurrentChatConfig = { skillActivateMode: 'manual' };
+
+      expect(generate().enabledToolIds).toEqual(['gmail-mcp']);
+    });
+
+    it('invokes a connector this turn mentions even when the agent has it off', () => {
+      expect(generate({ pluginIds: ['gmail-mcp'] }).enabledToolIds).toEqual(['gmail-mcp']);
     });
   });
 

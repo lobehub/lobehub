@@ -41,6 +41,10 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
 import { buildClientConnectorManifests } from './buildClientConnectorManifests';
+import {
+  applyAgentConnectorActivation,
+  resolveAgentConnectorActivation,
+} from './connectorActivation';
 
 /**
  * Tools engine configuration options
@@ -158,6 +162,13 @@ export const createAgentToolsEngine = (
   const agentState = getAgentStoreState();
   const activeAgentId = agentState.activeAgentId || '';
   const chatConfig = agentChatConfigSelectors.currentChatConfig(agentState);
+  // Connectors are opt-in per agent and two-state: one that is on is found
+  // through the activator instead of being invoked up front, one that is off
+  // leaves the pool. `pluginIds` already carries what this turn brings in.
+  const connectors = resolveAgentConnectorActivation(
+    { chatConfig, plugins: agentSelectors.currentAgentConfig(agentState)?.plugins },
+    pluginIds,
+  );
 
   // The rules — mode, per-tool enablement and defaults — are shared with the
   // server runtime through `@lobechat/mecha`; the browser only assembles its
@@ -167,12 +178,16 @@ export const createAgentToolsEngine = (
     agent: {
       chatConfig,
       // `currentAgentPlugins` already resolves to pinned-only identifiers.
-      plugins: agentSelectors.currentAgentPlugins(agentState),
+      plugins: applyAgentConnectorActivation(
+        agentSelectors.currentAgentPlugins(agentState),
+        connectors,
+      ),
     },
     // Feature-flagged tools (e.g. builtin-dashboard) leave the pool while their
     // flag is off for this user.
     disabledPluginIds: [
       ...agentSelectors.currentAgentDisabledPlugins(agentState),
+      ...connectors.offIds,
       ...getFeatureDisabledToolIds(getServerConfigStoreState()?.featureFlags),
       // This engine serves runs the browser executes; server-only tools have nothing to run here.
       ...serverOnlyToolIds,

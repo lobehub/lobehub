@@ -1,6 +1,6 @@
 'use client';
 
-import { upsertPluginMode } from '@lobechat/types';
+import { upsertConnectorEnabled } from '@lobechat/types';
 import { Button, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
@@ -70,14 +70,14 @@ const AgentUserTools = memo<AgentToolProps & { variant?: 'chip' | 'list' }>((pro
         await copyConnectorToAgent(id, effectiveAgentId);
         identifiers.push(conn.identifier);
       }
-      // Pin the copied tools for the agent so the runtime resolves them.
+      // Turn the copied tools on for the agent so the runtime resolves them.
       if (identifiers.length > 0) {
         const config = agentSelectors.getAgentConfigById(effectiveAgentId)(
           useAgentStore.getState(),
         );
         let plugins = config?.plugins;
         for (const identifier of identifiers)
-          plugins = upsertPluginMode(plugins, identifier, 'pinned');
+          plugins = upsertConnectorEnabled(plugins, identifier, true);
         await updateAgentConfigById(effectiveAgentId, { plugins });
       }
       resetCopy();

@@ -72,12 +72,13 @@ import {
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
 import { SKILL_ICON_SIZE } from './constants';
-import { resolveDisabledIds, resolveImplicitMode } from './librarySkillPolicy';
+import { resolveImplicitMode } from './librarySkillPolicy';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
+import { CONNECTOR_MODES, useActivationSets } from './useActivationSets';
 import { styles } from './useControls.styles';
 import { usePluginRowUninstall } from './usePluginRowUninstall';
 
@@ -168,23 +169,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     s.togglePlugin,
     s.setPluginMode,
   ]);
-  const checkedSet = useMemo(() => new Set(checked), [checked]);
-  // Disabled identifiers, read from the raw (unfiltered) plugins config —
-  // needed to render the dedicated Disabled group and policy-menu state.
   const rawPlugins = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
   );
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  // Library skills are opt-in per agent: one this agent never turned on is Disabled.
-  const librarySkillIds = useMemo(
-    () => new Set([...marketAgentSkills, ...userAgentSkills].map((skill) => skill.identifier)),
-    [marketAgentSkills, userAgentSkills],
-  );
-  const disabledIdSet = useMemo(
-    () => new Set(resolveDisabledIds(rawPlugins, librarySkillIds)),
-    [rawPlugins, librarySkillIds],
-  );
+  const activationSets = useActivationSets(checked, rawPlugins);
+  const { checkedSet, connectorIds, disabledIdSet, optInIds } = activationSets;
   // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
   // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
   // In auto mode the activator handles those tools transparently, so they remain hidden.
@@ -251,9 +242,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // is what puts the row in the Pinned or Disabled group.
       const patch = isCapabilityTool(id) ? resolveCapabilityConfigPatch(id, mode) : undefined;
       if (patch) await updateAgentChatConfig(patch);
-      await setPluginMode(id, mode, resolveImplicitMode(id, librarySkillIds));
+      await setPluginMode(id, mode, resolveImplicitMode(id, optInIds));
     },
-    [canEdit, checkedSet, disabledIdSet, librarySkillIds, setPluginMode, updateAgentChatConfig],
+    [canEdit, checkedSet, disabledIdSet, optInIds, setPluginMode, updateAgentChatConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -270,7 +261,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         deleteOnly = false,
         modeOverride,
         panelExtra,
-        supportedModes = ['pinned', 'auto', 'disabled'],
+        supportedModes = connectorIds.has(id) ? CONNECTOR_MODES : CAPABILITY_MODES,
       } = options;
       const mode: SkillPolicyMode =
         modeOverride ??
@@ -448,7 +439,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [canEdit, checkedSet, disabledIdSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
+    [
+      canEdit,
+      checkedSet,
+      connectorIds,
+      disabledIdSet,
+      openSkillPolicyMenu,
+      policyOpenId,
+      t,
+      updateSkillPolicy,
+    ],
   );
 
   const renderToolLabel = useCallback(

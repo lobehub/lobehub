@@ -61,6 +61,13 @@ export interface ToolReadsContext {
   candidateIds: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
+  /**
+   * The identifiers the agent turned on. A connector is opt-in per agent, so
+   * only these are resolved as discoverable; an off connector never has its
+   * credentials decrypted. `undefined` = no opt-in cut (an exact toolset, or a
+   * share run, which reads `shareGrantedExtensionIds` instead).
+   */
+  optedInExtensionIds?: Set<string>;
   /** Project the run belongs to (`appContext.projectId`). */
   projectId?: string;
   requestedDeviceId?: string;
@@ -177,6 +184,16 @@ const readConnectors = async (
     const onRefreshTimeout = () => {
       refreshTimeouts += 1;
     };
+    // Started with the read below, not after it: a connector that is on is
+    // resolved here, so this is the common path and must not queue behind the
+    // invocation set's own resolution. Never rejects.
+    const discoverableRead = readDiscoverableConnectors(
+      deps,
+      ctx,
+      connectorGateKeeper,
+      onRefreshTimeout,
+      installedPluginIds,
+    );
     const [resolved, installedIds] = await Promise.all([
       candidateIds.length > 0
         ? deps.connectorModel.resolveByIdentifiers(
@@ -211,13 +228,7 @@ const readConnectors = async (
         ? await deps.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
         : [];
 
-    const discoverable = await readDiscoverableConnectors(
-      deps,
-      ctx,
-      connectorGateKeeper,
-      onRefreshTimeout,
-      installedIds,
-    );
+    const discoverable = await discoverableRead;
     markDegradedStage(span, refreshTimeouts, 'connector token refreshes');
 
     return {
@@ -237,12 +248,13 @@ const readConnectors = async (
 };
 
 /**
- * Connectors the agent has not pinned — `auto` in the three-state plugin
- * config, which is simply "absent from `plugins`". A custom MCP is stored as
- * a connector, so without this source an unpinned one is resolvable only on
- * the turn that @-mentions it: the next turn's activator answers
- * "Not found" and the model's direct call is rejected as an unknown name.
- * Like installed plugins they are discoverable but never enabled.
+ * Connectors the agent turned on. A connector is two-state: on means the model
+ * finds it through the activator, so it is resolved here rather than into the
+ * invocation set. A custom MCP is stored as a connector, so without this
+ * source one that is on is resolvable only on the turn that @-mentions it: the
+ * next turn's activator answers "Not found" and the model's direct call is
+ * rejected as an unknown name. Like installed plugins they are discoverable
+ * but never enabled.
  *
  * A share run resolves only the connectors the share grants, by identifier:
  * `resolveAll` would decrypt every creator connector for a visitor turn.
@@ -253,7 +265,7 @@ const readDiscoverableConnectors = async (
   ctx: ToolReadsContext,
   gateKeeper: KeyVaultsGateKeeper | undefined,
   onRefreshTimeout: () => void,
-  installedIds: Set<string>,
+  installedPluginIds: Promise<Set<string>>,
 ): Promise<{
   connectorsMcp: DecryptedConnector[];
   manifests: LobeToolManifest[];
@@ -263,20 +275,19 @@ const readDiscoverableConnectors = async (
   if (ctx.exclusivePluginIds || ctx.isGoalTurn) return none;
   try {
     const candidates = new Set(ctx.candidateIds);
-    let resolved: DecryptedConnector[];
-    if (ctx.shareGrantedExtensionIds) {
-      const grantedUnpinnedIds = [...ctx.shareGrantedExtensionIds].filter(
-        (identifier) => !candidates.has(identifier),
-      );
-      if (grantedUnpinnedIds.length === 0) return none;
-      resolved = await deps.connectorModel.resolveByIdentifiers(
-        grantedUnpinnedIds,
-        ctx.resolvedAgentId,
-        gateKeeper,
-      );
-    } else {
-      resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
-    }
+    // Both cuts name what the run may discover: a share's grants, or the
+    // connectors the agent turned on.
+    const discoverableIds = ctx.shareGrantedExtensionIds ?? ctx.optedInExtensionIds;
+    const unresolvedIds = discoverableIds
+      ? [...discoverableIds].filter((identifier) => !candidates.has(identifier))
+      : undefined;
+    if (unresolvedIds?.length === 0) return none;
+    const [resolved, installedIds] = await Promise.all([
+      unresolvedIds
+        ? deps.connectorModel.resolveByIdentifiers(unresolvedIds, ctx.resolvedAgentId, gateKeeper)
+        : deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper),
+      installedPluginIds,
+    ]);
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
       (c) => !candidates.has(c.identifier) && hasCallableMcpEndpoint(c),
     );
