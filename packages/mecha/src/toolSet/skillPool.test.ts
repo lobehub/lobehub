@@ -8,8 +8,7 @@ const skill = (identifier: string, name = identifier, extra: Partial<SkillMeta> 
   ({ description: '', identifier, name, ...extra }) as SkillMeta;
 
 describe('isBuiltinSkillEnabled', () => {
-  it('hides the product-driven skills and gates the device-only ones', () => {
-    expect(isBuiltinSkillEnabled('task', { canExecuteOnDevice: true })).toBe(false);
+  it('gates only the device-only skills', () => {
     expect(isBuiltinSkillEnabled(AgentBrowserIdentifier, { canExecuteOnDevice: false })).toBe(
       false,
     );
