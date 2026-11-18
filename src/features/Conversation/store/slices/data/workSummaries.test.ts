@@ -110,4 +110,28 @@ describe('getAllWorkSummaries', () => {
     expect(getAllWorkSummaries(messages).map((w) => w.id)).toEqual(['work-main']);
     expect(getAllWorkSummaries(messages, 't1').map((w) => w.id)).toEqual(['work-thread']);
   });
+
+  it('leaves out Works whose backing resource was deleted, but keeps them on their message', () => {
+    const live = summary('work-live', 'op-a', '2026-07-01T00:00:00.000Z', {
+      resourceDeleted: false,
+    });
+    const deletedDoc = summary('work-deleted', 'op-a', '2026-07-02T00:00:00.000Z', {
+      resourceDeleted: true,
+      type: 'document',
+    });
+    const messages = [
+      message({
+        id: 'm1',
+        metadata: { work: { rootOperationId: 'op-a' } } as any,
+        works: [deletedDoc, live],
+      }),
+    ];
+
+    expect(getAllWorkSummaries(messages).map((w) => w.id)).toEqual(['work-live']);
+    // The in-message card still resolves the orphan, so the user can remove it there.
+    expect(getWorkSummariesByRootOperationId(messages, 'op-a').map((w) => w.id)).toEqual([
+      'work-deleted',
+      'work-live',
+    ]);
+  });
 });

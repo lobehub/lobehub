@@ -52,6 +52,12 @@ export const getWorkSummariesByRootOperationId = (
  * sidebar (summary mode) renders: one row per Work, deduped to its latest event
  * and sorted newest-first. Mirrors the server `latestSummaryItemsByWork` shaping
  * the removed `listSummariesByConversation` used to return.
+ *
+ * Orphaned Works (`resourceDeleted`: the backing task / document is gone) are
+ * left out, like the resource-page galleries do: an aggregate list of what the
+ * conversation produced should not keep listing a document the user deleted.
+ * Nothing is removed — the in-message cards and the history view still show the
+ * Work and offer its removal.
  */
 const buildAllWorkSummaries = (
   messages: UIChatMessage[],
@@ -70,9 +76,9 @@ const buildAllWorkSummaries = (
       }
     }
   }
-  return Array.from(latestByWork.values()).sort(
-    (a, b) => toTime(b.event.createdAt) - toTime(a.event.createdAt),
-  );
+  return Array.from(latestByWork.values())
+    .filter((work) => !work.resourceDeleted)
+    .sort((a, b) => toTime(b.event.createdAt) - toTime(a.event.createdAt));
 };
 
 // Memoize per (dbMessages array identity, threadId). Keying on the RAW messages
