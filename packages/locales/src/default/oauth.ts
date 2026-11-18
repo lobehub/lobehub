@@ -33,6 +33,9 @@ export default {
   'consent.redirecting': 'Authorization successful, redirecting...',
   'consent.scope.acceptance-review':
     'Comment on this acceptance and accept or send it back from its preview page',
+  'consent.scope.device-operate':
+    'Run commands, change files and git state on your devices and sandboxes',
+  'consent.scope.device-read': 'View your devices and sandboxes, their files and git state',
   'consent.scope.email': 'Access your email address',
   'consent.scope.offline_access': 'Allow the client to access your data',
   'consent.scope.openid': 'Authenticate using your LobeHub account',
