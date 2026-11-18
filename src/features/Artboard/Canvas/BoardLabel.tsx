@@ -95,15 +95,6 @@ const styles = stylex.create({
   titleSelected: {
     color: artboardTokens.selection,
   },
-  version: {
-    color: cssVar.colorTextTertiary,
-    flexShrink: 0,
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 11,
-    lineHeight: '16px',
-    marginInlineStart: 6,
-    paddingBlockStart: 3,
-  },
 });
 
 interface BoardLabelProps {
@@ -128,13 +119,11 @@ const BoardLabel = ({
   verify,
 }: BoardLabelProps) => {
   const { t } = useTranslation('project');
-  const { source } = board;
   const flagged = verify && linked && isFlagged(state);
   if (board.type === 'decision' && !flagged) return null;
 
   const recommendedText = t('artboard.board.recommended');
-  const version = source?.kind === 'canvas' && source.version > 1 ? `v${source.version}` : null;
-  const image = source?.kind === 'image';
+  const image = board.type === 'image';
   const locked = linked && !verify;
   const rowScale = boardLabelScale(k, board.rect.w);
   const statusTag = flagged && !!rowScale && (board.rect.w * k) / rowScale >= STATUS_TAG_MIN_ROW;
@@ -189,7 +178,6 @@ const BoardLabel = ({
           </span>
         )}
         <span {...stylex.props(styles.spacer)} />
-        {version && <span {...stylex.props(styles.version)}>{version}</span>}
         {locked && (
           <span title={t('artboard.board.locked')}>
             <LockIcon size={12} {...stylex.props(styles.icon, styles.lock)} />

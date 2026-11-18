@@ -4,7 +4,7 @@ import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/flowStateColor
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
-import type { BoardModel } from '../model';
+import { boardFileUrl, type BoardModel } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
 import { isFlagged, nodeScreenshot, nodeState } from '../Verify/flow';
 import { useBoardCapabilities } from '../Viewport/capabilities';
@@ -50,7 +50,7 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
   const border = s.verify && isFlagged(state) ? flowStateColor(state) : undefined;
   const screenshotUrl = s.verify && inJourney ? nodeScreenshot(journey, item.id) : undefined;
   const compare = s.selected && screenshotUrl ? s.compare : 'real';
-  const imageUrl = item.source?.kind === 'image' ? board.imageUrls[item.source.fileId] : undefined;
+  const imageUrl = item.type === 'image' ? boardFileUrl(board, item) : undefined;
   const { rect } = item;
   const round = item.groupId ? board.roundByGroupId[item.groupId] : undefined;
   const option = !s.verify && round && round.id === item.roundId ? round : undefined;

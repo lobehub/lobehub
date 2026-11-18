@@ -18,7 +18,7 @@ export const testBoard = (
   pageId: 'p1',
   rect: { h: 400, w: 640, x: 0, y: 0 },
   roundId: null,
-  source: { canvasId: `cvs_${id}`, kind: 'canvas', version: 1 },
+  source: { hash: `hash_${id}`, kind: 'file', path: `pages/${id}.html` },
   title: id,
   type: 'html',
   ...patch,
@@ -75,5 +75,5 @@ export const testModel = (
       revision: 1,
       ...artboard,
     } as ArtboardItem,
-    {},
+    null,
   );

@@ -9,7 +9,7 @@ import { artboardBlobKey, type ArtboardBlobStore } from './files';
 
 const DOMAIN = 'lobehub:artboard-file:v1';
 
-export const ARTBOARD_FILE_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const TOKEN_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 // `sandbox` makes the page an opaque origin even when the URL is opened in a tab of its own,
 // so board HTML can never read the app's cookies or storage on this origin.
@@ -28,7 +28,7 @@ export const signArtboardFileToken = (artboardId: string, now = Date.now()) => {
   const key = secret();
   if (!key) return;
   const payload = Buffer.from(
-    JSON.stringify({ a: artboardId, e: now + ARTBOARD_FILE_TOKEN_TTL_MS }),
+    JSON.stringify({ a: artboardId, e: (Math.floor(now / TOKEN_WINDOW_MS) + 2) * TOKEN_WINDOW_MS }),
   ).toString('base64url');
   return `${payload}.${sign(key, payload)}`;
 };

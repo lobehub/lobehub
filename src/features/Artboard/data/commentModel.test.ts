@@ -44,7 +44,7 @@ const item = {
   phase: 'discuss',
 } as unknown as ArtboardItem;
 
-const model = buildBoardModel(item, {});
+const model = buildBoardModel(item, null);
 
 const thread = (id: string, patch: Partial<ArtboardCommentThreadView> = {}) =>
   ({

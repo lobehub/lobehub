@@ -7,6 +7,7 @@ import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
 import BoardBody from '../Canvas/BoardBody';
+import { boardFileUrl } from '../model';
 
 export const thumbStyles = stylex.create({
   box: {
@@ -63,7 +64,7 @@ export const Thumb = ({ board: item, tone }: { board: ArtboardBoardView; tone?: 
         <BoardBody
           live
           board={item}
-          imageUrl={source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined}
+          imageUrl={item.type === 'image' ? boardFileUrl(board, item) : undefined}
         />
       </div>
     </div>

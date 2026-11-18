@@ -50,9 +50,9 @@ export interface BoardModel {
   boards: ArtboardBoardView[];
   bounds: Rect;
   edges: BoardEdge[];
+  fileBaseUrl: string | null;
   finalized: boolean;
   groups: ArtboardGroupView[];
-  imageUrls: Record<string, string>;
   journeyBoards: ArtboardBoardView[];
   journeyEdges: ArtboardEdgeView[];
   journeyEntryId: string | undefined;
@@ -208,9 +208,17 @@ const union = (rects: Rect[]): Rect =>
       }
     : EMPTY_BOUNDS;
 
+export const boardFileUrl = (
+  model: Pick<BoardModel, 'fileBaseUrl'>,
+  board: Pick<ArtboardBoardView, 'source'>,
+): string | undefined =>
+  model.fileBaseUrl && board.source
+    ? `${model.fileBaseUrl}${board.source.path.split('/').map(encodeURIComponent).join('/')}?v=${board.source.hash.slice(0, 12)}`
+    : undefined;
+
 export const buildBoardModel = (
   artboard: ArtboardItem,
-  imageUrls: Record<string, string>,
+  fileBaseUrl: string | null,
   requestedPageId?: string | null,
 ): BoardModel => {
   const { content } = artboard;
@@ -293,8 +301,8 @@ export const buildBoardModel = (
     ]),
     edges,
     finalized: artboard.phase === 'finalized',
+    fileBaseUrl,
     groups,
-    imageUrls,
     journeyBoards,
     journeyEdges,
     journeyEntryId: entries.length === 1 ? entries[0].id : undefined,

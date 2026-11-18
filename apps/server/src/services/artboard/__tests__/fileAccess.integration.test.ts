@@ -83,6 +83,12 @@ describe('artboard file tokens', () => {
     expect(verifyArtboardFileToken(token, now + 13 * 60 * 60 * 1000)).toBeUndefined();
   });
 
+  it('issues the same token within one window so viewers keep their frames', () => {
+    expect(signArtboardFileToken(artboardId, now + 1000)).toBe(
+      signArtboardFileToken(artboardId, now + 60 * 60 * 1000),
+    );
+  });
+
   it('rejects a token whose payload was changed', () => {
     const token = signArtboardFileToken(artboardId, now)!;
     const [, signature] = token.split('.');

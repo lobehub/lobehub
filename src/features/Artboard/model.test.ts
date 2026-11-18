@@ -6,7 +6,7 @@ import type {
 } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildBoardModel, computeEdgePath } from './model';
+import { boardFileUrl, buildBoardModel, computeEdgePath } from './model';
 
 const rect = (x: number, y: number, w = 640, h = 400) => ({ h, w, x, y });
 
@@ -118,7 +118,7 @@ const board = (id: string, patch: Partial<ArtboardBoardView> = {}): ArtboardBoar
   pageId: 'p1',
   rect: rect(0, 0),
   roundId: null,
-  source: { canvasId: 'cvs_1', kind: 'canvas', version: 2 },
+  source: { hash: 'h1', kind: 'file', path: 'pages/b.html' },
   title: id,
   type: 'html',
   ...patch,
@@ -206,7 +206,7 @@ const item = {
 } as ArtboardItem;
 
 describe('buildBoardModel', () => {
-  const model = buildBoardModel(item, { file_1: 'https://cdn/1.png' });
+  const model = buildBoardModel(item, '/artboard-files/tok/');
 
   it('shows the boards, groups and edges of the first page only', () => {
     expect(model.pageId).toBe('p1');
@@ -257,12 +257,12 @@ describe('buildBoardModel', () => {
   });
 
   it('shows another page when asked, and falls back to the first for an unknown one', () => {
-    const second = buildBoardModel(item, {}, 'p2');
+    const second = buildBoardModel(item, null, 'p2');
     expect(second.pageId).toBe('p2');
     expect(second.boards.map((b) => b.id)).toEqual(['b4']);
     expect(second.groups.map((g) => g.id)).toEqual(['g3']);
     expect(second.pages.map((p) => p.name)).toEqual(['Page 1', 'Page 2']);
-    expect(buildBoardModel(item, {}, 'gone').pageId).toBe('p1');
+    expect(buildBoardModel(item, null, 'gone').pageId).toBe('p1');
   });
 
   it('knows the page of any board, group or round, whatever page is shown', () => {
@@ -291,5 +291,25 @@ describe('buildBoardModel', () => {
       {},
     );
     expect(loose.bounds.maxX).toBe(3100);
+  });
+});
+
+describe('boardFileUrl', () => {
+  it('joins the base URL and the encoded path of the file a board shows', () => {
+    const model = buildBoardModel(item, '/artboard-files/tok/');
+
+    expect(
+      boardFileUrl(
+        model,
+        board('x', { source: { hash: '0123456789abcdef', kind: 'file', path: 'shots/a@2x.png' } }),
+      ),
+    ).toBe('/artboard-files/tok/shots/a%402x.png?v=0123456789ab');
+  });
+
+  it('has no URL without a base URL or a source', () => {
+    expect(boardFileUrl(buildBoardModel(item, null), board('x'))).toBeUndefined();
+    expect(
+      boardFileUrl(buildBoardModel(item, '/artboard-files/tok/'), board('x', { source: null })),
+    ).toBeUndefined();
   });
 });

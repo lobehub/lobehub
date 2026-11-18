@@ -8,7 +8,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 export interface ArtboardView {
   artboard: ArtboardItem;
-  imageUrls: Record<string, string>;
+  fileBaseUrl: string | null;
 }
 
 export interface ArtboardFinalize {

@@ -9,14 +9,14 @@ const BoardContext = createContext<BoardModel | null>(null);
 interface BoardProviderProps {
   artboard: ArtboardItem;
   children: ReactNode;
-  imageUrls: Record<string, string>;
+  fileBaseUrl: string | null;
 }
 
-export const BoardProvider = ({ artboard, children, imageUrls }: BoardProviderProps) => {
+export const BoardProvider = ({ artboard, children, fileBaseUrl }: BoardProviderProps) => {
   const pageId = useArtboardStore((s) => s.pageId);
   const model = useMemo(
-    () => buildBoardModel(artboard, imageUrls, pageId),
-    [artboard, imageUrls, pageId],
+    () => buildBoardModel(artboard, fileBaseUrl, pageId),
+    [artboard, fileBaseUrl, pageId],
   );
   return <BoardContext value={model}>{children}</BoardContext>;
 };

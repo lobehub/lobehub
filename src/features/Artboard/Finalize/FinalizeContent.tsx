@@ -154,10 +154,7 @@ const FinalizeContent = ({ artboardId }: { artboardId: string }) => {
                   >
                     {item.expected || t('artboard.finalize.missingCheck')}
                   </Text>
-                  <Tag size={'small'}>
-                    {item.title}
-                    {item.source?.kind === 'canvas' ? ` · v${item.source.version}` : ''}
-                  </Tag>
+                  <Tag size={'small'}>{item.title}</Tag>
                 </Flexbox>
               ))}
             </Flexbox>

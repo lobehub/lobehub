@@ -4,9 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openCanvasModal } from '@/features/CanvasModal/loader';
-
 import { useBoard } from '../BoardContext';
+import { boardFileUrl } from '../model';
 import StatusTag from '../StatusTag';
 import { artboardActions } from '../store';
 import { isFlagged, nodeAttempts, nodeScreenshot, nodeState } from './flow';
@@ -136,11 +135,10 @@ const CheckDetail = ({ boardId }: { boardId: string }) => {
       ),
     ),
   ];
-  const { source } = item;
-  const designImage = source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
+  const designUrl = boardFileUrl(board, item);
+  const designImage = item.type === 'image' ? designUrl : undefined;
   const openDesign = () => {
-    if (source?.kind === 'canvas') void openCanvasModal(source.canvasId, source.version);
-    else if (designImage) window.open(designImage, '_blank', 'noopener');
+    if (designUrl) window.open(designUrl, '_blank', 'noopener');
   };
   const next = checks[checks.findIndex((check) => check.id === boardId) + 1];
 
@@ -157,9 +155,7 @@ const CheckDetail = ({ boardId }: { boardId: string }) => {
           <Flexbox horizontal gap={8} style={{ marginBlock: 12 }}>
             <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
               <Text style={{ fontSize: 12 }} type="secondary">
-                {t('artboard.verify.reference', {
-                  rev: item.source?.kind === 'canvas' ? item.source.version : 1,
-                })}
+                {t('artboard.verify.finalizedReference')}
               </Text>
               <div
                 role="button"

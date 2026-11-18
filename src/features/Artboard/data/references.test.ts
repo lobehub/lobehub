@@ -17,7 +17,7 @@ const board = buildBoardModel(
           pageId: 'p1',
           rect: { h: 400, w: 640, x: 0, y: 0 },
           roundId: null,
-          source: { canvasId: 'cvs_1', kind: 'canvas', version: 1 },
+          source: { hash: 'h_cvs_1', kind: 'file', path: 'pages/cvs_1.html' },
           title: '空项目',
           type: 'html',
         },

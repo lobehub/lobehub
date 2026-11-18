@@ -3,12 +3,12 @@ import * as stylex from '@stylexjs/stylex';
 import { Maximize2Icon, MessageSquareQuoteIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { openCanvasModal } from '@/features/CanvasModal/loader';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
 import { addBoardReference } from '../data/addBoardReference';
 import { boardReference } from '../data/references';
+import { boardFileUrl } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
 import type { CompareView } from '../types';
 import { nodeScreenshot } from '../Verify/flow';
@@ -34,11 +34,10 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
     artboardActions.select(null);
   };
 
-  const { rect, source } = selected;
-  const imageUrl = source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
+  const { rect } = selected;
+  const fileUrl = boardFileUrl(board, selected);
   const openFull = () => {
-    if (source?.kind === 'canvas') void openCanvasModal(source.canvasId, source.version);
-    else if (imageUrl) window.open(imageUrl, '_blank', 'noopener');
+    if (fileUrl) window.open(fileUrl, '_blank', 'noopener');
   };
 
   return (
@@ -52,7 +51,7 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
       })}
     >
       <ActionIcon
-        disabled={source?.kind === 'canvas' ? false : !imageUrl}
+        disabled={!fileUrl}
         icon={Maximize2Icon}
         size={'small'}
         title={t('artboard.selection.view')}

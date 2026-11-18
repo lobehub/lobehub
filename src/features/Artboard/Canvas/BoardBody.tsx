@@ -55,7 +55,7 @@ const BoardBody = ({ board, imageUrl, k = 1, live, screenshotUrl }: BoardBodyPro
   const { source } = board;
   if (board.type === 'decision')
     return <DecisionPill height={board.rect.h} k={k} title={board.title} width={board.rect.w} />;
-  if (!source || (source.kind === 'image' && !imageUrl))
+  if (!source || (board.type === 'image' && !imageUrl))
     return (
       <BoardPlaceholder
         icon={ImageOffIcon}
@@ -64,7 +64,7 @@ const BoardBody = ({ board, imageUrl, k = 1, live, screenshotUrl }: BoardBodyPro
         title={board.title}
       />
     );
-  if (source.kind === 'image')
+  if (board.type === 'image')
     return (
       <img alt={board.title} draggable={false} src={imageUrl} {...stylex.props(styles.image)} />
     );
