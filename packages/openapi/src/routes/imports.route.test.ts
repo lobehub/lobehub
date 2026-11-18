@@ -135,6 +135,55 @@ const exportDump = async () => {
   return JSON.parse(holder.store.get(`exports/${OWNER}/personal/${id}.json`)!.toString());
 };
 
+describe('authentication and API-key scopes', () => {
+  const body = {
+    data: { agents: [{ id: 'agt_auth_probe', title: 'Probe' }] },
+    schemaHash: 'x',
+    source: 'export',
+  };
+
+  it('answers 401 without credentials', async () => {
+    const res = await call('/imports', { body, method: 'POST' });
+
+    expect(res.status).toBe(401);
+    expect(await serverDB.select().from(agents)).toHaveLength(0);
+  });
+
+  it('refuses a restricted key: an import overwrites credentials and agents', async () => {
+    const res = await call('/imports', { body, key: KEYS.restricted, method: 'POST' });
+
+    expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('insufficient_scope');
+    expect(await serverDB.select().from(agents)).toHaveLength(0);
+  });
+
+  it("refuses a workspace header the key's owner does not belong to", async () => {
+    const res = await call('/imports', {
+      body,
+      key: KEYS.stranger,
+      method: 'POST',
+      workspaceId: WORKSPACE,
+    });
+
+    expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('workspace_mismatch');
+    expect(await serverDB.select().from(agents)).toHaveLength(0);
+  });
+
+  it('refuses a workspace key pointed at a different workspace', async () => {
+    const res = await call('/imports', {
+      body,
+      key: KEYS.workspace,
+      method: 'POST',
+      workspaceId: 'r12-export-other-ws',
+    });
+
+    expect(res.status).toBe(403);
+    expect((await json(res)).code).toBe('workspace_mismatch');
+    expect(await serverDB.select().from(agents)).toHaveLength(0);
+  });
+});
+
 describe('POST /imports', () => {
   it('rejects a body without a known source', async () => {
     for (const body of [
