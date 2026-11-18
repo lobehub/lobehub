@@ -98,6 +98,7 @@ interface ContextEngineeringContext {
    */
   initialContext?: RuntimeInitialContext;
   inputTemplate?: string;
+  knowledgeFileErrors?: ReadonlyMap<string, string>;
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
   /** Memory-related context for prompt/runtime behavior */
@@ -136,6 +137,7 @@ export const contextEngineering = async ({
   provider,
   systemRole,
   inputTemplate,
+  knowledgeFileErrors,
   enableUserMemories,
   enableHistoryCount,
   historyCount,
@@ -208,14 +210,24 @@ export const contextEngineering = async ({
   const agentFiles = agentSelectors.currentAgentFiles(agentStoreState);
   const agentKnowledgeBases = agentSelectors.currentAgentKnowledgeBases(agentStoreState);
 
-  const fileContents = agentFiles
-    .filter((file) => file.enabled && file.content)
-    .map((file) => ({
-      content: file.content!,
-      fileId: file.id,
-      filename: file.name,
-      originalChars: file.originalCharCount,
-    }));
+  const fileContents = agentFiles.flatMap((file) => {
+    if (!file.enabled) return [];
+    const error =
+      !file.content && agentId === agentStoreState.activeAgentId
+        ? knowledgeFileErrors?.get(file.id)
+        : undefined;
+    if (!file.content && !error) return [];
+
+    return [
+      {
+        content: file.content ?? '',
+        ...(error && { error }),
+        fileId: file.id,
+        filename: file.name,
+        originalChars: file.originalCharCount,
+      },
+    ];
+  });
 
   const knowledgeBases = agentKnowledgeBases
     .filter((kb) => kb.enabled)
