@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelError } from '@/database/repositories/channel';
 
-import { ChannelThreadService, runChannelWatchReport, steerEntryId } from './ChannelThreadService';
+import {
+  ChannelThreadService,
+  channelWatchId,
+  runChannelWatchReport,
+  steerEntryId,
+} from './ChannelThreadService';
 
 const mocks = vi.hoisted(() => ({
   currentRun: vi.fn(),
@@ -220,12 +225,15 @@ describe('Thread watches', () => {
     mocks.isLocalExecution.mockReturnValue(true);
 
     await expect(
-      service().watchThreads({ intervalMinutes: 5, threadIds: ['cht_1'] }),
+      service().watchThreads({ intervalMinutes: 5, threadIds: ['cht_1'] }, 'call-1'),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('schedules the first report one interval out', async () => {
-    const watched = await service().watchThreads({ intervalMinutes: 5, threadIds: ['cht_1'] });
+    const watched = await service().watchThreads(
+      { intervalMinutes: 5, threadIds: ['cht_1'] },
+      'call-1',
+    );
 
     expect(watched).toMatchObject({ intervalMinutes: 5, maxReports: 12, threadIds: ['cht_1'] });
     expect(mocks.scheduleMessage).toHaveBeenCalledWith(
@@ -234,6 +242,26 @@ describe('Thread watches', () => {
         payload: expect.objectContaining({ report: 1, watchId: watched.watchId }),
       }),
     );
+  });
+
+  it('reuses the same watch when the tool call is retried', async () => {
+    const first = await service().watchThreads(
+      { intervalMinutes: 5, threadIds: ['cht_1'] },
+      'call-1',
+    );
+    const retry = await service().watchThreads(
+      { intervalMinutes: 5, threadIds: ['cht_2'] },
+      'call-1',
+    );
+
+    expect(first.watchId).toBe(retry.watchId);
+    expect(first.watchId).toBe(channelWatchId('op-main', 'call-1'));
+    expect(first.watchId).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
+    expect(channelWatchId('op-main', 'call-2')).not.toBe(first.watchId);
+    expect(mocks.scheduleMessage).toHaveBeenCalledTimes(2);
+    const ids = mocks.scheduleMessage.mock.calls.map(([job]) => job.deduplicationId);
+    expect(new Set(ids).size).toBe(1);
+    expect(ids[0]).toBe(`channel-watch:${first.watchId}:1`);
   });
 
   it('drops a report of a stopped watch', async () => {

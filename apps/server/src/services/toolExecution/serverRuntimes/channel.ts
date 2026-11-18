@@ -57,7 +57,7 @@ export const channelRuntime: ServerRuntimeRegistration = {
           steerThread: (params) => threads.steerThread(params, keyed()),
           stopThread: threads.stopThread,
           unwatchThreads: threads.unwatchThreads,
-          watchThreads: threads.watchThreads,
+          watchThreads: (params) => threads.watchThreads(params, keyed()),
         };
       })(),
     );

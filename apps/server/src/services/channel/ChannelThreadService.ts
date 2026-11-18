@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 import type {
   ChannelCreatedThread,
@@ -87,16 +87,25 @@ const integer = (value: number | undefined, fallback: number, min: number, max: 
   return result;
 };
 
+/** A UUID-shaped id of one tool call, stable across that call's retries. */
+const keyedUuid = (namespace: string, operationId: string, requestId: string) => {
+  const hex = createHash('sha256').update(`${namespace}:${operationId}:${requestId}`).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+};
+
 /**
  * The steer entry id of one tool call, UUID-shaped: a retried call appends the same entry, which
  * the steer queue recognizes instead of delivering the correction twice.
  */
-export const steerEntryId = (operationId: string, requestId: string) => {
-  const hex = createHash('sha256')
-    .update(`channel-steer:${operationId}:${requestId}`)
-    .digest('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-};
+export const steerEntryId = (operationId: string, requestId: string) =>
+  keyedUuid('channel-steer', operationId, requestId);
+
+/**
+ * The watch of one tool call, UUID-shaped: a retried call re-derives the same watch, so the report
+ * it schedules carries the same deduplication id instead of starting a second chain.
+ */
+export const channelWatchId = (operationId: string, requestId: string) =>
+  keyedUuid('channel-watch', operationId, requestId);
 
 const scheduleReport = async (payload: ChannelWatchReportPayload) => {
   const baseURL = process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
@@ -304,8 +313,14 @@ export class ChannelThreadService {
     return 'queued';
   };
 
-  /** Schedules the first report; each report schedules the next until the watch ends. */
-  watchThreads = async (params: ChannelWatchThreadsParams): Promise<ChannelWatchedThreads> => {
+  /**
+   * Schedules the first report; each report schedules the next until the watch ends. The watch is
+   * keyed by the tool call, so a retry re-schedules the same watch rather than a second one.
+   */
+  watchThreads = async (
+    params: ChannelWatchThreadsParams,
+    requestId: string,
+  ): Promise<ChannelWatchedThreads> => {
     await assertChannelEnabled(this.userId);
     if (new QueueService().isLocalExecution())
       throw new ChannelError(
@@ -326,7 +341,7 @@ export class ChannelThreadService {
       ? bounded(params.prompt, 'prompt', CHANNEL_LIMITS.contentLength / 10)
       : undefined;
 
-    const watchId = randomUUID();
+    const watchId = channelWatchId(this.operationId, requestId);
     await scheduleReport({
       agent: {
         agentId: run.manifest.self.agentId,
