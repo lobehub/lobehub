@@ -41,7 +41,7 @@ export interface ArtboardGroupMetadata {}
 export interface ArtboardBoardMetadata {}
 export interface ArtboardCommentMetadata {
   anchorSpace?: 'board' | 'group' | 'page';
-  sourceVersionId?: string;
+  sourceHash?: string;
 }
 
 export const ARTBOARD_BOARD_SIZE = { height: 400, width: 640 } as const;
@@ -50,28 +50,17 @@ const text = z.string();
 const coordinate = z.number().finite();
 const size = z.number().finite().positive();
 
-const canvasSourceSchema = z.object({
-  canvasId: z.string().min(1),
-  kind: z.literal('canvas'),
-  path: z.string().min(1).optional(),
-  version: z.number().int().positive(),
+export const artboardBoardSourceSchema = z.object({
+  hash: z.string().min(1),
+  kind: z.literal('file'),
+  path: z.string().min(1),
 });
-
-const imageSourceSchema = z.object({
-  fileId: z.string().min(1),
-  kind: z.literal('image'),
-});
-
-export const artboardBoardSourceSchema = z.discriminatedUnion('kind', [
-  canvasSourceSchema,
-  imageSourceSchema,
-]);
 export type ArtboardBoardSource = z.infer<typeof artboardBoardSourceSchema>;
 
-export const artboardBoardSourceInputSchema = z.discriminatedUnion('kind', [
-  canvasSourceSchema.extend({ version: z.number().int().positive().optional() }),
-  z.object({ fileRef: z.string().min(1), kind: z.literal('image') }),
-]);
+export const artboardBoardSourceInputSchema = z.object({
+  kind: z.literal('file'),
+  path: z.string().min(1),
+});
 export type ArtboardBoardSourceInput = z.infer<typeof artboardBoardSourceInputSchema>;
 
 export interface ArtboardPageView {
@@ -109,7 +98,7 @@ export interface ArtboardBoardView {
   // Page coordinates, also for a board inside a group.
   rect: ArtboardRect;
   roundId: string | null;
-  // null for a decision board, and for a board whose Canvas or file is gone.
+  // null for a decision board.
   source: ArtboardBoardSource | null;
   title: string;
   type: ArtboardBoardType;

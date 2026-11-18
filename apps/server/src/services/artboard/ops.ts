@@ -1,4 +1,10 @@
-import { ARTBOARD_BOARD_SIZE, type ArtboardPhase, type ArtboardRect } from '@lobechat/types';
+import {
+  ARTBOARD_BOARD_SIZE,
+  type ArtboardBoardSourceInput,
+  type ArtboardOp,
+  type ArtboardPhase,
+  type ArtboardRect,
+} from '@lobechat/types';
 
 import type {
   ArtboardBoardRow,
@@ -21,8 +27,7 @@ import {
   toPageRect,
   wrapBoards,
 } from './layout';
-import { boardTypeOf, resolveOpRefs, sourceColumns } from './opInputs';
-import type { ResolvedArtboardOp } from './sources';
+import { boardTypeOf, resolveOpRefs, sourceColumns, sourcePathOf } from './opInputs';
 
 export interface ArtboardOpTarget {
   id: string;
@@ -30,7 +35,7 @@ export interface ArtboardOpTarget {
   projectId: string | null;
 }
 
-type OpOf<T extends ResolvedArtboardOp['type']> = Extract<ResolvedArtboardOp, { type: T }>;
+type OpOf<T extends ArtboardOp['type']> = Extract<ArtboardOp, { type: T }>;
 
 interface DraftBoard extends ArtboardBoardRow {
   stored: ArtboardRect;
@@ -51,6 +56,7 @@ class Draft {
     private model: ArtboardStructureModel,
     private artboard: ArtboardOpTarget,
     structure: ArtboardStructure,
+    private files: ReadonlySet<string>,
   ) {
     this.pages = [...structure.pages];
     this.rounds = [...structure.rounds];
@@ -83,6 +89,26 @@ class Draft {
 
   private board(id: string) {
     return this.boards.find((b) => b.id === id) ?? failArtboard('not_found', `No board ${id}`);
+  }
+
+  private sourcePath(source: ArtboardBoardSourceInput | undefined) {
+    if (!source) return undefined;
+    const path = sourcePathOf(source);
+    if (!this.files.has(path))
+      failArtboard(
+        'invalid',
+        `Board source "${source.path}" is not a file of this artboard. Write the file first (files.writes), then point the board at its path.`,
+      );
+    return path;
+  }
+
+  assertSourcesExist() {
+    for (const board of this.boards)
+      if (board.sourcePath && !this.files.has(board.sourcePath))
+        failArtboard(
+          'invalid',
+          `Board "${board.title}" (${board.id}) still shows "${board.sourcePath}"; point it at another file or remove it before deleting the file.`,
+        );
   }
 
   private inJourney(groupId: string | null | undefined) {
@@ -288,7 +314,8 @@ class Draft {
     this.assertPlacement(page.id, group, round);
     if (round && round.status !== 'open')
       failArtboard('locked', `Round ${round.id} is submitted; its options can no longer change`);
-    const type = boardTypeOf(board.type, board.source);
+    const sourcePath = this.sourcePath(board.source);
+    const type = boardTypeOf(board.type, sourcePath);
     const journey = this.inJourney(group?.id);
     if (journey) this.assertJourneyOpen('journey boards');
     if (board.expected !== undefined && (!journey || type === 'decision'))
@@ -303,7 +330,7 @@ class Draft {
       y: board.y,
     };
     const row = await this.model.createBoard(this.artboard.id, {
-      ...sourceColumns(board.source),
+      ...sourceColumns(sourcePath),
       expected: board.expected ?? null,
       groupId: group?.id ?? null,
       pageId: page.id,
@@ -361,17 +388,18 @@ class Draft {
     if (roundChanges || (group?.id ?? null) !== board.groupId)
       this.assertPlacement(board.pageId, group, round, board.id);
 
+    const sourcePath = this.sourcePath(patch.source);
     const type =
-      patch.source === undefined
+      sourcePath === undefined
         ? board.type
-        : boardTypeOf(board.type === 'decision' ? 'decision' : undefined, patch.source);
+        : boardTypeOf(board.type === 'decision' ? 'decision' : undefined, sourcePath);
     const carriesCheck = journey && type !== 'decision';
     if (patch.expected !== undefined && !carriesCheck)
       failArtboard('invalid', 'Only journey boards that show a screen carry a check');
     const expected = carriesCheck ? (patch.expected ?? board.expected) : null;
 
     const values = {
-      ...(patch.source === undefined ? {} : { ...sourceColumns(patch.source), type }),
+      ...(sourcePath === undefined ? {} : { ...sourceColumns(sourcePath), type }),
       ...(patch.title === undefined ? {} : { title: patch.title }),
       ...(expected === board.expected ? {} : { expected }),
       ...((group?.id ?? null) === board.groupId ? {} : { groupId: group?.id ?? null }),
@@ -480,12 +508,13 @@ class Draft {
 export const applyArtboardOps = async (
   model: ArtboardStructureModel,
   artboard: ArtboardOpTarget,
-  ops: ResolvedArtboardOp[],
+  ops: ArtboardOp[],
+  files: ReadonlySet<string>,
 ): Promise<string[]> => {
   const structure = await model.getStructure(artboard.id);
   if (!structure) return failArtboard('not_found', `Artboard "${artboard.id}" was not found.`);
 
-  const draft = new Draft(model, artboard, structure);
+  const draft = new Draft(model, artboard, structure, files);
   for (const [index, op] of ops.entries()) {
     try {
       await draft.apply(op);
@@ -493,6 +522,7 @@ export const applyArtboardOps = async (
       throw toArtboardServiceError(error, index);
     }
   }
+  draft.assertSourcesExist();
   await draft.flushLayout();
   return draft.changed;
 };

@@ -12,6 +12,7 @@ import pMap from 'p-map';
 import { ArtboardFileModel } from '@/database/models/artboard/file';
 import type { ArtboardFileRow } from '@/database/models/artboard/types';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
+import type { FileService } from '@/server/services/file';
 
 import { ArtboardServiceError } from './errors';
 
@@ -21,6 +22,23 @@ export interface ArtboardBlobStore {
   read: (key: string) => Promise<Uint8Array>;
   write: (key: string, bytes: Uint8Array, contentType: string) => Promise<void>;
 }
+
+export const createFileServiceArtboardBlobStore = (
+  createFileService: () => FileService,
+): ArtboardBlobStore => {
+  let fileService: FileService | undefined;
+  const service = () => (fileService ??= createFileService());
+  return {
+    delete: async (keys) => {
+      await service().deleteFiles(keys);
+    },
+    list: (prefix) => service().listFileKeys(prefix),
+    read: (key) => service().getFileByteArray(key),
+    write: async (key, bytes, contentType) => {
+      await service().uploadBuffer(key, Buffer.from(bytes), contentType);
+    },
+  };
+};
 
 export interface ArtboardImageBytes {
   bytes: Uint8Array;
@@ -147,8 +165,12 @@ export class ArtboardFileService {
     return this.deps.store.read(artboardBlobKey(artboardId, hash));
   }
 
-  async prepare(artboardId: string, changes: ArtboardFileChanges): Promise<PreparedArtboardFiles> {
-    const existing = await this.model.list(artboardId);
+  async prepare(
+    artboardId: string,
+    changes: ArtboardFileChanges,
+    tx?: Transaction,
+  ): Promise<PreparedArtboardFiles> {
+    const existing = await (tx ? this.model.withTransaction(tx) : this.model).list(artboardId);
     const files = new Map<string, Pick<PendingFile, 'contentType' | 'hash' | 'path' | 'size'>>(
       existing.map((row) => [row.path, row]),
     );

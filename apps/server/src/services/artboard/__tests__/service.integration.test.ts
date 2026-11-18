@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
+
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import type { ArtboardOp } from '@lobechat/types';
@@ -6,7 +8,6 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
-import { WorkModel } from '@/database/models/work';
 import {
   acceptanceFlowEdges,
   acceptanceFlowNodes,
@@ -20,12 +21,12 @@ import {
   tasks,
   topics,
   users,
-  works,
 } from '@/database/schemas';
 
 import { ArtboardServiceError } from '../errors';
+import type { ArtboardBlobStore } from '../files';
 import { ArtboardService } from '../index';
-import { type ArtboardSourceResolver, createArtboardSourceResolver } from '../sources';
+import type { ArtboardSourceResolver } from '../sources';
 
 const userId = 'artboard-service-user';
 const projectId = 'prj_artboard_service';
@@ -35,40 +36,50 @@ const context = { topicId: projectTopicId };
 
 const db: LobeChatDatabase = await getTestDB();
 
+const shotBytes = new Uint8Array([137, 80, 78, 71]);
+
 const sources: ArtboardSourceResolver = {
-  ...createArtboardSourceResolver(db, { userId }),
-  image: async (fileRef) => (fileRef === 'msg_1.image_1' ? 'file_shot' : undefined),
-  imageUrl: async (fileId) => `https://files.test/${fileId}`,
+  imageBytes: async (fileRef) =>
+    fileRef === 'msg_1.image_1' ? { bytes: shotBytes, contentType: 'image/png' } : undefined,
+};
+
+const blobs = new Map<string, Uint8Array>();
+const fileStore: ArtboardBlobStore = {
+  delete: async (keys) => {
+    for (const key of keys) blobs.delete(key);
+  },
+  list: async (prefix) => [...blobs.keys()].filter((key) => key.startsWith(prefix)),
+  read: async (key) => blobs.get(key) ?? new Uint8Array(),
+  write: async (key, bytes) => {
+    blobs.set(key, bytes);
+  },
+};
+
+const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+
+const emptyHtml = '<!doctype html><body style="background:#111;color:#eee">空项目</body>';
+const ingestHtml = '<!doctype html><svg width="40" height="40"><circle r="20" fill="#f50"/></svg>';
+
+const baseFiles = {
+  writes: [
+    { content: emptyHtml, path: 'pages/empty.html' },
+    { content: ingestHtml, path: 'pages/ingest.html' },
+  ],
 };
 
 const service = () =>
-  new ArtboardService(db, userId, undefined, { context: { agentId: null }, sources });
+  new ArtboardService(db, userId, undefined, { context: { agentId: null }, fileStore, sources });
 
-const registerCanvas = (canvasId: string, title: string) =>
-  new WorkModel(db, userId).registerCanvas({
-    canvasId,
-    metadata: {
-      entry: 'index.html',
-      fileCount: 1,
-      manifestKey: `canvas/${canvasId}/${Date.now()}.json`,
-      runtimeMajor: 1,
-      totalSize: 1,
-    },
-    title,
-    toolIdentifier: 'lobe-canvas',
-    toolName: 'createCanvas',
-  });
-
-const canvasBoard = (ref: string, canvasId: string, x: number, groupId = 'j'): ArtboardOp => ({
-  board: { groupId, source: { canvasId, kind: 'canvas' }, title: ref, x, y: 0 },
+const fileBoard = (ref: string, path: string, x: number, groupId = 'j'): ArtboardOp => ({
+  board: { groupId, source: { kind: 'file', path }, title: ref, x, y: 0 },
   ref,
   type: 'addBoard',
 });
 
 const journeyOps = (): ArtboardOp[] => [
   { group: { kind: 'journey', title: '首次进入' }, ref: 'j', type: 'addGroup' },
-  canvasBoard('empty', 'cvs_a', 0),
-  canvasBoard('ingest', 'cvs_b', 720),
+  fileBoard('empty', 'pages/empty.html', 0),
+  fileBoard('ingest', 'pages/ingest.html', 720),
   { edge: { from: 'empty', label: '点接入', to: 'ingest' }, type: 'addEdge' },
 ];
 
@@ -80,7 +91,7 @@ const optionOps = (): ArtboardOp[] => [
       groupId: 'o',
       recommended: true,
       roundId: 'r',
-      source: { canvasId: 'cvs_a', kind: 'canvas' },
+      source: { kind: 'file', path: 'pages/empty.html' },
       title: 'A',
       x: 0,
       y: 600,
@@ -91,7 +102,7 @@ const optionOps = (): ArtboardOp[] => [
     board: {
       groupId: 'o',
       roundId: 'r',
-      source: { canvasId: 'cvs_b', kind: 'canvas' },
+      source: { kind: 'file', path: 'pages/ingest.html' },
       title: 'B',
       x: 720,
       y: 600,
@@ -111,7 +122,7 @@ const errorOf = async (promise: Promise<unknown>) => {
 };
 
 const createJourney = (extra: ArtboardOp[] = []) =>
-  service().create({ ops: [...journeyOps(), ...extra], title: '画板' }, context);
+  service().create({ files: baseFiles, ops: [...journeyOps(), ...extra], title: '画板' }, context);
 
 beforeEach(async () => {
   await db.delete(users).where(eq(users.id, userId));
@@ -129,8 +140,7 @@ beforeEach(async () => {
     url: 's',
     userId,
   });
-  await registerCanvas('cvs_a', '空项目');
-  await registerCanvas('cvs_b', '接入资料');
+  blobs.clear();
 });
 
 afterEach(async () => {
@@ -139,10 +149,10 @@ afterEach(async () => {
 });
 
 describe('ArtboardService.create', () => {
-  it('uses the task passed in, and stores each board as a row with its Canvas version', async () => {
+  it('uses the task passed in, and stores each board as a row pointing at its file', async () => {
     const task = await new TaskModel(db, userId).create({ instruction: '首次进入', projectId });
     const result = await service().create(
-      { ops: journeyOps(), taskId: task.identifier, title: '新用户首次进入项目' },
+      { files: baseFiles, ops: journeyOps(), taskId: task.identifier, title: '新用户首次进入项目' },
       { topicId: looseTopicId },
     );
 
@@ -157,8 +167,8 @@ describe('ArtboardService.create', () => {
     const { boards, edges, groups, pages } = result.artboard.content;
     expect(pages).toHaveLength(1);
     expect(boards.map((b) => b.source)).toEqual([
-      { canvasId: 'cvs_a', kind: 'canvas', version: 1 },
-      { canvasId: 'cvs_b', kind: 'canvas', version: 1 },
+      { hash: sha(emptyHtml), kind: 'file', path: 'pages/empty.html' },
+      { hash: sha(ingestHtml), kind: 'file', path: 'pages/ingest.html' },
     ]);
     expect(boards.map((b) => b.type)).toEqual(['html', 'html']);
     expect(edges).toMatchObject([{ from: boards[0].id, label: '点接入', to: boards[1].id }]);
@@ -203,10 +213,11 @@ describe('ArtboardService.create', () => {
   it('takes an edge without a label', async () => {
     const { artboard } = await service().create(
       {
+        files: baseFiles,
         ops: [
           { group: { kind: 'journey', title: '首次进入' }, ref: 'j', type: 'addGroup' },
-          canvasBoard('empty', 'cvs_a', 0),
-          canvasBoard('ingest', 'cvs_b', 720),
+          fileBoard('empty', 'pages/empty.html', 0),
+          fileBoard('ingest', 'pages/ingest.html', 720),
           { edge: { from: 'empty', to: 'ingest' }, type: 'addEdge' },
         ],
         title: '画板',
@@ -219,7 +230,7 @@ describe('ArtboardService.create', () => {
 
   it('creates a task in the conversation’s project when none is given', async () => {
     const result = await service().create(
-      { description: '讨论首次进入的流程', title: '首次进入' },
+      { files: baseFiles, description: '讨论首次进入的流程', title: '首次进入' },
       context,
     );
 
@@ -232,6 +243,7 @@ describe('ArtboardService.create', () => {
     const error = await errorOf(
       service().create(
         {
+          files: baseFiles,
           ops: [
             { group: { kind: 'journey', title: 'A' }, type: 'addGroup' },
             { group: { kind: 'journey', title: 'B' }, type: 'addGroup' },
@@ -250,42 +262,51 @@ describe('ArtboardService.create', () => {
   });
 
   it('refuses a board outside any project', async () => {
-    const error = await errorOf(service().create({ title: '画板' }, { topicId: looseTopicId }));
+    const error = await errorOf(
+      service().create({ files: baseFiles, title: '画板' }, { topicId: looseTopicId }),
+    );
     expect(error.code).toBe('no_project');
   });
 
   it('refuses a second board for one task and names the first', async () => {
     const task = await new TaskModel(db, userId).create({ instruction: 'x', projectId });
-    const first = await service().create({ taskId: task.id, title: 'A' }, {});
+    const first = await service().create({ files: baseFiles, taskId: task.id, title: 'A' }, {});
 
-    const error = await errorOf(service().create({ taskId: task.id, title: 'B' }, {}));
+    const error = await errorOf(
+      service().create({ files: baseFiles, taskId: task.id, title: 'B' }, {}),
+    );
     expect(error.code).toBe('exists');
     expect(error.data.artboardId).toBe(first.artboard.id);
   });
 
-  it('refuses a Canvas the user cannot open, and stores image refs as files', async () => {
-    const denied = await errorOf(
+  it('refuses a board whose file the artboard does not have', async () => {
+    const missing = await errorOf(
       service().create(
         {
+          files: baseFiles,
           ops: [
             { group: { kind: 'references', title: '参考' }, ref: 'o', type: 'addGroup' },
-            canvasBoard('x', 'cvs_x', 0, 'o'),
+            fileBoard('x', 'pages/missing.html', 0, 'o'),
           ],
           title: '画板',
         },
         context,
       ),
     );
-    expect(denied).toMatchObject({ code: 'source_denied', data: { opIndex: 1 } });
+    expect(missing).toMatchObject({ code: 'invalid', data: { opIndex: 1 } });
+    expect(missing.message).toContain('pages/missing.html');
+  });
 
+  it('copies an image ref into the artboard and shows it as an image board', async () => {
     const created = await service().create(
       {
+        files: { writes: [{ fileRef: 'msg_1.image_1', path: 'shots/home.png' }] },
         ops: [
           { group: { kind: 'references', title: '参考' }, ref: 'r', type: 'addGroup' },
           {
             board: {
               groupId: 'r',
-              source: { fileRef: 'msg_1.image_1', kind: 'image' },
+              source: { kind: 'file', path: 'shots/home.png' },
               title: '截图',
               x: 0,
               y: 0,
@@ -298,17 +319,41 @@ describe('ArtboardService.create', () => {
       context,
     );
     expect(created.artboard.content.boards[0]).toMatchObject({
-      source: { fileId: 'file_shot', kind: 'image' },
+      source: { kind: 'file', path: 'shots/home.png' },
       type: 'image',
     });
-    expect((await service().get(created.artboard.id)).imageUrls).toEqual({
-      file_shot: 'https://files.test/file_shot',
-    });
+  });
+
+  it('refuses a board type that does not match its file', async () => {
+    const error = await errorOf(
+      service().create(
+        {
+          files: baseFiles,
+          ops: [
+            { group: { kind: 'references', title: '参考' }, ref: 'o', type: 'addGroup' },
+            {
+              board: {
+                groupId: 'o',
+                source: { kind: 'file', path: 'pages/empty.html' },
+                title: 'x',
+                type: 'image',
+                x: 0,
+                y: 0,
+              },
+              type: 'addBoard',
+            },
+          ],
+          title: '画板',
+        },
+        context,
+      ),
+    );
+    expect(error.code).toBe('invalid');
   });
 });
 
 describe('ArtboardService.update and read', () => {
-  it('rejects a stale revision and flags boards behind their Canvas', async () => {
+  it('rejects a stale revision', async () => {
     const { artboard } = await createJourney();
     const [first, second] = artboard.content.boards;
 
@@ -321,11 +366,6 @@ describe('ArtboardService.update and read', () => {
       service().update(artboard.id, 1, [{ id: second.id, type: 'removeBoard' }]),
     );
     expect(stale.code).toBe('conflict');
-
-    await registerCanvas('cvs_b', '接入资料');
-    const read = await service().read(artboard.id);
-    expect(read.staleBoardIds).toEqual([second.id]);
-    expect(read.canvases.cvs_b).toEqual({ latestVersion: 2, title: '接入资料' });
   });
 
   it('applies none of a batch when one op fails', async () => {
@@ -365,7 +405,7 @@ describe('ArtboardService.update and read', () => {
       {
         board: {
           groupId: journey.id,
-          source: { canvasId: 'cvs_a', kind: 'canvas' },
+          source: { kind: 'file', path: 'pages/empty.html' },
           title: 'top',
           x: 0,
           y: -700,
@@ -435,18 +475,46 @@ describe('ArtboardService.update and read', () => {
     expect(reply.code).toBe('invalid');
   });
 
-  it('shows no source for a board whose Canvas went to the trash', async () => {
+  it('shows the new hash once a board file is rewritten', async () => {
     const { artboard } = await createJourney();
-    const canvas = await new WorkModel(db, userId).findCanvas('cvs_a');
-    await db
-      .update(works)
-      .set({ deletedAt: new Date(), isDeleted: true })
-      .where(eq(works.id, canvas!.work.id));
+
+    await service().writeFiles(artboard.id, {
+      edits: [{ newText: '新的空项目', oldText: '空项目', path: 'pages/empty.html' }],
+    });
 
     const read = await service().read(artboard.id);
-    expect(read.artboard.content.boards.map((b) => b.source?.kind ?? null)).toEqual([
-      null,
-      'canvas',
+    expect(read.artboard.content.boards[0].source).toEqual({
+      hash: sha(emptyHtml.replace('空项目', '新的空项目')),
+      kind: 'file',
+      path: 'pages/empty.html',
+    });
+  });
+
+  it('refuses to delete a file a board still shows', async () => {
+    const { artboard } = await createJourney();
+
+    const error = await errorOf(
+      service().writeFiles(artboard.id, { deletes: ['pages/empty.html'] }),
+    );
+
+    expect(error.code).toBe('invalid');
+    expect(error.message).toContain('pages/empty.html');
+    expect((await service().listFiles(artboard.id)).map((file) => file.path)).toEqual([
+      'pages/empty.html',
+      'pages/ingest.html',
+    ]);
+  });
+
+  it('removes a board and its file in one update', async () => {
+    const { artboard } = await createJourney();
+    const [first] = artboard.content.boards;
+
+    await service().update(artboard.id, 1, [{ id: first.id, type: 'removeBoard' }], {
+      deletes: ['pages/empty.html'],
+    });
+
+    expect((await service().listFiles(artboard.id)).map((file) => file.path)).toEqual([
+      'pages/ingest.html',
     ]);
   });
 
@@ -466,7 +534,7 @@ describe('ArtboardService.update and read', () => {
           board: {
             expected: '看到',
             groupId: 'r',
-            source: { canvasId: 'cvs_a', kind: 'canvas' },
+            source: { kind: 'file', path: 'pages/empty.html' },
             title: 'x',
             x: 0,
             y: 900,
@@ -480,7 +548,7 @@ describe('ArtboardService.update and read', () => {
     const loose = await errorOf(
       service().update(id, 1, [
         { group: { kind: 'options', title: '方案' }, ref: 'o', type: 'addGroup' },
-        canvasBoard('a', 'cvs_a', 0, 'o'),
+        fileBoard('a', 'pages/empty.html', 0, 'o'),
       ]),
     );
     expect(loose).toMatchObject({ code: 'invalid', data: { opIndex: 1 } });
@@ -490,7 +558,7 @@ describe('ArtboardService.update and read', () => {
         {
           board: {
             groupId: artboard.content.groups[0].id,
-            source: { canvasId: 'cvs_a', kind: 'canvas' },
+            source: { kind: 'file', path: 'pages/empty.html' },
             title: '付费？',
             type: 'decision',
             x: 0,
@@ -576,7 +644,7 @@ describe('ArtboardService rounds', () => {
           groupId: 'o2',
           recommended: true,
           roundId: 'r2',
-          source: { canvasId: 'cvs_a', kind: 'canvas' },
+          source: { kind: 'file', path: 'pages/empty.html' },
           title: 'N1',
           x: 0,
           y: 1400,
@@ -602,7 +670,7 @@ describe('ArtboardService rounds', () => {
       board: {
         groupId,
         roundId,
-        source: { canvasId: 'cvs_a', kind: 'canvas' },
+        source: { kind: 'file', path: 'pages/empty.html' },
         title: ref,
         x: 0,
         y,
@@ -629,7 +697,7 @@ describe('ArtboardService rounds', () => {
 
   it('refuses a round of another board', async () => {
     const { artboard } = await createJourney(optionOps());
-    const other = await service().create({ title: '另一块' }, context);
+    const other = await service().create({ files: baseFiles, title: '另一块' }, context);
 
     const error = await errorOf(
       service().submitRound(other.artboard.id, artboard.content.rounds[0].id),
@@ -783,15 +851,16 @@ describe('ArtboardService.finalize', () => {
   it('collapses a decision board into conditioned edges between the screens around it', async () => {
     const created = await service().create(
       {
+        files: baseFiles,
         ops: [
           { group: { kind: 'journey', title: '付费' }, ref: 'j', type: 'addGroup' },
-          canvasBoard('cart', 'cvs_a', 0),
+          fileBoard('cart', 'pages/empty.html', 0),
           {
             board: { groupId: 'j', title: '已付费？', type: 'decision', x: 720, y: 0 },
             ref: 'paid',
             type: 'addBoard',
           },
-          canvasBoard('done', 'cvs_b', 1440),
+          fileBoard('done', 'pages/ingest.html', 1440),
           { edge: { from: 'cart', label: '点结算', to: 'paid' }, type: 'addEdge' },
           { edge: { condition: '已付费', from: 'paid', label: '是', to: 'done' }, type: 'addEdge' },
           ...checks(['cart', 'done']),

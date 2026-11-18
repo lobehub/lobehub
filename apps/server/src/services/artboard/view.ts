@@ -11,7 +11,6 @@ import type { ArtboardCommentThread } from '@/database/models/artboard/comment';
 import type { ArtboardStructure } from '@/database/models/artboard/structure';
 
 import { toPageRect } from './layout';
-import type { ArtboardCanvasRef } from './sources';
 
 export const describeArtboard = (content: ArtboardContent) =>
   `${content.groups.length} groups · ${content.boards.length} boards`;
@@ -44,7 +43,7 @@ export const isThreadUnread = ({ replies, root }: ArtboardCommentThread) =>
   [root, ...replies].some((comment) => !comment.authorAgentId && !comment.deliveredAt);
 
 const anchorOf = ({ anchor, boardId, groupId, metadata }: ArtboardCommentThread['root']) => {
-  const space = metadata?.anchorSpace ?? (metadata?.sourceVersionId ? 'board' : undefined);
+  const space = metadata?.anchorSpace;
   const orphaned = (space === 'board' && !boardId) || (space === 'group' && !groupId);
   return orphaned ? null : (anchor ?? null);
 };
@@ -67,23 +66,13 @@ export const toCommentThreadView = (
 export const toArtboardContent = (
   structure: ArtboardStructure,
   openThreads: ArtboardCommentThread[],
-  canvases: Record<string, ArtboardCanvasRef>,
+  hashes: ReadonlyMap<string, string>,
 ): ArtboardContent => {
   const groupRects = new Map(structure.groups.map((group) => [group.id, group.rect]));
 
   const sourceOf = (board: ArtboardStructure['boards'][number]): ArtboardBoardSource | null => {
-    if (board.sourceWorkVersionId) {
-      const canvas = canvases[board.sourceWorkVersionId];
-      return canvas
-        ? {
-            canvasId: canvas.canvasId,
-            kind: 'canvas',
-            ...(board.sourcePath ? { path: board.sourcePath } : {}),
-            version: canvas.version,
-          }
-        : null;
-    }
-    return board.sourceFileId ? { fileId: board.sourceFileId, kind: 'image' } : null;
+    const hash = board.sourcePath ? hashes.get(board.sourcePath) : undefined;
+    return board.sourcePath && hash ? { hash, kind: 'file', path: board.sourcePath } : null;
   };
 
   return {

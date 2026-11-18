@@ -5,12 +5,12 @@ import type { ArtboardOp } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { WorkModel } from '@/database/models/work';
 import { agents, projects, tasks, topics, users } from '@/database/schemas';
 
 import { ArtboardServiceError } from '../errors';
+import type { ArtboardBlobStore } from '../files';
 import { ArtboardService } from '../index';
-import { type ArtboardSourceResolver, createArtboardSourceResolver } from '../sources';
+import type { ArtboardSourceResolver } from '../sources';
 
 const userId = 'artboard-comments-user';
 const agentId = 'agt_artboard_comments';
@@ -19,33 +19,31 @@ const topicId = 'tpc_artboard_comments';
 
 const db: LobeChatDatabase = await getTestDB();
 
-const sources: ArtboardSourceResolver = createArtboardSourceResolver(db, { userId });
+const sources: ArtboardSourceResolver = { imageBytes: async () => undefined };
+
+const blobs = new Map<string, Uint8Array>();
+const fileStore: ArtboardBlobStore = {
+  delete: async (keys) => {
+    for (const key of keys) blobs.delete(key);
+  },
+  list: async (prefix) => [...blobs.keys()].filter((key) => key.startsWith(prefix)),
+  read: async (key) => blobs.get(key) ?? new Uint8Array(),
+  write: async (key, bytes) => {
+    blobs.set(key, bytes);
+  },
+};
 
 const asUser = () =>
-  new ArtboardService(db, userId, undefined, { context: { agentId: null }, sources });
-const asAgent = () => new ArtboardService(db, userId, undefined, { context: { agentId }, sources });
-
-const registerCanvas = (canvasId: string) =>
-  new WorkModel(db, userId).registerCanvas({
-    canvasId,
-    metadata: {
-      entry: 'index.html',
-      fileCount: 1,
-      manifestKey: `canvas/${canvasId}/${Date.now()}-${Math.random()}.json`,
-      runtimeMajor: 1,
-      totalSize: 1,
-    },
-    title: canvasId,
-    toolIdentifier: 'lobe-canvas',
-    toolName: 'createCanvas',
-  });
+  new ArtboardService(db, userId, undefined, { context: { agentId: null }, fileStore, sources });
+const asAgent = () =>
+  new ArtboardService(db, userId, undefined, { context: { agentId }, fileStore, sources });
 
 const ops = (): ArtboardOp[] => [
   { group: { kind: 'journey', title: '主流程' }, ref: 'j', type: 'addGroup' },
   {
     board: {
       groupId: 'j',
-      source: { canvasId: 'cvs_c1', kind: 'canvas' },
+      source: { kind: 'file', path: 'pages/home.html' },
       title: '首页',
       x: 0,
       y: 0,
@@ -59,7 +57,7 @@ const ops = (): ArtboardOp[] => [
       groupId: 'o',
       recommended: true,
       roundId: 'r',
-      source: { canvasId: 'cvs_c2', kind: 'canvas' },
+      source: { kind: 'file', path: 'pages/option-a.html' },
       title: 'A',
       x: 0,
       y: 800,
@@ -69,7 +67,19 @@ const ops = (): ArtboardOp[] => [
 ];
 
 const create = async () => {
-  const { artboard } = await asUser().create({ ops: ops(), title: '画板' }, { topicId });
+  const { artboard } = await asUser().create(
+    {
+      files: {
+        writes: [
+          { content: '<h1>首页</h1>', path: 'pages/home.html' },
+          { content: '<h1>A</h1>', path: 'pages/option-a.html' },
+        ],
+      },
+      ops: ops(),
+      title: '画板',
+    },
+    { topicId },
+  );
   const journey = artboard.content.boards.find((b) => !b.roundId)!;
   const option = artboard.content.boards.find((b) => b.roundId)!;
   return { artboard, journey, option, round: artboard.content.rounds[0] };
@@ -94,8 +104,7 @@ beforeEach(async () => {
   await db.insert(agents).values({ id: agentId, userId });
   await db.insert(projects).values({ id: projectId, name: 'Comments', userId });
   await db.insert(topics).values({ id: topicId, projectId, title: '需求讨论', userId });
-  await registerCanvas('cvs_c1');
-  await registerCanvas('cvs_c2');
+  blobs.clear();
 });
 
 afterEach(async () => {
@@ -208,7 +217,7 @@ describe('ArtboardService.unreadCommentNotices', () => {
 });
 
 describe('ArtboardService comment anchors', () => {
-  it('flags a board thread as stale once the board moves to another Canvas version', async () => {
+  it('flags a board thread as stale once the board file it was written on changes', async () => {
     const { artboard, journey } = await create();
     const onBoard = await asUser().addComment(artboard.id, {
       anchor: { type: 'canvas', x: 0.5, y: 0.5 },
@@ -219,17 +228,37 @@ describe('ArtboardService comment anchors', () => {
     const onCanvas = await asUser().addComment(artboard.id, { clientId: 'c2', content: '整体' });
     expect((await threadOf(artboard.id, onBoard.id)).stale).toBe(false);
 
-    await registerCanvas('cvs_c1');
-    await asUser().update(artboard.id, artboard.revision, [
-      {
-        id: journey.id,
-        patch: { source: { canvasId: 'cvs_c1', kind: 'canvas' } },
-        type: 'updateBoard',
-      },
-    ]);
+    await asUser().writeFiles(artboard.id, {
+      edits: [{ newText: '<h1>新首页</h1>', oldText: '<h1>首页</h1>', path: 'pages/home.html' }],
+    });
 
     expect((await threadOf(artboard.id, onBoard.id)).stale).toBe(true);
     expect((await threadOf(artboard.id, onCanvas.id)).stale).toBe(false);
+  });
+
+  it('flags a board thread as stale once the board points at another file', async () => {
+    const { artboard, journey } = await create();
+    const onBoard = await asUser().addComment(artboard.id, {
+      anchor: { type: 'canvas', x: 0.5, y: 0.5 },
+      boardId: journey.id,
+      clientId: 'c1',
+      content: '按钮颜色',
+    });
+
+    await asUser().update(
+      artboard.id,
+      artboard.revision,
+      [
+        {
+          id: journey.id,
+          patch: { source: { kind: 'file', path: 'pages/home-v2.html' } },
+          type: 'updateBoard',
+        },
+      ],
+      { writes: [{ content: '<h1>首页 v2</h1>', path: 'pages/home-v2.html' }] },
+    );
+
+    expect((await threadOf(artboard.id, onBoard.id)).stale).toBe(true);
   });
 
   it('drops the anchor of a thread whose board was removed', async () => {

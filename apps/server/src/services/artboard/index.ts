@@ -14,6 +14,7 @@ import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
+import { FileService } from '@/server/services/file';
 import { TaskService } from '@/server/services/task';
 
 import {
@@ -22,13 +23,18 @@ import {
   type ArtboardQuestionInput,
 } from './comments';
 import { artboardConflict, ArtboardServiceError, guardArtboard, requireRowId } from './errors';
+import {
+  type ArtboardBlobStore,
+  type ArtboardFileChanges,
+  ArtboardFileService,
+  createFileServiceArtboardBlobStore,
+} from './files';
 import { buildJourneyFlow } from './finalize';
 import { applyArtboardOps } from './ops';
 import {
   ARTBOARD_SOURCE_CONCURRENCY,
   type ArtboardSourceResolver,
   createArtboardSourceResolver,
-  resolveOpSources,
 } from './sources';
 import { describeArtboard, toArtboardContent, toArtboardItem, withoutDraftPicks } from './view';
 
@@ -48,6 +54,7 @@ export interface ArtboardContext {
 
 export interface ArtboardCreateInput {
   description?: string | null;
+  files?: ArtboardFileChanges;
   ops?: ArtboardOp[];
   taskId?: string | null;
   title: string;
@@ -65,13 +72,10 @@ export interface ArtboardCreateResult extends ArtboardWriteResult {
 
 export interface ArtboardReadResult {
   artboard: ArtboardItem;
-  canvases: Record<string, { latestVersion: number; title: string } | null>;
-  staleBoardIds: string[];
 }
 
 export interface ArtboardViewResult {
   artboard: ArtboardItem;
-  imageUrls: Record<string, string>;
 }
 
 export interface ArtboardFinalizeResult {
@@ -81,6 +85,7 @@ export interface ArtboardFinalizeResult {
 
 export interface ArtboardServiceOptions {
   context?: ArtboardContext;
+  fileStore?: ArtboardBlobStore;
   sources?: ArtboardSourceResolver;
 }
 
@@ -93,6 +98,7 @@ export class ArtboardService {
   private comments: ArtboardCommentModel;
   private commentService: ArtboardCommentService;
   private sources: ArtboardSourceResolver;
+  private files: ArtboardFileService;
   private agentId: string | null;
 
   constructor(
@@ -108,12 +114,23 @@ export class ArtboardService {
     this.commentService = new ArtboardCommentService({
       agentId: this.agentId,
       comments: this.comments,
+      fileHashes: async (id) =>
+        new Map((await this.files.list(id)).map((file) => [file.path, file.hash])),
       requireArtboard: (id) => this.require(id),
       structure: this.structure,
     });
     this.sources =
       options.sources ??
       createArtboardSourceResolver(db, { ...options.context, userId, workspaceId });
+    this.files = new ArtboardFileService({
+      db,
+      resolveImage: (fileRef) => this.sources.imageBytes(fileRef),
+      store:
+        options.fileStore ??
+        createFileServiceArtboardBlobStore(() => new FileService(db, userId, workspaceId)),
+      userId,
+      workspaceId,
+    });
   }
 
   private async require(id: string) {
@@ -123,15 +140,17 @@ export class ArtboardService {
   }
 
   private async content(id: string) {
-    const [structure, openThreads] = await Promise.all([
+    const [structure, openThreads, files] = await Promise.all([
       this.structure.getStructure(id),
       this.comments.listThreads(id, { unresolvedOnly: true }),
+      this.files.list(id),
     ]);
     if (!structure) throw notFound(id);
-    const versionIds = [
-      ...new Set(structure.boards.flatMap((board) => board.sourceWorkVersionId ?? [])),
-    ];
-    return toArtboardContent(structure, openThreads, await this.sources.canvasVersions(versionIds));
+    return toArtboardContent(
+      structure,
+      openThreads,
+      new Map(files.map((file) => [file.path, file.hash])),
+    );
   }
 
   private item = async (row: ArtboardRow) => toArtboardItem(row, await this.content(row.id));
@@ -186,7 +205,6 @@ export class ArtboardService {
         );
     }
 
-    const ops = await resolveOpSources(input.ops ?? [], this.sources);
     const { changedIds, row } = await guardArtboard(() =>
       this.db.transaction(async (tx) => {
         const created = await this.artboards.withTransaction(tx).create({
@@ -196,7 +214,14 @@ export class ArtboardService {
           title: input.title,
           topicId: context.topicId ?? null,
         });
-        const changed = await applyArtboardOps(this.structure.withTransaction(tx), created, ops);
+        const files = await this.files.prepare(created.id, input.files ?? {}, tx);
+        await this.files.commit(created.id, files, tx);
+        const changed = await applyArtboardOps(
+          this.structure.withTransaction(tx),
+          created,
+          input.ops ?? [],
+          new Set(files.files.keys()),
+        );
         return { changedIds: changed, row: created };
       }),
     );
@@ -226,67 +251,72 @@ export class ArtboardService {
       });
     } catch (error) {
       await this.artboards.delete(row.id);
+      await this.files.removeAll(row.id);
       throw error;
     }
   }
 
-  async update(id: string, revision: number, ops: ArtboardOp[]): Promise<ArtboardWriteResult> {
+  async update(
+    id: string,
+    revision: number,
+    ops: ArtboardOp[],
+    changes: ArtboardFileChanges = {},
+  ): Promise<ArtboardWriteResult> {
     const row = await this.require(id);
     if (row.revision !== revision) throw artboardConflict();
-    const resolved = await resolveOpSources(ops, this.sources);
+    const files = await this.files.prepare(id, changes);
 
     const { changedIds, next } = await guardArtboard(() =>
       this.db.transaction(async (tx) => {
         const bumped = await this.artboards
           .withTransaction(tx)
           .update(id, { expectedRevision: revision });
-        const changed = await applyArtboardOps(this.structure.withTransaction(tx), row, resolved);
+        await this.files.commit(id, files, tx);
+        const changed = await applyArtboardOps(
+          this.structure.withTransaction(tx),
+          row,
+          ops,
+          new Set(files.files.keys()),
+        );
         return { changedIds: changed, next: bumped };
       }),
     );
     return { artboard: await this.item(next), changedIds };
   }
 
-  async read(id: string): Promise<ArtboardReadResult> {
-    const artboard = withoutDraftPicks(await this.item(await this.require(id)));
-    const sourced = artboard.content.boards.flatMap((board) =>
-      board.source?.kind === 'canvas' ? [{ id: board.id, source: board.source }] : [],
-    );
-    const canvasIds = [...new Set(sourced.map((board) => board.source.canvasId))];
-    const infos = await pMap(canvasIds, (canvasId) => this.sources.canvas(canvasId), {
-      concurrency: ARTBOARD_SOURCE_CONCURRENCY,
-    });
-    const canvases = Object.fromEntries(
-      canvasIds.map((canvasId, index) => {
-        const info = infos[index];
-        return [canvasId, info ? { latestVersion: info.version, title: info.title } : null];
+  async writeFiles(id: string, changes: ArtboardFileChanges) {
+    const row = await this.require(id);
+    const files = await this.files.prepare(id, changes);
+    await guardArtboard(() =>
+      this.db.transaction(async (tx) => {
+        await this.files.commit(id, files, tx);
+        await applyArtboardOps(
+          this.structure.withTransaction(tx),
+          row,
+          [],
+          new Set(files.files.keys()),
+        );
       }),
     );
-    const staleBoardIds = sourced
-      .filter(({ source }) => {
-        const latest = canvases[source.canvasId]?.latestVersion;
-        return latest !== undefined && source.version < latest;
-      })
-      .map((board) => board.id);
-    return { artboard, canvases, staleBoardIds };
+    return { files: files.changed };
+  }
+
+  async listFiles(id: string) {
+    await this.require(id);
+    return this.files.list(id);
+  }
+
+  async readFile(id: string, path: string) {
+    await this.require(id);
+    return this.files.read(id, path);
+  }
+
+  async read(id: string): Promise<ArtboardReadResult> {
+    return { artboard: withoutDraftPicks(await this.item(await this.require(id))) };
   }
 
   async get(id: string): Promise<ArtboardViewResult> {
-    const artboard = await this.item(await this.require(id));
-    const fileIds = [
-      ...new Set(
-        artboard.content.boards.flatMap((board) =>
-          board.source?.kind === 'image' ? [board.source.fileId] : [],
-        ),
-      ),
-    ];
-    const urls = await pMap(fileIds, (fileId) => this.sources.imageUrl(fileId), {
-      concurrency: ARTBOARD_SOURCE_CONCURRENCY,
-    });
-    const imageUrls = Object.fromEntries(
-      fileIds.flatMap((fileId, index) => (urls[index] ? [[fileId, urls[index]!]] : [])),
-    );
-    return { artboard, imageUrls };
+    return { artboard: await this.item(await this.require(id)) };
   }
 
   async getRevision(id: string): Promise<number> {

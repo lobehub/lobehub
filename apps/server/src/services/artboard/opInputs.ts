@@ -1,35 +1,58 @@
-import type { ArtboardBoardType } from '@lobechat/types';
+import {
+  type ArtboardBoardSourceInput,
+  type ArtboardBoardType,
+  type ArtboardOp,
+  isArtboardHtmlPath,
+  isArtboardImagePath,
+  normalizeArtboardFilePath,
+} from '@lobechat/types';
+
+import type { ArtboardBoardRow } from '@/database/models/artboard';
 
 import { failArtboard } from './errors';
-import type { ResolvedArtboardOp, ResolvedBoardSource } from './sources';
 
-export const sourceColumns = (source?: ResolvedBoardSource) => ({
-  sourceFileId: source?.kind === 'image' ? source.fileId : null,
-  sourcePath: source?.kind === 'canvas' ? source.path : null,
-  sourceWorkVersionId: source?.kind === 'canvas' ? source.workVersionId : null,
+export const sourcePathOf = (source: ArtboardBoardSourceInput) =>
+  normalizeArtboardFilePath(source.path) ??
+  failArtboard('invalid', `"${source.path}" is not a valid artboard file path.`);
+
+export const sourceColumns = (path: string) => ({
+  sourceFileId: null,
+  sourcePath: path,
+  sourceWorkVersionId: null,
 });
+
+export const sourceHashKey = (
+  board: Pick<ArtboardBoardRow, 'sourcePath'>,
+  hashes: ReadonlyMap<string, string>,
+): string | undefined => (board.sourcePath ? hashes.get(board.sourcePath) : undefined);
+
+const derivedBoardType = (sourcePath: string): ArtboardBoardType => {
+  if (isArtboardImagePath(sourcePath)) return 'image';
+  if (isArtboardHtmlPath(sourcePath)) return 'html';
+  return failArtboard(
+    'invalid',
+    `"${sourcePath}" is neither an HTML page nor an image a board can show`,
+  );
+};
 
 export const boardTypeOf = (
   requested: ArtboardBoardType | undefined,
-  source: ResolvedBoardSource | undefined,
+  sourcePath: string | undefined,
 ): ArtboardBoardType => {
   if (requested === 'video') return failArtboard('invalid', 'Video boards are not supported yet');
   if (requested === 'decision') {
-    if (source) failArtboard('invalid', 'A decision board has no source');
+    if (sourcePath) failArtboard('invalid', 'A decision board has no source');
     return 'decision';
   }
-  if (!source)
+  if (!sourcePath)
     return failArtboard('invalid', 'A board needs a source unless its type is "decision"');
-  const derived = source.kind === 'image' ? 'image' : 'html';
+  const derived = derivedBoardType(sourcePath);
   if (requested && requested !== derived)
-    failArtboard('invalid', `A ${source.kind} source makes an "${derived}" board`);
+    failArtboard('invalid', `"${sourcePath}" makes an "${derived}" board`);
   return derived;
 };
 
-export const resolveOpRefs = (
-  op: ResolvedArtboardOp,
-  refs: Map<string, string>,
-): ResolvedArtboardOp => {
+export const resolveOpRefs = (op: ArtboardOp, refs: Map<string, string>): ArtboardOp => {
   const id = (value: string) => refs.get(value) ?? value;
   const optionalId = <T extends string | null | undefined>(value: T) =>
     (value ? id(value) : value) as T;

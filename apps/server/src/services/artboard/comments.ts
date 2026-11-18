@@ -16,6 +16,7 @@ import type {
 } from '@/database/models/artboard/structure';
 
 import { ArtboardServiceError, guardArtboard, requireRowId, requireText } from './errors';
+import { sourceHashKey } from './opInputs';
 import { isThreadUnread, toCommentThreadView, toCommentView } from './view';
 
 export interface ArtboardCommentInput {
@@ -37,28 +38,34 @@ export interface ArtboardQuestionInput {
 interface CommentDeps {
   agentId: string | null;
   comments: ArtboardCommentModel;
+  fileHashes: (id: string) => Promise<ReadonlyMap<string, string>>;
   requireArtboard: (id: string) => Promise<unknown>;
   structure: ArtboardStructureModel;
 }
+
+type BoardSnapshot = ArtboardStructure & { hashes: ReadonlyMap<string, string> };
 
 const inside = (value: number) => value >= 0 && value <= 1;
 
 export class ArtboardCommentService {
   constructor(private deps: CommentDeps) {}
 
-  private async structureOf(id: string): Promise<ArtboardStructure> {
+  private async structureOf(id: string): Promise<BoardSnapshot> {
     await this.deps.requireArtboard(id);
-    const structure = await this.deps.structure.getStructure(id);
+    const [structure, hashes] = await Promise.all([
+      this.deps.structure.getStructure(id),
+      this.deps.fileHashes(id),
+    ]);
     if (!structure) throw new ArtboardServiceError('not_found', `No artboard with id "${id}".`);
-    return structure;
+    return { ...structure, hashes };
   }
 
-  private view(structure: ArtboardStructure) {
-    const versions = new Map(structure.boards.map((b) => [b.id, b.sourceWorkVersionId]));
+  private view(structure: BoardSnapshot) {
+    const shown = new Map(structure.boards.map((b) => [b.id, sourceHashKey(b, structure.hashes)]));
     return (thread: ArtboardCommentThread): ArtboardCommentThreadView => {
-      const recorded = thread.root.metadata?.sourceVersionId;
+      const recorded = thread.root.metadata?.sourceHash;
       const { boardId } = thread.root;
-      const stale = !!recorded && !!boardId && versions.get(boardId) !== recorded;
+      const stale = !!recorded && !!boardId && shown.get(boardId) !== recorded;
       return toCommentThreadView(thread, stale);
     };
   }
@@ -125,7 +132,9 @@ export class ArtboardCommentService {
         groupId: input.groupId ?? null,
         metadata: {
           anchorSpace: board ? 'board' : group ? 'group' : 'page',
-          ...(board?.sourceWorkVersionId ? { sourceVersionId: board.sourceWorkVersionId } : {}),
+          ...(board && sourceHashKey(board, structure.hashes)
+            ? { sourceHash: sourceHashKey(board, structure.hashes) }
+            : {}),
         },
         pageId: input.pageId ?? board?.pageId ?? group?.pageId ?? structure.pages[0].id,
       }),
