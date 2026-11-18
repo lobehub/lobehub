@@ -176,6 +176,10 @@ const startGateway = async () => {
 // The goal sweep is not an optimization: a Goal Graph advances on events, so a
 // dropped delivery or a process that dies after dispatch would strand the goal
 // forever with nothing to notice. The sweep is what makes that recoverable.
+//
+// Without QStash the server runs the same jobs in-process instead
+// (`BUILTIN_SCHEDULER_JOBS` in `apps/server/src/services/builtinScheduler`), so
+// keep the two lists in step.
 const QSTASH_SCHEDULES = [
   {
     cron: '*/5 * * * *',
@@ -200,7 +204,9 @@ const createQstashSchedule = async () => {
 
   const QSTASH_TOKEN = process.env.QSTASH_TOKEN;
   if (!QSTASH_TOKEN) {
-    console.warn('⚠️ QStash: QSTASH_TOKEN not set. Skipping schedule creation.');
+    console.log(
+      'ℹ️ QStash: QSTASH_TOKEN not set. Skipping schedule creation; the server runs scheduled tasks and sweeps on its built-in scheduler instead.',
+    );
     return;
   }
 

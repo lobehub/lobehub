@@ -159,6 +159,15 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 默认值：-
 - 示例：`https://device-gateway.example.com` 或 `http://your_server_ip:8788`
 
+### `QSTASH_TOKEN`
+
+- 类型：可选
+- 描述：Upstash QStash 的 Token。配置后，由 QStash Schedules 触发 cron 型定时任务，并执行目标与入站 Webhook 的巡检。Docker 镜像会在启动时基于 `APP_URL` 注册这些计划，因此 QStash 必须能访问该地址。还需要同时设置 `QSTASH_CURRENT_SIGNING_KEY` 和 `QSTASH_NEXT_SIGNING_KEY`，否则服务端会拒绝 QStash 的回调。
+- 默认值：-
+- 示例：`eyJVc2VySUQiOiJ...`
+
+未设置 `QSTASH_TOKEN` 时，常驻运行的服务（Docker 或 `next start`）会用内置调度器执行同样的任务：每分钟检查一次定时任务，启动日志中会出现 `⏰ Built-in scheduler started`。多副本部署时每个副本都会运行内置调度器，同一次定时运行仍只会启动一次。Vercel 等 Serverless 部署无法持续运行内置调度器，必须配置 QStash；否则启动日志会报错，「定时任务」页也会显示警告。
+
 ### `PROXY_URL`
 
 - 类型：可选

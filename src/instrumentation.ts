@@ -42,6 +42,32 @@ export async function register() {
     });
   }
 
+  // Recurring schedules (cron-pattern tasks, goal sweep, inbound webhook sweep)
+  // come from QStash when it is configured. A long-running server without it
+  // runs them in-process; anywhere else they never fire, so say so loudly.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.NEXT_PHASE !== 'phase-production-build'
+  ) {
+    const { getScheduledTaskDispatch } =
+      await import('@/server/services/builtinScheduler/deployment');
+    const dispatch = getScheduledTaskDispatch();
+    if (dispatch === 'builtin') {
+      const { startBuiltinScheduler } = await import('@/server/services/builtinScheduler');
+      startBuiltinScheduler();
+    } else if (dispatch === 'unconfigured') {
+      if (isDev) {
+        console.warn(
+          '⚠️ Scheduler: cron-pattern scheduled tasks will not run in this dev server. Set ENABLE_SCHEDULER_IN_DEV=1 to run the built-in scheduler (only against a database you own), or configure QSTASH_TOKEN.',
+        );
+      } else {
+        console.error(
+          '❌ Scheduler: QSTASH_TOKEN is not set and this runtime cannot keep the built-in scheduler running, so cron-pattern scheduled tasks will never start. Configure QStash, or run LobeHub as a long-running server (Docker or `next start`).',
+        );
+      }
+    }
+  }
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is

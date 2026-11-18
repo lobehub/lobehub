@@ -3410,6 +3410,10 @@ export default {
   'taskList.mine.emptyAssigned': 'No tasks assigned to you yet',
   'taskList.mine.emptyCreated': "You haven't created any tasks yet",
   'taskList.mine.title': 'My tasks',
+  'taskList.scheduled.dispatchUnavailable.action': 'View setup guide',
+  'taskList.scheduled.dispatchUnavailable.desc':
+    "No scheduler is running here: QStash isn't configured, and this deployment can't run the built-in scheduler. Tasks keep their schedule but won't start until an administrator configures QStash or runs LobeHub as a long-running server, such as with Docker.",
+  'taskList.scheduled.dispatchUnavailable.title': "Scheduled tasks won't run on this server",
   'taskList.scheduled.empty': 'No scheduled tasks yet',
   'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.subtaskProgress.loadFailed':

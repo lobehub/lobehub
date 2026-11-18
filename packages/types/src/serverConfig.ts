@@ -248,6 +248,13 @@ export interface GlobalServerConfig {
    * authorization unless the trusted client is configured), Onlyboxes, or none.
    */
   sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
+  /**
+   * What runs cron-pattern scheduled tasks here: QStash Schedules (`qstash`), the
+   * in-process scheduler of a long-running server (`builtin`), or nothing
+   * (`unconfigured`) — those tasks are then saved but never start, so the
+   * Scheduled tasks tab says so. Absent until the server config resolves.
+   */
+  scheduledTaskDispatch?: 'builtin' | 'qstash' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

@@ -39,5 +39,6 @@ export const serverConfigSelectors = {
   oAuthSSOProviders: (s: ServerConfigStore) => s.serverConfig.oAuthSSOProviders,
   oidcIssuer: (s: ServerConfigStore) => s.serverConfig.oidcIssuer,
   sandbox: (s: ServerConfigStore) => s.serverConfig.sandbox ?? 'market',
+  scheduledTaskDispatch: (s: ServerConfigStore) => s.serverConfig.scheduledTaskDispatch,
   multimodalUnderstanding: (s: ServerConfigStore) => s.serverConfig.multimodalUnderstanding,
 };
