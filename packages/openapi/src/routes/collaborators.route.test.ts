@@ -386,4 +386,62 @@ describe('general access', () => {
 
     expect(res.status).toBe(403);
   });
+
+  it('answers 401 without credentials on read and write', async () => {
+    const read = await call(`${base}/general-access`, { workspaceId: WORKSPACE });
+    const write = await call(`${base}/general-access`, {
+      body: { accessLevel: 'view' },
+      method: 'PUT',
+      workspaceId: WORKSPACE,
+    });
+
+    expect(read.status).toBe(401);
+    expect(write.status).toBe(401);
+  });
+
+  it('keeps restricted keys out of reading and changing it', async () => {
+    const read = await call(`${base}/general-access`, {
+      key: KEYS.ownerRead,
+      workspaceId: WORKSPACE,
+    });
+    expect(read.status).toBe(403);
+    expect((await json(read)).code).toBe('insufficient_scope');
+
+    const write = await call(`${base}/general-access`, {
+      body: { accessLevel: 'view' },
+      key: KEYS.ownerRead,
+      method: 'PUT',
+      workspaceId: WORKSPACE,
+    });
+    expect(write.status).toBe(403);
+    expect((await json(write)).code).toBe('insufficient_scope');
+  });
+
+  it('answers 404 across workspaces and for a private resource, leaving the level unchanged', async () => {
+    const strangerRead = await call(`${base}/general-access`, {
+      key: KEYS.stranger,
+      workspaceId: OTHER_WORKSPACE,
+    });
+    expect(strangerRead.status).toBe(404);
+
+    const strangerWrite = await call(`${base}/general-access`, {
+      body: { accessLevel: 'view' },
+      key: KEYS.stranger,
+      method: 'PUT',
+      workspaceId: OTHER_WORKSPACE,
+    });
+    expect(strangerWrite.status).toBe(404);
+
+    const privateRead = await call(`/agents/${PRIVATE_AGENT}/collaborators/general-access`, {
+      key: KEYS.ownerFull,
+      workspaceId: WORKSPACE,
+    });
+    expect(privateRead.status).toBe(404);
+
+    const after = await call(`${base}/general-access`, {
+      key: KEYS.ownerFull,
+      workspaceId: WORKSPACE,
+    });
+    expect((await json(after)).data).toMatchObject({ accessLevel: 'edit' });
+  });
 });
