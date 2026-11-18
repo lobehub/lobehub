@@ -93,6 +93,8 @@ export interface ContextFactRequest {
   agentId?: string;
   /** Plugin identifiers the agent explicitly disabled (tri-state entries). */
   disabledPluginIds?: string[];
+  /** Tools offered for activation in the current step. */
+  discoverableTools?: ReadonlyArray<{ identifier: string }>;
   /** Agent being edited in the Profile panel, when the agent builder is active. */
   editingAgentId?: string;
   /** Group being edited in the group Profile panel, when the group builder is active. */
@@ -114,6 +116,12 @@ export interface ContextFactRequest {
   mentionedAgents?: RuntimeMentionedAgent[];
   /** Conversation as the engine will see it (history hints already applied). */
   messages: UIChatMessage[];
+  /**
+   * Identifiers the agent turned on (every `plugins` entry that is not
+   * disabled). A connector is opt-in per agent, so a connected service absent
+   * from it is not offered as usable. Omitted = no opt-in cut.
+   */
+  optedInPluginIds?: string[];
   /** Present only on a shared-agent visitor run. */
   shareVisitor?: Pick<AgentShareVisitorContext, 'agentId' | 'visitorUserId'>;
   topicId?: string;

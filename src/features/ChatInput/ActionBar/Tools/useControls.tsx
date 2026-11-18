@@ -1,6 +1,6 @@
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { getConnectorCatalog, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
+import { getConnectorCatalog } from '@lobechat/const';
 import { type AgentPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import {
@@ -72,12 +72,13 @@ import {
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
 import { SKILL_ICON_SIZE } from './constants';
-import { resolveDisabledIds, resolveImplicitMode } from './librarySkillPolicy';
+import { resolveImplicitMode } from './librarySkillPolicy';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
+import { CONNECTOR_MODES, useActivationSets } from './useActivationSets';
 import { styles } from './useControls.styles';
 import { usePluginRowUninstall } from './usePluginRowUninstall';
 
@@ -168,23 +169,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     s.togglePlugin,
     s.setPluginMode,
   ]);
-  const checkedSet = useMemo(() => new Set(checked), [checked]);
-  // Disabled identifiers, read from the raw (unfiltered) plugins config —
-  // needed to render the dedicated Disabled group and policy-menu state.
   const rawPlugins = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
   );
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  // Library skills are opt-in per agent: one this agent never turned on is Disabled.
-  const librarySkillIds = useMemo(
-    () => new Set([...marketAgentSkills, ...userAgentSkills].map((skill) => skill.identifier)),
-    [marketAgentSkills, userAgentSkills],
-  );
-  const disabledIdSet = useMemo(
-    () => new Set(resolveDisabledIds(rawPlugins, librarySkillIds)),
-    [rawPlugins, librarySkillIds],
-  );
+  const activationSets = useActivationSets(checked, rawPlugins);
+  const { checkedSet, connectorIds, disabledIdSet, optInIds } = activationSets;
   // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
   // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
   // In auto mode the activator handles those tools transparently, so they remain hidden.
@@ -200,10 +191,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       : builtinToolSelectors.metaList,
     isEqual,
   );
-  // Application-fixed tools (always-on, not user-controllable, e.g. lobe-agent).
-  // Rendered read-only at the top of the "Pinned" section so users can see what the
-  // app keeps active for every conversation. Mode-aware: in manual skill-activate mode the
-  // discovery tools the engine strips (activator, skill-store) are dropped from the list.
+  // Default-pinned builtins have their own rows; the activation switch represents the activator.
   const fixedDisplayList = useToolStore(
     builtinToolSelectors.fixedDisplayMetaList({ isManualMode: isManualSkillMode }),
     isEqual,
@@ -251,9 +239,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // is what puts the row in the Pinned or Disabled group.
       const patch = isCapabilityTool(id) ? resolveCapabilityConfigPatch(id, mode) : undefined;
       if (patch) await updateAgentChatConfig(patch);
-      await setPluginMode(id, mode, resolveImplicitMode(id, librarySkillIds));
+      await setPluginMode(id, mode, resolveImplicitMode(id, optInIds));
     },
-    [canEdit, checkedSet, disabledIdSet, librarySkillIds, setPluginMode, updateAgentChatConfig],
+    [canEdit, checkedSet, disabledIdSet, optInIds, setPluginMode, updateAgentChatConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -270,7 +258,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         deleteOnly = false,
         modeOverride,
         panelExtra,
-        supportedModes = ['pinned', 'auto', 'disabled'],
+        supportedModes = connectorIds.has(id) ? CONNECTOR_MODES : CAPABILITY_MODES,
       } = options;
       const mode: SkillPolicyMode =
         modeOverride ??
@@ -448,7 +436,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [canEdit, checkedSet, disabledIdSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
+    [
+      canEdit,
+      checkedSet,
+      connectorIds,
+      disabledIdSet,
+      openSkillPolicyMenu,
+      policyOpenId,
+      t,
+      updateSkillPolicy,
+    ],
   );
 
   const renderToolLabel = useCallback(
@@ -587,14 +584,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Load user's LobeHub Skill connections via SWR
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
-  // Get connected server by identifier
-  const getServerByName = useCallback(
-    (identifier: string) => {
-      return allComposioServers.find((server) => server.identifier === identifier);
-    },
-    [allComposioServers],
-  );
-
   const connectorCatalog = useMemo(
     () =>
       getConnectorCatalog({
@@ -628,60 +617,30 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     return list.filter((item) => !allSkillIdentifiers.has(item.identifier));
   }, [builtinList, connectorIdentifiers, allSkillIdentifiers]);
 
-  // Get recommended Composio skill IDs
-  const recommendedComposioIds = useMemo(
+  // The chat picker lists existing connections, including those that need authorization.
+  const composioConnections = useMemo(
     () =>
-      new Set(
-        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Composio).map((s) => s.id),
-      ),
-    [],
+      connectorCatalog.flatMap((item) => {
+        if (item.type !== 'composio') return [];
+        const server = allComposioServers.find(
+          (server) => server.identifier === item.serverType.identifier,
+        );
+        return server ? [{ server, type: item.serverType }] : [];
+      }),
+    [connectorCatalog, allComposioServers],
   );
-
-  // Get recommended Lobehub skill IDs
-  const recommendedLobehubIds = useMemo(
+  const lobehubConnections = useMemo(
     () =>
-      new Set(
-        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Lobehub).map((s) => s.id),
-      ),
-    [],
-  );
-
-  // Get installed Composio server IDs
-  const installedComposioIds = useMemo(
-    () => new Set(allComposioServers.map((s) => s.identifier)),
-    [allComposioServers],
-  );
-
-  // Get installed Lobehub skill IDs
-  const installedLobehubIds = useMemo(
-    () => new Set(allLobehubSkillServers.map((s) => s.identifier)),
-    [allLobehubSkillServers],
-  );
-
-  const visibleComposioTypes = useMemo(
-    () =>
-      connectorCatalog
-        .filter((item) => item.type === 'composio')
-        .map(({ serverType }) => serverType)
-        .filter(
-          (type) =>
-            installedComposioIds.has(type.identifier) ||
-            recommendedComposioIds.has(type.identifier) ||
-            checkedSet.has(type.identifier) ||
-            disabledIdSet.has(type.identifier),
-        ),
-    [connectorCatalog, installedComposioIds, recommendedComposioIds, checkedSet, disabledIdSet],
-  );
-  const visibleLobehubProviders = useMemo(
-    () =>
-      connectorCatalog
-        .filter((item) => item.type === 'lobehub')
-        .map(({ provider }) => provider)
-        .filter(
-          (provider) =>
-            installedLobehubIds.has(provider.id) || recommendedLobehubIds.has(provider.id),
-        ),
-    [connectorCatalog, installedLobehubIds, recommendedLobehubIds],
+      connectorCatalog.flatMap((item) => {
+        if (item.type !== 'lobehub') return [];
+        const server = allLobehubSkillServers.find(
+          (server) => server.identifier === item.provider.id,
+        );
+        // A status probe can cache a provider even when there is no connection.
+        if (!server || server.status === LobehubSkillStatus.NOT_CONNECTED) return [];
+        return [{ provider: item.provider, server }];
+      }),
+    [connectorCatalog, allLobehubSkillServers],
   );
 
   // Remove a Composio connection AND drop its identifier from the agent's
@@ -704,15 +663,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [removeComposioConnection, togglePlugin],
   );
 
-  // Composio server list items - show installed, recommended, or any id that
-  // still lingers in the agent's plugins (so an orphaned, never-authorized
-  // entry can be removed even when it isn't a recommended app). "Lingers"
-  // means present at all — pinned or disabled, not just pinned.
   const composioServerItems = useMemo(
     () =>
       isComposioEnabledInEnv
-        ? visibleComposioTypes.map((type) => {
-            const server = getServerByName(type.identifier);
+        ? composioConnections.map(({ server, type }) => {
             const icon = (
               <ComposioSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
             );
@@ -728,7 +682,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               />
             );
 
-            if (server?.status === ComposioServerStatus.ACTIVE) {
+            if (server.status === ComposioServerStatus.ACTIVE) {
               return createManagedSkillItem({
                 badge: <Icon icon={McpIcon} size={12} />,
                 deleteConfig: {
@@ -744,80 +698,55 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               });
             }
 
-            const serverItem = (
-              <ComposioServerItem
-                agentId={agentId}
-                appSlug={type.appSlug}
-                icon={icon}
-                identifier={type.identifier}
-                label={type.label}
-                server={server}
-              />
-            );
-
-            // Expose a delete-only menu (via the "..." button and right-click)
-            // whenever the entry is removable but not yet connected, while
-            // keeping the Connect/Re-authorize action. This covers two states:
-            //   - a server exists but isn't ACTIVE (pending auth / re-authorize)
-            //   - no server yet, but the id already lingers in the agent's
-            //     plugins (added optimistically, never authorized)
-            // so an accidental or failed authorization can always be cleaned up.
-            const removableId = server?.identifier ?? type.identifier;
-            if (server || checkedSet.has(type.identifier) || disabledIdSet.has(type.identifier)) {
-              return {
-                extra: renderPolicyMenu(removableId, {
-                  deleteConfig: {
-                    displayName: type.label,
-                    onDelete: () => removeComposioServer(removableId),
-                  },
-                  deleteOnly: true,
-                }),
-                key: removableId,
-                label: (
-                  <span
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      openSkillPolicyMenu(removableId);
-                    }}
-                  >
-                    {serverItem}
-                  </span>
-                ),
-                popoverContent,
-                searchText: `${type.label} ${removableId}`,
-              } as SkillMenuItem;
-            }
-
+            // Keep the reauthorization action and deletion available on unfinished connections.
             return {
-              key: type.identifier,
-              label: serverItem,
+              extra: renderPolicyMenu(server.identifier, {
+                deleteConfig: {
+                  displayName: type.label,
+                  onDelete: () => removeComposioServer(server.identifier),
+                },
+                deleteOnly: true,
+              }),
+              key: server.identifier,
+              label: (
+                <span
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openSkillPolicyMenu(server.identifier);
+                  }}
+                >
+                  <ComposioServerItem
+                    agentId={agentId}
+                    appSlug={type.appSlug}
+                    icon={icon}
+                    identifier={type.identifier}
+                    label={type.label}
+                    server={server}
+                  />
+                </span>
+              ),
               popoverContent,
-              searchText: type.label,
+              searchText: `${type.label} ${server.identifier}`,
             } as SkillMenuItem;
           })
         : [],
     [
       isComposioEnabledInEnv,
-      visibleComposioTypes,
+      composioConnections,
       agentId,
       t,
       createManagedSkillItem,
-      getServerByName,
       removeComposioServer,
       renderPolicyMenu,
       openSkillPolicyMenu,
-      checkedSet,
-      disabledIdSet,
     ],
   );
 
-  // LobeHub Skill Provider list items - only show installed or recommended
   const lobehubSkillItems = useMemo(
     () =>
       isLobehubSkillEnabled
-        ? visibleLobehubProviders.map((provider) => {
-            const server = allLobehubSkillServers.find((s) => s.identifier === provider.id);
+        ? lobehubConnections.map(({ provider, server }) => {
             const icon = (
               <LobehubSkillIcon
                 icon={provider.icon}
@@ -837,7 +766,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               />
             );
 
-            if (server?.status === LobehubSkillStatus.CONNECTED || server?.isConnected) {
+            if (server.status === LobehubSkillStatus.CONNECTED || server.isConnected) {
               return createManagedSkillItem({
                 badge: <Icon icon={McpIcon} size={12} />,
                 extraTag: provider.author === 'LobeHub' ? officialTag : undefined,
@@ -864,14 +793,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             };
           })
         : [],
-    [
-      isLobehubSkillEnabled,
-      visibleLobehubProviders,
-      allLobehubSkillServers,
-      agentId,
-      t,
-      createManagedSkillItem,
-    ],
+    [isLobehubSkillEnabled, lobehubConnections, agentId, t, createManagedSkillItem],
   );
 
   // Builtin tool list items (excluding Composio and LobeHub Skill)
@@ -1088,41 +1010,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, togglePlugin],
   );
 
-  // Skills list items (including LobeHub Skill and Composio)
-  // Connected items listed first, deduplicated by key (LobeHub takes priority)
-  const skillItems = useMemo(() => {
-    // Deduplicate by key - LobeHub items take priority over Composio
-    const seenKeys = new Set<string>();
-    const allItems: typeof lobehubSkillItems = [];
-
-    // Add LobeHub items first (they take priority)
-    for (const item of lobehubSkillItems) {
-      if (!seenKeys.has(item.key as string)) {
-        seenKeys.add(item.key as string);
-        allItems.push(item);
-      }
-    }
-
-    // Add Composio items only if not already present
-    for (const item of composioServerItems) {
-      if (!seenKeys.has(item.key as string)) {
-        seenKeys.add(item.key as string);
-        allItems.push(item);
-      }
-    }
-
-    return allItems.sort((a, b) => {
-      const isConnectedA =
-        installedLobehubIds.has(a.key as string) || installedComposioIds.has(a.key as string);
-      const isConnectedB =
-        installedLobehubIds.has(b.key as string) || installedComposioIds.has(b.key as string);
-
-      if (isConnectedA && !isConnectedB) return -1;
-      if (!isConnectedA && isConnectedB) return 1;
-      return 0;
-    });
-  }, [lobehubSkillItems, composioServerItems, installedLobehubIds, installedComposioIds]);
-
   // Distinguish community plugins and custom plugins.
   // Whitelist `type === 'plugin'` (matching /settings/skill) so connected
   // integrations (Composio/LobeHub Skill gateway plugins with other sources like
@@ -1191,7 +1078,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   };
 
   // Only builtin tools and service integrations belong in this activation picker.
-  const lobehubGroupChildren: ItemType[] = [...builtinItems, ...skillItems];
+  const lobehubGroupChildren: ItemType[] = [
+    ...builtinItems,
+    ...lobehubSkillItems,
+    ...composioServerItems,
+  ];
 
   // User-installed skills are selected in the Skills panel, not enabled here.
   const communityGroupChildren: ItemType[] = communityPlugins.map(mapPluginToItem);
@@ -1203,11 +1094,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   ];
 
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
-  // Deduplicate by key: the same app can be sourced from more than one list
-  // (e.g. a Composio/LobeHub integration item plus an installed plugin sharing
-  // the same identifier), which would otherwise render the row twice. Keep the
-  // first occurrence so the richer integration item (LobeHub group, listed
-  // first) wins over a generic plugin duplicate.
+  // Keep the richer integration row ahead of any installed plugin with the same identifier.
   const seenSkillKeys = new Set<string>();
   const allSkillItems = [
     ...lobehubGroupChildren,

@@ -1,6 +1,13 @@
 import type { ItemType } from '@lobehub/ui';
-import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { createElement, Fragment } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type ComposioServer, ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
+import {
+  type LobehubSkillServer,
+  LobehubSkillStatus,
+} from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useControls } from './useControls';
 
@@ -13,6 +20,10 @@ const mocks = vi.hoisted(() => ({
     { identifier: 'lobehub', name: 'LobeHub' },
   ],
   checked: [] as string[],
+  composioEnabled: false,
+  composioServers: [] as Pick<ComposioServer, 'identifier' | 'status'>[],
+  lobehubEnabled: false,
+  lobehubSkillServers: [] as LobehubSkillServer[],
   mode: 'auto',
   plugins: [] as { identifier: string; mode: string }[],
   skills: [
@@ -59,13 +70,18 @@ vi.mock('@/store/aiInfra', () => ({
   useAiInfraStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/serverConfig', () => ({
-  serverConfigSelectors: { enableComposio: () => false, enableLobehubSkill: () => false },
+  serverConfigSelectors: {
+    enableComposio: () => mocks.composioEnabled,
+    enableLobehubSkill: () => mocks.lobehubEnabled,
+  },
   useServerConfigStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (state: unknown) => unknown) =>
     selector({
+      composioServers: mocks.composioServers,
       isConnectorsInit: true,
+      lobehubSkillServers: mocks.lobehubSkillServers,
       useFetchAgentSkills: vi.fn(),
       useFetchLobehubSkillConnections: vi.fn(),
       useFetchUninstalledBuiltinTools: vi.fn(),
@@ -92,8 +108,8 @@ vi.mock('@/store/tool/selectors', () => ({
       ...mocks.skills,
     ],
   },
-  composioStoreSelectors: { getServers: () => [] },
-  lobehubSkillStoreSelectors: { getServers: () => [] },
+  composioStoreSelectors: { getServers: () => mocks.composioServers },
+  lobehubSkillStoreSelectors: { getServers: () => mocks.lobehubSkillServers },
   pluginSelectors: {
     installedPluginMetaList: () => [
       { identifier: 'community-mcp', title: 'Community MCP', type: 'plugin' },
@@ -126,8 +142,91 @@ describe('chat input tool picker', () => {
     vi.clearAllMocks();
     mocks.agentId = 'agent-1';
     mocks.checked = [];
+    mocks.composioEnabled = false;
+    mocks.composioServers = [];
+    mocks.lobehubEnabled = false;
+    mocks.lobehubSkillServers = [];
     mocks.plugins = [];
     mocks.mode = 'auto';
+  });
+
+  afterEach(cleanup);
+
+  it.each([
+    { id: 'gmail', pin: false },
+    { id: 'builtin-tool', pin: true },
+  ])('offers the applicable activation actions on the $id row', async ({ id, pin }) => {
+    mocks.composioEnabled = true;
+    mocks.composioServers = [{ identifier: 'gmail', status: ComposioServerStatus.ACTIVE }];
+    mocks.plugins = [{ identifier: 'gmail', mode: 'auto' }];
+
+    const Row = () => {
+      const { marketItems } = useControls();
+      const group = marketItems.find((item) => item?.key === 'auto');
+      const row = group?.type === 'group' && group.children?.find((item) => item?.key === id);
+      if (!row || !('label' in row)) throw new Error(`Missing row ${id}`);
+      return createElement(Fragment, null, row.label);
+    };
+    render(createElement(Row));
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'tools.skillActivateMode.title' }));
+
+    expect(
+      await screen.findByRole('button', { name: 'tools.activation.action.auto' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'tools.activation.action.disable' })).toBeTruthy();
+    expect(!!screen.queryByRole('button', { name: 'tools.activation.action.pin' })).toBe(pin);
+  });
+
+  it('only shows connectors with connection records and keeps rows needing authorization', () => {
+    mocks.composioEnabled = true;
+    mocks.composioServers = [
+      { identifier: 'gmail', status: ComposioServerStatus.ACTIVE },
+      { identifier: 'slack', status: ComposioServerStatus.ERROR },
+      { identifier: 'airtable', status: ComposioServerStatus.PENDING_AUTH },
+    ];
+    mocks.lobehubEnabled = true;
+    mocks.lobehubSkillServers = [
+      {
+        identifier: 'notion',
+        isConnected: false,
+        name: 'Notion',
+        status: LobehubSkillStatus.NOT_CONNECTED,
+      },
+      {
+        identifier: 'vercel',
+        isConnected: true,
+        name: 'Vercel',
+        status: LobehubSkillStatus.CONNECTED,
+      },
+    ];
+    mocks.plugins = [
+      { identifier: 'gmail', mode: 'auto' },
+      { identifier: 'vercel', mode: 'auto' },
+      { identifier: 'google-drive', mode: 'disabled' },
+    ];
+    const { result } = renderHook(() => useControls());
+
+    const { autoCount, marketItems } = result.current;
+    const autoGroup = marketItems.find((item) => item?.key === 'auto');
+    expect(autoGroup?.type).toBe('group');
+    if (autoGroup?.type !== 'group') throw new Error('Missing Auto group');
+    expect(leafKeys(autoGroup.children ?? []).sort()).toEqual(
+      [...toolIds, 'gmail', 'vercel'].sort(),
+    );
+    expect(autoCount).toBe(toolIds.length + 2);
+    const disabledGroup = marketItems.find((item) => item?.key === 'disabled');
+    expect(disabledGroup?.type).toBe('group');
+    if (disabledGroup?.type !== 'group') throw new Error('Missing Disabled group');
+    expect(leafKeys(disabledGroup.children ?? [])).toEqual(
+      expect.arrayContaining(['airtable', 'slack']),
+    );
+    const keys = leafKeys(marketItems);
+    for (const identifier of ['google-drive', 'notion', 'twitter'])
+      expect(keys).not.toContain(identifier);
+
+    act(() => result.current.marketHeader.props.onChange({ target: { value: 'Google Drive' } }));
+    expect(leafKeys(result.current.marketItems)).toEqual([]);
+    expect(result.current.autoCount).toBe(toolIds.length + 2);
   });
 
   it('offers only tool management in the footer, without an add-tools action', () => {

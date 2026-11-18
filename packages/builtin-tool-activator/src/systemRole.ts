@@ -31,43 +31,7 @@ const toolSelectionGuidelines = ({
 ${withSkills ? toolSelectionSkill : ''}</tool_selection_guidelines>`;
 
 const skillStoreDiscovery = `<skill_store_discovery>
-**CRITICAL: Always activate \`lobe-skill-store\` FIRST when ANY of the following conditions are met:**
-
-**Trigger keywords/patterns (MUST activate lobe-skill-store immediately):**
-- User mentions: "SKILL.md", "LobeHub Skills", "skill store", "install skill", "search skill"
-- User provides a GitHub link to install a skill (e.g., github.com/xxx/xxx containing SKILL.md)
-- User mentions installing from LobeHub marketplace
-- User provides LobeHub skill URLs like: \`https://lobehub.com/skills/{identifier}/skill.md\` → extract identifier and use \`importFromMarket\`
-- User provides instructions like: "curl https://lobehub.com/skills/..." → extract identifier from URL, use \`importFromMarket\`
-- User asks to "follow instructions to set up/install a skill"
-- User's task involves a specialized domain (e.g., creating presentations/PPT, generating PDFs, charts, diagrams) and no matching tool exists
-
-**Decision flow:**
-1. **If ANY trigger condition above is met** → Immediately activate \`lobe-skill-store\`
-2. **For LobeHub skill URLs** (e.g., \`https://lobehub.com/skills/{identifier}/skill.md\`):
-   - Extract the identifier from the URL path (the part between \`/skills/\` and \`/skill.md\`)
-   - Use \`importFromMarket\` with that identifier directly (NOT \`importSkill\`)
-   - Example: \`lobehub.com/skills/openclaw-openclaw-github/skill.md\` → identifier is \`openclaw-openclaw-github\`
-3. For GitHub repository URLs → use \`importSkill\` with type "url"
-4. For marketplace searches → use \`searchSkill\` then \`importFromMarket\`
-5. Check \`<available_tools>\` for other relevant tools → if found, use \`activateTools\`
-6. Fall back to generic tools (web browsing, cloud sandbox, etc.) only when the user gave you no
-   skill URL or identifier AND \`searchSkill\` found nothing. Holding a skill URL is never a reason
-   to browse — import it.
-
-**Install priority — go down this ladder, never skip up it:**
-1. \`importFromMarket\` — whenever you have or can extract a marketplace identifier
-2. \`importSkill\` — any other skill URL (GitHub repo, raw SKILL.md, ZIP)
-3. The marketplace CLI (\`npx @lobehub/market-cli register\` / \`skills install\`) in a sandbox — **last
-   resort only**, when \`lobe-skill-store\` is genuinely unavailable, or steps 1 and 2 were tried and
-   failed. It needs a device registration the tools don't, is rate-limited, and needs a working
-   sandbox. A skill page documents the CLI because it is written for agents with no Skill Store
-   tool; when you have one, importing through it IS installing "as documented".
-
-**Important:**
-- Do NOT manually curl/fetch SKILL.md files or try to parse them yourself
-- For \`lobehub.com/skills/xxx/skill.md\` URLs, ALWAYS extract the identifier and use \`importFromMarket\`, NOT \`importSkill\`
-- \`importSkill\` is only for GitHub repository URLs or ZIP packages, not for lobehub.com skill URLs
+For marketplace skill searches, skill install requests (including SKILL.md, GitHub or LobeHub skill URLs), or a specialized task that needs a capability missing from the available tools and skills, use the Skill Store. If lobe-skill-store is in <available_tools>, activate it before browsing or trying a CLI. If already active, call it directly.
 </skill_store_discovery>`;
 
 const credentialsManagement = `<credentials_management>
@@ -115,21 +79,13 @@ When \`{{creds_sandbox_reachable}}\` is \`false\` (this run is routed to a devic
 </credential_usage_by_runtime>
 </credentials_management>`;
 
-const bestPracticesSkillFirst = `- **SKILL-FIRST: Any mention of skills, SKILL.md, GitHub skill links, or LobeHub marketplace → activate \`lobe-skill-store\` FIRST, no exceptions.**
-- **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`lobe-creds\` FIRST to manage credentials securely.**
+const bestPracticesCreds = `- **CREDS-FIRST: Any need for authentication, API keys, OAuth, tokens, or env variables → activate \`lobe-creds\` FIRST to manage credentials securely.**
 `;
 
-const bestPracticesSkillMarketplace = `- For specialized tasks, search the Skill Marketplace first — a dedicated skill is almost always better than a generic approach
-`;
-
-const bestPractices = ({
-  withSkillStoreAndCreds,
-}: {
-  withSkillStoreAndCreds: boolean;
-}) => `<best_practices>
+const bestPractices = ({ withCreds }: { withCreds: boolean }) => `<best_practices>
 - **IMPORTANT: Plan ahead and activate all needed tools upfront in a single call.** Before responding to the user, analyze their request and determine ALL tools you will need, then activate them together. Do NOT activate tools incrementally during a multi-step task.
-${withSkillStoreAndCreds ? bestPracticesSkillFirst : ''}- Check the \`<available_tools>\` list before activating tools
-${withSkillStoreAndCreds ? bestPracticesSkillMarketplace : ''}- Only activate tools that are relevant to the user's current request
+${withCreds ? bestPracticesCreds : ''}- Check the \`<available_tools>\` list before activating tools
+- Only activate tools that are relevant to the user's current request
 - After activation, use the tools' APIs directly — no need to call activateTools again for the same tools
 </best_practices>`;
 
@@ -143,7 +99,7 @@ ${skillStoreDiscovery}
 
 ${credentialsManagement}
 
-${bestPractices({ withSkillStoreAndCreds: true })}
+${bestPractices({ withCreds: true })}
 `;
 
 /**
@@ -160,5 +116,5 @@ ${howItWorks({ withSkills })}
 
 ${toolSelectionGuidelines({ withSkills })}
 
-${bestPractices({ withSkillStoreAndCreds: false })}
+${bestPractices({ withCreds: false })}
 `;
