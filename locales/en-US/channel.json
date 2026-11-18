@@ -91,6 +91,7 @@
   "environment.inherited.deviceOffline": "This Agent’s device is offline. Reconnect the device, or remove the Agent.",
   "environment.inherited.deviceUnavailable": "This Agent’s device is unavailable in the current space. Change it in the Agent’s settings, or remove the Agent.",
   "environment.permissionRequired": "You do not have permission to save these members. Check channel and Agent access.",
+  "environment.remoteHost": "This Agent runs on its own host, so there is no device to choose.",
   "environment.resolveRequired": "Resolve the issues shown under the selected Agents first.",
   "environment.saveFailed": "Could not save channel members. Your choices are preserved; try again.",
   "environment.saved": "Runtime environment updated",

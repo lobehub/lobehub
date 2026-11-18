@@ -1,5 +1,8 @@
-import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentType } from './agent';
-import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import {
+  LocalExecutionHeterogeneousAgentTypeSchema,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
 import type { BotWakeKind } from './signal';
 import type { ExternalWorkSummaryItem } from './work';
@@ -12,32 +15,29 @@ import type { ExternalWorkSummaryItem } from './work';
  */
 
 /**
- * Runtimes a Channel can seat, derived rather than listed: LobeHub's own `native` loop plus every
- * heterogeneous runtime that executes on its user's machine (descriptor-backed CLIs and
- * protocol-driven local runtimes). A new local runtime joins Channels when it joins the provider
- * registry; only runtimes known not to work are excluded below, each with its reason.
+ * Remote-task runtimes (`openclaw`, `hermes`) run on their own host, so a Channel seats them
+ * without a device or working directory; the run routes to that host as an ordinary one does.
  */
-const LOCAL_EXECUTION_RUNTIMES = LocalExecutionHeterogeneousAgentTypeSchema.options;
+const REMOTE_RUNTIMES = REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type);
 
 /**
- * Remote-task runtimes (`openclaw`, `hermes`) run a task on a remote host instead of on a seated
- * device, so a Channel's "pick a device + working directory" premise does not hold for them.
- * They are not part of LOCAL_EXECUTION_RUNTIMES; this list documents the exclusion and is
- * asserted by tests so a remote runtime cannot slip in by being reclassified.
+ * Runtimes a Channel can seat: every runtime an Agent can have, derived rather than listed.
+ * LobeHub's own `native` loop, every heterogeneous runtime that executes on its user's machine
+ * and every remote-task runtime. A new runtime joins Channels when it joins the registry.
  */
-export const CHANNEL_EXCLUDED_RUNTIMES: Readonly<Record<RemoteHeterogeneousAgentType, string>> = {
-  hermes:
-    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
-  openclaw:
-    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
-};
-
-export const CHANNEL_RUNTIMES = ['native', ...LOCAL_EXECUTION_RUNTIMES] as const;
-export type ChannelRuntime = 'native' | (typeof LOCAL_EXECUTION_RUNTIMES)[number];
+export const CHANNEL_RUNTIMES = [
+  'native',
+  ...LocalExecutionHeterogeneousAgentTypeSchema.options,
+  ...REMOTE_RUNTIMES,
+] as const;
+export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
-  !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
+
+/** A runtime that runs on its own host: a Channel picks no device or directory for it. */
+export const isRemoteChannelRuntime = (runtime: string) =>
+  (REMOTE_RUNTIMES as readonly string[]).includes(runtime);
 
 /** The directory on that device: the Agent's own choice there, else the device's default. */
 export const defaultChannelAgentDirectory = (
