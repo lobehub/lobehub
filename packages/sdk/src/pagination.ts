@@ -19,6 +19,15 @@ export type PageItem<P> = P extends { items: Array<infer I> }
 
 export type PaginateOptions<M extends AnyFn> = NonNullable<Parameters<M>[0]>;
 
+export interface PaginateLimits {
+  /**
+   * Stop after this many items. Each request then asks for no more than the
+   * items still wanted (`query.limit` caps the page size), so a "first N"
+   * read never fetches a full page it throws away.
+   */
+  maxItems?: number;
+}
+
 const PAGE_FIELDS = new Set(['hasMore', 'nextCursor', 'total', 'totalSize']);
 
 /** Find the item array on a page: `items` first, else the one array-valued key. */
@@ -46,19 +55,33 @@ export async function* paginate<M extends AnyFn>(
   client: Client,
   method: M,
   options?: PaginateOptions<M>,
+  { maxItems }: PaginateLimits = {},
 ): AsyncGenerator<PageItem<PageOf<M>>> {
   const base = (options ?? {}) as { query?: Record<string, unknown> };
   let cursor = base.query?.cursor as string | undefined;
+  const pageLimit = base.query?.limit as number | undefined;
+  let remaining = maxItems ?? Number.POSITIVE_INFINITY;
+  if (remaining <= 0) return;
 
   while (true) {
+    const limit = Number.isFinite(remaining)
+      ? Math.min(pageLimit ?? remaining, remaining)
+      : pageLimit;
     const { data } = await method({
       ...base,
       client,
-      query: { ...base.query, ...(cursor ? { cursor } : {}) },
+      query: {
+        ...base.query,
+        ...(cursor ? { cursor } : {}),
+        ...(limit === undefined ? {} : { limit }),
+      },
       throwOnError: true,
     });
     const page = (data as { data: PageShape & Record<string, unknown> }).data;
-    for (const item of pageItems(page)) yield item as PageItem<PageOf<M>>;
+    for (const item of pageItems(page)) {
+      yield item as PageItem<PageOf<M>>;
+      if (--remaining <= 0) return;
+    }
 
     if (!page.hasMore || !page.nextCursor || page.nextCursor === cursor) return;
     cursor = page.nextCursor;

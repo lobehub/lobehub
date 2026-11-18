@@ -146,6 +146,18 @@ for await (const agent of lobehub.paginate(lobehub.agents.list, { query: { limit
 
 The method can be passed unbound; query parameters other than `cursor` are sent with every page.
 
+To read only the first N items, pass `maxItems`: iteration stops there, and each page asks for no more than the items still wanted:
+
+```ts
+for await (const goal of lobehub.paginate(
+  lobehub.goals.list,
+  { query: { limit: 100 } },
+  { maxItems: 30 },
+)) {
+  console.log(goal.id);
+}
+```
+
 ## Streaming responses
 
 `responses.stream` starts a response with `stream: true` and yields typed OpenResponses events (`ResponseStreamEvent`, generated from the spec). `finalResponse()` drains it and resolves with the response object of the last event; `abort()` (or breaking out of the loop) closes the connection.

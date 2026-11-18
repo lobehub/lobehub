@@ -271,6 +271,43 @@ describe('paginate', () => {
     ]);
   });
 
+  it('stops after maxItems and asks each page only for the items still wanted', async () => {
+    const pages: Record<string, unknown> = {
+      '': { agents: [{ id: 'a1' }, { id: 'a2' }], hasMore: true, nextCursor: 'c2', total: 9 },
+      'c2': { agents: [{ id: 'a3' }], hasMore: true, nextCursor: 'c3', total: 9 },
+    };
+    const { fetch, requests } = mockFetch((request) =>
+      json(envelope(pages[new URL(request.url).searchParams.get('cursor') ?? ''])),
+    );
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    const ids: string[] = [];
+    const pager = lobehub.paginate(lobehub.agents.list, { query: { limit: 2 } }, { maxItems: 3 });
+    for await (const agent of pager) ids.push(agent.id);
+
+    expect(ids).toEqual(['a1', 'a2', 'a3']);
+    expect(requests.map((request) => new URL(request.url).search)).toEqual([
+      '?limit=2',
+      '?limit=1&cursor=c2',
+    ]);
+  });
+
+  it('uses maxItems as the page size when the query sets none, and sends nothing for 0', async () => {
+    const { fetch, requests } = mockFetch(() =>
+      json(envelope({ agents: [{ id: 'a1' }], hasMore: false, nextCursor: null, total: 1 })),
+    );
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    for await (const _ of lobehub.paginate(lobehub.agents.list, {}, { maxItems: 0 })) {
+      throw new Error('maxItems 0 yields nothing');
+    }
+    for await (const _ of lobehub.paginate(lobehub.agents.list, {}, { maxItems: 5 })) {
+      // drain
+    }
+
+    expect(requests.map((request) => new URL(request.url).search)).toEqual(['?limit=5']);
+  });
+
   it('reads the generic `items` array of newer endpoints', async () => {
     const { fetch } = mockFetch(() =>
       json(envelope({ hasMore: false, items: [{ id: 'g1' }], nextCursor: null })),
