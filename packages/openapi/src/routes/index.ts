@@ -2,9 +2,11 @@ import AgentGroupsRoutes from './agent-groups.route';
 import AgentsRoutes from './agents.route';
 import AnthropicRoutes from './anthropic.route';
 import ApiKeysRoutes from './api-keys.route';
+import ArtifactsRoutes from './artifacts.route';
 import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
+import DashboardsRoutes from './dashboards.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -19,6 +21,7 @@ import NotificationsRoutes from './notifications.route';
 import OpenAIRoutes from './openai.route';
 import PermissionsRoutes from './permissions.route';
 import { PluginsRoutes } from './plugins.route';
+import ProjectsRoutes from './projects.route';
 import ProvidersRoutes from './providers.route';
 import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
@@ -28,6 +31,7 @@ import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
 import UsageRoutes from './usage.route';
 import UsersRoutes from './users.route';
+import WidgetsRoutes from './widgets.route';
 
 export default {
   'agent-groups': AgentGroupsRoutes,
@@ -60,4 +64,8 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'projects': ProjectsRoutes,
+  'widgets': WidgetsRoutes,
+  'dashboards': DashboardsRoutes,
+  'artifacts': ArtifactsRoutes,
 };

@@ -49,6 +49,36 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Projects on the public REST API (`/api/v1/projects`): the project itself,
+   * its member agents, linked knowledge bases, works and completion review.
+   * The tRPC `project` namespace keeps requiring `agent:*`.
+   */
+  'project:read',
+  'project:write',
+  /**
+   * Widgets on the public REST API (`/api/v1/widgets`). `widget:write` covers
+   * the widget and its drafts; running a script — a dry run, a manual run, a
+   * refresh schedule — or publishing a version is `widget:publish`, its own
+   * tier: those execute the script in the sandbox with the owner's connector
+   * credentials, so editing a widget must not imply running it.
+   */
+  'widget:read',
+  'widget:write',
+  'widget:publish',
+  /**
+   * Dashboards on the public REST API (`/api/v1/dashboards`): boards and widget
+   * layout. Reading a board shows the cards on it — each widget's latest output
+   * — as the app does; editing or running those widgets stays `widget:*`.
+   */
+  'dashboard:read',
+  'dashboard:write',
+  /**
+   * Publishing an HTML artifact to a public URL (`POST /api/v1/artifacts`).
+   * Its own REST tier with no read twin: it puts content in front of anyone
+   * with the link. The tRPC `market` namespace keeps its `agent:*` rule.
+   */
+  'artifact:publish',
   'mcp:read',
   'mcp:write',
   'usage:read',

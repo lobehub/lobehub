@@ -64,17 +64,39 @@ const styles = stylex.create({
  *
  * - `model:invoke` burns money;
  * - `agent:credential:write` installs a secret into one of an agent's
- *   accounts — managing the agent's accounts must not imply that.
+ *   accounts — managing the agent's accounts must not imply that;
+ * - `widget:publish` runs and publishes widget scripts with the owner's
+ *   connector credentials — editing a widget must not imply that.
+ *
+ * Artifacts only carry their high-risk tier: `artifact:publish` puts HTML on a
+ * public URL, and there is nothing to read.
  */
 type ScopeGroupKey =
-  'agent' | 'chat' | 'file' | 'knowledge' | 'mcp' | 'model' | 'usage' | 'user' | 'workspace';
+  | 'agent'
+  | 'artifact'
+  | 'chat'
+  | 'dashboard'
+  | 'file'
+  | 'knowledge'
+  | 'mcp'
+  | 'model'
+  | 'project'
+  | 'usage'
+  | 'user'
+  | 'widget'
+  | 'workspace';
 
 /**
  * Labels an extra scope can carry. Kept as literals (not `string`) so the
  * `t()` calls stay inside the generated key union.
  */
 type ScopeExtraLabel =
-  'apikey.scopes.agentCredential' | 'apikey.scopes.invoke' | 'apikey.scopes.modelInvoke';
+  | 'apikey.scopes.agentCredential'
+  | 'apikey.scopes.artifactPublish'
+  | 'apikey.scopes.invoke'
+  | 'apikey.scopes.modelInvoke'
+  | 'apikey.scopes.publish'
+  | 'apikey.scopes.widgetPublish';
 
 interface ScopeGroup {
   /**
@@ -90,7 +112,7 @@ interface ScopeGroup {
   };
   readonly key: ScopeGroupKey;
   readonly label: `apikey.scopes.groups.${ScopeGroupKey}`;
-  readonly read: ApiKeyScope;
+  readonly read?: ApiKeyScope;
   readonly write?: ApiKeyScope;
 }
 
@@ -125,6 +147,38 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     read: 'knowledge:read',
     write: 'knowledge:write',
   },
+  {
+    key: 'project',
+    label: 'apikey.scopes.groups.project',
+    read: 'project:read',
+    write: 'project:write',
+  },
+  {
+    key: 'widget',
+    label: 'apikey.scopes.groups.widget',
+    read: 'widget:read',
+    write: 'widget:write',
+    extra: {
+      createLabel: 'apikey.scopes.widgetPublish',
+      overviewLabel: 'apikey.scopes.widgetPublish',
+      scope: 'widget:publish',
+    },
+  },
+  {
+    key: 'dashboard',
+    label: 'apikey.scopes.groups.dashboard',
+    read: 'dashboard:read',
+    write: 'dashboard:write',
+  },
+  {
+    key: 'artifact',
+    label: 'apikey.scopes.groups.artifact',
+    extra: {
+      createLabel: 'apikey.scopes.artifactPublish',
+      overviewLabel: 'apikey.scopes.publish',
+      scope: 'artifact:publish',
+    },
+  },
   { key: 'mcp', label: 'apikey.scopes.groups.mcp', read: 'mcp:read', write: 'mcp:write' },
   { key: 'usage', label: 'apikey.scopes.groups.usage', read: 'usage:read' },
   {
@@ -156,7 +210,7 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
 
   const grants = SCOPE_GROUPS.flatMap((group) => {
     const actions = [
-      scopeSet.has(group.read) && t('apikey.scopes.read'),
+      group.read && scopeSet.has(group.read) && t('apikey.scopes.read'),
       group.write && scopeSet.has(group.write) && t('apikey.scopes.write'),
       group.extra && scopeSet.has(group.extra.scope) && t(group.extra.overviewLabel),
     ].filter(Boolean) as string[];
@@ -197,6 +251,8 @@ export const ScopeOverview: FC<ScopeOverviewProps> = ({ scopes }) => {
  */
 const SCOPE_PREREQUISITES: Partial<Record<ApiKeyScope, readonly ApiKeyScope[]>> = {
   'agent:credential:write': ['agent:write'],
+  // A run executes the widget's script as it stands; the key must be able to read it.
+  'widget:publish': ['widget:read'],
 };
 
 /** Each scope's prerequisites, with every `:write` needing its `:read` twin when one exists. */
@@ -280,13 +336,15 @@ const ScopeSelector: FC<ScopeSelectorProps> = ({
               <Flexbox gap={4} key={group.key}>
                 <span {...stylex.props(styles.groupTitle)}>{t(group.label)}</span>
                 <Flexbox horizontal className={stylex.props(styles.scopeRow).className} gap={12}>
-                  <Checkbox
-                    checked={selectedSet.has(group.read)}
-                    disabled={fullAccess}
-                    onChange={(checked) => toggle(group.read, checked)}
-                  >
-                    {t('apikey.scopes.read')}
-                  </Checkbox>
+                  {group.read && (
+                    <Checkbox
+                      checked={selectedSet.has(group.read)}
+                      disabled={fullAccess}
+                      onChange={(checked) => group.read && toggle(group.read, checked)}
+                    >
+                      {t('apikey.scopes.read')}
+                    </Checkbox>
+                  )}
                   {group.write && (
                     <Checkbox
                       checked={selectedSet.has(group.write)}
