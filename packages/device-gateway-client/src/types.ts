@@ -353,6 +353,8 @@ export interface AgentRunRequestMessage {
    * `sendPrompt(imageList)` path. Optional — omitted for older servers.
    */
   imageList?: Array<{ id?: string; url: string }>;
+  /** Temporary personal TFS Git config for this run. Older clients ignore it. */
+  tfsGitConfig?: Array<[string, string]>;
   /**
    * Same meaning as {@link workspaceId}. The HTTP dispatch payload uses this
    * name so it is not confused with the device-pool routing `workspaceId`.

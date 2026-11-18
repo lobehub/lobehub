@@ -230,6 +230,7 @@ export function bindGatewayClientHandlers(
             resumeSessionId: request.resumeSessionId,
             serverUrl: getAuth().serverUrl,
             systemContext: request.systemContext,
+            tfsGitConfig: request.tfsGitConfig,
             topicId: request.topicId,
             workspaceId: request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId,
           },

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 
 import {
   listDefaultClaudeLogin,
@@ -38,6 +39,8 @@ export interface SpawnHeteroAgentRunParams {
   resumeSessionId?: string;
   serverUrl: string;
   systemContext?: string;
+  /** Temporary personal TFS Git config for this spawned process. */
+  tfsGitConfig?: Array<[string, string]>;
   topicId: string;
   /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
   workspaceId?: string;
@@ -105,6 +108,7 @@ function startHeteroAgentRun(
     resumeSessionId,
     serverUrl,
     systemContext,
+    tfsGitConfig,
     topicId,
     workspaceId,
   } = params;
@@ -174,6 +178,20 @@ function startHeteroAgentRun(
         LOBEHUB_SERVER: serverUrl,
         LOBEHUB_TOPIC_ID: topicId,
         ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
+        ...(tfsGitConfig?.length
+          ? {
+              GIT_CONFIG_GLOBAL: os.devNull,
+              GIT_CONFIG_NOSYSTEM: '1',
+              GIT_CONFIG_COUNT: String(tfsGitConfig.length),
+              GIT_TERMINAL_PROMPT: '0',
+              ...Object.fromEntries(
+                tfsGitConfig.flatMap(([key, value], index) => [
+                  [`GIT_CONFIG_KEY_${index}`, key],
+                  [`GIT_CONFIG_VALUE_${index}`, value],
+                ]),
+              ),
+            }
+          : {}),
         ...accountEnv,
         ...(agentType === 'claude-code'
           ? buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)

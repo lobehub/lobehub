@@ -150,6 +150,32 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
 
+  it('injects temporary TFS Git config into the spawned agent environment', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      tfsGitConfig: [
+        ['credential.helper', ''],
+        ['credential.https://dev.example.com.helper', '!f() { printf secret; }; f'],
+      ],
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    const [, , options] = spawnMock.mock.calls[0];
+    expect(options.env).toMatchObject({
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_GLOBAL: os.devNull,
+      GIT_CONFIG_KEY_0: 'credential.helper',
+      GIT_CONFIG_KEY_1: 'credential.https://dev.example.com.helper',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_TERMINAL_PROMPT: '0',
+    });
+    expect(options.env.GIT_CONFIG_VALUE_1).toContain('secret');
+  });
+
   it.each([undefined, 'agt_dispatched'])(
     'replaces the launcher conversation context with dispatched agent %s',
     async (agentId) => {

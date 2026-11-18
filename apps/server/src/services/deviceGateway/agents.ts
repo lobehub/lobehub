@@ -189,6 +189,8 @@ export async function dispatchAgentRun(
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
+    /** Temporary personal TFS Git config for the spawned process. */
+    tfsGitConfig?: Array<[string, string]>;
     topicId: string;
     userId: string;
     workspaceId?: string;

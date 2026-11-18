@@ -41,16 +41,36 @@ describe('personal TFS device initialization', () => {
   });
 
   it('initializes the caller personal device and exposes only sanitized command output', async () => {
+    const onCredential = vi.fn();
     mocks.execute.mockResolvedValue({
       success: true,
       content: `failure ${init.cloneCredential.tfs.secret}`,
       state: { env: 'private' },
     });
-    expect(await initializeTfsDeviceCheckout(params)).toBe('TFS checkout: failure [redacted]');
+    expect(await initializeTfsDeviceCheckout({ ...params, onCredential })).toBe(
+      'TFS checkout: failure [redacted]',
+    );
     const args = JSON.parse(mocks.execute.mock.calls[0][2].arguments);
     expect(args.command).not.toContain(init.cloneCredential.tfs.secret);
     expect(args.env.GIT_CONFIG_COUNT).toBeDefined();
     expect(args.cwd).toBe('/work/project');
+    expect(onCredential).toHaveBeenCalledWith([
+      ['credential.helper', ''],
+      [
+        `credential.${init.cloneCredential.urlPrefix}.helper`,
+        expect.stringContaining(init.cloneCredential.tfs.secret),
+      ],
+      [`http.${init.cloneCredential.urlPrefix}.followRedirects`, 'false'],
+    ]);
+  });
+
+  it('does not release Git credentials when checkout fails', async () => {
+    const onCredential = vi.fn();
+    mocks.execute.mockResolvedValue({ success: false, content: 'failed' });
+
+    await initializeTfsDeviceCheckout({ ...params, onCredential });
+
+    expect(onCredential).not.toHaveBeenCalled();
   });
 
   it.each([{ deviceWorkspaceId: 'ws' }, { otherOwner: true }])(

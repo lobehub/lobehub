@@ -533,6 +533,25 @@ describe('GatewayHttpClient', () => {
       );
     });
 
+    it('forwards temporary TFS Git config to the device', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ success: true }),
+        ok: true,
+      });
+
+      await client.dispatchAgentRun({
+        ...createAgentRunInput(),
+        tfsGitConfig: [['credential.helper', '']],
+      });
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/agent/run',
+        expect.objectContaining({
+          body: expect.stringContaining('"tfsGitConfig":[["credential.helper",""]]'),
+        }),
+      );
+    });
+
     it('should preserve backward compatibility when accepted response has no JSON body', async () => {
       mockFetch({
         json: vi.fn().mockRejectedValue(new Error('empty body')),

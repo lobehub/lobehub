@@ -343,6 +343,8 @@ export class GatewayHttpClient {
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
+    /** Temporary personal TFS Git config for the spawned process. */
+    tfsGitConfig?: AgentRunRequestMessage['tfsGitConfig'];
     timeout?: number;
     topicId: string;
     userId: string;

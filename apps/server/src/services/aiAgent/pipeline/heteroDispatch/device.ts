@@ -239,6 +239,7 @@ export const dispatchToCliDevice = async (
   // A worktree the app created on the first send is where the session starts
   // (`getWorkingDirSessionPath`), so it needs no description.
   const deviceCwd = getWorkingDirSessionPath(deviceCwdConfig);
+  let tfsGitConfig: [string, string][] | undefined;
   const worktreePath = deviceCwdConfig?.git?.activeWorktree;
   const worktreeContext =
     worktreePath && worktreePath !== deviceCwd
@@ -280,6 +281,9 @@ export const dispatchToCliDevice = async (
           db: deps.db,
           deviceId: dispatchDeviceId,
           deviceWorkspaceId: dispatchWorkspaceId,
+          onCredential: (config) => {
+            tfsGitConfig = config;
+          },
           operationId,
           topicId,
           userId: deps.userId,
@@ -330,6 +334,7 @@ export const dispatchToCliDevice = async (
           clientKinds: nativeCodex?.clientKinds,
           cwd: deviceCwd,
           deviceId: dispatchDeviceId,
+          tfsGitConfig,
           resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
           systemContext: deviceSystemContext,
           // Route to the workspace pool when this is a workspace device; the
