@@ -192,6 +192,20 @@ export const projectRouter = router({
         id: z.string().regex(PROJECT_ID_REGEX).optional(),
         identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
+        /**
+         * More GitHub repositories the project's environment checks out beside
+         * `repository` — the create dialog's advanced options. Laid out side
+         * by side, each in a folder named after it.
+         */
+        additionalRepositories: z
+          .array(
+            z.object({
+              defaultBranch: z.string().max(255).optional(),
+              url: z.string().min(1).max(2048),
+            }),
+          )
+          .max(9)
+          .optional(),
         repository: z
           .object({
             defaultBranch: z.string().max(255).optional(),

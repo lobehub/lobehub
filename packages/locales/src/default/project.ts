@@ -27,8 +27,6 @@ export default {
   'settings.workLocations': 'Working directories',
   'settings.directoryListDescription':
     'Device folders this project works in. Agents read and change files in them on that device.',
-  'settings.environmentDescription':
-    'Link environments configured in Settings → Environments, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
   'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
@@ -98,9 +96,8 @@ export default {
   'settings.noDirectories':
     'No folders in this environment yet. Add an existing folder on a connected device to start working.',
   'settings.title': 'Project settings',
-  'settings.environments': 'Environments',
+  'settings.environments': 'Environment',
   'settings.addEnvironment': 'Add environment',
-  'settings.noEnvironments': 'No environments associated yet',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',
 
@@ -307,24 +304,6 @@ export default {
   'rename.nameLabel': 'Project name',
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
-  'environment.add.action': 'Add',
-  'environment.add.existing': 'Add an existing one',
-  'environment.add.failed': "Couldn't add the environment to this project",
-  'environment.add.github': 'New from GitHub',
-  'environment.add.noExisting': 'All of your environments are already in this project.',
-  'environment.add.noPublished':
-    'No published environments to add. A shared project only uses published environments.',
-  'environment.add.title': 'Add environment',
-  'environment.create': 'New environment',
-  'environment.link': 'Link environment',
-  'environment.unlink': 'Unlink from project',
-  'environment.unlinkConfirm.desc':
-    "The environment stays in Settings → Environments. This project's folders that use it are kept, but can't run conversations until it is linked again.",
-  'environment.unlinkConfirm.title': 'Unlink "{{name}}" from this project?',
-  'environment.unlinkFailed': "Couldn't unlink the environment from this project",
-  'environment.privateInShared': 'Private',
-  'environment.privateInSharedTooltip':
-    "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
   'overview.context.location.devices': 'Devices',
   'overview.context.location.directories': 'Project folders',
   'overview.context.location.directoryUnavailable':
@@ -520,4 +499,16 @@ export default {
   'onboarding.connect.goal.title': 'Goals',
   'onboarding.connect.goal.description': 'Set a goal you can sign off',
   'onboarding.connect.goal.count': '{{count}} set',
+  'environment.configure': 'Configure environment',
+  'settings.environmentIntro':
+    'Every conversation in this project runs in this environment: its repositories are cloned, the setup command runs, and its variables are set.',
+  'createFromGithub.advanced': 'Advanced: add more repositories',
+  'createFromGithub.advancedWithCount': 'Advanced: more repositories ({{count}})',
+  'createFromGithub.extraRepositoriesHint':
+    "The project's environment checks these out beside the main repository, each in a folder named after it. You can add or remove repositories later in the project's settings.",
+  'createFromGithub.extraRepositoriesLabel': 'More repositories',
+  'createFromGithub.extraUrlLabel': 'Or paste another repository URL',
+  'createFromGithub.addRepository': 'Add',
+  'createFromGithub.removeRepository': 'Remove',
+  'createFromGithub.openIntegrations': 'Open GitHub settings',
 };

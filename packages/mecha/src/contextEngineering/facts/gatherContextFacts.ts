@@ -671,7 +671,10 @@ export const gatherContextFacts = async (
       // Left out entirely for an ephemeral run so the variable generators'
       // fallback renders the original wording; spelling it out here would mean
       // two copies of the same ephemeral text to keep in step.
-      ...(isPersistentSandboxMode(sandboxPersistence?.mode)
+      // Also for an ephemeral run whose environment checks repositories out:
+      // the model is told where they are (see `formatSandboxRepositoriesPrompt`).
+      ...(isPersistentSandboxMode(sandboxPersistence?.mode) ||
+      sandboxPersistence?.repositories?.length
         ? formatSandboxStoragePromptVariables(sandboxPersistence)
         : {}),
       topic_id: request.topicId ?? '',

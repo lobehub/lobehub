@@ -124,5 +124,79 @@ export const toExecutionConfiguration = (
 ): EnvironmentConfiguration => {
   const { kind: _kind, ...rest } = configuration;
 
-  return rest;
+  return rest.sources ? { ...rest, sources: layoutRepositorySources(rest.sources) } : rest;
+};
+
+/** The last segment of a checkout url — the repository's name, without `.git`. */
+export const repositoryFolderName = (url: string): string =>
+  url
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .pop() || 'repository';
+
+/** `owner-name` of a checkout url, the fallback when two repositories share a name. */
+const repositoryOwnerFolderName = (url: string): string => {
+  const [owner, name] = url
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .slice(-2);
+  return owner && name ? `${owner}-${name}` : repositoryFolderName(url);
+};
+
+const isRootPath = (path: string | undefined) => {
+  const value =
+    path
+      ?.trim()
+      .replace(/^\.?\/+/, '')
+      .replace(/\/+$/, '') ?? '';
+  return value === '' || value === '.';
+};
+
+/**
+ * Where each repository of an environment is checked out.
+ *
+ * One repository is checked out at the top of the working directory, as it
+ * always was. Several are laid out side by side, each in a folder of its own
+ * named after it (`lobehub/`, `lobe-ui/`), and the working directory itself is
+ * none of them. Nesting one checkout inside another would put the second
+ * repository in the first one's working tree — untracked in its `git status`,
+ * one `git add -A` away from being committed into it as an embedded repository,
+ * and inside every search, lint and build the first one runs.
+ *
+ * A folder the author set explicitly is kept; only a repository left at the
+ * top gets one. Two repositories of the same name fall back to `owner-name`,
+ * then a numeric suffix.
+ */
+export const layoutRepositorySources = (sources: EnvironmentSource[]): EnvironmentSource[] => {
+  const repositories = sources.filter((source) => source.kind === 'git');
+  if (repositories.length <= 1) return sources;
+
+  const taken = new Set(
+    repositories.flatMap((source) =>
+      isRootPath(source.path)
+        ? []
+        : [
+            source
+              .path!.trim()
+              .replace(/^\.?\/+/, '')
+              .replace(/\/+$/, ''),
+          ],
+    ),
+  );
+  const claim = (url: string) => {
+    let folder = repositoryFolderName(url);
+    if (taken.has(folder)) folder = repositoryOwnerFolderName(url);
+    for (let suffix = 2; taken.has(folder); suffix++)
+      folder = `${repositoryOwnerFolderName(url)}-${suffix}`;
+    taken.add(folder);
+    return folder;
+  };
+
+  return sources.map((source) =>
+    source.kind === 'git' && isRootPath(source.path)
+      ? { ...source, path: claim(source.url) }
+      : source,
+  );
 };

@@ -130,3 +130,53 @@ export const resolveScmCloneCredential = async (params: {
     return null;
   }
 };
+
+/** Every GitHub repository a specification checks out, as `{ owner/name, url }`, in order. */
+export const githubRepositoriesOf = (
+  configuration: SourcedConfiguration | undefined,
+): { repository: string; url: string }[] => {
+  const seen = new Set<string>();
+  return (configuration?.sources ?? []).flatMap((source) => {
+    if (source.kind !== 'git' || !source.url) return [];
+    const repository = githubRepositoryOf({ sources: [source] });
+    if (!repository || seen.has(repository.toLowerCase())) return [];
+    seen.add(repository.toLowerCase());
+    return [{ repository, url: source.url.replace(/\/$/, '') }];
+  });
+};
+
+/**
+ * One clone credential per GitHub repository the specification checks out.
+ *
+ * A single repository keeps the host-wide header {@link resolveScmCloneCredential}
+ * has always produced. Several are each scoped to their own url: a minted
+ * token reads only the repository it was minted for, and git picks the most
+ * specific `http.<url>.extraHeader` — a path matches at a `/` boundary, so
+ * `…/owner/repo` covers `…/owner/repo/info/refs` and nothing of `…/owner/repo2`.
+ *
+ * Never throws; a repository without a credential still clones when public.
+ */
+export const resolveScmCloneCredentials = async (params: {
+  configuration: SourcedConfiguration | undefined;
+  db: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string | null;
+}): Promise<ScmCloneCredential[]> => {
+  const repositories = githubRepositoriesOf(params.configuration);
+  if (repositories.length <= 1) {
+    const single = await resolveScmCloneCredential(params);
+    return single ? [single] : [];
+  }
+
+  const credentials = await Promise.all(
+    repositories.map(async ({ url }) => {
+      const credential = await resolveScmCloneCredential({
+        ...params,
+        configuration: { sources: [{ kind: 'git', url }] },
+      });
+      return credential ? { ...credential, urlPrefix: url } : undefined;
+    }),
+  );
+
+  return credentials.filter((credential): credential is ScmCloneCredential => !!credential);
+};

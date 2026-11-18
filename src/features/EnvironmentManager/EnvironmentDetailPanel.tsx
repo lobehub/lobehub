@@ -29,7 +29,7 @@ import UserAvatar from '@/components/UserAvatar';
 
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import PanelSection from './PanelSection';
-import { repositoryPath } from './repository';
+import { repositoryPaths } from './repository';
 import { EnvironmentDefinitionSkeleton } from './Skeleton';
 import TabPane from './TabPane';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
@@ -106,7 +106,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
   // than reading as empty — an editor saving over `{}` would erase it.
   const configurationPending = environment.configuration === undefined;
   const configuration = environment.configuration ?? {};
-  const repository = repositoryPath(configuration);
+  const repositories = repositoryPaths(configuration);
 
   const creator =
     environment.creator?.fullName ||
@@ -209,7 +209,15 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
         {!configurationPending && tab === 'overview' && (
           <TabPane desc={t('environments.detail.initializerDesc')}>
             <PanelSection icon={FolderGit2Icon} title={t('environments.form.sources')}>
-              <Text fontSize={13}>{repository ?? t('environments.detail.noRepository')}</Text>
+              {repositories.length > 0 ? (
+                repositories.map((repository) => (
+                  <Text fontSize={13} key={repository}>
+                    {repository}
+                  </Text>
+                ))
+              ) : (
+                <Text fontSize={13}>{t('environments.detail.noRepository')}</Text>
+              )}
             </PanelSection>
             <PanelSection last icon={TerminalIcon} title={t('environments.form.bootstrap')}>
               <Text code={!!configuration.bootstrapCommand} fontSize={13}>

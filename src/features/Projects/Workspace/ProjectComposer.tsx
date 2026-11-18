@@ -246,7 +246,6 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
               disabled={sending}
               location={location}
               projectId={project.id}
-              publish={sharedAgent}
               showRepositories={mode === 'chat'}
               state={repositoryState}
             />

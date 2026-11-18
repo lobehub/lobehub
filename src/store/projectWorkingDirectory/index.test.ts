@@ -84,23 +84,24 @@ describe('projectWorkingDirectory store', () => {
     });
   });
 
-  describe('detachEnvironment', () => {
+  describe('updateProjectEnvironment', () => {
     afterEach(() => vi.restoreAllMocks());
 
-    it("unlinks through the service and refreshes only that project's environments", async () => {
+    it("saves through the service and refreshes only that project's environment and folders", async () => {
       vi.mocked(mutate).mockClear();
-      const detach = vi
-        .spyOn(projectWorkingDirectoryService, 'detachEnvironment')
-        .mockResolvedValue({ data: {}, success: true } as never);
+      const update = vi
+        .spyOn(projectWorkingDirectoryService, 'updateEnvironment')
+        .mockResolvedValue({ data: { id: 'env-1' }, success: true } as never);
+      const configuration = { sources: [{ kind: 'git' as const, url: 'https://github.com/a/b' }] };
 
-      await useProjectDirectoryStore.getState().detachEnvironment('project-1', 'env-1');
+      await useProjectDirectoryStore
+        .getState()
+        .updateProjectEnvironment({ configuration, projectId: 'project-1' });
 
-      expect(detach).toHaveBeenCalledWith('project-1', 'env-1');
+      expect(update).toHaveBeenCalledWith({ configuration, projectId: 'project-1' });
       expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
-      // Its folders in the project are no longer runnable.
       expect(invalidates('projectDirectories', 'project-1')).toBe(true);
-      expect(invalidates('projectDirectories', 'all')).toBe(true);
-      // The environment itself is untouched, so the scope-wide list stays as it is.
+      // Standalone environments are untouched.
       expect(invalidates('projectEnvironments', 'all')).toBe(false);
     });
   });

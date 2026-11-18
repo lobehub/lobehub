@@ -75,11 +75,11 @@ export const configurationSchema = z.object({
   // it would leave those environments impossible to change.
   kind: z.enum(['code', 'files']).optional(),
   maintenanceCommand: z.string().max(8000).optional(),
-  // One repository per environment. The wire format stays a list because the
-  // execution plane checks out an array of sources, but an environment that
-  // builds from two repositories has no single working directory to hand a
-  // conversation — and the picker that fills this offers exactly one.
-  sources: z.array(environmentSourceSchema).max(1).optional(),
+  // Any number of repositories, or none. The working directory a conversation
+  // gets is still one folder: the first repository is checked out at its top
+  // and each one after it into a folder of its own (`path`, which the form
+  // fills with the repository's name), the layout Codex environments use.
+  sources: z.array(environmentSourceSchema).max(10).optional(),
 });
 
 /**

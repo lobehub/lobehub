@@ -5350,4 +5350,17 @@ When I am ___, I need ___
   'automations.empty.title': 'No automations yet',
   'automations.empty.desc':
     'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
+  'environments.form.addRepository': 'Add repository',
+  'environments.form.noRepositories': 'No repositories. Conversations start in an empty folder.',
+  'environments.form.noVariables': 'No variables',
+  'environments.form.bootstrapMultiRepo':
+    'With several repositories, the setup command runs in the folder that holds them. Change into a repository first, for example: {{example}}',
+  'environments.github.openIntegrations': 'Open GitHub settings',
+  'environments.form.pasteRepository': 'Or paste a public repository URL',
+  'environments.form.addPastedRepository': 'Add',
+  'environments.form.repositoryUrlInvalid': 'Not a GitHub repository URL',
+  'environments.form.editRepository': 'Edit branch and folder',
+  'environments.form.doneEditing': 'Done',
+  'environments.form.defaultBranchShort': 'Default branch',
+  'environments.form.topFolder': 'Top of the working directory',
 };
