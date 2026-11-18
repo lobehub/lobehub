@@ -29,7 +29,6 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useTopicBugReportMenuItem } from '@/business/client/hooks/useTopicBugReportMenuItem';
-import { openRenameModal } from '@/components/RenameModal';
 import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
@@ -55,6 +54,7 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { useScopedTopic, useScopedTopics } from '../../useScopedTopics';
 import { buildTopicPrompt } from './buildTopicPrompt';
+import { useRenameTopic } from './useRenameTopic';
 
 export interface TopicItemDropdownMenuProps {
   completionLabel?: string;
@@ -126,7 +126,6 @@ export const useTopicItemDropdownMenu = ({
     favoriteTopic,
     markTopicCompleted,
     unmarkTopicCompleted,
-    updateTopicTitle,
   ] = useChatStore((s) => [
     s.autoRenameTopicTitle,
     s.duplicateTopic,
@@ -134,8 +133,8 @@ export const useTopicItemDropdownMenu = ({
     s.favoriteTopic,
     s.markTopicCompleted,
     s.unmarkTopicCompleted,
-    s.updateTopicTitle,
   ]);
+  const { openRename } = useRenameTopic(id, title);
 
   const isCompleted = status === 'completed';
   const toggleCompleted = useCallback(async () => {
@@ -210,25 +209,7 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={PencilLine} />,
         key: 'rename',
         label: t('rename', { ns: 'common' }),
-        onClick: () => {
-          openRenameModal({
-            defaultValue: title,
-            description: t('renameModal.description', { ns: 'topic' }),
-            onSave: async (newTitle) => {
-              try {
-                await updateTopicTitle(id, newTitle);
-                if (scope) await refresh();
-              } catch (error) {
-                toast.error(
-                  isForbiddenError(error)
-                    ? t('manageOnlyCreator', { ns: 'common' })
-                    : t('operationFailed', { ns: 'common' }),
-                );
-              }
-            },
-            title: t('renameModal.title', { ns: 'topic' }),
-          });
-        },
+        onClick: openRename,
         sfSymbol: 'pencil',
       },
       {
@@ -428,7 +409,7 @@ export const useTopicItemDropdownMenu = ({
     favoriteTopic,
     toggleCompleted,
     removeTopic,
-    updateTopicTitle,
+    openRename,
     openTopicInNewWindow,
     openTopicInPortal,
     addTab,

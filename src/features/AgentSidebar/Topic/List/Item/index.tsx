@@ -20,7 +20,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { MessageSquareDashed, TargetIcon } from 'lucide-react';
-import type { CSSProperties, DragEvent, RefObject } from 'react';
+import type { CSSProperties, DragEvent, MouseEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,6 +65,7 @@ import {
   PR_STATE_VISUAL,
 } from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
+import { useRenameTopic } from './useRenameTopic';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
 // CSS vars on the positioner. Zero them so the meta hover card appears instantly
@@ -344,6 +345,19 @@ const TopicItemRow = memo<TopicItemRowProps>(
       if (id) markSidebarTopicActivation(id);
       void navRef.current.navigateToTopic(id);
     }, [id, navRef]);
+
+    // Double clicking the row renames the topic, like the context menu's
+    // Rename. The first click of the pair has already switched to the topic.
+    const { canRename, openRename } = useRenameTopic(id, title);
+    const handleDoubleClick = useCallback(
+      (event: MouseEvent) => {
+        // The trailing actions (complete, archive, more) stop click propagation
+        // but not double clicks; a fast double click on them must not rename.
+        if ((event.target as HTMLElement).closest('[data-nav-item-actions]')) return;
+        openRename();
+      },
+      [openRename],
+    );
 
     const isFailed = status === 'failed';
     const isRunning = status === 'running';
@@ -655,6 +669,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
             workingDirectoryNode ? { iconBelow: draftBelowIcon } : { titlePrefix: draftPrefix }
           }
           onClick={handleClick}
+          onDoubleClick={canRename ? handleDoubleClick : undefined}
           onDragStart={handleDragStart}
         />
       </TopicItemContextMenu>

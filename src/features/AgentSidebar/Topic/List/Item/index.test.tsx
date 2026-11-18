@@ -23,6 +23,7 @@ const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefi
 const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
 const hasDraftMock = vi.hoisted(() => ({ value: false }));
 const isDesktopMock = vi.hoisted(() => ({ value: false }));
+const renameMock = vi.hoisted(() => ({ canRename: true, openRename: vi.fn() }));
 const electronTabMocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
   addNewTab: vi.fn(),
@@ -110,7 +111,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
       </div>
       {description}
       {extra}
-      {typeof actions === 'function' ? actions() : actions}
+      <div data-nav-item-actions="">{typeof actions === 'function' ? actions() : actions}</div>
     </div>
   ),
 }));
@@ -220,6 +221,7 @@ vi.mock('./Actions', () => ({
     <div data-show-inline-archive={String(!!showInlineArchive)} data-testid="topic-actions" />
   ),
 }));
+vi.mock('./useRenameTopic', () => ({ useRenameTopic: () => renameMock }));
 vi.mock('./useDropdownMenu', () => ({
   useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
 }));
@@ -749,5 +751,45 @@ describe('TopicItem double click on desktop', () => {
     expect(electronTabMocks.addTab).not.toHaveBeenCalled();
     expect(electronTabMocks.addNewTab).not.toHaveBeenCalled();
     expect(electronTabMocks.activateTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('TopicItem double click rename', () => {
+  beforeEach(() => {
+    renameMock.canRename = true;
+    renameMock.openRename.mockClear();
+    useTopicNavigationMock.mockReturnValue({
+      focusTopicPopup: vi.fn().mockResolvedValue(false),
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: false,
+      navigateToTopic: vi.fn(),
+      routeTopicId: undefined,
+      urlTopicId: undefined,
+    });
+  });
+
+  it('opens the rename modal when the row is double clicked', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.doubleClick(screen.getByTestId('nav-item-title'));
+
+    expect(renameMock.openRename).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a double click on the trailing actions', () => {
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.doubleClick(screen.getByTestId('topic-actions'));
+
+    expect(renameMock.openRename).not.toHaveBeenCalled();
+  });
+
+  it('does not rename without edit permission', () => {
+    renameMock.canRename = false;
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    fireEvent.doubleClick(screen.getByTestId('nav-item-title'));
+
+    expect(renameMock.openRename).not.toHaveBeenCalled();
   });
 });
