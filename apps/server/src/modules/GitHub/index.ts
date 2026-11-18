@@ -81,7 +81,11 @@ export class GitHub {
         }
       }
       if (path) {
-        result.path = path;
+        try {
+          result.path = decodeURIComponent(path).replace(/\/+$/, '');
+        } catch {
+          throw new GitHubParseError('Invalid GitHub path encoding');
+        }
       }
     }
 
@@ -131,7 +135,11 @@ export class GitHub {
    * Build the ZIP download URL for a GitHub repository
    */
   buildRepoZipUrl(info: GitHubRepoInfo): string {
-    return `https://github.com/${info.owner}/${info.repo}/archive/refs/heads/${info.branch}.zip`;
+    const ref =
+      info.branch === 'HEAD' || /^[a-f0-9]{40}$/.test(info.branch)
+        ? info.branch
+        : 'refs/heads/' + info.branch;
+    return `https://github.com/${info.owner}/${info.repo}/archive/${ref}.zip`;
   }
 
   /**
@@ -139,6 +147,41 @@ export class GitHub {
    */
   buildRawFileUrl(info: GitHubRawFileInfo): string {
     return `https://raw.githubusercontent.com/${info.owner}/${info.repo}/${info.branch}/${info.filePath}`;
+  }
+
+  async resolveCommit(info: GitHubRepoInfo) {
+    const repoUrl = `https://api.github.com/repos/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}`;
+    const response = await fetch(`${repoUrl}/commits/${encodeURIComponent(info.branch)}`, {
+      headers: { 'Accept': 'application/vnd.github.sha', 'User-Agent': this.userAgent },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok)
+      throw new GitHubDownloadError(`Could not resolve GitHub revision (HTTP ${response.status})`);
+    const commit = (await response.text()).trim();
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubDownloadError('Invalid GitHub revision');
+    return commit;
+  }
+
+  async downloadCommitZip(info: GitHubRepoInfo, commit: string) {
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw new GitHubParseError('Invalid commit SHA');
+    const url = `https://codeload.github.com/${encodeURIComponent(info.owner)}/${encodeURIComponent(info.repo)}/zip/${commit}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (!response.ok || !response.body)
+      throw new GitHubDownloadError(`Could not download repository (HTTP ${response.status})`);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 32 * 1024 * 1024) {
+        await reader.cancel();
+        throw new GitHubDownloadError('Repository exceeds the 32 MiB download limit');
+      }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks, size);
   }
 
   /**

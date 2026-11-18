@@ -310,9 +310,7 @@ export const contextEngineering = async ({
     createBrowserContextFactProviders({ agentId, groupId, shareVisitor }),
   );
 
-  // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
-  // In auto mode: expose all installed skills so the AI can discover and activate them.
-  // In manual mode: only expose user-selected skills (filtered by pluginIds).
+  // Profile skill choices contribute discovery metadata only.
   let enabledSkills: OperationSkillSet['skills'] | undefined;
   if (plugins) {
     // Manual mode narrows the pool itself, so an unselected skill is neither

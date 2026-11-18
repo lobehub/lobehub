@@ -1312,8 +1312,6 @@
   "serviceModel.desc": "Les modèles que LobeHub utilise pour les tâches en arrière-plan. Ils suivent la recommandation du système par défaut et sont mis à niveau automatiquement lorsque de nouveaux modèles arrivent.",
   "serviceModel.off": "Désactivé",
   "serviceModel.systemRecommended": "Recommandé par le système",
-  "serviceModel.tier.embedding.desc": "Récupération de la mémoire",
-  "serviceModel.tier.embedding.title": "Modèle d'embedding",
   "serviceModel.tier.flash.desc": "Tâches fréquentes telles que le nommage, la traduction, la compression et la mémoire",
   "serviceModel.tier.flash.title": "Modèle Flash",
   "serviceModel.tier.main.desc": "Tâches sensibles à la qualité telles que la rédaction et le raisonnement",

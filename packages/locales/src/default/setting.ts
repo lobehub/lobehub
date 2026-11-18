@@ -333,6 +333,32 @@ export default {
   'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
   'agentSkillModal.github.desc':
     'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
+  'agentSkillModal.github.clear': 'Clear selection',
+  'agentSkillModal.github.collectionHint':
+    'Enter a public GitHub repository or skill directory URL.',
+  'agentSkillModal.github.empty':
+    'No SKILL.md found at this URL. Try another repository or directory.',
+  'agentSkillModal.github.find': 'Find skills',
+  'agentSkillModal.github.findFailed':
+    'Couldn’t read this GitHub link. Check the URL and try again.',
+  'agentSkillModal.github.importFailed':
+    'Couldn’t import the selected skills. Find skills again, then retry.',
+  'agentSkillModal.github.install': 'Import {{count}} ({{updates}} updates)',
+  'agentSkillModal.github.noMatch': 'No matching skills',
+  'agentSkillModal.github.retry': 'Retry failed imports',
+  'agentSkillModal.github.sameName': 'Choose one of the skills with this name.',
+  'agentSkillModal.github.search': 'Search by name, description or path',
+  'agentSkillModal.github.select': 'Select all unambiguous matches',
+  'agentSkillModal.github.status.conflict': 'Conflict · check the library and scan again',
+  'agentSkillModal.github.status.created': 'Imported',
+  'agentSkillModal.github.status.failed': 'Import failed',
+  'agentSkillModal.github.status.forbidden': 'Update requires the creator or a workspace owner',
+  'agentSkillModal.github.status.invalid': 'Invalid SKILL.md',
+  'agentSkillModal.github.status.new': 'New',
+  'agentSkillModal.github.status.unchanged': 'Up to date',
+  'agentSkillModal.github.status.update': 'Update available',
+  'agentSkillModal.github.status.updated': 'Updated',
+  'agentSkillModal.github.summary': '{{success}} imported or up to date · {{failed}} failed',
   'agentSkillModal.github.title': 'Import from GitHub',
   'agentSkillModal.github.urlPlaceholder':
     'https://github.com/username/repo/tree/main/skills/my-skill',
@@ -1845,8 +1871,9 @@ export default {
   'serviceModel.systemRecommended': 'System recommended',
   'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
-  'serviceModel.tier.embedding.desc': 'Memory retrieval',
-  'serviceModel.tier.embedding.title': 'Embedding Model',
+  'serviceModel.tier.embedding.desc':
+    'Embeds memories for semantic search. Not used for files or knowledge bases (set via the DEFAULT_FILES_CONFIG env var)',
+  'serviceModel.tier.embedding.title': 'Memory Embedding Model',
   'serviceModel.tier.flash.desc':
     'Frequent tasks such as naming, translation, compression and memory',
   'serviceModel.tier.flash.title': 'Flash Model',
