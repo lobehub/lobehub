@@ -56,11 +56,6 @@ export interface QueuedFollowUp extends SteerQueueEntry {
   /** Server-derived provenance of the request that queued it. */
   audit?: { clientIp?: string; userAgent?: string };
   /**
-   * Queued by an Agent for its own running reply in another Thread of a Channel
-   * (`lobe-channel.steerThread`), so like `subAgentSteer` it joins that run as it is.
-   */
-  channelSteer?: boolean;
-  /**
    * The composer state the follow-up was sent from, opaque to the server, so a
    * client that reloads can show and resend it exactly as typed (selections,
    * mentions). Never used to run it.

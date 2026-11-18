@@ -81,17 +81,6 @@ describe('canJoinRunningTurn', () => {
     ).toBe(false);
   });
 
-  it('takes an Agent’s steer of its own Channel reply whatever the run’s settings', () => {
-    const channelRun = {
-      ...state,
-      host: { acceptsFileWorks: true, clientProtocol: 2 },
-    } as AgentState;
-    const steer = { ...followUp('a', 1), channelSteer: true };
-
-    expect(canJoinRunningTurn(followUp('a', 1), channelRun)).toBe(false);
-    expect(canJoinRunningTurn(steer, channelRun)).toBe(true);
-  });
-
   it.each([
     ['an attachment', { fileIds: ['f1'] }],
     [

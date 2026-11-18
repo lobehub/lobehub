@@ -238,54 +238,6 @@ describe('server-side steer queue in the step loop', () => {
     });
   });
 
-  describe('a Channel reply steered from another Thread', () => {
-    const channelRun = (overrides: Partial<AgentState> = {}) =>
-      stateOf({
-        origin: { agentId: 'agt-1', topicId: 'tpc-channel', trigger: 'channel' },
-        status: 'running',
-        ...overrides,
-      });
-    const injectDeps = () =>
-      ({
-        delegate: { injectQueuedFollowUp: vi.fn().mockResolvedValue({ messageId: 'm' }) },
-        userId: 'user-1',
-      }) as any;
-
-    it('joins the steer even with Follow-up behavior: Queue', async () => {
-      readFollowUpMode.mockResolvedValue('queue');
-      steerQueueLength.mockResolvedValue(1);
-      const deps = injectDeps();
-
-      await expect(injectQueuedFollowUp(deps, 'op-1', 2, channelRun())).resolves.toEqual({
-        messageId: 'm',
-      });
-      expect(deps.delegate.injectQueuedFollowUp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          scope: { threadId: null, topicId: 'tpc-channel', userId: 'user-1' },
-        }),
-      );
-    });
-
-    it('seals its last read, so a steer that arrives later is taken back', async () => {
-      steerQueueLength.mockResolvedValue(0);
-
-      await injectQueuedFollowUp(injectDeps(), 'op-1', 4, channelRun(), { lastRead: true });
-
-      expect(steerQueueSeal).toHaveBeenCalledWith('op-1');
-    });
-
-    it('never hands its turn back for a queued steer', async () => {
-      steerQueueLength.mockResolvedValue(2);
-      const deps = {
-        coordinator: { hasQueuedMessages: vi.fn().mockResolvedValue(false) },
-        userId: 'user-1',
-      } as any;
-
-      await expect(readQueuedMessagesFlag(deps, 'op-1', 1, channelRun())).resolves.toBe(false);
-      expect(steerQueueLength).not.toHaveBeenCalled();
-    });
-  });
-
   describe('finishOperation', () => {
     const createDeps = (startQueuedFollowUp = vi.fn().mockResolvedValue(undefined)) => {
       const order: string[] = [];
@@ -344,14 +296,6 @@ describe('server-side steer queue in the step loop', () => {
         expect(deps.delegate.startQueuedFollowUp).not.toHaveBeenCalled();
       },
     );
-
-    it('starts nothing after a Channel reply, which publishes its own answer', async () => {
-      const { deps } = createDeps();
-
-      await finish(deps, stateOf({ origin: { topicId: 'tpc-1', trigger: 'channel' } }));
-
-      expect(deps.delegate.startQueuedFollowUp).not.toHaveBeenCalled();
-    });
 
     it('leaves the parent conversation queue to the parent run', async () => {
       const { deps } = createDeps();

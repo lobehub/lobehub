@@ -22,9 +22,13 @@ import { ChannelError, ChannelHistoryRepository } from '@/database/repositories/
 import { channelJobs, channelMembers, channelMessages, channelThreads } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
-import { queueRunSteer } from '@/server/services/aiAgent/steerQueue/subAgent';
+import type { QueuedFollowUp } from '@/server/services/aiAgent/steerQueue';
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
+import { isRunAlive } from '@/server/services/aiAgent/steerQueue/liveRuns';
 import { QueueService } from '@/server/services/queue';
 import { redisService } from '@/server/services/redis';
+import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { SteerQueueWriteUnknownError } from '@/server/services/redis/steerQueue';
 
 import { ChannelService } from './ChannelService';
 import { assertChannelEnabled } from './featureGate';
@@ -220,26 +224,23 @@ export class ChannelThreadService {
         !!job.operationId &&
         !!job.topicId,
     );
-    if (running) {
-      const outcome = await queueRunSteer(
-        { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
-        {
-          entry: {
-            channelSteer: true,
-            createdAt: Date.now(),
-            id: steerEntryId(this.operationId, requestId),
-            request: {
-              agentId: target.self.agentId,
-              appContext: { topicId: running.topicId! },
-              prompt: `Correction from the main conversation of this Channel, sent by you (${target.self.name}) for your requester. Follow it from now on:\n\n${content}`,
-            },
-            userId: this.userId,
+    // The run's own steer queue, as a person's follow-up typed behind it. In Queue mode the run
+    // would hold it for a hand-back outside the Channel, so the correction is posted instead.
+    if (running && (await readFollowUpMode(this.db, this.userId)) !== 'queue') {
+      const outcome = await this.queueSteer(running.operationId!, {
+        entry: {
+          createdAt: Date.now(),
+          id: steerEntryId(this.operationId, requestId),
+          request: {
+            agentId: target.self.agentId,
+            appContext: { topicId: running.topicId! },
+            prompt: `Correction from the main conversation of this Channel, sent by you (${target.self.name}) for your requester. Follow it from now on:\n\n${content}`,
           },
-          operationId: running.operationId!,
-          scope: { threadId: null, topicId: running.topicId!, userId: this.userId },
+          userId: this.userId,
         },
-      );
-      if (outcome.queued) {
+        scope: { threadId: null, topicId: running.topicId!, userId: this.userId },
+      });
+      if (outcome === 'queued') {
         const record = await service.send(target.channelId, {
           content,
           metadata: { steer: true, via },
@@ -249,7 +250,7 @@ export class ChannelThreadService {
         });
         return { delivery: 'steered', messageId: record.id, threadId: target.threadId };
       }
-      if (outcome.reason === 'unknown')
+      if (outcome === 'unknown')
         throw new ChannelError(
           'CONFLICT',
           'The correction may already have reached the running reply; check the Thread with readMessages before sending it again',
@@ -264,6 +265,43 @@ export class ChannelThreadService {
       threadId: target.threadId,
     });
     return { delivery: 'queued', messageId: message.id, threadId: target.threadId };
+  };
+
+  /**
+   * Appends a correction to a running reply's steer queue, which the run reads at its next step.
+   * A run that ended meanwhile has its entry taken back (`ended`), so the caller posts it instead
+   * of leaving it to start a turn outside the Channel. The entry id makes a retry append once.
+   */
+  private queueSteer = async (
+    operationId: string,
+    { entry, scope }: { entry: QueuedFollowUp; scope: SteerQueueScope },
+  ): Promise<'ended' | 'queued' | 'unavailable' | 'unknown'> => {
+    const appendOnce = () =>
+      redisService.steerQueue.append(scope, entry, operationId).catch((error) => {
+        if (!(error instanceof SteerQueueWriteUnknownError)) throw error;
+        return 'unknown' as const;
+      });
+
+    let length = await appendOnce();
+    const uncertain = length === 'unknown';
+    if (uncertain) length = await appendOnce();
+    if (length === 'unknown') return 'unknown';
+    if (length === 'taken') return 'queued';
+    if (length === undefined || length === 'notStored' || length === 'full')
+      return uncertain && length === undefined ? 'unknown' : 'unavailable';
+
+    try {
+      const alive = await isRunAlive(
+        { db: this.db, workspaceId: this.workspaceId },
+        this.userId,
+        operationId,
+      );
+      if (!alive && (await redisService.steerQueue.remove(scope, entry.id))) return 'ended';
+    } catch (error) {
+      log('[%s] Checking the steer after queuing failed: %O', operationId, error);
+      return 'unknown';
+    }
+    return 'queued';
   };
 
   /** Schedules the first report; each report schedules the next until the watch ends. */

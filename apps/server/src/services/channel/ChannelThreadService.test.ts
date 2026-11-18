@@ -8,10 +8,13 @@ import { ChannelThreadService, runChannelWatchReport, steerEntryId } from './Cha
 const mocks = vi.hoisted(() => ({
   currentRun: vi.fn(),
   isLocalExecution: vi.fn(),
+  isRunAlive: vi.fn(),
   isStopped: vi.fn(),
-  queueRunSteer: vi.fn(),
+  readFollowUpMode: vi.fn(),
+  removeSteer: vi.fn(),
   scheduleMessage: vi.fn(),
   send: vi.fn(),
+  steerAppend: vi.fn(),
   stop: vi.fn(),
   threadTarget: vi.fn(),
 }));
@@ -28,8 +31,11 @@ vi.mock('./ChannelService', () => ({
   }),
 }));
 vi.mock('./featureGate', () => ({ assertChannelEnabled: vi.fn() }));
-vi.mock('@/server/services/aiAgent/steerQueue/subAgent', () => ({
-  queueRunSteer: mocks.queueRunSteer,
+vi.mock('@/server/services/aiAgent/steerQueue/followUpMode', () => ({
+  readFollowUpMode: mocks.readFollowUpMode,
+}));
+vi.mock('@/server/services/aiAgent/steerQueue/liveRuns', () => ({
+  isRunAlive: mocks.isRunAlive,
 }));
 vi.mock('@/server/services/queue', () => ({
   QueueService: vi.fn(function () {
@@ -37,7 +43,10 @@ vi.mock('@/server/services/queue', () => ({
   }),
 }));
 vi.mock('@/server/services/redis', () => ({
-  redisService: { channelWatch: { isStopped: mocks.isStopped, stop: vi.fn() } },
+  redisService: {
+    channelWatch: { isStopped: mocks.isStopped, stop: vi.fn() },
+    steerQueue: { append: mocks.steerAppend, remove: mocks.removeSteer },
+  },
 }));
 
 const self = { agentId: 'agt-1', memberId: 'mem-agent', name: 'Worker' };
@@ -77,12 +86,14 @@ beforeEach(() => {
   }));
   mocks.isLocalExecution.mockReturnValue(false);
   mocks.isStopped.mockResolvedValue(false);
+  mocks.readFollowUpMode.mockResolvedValue('steer');
+  mocks.steerAppend.mockResolvedValue(1);
+  mocks.isRunAlive.mockResolvedValue(true);
+  mocks.removeSteer.mockResolvedValue(true);
 });
 
 describe('ChannelThreadService.steerThread', () => {
-  it('joins the correction into the running reply and posts it for the record', async () => {
-    mocks.queueRunSteer.mockResolvedValue({ queued: true });
-
+  it('queues the correction for the running reply and posts it for the record', async () => {
     await expect(
       service().steerThread({ content: 'Use the v2 API', threadId: 'cht_1' }, 'call-1'),
     ).resolves.toEqual({
@@ -90,21 +101,18 @@ describe('ChannelThreadService.steerThread', () => {
       messageId: 'msg-agent-steer:op-main:call-1',
       threadId: 'cht_1',
     });
-    expect(mocks.queueRunSteer).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(mocks.steerAppend).toHaveBeenCalledWith(
+      { threadId: null, topicId: 'tpc-thread', userId: 'user-1' },
       expect.objectContaining({
-        entry: expect.objectContaining({
-          channelSteer: true,
-          request: expect.objectContaining({
-            agentId: 'agt-1',
-            prompt: expect.stringContaining('Use the v2 API'),
-          }),
-          userId: 'user-1',
+        request: expect.objectContaining({
+          agentId: 'agt-1',
+          prompt: expect.stringContaining('Use the v2 API'),
         }),
-        operationId: 'op-thread',
-        scope: { threadId: null, topicId: 'tpc-thread', userId: 'user-1' },
+        userId: 'user-1',
       }),
+      'op-thread',
     );
+    expect(mocks.removeSteer).not.toHaveBeenCalled();
     expect(mocks.send).toHaveBeenCalledWith(
       'chn_1',
       expect.objectContaining({ silent: true, threadId: 'cht_1' }),
@@ -112,7 +120,8 @@ describe('ChannelThreadService.steerThread', () => {
   });
 
   it.each([
-    ['the run ended before it read the queue', [runningJob], { queued: false, reason: 'ended' }],
+    ['the run ended before it read the queue', [runningJob], 'ended'],
+    ['the requester follows up in Queue mode', [runningJob], 'queue'],
     ['nothing runs there', [], undefined],
     [
       'the reply runs on a device runtime',
@@ -126,7 +135,8 @@ describe('ChannelThreadService.steerThread', () => {
     ],
   ])('posts it as a new request when %s', async (_case, openJobs, outcome) => {
     mocks.threadTarget.mockResolvedValue(target(openJobs));
-    if (outcome) mocks.queueRunSteer.mockResolvedValue(outcome);
+    if (outcome === 'ended') mocks.isRunAlive.mockResolvedValue(false);
+    if (outcome === 'queue') mocks.readFollowUpMode.mockResolvedValue('queue');
 
     const result = await service().steerThread(
       { content: 'Use the v2 API', threadId: 'cht_1' },
@@ -141,16 +151,15 @@ describe('ChannelThreadService.steerThread', () => {
       requestKey: 'agent-steer:op-main:call-1',
       threadId: 'cht_1',
     });
-    if (!outcome) expect(mocks.queueRunSteer).not.toHaveBeenCalled();
+    if (outcome === 'ended') expect(mocks.removeSteer).toHaveBeenCalled();
+    else expect(mocks.steerAppend).not.toHaveBeenCalled();
   });
 
   it('appends the same steer entry when the tool call is retried', async () => {
-    mocks.queueRunSteer.mockResolvedValue({ queued: true });
-
     await service().steerThread({ content: 'x', threadId: 'cht_1' }, 'call-1');
     await service().steerThread({ content: 'x', threadId: 'cht_1' }, 'call-1');
 
-    const [first, retry] = mocks.queueRunSteer.mock.calls.map(([, params]) => params.entry.id);
+    const [first, retry] = mocks.steerAppend.mock.calls.map(([, entry]) => entry.id);
     expect(first).toBe(retry);
     expect(first).toBe(steerEntryId('op-main', 'call-1'));
     expect(first).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
@@ -158,7 +167,7 @@ describe('ChannelThreadService.steerThread', () => {
   });
 
   it('refuses to resend a correction that may already have landed', async () => {
-    mocks.queueRunSteer.mockResolvedValue({ queued: false, reason: 'unknown' });
+    mocks.isRunAlive.mockRejectedValue(new Error('db down'));
 
     await expect(
       service().steerThread({ content: 'x', threadId: 'cht_1' }, 'call-1'),
