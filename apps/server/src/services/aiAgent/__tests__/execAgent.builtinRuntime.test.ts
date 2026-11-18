@@ -794,7 +794,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.agentConfig.plugins).toEqual(['lobe-agent-documents']);
+    // No page agent without a sandbox; the saved documents pin loads on demand.
+    expect(callArgs.agentConfig.plugins).toEqual([]);
   });
 
   it('should inject page-agent runtime for regular agents in page scope', async () => {
@@ -822,7 +823,8 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       documentId: 'docs-1',
       scope: 'page',
     });
-    expect(callArgs.agentConfig.plugins).toEqual([PageAgentIdentifier, 'lobe-agent-documents']);
+    // The page agent is a runtime addition; the saved documents pin loads on demand.
+    expect(callArgs.agentConfig.plugins).toEqual([PageAgentIdentifier]);
     expect(callArgs.agentConfig.chatConfig.enableHistoryCount).toBe(false);
     expect(callArgs.agentConfig.systemRole).toContain('Custom role.');
     expect(callArgs.agentConfig.systemRole).toContain(
@@ -833,10 +835,13 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       expect.anything(),
       expect.objectContaining({
         agentConfig: expect.objectContaining({
-          plugins: [PageAgentIdentifier, 'lobe-agent-documents'],
+          plugins: [PageAgentIdentifier],
         }),
       }),
     );
+    // …and stays discoverable rather than cut as an unselected builtin.
+    const engineArgs = vi.mocked(createServerAgentToolsEngine).mock.calls[0][1];
+    expect(engineArgs.disabledPluginIds).not.toContain('lobe-agent-documents');
   });
 
   it('should normalize task identifier from appContext before creating runtime operation', async () => {

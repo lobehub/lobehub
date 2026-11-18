@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getToolContextRefreshKey, getToolExcludeDefaultToolIds } from './utils';
+import { getToolContextRefreshKey } from './utils';
 
 describe('Token tool utils', () => {
   describe('getToolContextRefreshKey', () => {
@@ -48,18 +48,6 @@ describe('Token tool utils', () => {
           enableAgentMode: true,
         }),
       ).not.toBe(chatModeKey);
-    });
-  });
-
-  describe('getToolExcludeDefaultToolIds', () => {
-    it('excludes discovery tools in manual skill mode', () => {
-      expect(getToolExcludeDefaultToolIds('manual')).toEqual(
-        expect.arrayContaining(['lobe-activator', 'lobe-skill-store']),
-      );
-    });
-
-    it('keeps default tools in auto skill mode', () => {
-      expect(getToolExcludeDefaultToolIds('auto')).toBeUndefined();
     });
   });
 });

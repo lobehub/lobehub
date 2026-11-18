@@ -11,7 +11,11 @@ import { ChatAppearanceSectionSkeleton } from '@/components/Skeleton/Settings/ta
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
+import {
+  labPreferSelectors,
+  settingsSelectors,
+  userGeneralSettingsSelectors,
+} from '@/store/user/selectors';
 
 import ChatTransitionPreview from './ChatTransitionPreview';
 import HighlighterPreview from './HighlighterPreview';
@@ -22,6 +26,9 @@ const ChatAppearance = memo(() => {
   const { t } = useTranslation('setting');
   const { general } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const enablePasteAutoConvert = useUserStore(userGeneralSettingsSelectors.enablePasteAutoConvert);
+  const enableBetterCodingExperience = useUserStore(
+    labPreferSelectors.enableBetterCodingExperience,
+  );
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const [savingKey, setSavingKey] = useState<string>();
@@ -149,6 +156,35 @@ const ChatAppearance = memo(() => {
                 label: t('settingChatAppearance.pasteAutoConvert.title'),
                 minWidth: undefined,
               },
+              ...(enableBetterCodingExperience
+                ? [
+                    {
+                      children: (
+                        <Flexbox horizontal align={'center'} gap={8}>
+                          {renderSaveHint('followUpBehavior')}
+                          <Select
+                            style={{ width: 160 }}
+                            value={general.followUpBehavior ?? 'steer'}
+                            options={[
+                              {
+                                label: t('settingChatAppearance.followUpBehavior.options.queue'),
+                                value: 'queue',
+                              },
+                              {
+                                label: t('settingChatAppearance.followUpBehavior.options.steer'),
+                                value: 'steer',
+                              },
+                            ]}
+                            onChange={(value) => handleChange('followUpBehavior', value)}
+                          />
+                        </Flexbox>
+                      ),
+                      desc: t('settingChatAppearance.followUpBehavior.desc'),
+                      label: t('settingChatAppearance.followUpBehavior.title'),
+                      minWidth: undefined,
+                    },
+                  ]
+                : []),
             ],
             title: t('settingChatAppearance.chatBehavior.title'),
           },

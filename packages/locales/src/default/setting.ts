@@ -1,4 +1,26 @@
 export default {
+  'connectorMarket.action.connect': 'Connect',
+  'connectorMarket.action.details': 'View details',
+  'connectorMarket.action.install': 'Install',
+  'connectorMarket.action.manage': 'Manage',
+  'connectorMarket.add': 'Add',
+  'connectorMarket.add.browseStore': 'Browse Skill Store',
+  'connectorMarket.add.browseStoreDesc': 'Built-in tools, skills and MCP servers',
+  'connectorMarket.add.custom': 'Add custom connector',
+  'connectorMarket.add.customDesc': 'Connect your own MCP server',
+  'connectorMarket.detail.byAuthor': 'By {{author}}',
+  'connectorMarket.detail.information': 'Information',
+  'connectorMarket.detail.tools': 'Tools',
+  'connectorMarket.detail.type': 'Type',
+  'connectorMarket.empty.clear': 'Clear search',
+  'connectorMarket.empty.search': 'No connectors match “{{keyword}}”',
+  'connectorMarket.empty.searchDesc': 'Try another name, or find more in the Skill Store.',
+  'connectorMarket.refresh': 'Refresh',
+  'connectorMarket.search.placeholder': 'Search connectors',
+  'connectorMarket.section.installed': 'Installed',
+  'connectorMarket.section.showAll': 'Show all',
+  'connectorMarket.section.showLess': 'Show less',
+  'connectorMarket.source': 'Source',
   'systemAgent.channelRouting.title': 'Channel decision model',
   'systemAgent.channelRouting.modelDesc':
     'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',
@@ -1048,6 +1070,8 @@ export default {
     'The hotkey must include at least one modifier key (Ctrl, Alt, Shift) and one regular key',
   'hotkey.record': 'Press a key to record the hotkey',
   'hotkey.reset': 'Reset to default hotkeys',
+  'hotkey.sendMessage.desc': 'The other key combination inserts a line break',
+  'hotkey.sendMessage.title': 'Send Message',
   'hotkey.title': 'Hotkeys',
   'hotkey.updateError': 'Failed to update hotkey: Network or system error',
   'hotkey.updateSuccess': 'Hotkey updated successfully',
@@ -1385,8 +1409,8 @@ export default {
   'settingAgent.environment.title': 'Environment',
   'settingAgent.environment.desc': 'Where it runs, and what it needs there.',
   'settingAgent.instruction.title': 'Instruction',
-  'settingAgent.instruction.desc':
-    'Who it is and how it should behave. It reads this before every reply.',
+  'settingAgent.instruction.description':
+    'Define the agent’s identity, responsibilities, working methods, and response style. These instructions apply in every conversation.',
   'settingAgent.knowledgePage.title': 'Knowledge Base',
   'settingAgent.knowledgePage.desc': 'The libraries and files it can search when it answers.',
   'settingAgent.knowledgePage.libraries.title': 'Libraries',
@@ -1565,6 +1589,11 @@ export default {
   'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChatAppearance.chatBehavior.title': 'Chat Behavior',
   'settingChatAppearance.workflowStreamingExpand.title': 'Expand Tool Steps While Running',
+  'settingChatAppearance.followUpBehavior.desc':
+    'Queue follow-ups while the agent runs, or steer the current run',
+  'settingChatAppearance.followUpBehavior.options.queue': 'Queue',
+  'settingChatAppearance.followUpBehavior.options.steer': 'Steer',
+  'settingChatAppearance.followUpBehavior.title': 'Follow-up behavior',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',
   'settingChatAppearance.fontSize.title': 'Font Size',
@@ -1952,7 +1981,13 @@ When I am ___, I need ___
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
+  'skillView.empty.description': 'Browse the Skill Store or import a skill from the Add menu.',
+  'skillView.empty.search': 'No skills match “{{keyword}}”',
+  'skillView.empty.title': 'No skills yet',
+  'skillView.search.placeholder': 'Search skills',
   'skillView.skills': 'Skills',
+  'skillView.skillsDesc':
+    'Give your agents task-specific skills. Open a skill to see its instructions and resources.',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':
@@ -1971,6 +2006,15 @@ When I am ___, I need ___
     'Copy agent groups and their member agents into another workspace or personal account.',
   'storage.actions.copyAgentGroups.title': 'Agent Groups Copy',
   'storage.actions.export.button': 'Export',
+  'storage.actions.export.download': 'Download',
+  'storage.actions.export.downloadError': 'Download failed. Please try again.',
+  'storage.actions.export.exporting': 'Exporting…',
+  'storage.actions.export.exportingDesc':
+    'Preparing your data in the background. You can leave this page; we will notify you when it is ready.',
+  'storage.actions.export.failed': 'The last export failed. Please try again.',
+  'storage.actions.export.ready': 'Last export: {{time}} · {{size}}',
+  'storage.actions.export.rerun': 'Export Again',
+  'storage.actions.export.startError': 'Could not start the export. Please try again later.',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',
   'storage.actions.export.exportType.agentWithMessage': 'Export Agent and Messages',
   'storage.actions.export.exportType.all': 'Export Global Settings and All Agent Data',
@@ -4251,7 +4295,6 @@ When I am ___, I need ___
   'workspaceSetting.tab.connector': 'Connectors',
   'workspaceSetting.tab.skill': 'Skills',
   'tools.add': 'Add Skill',
-  'tools.addSkillOrConnector': 'Add Skills / Connectors',
   'tools.noConfigurablePermissions': 'This skill does not expose configurable tool permissions.',
   'tools.legacyConnector.configure': 'Configure',
   'tools.legacyConnector.upgradeDesc':
@@ -4264,6 +4307,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-artifacts.readme':
     'Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.',
   'tools.builtins.lobe-artifacts.title': 'Artifacts',
+  'tools.builtins.lobe-canvas.title': 'Canvas',
   'tools.builtins.lobe-calculator.title': 'Calculator',
   'tools.builtins.lobe-calculator.description':
     'Perform mathematical calculations, solve equations, and work with symbolic expressions',
@@ -4387,7 +4431,6 @@ When I am ___, I need ___
     'Are you sure you want to uninstall {{name}}? This skill will be removed from the current agent.',
   'tools.builtins.uninstallConfirm.title': 'Uninstall {{name}}',
   'tools.builtins.uninstalled': 'Uninstalled',
-  'tools.disabled': 'The current model does not support function calls and cannot use the skill',
   'tools.composio.addServer': 'Add Server',
   'tools.composio.authCompleted': 'Authentication Completed',
   'tools.composio.authFailed': 'Authentication Failed',
@@ -4621,18 +4664,24 @@ When I am ___, I need ___
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',
+  'tools.picker.disabled': 'This model does not support tool calling.',
+  'tools.picker.management': 'Manage tools',
+  'tools.picker.emptyGroup': 'No tools in this group',
+  'tools.picker.noMatches': 'No matching tools',
+  'tools.picker.search': 'Search tools…',
+  'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
   'tools.plugins.groupName': 'Skills',
   'tools.plugins.management': 'Skill Management',
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
   'tools.search': 'Search skills...',
+  'tools.loading.onDemand': 'Load on demand',
   'tools.activation.action.auto': 'Auto',
-  'tools.activation.action.disable': 'Disable',
+  'tools.loading.never': 'Never load',
   'tools.activation.action.pin': 'Pin',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
-  'tools.activation.disabled': 'Disabled',
   'tools.activation.disabled.desc': 'Turned Off',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
   'tools.activation.pinned': 'Pinned',
@@ -5124,7 +5173,11 @@ When I am ___, I need ___
   'subscriptionAccounts.columns.status': 'Status',
   'subscriptionAccounts.empty.desc':
     'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
+  'subscriptionAccounts.empty.privateDesc':
+    'No private accounts here. Accounts you sign in to on your devices start here, visible only to you.',
   'subscriptionAccounts.empty.title': 'No subscription accounts yet',
+  'subscriptionAccounts.empty.workspaceDesc':
+    "No accounts are shared with this workspace yet. Share one from the Private tab so teammates' agents can use it.",
   'subscriptionAccounts.filter.all': 'All',
   'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
   'subscriptionAccounts.meter.session': '5-hour',
@@ -5166,17 +5219,20 @@ When I am ___, I need ___
   'subscriptionAccounts.calendar.todayDay': 'Today',
   'subscriptionAccounts.calendar.tomorrow': 'Tomorrow {{time}}',
   'subscriptionAccounts.calendar.tomorrowDay': 'Tomorrow',
+  'subscriptionAccounts.tabs.private': 'Private',
+  'subscriptionAccounts.tabs.workspace': 'Workspace',
   'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
   'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
-  'subscriptionAccounts.visibility.private': 'Private',
   'subscriptionAccounts.visibility.privateAction': 'Make private',
   'subscriptionAccounts.visibility.privateConfirm.desc':
     "Only you will see it. Other members' agents stop drawing on its quota.",
   'subscriptionAccounts.visibility.privateConfirm.title': 'Make this account private?',
+  'subscriptionAccounts.visibility.privateDone': 'Made private. It now lists under Private.',
   'subscriptionAccounts.visibility.publicAction': 'Share with workspace',
   'subscriptionAccounts.visibility.publicConfirm.desc':
     'Every member will see it, and their agents can draw on its quota. You can make it private again from the same menu.',
   'subscriptionAccounts.visibility.publicConfirm.title': 'Share this account with the workspace?',
+  'subscriptionAccounts.visibility.publicDone': 'Shared. It now lists under Workspace.',
   'tab.subscriptionAccounts': 'Subscription Accounts',
   'taskLabels.actions.addToGroup': 'Add label to group',
   'taskLabels.actions.create': 'New label',
@@ -5209,25 +5265,35 @@ When I am ___, I need ___
   'taskLabels.usage': '{{count}} tasks',
   'taskLabels.actions.more': 'More actions',
   'tab.automations': 'Automations',
-  'settingsSearch.tabKeywords.automations':
-    'automations, events, event subscriptions, triggers, webhooks',
+  'webhooks.empty.desc':
+    'Open an agent and go to Agent Profile → Webhook to create one. Every agent’s webhooks are listed here.',
+  'webhooks.empty.title': 'No webhooks yet',
+  'webhooks.desc':
+    'URLs any outside system can call to run an agent with what it sent. Each call uses credits. To create one, open an agent and go to Agent Profile → Webhook.',
+  'automations.actions.more': 'More actions',
+  'settingsSearch.tabKeywords.webhooks': 'webhooks, webhook url, callback, http trigger',
+  'tab.webhooks': 'Webhooks',
+  'settingsSearch.tabKeywords.automations': 'automations, events, event subscriptions, triggers',
   'automations.desc':
-    'Connector events your agents subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events your agents subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.descWorkspace':
-    'Connector events the agents in this workspace subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
+    'Connector events the agents in this workspace subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
   'automations.descAgent':
-    'Connector events this agent subscribed to, and webhooks that wake it. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events this agent subscribed to. Each event runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.columns.subscription': 'Subscription',
   'automations.columns.status': 'Status',
   'automations.columns.target': 'Agent & topic',
   'automations.columns.topic': 'Topic',
   'automations.columns.lastDelivery': 'Last event',
   'automations.source.moreArgs': '{{text}} +{{count}}',
-  'automations.source.webhook': 'Webhook',
-  'automations.source.topicMode.new': 'New topic per call',
-  'automations.source.topicMode.reuse': 'One shared topic',
   'automations.untitledTopic': 'Untitled topic',
-  'automations.target.webhookCalls': 'Calls and topics',
+  'automations.error.channel_unavailable':
+    "Couldn't post the last result to the Channel: the Agent or its creator is no longer a member, or the Channel was archived.",
+  'automations.target.channel': 'Posts to {{channel}}',
+  'automations.target.channelHidden': "Posts to a Channel you're not in",
+  'automations.target.channelThread': 'Posts to a thread in {{channel}}: {{thread}}',
+  'automations.target.untitledChannel': 'Untitled Channel',
+  'automations.target.untitledThread': 'Untitled thread',
   'automations.lastDelivery.never': 'No events yet',
   'automations.status.active': 'Active',
   'automations.status.reconnect': 'Reconnect needed',
@@ -5249,8 +5315,8 @@ When I am ___, I need ___
     'Events arrived too often, so some runs in the last 10 minutes were skipped.',
   'automations.error.insufficient_budget':
     'Not enough credits to run the agent. Later events run once you top up.',
-  'automations.error.access_revoked':
-    'Access was revoked; the subscription ended. Delete it and ask the agent to resubscribe.',
+  'automations.error.reconnectToResubscribe':
+    'Access was revoked and the subscription ended. Reconnect the connector, then delete this subscription and ask the agent to subscribe again.',
   'automations.error.event_unavailable':
     'The connector no longer offers this event, so the subscription ended.',
   'automations.error.server_unreachable': "Could not reach the connector's server.",
@@ -5262,6 +5328,13 @@ When I am ___, I need ___
   'automations.actions.checkTooltip':
     'Confirm with the connector that events are still delivered; paused delivery resumes',
   'automations.actions.delete': 'Delete',
+  'automations.actions.rename': 'Rename',
+  'automations.rename.done': 'Renamed',
+  'automations.rename.failed': "Couldn't rename it. Try again.",
+  'automations.rename.hint':
+    'Only people see this name; the agent keeps using its identifier. Leave it empty to show "{{fallback}}".',
+  'automations.rename.ok': 'Save',
+  'automations.rename.title': 'Rename automation',
   'automations.actions.noPermission':
     'Only the member who approved it or a workspace admin can do this',
   'automations.check.healthy': 'Subscription is working',
@@ -5273,8 +5346,6 @@ When I am ___, I need ___
   'automations.delete.title': 'Delete this subscription?',
   'automations.delete.content':
     '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
-  'automations.delete.contentWebhook':
-    'The URL of "{{name}}" stops working at once, and calls to it no longer run "{{agent}}". This cannot be undone.',
   'automations.delete.ok': 'Delete',
   'automations.delete.cancel': 'Cancel',
   'automations.delete.failed': "Couldn't delete the subscription. Try again",

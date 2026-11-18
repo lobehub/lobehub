@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { UserModel } from '../../../models/user';
-import { channelJobs, channelMemberGrants, channelMembers, devices } from '../../../schemas';
+import {
+  channelJobs,
+  channelMemberGrants,
+  channelMembers,
+  channelMessages,
+  devices,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { createChannelFixture, deviceConfig, jobsOf, lease } from './testUtils';
@@ -142,6 +148,21 @@ describe('claim guards', () => {
     const { job } = await request(asMember, channel.id, agent.id, 'req');
 
     await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, member.id));
+
+    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+    expect((await jobById(job.id)).status).toBe('cancelled');
+  });
+
+  it('cancels a job whose request was deleted while it waited', async () => {
+    const { asMember, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Coder');
+    const { job, message } = await request(asMember, channel.id, agent.id, 'withdrawn');
+
+    // Deletion racing the claim: the tombstone lands while the job is still queued.
+    await db
+      .update(channelMessages)
+      .set({ metadata: { deletedAt: new Date().toISOString() } })
+      .where(eq(channelMessages.id, message.id));
 
     expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
     expect((await jobById(job.id)).status).toBe('cancelled');

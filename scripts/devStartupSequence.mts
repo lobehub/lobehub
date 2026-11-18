@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
-import { buildFileParseWorker } from './buildFileParseWorker.mjs';
+import { buildFileParseWorker } from './buildFileParseWorker.mts';
 
 interface DevProcessHandle {
   directPid?: number;

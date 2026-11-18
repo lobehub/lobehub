@@ -7,7 +7,7 @@ import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 import ConnectorBrandIcon from '../ConnectorBrandIcon';
 
-const ICON_SIZE = 28;
+const ICON_SIZE = { large: 40, middle: 28 } as const;
 
 const styles = stylex.create({
   tile: {
@@ -21,22 +21,29 @@ const styles = stylex.create({
     overflow: 'hidden',
     width: 48,
   },
+  tileLarge: {
+    borderRadius: cssVar.borderRadiusLG,
+    height: 64,
+    width: 64,
+  },
 });
 
 interface ConnectorDetailIconProps {
   connector: Pick<ConnectorWithTools, 'identifier' | 'name' | 'sourceType'>;
+  /** `large` heads the detail page; `middle` sits in denser layouts. */
+  size?: keyof typeof ICON_SIZE;
 }
 
 /**
  * The same brand mark the list row shows, so the detail page reads as the
  * row it was opened from.
  */
-const ConnectorDetailIcon = memo<ConnectorDetailIconProps>(({ connector }) => (
-  <Center {...stylex.props(styles.tile)}>
+const ConnectorDetailIcon = memo<ConnectorDetailIconProps>(({ connector, size = 'middle' }) => (
+  <Center {...stylex.props(styles.tile, size === 'large' && styles.tileLarge)}>
     <ConnectorBrandIcon
       identifier={connector.identifier}
       name={connector.name}
-      size={ICON_SIZE}
+      size={ICON_SIZE[size]}
       sourceType={connector.sourceType}
     />
   </Center>

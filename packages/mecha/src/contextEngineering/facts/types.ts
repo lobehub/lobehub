@@ -6,6 +6,7 @@ import type {
   AvailablePluginInfo,
   AvailableProviderInfo,
   OnboardingContext,
+  RevokedDocumentReads,
 } from '@lobechat/context-engine';
 import type {
   AgentAccountContext,
@@ -92,6 +93,8 @@ export interface ContextFactRequest {
   agentId?: string;
   /** Plugin identifiers the agent explicitly disabled (tri-state entries). */
   disabledPluginIds?: string[];
+  /** Tools offered for activation in the current step. */
+  discoverableTools?: ReadonlyArray<{ identifier: string }>;
   /** Agent being edited in the Profile panel, when the agent builder is active. */
   editingAgentId?: string;
   /** Group being edited in the group Profile panel, when the group builder is active. */
@@ -113,6 +116,12 @@ export interface ContextFactRequest {
   mentionedAgents?: RuntimeMentionedAgent[];
   /** Conversation as the engine will see it (history hints already applied). */
   messages: UIChatMessage[];
+  /**
+   * Identifiers the agent turned on (every `plugins` entry that is not
+   * disabled). A connector is opt-in per agent, so a connected service absent
+   * from it is not offered as usable. Omitted = no opt-in cut.
+   */
+  optedInPluginIds?: string[];
   /** Present only on a shared-agent visitor run. */
   shareVisitor?: Pick<AgentShareVisitorContext, 'agentId' | 'visitorUserId'>;
   topicId?: string;
@@ -136,6 +145,19 @@ export interface ContextFactProviders {
     agentId: string,
     documentId: string,
   ) => Promise<{ content?: string | null; title?: string | null } | null | undefined>;
+  /**
+   * Of the given document ids (`documents.id` or `agent_documents.id`) that
+   * `agentId` read in earlier turns, those whose content must no longer reach
+   * the model: `documentIds` for every read route, `agentDocumentReadIds` for
+   * `readDocument` only (still a knowledge-base page). Ids never bound to the
+   * agent (knowledge-base documents, uploads) are not revoked.
+   */
+  findRevokedDocumentReads?: (
+    agentId: string,
+    documentIds: string[],
+  ) => Promise<
+    { agentDocumentReadIds?: Iterable<string>; documentIds?: Iterable<string> } | undefined
+  >;
   /** A topic by id, or null when the caller may not see it. */
   findTopic?: (topicId: string) => Promise<TopicFacts | null | undefined>;
   /** The agent row the builder or group builder is editing. */
@@ -206,6 +228,8 @@ export interface ContextFactProviders {
 export interface GatheredContextFacts {
   agentDocumentChanges?: AgentDocumentChangesByMessage;
   agentDocuments?: AgentContextDocument[];
+  /** Documents whose earlier reads must no longer reach the model, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   step: ContextStepSnapshot & { agentManagementContext?: AgentManagementContext };
   variables: ContextVariables;
 }

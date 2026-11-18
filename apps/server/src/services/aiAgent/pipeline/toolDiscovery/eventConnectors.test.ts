@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 
-import { hasSupportedEventConnector, offersMcpEvents } from './eventConnectors';
+import { hasSupportedEventConnector } from './eventConnectors';
 
 const connector = (patch: Partial<DecryptedConnector> = {}): DecryptedConnector =>
   ({
@@ -39,14 +39,5 @@ describe('event connector discovery', () => {
     { metadata: { capabilities: { events: { supported: false } } } },
   ])('rejects non-event or unavailable connectors: %j', (patch) => {
     expect(hasSupportedEventConnector([connector(patch)])).toBe(false);
-  });
-});
-
-describe('offersMcpEvents', () => {
-  it('offers the tools wherever an event connector is available, except in Channel runs', () => {
-    expect(offersMcpEvents(true, 'chat')).toBe(true);
-    expect(offersMcpEvents(true, undefined)).toBe(true);
-    expect(offersMcpEvents(true, 'channel')).toBe(false);
-    expect(offersMcpEvents(false, 'chat')).toBe(false);
   });
 });

@@ -13,6 +13,7 @@ import {
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { isMCPSSRFBlockedError } from '@/libs/mcp/ssrf';
+import { createMCPError } from '@/libs/mcp/types';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { resolveLinkedCall } from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
@@ -324,10 +325,11 @@ export class ToolExecutionService {
 
     // Agent Share visitor runs execute with the CREATOR's identity, so a
     // device-only MCP would access the creator's device or private network
-    // on a visitor's behalf. The tool-set gate already drops
-    // these manifests (`applyShareGateToToolSet`); this is the unbypassable
-    // dispatch-site check, mirroring `isShareBlockedBuiltinDispatch`.
-    if (context.agentShareVisitor && isDeviceOnlyMcp) {
+    // on a visitor's behalf — allowed only under the share's device grant.
+    // The tool-set gate already drops these manifests
+    // (`applyShareGateToToolSet`); this is the unbypassable dispatch-site
+    // check, mirroring `isShareBlockedBuiltinDispatch`.
+    if (context.agentShareVisitor && !context.agentShareVisitor.canUseDevice && isDeviceOnlyMcp) {
       log('Share gate blocked device-only MCP dispatch: %s:%s', identifier, apiName);
       const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
       return {
@@ -338,6 +340,12 @@ export class ToolExecutionService {
     }
 
     try {
+      if (
+        (manifest as { connectorReauthorizationRequired?: boolean })
+          .connectorReauthorizationRequired
+      ) {
+        throw createMCPError('AUTHORIZATION_ERROR', 'Reconnect this connector to continue.');
+      }
       const marker = (manifest as { connectorLinks?: { connectorId: string; param: string } })
         .connectorLinks;
       if (marker) {
@@ -376,7 +384,11 @@ export class ToolExecutionService {
         if (tool.permission === ConnectorToolPermission.disabled)
           return buildBlockedToolResponse(apiName);
         const currentEndpoint = buildConnectorMcpParams({ ...connector, credentials: null });
-        if (context.agentShareVisitor && isDeviceOnlyMcpEndpoint(currentEndpoint)) {
+        if (
+          context.agentShareVisitor &&
+          !context.agentShareVisitor.canUseDevice &&
+          isDeviceOnlyMcpEndpoint(currentEndpoint)
+        ) {
           const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
           return {
             content: message,

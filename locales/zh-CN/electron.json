@@ -168,6 +168,7 @@
   "tab.openInSplitView": "在右侧分栏打开",
   "tab.overflow": "另有 {{count}} 个标签页",
   "tab.pin": "固定标签页",
+  "tab.reopenClosedTab": "重新打开关闭的标签页",
   "tab.resizeSplitView": "调整分栏宽度",
   "tab.running": "助理运行中",
   "tab.unpin": "取消固定",

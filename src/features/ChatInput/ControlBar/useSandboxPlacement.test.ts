@@ -120,6 +120,18 @@ describe('useSandboxPlacement', () => {
     expect(state.refreshTopicDetail).toHaveBeenCalledWith('fresh-topic', true);
   });
 
+  // The write has landed when the read-back runs; its failure must not make
+  // the pick look failed (and so go unremembered for the next conversation).
+  it('resolves a pick whose save landed even if the read-back fails', async () => {
+    state.refreshTopicDetail.mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useSandboxPlacement('agent-1', 'fresh-topic'));
+
+    await expect(
+      act(() => result.current.setSelection({ workingDirectory: 'reports' })),
+    ).resolves.toBeUndefined();
+    expect(state.updateTopicMetadata).toHaveBeenCalled();
+  });
+
   it('leaves a listed topic to the list it is in', async () => {
     const { result } = renderHook(() => useSandboxPlacement('agent-1', 'pane-topic'));
 

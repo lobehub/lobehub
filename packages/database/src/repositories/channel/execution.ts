@@ -21,7 +21,7 @@ import { appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
 import type { ChannelOpeningDecision } from './opening';
-import { applyOpening, findOpeningCandidate, findOpeningReply } from './opening';
+import { applyOpening, findCoAddressed, findOpeningCandidate, findOpeningReply } from './opening';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
@@ -399,6 +399,9 @@ export class ChannelExecutionRepository {
   /** Opens a queued job's reply once. See {@link applyOpening}. */
   open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>
     applyOpening(this.db, channelId, jobId, decision);
+
+  /** The other Agents the job's request asked to answer alongside it. */
+  coAddressed = (channelId: string, jobId: string) => findCoAddressed(this.db, channelId, jobId);
 
   /** The acknowledgement the job posted before its run, if any. */
   openingReply = async (channelId: string, jobId: string) =>

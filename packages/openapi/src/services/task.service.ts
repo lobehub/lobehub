@@ -17,6 +17,7 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateTaskRequest,
   RunTaskRequest,
@@ -186,11 +187,13 @@ export class TaskRestService extends BaseService {
     return rows.map(toPublicRun);
   }
 
-  async deleteTask(id: string): ServiceResult<unknown> {
+  async deleteTask(id: string): ServiceResult<DeletedResource> {
     // Same scope as the tRPC delete: the route's `agent:update` gate plus the
     // model's visibility-aware `resolve`, whoever created the task.
     const task = await this.taskModel.resolve(id);
     if (!task) throw this.createNotFoundError('Task not found');
-    return this.taskService.deleteTask(task.id);
+    await this.taskService.deleteTask(task.id);
+    // The path may carry the display identifier (`T-12`); answer with the row id.
+    return { deleted: true, id: task.id };
   }
 }

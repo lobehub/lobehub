@@ -67,6 +67,7 @@
   "claudeCode.askUserQuestion.timeExpired": "已超时——将使用每题的选项 1。",
   "claudeCode.askUserQuestion.timeExpiredNoAnswer": "已超时——这个提问已经无法再作答。",
   "claudeCode.askUserQuestion.timeRemaining": "剩余时间：{{time}} · 超时后未作答题目默认选项 1。",
+  "claudeCode.askUserQuestion.timeRemainingNoAnswer": "剩余时间：{{time}} · 超时后结束提问，不会代为作答。",
   "codeInterpreter-legacy.error": "执行出错",
   "codeInterpreter-legacy.executing": "正在执行...",
   "codeInterpreter-legacy.files": "文件：",

@@ -1,9 +1,10 @@
+import { needsConnectorReauthorization } from '@lobechat/types';
 import { connectorMcpEndpoint, isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import { TRPCError } from '@trpc/server';
 
 import type { ConnectorModel } from '@/database/models/connector';
 
-import { getConnectorLinkModel, loadConnectorLinksMap, pickPrimaryLink } from './links';
+import { loadConnectorLinksMap, pickPrimaryLink } from './links';
 import { ensureFreshLinkToken } from './tokens';
 
 /**
@@ -51,12 +52,13 @@ export const getConnectorLocalCallToken = async (
     });
   }
 
-  const fresh = await ensureFreshLinkToken(
-    connector,
-    link,
-    getConnectorLinkModel(ctx),
-    ctx.connectorModel,
-  );
+  const fresh = await ensureFreshLinkToken(connector, link, ctx.connectorModel);
+  if (needsConnectorReauthorization(fresh.credentials)) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Reconnect this connector to continue.',
+    });
+  }
   return fresh.credentials.accessToken
     ? { accessToken: fresh.credentials.accessToken, type: 'oauth2' }
     : null;

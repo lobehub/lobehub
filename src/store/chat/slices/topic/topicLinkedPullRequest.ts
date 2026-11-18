@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react';
 import type { GitLinkedPRSummary } from '@/services/git';
 import { gitLinkedPRKey } from '@/store/device/gitReview/projection';
 import { useGitReviewStore } from '@/store/device/gitReview/store';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 export interface TopicLinkedPullRequestRefreshParams {
   branch: string;
@@ -30,14 +32,18 @@ export const useTopicLinkedPullRequestSync = (
     pr?: GitLinkedPRSummary,
   ) => Promise<void>,
 ) => {
-  const replicaParams = params
-    ? {
-        branch: params.branch,
-        deviceId: params.deviceId,
-        path: params.path,
-        pullRequestNumber: params.pullRequestNumber,
-      }
-    : null;
+  // Better Coding Experience reads a topic's PRs from its Work rows: the
+  // branch-guessed snapshot is neither refreshed nor written back.
+  const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+  const replicaParams =
+    params && !betterCoding
+      ? {
+          branch: params.branch,
+          deviceId: params.deviceId,
+          path: params.path,
+          pullRequestNumber: params.pullRequestNumber,
+        }
+      : null;
   const key = replicaParams ? gitLinkedPRKey(replicaParams) : undefined;
 
   const sync = useGitReviewStore.getState().slices.linkedPR.useSync(replicaParams, {

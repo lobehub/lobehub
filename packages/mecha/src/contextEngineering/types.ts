@@ -16,6 +16,7 @@ import type {
   OnboardingContext,
   PlanTodoConfig,
   ProjectInstructionFile,
+  RevokedDocumentReads,
   SkillMeta,
   ToolDiscoveryConfig,
   TopicReferenceItem,
@@ -56,6 +57,8 @@ export interface ContextAgentSnapshot {
   inputTemplate?: string;
   /** Files and knowledge bases attached to the agent. */
   knowledge?: KnowledgeConfig;
+  /** Documents deleted or disabled since earlier turns read them, per reading agent. */
+  revokedDocumentReads?: RevokedDocumentReads[];
   systemRole?: string;
 }
 

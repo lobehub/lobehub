@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -81,6 +81,9 @@ An unaddressed message has exactly one primary responder; every other member wok
   cover it, then candidate order. A primary woken by its own rules keeps its own `followup` wake.
 - Explicit @mentions are unchanged: every mentioned Agent owes an answer and runs in parallel.
   So are the paired Agent of a one-person group and the all-candidate fallback.
+  Agents @mentioned together answer in one shared Thread under the request: the first opening
+  that chooses a Thread opens and names it, every later acknowledgement and answer joins it, and
+  each run's opener and prompt (`channel_peers`) name the others so they take their own part.
 
 A deferred job is queued as `awaiting_primary` and the claim keeps it there until the primary's
 job settles (completed, silent, failed or cancelled), or the primary is stuck on a device or a
@@ -252,6 +255,26 @@ chosen Agents (`ChannelMessagingService`).
   `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
   the `channel:message` capability that every Channel dispatch is minted alongside
   `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
+
+### Messaging people for the requester
+
+"Let Alice know when you are done" is a message to a person, not a request for an Agent.
+`lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
+the run's scope (`ContactModel.listPeople`): personal contacts, or in a workspace its other members
+and the external contacts paired with the requester. `lobe-channel.messagePerson` (`lh channel dm`)
+posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
+first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
+
+- **Who sends it.** The requester, with the writing Agent in `metadata.via`, like a relay: the
+  timeline shows "Relayed by". The conversation between two people decides who can be reached
+  (`requirePeerRelation`, checked on opening and on every send), so an Agent reaches exactly the
+  people its requester could message by hand. A conversation the requester trashed is refused.
+- **Notification.** It is an ordinary message there, so `notifyChannelDirectMessages` notifies the
+  person as of any message from the requester.
+- **Nothing comes back.** No Agent is in that conversation; the `via` has no `origin`, so no
+  receipt is delivered. Unlike `sendMessage` there is no hop rule: a person does not wake anyone.
+- **Retries.** The request key is `agent-dm:<operationId>:<toolCallId>` (or `cli:<requestKey>`).
+- Shared-Agent runs do not get it: the share gate allows only history reads.
 
 ### Why history reads stay on `lobe-channel`
 

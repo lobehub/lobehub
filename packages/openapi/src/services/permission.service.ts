@@ -7,6 +7,7 @@ import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicPermission, type PublicPermission } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreatePermissionRequest,
   PermissionsListQuery,
@@ -169,7 +170,7 @@ export class PermissionService extends BaseService {
   /**
    * Delete permission by ID
    */
-  async deletePermission(id: string): ServiceResult<{ id: string }> {
+  async deletePermission(id: string): ServiceResult<DeletedResource> {
     try {
       const existingPermission = await this.db.query.permissions.findFirst({
         where: eq(permissions.id, id),
@@ -197,7 +198,7 @@ export class PermissionService extends BaseService {
         throw this.createBusinessError('Failed to delete permission');
       }
 
-      return deleted;
+      return { deleted: true, id: deleted.id };
     } catch (error) {
       this.handleServiceError(error, '删除权限');
     }

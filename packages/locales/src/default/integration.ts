@@ -236,7 +236,8 @@ export default {
   'mcpEvent.truncated': 'Possible gap',
   'mcpEvent.truncatedDesc': 'Some events before these may not have arrived.',
   'mcpEvent.notice.subscription_terminated': 'Subscription ended',
-  'mcpEvent.noticeReason.access_revoked': 'The connector revoked access',
+  'mcpEvent.noticeReason.reconnectToResubscribe':
+    'The connector revoked access. Reconnect it, then ask the agent to subscribe again.',
   'mcpEvent.noticeReason.event_unavailable': 'The connector no longer offers this event',
   'mcpEvent.noticeReason.unknown': 'The connector ended the subscription',
   'mcpEvent.senderCaption': 'Event subscription',

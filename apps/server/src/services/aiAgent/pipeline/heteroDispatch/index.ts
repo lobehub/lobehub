@@ -3,7 +3,7 @@ import {
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
 import type { ExecAgentResult } from '@lobechat/types';
-import { resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
+import { ChatErrorType, resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -73,6 +73,20 @@ const dispatchHeteroAgentImpl = async (
   } = input;
 
   const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
+  const { shareGate } = ctx;
+  // A share visitor's run executes as the creator but streams only to the
+  // visitor: the gateway registers the op under this id, the token it returns
+  // is the visitor's, and `streamOwnerUserId` on the op metadata is what tells
+  // the ingest/finish requests (other processes) to redact for a visitor.
+  const shareStream = shareGate
+    ? {
+        streamOwnerUserId: shareGate.visitorUserId,
+        visitorRedaction: {
+          showErrorDetails: shareGate.shareConfig.showErrorDetails,
+          showModelInfo: shareGate.shareConfig.showModelInfo,
+        },
+      }
+    : undefined;
   // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
   const operationId =
@@ -104,7 +118,9 @@ const dispatchHeteroAgentImpl = async (
   // also an authentication prerequisite: every callback
   // re-authorizes its operation token against this exact principal. Do not
   // mint a token or dispatch/spawn when persistence fails.
-  const completionLifecycle = new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId);
+  const completionLifecycle = new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId, {
+    includeShareVisitor: deps.includeShareVisitor,
+  });
   const operationPersisted = await traceHeteroStage('record_start', () =>
     completionLifecycle.recordStart({
       requireReservation: !!input.reservedOperationId,
@@ -114,6 +130,11 @@ const dispatchHeteroAgentImpl = async (
       maxSteps,
       metadata: {
         _hooks: serializedHooks,
+        // Read back by heteroIngest / heteroFinish, which run in other
+        // requests and must scope to (and settle) the visitor's rows.
+        ...(shareGate && {
+          agentShareVisitor: { shareId: shareGate.shareId, visitorUserId: shareGate.visitorUserId },
+        }),
         assistantMessageId,
         heterogeneousRuntimeConfig: runtimeConfig,
       },
@@ -234,7 +255,9 @@ const dispatchHeteroAgentImpl = async (
       // dispatch settles and unregisters it, so the caller learns whether this
       // failure was already announced to its own surfaces.
       const terminalReported = hookDispatcher.canDeliver(operationId, 'onComplete');
-      await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId).completeOperation(
+      await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId, {
+        includeShareVisitor: deps.includeShareVisitor,
+      }).completeOperation(
         {
           agentId: persistAgentId,
           assistantMessageId,
@@ -294,19 +317,22 @@ const dispatchHeteroAgentImpl = async (
   // callAgent has no metadata row, the callback 401s, and the parent
   // operation is never resumed (stays parked until the inactivity
   // watchdog abandons it).
-  const persistOperationMetadata = async () => {
+  const persistOperationMetadata = async (): Promise<boolean> => {
     try {
       await traceHeteroStage('operation_metadata', () =>
         createAgentStateManager().createOperationMetadata(operationId, {
           ...(topicStartOwnerOperationId && {
             mirrorToOperationId: topicStartOwnerOperationId,
           }),
+          ...shareStream,
           userId: deps.userId,
           workspaceId: deps.workspaceId,
         }),
       );
+      return true;
     } catch (err) {
       log('execAgent: failed to persist hetero operation metadata: %O', err);
+      return false;
     }
   };
 
@@ -332,7 +358,9 @@ const dispatchHeteroAgentImpl = async (
         canUseDevice,
         deviceAccessReason,
         heteroType,
-        persistOperationMetadata,
+        persistOperationMetadata: async () => {
+          await persistOperationMetadata();
+        },
         prompt,
         remoteDeviceId,
         remoteDeviceUserId,
@@ -374,14 +402,28 @@ const dispatchHeteroAgentImpl = async (
     // Best-effort: a stream-manager/Redis failure must never block dispatch —
     // the init only powers reconnect, not the run. `createStreamEventManager`
     // probes Redis synchronously, so guard construction too, not just publish.
+    // A share run's stream owner and redaction live only in this metadata: a
+    // later heteroIngest worker reads them back, and without them it would
+    // publish the creator's unredacted stream. So a share run that cannot
+    // persist them does not dispatch.
+    const metadataPersisted = await persistOperationMetadata();
+    if (shareGate && !metadataPersisted) {
+      const message = 'Share run metadata could not be persisted';
+      return failHeteroDispatch(
+        deps,
+        run,
+        { detail: message, errorType: ChatErrorType.ServerAgentRuntimeError, message },
+        { error: ChatErrorType.ServerAgentRuntimeError, message },
+      );
+    }
     try {
-      await persistOperationMetadata();
       await traceHeteroStage('stream_init', () =>
         createStreamEventManager().publishAgentRuntimeInit(operationId, {
           agentId: resolvedAgentId,
           assistantMessageId,
           heteroType,
           mirrorToOperationId: topicStartOwnerOperationId,
+          ...shareStream,
           topicId,
           userId: deps.userId,
         }),
@@ -391,6 +433,24 @@ const dispatchHeteroAgentImpl = async (
     }
 
     const heteroPlan = deviceHeteroPlan!;
+    // `setupTurn` already refused a share run whose device is not online; this
+    // keeps the sandbox (creator JWT + GitHub token in a box the visitor's
+    // prompt controls) out of reach even if routing changed in between.
+    if (shareGate && heteroPlan.kind !== 'device' && heteroPlan.kind !== 'device-wakeable') {
+      return failHeteroDispatch(
+        deps,
+        run,
+        {
+          detail: ChatErrorType.ShareHeteroDeviceUnavailable,
+          errorType: ChatErrorType.ShareHeteroDeviceUnavailable,
+          message: ChatErrorType.ShareHeteroDeviceUnavailable,
+        },
+        {
+          error: ChatErrorType.ShareHeteroDeviceUnavailable,
+          message: ChatErrorType.ShareHeteroDeviceUnavailable,
+        },
+      );
+    }
     const cliDispatchParams = {
       agentConfig,
       appContext,
@@ -443,7 +503,9 @@ const dispatchHeteroAgentImpl = async (
   let gatewayToken: string | undefined;
   if (!deps.withholdGatewayToken) {
     try {
-      gatewayToken = await traceHeteroStage('sign_gateway_token', () => signUserJWT(deps.userId));
+      gatewayToken = await traceHeteroStage('sign_gateway_token', () =>
+        signUserJWT(shareGate?.visitorUserId ?? deps.userId),
+      );
     } catch {
       // non-critical
     }

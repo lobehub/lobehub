@@ -4,6 +4,7 @@ import type {
   ChannelMemberConfig,
   ChannelMemberRole,
   ChannelReplyJob,
+  ChannelThreadMention,
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
@@ -35,6 +36,7 @@ import {
 } from './agent';
 import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
+import { deleteMessage } from './delete';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
@@ -55,9 +57,11 @@ import { joinPublicChannel, listJoinableChannels } from './publicAccess';
 import { retryJob } from './retry';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
+import { type ChannelSearchOptions, searchChannelMessages } from './search';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
+import { channelThreadMentions } from './threadMentions';
 import { audit, lockChannel } from './transaction';
 import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView } from './view';
@@ -80,7 +84,11 @@ export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
 export { removeAgentFromProjectChannels } from './membership';
-export type { ChannelOpeningCandidate, ChannelOpeningDecision } from './opening';
+export type {
+  ChannelCoAddressedAgent,
+  ChannelOpeningCandidate,
+  ChannelOpeningDecision,
+} from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
@@ -480,6 +488,18 @@ export class ChannelRepository {
       minRole: 'admin',
     });
 
+  /** Messages in a Channel the caller can read, its live Threads included, matching `query`. */
+  searchMessages = async (channelId: string, options: ChannelSearchOptions) => {
+    const access = await this.findAccess(channelId);
+    return this.db.transaction(async (tx) => {
+      const readable = access
+        ? !access.channel.isDeleted
+        : !!(await findOpenChannel(tx, this.userId, this.workspaceId, channelId));
+      if (!readable) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      return searchChannelMessages(tx, channelId, options);
+    });
+  };
+
   detail = async (channelId: string, options?: Parameters<typeof readChannelView>[2]) => {
     if (!(await this.findAccess(channelId)))
       return readOpenChannel(this.db, this.userId, this.workspaceId, channelId, options);
@@ -527,6 +547,18 @@ export class ChannelRepository {
       { allowArchived: true, allowTrashed: true },
     );
 
+  /** Pins the conversation atop the caller's own list, or unpins it; nobody else sees it. */
+  setPinned = async (channelId: string, pinned: boolean) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        const pinnedAt = pinned ? (member.pinnedAt ?? new Date()) : null;
+        await tx.update(channelMembers).set({ pinnedAt }).where(eq(channelMembers.id, member.id));
+        return pinnedAt;
+      },
+      { allowArchived: true, allowTrashed: true },
+    );
+
   /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list. Active open
@@ -543,8 +575,10 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
+        pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
         sharedAgentHandle: string | null;
+        threadMentions: ChannelThreadMention[];
         unreadCount: number;
       }
     >
@@ -557,6 +591,7 @@ export class ChannelRepository {
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
+        pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
@@ -636,6 +671,12 @@ export class ChannelRepository {
       : [];
     const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
 
+    // Thread mentions outlive the read position, which opening the main conversation moves.
+    const threadMentionsOf = await channelThreadMentions(
+      this.db,
+      rows.map(({ memberId }) => memberId),
+    );
+
     // A group Channel's list avatar pictures its first members; a direct one, its Agent or the
     // other person, which also pictures a shared Agent the caller has no sidebar row for.
     const avatarsOf = await channelAvatarMembers(this.db, previewIds, this.userId);
@@ -663,25 +704,29 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    const joined = rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
-      const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
-      return {
-        ...channel,
-        agentIds: agentIdsOf.get(channel.id) ?? [],
-        sharedAgent,
-        // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
-        sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
-        canDelete: hasRole(role, 'admin'),
-        joined: true,
-        lastMessage: lastMessageOf.get(channel.id) ?? null,
-        memberAvatars: avatarsOf.get(channel.id) ?? [],
-        memberRole: role,
-        mentionCount: mentionCountOf.get(channel.id) ?? 0,
-        peerUserId: peerOf(channel, this.userId),
-        replyJobs: replyJobsOf.get(channel.id) ?? [],
-        unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
-      };
-    });
+    const joined = rows.map(
+      ({ channel, lastReadSequence, pinnedAt, role, shareId, shareSlug, ...agent }) => {
+        const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
+        return {
+          ...channel,
+          agentIds: agentIdsOf.get(channel.id) ?? [],
+          sharedAgent,
+          // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
+          sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+          canDelete: hasRole(role, 'admin'),
+          joined: true,
+          lastMessage: lastMessageOf.get(channel.id) ?? null,
+          memberAvatars: avatarsOf.get(channel.id) ?? [],
+          memberRole: role,
+          mentionCount: mentionCountOf.get(channel.id) ?? 0,
+          peerUserId: peerOf(channel, this.userId),
+          pinnedAt,
+          replyJobs: replyJobsOf.get(channel.id) ?? [],
+          threadMentions: threadMentionsOf.get(channel.id) ?? [],
+          unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+        };
+      },
+    );
     return [
       ...joined,
       // Not joined: nothing is unread or pending for the caller yet.
@@ -697,7 +742,9 @@ export class ChannelRepository {
         memberRole: null,
         mentionCount: 0,
         peerUserId: peerOf(channel, this.userId),
+        pinnedAt: null,
         replyJobs: [],
+        threadMentions: [],
         unreadCount: 0,
       })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -1084,6 +1131,17 @@ export class ChannelRepository {
   /** Rewrites the text of the caller's own message; see `editMessage`. */
   editMessage = async (channelId: string, messageId: string, content: string) =>
     this.write(channelId, (tx) => editMessage(tx, channelId, this.userId, messageId, content));
+
+  /** Deletes the caller's own message, or any as an admin; see `deleteMessage`. */
+  deleteMessage = async (channelId: string, messageId: string): Promise<ChannelJobItem[]> =>
+    this.write(channelId, (tx, { member }) =>
+      deleteMessage(
+        tx,
+        channelId,
+        { admin: hasRole(member.role, 'admin'), userId: this.userId },
+        messageId,
+      ),
+    );
 
   /** Sends an unassigned message back to the decision model. Its author or an admin may retry. */
   retryRouting = async (channelId: string, messageId: string): Promise<ChannelMessageItem> =>

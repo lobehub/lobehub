@@ -1,15 +1,16 @@
-import { FileTextIcon } from 'lucide-react';
 import type { RouteObject } from 'react-router';
 
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
-import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
-import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { goalDetailRouteMeta } from '@/features/AgentGoals/routeMeta';
+import { taskRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
   agentAutomationsRouteMeta,
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
+  agentDocumentsRouteMeta,
   agentEngineRouteMeta,
   agentEnvironmentRouteMeta,
+  agentGoalsRouteMeta,
   agentInstructionRouteMeta,
   agentKnowledgeRouteMeta,
   agentMailRouteMeta,
@@ -19,6 +20,7 @@ import {
   agentShareRouteMeta,
   agentSkillsRouteMeta,
   agentStatisticsRouteMeta,
+  agentTasksRouteMeta,
   agentToolsRouteMeta,
   agentWebhookRouteMeta,
   topicsRouteMeta,
@@ -45,13 +47,7 @@ export const agentPageChildren: RouteObject[] = [
           () => import('@/routes/(main)/agent/docs'),
           'Desktop > Chat > DocumentsIndex',
         ),
-        handle: {
-          meta: routeMeta({
-            icon: FileTextIcon,
-            Skeleton: NoRouteSkeleton,
-            titleKey: 'navigation.document',
-          }),
-        },
+        handle: { meta: agentDocumentsRouteMeta },
         index: true,
       },
       {
@@ -73,7 +69,7 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/goals'), 'Desktop > Chat > Goals'),
-    handle: { meta: goalsRouteMeta },
+    handle: { meta: agentGoalsRouteMeta },
     path: 'goals',
   },
   {
@@ -284,7 +280,7 @@ export const agentPageChildren: RouteObject[] = [
   },
   {
     element: dynamicElement(() => import('@/routes/(main)/agent/tasks'), 'Desktop > Chat > Tasks'),
-    handle: { meta: tasksRouteMeta },
+    handle: { meta: agentTasksRouteMeta },
     loader: scheduledTaskListLoader,
     path: 'tasks',
   },

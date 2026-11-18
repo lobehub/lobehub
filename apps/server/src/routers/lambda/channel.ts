@@ -3,7 +3,10 @@ import { CHANNEL_LIMITS, SIGNAL_DECISION_OUTCOMES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import {
+  denyExternalContact,
+  wsExternalCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SCOPE_READ_MAX_LIMIT, SignalDecisionModel } from '@/database/models/signalDecision';
 import { ChannelError } from '@/database/repositories/channel';
 import { router } from '@/libs/trpc/lambda';
@@ -29,28 +32,38 @@ const agentSelection = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   workingDirectory: z.string().trim().min(1).max(4096).optional(),
 });
-const channelProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
-  if (!(await isChannelEnabled(ctx.userId)))
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'Channels are not enabled for this account',
+const channelBaseProcedure = wsExternalCompatProcedure
+  .use(serverDatabase)
+  .use(async ({ ctx, next }) => {
+    if (!(await isChannelEnabled(ctx.userId)))
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'Channels are not enabled for this account',
+      });
+    const result = await next({
+      ctx: {
+        channelService: new ChannelService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+          projectModelOptions(ctx),
+        ),
+      },
     });
-  const result = await next({
-    ctx: {
-      channelService: new ChannelService(
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-        projectModelOptions(ctx),
-      ),
-    },
+    if (!result.ok && result.error.cause instanceof ChannelError) {
+      const cause = result.error.cause;
+      throw new TRPCError({ cause, code: cause.code, message: cause.message });
+    }
+    return result;
   });
-  if (!result.ok && result.error.cause instanceof ChannelError) {
-    const cause = result.error.cause;
-    throw new TRPCError({ cause, code: cause.code, message: cause.message });
-  }
-  return result;
-});
+
+/**
+ * What a workspace's external contact may do in it: their one-on-one conversations with the
+ * members open to them. The Channel repository rechecks the pairing on every open and send.
+ */
+const externalChannelProcedure = channelBaseProcedure;
+/** Everything else is for members (and the personal space) only. */
+const channelProcedure = channelBaseProcedure.use(denyExternalContact);
 
 export const channelRouter = router({
   ...channelHistoryProcedures,
@@ -216,7 +229,7 @@ export const channelRouter = router({
       data: await ctx.channelService.createGroupFromDirect(input.channelId, input),
       success: true,
     })),
-  detail: channelProcedure
+  detail: externalChannelProcedure
     .input(
       z.object({
         before: z.number().int().positive().optional(),
@@ -227,6 +240,20 @@ export const channelRouter = router({
     )
     .query(async ({ ctx, input }) => ({
       data: await ctx.channelService.detail(input.channelId, input),
+      success: true,
+    })),
+  /** Messages in a Channel and its Threads containing every word of `query`, newest first. */
+  searchMessages: channelProcedure
+    .input(
+      z.object({
+        before: z.number().int().positive().optional(),
+        channelId,
+        limit: z.number().int().min(1).max(50).optional(),
+        query: z.string().trim().min(1).max(200),
+      }),
+    )
+    .query(async ({ ctx, input: { channelId, ...options } }) => ({
+      data: await ctx.channelService.repository.searchMessages(channelId, options),
       success: true,
     })),
   /**
@@ -250,7 +277,7 @@ export const channelRouter = router({
    * The one-on-one conversation with another person: a mutual contact in the personal space, a
    * fellow member in a workspace.
    */
-  openPeer: channelProcedure
+  openPeer: externalChannelProcedure
     .input(z.object({ userId: z.string().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
       const access = await ctx.channelService.openPeer(input.userId);
@@ -272,14 +299,21 @@ export const channelRouter = router({
     const { readable } = await ctx.channelService.leave(input.channelId);
     return { readable, success: true };
   }),
-  list: channelProcedure.query(async ({ ctx }) => ({
+  list: externalChannelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,
   })),
-  markRead: channelProcedure
+  markRead: externalChannelProcedure
     .input(z.object({ channelId, sequence: z.number().int().nonnegative() }))
     .mutation(async ({ ctx, input }) => ({
       data: await ctx.channelService.repository.markRead(input.channelId, input.sequence),
+      success: true,
+    })),
+  /** Pins or unpins the conversation atop the caller's own list. */
+  setPinned: externalChannelProcedure
+    .input(z.object({ channelId, pinned: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.setPinned(input.channelId, input.pinned),
       success: true,
     })),
   remove: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
@@ -292,7 +326,7 @@ export const channelRouter = router({
       await ctx.channelService.setMemberMuted(input.channelId, input.memberId, input.muted);
       return { success: true };
     }),
-  editMessage: channelProcedure
+  editMessage: externalChannelProcedure
     .input(
       z.object({
         channelId,
@@ -304,6 +338,12 @@ export const channelRouter = router({
       data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
       success: true,
     })),
+  deleteMessage: channelProcedure
+    .input(z.object({ channelId, messageId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.deleteMessage(input.channelId, input.messageId);
+      return { success: true };
+    }),
   /** An admin removes a person or an Agent from a group Channel. */
   removeMember: channelProcedure
     .input(z.object({ channelId, memberId: z.uuid() }))
@@ -341,7 +381,7 @@ export const channelRouter = router({
       data: await ctx.channelService.retryRouting(input.channelId, input.messageId),
       success: true,
     })),
-  send: channelProcedure
+  send: externalChannelProcedure
     .input(
       z.object({
         channelId,

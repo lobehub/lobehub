@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ToolResolver } from '@lobechat/context-engine';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +14,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/database/schemas';
+import { buildToolDiscoveryConfig } from '@/server/modules/AgentRuntime/executorHelpers';
 import { discoverTools } from '@/server/services/aiAgent/pipeline/toolDiscovery';
 import {
   installMarketplaceMcpConnector,
@@ -87,8 +89,15 @@ const installFromServer = (
     { agentId: AGENT_ID, source: 'market' },
   );
 
+interface NextRunOptions {
+  /** Manual skill-activate mode: the run has no activator. */
+  manual?: boolean;
+  /** The agent's `plugins`; the install pins the MCP on the agent by default. */
+  plugins?: string[];
+}
+
 /** The next run of the agent the install pinned the MCP on. */
-const nextRun = () =>
+const nextRun = (options: NextRunOptions = {}) =>
   discoverTools(
     {
       agentDocumentsService: { hasDocuments: vi.fn().mockResolvedValue(false) },
@@ -104,7 +113,10 @@ const nextRun = () =>
       userId,
     } as never,
     {
-      agentConfig: { chatConfig: {}, plugins: [IDENTIFIER] },
+      agentConfig: {
+        chatConfig: options.manual ? { skillActivateMode: 'manual' } : {},
+        plugins: options.plugins ?? [IDENTIFIER],
+      },
       appContext: undefined,
       canUseDevice: false,
       model: 'test-model',
@@ -125,6 +137,11 @@ const nextRun = () =>
       throwIfExecutionAborted: vi.fn(),
     } as never,
   );
+
+const TOOL_NAME = `${IDENTIFIER}____fetch____mcp`;
+
+const offeredToolNames = (tools: { function: { name: string } }[] | undefined) =>
+  (tools ?? []).map((tool) => tool.function.name);
 
 beforeEach(async () => {
   await db.delete(users);
@@ -148,7 +165,7 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
       },
     },
   ])(
-    'installs a manifest with $label into user_connectors only, and the next run can call it',
+    'installs a manifest with $label into user_connectors only, and the next run can activate and call it',
     async ({ served }) => {
       const { installedNow, resolution } = await installFromServer(served);
 
@@ -169,13 +186,77 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
         api: [expect.objectContaining({ name: 'fetch' })],
         mcpParams: expect.objectContaining({ type: 'cloud' }),
       });
-      expect(run.toolsResult.enabledToolIds).toContain(IDENTIFIER);
-      // The model is offered the connector's tool by name
-      expect((run.tools ?? []).map((tool) => tool.function.name)).toContain(
-        `${IDENTIFIER}____fetch____mcp`,
+      // The pin turns the connector on: the run lists it for the activator
+      // instead of offering its tools up front.
+      expect(run.toolSourceMap[IDENTIFIER]).toBe('mcp');
+      expect(run.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
+      expect(offeredToolNames(run.tools)).not.toContain(TOOL_NAME);
+      expect(
+        (
+          buildToolDiscoveryConfig(
+            { manifestMap: run.toolManifestMap } as never,
+            run.toolsResult.enabledToolIds,
+          )?.availableTools ?? []
+        ).map((tool) => tool.identifier),
+      ).toContain(IDENTIFIER);
+
+      // Activating it offers the model the connector's tool by name
+      const activated = new ToolResolver().resolve(
+        {
+          enabledToolIds: run.toolsResult.enabledToolIds,
+          executorMap: run.toolExecutorMap,
+          manifestMap: run.toolManifestMap,
+          sourceMap: run.toolSourceMap,
+          tools: run.tools ?? [],
+        },
+        {
+          activatedTools: [
+            {
+              activatedAtStep: 1,
+              id: IDENTIFIER,
+              manifest: run.toolManifestMap[IDENTIFIER],
+              source: 'discovery',
+            },
+          ],
+        },
       );
+      expect(activated.enabledToolIds).toContain(IDENTIFIER);
+      expect(offeredToolNames(activated.tools)).toContain(TOOL_NAME);
+      // …and a later operation can restore that activation through the engine
+      const restored = run.toolsEngine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [IDENTIFIER],
+      });
+      expect(restored.enabledToolIds).toContain(IDENTIFIER);
+      expect(offeredToolNames(restored.tools)).toContain(TOOL_NAME);
+
+      // A legacy manual preference keeps the activator, so the install is still deferred
+      const manualRun = await nextRun({ manual: true });
+      expect(manualRun.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
+      expect(offeredToolNames(manualRun.tools)).not.toContain(TOOL_NAME);
+      expect(
+        (
+          buildToolDiscoveryConfig(
+            { manifestMap: manualRun.toolManifestMap } as never,
+            manualRun.toolsResult.enabledToolIds,
+          )?.availableTools ?? []
+        ).map((tool) => tool.identifier),
+      ).toContain(IDENTIFIER);
     },
   );
+
+  it('keeps the install out of the run of an agent that has not turned it on', async () => {
+    await installFromServer();
+
+    const run = await nextRun({ plugins: [] });
+
+    expect(run.toolManifestMap[IDENTIFIER]).toBeUndefined();
+    expect(run.toolsResult.enabledToolIds).not.toContain(IDENTIFIER);
+    expect(offeredToolNames(run.tools)).not.toContain(TOOL_NAME);
+  });
 
   it('refuses a stdio MCP the market does not host, writing nothing', async () => {
     const { installedNow, resolution } = await installFromServer(manifest, {

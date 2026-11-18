@@ -156,6 +156,10 @@ class TaskService {
     options?: { takeOwnership?: boolean },
   ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
 
+  /** File a task without a project, with all its subtasks, under `projectId`. */
+  moveTreeToProject = async (id: string, projectId: string) =>
+    lambdaClient.task.moveTreeToProject.mutate({ id, projectId });
+
   update = async (
     id: string,
     data: {

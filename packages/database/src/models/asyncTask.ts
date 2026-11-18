@@ -10,7 +10,7 @@ import {
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@lobechat/types';
-import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AsyncTaskSelectItem, NewAsyncTaskItem } from '../schemas';
 import { asyncTasks } from '../schemas';
@@ -120,6 +120,35 @@ export class AsyncTaskModel {
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(asyncTasks.id, taskId), this.ownership()));
   }
+
+  /**
+   * Move a pending task to processing. Returns false when the task is gone or
+   * another runner already claimed or settled it, so one task runs at most once.
+   */
+  claimPending = async (taskId: string): Promise<boolean> => {
+    const [claimed] = await this.db
+      .update(asyncTasks)
+      .set({ status: AsyncTaskStatus.Processing, updatedAt: new Date() })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          this.ownership(),
+          eq(asyncTasks.status, AsyncTaskStatus.Pending),
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+
+    return Boolean(claimed);
+  };
+
+  /** All tasks of one type in the current scope, newest first. */
+  findAllByType = async (type: AsyncTaskType): Promise<AsyncTaskSelectItem[]> => {
+    return this.db
+      .select()
+      .from(asyncTasks)
+      .where(and(this.ownership(), eq(asyncTasks.type, type)))
+      .orderBy(desc(asyncTasks.createdAt));
+  };
 
   findActiveByType = async (type: AsyncTaskType) => {
     return this.db.query.asyncTasks.findFirst({

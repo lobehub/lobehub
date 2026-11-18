@@ -11,7 +11,6 @@ import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
-import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
   aiAgentService,
@@ -37,6 +36,7 @@ import {
   shouldUseGatewayResume as resolveGatewayResume,
 } from './gatewayResume';
 import { createInterventionProjection } from './interventionProjection';
+import { submitRemoteHeteroIntervention } from './remoteHeteroIntervention';
 
 /**
  * Actions for controlling conversation operations like cancellation and error handling
@@ -1730,7 +1730,10 @@ export class ConversationControlActionImpl {
       optimisticContext,
     );
     if (actionType === 'submit') {
-      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      // A share visitor cannot write the creator's rows; the tool result persists it.
+      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext, {
+        persist: !effectiveContext.agentShareId,
+      });
     }
     if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
 
@@ -1770,22 +1773,13 @@ export class ConversationControlActionImpl {
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
-        await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
-          actionType === 'submit'
-            ? {
-                operationId: remoteOperationId,
-                resolutionRequestId,
-                result: payload ?? {},
-                toolCallId,
-              }
-            : {
-                cancelReason: 'user_cancelled',
-                cancelled: true,
-                operationId: remoteOperationId,
-                resolutionRequestId,
-                toolCallId,
-              },
-        );
+        await submitRemoteHeteroIntervention(effectiveContext, {
+          actionType,
+          operationId: remoteOperationId,
+          payload,
+          resolutionRequestId,
+          toolCallId,
+        });
       }
     } catch (err) {
       if (this.#discardSettledHeteroQuestion(toolMessageId)) return;
@@ -1854,16 +1848,13 @@ export class ConversationControlActionImpl {
     toolMessageId: string,
     answers: Record<string, unknown>,
     context?: OptimisticUpdateContext,
+    { persist = true }: { persist?: boolean } = {},
   ): Promise<void> => {
     this.#get().internal_dispatchMessage(
-      {
-        id: toolMessageId,
-        key: 'askUserAnswers',
-        type: 'updatePluginState',
-        value: answers,
-      },
+      { id: toolMessageId, key: 'askUserAnswers', type: 'updatePluginState', value: answers },
       context,
     );
+    if (!persist) return;
     try {
       const { messageService } = await import('@/services/message');
       const ctx = this.#get().internal_getConversationContext(context);

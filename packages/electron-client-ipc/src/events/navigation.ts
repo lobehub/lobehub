@@ -63,4 +63,10 @@ export interface NavigationBroadcastEvents {
 
   /** Ask the renderer to open the Recently Viewed surface. */
   openRecentlyViewed: () => void;
+
+  /**
+   * Ask renderer to reopen the most recently closed tab (or bulk-closed tabs).
+   * Triggered by Cmd/Ctrl+Shift+T on the main window.
+   */
+  reopenClosedTab: () => void;
 }

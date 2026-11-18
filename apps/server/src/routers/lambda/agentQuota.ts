@@ -1,4 +1,4 @@
-import type { QuotaDeviceAccount } from '@lobechat/types';
+import type { QuotaAgentAvailability, QuotaDeviceAccount } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -435,6 +435,30 @@ export const agentQuotaRouter = router({
   resolveAccountLoads: quotaProcedure
     .input(z.object({ accountIds: z.array(z.string()) }))
     .query(async ({ ctx, input }) => ctx.quotaService.resolveAccountLoads(input.accountIds)),
+
+  /**
+   * Whether an agent would find quota on the device it runs on, judged on the
+   * accounts a run there is routed to (its device pick, a legacy pin, or the
+   * pool's candidates). Presence reads this instead of judging the whole pool,
+   * which reads "idle" while a device pin is spent.
+   */
+  resolveAgentAvailability: quotaProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        /** Gateway id of the device the agent runs on; omitted for a run without one. */
+        deviceId: z.string().optional(),
+        modelScope: z.string().optional(),
+        provider: providerSchema.optional(),
+      }),
+    )
+    .query(async ({ ctx, input }): Promise<QuotaAgentAvailability> =>
+      ctx.quotaService.resolveAgentAvailability(input.agentId, {
+        deviceId: await deviceRowIdOf(ctx, input.deviceId),
+        modelScope: input.modelScope,
+        provider: input.provider,
+      }),
+    ),
 
   selectAccountForAgent: quotaProcedure
     .input(

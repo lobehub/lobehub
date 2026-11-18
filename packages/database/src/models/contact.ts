@@ -6,6 +6,8 @@ import type {
   ContactRequestItem,
   ContactSearchResult,
   ContactUserItem,
+  ContactUserProfile,
+  ContactWorkspace,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
@@ -23,6 +25,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
+import { ilikeContains } from '../utils/like';
 import { notTrashed } from '../utils/softDelete';
 import { isUuid } from '../utils/uuid';
 
@@ -300,6 +303,125 @@ export class ContactModel {
     return user;
   };
 
+  /**
+   * People the caller can talk to one-on-one in this scope, the ones a conversation between two
+   * people opens with: personal contacts; in a workspace, its other members, then the external
+   * contacts paired with the caller; for an external contact, the members paired with them.
+   * `query` narrows by a case-insensitive part of the display name or @handle.
+   */
+  listPeople = async (options: {
+    limit: number;
+    query?: string;
+  }): Promise<{ hasMore: boolean; people: ContactUserProfile[] }> => {
+    const role = await this.scopeRole();
+    // A handle is matched without its `@`.
+    const query = options.query?.trim().replace(/^@/, '').toLowerCase() || undefined;
+    const matches = (person: ContactUserProfile) =>
+      !query ||
+      [person.fullName, person.username].some((value) => value?.toLowerCase().includes(query));
+
+    const contacts =
+      role === 'member'
+        ? (await this.listExternals()).filter((item) => item.external?.openedToMe)
+        : await this.listOwnPeople(role);
+    const members =
+      role === 'member'
+        ? await this.db
+            .select(userProfileColumns)
+            .from(workspaceMembers)
+            .innerJoin(users, eq(users.id, workspaceMembers.userId))
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, this.workspaceId!),
+                isNull(workspaceMembers.deletedAt),
+                not(eq(workspaceMembers.userId, this.userId)),
+                query
+                  ? or(ilikeContains(users.fullName, query), ilikeContains(users.username, query))
+                  : undefined,
+              ),
+            )
+            .orderBy(users.fullName, users.username)
+            // One more than asked tells whether more matched.
+            .limit(options.limit + 1)
+        : [];
+
+    const people = [...members, ...contacts.map((item) => item.user).filter(matches)];
+    return { hasMore: people.length > options.limit, people: people.slice(0, options.limit) };
+  };
+
+  /**
+   * Everyone in this scope's address book except the caller: personal contacts; in a workspace,
+   * its other members and every external contact of it, whoever invited them. Unlike
+   * {@link listPeople} this ignores who the caller is in the scope, because it answers for a
+   * resource the scope owns (an Agent's share), not for the caller's own conversations.
+   */
+  listAddressBookPeople = async (): Promise<ContactUserProfile[]> => {
+    if (!this.workspaceId) {
+      const rows = await this.db
+        .select(userProfileColumns)
+        .from(userContacts)
+        .innerJoin(users, eq(users.id, userContacts.contactUserId))
+        .where(and(this.userEntryWhere(), eq(userContacts.userId, this.userId)))
+        .orderBy(desc(userContacts.createdAt));
+      return rows;
+    }
+
+    const [members, externals] = await Promise.all([
+      this.db
+        .select(userProfileColumns)
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, this.workspaceId),
+            isNull(workspaceMembers.deletedAt),
+            not(eq(workspaceMembers.userId, this.userId)),
+          ),
+        )
+        .orderBy(users.fullName, users.username),
+      this.listExternals(),
+    ]);
+    return [...members, ...externals.map((item) => item.user)];
+  };
+
+  /**
+   * The subset of `userIds` that {@link listAddressBookPeople} would list, without loading it:
+   * the check an access grant re-runs on every use, so removing someone from the address book
+   * (or from the workspace) ends what was granted to them.
+   */
+  filterAddressBookPeople = async (userIds: string[]): Promise<string[]> => {
+    const candidates = [...new Set(userIds)].filter((id) => id !== this.userId);
+    if (candidates.length === 0) return [];
+
+    const entries = await this.db
+      .select({ userId: userContacts.contactUserId })
+      .from(userContacts)
+      .where(
+        and(
+          this.userEntryWhere(),
+          inArray(userContacts.contactUserId, candidates),
+          // Personal: my own entries. Workspace: any member's external contact; the paired
+          // member side of the same pair is a member, matched below instead.
+          this.workspaceId ? not(this.contactIsMember()) : eq(userContacts.userId, this.userId),
+        ),
+      );
+    const members = this.workspaceId
+      ? await this.db
+          .select({ userId: workspaceMembers.userId })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, this.workspaceId),
+              isNull(workspaceMembers.deletedAt),
+              inArray(workspaceMembers.userId, candidates),
+            ),
+          )
+      : [];
+
+    const found = new Set([...entries, ...members].map((row) => row.userId));
+    return candidates.filter((id) => found.has(id));
+  };
+
   relationTo = async (otherUserId: string): Promise<ContactRelation> => {
     if (otherUserId === this.userId) return 'self';
     if ((await this.scopeRole()) === 'member' && (await this.isMember(otherUserId)))
@@ -481,8 +603,9 @@ export class ContactModel {
       return { contactUserId: requesterId, workspaceId };
     });
 
-  declineRequest = async (requestId: string) => {
-    await this.db.transaction(async (tx) => {
+  /** Returns who sent it, so they can be told their request is no longer pending. */
+  declineRequest = async (requestId: string): Promise<{ requesterId: string }> =>
+    this.db.transaction(async (tx) => {
       const request = await this.incomingPending(tx, requestId);
       // Same rule as accepting: only a request still pending can be answered.
       const [declined] = await tx
@@ -493,10 +616,11 @@ export class ContactModel {
         )
         .returning({ id: userContactRequests.id });
       if (!declined) throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
+      return { requesterId: request.requesterId };
     });
-  };
 
-  cancelRequest = async (requestId: string) => {
+  /** Returns who it was sent to, so their incoming request can disappear. */
+  cancelRequest = async (requestId: string): Promise<{ addresseeId: string }> => {
     if (!isUuid(requestId))
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
     const [cancelled] = await this.db
@@ -509,8 +633,9 @@ export class ContactModel {
           eq(userContactRequests.status, 'pending'),
         ),
       )
-      .returning({ id: userContactRequests.id });
+      .returning({ addresseeId: userContactRequests.addresseeId });
     if (!cancelled) throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
+    return { addresseeId: cancelled.addresseeId };
   };
 
   /**
@@ -585,6 +710,43 @@ export class ContactModel {
           ),
         );
     });
+  };
+
+  /**
+   * The workspaces I am an external contact of, for the space switcher: paired there with a
+   * member who still is one, and not a member myself. Independent of the active scope.
+   */
+  listExternalWorkspaces = async (): Promise<ContactWorkspace[]> => {
+    const myMembership = alias(workspaceMembers, 'my_membership');
+    return this.db
+      .selectDistinct({ avatar: workspaces.avatar, id: workspaces.id, name: workspaces.name })
+      .from(userContacts)
+      .innerJoin(workspaces, eq(workspaces.id, userContacts.workspaceId))
+      .innerJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, userContacts.workspaceId),
+          eq(workspaceMembers.userId, userContacts.contactUserId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .leftJoin(
+        myMembership,
+        and(
+          eq(myMembership.workspaceId, userContacts.workspaceId),
+          eq(myMembership.userId, this.userId),
+          isNull(myMembership.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(userContacts.userId, this.userId),
+          eq(userContacts.type, 'user'),
+          isNotNull(userContacts.workspaceId),
+          isNull(myMembership.userId),
+        ),
+      )
+      .orderBy(workspaces.name);
   };
 
   /** Someone paired with a member here who is not a member themselves. */

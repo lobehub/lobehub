@@ -134,6 +134,11 @@ export async function applyMainIntent(
       return;
     }
 
+    case 'updateBackgroundTask': {
+      await applyBackgroundTask(deps, state, intent);
+      return;
+    }
+
     case 'setToolIntervention': {
       await applyToolIntervention(deps, state, intent, stepIndex);
       return;
@@ -195,6 +200,32 @@ async function applyToolResult(
   });
   if (!result.success) {
     throw new Error(`Failed to persist tool_result for message ${toolMsgId}`);
+  }
+}
+
+/**
+ * Store a background task snapshot on the tool message that started it. Only
+ * the `backgroundTask` key is written: plugin state patches merge per key, so
+ * the tool's own result state stays. The run's operation id goes with it so a
+ * client can route a stop to this run and tell whether it is still alive.
+ */
+async function applyBackgroundTask(
+  deps: HeterogeneousPersistenceHandlerDeps,
+  state: OperationState,
+  intent: Extract<MainAgentIntent, { kind: 'updateBackgroundTask' }>,
+): Promise<void> {
+  const toolMsgId = state.toolMsgIdByCallId.get(intent.toolCallId);
+  if (!toolMsgId) {
+    log('background_task for unknown toolCallId=%s op=%s', intent.toolCallId, state.operationId);
+    return;
+  }
+
+  const backgroundTask = { ...intent.backgroundTask, operationId: state.operationId };
+  const result = await deps.messageModel.updateToolMessage(toolMsgId, {
+    pluginState: { backgroundTask },
+  });
+  if (!result.success) {
+    throw new Error(`Failed to persist background_task for message ${toolMsgId}`);
   }
 }
 

@@ -1,4 +1,9 @@
-import { channelMessageEditedAt, channelMessageReceipt, channelMessageVia } from '@lobechat/types';
+import {
+  channelMessageDeletedAt,
+  channelMessageEditedAt,
+  channelMessageReceipt,
+  channelMessageVia,
+} from '@lobechat/types';
 import {
   and,
   asc,
@@ -23,6 +28,7 @@ import {
   channelMessages,
   channels,
   channelThreads,
+  devices,
   files as fileTable,
   topics,
   users,
@@ -35,7 +41,7 @@ import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
 
-const publicMessageColumns = {
+export const publicMessageColumns = {
   ...getTableColumns(channelMessages),
   senderAgentAvatar: agents.avatar,
   senderAgentName: agents.name,
@@ -54,7 +60,7 @@ type MessageRow = typeof channelMessages.$inferSelect & {
   senderUsername: string | null;
 };
 
-const publicMessage = (row: MessageRow, fileIds: string[]) => {
+export const publicMessage = (row: MessageRow, fileIds: string[]) => {
   const {
     senderAgentAvatar,
     senderAgentName,
@@ -74,6 +80,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    deletedAt: channelMessageDeletedAt(message.metadata),
     editedAt: channelMessageEditedAt(message.metadata),
     // On an Agent's message, the exchange between Agents it reports from.
     receipt: (() => {
@@ -304,6 +311,73 @@ const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
     .orderBy(desc(channelJobs.createdAt))
     .limit(limit);
 
+interface MemberDevice {
+  agentId: string | null;
+  deviceId: string | null;
+  deviceOwnerId: string | null;
+}
+
+/**
+ * Display names for the devices Agent members run on, keyed by member id. A device id is unique
+ * only within its principal, so each one resolves the way execution does: the Channel's workspace
+ * device first, else the personal device of the member who owns it.
+ */
+const memberDeviceNames = async (tx: Transaction, channelId: string, members: MemberDevice[]) => {
+  const configured = members.filter(
+    (member): member is MemberDevice & { deviceId: string } =>
+      !!member.agentId && !!member.deviceId,
+  );
+  const names = new Map<MemberDevice, string>();
+  if (!configured.length) return names;
+
+  const [channel] = await tx
+    .select({ workspaceId: channels.workspaceId })
+    .from(channels)
+    .where(eq(channels.id, channelId));
+  const owners = [
+    ...new Set(
+      configured.flatMap((member) => (member.deviceOwnerId ? [member.deviceOwnerId] : [])),
+    ),
+  ];
+  const scopes = [
+    channel?.workspaceId ? eq(devices.workspaceId, channel.workspaceId) : undefined,
+    owners.length ? and(isNull(devices.workspaceId), inArray(devices.userId, owners)) : undefined,
+  ].filter((scope): scope is SQL => !!scope);
+  if (!scopes.length) return names;
+
+  const rows = await tx
+    .select({
+      deviceId: devices.deviceId,
+      friendlyName: devices.friendlyName,
+      hostname: devices.hostname,
+      userId: devices.userId,
+      workspaceId: devices.workspaceId,
+    })
+    .from(devices)
+    .where(
+      and(
+        inArray(
+          devices.deviceId,
+          configured.map((member) => member.deviceId),
+        ),
+        or(...scopes),
+      ),
+    );
+  for (const member of configured) {
+    const row =
+      rows.find((entry) => entry.deviceId === member.deviceId && entry.workspaceId) ??
+      rows.find(
+        (entry) =>
+          entry.deviceId === member.deviceId &&
+          !entry.workspaceId &&
+          entry.userId === member.deviceOwnerId,
+      );
+    const name = row?.friendlyName || row?.hostname;
+    if (name) names.set(member, name);
+  }
+  return names;
+};
+
 export const readChannelView = async (
   tx: Transaction,
   channelId: string,
@@ -332,6 +406,9 @@ export const readChannelView = async (
         userAvatar: users.avatar,
         lastReadSequence: channelMembers.lastReadSequence,
         joinedAt: channelMembers.createdAt,
+        deviceId: sql<string | null>`${channelMembers.config}->>'deviceId'`,
+        deviceOwnerId: sql<string | null>`${channelMembers.config}->>'deviceOwnerId'`,
+        workingDirectory: sql<string | null>`${channelMembers.config}->>'workingDirectory'`,
       })
       .from(channelMembers)
       .leftJoin(users, eq(users.id, channelMembers.userId))
@@ -387,6 +464,7 @@ export const readChannelView = async (
           THREAD_ACTIVE_JOB_LIMIT,
         ),
   ]);
+  const deviceNames = await memberDeviceNames(tx, channelId, members);
   const jobs = [...ownJobs, ...threadJobs].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
@@ -430,8 +508,11 @@ export const readChannelView = async (
     : [];
   const quotes = new Map(
     quoted.map((row) => {
-      const { author, content, id, sequence, threadId } = publicMessage(row, []);
-      return [id, { author, content: content.slice(0, 240), id, sequence, threadId }] as const;
+      const { author, content, deletedAt, id, sequence, threadId } = publicMessage(row, []);
+      return [
+        id,
+        { author, content: content.slice(0, 240), deletedAt, id, sequence, threadId },
+      ] as const;
     }),
   );
   const files = await fileIdsByMessage(tx, [
@@ -464,7 +545,16 @@ export const readChannelView = async (
     attachments,
     hasMore: reversed.length > limit,
     jobs,
-    members,
+    members: members.map((row) => {
+      const { deviceId, deviceOwnerId: _deviceOwnerId, workingDirectory, ...member } = row;
+      return {
+        ...member,
+        environment:
+          member.agentId && (deviceId || workingDirectory)
+            ? { deviceId, deviceName: deviceNames.get(row) ?? null, workingDirectory }
+            : null,
+      };
+    }),
     threads: threads.map((entry) => {
       const title = entry.metadata?.title;
       const named = typeof title === 'string' && title ? { ...entry, title } : entry;

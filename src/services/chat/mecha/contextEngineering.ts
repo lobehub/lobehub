@@ -245,9 +245,15 @@ export const contextEngineering = async ({
   let toolDiscoveryConfig: ToolDiscoveryConfig | undefined;
   if (isLobeToolsEnabled) {
     const toolState = getToolStoreState();
+    // Disabled tools and connectors the agent has off are in neither set: the
+    // engine dropped their manifests, so listing them would only invite an
+    // activation that cannot succeed.
+    const disabledIdSet = new Set(disabledPluginIds ?? []);
     const availableTools = toolSelectors
       .availableToolsForDiscovery(toolState)
-      .filter((tool) => !enabledToolSet.has(tool.identifier));
+      .filter(
+        (tool) => !enabledToolSet.has(tool.identifier) && !disabledIdSet.has(tool.identifier),
+      );
 
     if (availableTools.length > 0) {
       toolDiscoveryConfig = { availableTools };
@@ -282,6 +288,7 @@ export const contextEngineering = async ({
       },
       agentId,
       disabledPluginIds,
+      discoverableTools: toolDiscoveryConfig?.availableTools,
       // The Profile panel edits `activeAgentId` / `activeGroupId`, not the
       // builder agent that is answering.
       editingAgentId: tools?.includes(AgentBuilderIdentifier)
@@ -340,6 +347,7 @@ export const contextEngineering = async ({
       identity: { name: agentMeta?.name, title: agentMeta?.title },
       inputTemplate,
       knowledge: { fileContents, knowledgeBases },
+      revokedDocumentReads: facts.revokedDocumentReads,
       systemRole,
     },
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.

@@ -1644,6 +1644,9 @@ table channel_members {
   user_id text
   role text
   last_read_sequence integer
+  section_id uuid
+  pinned boolean [not null, default: false]
+  hidden boolean [not null, default: false]
   pinned_at "timestamp with time zone"
   agent_id text
   name text
@@ -1658,7 +1661,9 @@ table channel_members {
     (channel_id, id) [name: 'channel_members_scope_unique', unique]
     (channel_id, user_id) [name: 'channel_members_channel_user_unique', unique]
     user_id [name: 'channel_members_user_id_idx']
+    section_id [name: 'channel_members_section_id_idx']
     agent_id [name: 'channel_members_agent_id_idx']
+    
     
     
     
@@ -1710,6 +1715,21 @@ table channel_messages {
     
     
     
+  }
+}
+
+table channel_sections {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  name text [not null]
+  sort integer
+  collapsed boolean [not null, default: false]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, workspace_id) [name: 'channel_sections_user_id_workspace_id_idx']
   }
 }
 
@@ -2149,6 +2169,7 @@ table environments {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   workspace_id text
+  project_id text
   name varchar(255) [not null]
   description text
   enabled boolean [not null, default: true]
@@ -2161,6 +2182,7 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
+    project_id [name: 'environments_project_id_unique', unique]
     (workspace_id, visibility, user_id) [name: 'environments_workspace_visibility_idx']
     (user_id, name) [name: 'environments_user_name_unique', unique]
     (workspace_id, user_id, name) [name: 'environments_workspace_user_name_unique', unique]

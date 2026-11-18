@@ -11,6 +11,7 @@ import { sx } from '@/styles/sx';
 import { useAcceptanceScope } from './AcceptanceScope';
 import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
 import AcceptanceCheckOwnerToolbar from './Checks/AcceptanceCheckOwnerToolbar';
+import { columnStyles } from './columnStyles';
 import AcceptanceDiscussion from './Comments/AcceptanceDiscussion';
 import { commentIdFromHash } from './Comments/anchor';
 import CollaborationRequestBanner from './Comments/CollaborationRequestBanner';
@@ -40,11 +41,6 @@ import { useAcceptanceBundle } from './useAcceptanceBundle';
 import { useAcceptanceTurn } from './useAcceptanceTurn';
 
 const styles = stylex.create({
-  column: {
-    width: '100%',
-    marginInline: 'auto',
-    paddingInline: { 'default': '24px', '@media (width <= 767px)': '16px' },
-  },
   headerBand: {
     flex: 'none',
     paddingBlockStart: '20px',
@@ -89,11 +85,16 @@ export const AcceptanceOverview = ({
   const gateDossier =
     data?.subject.type === 'goal_gate' ? rounds.at(-1)?.run.metadata?.releaseGate : undefined;
   const resourceCount = collectResources(data?.checks ?? []).length;
+  const bodyMaxWidth = tab === 'flow' ? 1500 : getAcceptanceBodyMaxWidth(tab);
+  const decisionDocked = tab === 'flow' || (tab === 'checks' && !gateDossier);
 
   return (
     <>
       <Flexbox {...stylex.props(styles.headerBand)}>
-        <Flexbox gap={12} {...sx(styles.column, { maxWidth: acceptanceReadingColumnMaxWidth })}>
+        <Flexbox
+          gap={12}
+          {...sx(columnStyles.column, { maxWidth: acceptanceReadingColumnMaxWidth })}
+        >
           {/* Sharing sits beside the identity, as on the workbench page. The
               control gates itself on the server's review capability, so a
               reader without it sees nothing here. The inline padding clears the
@@ -141,13 +142,7 @@ export const AcceptanceOverview = ({
         </Flexbox>
       </Flexbox>
 
-      <Flexbox
-        gap={16}
-        paddingBlock={20}
-        {...sx(styles.column, {
-          maxWidth: tab === 'flow' ? 1500 : getAcceptanceBodyMaxWidth(tab),
-        })}
-      >
+      <Flexbox gap={16} paddingBlock={20} {...sx(columnStyles.column, { maxWidth: bodyMaxWidth })}>
         {/* Deciding belongs where the evidence is. The discussion is a
             conversation; ending one there put the closing act under a thread
             that says nothing about whether the checks passed. Both faces of
@@ -157,22 +152,23 @@ export const AcceptanceOverview = ({
         {tab === 'discussion' ? (
           <AcceptanceDiscussion onOpenChecks={() => setTab('checks')} />
         ) : tab === 'flow' ? (
-          <>
-            <AcceptanceFlow />
-            <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
-          </>
+          <AcceptanceFlow />
         ) : tab === 'checks' && gateDossier ? (
           <GateReview dossier={gateDossier} />
         ) : tab === 'checks' ? (
           <>
             <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
             <ReviewerApprovalBar />
-            <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
           </>
         ) : (
           <AcceptanceResources />
         )}
       </Flexbox>
+      {/* Outside the column so its rule spans the frame like the header
+          band's under the tabs — the page opens and closes on the same line. */}
+      {decisionDocked && (
+        <AcceptanceDecision dockedMaxWidth={bodyMaxWidth} onDraftToComposer={onDraftToComposer} />
+      )}
     </>
   );
 };

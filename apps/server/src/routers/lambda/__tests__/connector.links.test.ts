@@ -181,7 +181,7 @@ describe('connector account APIs', () => {
         });
         const links = await linkModel.listByConnectorIds([row.id]);
         expect(links.map((item) => item.id)).toEqual([link.linkId]);
-        const refreshed = await ensureFreshLinkToken(updated, links[0], linkModel, model);
+        const refreshed = await ensureFreshLinkToken(updated, links[0], model);
         expect(refreshed.credentials.accessToken).toMatch(/^tok-alice-/);
         expect((await linkModel.findById(row.id, link.linkId))?.credentials.accessToken).toBe(
           refreshed.credentials.accessToken,

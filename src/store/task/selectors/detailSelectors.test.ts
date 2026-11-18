@@ -127,6 +127,33 @@ describe('taskDetailSelectors', () => {
       expect(taskDetailSelectors.activeTaskSubtasks(state)).toHaveLength(1);
     });
 
+    it('counts subtasks at every depth', () => {
+      const nested = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            ...mockDetail,
+            subtasks: [
+              {
+                children: [
+                  {
+                    children: [{ identifier: 'T-4', status: 'backlog' }],
+                    identifier: 'T-3',
+                    status: 'backlog',
+                  },
+                ],
+                identifier: 'T-2',
+                status: 'backlog',
+              },
+              { identifier: 'T-5', status: 'backlog' },
+            ],
+          },
+        },
+      });
+      expect(taskDetailSelectors.activeTaskSubtaskCount(nested)).toBe(4);
+      expect(taskDetailSelectors.activeTaskSubtaskCount(createState())).toBe(0);
+    });
+
     it('should return empty array when no subtasks', () => {
       expect(taskDetailSelectors.activeTaskSubtasks(createState())).toEqual([]);
     });

@@ -2,6 +2,10 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  getRememberedSandboxRepository,
+  rememberSandboxSelection,
+} from './rememberedSandboxDirectory';
+import {
   prefersTemporarySandbox,
   TEMPORARY_SANDBOX_PREFERENCE_KEY,
 } from './temporarySandboxPreference';
@@ -46,7 +50,7 @@ const renderMode = () =>
   );
 
 beforeEach(() => {
-  localStorage.removeItem(TEMPORARY_SANDBOX_PREFERENCE_KEY);
+  localStorage.clear();
   state.driveStatus = 'ready';
   state.selection = {};
   state.topicId = undefined;
@@ -122,6 +126,46 @@ describe('useSandboxModeSelect', () => {
     expect(state.seedPendingSandboxSelection).toHaveBeenCalledWith('agent-1', {
       workingDirectory: '.',
     });
+  });
+
+  // T-14158: switching back to the persistent sandbox starts in the folder the
+  // agent's last conversation used, like a new conversation does.
+  it('gives a conversation back the remembered folder', async () => {
+    rememberSandboxSelection(ME, 'agent-1', { workingDirectory: 'projects/demo' });
+
+    const { result } = renderMode();
+    await act(() => result.current.toPersistent());
+
+    expect(state.seedPendingSandboxSelection).toHaveBeenCalledWith('agent-1', {
+      workingDirectory: 'projects/demo',
+    });
+  });
+
+  // Leaving the drive, a conversation starts from the repository the agent's
+  // last temporary sandbox used.
+  it('moves a conversation off the drive onto the remembered repository', async () => {
+    state.topicId = 'topic-1';
+    state.selection = { workingDirectory: 'notes' } satisfies SandboxSelection;
+    rememberSandboxSelection(ME, 'agent-1', { environmentId: 'env_repo' });
+
+    const { result } = renderMode();
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env_repo' });
+  });
+
+  it('remembers the repository a conversation leaves the drive with', async () => {
+    state.topicId = 'topic-1';
+    state.selection = {
+      environmentId: 'env_old',
+      workingDirectory: 'notes',
+    } satisfies SandboxSelection;
+
+    const { result } = renderMode();
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({ environmentId: 'env_old' });
+    expect(getRememberedSandboxRepository(ME, 'agent-1')).toEqual({ environmentId: 'env_old' });
   });
 
   it('remembers nothing without a drive service', async () => {

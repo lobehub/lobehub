@@ -7,6 +7,7 @@ import {
   seedPendingSandboxSelection,
   setPendingSandboxSelection,
   setSandboxDefaultSelection,
+  setSandboxTemporaryDefaultSelection,
   subscribePendingSandboxSelection,
   toSandboxTopicMetadata,
 } from './pendingSandboxSelection';
@@ -169,6 +170,40 @@ describe('pendingSandboxSelection', () => {
       await expect(resolvePendingSandboxSelection('agent-none')).resolves.toBeUndefined();
 
       setSandboxDefaultSelection('agent-offline');
+    });
+  });
+
+  // A plan without a drive learns so only from the entitlement; a first send
+  // made before then still starts from the remembered repository.
+  describe('temporary-sandbox default', () => {
+    it('is carried by a first send once the plan turns out to have no drive', async () => {
+      mocks.cachedEntitlement = undefined;
+      mocks.getEntitlement.mockResolvedValueOnce({ entitled: false });
+      setSandboxDefaultSelection('agent-nodrive', { workingDirectory: '.' });
+      setSandboxTemporaryDefaultSelection('agent-nodrive', { environmentId: 'env_repo' });
+
+      await expect(resolvePendingSandboxSelection('agent-nodrive')).resolves.toEqual({
+        environmentId: 'env_repo',
+      });
+
+      consumePendingSandboxSelection('agent-nodrive');
+      setSandboxDefaultSelection('agent-nodrive');
+      setSandboxTemporaryDefaultSelection('agent-nodrive');
+    });
+
+    it('gives way to the drive default when the plan has a drive', async () => {
+      mocks.cachedEntitlement = { entitled: true };
+      setSandboxDefaultSelection('agent-drive', { workingDirectory: 'notes' });
+      setSandboxTemporaryDefaultSelection('agent-drive', { environmentId: 'env_repo' });
+
+      await expect(resolvePendingSandboxSelection('agent-drive')).resolves.toEqual({
+        workingDirectory: 'notes',
+      });
+
+      mocks.cachedEntitlement = undefined;
+      consumePendingSandboxSelection('agent-drive');
+      setSandboxDefaultSelection('agent-drive');
+      setSandboxTemporaryDefaultSelection('agent-drive');
     });
   });
 });

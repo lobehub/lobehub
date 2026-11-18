@@ -2,6 +2,8 @@ import type { SpendOrigin } from './agentRuntime';
 
 export enum AsyncTaskType {
   Chunking = 'chunk',
+  /** Full account or workspace data export built in the background (`data_export`). */
+  DataExport = 'data_export',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
   /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */

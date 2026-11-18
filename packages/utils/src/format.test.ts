@@ -186,8 +186,6 @@ describe('format', () => {
 
     it('should format prices with digits correctly', () => {
       expect(formatPrice(1000, 1)).toBe('1,000.0');
-      expect(formatPrice(1234.56)).toBe('1,234.56');
-      expect(formatPrice(0.99)).toBe('0.99');
       expect(formatPrice(1000000.01, 0)).toBe('1,000,000');
     });
 

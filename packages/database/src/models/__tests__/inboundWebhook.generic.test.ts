@@ -122,4 +122,26 @@ describe('InboundWebhookModel generic rows', () => {
     expect(await model.rotateSecret(row.id, 'token-2')).toBeUndefined();
     expect(await model.getSecret(row.id)).toBe('token-1');
   });
+
+  it('settles the config under the creation locks, validated like the input', async () => {
+    const seen: unknown[] = [];
+    const row = await model.createWithLimits(generic(), undefined, async (tx, config) => {
+      // Runs inside the transaction: the rows already there are readable through it.
+      seen.push(config);
+      expect(tx).toBeDefined();
+      return { ...config, identifier: 'ci-alerts-2' };
+    });
+    expect(seen).toEqual([{ autoApprove: false, topicMode: 'new' }]);
+    if (row.kind !== 'generic') throw new Error('not narrowed');
+    expect(row.config.identifier).toBe('ci-alerts-2');
+
+    // A config the kind's schema refuses is not stored.
+    await expect(
+      model.createWithLimits(generic(), undefined, async (_tx, config) => ({
+        ...config,
+        identifier: 'Not An Identifier',
+      })),
+    ).rejects.toThrow();
+    expect(await model.query({ kind: 'generic' })).toHaveLength(1);
+  });
 });
