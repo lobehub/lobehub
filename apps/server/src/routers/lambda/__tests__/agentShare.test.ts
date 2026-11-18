@@ -112,6 +112,11 @@ vi.mock('@/server/featureFlags', () => ({
     mockGetFeatureFlagsState(...args),
 }));
 
+const mockGetAgentShareOwnerId = vi.fn(async (_db: unknown, _agentId: string) => 'user-1');
+vi.mock('@/server/services/agentShare/embedPolicy', () => ({
+  getAgentShareOwnerId: (db: unknown, agentId: string) => mockGetAgentShareOwnerId(db, agentId),
+}));
+
 const { agentShareConfigPatchSchema, agentShareConfigSchema, agentShareRouter } =
   await import('../agentShare');
 
@@ -704,6 +709,20 @@ describe('agentShareRouter embed allowlist', () => {
         config: { embedAllowedOrigins: origins },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it("checks the Agent owner's rollout, not the editor's", async () => {
+    mockGetAgentShareOwnerId.mockResolvedValueOnce('owner-9');
+
+    await (
+      await caller()
+    ).updateShareConfig({
+      agentId: 'agent-1',
+      config: { embedAllowedOrigins: ['https://example.com'] },
+    });
+
+    expect(mockGetAgentShareOwnerId).toHaveBeenCalledWith(expect.anything(), 'agent-1');
+    expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('owner-9');
   });
 
   it('refuses a non-empty allowlist outside the agent_embed rollout', async () => {

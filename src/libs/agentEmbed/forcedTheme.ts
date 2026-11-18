@@ -23,6 +23,13 @@ export const initEmbedTheme = (search: string) => {
   emit();
 };
 
+/** Leaving the embed page hands the theme back to the visitor's own preference. */
+export const clearEmbedTheme = () => {
+  if (embedTheme === undefined) return;
+  embedTheme = undefined;
+  emit();
+};
+
 export const setEmbedTheme = (theme: EmbedTheme) => {
   if (theme === embedTheme) return;
   embedTheme = theme;

@@ -76,9 +76,15 @@ The loader accepts messages only from its own iframe on the LobeHub origin.
 ## Signing in
 
 Visitors need a LobeHub account, as on the share link. Inside the panel, sign-in opens in a new
-window (the sign-in page itself cannot be framed); the panel picks the session up afterwards. The
-session cookie has to reach the framed page, so browsers that block third-party cookies keep the
-visitor signed out on websites that are not same-site with the LobeHub origin.
+window (the sign-in page itself cannot be framed); the panel picks the session up afterwards.
+
+**Known limitation — cross-site hosts.** The session cookie is `SameSite=Lax`, and browsers never
+send a Lax cookie to a frame whose top-level site differs. So a signed-in conversation works only
+where the host website is same-site with the LobeHub origin (for example `docs.example.com`
+embedding a LobeHub deployment on `chat.example.com`, or `localhost` ports in development). On any
+other website the panel keeps asking the visitor to sign in. Supporting arbitrary websites needs a
+cross-site session (the Storage Access API with a `SameSite=None; Secure` cookie, or a scoped token
+the sign-in window hands to the panel) and is not part of this version.
 
 ## Try it locally
 

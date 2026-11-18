@@ -126,7 +126,12 @@ export function defineConfig(config: CustomNextConfig) {
       const frameRules = shouldUseCSP
         ? [
             { headers: frameHeaders, source: '/' },
-            { headers: frameHeaders, source: '/:path((?!embed/agent/).*)' },
+            // Exactly the embed route shape (`embedRoutes.ts`); any other `/embed/agent/…`
+            // path keeps the DENY rule.
+            {
+              headers: frameHeaders,
+              source: '/:path((?!embed/agent/[^/.]+(?:/[^/.]+)?/?$).*)',
+            },
           ]
         : [];
 

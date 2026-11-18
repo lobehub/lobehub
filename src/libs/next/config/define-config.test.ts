@@ -124,6 +124,9 @@ describe('defineConfig', () => {
         'https://app.example.com/a/my-bot/chat',
         'https://app.example.com/embed',
         'https://app.example.com/embed/other',
+        'https://app.example.com/embed/agent/',
+        'https://app.example.com/embed/agent/a/b/c',
+        'https://app.example.com/embed/agent/embed.js',
       ]) {
         expect(await framingHeadersOf(url), url).toEqual({
           csp: "frame-ancestors 'none';",
@@ -134,10 +137,12 @@ describe('defineConfig', () => {
 
     // The proxy sets the per-share allowlist; a static DENY here would override it.
     it('leaves the Agent Share embed page to the proxy', async () => {
-      expect(await framingHeadersOf('https://app.example.com/embed/agent/my-bot')).toEqual({
-        csp: null,
-        xfo: null,
-      });
+      for (const path of ['/embed/agent/my-bot', '/embed/agent/my-bot/tpc_1']) {
+        expect(await framingHeadersOf(`https://app.example.com${path}`), path).toEqual({
+          csp: null,
+          xfo: null,
+        });
+      }
     });
   });
 

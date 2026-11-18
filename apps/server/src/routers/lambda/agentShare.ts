@@ -25,6 +25,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { getAgentShareOwnerId } from '@/server/services/agentShare/embedPolicy';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import {
@@ -479,9 +480,12 @@ export const agentShareRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
       // Clearing the allowlist is always allowed, so turning the flag off never
-      // strands a creator with an embed they cannot revoke.
+      // strands a creator with an embed they cannot revoke. The rollout is the
+      // Agent owner's — the identity the embed page is served under — so a
+      // Workspace admin cannot save an allowlist that would silently never apply.
       if (input.config.embedAllowedOrigins?.length) {
-        await assertAgentEmbedEnabled(ctx.userId);
+        const ownerId = await getAgentShareOwnerId(ctx.serverDB, input.agentId);
+        await assertAgentEmbedEnabled(ownerId ?? ctx.userId);
       }
       return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
     }),

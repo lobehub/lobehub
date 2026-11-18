@@ -13,7 +13,11 @@ import { resolveAgentEmbedFrameAncestors } from '@/server/services/agentShare/em
 import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
-import { matchAgentEmbedRoute, withAgentEmbedFrameHeaders } from '../embedRoutes';
+import {
+  matchAgentEmbedRoute,
+  resolveEmbedPathDirective,
+  withAgentEmbedFrameHeaders,
+} from '../embedRoutes';
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
 import { isShareSpaRoute } from '../shareRoutes';
 import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
@@ -303,10 +307,11 @@ export function defineConfig() {
 
     const response = defaultMiddleware(req);
 
-    const embedSlug = matchAgentEmbedRoute(req.nextUrl.pathname);
-    if (embedSlug) {
-      return withAgentEmbedFrameHeaders(response, await resolveAgentEmbedFrameAncestors(embedSlug));
-    }
+    const embedDirective = await resolveEmbedPathDirective(
+      req.nextUrl.pathname,
+      resolveAgentEmbedFrameAncestors,
+    );
+    if (embedDirective) return withAgentEmbedFrameHeaders(response, embedDirective);
 
     // when enable auth protection, only public route is not protected, others are all protected
     const isProtected = !isPublicRoute(req);

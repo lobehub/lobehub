@@ -236,12 +236,16 @@ describe('Agent Share embed pages', () => {
     expect(response!.headers.get('x-frame-options')).toBe('DENY');
   });
 
-  it('is matched by the proxy and leaves other /embed paths alone', async () => {
+  it('is matched by the proxy and forbids framing for embed paths that are not the route', async () => {
     const matcher = createRouteMatcher(proxyConfig.matcher);
     expect(matcher(new NextRequest('http://localhost:3010/embed/agent/my-bot'))).toBe(true);
 
     embedPolicy.resolveAgentEmbedFrameAncestors.mockClear();
-    await request('http://localhost:3010/embed/agent/a/b/c?hl=en-US');
+    for (const path of ['/embed/agent/a/b/c', '/embed/agent/', '/embed/agent/x.js']) {
+      const response = await request(`http://localhost:3010${path}?hl=en-US`);
+      expect(response!.headers.get('content-security-policy'), path).toBe("frame-ancestors 'none'");
+      expect(response!.headers.get('x-frame-options'), path).toBe('DENY');
+    }
     expect(embedPolicy.resolveAgentEmbedFrameAncestors).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@
  * conversation of a shared Agent, served to be framed by the origins its
  * creator allowed (`shareConfig.embedAllowedOrigins`).
  */
-const AGENT_EMBED_ROUTE = /^\/embed\/agent\/([^/]+)(?:\/[^/]+)?\/?$/;
+const AGENT_EMBED_ROUTE = /^\/embed\/agent\/([^/.]+)(?:\/[^/.]+)?\/?$/;
 
 /** The share slug (or share id) of an embed page path, or `null` for any other path. */
 export const matchAgentEmbedRoute = (pathname: string): string | null => {
@@ -18,6 +18,21 @@ export const matchAgentEmbedRoute = (pathname: string): string | null => {
 };
 
 export const AGENT_EMBED_NO_FRAME_DIRECTIVE = "frame-ancestors 'none'";
+
+/**
+ * The global DENY rule skips exactly the embed route shape, so the proxy owns
+ * framing for everything under `/embed/agent/`: a path that does not match the
+ * route (empty slug, extra segments) gets `'none'` rather than no policy.
+ */
+export const resolveEmbedPathDirective = async (
+  pathname: string,
+  resolveForSlug: (slugOrId: string) => Promise<string>,
+): Promise<string | null> => {
+  if (!pathname.startsWith('/embed/agent/')) return null;
+
+  const slug = matchAgentEmbedRoute(pathname);
+  return slug ? resolveForSlug(slug) : AGENT_EMBED_NO_FRAME_DIRECTIVE;
+};
 
 /**
  * Framing headers of an embed page response. The global `X-Frame-Options: DENY`

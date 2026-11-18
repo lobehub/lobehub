@@ -7,8 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AgentEmbedChat, { AGENT_EMBED_CHAT_SUPPORTED } from '@/business/client/AgentEmbedChat';
+import { clearEmbedTheme } from '@/libs/agentEmbed/forcedTheme';
 
 import { getEmbedHostBridge } from './hostBridge';
+import { useFramedNavigationGuard } from './useFramedNavigationGuard';
 
 /**
  * `/embed/agent/:slugOrId` — a shared Agent's conversation, trimmed to fit a
@@ -24,7 +26,11 @@ const AgentEmbedPage = memo(() => {
   // `init` until the bridge answers, so a late start loses nothing.
   useEffect(() => {
     getEmbedHostBridge();
+    return clearEmbedTheme;
   }, []);
+
+  const framed = window.parent !== window;
+  useFramedNavigationGuard(framed);
 
   if (!AGENT_EMBED_CHAT_SUPPORTED) {
     return (
@@ -41,7 +47,7 @@ const AgentEmbedPage = memo(() => {
   return (
     <Flexbox height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
       <AgentEmbedChat
-        framed={window.parent !== window}
+        framed={framed}
         slugOrId={slugOrId}
         onClose={() => getEmbedHostBridge().emit({ type: 'close' })}
         onMessageSent={(topicId) => getEmbedHostBridge().emit({ topicId, type: 'messageSent' })}

@@ -1,9 +1,11 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { buildFrameAncestorsDirective } from '@lobechat/embed/origin';
 import debug from 'debug';
+import { eq } from 'drizzle-orm';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 
@@ -43,3 +45,17 @@ export const resolveAgentEmbedOrigins = async (
 /** The `Content-Security-Policy` value of a share's embed page. */
 export const resolveAgentEmbedFrameAncestors = async (slugOrId: string, db?: LobeChatDatabase) =>
   buildFrameAncestorsDirective(await resolveAgentEmbedOrigins(slugOrId, db));
+
+/**
+ * The user whose `agent_embed` rollout governs an Agent's share: its owner, the
+ * same identity {@link resolveAgentEmbedOrigins} evaluates when serving the page.
+ */
+export const getAgentShareOwnerId = async (db: LobeChatDatabase, agentId: string) => {
+  const [agent] = await db
+    .select({ userId: agents.userId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+
+  return agent?.userId ?? null;
+};
