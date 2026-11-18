@@ -100,8 +100,8 @@ const styles = createStaticStyles(({ css }) => ({
     mask-image: linear-gradient(
       to right,
       transparent,
-      #000 var(${TITLE_MARQUEE_FADE_START_VAR}, 0px),
-      #000 calc(100% - var(${TITLE_MARQUEE_FADE_END_VAR})),
+      black var(${TITLE_MARQUEE_FADE_START_VAR}, 0px),
+      black calc(100% - var(${TITLE_MARQUEE_FADE_END_VAR})),
       transparent
     );
   `,
@@ -125,12 +125,6 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    */
   actions?: LazyActions;
   active?: boolean;
-  /**
-   * Denser single-line row for long lists of shortcuts (e.g. Favorites): 28px
-   * tall with 13px text and a 16px icon, instead of 36px / 14px / 18px. The
-   * icon column keeps its width, so titles still line up with the other rows.
-   */
-  compact?: boolean;
   contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
   /**
    * Optional second line rendered under the title (e.g. a topic's project
@@ -172,10 +166,9 @@ const NavItem = memo<NavItemProps>(
     actions,
     contextMenuItems,
     active,
-    compact,
     href,
     icon,
-    iconSize = compact ? 16 : 18,
+    iconSize = 18,
     title,
     titleColor,
     titleMarquee,
@@ -244,11 +237,10 @@ const NavItem = memo<NavItemProps>(
           }
         : undefined;
 
-    const titleFontSize = compact ? 13 : undefined;
     // A description stacks the title in a column, where `flex: 1` would grow it vertically.
     const titleStyle = description ? undefined : { flex: 1 };
     const titleNode = marquee ? (
-      <Text color={textColor} fontSize={titleFontSize} style={{ ...titleStyle, minWidth: 0 }}>
+      <Text color={textColor} style={{ ...titleStyle, minWidth: 0 }}>
         <span className={styles.marqueeViewport} ref={titleViewportRef}>
           <span className={styles.marqueeText} ref={titleTextRef}>
             {title}
@@ -256,12 +248,7 @@ const NavItem = memo<NavItemProps>(
         </span>
       </Text>
     ) : (
-      <Text
-        color={textColor}
-        ellipsis={{ tooltipWhenOverflow: true }}
-        fontSize={titleFontSize}
-        style={titleStyle}
-      >
+      <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }} style={titleStyle}>
         {title}
       </Text>
     );
@@ -292,7 +279,7 @@ const NavItem = memo<NavItemProps>(
         clickable={!disabled}
         data-nav-item=""
         gap={8}
-        height={description ? undefined : compact ? 28 : 36}
+        height={description ? undefined : 36}
         paddingBlock={description ? 8 : undefined}
         paddingInline={4}
         style={mergedStyle}

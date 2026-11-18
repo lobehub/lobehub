@@ -38,7 +38,10 @@ const Favorites = memo<FavoritesProps>(({ itemKey }) => {
 
   return (
     <AccordionItem value={itemKey}>
-      <AccordionHeader>
+      {/* Recents and Agents carry a header action that sets their height at
+          32px; Favorites has none, so pin the same height to keep the
+          section headers aligned. */}
+      <AccordionHeader style={{ minHeight: 32 }}>
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
           <Text ellipsis fontSize={12} type="secondary" weight={500}>
             {t('favorite.section')}

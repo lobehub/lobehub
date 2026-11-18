@@ -9,7 +9,7 @@ import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
-const ICON_SIZE = 14;
+const ICON_SIZE = 16;
 
 /**
  * Leading icon of a favorite row. A task wears its status, the way Recents

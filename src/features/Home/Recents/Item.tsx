@@ -13,8 +13,8 @@ import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
-/** Same density as the Favorites rows above. */
-const ICON_SIZE = 14;
+/** Same size as the Favorites row icons above. */
+const ICON_SIZE = 16;
 
 const TYPE_ICON_MAP: Partial<Record<'document' | 'task' | 'topic', typeof FileTextIcon>> = {
   document: FileTextIcon,
@@ -47,8 +47,8 @@ const RecentListItem = memo<RecentItem>((item) => {
   return (
     <Flexbox style={{ position: 'relative' }}>
       <NavItem
-        compact
         contextMenuItems={dropdownMenu}
+        height={32}
         title={title}
         actions={
           <DropdownMenu items={dropdownMenu()}>
