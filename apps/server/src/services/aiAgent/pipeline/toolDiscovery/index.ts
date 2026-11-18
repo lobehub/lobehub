@@ -19,8 +19,11 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import {
+  applyConnectorActivation,
   dropInvalidManifests,
+  hasConnectorActivator,
   resolveClientExecutors,
+  resolveConnectorActivation,
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
@@ -34,11 +37,17 @@ import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import {
+  AgentEvalConnectorService,
+  getEvalConnectorDatasetId,
+} from '@/server/services/agentEvalConnector';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
+import { applyFrozenEvalManifests } from '../../evalGate/frozenManifests';
 import {
   filterPluginsByShareGate,
   getShareGrantActivatedPluginIds,
@@ -102,6 +111,7 @@ export const discoverTools = async (
     disableTools,
     disabledPluginIds: requestedDisabledPluginIds,
     discordContext,
+    evalConnectorSnapshots,
     exclusivePluginIds,
     externalFileTypes: rawExternalFileTypes,
     functionTools,
@@ -143,6 +153,18 @@ export const discoverTools = async (
   let hasEnabledKnowledgeBases = false;
   let operationAgentGroup: AgentGroupConfig | undefined;
   const isBotConversation = !!(botContext || discordContext);
+  const boundConnectorIds = new Set(Object.keys(evalConnectorSnapshots ?? {}));
+  const boundConnectorManifests =
+    evalConnectorSnapshots && boundConnectorIds.size
+      ? (
+          await new AgentEvalConnectorService(
+            deps.db,
+            deps.userId,
+            getEvalConnectorDatasetId(evalConnectorSnapshots),
+            deps.workspaceId,
+          ).resolveBindings(evalConnectorSnapshots, evalConnectorSnapshots)
+        ).manifests
+      : [];
 
   // Device-tool access (`canUseDevice` / `deviceAccessReason`) was resolved
   // once before the hetero early exit; the decision flows into the
@@ -193,6 +215,39 @@ export const discoverTools = async (
   if (shareGate) {
     agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
   }
+
+  // Connectors are opt-in per agent and two-state (see
+  // `resolveConnectorActivation`): on is every entry that is not disabled, off
+  // is everything else. An exact toolset (verify agent, goal supervisor) names
+  // its tools itself, so the agent's switches do not apply to it.
+  const optedInIds = [...getActivePluginIds(agentConfig?.plugins), ...(ctx.autoSkillIds ?? [])];
+  const connectorActivation =
+    exclusivePluginIds || isGoalTurn
+      ? undefined
+      : resolveConnectorActivation({
+          hasActivator: hasConnectorActivator(
+            agentConfig.chatConfig,
+            agentPlugins,
+            disabledPluginIds,
+          ),
+          optedInIds,
+          turnIds: [
+            ...(additionalPluginIds || []),
+            ...(selectedToolIds || []),
+            ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
+            // An eval binds its connectors to the run by snapshot.
+            ...boundConnectorIds,
+          ],
+        });
+  // The connectors resolved straight into the invocation set. One that is on
+  // is found on demand instead, so it is read with the discoverable ones.
+  const injectedConnectorCandidateIds = connectorActivation
+    ? [...new Set([...agentPlugins, ...optedInIds])].filter(
+        (identifier) =>
+          connectorActivation.isInjected(identifier) &&
+          (!shareGate || filterPluginsByShareGate([identifier], shareGate).length > 0),
+      )
+    : agentPlugins;
   // The unpinned sources the activator may discover (connectors, Composio,
   // LobeHub Skills, installed plugins) need the same early cut for a share
   // run: only granted identifiers are read. A grant the owner later disabled
@@ -217,9 +272,19 @@ export const discoverTools = async (
     : startToolReads(deps, {
         agentConfig,
         attachedFileIds,
-        candidateIds: [...agentPlugins],
-        exclusivePluginIds,
+        candidateIds: injectedConnectorCandidateIds.filter(
+          (identifier) => !boundConnectorIds.has(identifier),
+        ),
+        // Bound eval tools must not auto-discover unrelated credential-bearing
+        // connectors. This limits reads only; progressive activation remains enabled.
+        exclusivePluginIds:
+          exclusivePluginIds ?? (evalConnectorSnapshots ? agentPlugins : undefined),
         isGoalTurn,
+        // A share run reads what the share grants instead.
+        optedInExtensionIds:
+          connectorActivation && !shareGate
+            ? new Set(optedInIds.filter((identifier) => !disabledPluginIds.includes(identifier)))
+            : undefined,
         projectId: appContext?.projectId,
         requestedDeviceId,
         resolvedAgentId,
@@ -248,9 +313,16 @@ export const discoverTools = async (
     // A share run keeps only granted plugins, so an ungranted one never reaches
     // the connector permission lookup or the activator pool below.
     const disabledPluginIdSet = new Set(disabledPluginIds);
+    // A connector the agent has not turned on is off for it: it leaves every
+    // connector source here, so neither the engine nor the activator sees it.
+    // A share run is cut to its grants above instead.
+    const isConnectorOn = (identifier: string) =>
+      !connectorActivation || !!shareGate || connectorActivation.isAllowed(identifier);
     const installedPlugins = (await toolReads.installedPlugins).filter(
       (p) =>
+        !boundConnectorIds.has(p.identifier) &&
         !disabledPluginIdSet.has(p.identifier) &&
+        isConnectorOn(p.identifier) &&
         (!shareGrantedExtensionIds || shareGrantedExtensionIds.has(p.identifier)),
     );
     log(
@@ -265,6 +337,7 @@ export const discoverTools = async (
       connectors,
       connectorsMcp,
       connectorTools,
+      hasEventConnector,
       discoverableConnectorManifests,
       discoverableConnectorsMcp,
       discoverableConnectorTools,
@@ -272,9 +345,25 @@ export const discoverTools = async (
 
     // 5a-1b. Model awareness: tell the model whose connected account each
     // borrowed tool runs on (see `buildOwnershipNote`).
-    connectorOwnershipNote = await buildOwnershipNote(deps, connectors);
+    connectorOwnershipNote = await buildOwnershipNote(
+      deps,
+      [
+        ...connectors.map((c) => connectorsMcp.find((mcp) => mcp.id === c.id) ?? c),
+        // A connector that is on is found on demand, so it is read with the
+        // discoverable ones; the model still needs to know whose account it is.
+        ...discoverableConnectorsMcp,
+      ],
+      !!shareGate,
+    );
 
-    connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+    connectorManifests = [
+      ...buildConnectorManifests(
+        connectorsMcp,
+        connectorTools,
+        await isMcpAppsEnabled(deps.userId),
+      ),
+      ...boundConnectorManifests,
+    ];
 
     scheduleConnectorRefresh(deps, {
       connectorGateKeeper,
@@ -314,9 +403,13 @@ export const discoverTools = async (
     };
 
     // 5c / 5d. LobeHub Skills and Composio manifests, read in the wave above.
-    lobehubSkillManifests = await toolReads.lobehubSkillManifests;
+    lobehubSkillManifests = (await toolReads.lobehubSkillManifests).filter((m) =>
+      isConnectorOn(m.identifier),
+    );
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
-    composioManifests = await toolReads.composioManifests;
+    composioManifests = (await toolReads.composioManifests).filter((m) =>
+      isConnectorOn(m.identifier),
+    );
     log('execAgent: got %d composio manifests', composioManifests.length);
 
     // 5d-1. Patch Lobehub/Composio manifests AND community-MCP plugin manifests
@@ -357,6 +450,26 @@ export const discoverTools = async (
       installedPlugins: pluginsWithoutConnectors,
       isModelSupportToolUse,
     };
+
+    // A connector that is on is found on demand rather than invoked up front:
+    // it leaves the invocation candidates here and stays in the discovery pool
+    // below. Runs without an activator need it in the initial tool set.
+    let allowedConnectorIds: Set<string> | undefined;
+    if (connectorActivation) {
+      const connectorIds = [
+        ...installedPlugins,
+        ...connectorManifests,
+        ...discoverableConnectorManifests,
+        ...lobehubSkillManifests,
+        ...composioManifests,
+      ]
+        .map((item) => item.identifier)
+        .filter((id) => !disabledPluginIdSet.has(id));
+      agentPlugins = applyConnectorActivation(agentPlugins, connectorIds, connectorActivation);
+      if (agentConfig.chatConfig?.toolMode === 'custom') {
+        allowedConnectorIds = new Set(connectorIds.filter(connectorActivation.isAllowed));
+      }
+    }
 
     // Dynamically inject turn-scoped builtin tools.
     const modelAbilities =
@@ -479,6 +592,7 @@ export const discoverTools = async (
           : (agentConfig.chatConfig ?? undefined),
         plugins: agentPlugins,
       },
+      allowedConnectorIds,
       canUseDevice,
       deviceContext: gatewayConfigured
         ? {
@@ -495,6 +609,7 @@ export const discoverTools = async (
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
       hasIdentityAccount,
+      hasEventConnector,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,
@@ -536,7 +651,10 @@ export const discoverTools = async (
     // read off here and await it at the end: it is one Market round trip, and
     // every step of the run reads the answer back off the operation instead of
     // asking again.
-    if (toolsResult.enabledToolIds?.includes(CredsIdentifier)) {
+    if (
+      toolsResult.enabledToolIds?.includes(CredsIdentifier) &&
+      !boundConnectorIds.has(CredsIdentifier)
+    ) {
       credentialFactsPromise = readCredentialFacts(deps);
     }
 
@@ -687,6 +805,26 @@ export const discoverTools = async (
       ...toolManifestMap[RemoteDeviceManifest.identifier],
       systemRole: generateSystemPrompt(onlineDevices),
     };
+  }
+
+  if (!disableTools && boundConnectorManifests.length > 0) {
+    const frozenToolSet = {
+      activatableToolIds: [],
+      enabledToolIds: toolsResult.enabledToolIds,
+      executorMap: toolExecutorMap,
+      manifestMap: toolManifestMap,
+      sourceMap: toolSourceMap,
+      tools,
+    };
+    applyFrozenEvalManifests(
+      frozenToolSet,
+      boundConnectorManifests.filter(
+        (manifest) =>
+          (!exclusivePluginIds || exclusivePluginIds.includes(manifest.identifier)) &&
+          !requestedDisabledPluginIds.includes(manifest.identifier),
+      ),
+    );
+    tools = frozenToolSet.tools;
   }
 
   return {

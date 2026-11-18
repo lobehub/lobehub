@@ -41,6 +41,70 @@ const expectCode = async (promise: Promise<unknown>, code: TaskLabelError['code'
 };
 
 describe('TaskLabelModel registry', () => {
+  it('locks labels for sharing inside a transaction, ignoring ids it cannot use', async () => {
+    const label = await workspace.create({ name: 'Bug' });
+
+    await expect(
+      serverDB.transaction((tx) =>
+        new TaskLabelModel(tx, userId, workspaceId).lockForShare([label.id, 'not-a-uuid']),
+      ),
+    ).resolves.toBeUndefined();
+    await expect(workspace.lockForShare([])).resolves.toBeUndefined();
+  });
+
+  describe('findOrCreateMany', () => {
+    it('creates what is missing and returns existing labels untouched', async () => {
+      const existing = await workspace.create({ color: '#EB5757', name: 'Bug' });
+
+      const labels = await workspace.findOrCreateMany([
+        { color: '#111111', name: 'bug' },
+        { color: '#4CB782', name: ' Backend ' },
+        { name: 'backend' },
+      ]);
+
+      expect(labels).toHaveLength(2);
+      expect(labels.find((label) => label.id === existing.id)?.color).toBe('#EB5757');
+      expect(labels.find((label) => label.name === 'Backend')?.color).toBe('#4CB782');
+      expect(await workspace.query()).toHaveLength(2);
+    });
+
+    it('stays in its scope', async () => {
+      await workspace.create({ name: 'Bug' });
+
+      const [label] = await personal.findOrCreateMany([{ name: 'Bug' }]);
+
+      expect(label.workspaceId).toBeNull();
+      expect(await personal.query()).toHaveLength(1);
+      expect(await workspace.query()).toHaveLength(1);
+    });
+
+    it('nests only under a group', async () => {
+      const group = await workspace.create({ isGroup: true, name: 'Type' });
+      const plain = await workspace.create({ name: 'Plain' });
+
+      const [label] = await workspace.findOrCreateMany([{ name: 'Bug', parentId: group.id }]);
+
+      expect(label.parentId).toBe(group.id);
+      await expectCode(
+        workspace.findOrCreateMany([{ name: 'Other', parentId: plain.id }]),
+        'INVALID_PARENT',
+      );
+    });
+
+    it('takes one row per name, however many uses of it there are', async () => {
+      // Six parameters a row: this many rows would exceed what a statement can bind.
+      const uses = Array.from({ length: 12_000 }, (_, index) => ({
+        name: index % 2 ? 'Bug' : 'bug',
+      }));
+
+      expect(await workspace.findOrCreateMany(uses)).toHaveLength(1);
+    });
+
+    it('returns nothing for nothing', async () => {
+      expect(await workspace.findOrCreateMany([])).toEqual([]);
+    });
+  });
+
   it('scopes labels per workspace and per personal owner', async () => {
     await personal.create({ name: 'Mine' });
     await workspace.create({ color: '#EB5757', name: 'Shared' });

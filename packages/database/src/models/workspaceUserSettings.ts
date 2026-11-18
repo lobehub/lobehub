@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import { and, eq } from 'drizzle-orm';
 
@@ -68,9 +69,7 @@ export class WorkspaceUserSettingsModel {
    * in the patch is a no-op — pass an explicit `{}` to clear it).
    */
   updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
-    /* v8 ignore start -- unreachable: getPreference() already falls back to {}, never nullish */
-    const current = (await this.getPreference()) ?? {};
-    /* v8 ignore stop */
+    const current = await this.getPreference();
     // Per-agent override maps merge one level deeper: clients patch a single
     // agent's leaf from a local copy that may be stale or empty (for example a
     // picker used before the preference fetch settles). A top-level replace
@@ -151,4 +150,35 @@ export class WorkspaceUserSettingsModel {
       .returning();
     return row;
   };
+
+  /**
+   * Turn the composer's "New worktree" switch on or off for one directory and
+   * return the stored list. Read → apply → write under the row lock, so the
+   * cap (see `applyWorktreeModeDir`) is enforced here rather than trusted from a
+   * client copy that may be stale.
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> =>
+    this.db.transaction(async (trx) => {
+      const [row] = await trx
+        .select({ preference: workspaceUserSettings.preference })
+        .from(workspaceUserSettings)
+        .where(
+          and(
+            eq(workspaceUserSettings.workspaceId, this.workspaceId),
+            eq(workspaceUserSettings.userId, this.userId),
+          ),
+        )
+        .for('update');
+      const current = row?.preference ?? {};
+      const worktreeModeDirs = applyWorktreeModeDir(current.worktreeModeDirs, key, enabled);
+      const next: WorkspaceUserPreference = { ...current, worktreeModeDirs };
+      await trx
+        .insert(workspaceUserSettings)
+        .values({ preference: next, userId: this.userId, workspaceId: this.workspaceId })
+        .onConflictDoUpdate({
+          set: { preference: next, updatedAt: new Date() },
+          target: [workspaceUserSettings.workspaceId, workspaceUserSettings.userId],
+        });
+      return worktreeModeDirs;
+    });
 }

@@ -55,7 +55,11 @@ export class AgentService extends BaseService {
         .where(eq(agents.id, result.agentId));
     }
 
-    return this.getAgentById(result.agentId);
+    // The copy was just written in the caller's scope, so it is readable; a
+    // miss here would mean the copy vanished, which is still "not found".
+    const duplicated = await this.getAgentById(result.agentId);
+    if (!duplicated) throw this.createNotFoundError('Duplicated agent not found');
+    return duplicated;
   }
 
   /**

@@ -72,8 +72,44 @@ describe('matchLLMRubric', () => {
     expect(result.score).toBe(0.5);
   });
 
-  it('should clamp score to [0, 1]', async () => {
-    mockGenerateObject.mockResolvedValue({ reason: 'overflow', score: 1.5 });
+  it.each([-1, 1.5, 7])(
+    'should mark out-of-range score %s as a Judge error after retries',
+    async (score) => {
+      mockGenerateObject.mockResolvedValue({ reason: 'Out of range', score });
+
+      const result = await matchLLMRubric({
+        actual: 'x',
+        context: { ...context, judgeMaxAttempts: 2 },
+        rubric: rubric({ criteria: 'test' }),
+      });
+
+      expect(result.passed).toBe(false);
+      expect(result.judgeError).toBe('LLM judge returned an out-of-range score');
+      expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([-1, 7])(
+    'should recover from out-of-range score %s with a valid retry',
+    async (score) => {
+      mockGenerateObject
+        .mockResolvedValueOnce({ reason: 'Out of range', score })
+        .mockResolvedValueOnce({ reason: 'Recovered', score: 0.8 });
+
+      const result = await matchLLMRubric({
+        actual: 'x',
+        context,
+        rubric: rubric({ criteria: 'test' }),
+      });
+
+      expect(result).toMatchObject({ passed: true, reason: 'Recovered', score: 0.8 });
+      expect(result.judgeError).toBeUndefined();
+      expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([0, 1])('should accept the valid score boundary %s', async (score) => {
+    mockGenerateObject.mockResolvedValue({ reason: 'Valid boundary', score });
 
     const result = await matchLLMRubric({
       actual: 'x',
@@ -81,7 +117,9 @@ describe('matchLLMRubric', () => {
       rubric: rubric({ criteria: 'test' }),
     });
 
-    expect(result.score).toBe(1);
+    expect(result).toMatchObject({ passed: score === 1, score });
+    expect(result.judgeError).toBeUndefined();
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
   });
 
   it('should return score 0 when generateObject is not available', async () => {
@@ -225,6 +263,33 @@ describe('matchLLMRubric', () => {
     const userMsg = payload.messages.find((m) => m.role === 'user')!;
     expect(userMsg.content).toContain('[Input]');
     expect(userMsg.content).toContain('How do I deploy?');
+  });
+
+  it('should give the judge the execution evidence when provided', async () => {
+    mockGenerateObject.mockResolvedValue({ reason: 'ok', score: 1 });
+
+    await matchLLMRubric({
+      actual: 'Saved your workout habits.',
+      context: {
+        ...context,
+        judgeEvidence: 'Tool calls:\n1. lobe-user-memory.addPreferenceMemory',
+      },
+      rubric: rubric({ criteria: 'Must call the memory tool to save the habits' }),
+    });
+
+    const payload = mockGenerateObject.mock.calls[0][0];
+    const userMsg = payload.messages.find((m) => m.role === 'user')!;
+    expect(userMsg.content).toContain('[Evidence]');
+    expect(userMsg.content).toContain('lobe-user-memory.addPreferenceMemory');
+  });
+
+  it('should omit the evidence section when there is none', async () => {
+    mockGenerateObject.mockResolvedValue({ reason: 'ok', score: 1 });
+
+    await matchLLMRubric({ actual: 'Hi', context, rubric: rubric({ criteria: 'Greets' }) });
+
+    const userMsg = mockGenerateObject.mock.calls[0][0].messages.find((m) => m.role === 'user')!;
+    expect(userMsg.content).not.toContain('[Evidence]');
   });
 
   it('should omit input section when not provided', async () => {

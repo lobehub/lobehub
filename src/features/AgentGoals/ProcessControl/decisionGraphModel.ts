@@ -39,8 +39,14 @@ const COORDINATOR_EFFECTS = new Set<string>(['fail', 'retire', 'retry']);
 
 export const effectOfOption = (
   option: Pick<GoalDecisionOption, 'effect' | 'id'>,
-): DecisionEffect | undefined =>
-  option.effect ?? (COORDINATOR_EFFECTS.has(option.id) ? (option.id as DecisionEffect) : undefined);
+): DecisionEffect | undefined => {
+  // Waiting for a reset still ends in a retry; the option's own words say when.
+  if (option.effect === 'retry_after_reset') return 'retry';
+  return (
+    option.effect ??
+    (COORDINATOR_EFFECTS.has(option.id) ? (option.id as DecisionEffect) : undefined)
+  );
+};
 
 /**
  * `labels` are the options as the reader should see them (already localized,

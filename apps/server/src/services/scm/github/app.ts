@@ -229,6 +229,36 @@ export const listGitHubInstallationRepositoryDetails = async (
 };
 
 /**
+ * Branch names of one repository, read with the installation's own token —
+ * the same grant a build from that repository clones with. Walked to `limit`
+ * rather than to the end: a repository with thousands of branches would
+ * otherwise be dozens of requests behind one picker, so a caller that gets
+ * exactly `limit` back should treat the list as partial.
+ */
+export const listGitHubInstallationRepositoryBranches = async (params: {
+  installationId: string;
+  limit: number;
+  repoFullName: string;
+}): Promise<string[]> => {
+  const app = getGitHubApp();
+  if (!app) throw new Error('GitHub App is not configured');
+
+  const { owner, repo } = parseRepo(params.repoFullName);
+  const octokit = await app.getInstallationOctokit(Number(params.installationId));
+  const names: string[] = [];
+  for await (const { data } of octokit.paginate.iterator('GET /repos/{owner}/{repo}/branches', {
+    owner,
+    per_page: 100,
+    repo,
+  })) {
+    for (const branch of data) if (branch.name) names.push(branch.name);
+    if (names.length >= params.limit) break;
+  }
+
+  return names.slice(0, params.limit);
+};
+
+/**
  * Cut an Actions job log down to the part that explains the failure. Logs
  * open with hundreds of lines of checkout noise; the first `##[error]`
  * annotation marks where the failing step reported, so the window is

@@ -180,6 +180,21 @@ const parseAnswerSegments = () =>
 const parseWorkflowSegment = () =>
   JSON.parse(screen.getByTestId('workflow-segment').getAttribute('data-blocks') || '[]');
 
+const runningChecksInput = (): Parameters<typeof blk>[0] => ({
+  content: 'Running the checks.',
+  id: 'block-1',
+  tools: [
+    { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
+    { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
+  ],
+});
+
+const completedToolInput = (): Parameters<typeof blk>[0] => ({
+  content: '',
+  id: 'block-1',
+  tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+});
+
 describe('Group', () => {
   afterEach(() => {
     cleanup();
@@ -328,7 +343,7 @@ describe('Group', () => {
     ]);
   });
 
-  it('folds consecutive short mixed single-tool blocks into one workflow segment', () => {
+  it('shows short narration between consecutive single-tool workflow steps', () => {
     const { container } = render(
       <Group
         isLatestItem
@@ -353,27 +368,57 @@ describe('Group', () => {
       node.getAttribute('data-testid'),
     );
 
-    expect(sequence).toEqual(['workflow-segment']);
-    expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
-    expect(parseWorkflowSegment()).toEqual([
-      {
+    expect(sequence).toEqual([
+      'answer-segment',
+      'answer-segment',
+      'answer-segment',
+      'answer-segment',
+    ]);
+    expect(screen.queryByTestId('workflow-segment')).not.toBeInTheDocument();
+    const rendered = screen
+      .getAllByTestId('answer-segment')
+      .map((node) => JSON.parse(node.getAttribute('data-block') || '{}'));
+    expect(rendered).toEqual([
+      expect.objectContaining({
         content: 'Let me inspect the package scripts.',
+        id: 'block-1',
+        domId: 'block-1__answer',
+        toolCount: 0,
+        hasToolsOverride: false,
         disableMarkdownStreaming: true,
-        domId: undefined,
         hasError: false,
+      }),
+      expect.objectContaining({
+        content: '',
+        id: 'block-1',
+        domId: 'block-1__workflow',
         toolCount: 1,
-      },
-      {
+        hasToolsOverride: true,
+        disableMarkdownStreaming: true,
+        hasError: false,
+      }),
+      expect.objectContaining({
         content: 'Now let me read the source file.',
+        id: 'block-2',
+        domId: 'block-2__answer',
+        toolCount: 0,
+        hasToolsOverride: false,
         disableMarkdownStreaming: false,
-        domId: undefined,
         hasError: false,
+      }),
+      expect.objectContaining({
+        content: '',
+        id: 'block-2',
+        domId: 'block-2__workflow',
         toolCount: 1,
-      },
+        hasToolsOverride: true,
+        disableMarkdownStreaming: false,
+        hasError: false,
+      }),
     ]);
   });
 
-  it('breaks an image-bearing tool out between two workflow folds', () => {
+  it('breaks an image-bearing tool out and shows narration between workflow runs', () => {
     const { container } = render(
       <Group
         isLatestItem
@@ -411,25 +456,31 @@ describe('Group', () => {
     const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
       node.getAttribute('data-testid'),
     );
-    expect(sequence).toEqual(['workflow-segment', 'answer-segment', 'workflow-segment']);
-
-    const [first, second] = screen
-      .getAllByTestId('workflow-segment')
-      .map((node) => JSON.parse(node.getAttribute('data-blocks') || '[]'));
-    expect(first).toEqual([
+    expect(sequence).toEqual([
+      'answer-segment',
+      'workflow-segment',
+      'answer-segment',
+      'answer-segment',
+      'answer-segment',
+      'answer-segment',
+    ]);
+    expect(parseWorkflowSegment()).toEqual([
       expect.objectContaining({
-        contentOverride: 'Inspecting.',
+        contentOverride: '',
         domId: 'block-1__tool-0__workflow',
         toolCount: 2,
       }),
     ]);
-    expect(second).toEqual([
-      expect.objectContaining({ domId: 'block-1__tool-3__workflow', toolCount: 1 }),
-      expect.objectContaining({ content: 'Continuing.', toolCount: 1 }),
-    ]);
-    expect(parseAnswerSegment()).toEqual(
+    const answers = screen
+      .getAllByTestId('answer-segment')
+      .map((node) => JSON.parse(node.getAttribute('data-block') || '{}'));
+    expect(answers).toEqual([
+      expect.objectContaining({ content: 'Inspecting.', domId: 'block-1__answer', toolCount: 0 }),
       expect.objectContaining({ domId: 'block-1__tool-2__workflow', id: 'block-1', toolCount: 1 }),
-    );
+      expect.objectContaining({ content: '', domId: 'block-1__tool-3__workflow', toolCount: 1 }),
+      expect.objectContaining({ content: 'Continuing.', domId: 'block-2__answer', toolCount: 0 }),
+      expect.objectContaining({ content: '', domId: 'block-2__workflow', toolCount: 1 }),
+    ]);
   });
 
   it('does not fold the latest process behind a non-renderable final answer placeholder', () => {
@@ -455,7 +506,9 @@ describe('Group', () => {
 
     expect(screen.queryByTestId('process-fold')).not.toBeInTheDocument();
     expect(screen.getByTestId('workflow-segment')).toBeInTheDocument();
-    expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
+    expect(parseAnswerSegment()).toEqual(
+      expect.objectContaining({ content: 'I will run the checks.', toolCount: 0 }),
+    );
   });
 
   it('keeps a non-latest finished turn’s final answer visible outside the fold', () => {
@@ -466,21 +519,18 @@ describe('Group', () => {
         isLatestItem={false}
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
     );
 
     const fold = screen.getByTestId('process-fold');
-    const answer = screen.getByTestId('answer-segment');
+    const [narration, answer] = screen.getAllByTestId('answer-segment');
+    expect(fold.contains(narration)).toBe(true);
+    expect(JSON.parse(answer.getAttribute('data-block') || '{}').content).toBe(
+      'Here is the final answer.',
+    );
     // Folding only ever collapses the process; the final answer stays a visible
     // sibling for every turn, latest or not — never swallowed into the fold.
     expect(fold.contains(answer)).toBe(false);
@@ -501,14 +551,7 @@ describe('Group', () => {
         id="assistant-1"
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
@@ -527,14 +570,7 @@ describe('Group', () => {
         id="assistant-1"
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
@@ -551,21 +587,18 @@ describe('Group', () => {
         id="assistant-1"
         messageIndex={0}
         blocks={[
-          blk({
-            content: 'Running the checks.',
-            id: 'block-1',
-            tools: [
-              { apiName: 'bash', id: 'tool-1', result: { content: 'ok' } } as any,
-              { apiName: 'bash', id: 'tool-2', result: { content: 'ok' } } as any,
-            ],
-          }),
+          blk(runningChecksInput()),
           blk({ content: 'Here is the final answer.', id: 'block-2' }),
         ]}
       />,
     );
 
     const fold = screen.getByTestId('process-fold');
-    const answer = screen.getByTestId('answer-segment');
+    const [narration, answer] = screen.getAllByTestId('answer-segment');
+    expect(fold.contains(narration)).toBe(true);
+    expect(JSON.parse(answer.getAttribute('data-block') || '{}').content).toBe(
+      'Here is the final answer.',
+    );
     // Latest turn: the answer stays out of the fold so it reads without expanding.
     expect(fold.contains(answer)).toBe(false);
     expect(fold.contains(screen.getByTestId('workflow-segment'))).toBe(true);
@@ -657,18 +690,7 @@ describe('Group', () => {
   it('shows a running indicator below a settled single inline tool while still generating', () => {
     mockIsGenerating = true;
     render(
-      <Group
-        isLatestItem
-        id="assistant-1"
-        messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-        ]}
-      />,
+      <Group isLatestItem blocks={[blk(completedToolInput())]} id="assistant-1" messageIndex={0} />,
     );
 
     expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
@@ -682,16 +704,9 @@ describe('Group', () => {
     render(
       <Group
         isLatestItem
+        blocks={[blk(completedToolInput()), blk({ content: LOADING_FLAT, id: 'block-2' })]}
         id="assistant-1"
         messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-          blk({ content: LOADING_FLAT, id: 'block-2' }),
-        ]}
       />,
     );
 
@@ -707,16 +722,9 @@ describe('Group', () => {
     render(
       <Group
         isLatestItem
+        blocks={[blk(completedToolInput()), blk({ content: '', id: 'block-2' })]}
         id="assistant-1"
         messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-          blk({ content: '', id: 'block-2' }),
-        ]}
       />,
     );
 
@@ -779,18 +787,7 @@ describe('Group', () => {
   it('hides the running indicator once generation has finished', () => {
     mockIsGenerating = false;
     render(
-      <Group
-        isLatestItem
-        id="assistant-1"
-        messageIndex={0}
-        blocks={[
-          blk({
-            content: '',
-            id: 'block-1',
-            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
-          }),
-        ]}
-      />,
+      <Group isLatestItem blocks={[blk(completedToolInput())]} id="assistant-1" messageIndex={0} />,
     );
 
     expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();

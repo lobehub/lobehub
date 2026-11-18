@@ -143,4 +143,31 @@ describe('VerifyRunModel coverage', () => {
       expect(gone).toBeUndefined();
     });
   });
+
+  describe('recordVerifierRedrive', () => {
+    it('stamps the re-drive without clobbering other metadata', async () => {
+      const run = await insertRun({ metadata: { keep: 'me' }, status: 'verifying' });
+      const at = new Date('2026-10-01T00:00:00.000Z');
+
+      await new VerifyRunModel(serverDB, userId).recordVerifierRedrive(run.id, at);
+
+      const [stored] = await serverDB.select().from(verifyRuns).where(eq(verifyRuns.id, run.id));
+      expect(stored.metadata).toEqual({
+        keep: 'me',
+        verifierRedrivenAt: '2026-10-01T00:00:00.000Z',
+      });
+    });
+
+    it('leaves another owner run untouched', async () => {
+      const run = await insertRun({ status: 'verifying' });
+
+      await new VerifyRunModel(serverDB, otherUserId).recordVerifierRedrive(
+        run.id,
+        new Date('2026-10-01T00:00:00.000Z'),
+      );
+
+      const [stored] = await serverDB.select().from(verifyRuns).where(eq(verifyRuns.id, run.id));
+      expect(stored.metadata ?? {}).not.toHaveProperty('verifierRedrivenAt');
+    });
+  });
 });

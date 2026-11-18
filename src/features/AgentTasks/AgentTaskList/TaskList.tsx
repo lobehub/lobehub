@@ -22,6 +22,7 @@ import type { Components } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { useLoadedProjectList } from '@/store/project';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
@@ -86,6 +87,8 @@ interface TaskListProps {
    * edited out of it (priority changed, assignee swapped) leaves at once.
    */
   filter?: TaskListFilter;
+  /** The list already belongs to one project, so its rows do not repeat it. */
+  hideProject?: boolean;
   /** First-load / retry in flight (SWR `isLoading`). */
   isLoading?: boolean;
   /** Optional list source for alternate task collections such as scheduled tasks. */
@@ -222,6 +225,7 @@ const TaskList = memo<TaskListProps>((props) => {
     data,
     error,
     filter,
+    hideProject,
     isLoading,
     items,
     onRetry,
@@ -267,6 +271,8 @@ const TaskList = memo<TaskListProps>((props) => {
   // resolve into a context row.
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const nested = options.showSubTasks && options.nestedSubTasks;
+  // Project groups read their names from this list (`getTaskProjectGroupMeta`).
+  const projects = useLoadedProjectList();
   const groupedTaskEntries = useMemo((): TaskListGroupEntry[] => {
     const compare = (a: (typeof visibleTasks)[number], b: (typeof visibleTasks)[number]) =>
       compareTaskItems(a, b, options);
@@ -298,7 +304,8 @@ const TaskList = memo<TaskListProps>((props) => {
         ),
       };
     });
-  }, [effectiveSubGroupBy, groupBy, nested, options, taskById, visibleTasks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a project list change renames or folds project groups
+  }, [effectiveSubGroupBy, groupBy, nested, options, projects, taskById, visibleTasks]);
 
   // Collapse state lives here (not in the Accordion) because headers and rows
   // are flattened into one virtual list; a collapsed key simply drops its rows
@@ -408,7 +415,11 @@ const TaskList = memo<TaskListProps>((props) => {
         <div style={{ paddingBlock: 1, paddingInline: 2 }}>
           <TaskRowIndent depth={item.row.depth} muted={item.row.isParentContext}>
             {item.row.isParentContext ? (
-              <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+              <AgentTaskItem
+                hideProject={hideProject}
+                routeScope={routeScope}
+                task={item.row.task}
+              />
             ) : (
               <SelectableTaskRow
                 id={item.row.task.id}
@@ -419,6 +430,7 @@ const TaskList = memo<TaskListProps>((props) => {
               >
                 <AgentTaskItem
                   className={selectableTaskItemClassName}
+                  hideProject={hideProject}
                   routeScope={routeScope}
                   task={item.row.task}
                 />
@@ -429,7 +441,7 @@ const TaskList = memo<TaskListProps>((props) => {
         </div>
       );
     },
-    [createScope, getSelectionOrder, routeScope, toggleCollapsed],
+    [createScope, getSelectionOrder, hideProject, routeScope, toggleCollapsed],
   );
 
   const skeleton = (

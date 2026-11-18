@@ -7,7 +7,6 @@ const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean 
     (subtask) =>
       Boolean(subtask.runningTopic) ||
       subtask.status === 'running' ||
-      subtask.status === 'pending' ||
       hasInFlightSubtask(subtask.children),
   ) ?? false;
 
@@ -16,7 +15,7 @@ const hasInFlightSubtask = (subtasks: TaskDetailSubtask[] | undefined): boolean 
 // a manual refresh. Returns false once everything settles so SWR stops polling.
 export const hasInFlightActivity = (detail: TaskDetailData | undefined): boolean => {
   if (!detail) return false;
-  if (detail.status === 'running' || detail.status === 'pending') return true;
+  if (detail.status === 'running') return true;
   if (hasInFlightSubtask(detail.subtasks)) return true;
   return (
     detail.activities?.some(

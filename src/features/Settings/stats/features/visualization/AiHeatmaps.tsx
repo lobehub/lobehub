@@ -5,9 +5,8 @@ import { CoinsIcon, FlameIcon, MessageSquareIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
+import AsyncBoundary from '@/components/AsyncBoundary';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatIntergerNumber, formatShortenNumber } from '@/utils/format';
 
 import { HeatmapType } from '../../types';
@@ -23,57 +22,61 @@ const AiHeatmaps = memo<
   );
   const isTokens = type === HeatmapType.Tokens;
 
-  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(type), async () =>
-    isTokens ? messageService.getTokenHeatmaps() : messageService.getHeatmaps(),
-  );
+  const { error, revalidate } = statsActions.useFetchHeatmap(type);
+  // A restored empty year stays unsettled until the server confirms it, so a
+  // failed refresh surfaces the error instead of an endless loading state.
+  const data = useStatsStore(statsSelectors.settledHeatmap(type));
+  const loading = !data;
 
   const days = data?.filter((item) => item.level > 0).length || '--';
   const hotDays = data?.filter((item) => item.level >= 3).length || '--';
 
   const content = (
-    <Heatmaps
-      blockMargin={mobile ? 3 : undefined}
-      blockRadius={mobile ? 2 : undefined}
-      blockSize={mobile ? 6 : 14}
-      data={data || []}
-      hideTotalCount={isTokens}
-      loading={isLoading || !data}
-      maxLevel={4}
-      customTooltip={(activity) =>
-        t(isTokens ? 'heatmaps.tooltipTokens' : 'heatmaps.tooltip', {
-          count: isTokens
-            ? formatShortenNumber(activity.count)
-            : formatIntergerNumber(activity.count),
-          date: activity.date,
-        })
-      }
-      labels={{
-        legend: {
-          less: t('heatmaps.legend.less'),
-          more: t('heatmaps.legend.more'),
-        },
-        months: [
-          t('heatmaps.months.jan'),
-          t('heatmaps.months.feb'),
-          t('heatmaps.months.mar'),
-          t('heatmaps.months.apr'),
-          t('heatmaps.months.may'),
-          t('heatmaps.months.jun'),
-          t('heatmaps.months.jul'),
-          t('heatmaps.months.aug'),
-          t('heatmaps.months.sep'),
-          t('heatmaps.months.oct'),
-          t('heatmaps.months.nov'),
-          t('heatmaps.months.dec'),
-        ],
-        tooltip: isTokens ? t('heatmaps.tooltipTokens') : t('heatmaps.tooltip'),
-        totalCount: isTokens ? t('heatmaps.totalCountTokens') : t('heatmaps.totalCount'),
-      }}
-      style={{
-        alignSelf: 'center',
-      }}
-      {...rest}
-    />
+    <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => revalidate()}>
+      <Heatmaps
+        blockMargin={mobile ? 3 : undefined}
+        blockRadius={mobile ? 2 : undefined}
+        blockSize={mobile ? 6 : 14}
+        data={data || []}
+        hideTotalCount={isTokens}
+        loading={loading}
+        maxLevel={4}
+        customTooltip={(activity) =>
+          t(isTokens ? 'heatmaps.tooltipTokens' : 'heatmaps.tooltip', {
+            count: isTokens
+              ? formatShortenNumber(activity.count)
+              : formatIntergerNumber(activity.count),
+            date: activity.date,
+          })
+        }
+        labels={{
+          legend: {
+            less: t('heatmaps.legend.less'),
+            more: t('heatmaps.legend.more'),
+          },
+          months: [
+            t('heatmaps.months.jan'),
+            t('heatmaps.months.feb'),
+            t('heatmaps.months.mar'),
+            t('heatmaps.months.apr'),
+            t('heatmaps.months.may'),
+            t('heatmaps.months.jun'),
+            t('heatmaps.months.jul'),
+            t('heatmaps.months.aug'),
+            t('heatmaps.months.sep'),
+            t('heatmaps.months.oct'),
+            t('heatmaps.months.nov'),
+            t('heatmaps.months.dec'),
+          ],
+          tooltip: isTokens ? t('heatmaps.tooltipTokens') : t('heatmaps.tooltip'),
+          totalCount: isTokens ? t('heatmaps.totalCountTokens') : t('heatmaps.totalCount'),
+        }}
+        style={{
+          alignSelf: 'center',
+        }}
+        {...rest}
+      />
+    </AsyncBoundary>
   );
 
   const typeSwitch = (

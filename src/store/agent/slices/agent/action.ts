@@ -31,7 +31,6 @@ import { aiAgentService } from '@/services/aiAgent';
 import { ragService } from '@/services/rag';
 import { refreshChannelListIfEnabled } from '@/store/channel/refreshIfEnabled';
 import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
-import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 // Projection module only (no store import), so this does not cycle through the home store.
@@ -375,11 +374,7 @@ export class AgentSliceActionImpl {
           : randomAgentName(locale, await getSidebarAgentNames())),
     };
 
-    // On desktop, name this machine so a direct Channel to a local Agent can run here.
-    const localDeviceId = isDesktop
-      ? await getElectronStoreState().resolveGatewayDeviceId()
-      : undefined;
-    const result = await agentService.createAgent({ ...params, config, localDeviceId });
+    const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
     // The server opened the creator's direct Channel to the new Agent alongside it.
     refreshChannelListIfEnabled();

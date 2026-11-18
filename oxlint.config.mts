@@ -322,6 +322,21 @@ const uppercaseRestrictedSyntax = [
   },
 ];
 
+const stylexCallMessage =
+  'Pass styles to sx() / stylex.props() as separate arguments: no array wrapper, no undefined placeholder.';
+const stylexCallRestrictedSyntax = [
+  {
+    message: stylexCallMessage,
+    selector:
+      "CallExpression:matches([callee.name='sx'], [callee.object.name='stylex'][callee.property.name='props']) > ArrayExpression.arguments",
+  },
+  {
+    message: stylexCallMessage,
+    selector:
+      "CallExpression:matches([callee.name='sx'], [callee.object.name='stylex'][callee.property.name='props']) > Identifier.arguments[name='undefined']",
+  },
+];
+
 const electronIpcRemoveListenerRestrictedSyntax = {
   message:
     'Do not use removeListener in renderer code. Electron contextBridge does not preserve listener identity across calls; use the disposer returned by ipcRenderer.on().',
@@ -707,7 +722,11 @@ export default defineConfig(
   },
   restrictSyntax(
     ['**/*.{ts,tsx}'],
-    [...useRefLazyInitRestrictedSyntax, ...uppercaseRestrictedSyntax],
+    [
+      ...useRefLazyInitRestrictedSyntax,
+      ...uppercaseRestrictedSyntax,
+      ...stylexCallRestrictedSyntax,
+    ],
   ),
   restrictImports(
     ['apps/server/src/**/*.{ts,tsx}'],
@@ -779,6 +798,7 @@ export default defineConfig(
     [
       ...useRefLazyInitRestrictedSyntax,
       ...uppercaseRestrictedSyntax,
+      ...stylexCallRestrictedSyntax,
       electronIpcRemoveListenerRestrictedSyntax,
     ],
     ['src/hooks/usePWAInstall.ts'],

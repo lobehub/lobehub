@@ -1,7 +1,6 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
 import {
   DEFAULT_AGENT_CONFIG,
-  DEFAULT_AVATAR,
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_INBOX_AVATAR,
   DEFAULT_MODEL,
@@ -48,7 +47,7 @@ const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(current
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
 
-  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR;
+  return agentId && inboxAgentId === agentId ? DEFAULT_INBOX_AVATAR : undefined;
 };
 
 const currentAgentAvatar = (s: AgentStoreState) =>

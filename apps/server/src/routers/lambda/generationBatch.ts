@@ -59,7 +59,7 @@ export const generationBatchRouter = router({
     }),
 
   getGenerationBatches: generationBatchProcedure
-    .input(z.object({ topicId: z.string(), type: z.enum(['image', 'video']).optional() }))
+    .input(z.object({ topicId: z.string(), type: z.enum(['image', 'music', 'video']).optional() }))
     .query(async ({ ctx, input }) => {
       const batches = await ctx.generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(
         input.topicId,

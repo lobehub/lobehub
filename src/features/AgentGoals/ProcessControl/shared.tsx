@@ -1,6 +1,7 @@
 import { createStaticStyles, cssVar, Icon, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  Ban,
   Boxes,
   CircleHelp,
   FlaskConical,
@@ -8,6 +9,9 @@ import {
   Lightbulb,
   ListChecks,
   type LucideIcon,
+  Repeat,
+  TriangleAlert,
+  Wrench,
 } from 'lucide-react';
 import { memo } from 'react';
 
@@ -32,6 +36,13 @@ export const KIND_COLOR: Record<GoalGraphNodeKind, { line: string; soft: string 
   finding: { line: cssVar.green10, soft: cssVar.green3 },
   problem: { line: cssVar.purple10, soft: cssVar.purple3 },
   task: { line: cssVar.blue10, soft: cssVar.blue3 },
+  // Marks are notes runs leave each other. Only a client that declares the
+  // `marks` graph capability receives them; until then they arrive as findings.
+  dead_end: { line: cssVar.colorTextTertiary, soft: cssVar.colorFillTertiary },
+  hazard: { line: cssVar.red10, soft: cssVar.red3 },
+  pattern: { line: cssVar.lime10, soft: cssVar.lime3 },
+  template: { line: cssVar.colorSuccess, soft: cssVar.colorSuccessBg },
+  tool: { line: cssVar.gold10, soft: cssVar.gold3 },
 };
 
 /**
@@ -57,6 +68,11 @@ export const KIND_ICON: Record<GoalGraphNodeKind, LucideIcon> = {
   finding: Lightbulb,
   problem: CircleHelp,
   task: ListChecks,
+  dead_end: Ban,
+  hazard: TriangleAlert,
+  pattern: Repeat,
+  template: SKILL_ICON,
+  tool: Wrench,
 };
 
 const styles = createStaticStyles(({ css }) => ({

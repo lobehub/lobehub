@@ -25,7 +25,9 @@ import {
   runtimeEnvironmentBinaries,
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
+import { syncDebugLogging } from '@/modules/debugLogging';
 import { PermissionGuide } from '@/modules/permissionGuide/PermissionGuide';
+import { applyRemoteDebuggingSwitch } from '@/modules/remoteDebugging';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
 import { BUILD_CHANNEL, UPDATE_SERVER_URL } from '@/modules/updater/configs';
 import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
@@ -128,6 +130,7 @@ export class App {
     logger.debug('Initializing App');
     // Initialize store manager
     this.storeManager = new StoreManager(this);
+    syncDebugLogging(this.storeManager);
 
     this.rendererUrlManager = new RendererUrlManager();
     // Wire the backend reverse-proxy as an `app://` interceptor: keeps
@@ -505,6 +508,7 @@ export class App {
 
     app.commandLine.appendSwitch('enable-precise-memory-info');
     app.commandLine.appendSwitch('enable-features', this.chromeFlags.join(','));
+    applyRemoteDebuggingSwitch(this.storeManager.get('remoteDebuggingEnabled', false));
 
     logger.debug('Waiting for app to be ready');
     await app.whenReady();

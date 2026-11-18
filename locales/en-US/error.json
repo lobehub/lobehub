@@ -91,6 +91,7 @@
   "response.GoogleAIBlockReason.SAFETY": "The content was blocked for safety reasons. Please adjust it and try again.",
   "response.GoogleAIBlockReason.SPII": "The content may include sensitive personal information (SPII). Please remove sensitive details and try again.",
   "response.GoogleAIBlockReason.default": "The content was blocked ({{blockReason}}). Please adjust it and try again.",
+  "response.InsufficientBudgetForAgentRunFee": "Not enough credits to pay the agent run fee. Each agent run carries a fee, even on your own CLI account. Top up or upgrade your plan, then try again.",
   "response.InsufficientBudgetForModel": "Your remaining balance is insufficient for this model. Please top up, upgrade your plan, or try a less expensive model.",
   "response.InvalidAccessCode": "Invalid access code or empty. Please enter the correct access code or add a custom API Key.",
   "response.LobeHubModelDeprecated": "The model \"{{model}}\" is no longer available. Please pick a current model from the model selector.",

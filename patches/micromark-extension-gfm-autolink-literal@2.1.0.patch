@@ -6,7 +6,7 @@ diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
 - * @import {Code, ConstructRecord, Event, Extension, Previous, State, TokenizeContext, Tokenizer} from 'micromark-util-types'
 + * @import {Code, ConstructRecord, Event, Extension, Previous, State, Token, TokenizeContext, Tokenizer} from 'micromark-util-types'
   */
-
+ 
  import {
 @@ -16,6 +16,7 @@
  const domain = {tokenize: tokenizeDomain, partial: true}
@@ -25,7 +25,7 @@ diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
 +  let strong
    let sizeOpen = 0
    let sizeClose = 0
-
+ 
 @@ -656,7 +660,13 @@
        code === codes.underscore ||
        code === codes.tilde
@@ -39,12 +39,12 @@ diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
 +          : pathAtPunctuation
 +      )(code)
      }
-
+ 
      if (
 @@ -671,6 +681,13 @@
      return pathInside
    }
-
+ 
 +  /** @type {State} */
 +  function atStrongEnd(code) {
 +    // Only resolve the prefix once a qualifying closing boundary is found.
@@ -57,7 +57,7 @@ diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
     *
 @@ -693,6 +710,94 @@
  }
-
+ 
  /**
 + * Resolve a detached prefix to distinguish a fresh ** opener from a delimiter
 + * already used as a closer. Use the tokenizer's actual resolver order, including
@@ -150,6 +150,84 @@ diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
   * Trail.
   *
   * This calls `ok` if this *is* the trail, followed by an end, which means
+@@ -947,20 +1052,66 @@
+ }
+ 
+ /**
++ * Where a walk back from an event found an unbalanced bracket.
++ * Without it every autolink candidate after an unbalanced bracket walks back
++ * to that bracket again, which is quadratic in the length of the paragraph.
++ *
++ * @typedef Unbalanced
++ * @property {number} from
++ *   Index of the event the walk started at.
++ * @property {number} index
++ *   Index of the event of the bracket.
++ * @property {Event} event
++ *   Event of the bracket.
++ */
++
++/** @type {WeakMap<Event, Unbalanced>} */
++const unbalancedBefore = new WeakMap()
++
++/**
++ * @param {Token} token
++ * @returns {boolean}
++ */
++function unbalancedLabel(token) {
++  return (
++    (token.type === 'labelLink' || token.type === 'labelImage') &&
++    !token._balanced
++  )
++}
++
++/**
+  * @param {Array<Event>} events
+  * @returns {boolean}
+  */
+ function previousUnbalanced(events) {
++  const last = events.length - 1
+   let index = events.length
+   let result = false
+ 
+   while (index--) {
+     const token = events[index][1]
++    const known = unbalancedBefore.get(events[index])
+ 
++    // Reuse the bracket an earlier walk from this event found.
++    // Forming a link or image replaces its bracket and moves the events after
++    // it, so the bracket has to still be the same event at the same place.
+     if (
+-      (token.type === 'labelLink' || token.type === 'labelImage') &&
+-      !token._balanced
++      known &&
++      known.from === index &&
++      events[known.index] === known.event &&
++      unbalancedLabel(known.event[1])
+     ) {
++      unbalancedBefore.set(events[last], {...known, from: last})
++      result = true
++      break
++    }
++
++    if (unbalancedLabel(token)) {
++      unbalancedBefore.set(events[last], {
++        event: events[index],
++        from: last,
++        index
++      })
+       result = true
+       break
+     }
+@@ -976,7 +1127,7 @@
+   if (events.length > 0 && !result) {
+     // Mark the last token as “walked into” w/o finding
+     // anything.
+-    events[events.length - 1][1]._gfmAutolinkLiteralWalkedInto = true
++    events[last][1]._gfmAutolinkLiteralWalkedInto = true
+   }
+ 
+   return result
 diff --git a/lib/syntax.js b/lib/syntax.js
 --- a/lib/syntax.js
 +++ b/lib/syntax.js
@@ -158,7 +236,7 @@ diff --git a/lib/syntax.js b/lib/syntax.js
 - * @import {Code, ConstructRecord, Event, Extension, Previous, State, TokenizeContext, Tokenizer} from 'micromark-util-types'
 + * @import {Code, ConstructRecord, Event, Extension, Previous, State, Token, TokenizeContext, Tokenizer} from 'micromark-util-types'
   */
-
+ 
  import { asciiAlpha, asciiAlphanumeric, asciiControl, markdownLineEndingOrSpace, unicodePunctuation, unicodeWhitespace } from 'micromark-util-character';
 @@ -19,6 +19,10 @@
    tokenize: tokenizeTrail,
@@ -193,7 +271,7 @@ diff --git a/lib/syntax.js b/lib/syntax.js
 @@ -591,6 +598,13 @@
      return pathInside;
    }
-
+ 
 +  /** @type {State} */
 +  function atStrongEnd(code) {
 +    // Only resolve the prefix once a qualifying closing boundary is found.
@@ -204,14 +282,10 @@ diff --git a/lib/syntax.js b/lib/syntax.js
    /**
     * In path, at potential trailing punctuation, that was not trailing.
     *
-@@ -608,6 +622,60 @@
-     }
-     effects.consume(code);
-     return pathInside;
-+  }
-+}
-+
-+/**
+@@ -612,6 +626,60 @@
+ }
+ 
+ /**
 + * Resolve a detached prefix to distinguish a fresh ** opener from a delimiter
 + * already used as a closer. Use the tokenizer's actual resolver order, including
 + * strikethrough, without mutating the live tokens or their positions.
@@ -262,13 +336,106 @@ diff --git a/lib/syntax.js b/lib/syntax.js
 +  function after(code) {
 +    const event = self.events[self.events.length - 1];
 +    return code !== null && code > 127 && unicodePunctuation(code) && event[0] === 'exit' && event[1].type === 'attentionSequence' && event[1]._close && self.sliceSerialize(event[1]) === '**' ? ok(code) : nok(code);
-   }
++  }
++}
++
++/**
+  * Trail.
+  *
+  * This calls `ok` if this *is* the trail, followed by an end, which means
+@@ -825,30 +893,83 @@
  }
-
-@@ -851,4 +919,4 @@
-     events[events.length - 1][1]._gfmAutolinkLiteralWalkedInto = true;
+ 
+ /**
++ * Where a walk back from an event found an unbalanced bracket.
++ * Without it every autolink candidate after an unbalanced bracket walks back
++ * to that bracket again, which is quadratic in the length of the paragraph.
++ *
++ * @typedef Unbalanced
++ * @property {number} from
++ *   Index of the event the walk started at.
++ * @property {number} index
++ *   Index of the event of the bracket.
++ * @property {Event} event
++ *   Event of the bracket.
++ */
++
++/** @type {WeakMap<Event, Unbalanced>} */
++const unbalancedBefore = new WeakMap()
++
++/**
++ * @param {Token} token
++ * @returns {boolean}
++ */
++function unbalancedLabel(token) {
++  return (
++    (token.type === 'labelLink' || token.type === 'labelImage') &&
++    !token._balanced
++  )
++}
++
++/**
+  * @param {Array<Event>} events
+  * @returns {boolean}
+  */
+ function previousUnbalanced(events) {
+-  let index = events.length;
+-  let result = false;
++  const last = events.length - 1
++  let index = events.length
++  let result = false
++
+   while (index--) {
+-    const token = events[index][1];
+-    if ((token.type === 'labelLink' || token.type === 'labelImage') && !token._balanced) {
+-      result = true;
+-      break;
++    const token = events[index][1]
++    const known = unbalancedBefore.get(events[index])
++
++    // Reuse the bracket an earlier walk from this event found.
++    // Forming a link or image replaces its bracket and moves the events after
++    // it, so the bracket has to still be the same event at the same place.
++    if (
++      known &&
++      known.from === index &&
++      events[known.index] === known.event &&
++      unbalancedLabel(known.event[1])
++    ) {
++      unbalancedBefore.set(events[last], {...known, from: last})
++      result = true
++      break
++    }
++
++    if (unbalancedLabel(token)) {
++      unbalancedBefore.set(events[last], {
++        event: events[index],
++        from: last,
++        index
++      })
++      result = true
++      break
+     }
+ 
+     // If we’ve seen this token, and it was marked as not having any unbalanced
+     // bracket before it, we can exit.
+     if (token._gfmAutolinkLiteralWalkedInto) {
+-      result = false;
+-      break;
++      result = false
++      break
+     }
    }
-   return result;
++
+   if (events.length > 0 && !result) {
+     // Mark the last token as “walked into” w/o finding
+     // anything.
+-    events[events.length - 1][1]._gfmAutolinkLiteralWalkedInto = true;
++    events[last][1]._gfmAutolinkLiteralWalkedInto = true
+   }
+-  return result;
 -}
 \ No newline at end of file
++
++  return result
 +}

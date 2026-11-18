@@ -71,11 +71,10 @@ const both = (before: string, after: string) => {
 
 describe('a real library component rendered in place of the stand-in', () => {
   it('marks an element whose tag is imported from the configured source', () => {
-    const [tabs] = extractFile(head(), 'a.tsx', options).elements;
+    const extraction = extractFile(head(), 'a.tsx', options);
+    const [tabs] = extraction.elements;
     expect(tabs.real).toBe(true);
-    expect(extractFile(head(), 'a.tsx', options).prelude).toContain(
-      "import { Tabs } from '@lobehub/ui';",
-    );
+    expect(extraction.prelude).toContain("import { Tabs } from '@lobehub/ui';");
   });
 
   it('proves a className to classNames move by rendering the real component', () => {

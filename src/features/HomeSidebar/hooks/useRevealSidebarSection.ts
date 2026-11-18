@@ -10,7 +10,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
  * `../Body` — not imported from there to avoid a hooks ⇄ Body import cycle
  * (Body renders sections that consume these hooks).
  */
-export type RevealableSidebarSection = 'agent' | 'private';
+export type RevealableSidebarSection = 'agent';
 
 /**
  * Compute the system-status patch that makes a sidebar section visible after
@@ -18,12 +18,10 @@ export type RevealableSidebarSection = 'agent' | 'private';
  * user-applied section hide. Returns `null` when the section is already
  * fully visible so callers can skip the store write.
  *
- * Why this exists: `sidebarExpandedKeys` is persisted, so
- * accounts whose keys were saved before a section shipped (e.g. `private`,
- * added with workspace private agents) never include the new key — the
- * section stays collapsed forever. "Make private" then moves the agent into
- * a collapsed (or hidden) Private section with zero visual feedback, which
- * reads as the agent silently disappearing.
+ * Why this exists: `sidebarExpandedKeys` is persisted, so a collapsed or
+ * hidden Agents section would swallow an agent that "Publish to Workspace" /
+ * "Make private" just regrouped, with zero visual feedback — which reads as
+ * the agent silently disappearing.
  */
 export const buildRevealSidebarSectionPatch = (
   section: RevealableSidebarSection,

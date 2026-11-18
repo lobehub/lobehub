@@ -27,10 +27,8 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 }));
 
 const { IDENTITY_CHANNELS } = await import('./const');
-const { default: AccountCard } = await import('./AccountCard');
-const { default: InboxMessageModal } = await import('./InboxMessageModal');
+const { default: InboxMessageDetail } = await import('./InboxMessageDetail');
 const { default: InboxSection } = await import('./InboxSection');
-const { default: IdentityAccounts } = await import('./IdentityAccounts');
 const { INBOX_REFRESH_INTERVAL_MS, useAgentAccounts } = await import('./useAgentIdentity');
 
 const fresh = (node: React.ReactNode) =>
@@ -42,80 +40,17 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('InboxMessageModal', () => {
+describe('InboxMessageDetail', () => {
   it('shows a retryable error instead of a skeleton that never resolves', async () => {
     service.getInboxMessage.mockRejectedValueOnce(new Error('network down'));
 
-    fresh(<InboxMessageModal id={'msg_1'} />);
+    fresh(<InboxMessageDetail id={'msg_1'} />);
 
     expect(await screen.findByText('identity.inbox.detail.loadFailed')).toBeInTheDocument();
   });
 });
 
-describe('IdentityAccounts', () => {
-  it('shows a mounted address that no built-in channel claims, so it can be released', async () => {
-    service.list.mockResolvedValue([
-      {
-        agentId: 'agt_1',
-        capabilities: { receive: true, send: true },
-        displayName: null,
-        id: 'acc_user',
-        identifier: 'me@example.com',
-        kind: 'mail',
-        provider: 'user',
-        status: 'active',
-      },
-    ]);
-
-    fresh(<IdentityAccounts agentId={'agt_1'} />);
-
-    expect(await screen.findByText('me@example.com')).toBeInTheDocument();
-    // Its provider stands in for the channel title, and it is releasable.
-    expect(screen.getByText('user')).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole('button').at(-1)!);
-    expect(ui.confirmModal).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('IdentityAccounts — revalidation failure', () => {
-  it('keeps the addresses on screen when a later refresh fails', async () => {
-    service.list
-      .mockResolvedValueOnce([
-        {
-          agentId: 'agt_1',
-          capabilities: { receive: true, send: true },
-          displayName: null,
-          id: 'acc_user',
-          identifier: 'me@example.com',
-          kind: 'mail',
-          provider: 'user',
-          status: 'active',
-        },
-      ])
-      .mockRejectedValue(new Error('network down'));
-    let revalidate: () => Promise<unknown> = async () => {};
-    const Probe = () => {
-      const { mutate } = (useAgentAccounts as any)('agt_1');
-      revalidate = mutate;
-      return null;
-    };
-
-    fresh(
-      <>
-        <IdentityAccounts agentId={'agt_1'} />
-        <Probe />
-      </>,
-    );
-    expect(await screen.findByText('me@example.com')).toBeInTheDocument();
-
-    await revalidate().catch(() => {});
-
-    expect(await screen.findByText('identity.loadFailed')).toBeInTheDocument();
-    expect(screen.getByText('me@example.com')).toBeInTheDocument();
-  });
-});
-
-describe('InboxMessageModal attachments', () => {
+describe('InboxMessageDetail attachments', () => {
   it('lists what an attachment-only message carried instead of a blank body', async () => {
     service.getInboxMessage.mockResolvedValue({
       attachments: [
@@ -130,7 +65,7 @@ describe('InboxMessageModal attachments', () => {
       to: 'toby@lobe.id',
     });
 
-    fresh(<InboxMessageModal id={'msg_photo'} />);
+    fresh(<InboxMessageDetail id={'msg_photo'} />);
 
     // Named by file (or type) and size; nothing is fetched from the provider,
     // so the list neither links nor previews what an outside sender sent.
@@ -138,27 +73,6 @@ describe('InboxMessageModal attachments', () => {
     expect(screen.getByText('application/pdf')).toBeInTheDocument();
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.queryByRole('img')).toBeNull();
-  });
-});
-
-describe('AccountCard', () => {
-  it('cannot release an address from a read-only view', () => {
-    fresh(
-      <AccountCard
-        disabled
-        account={{ id: 'acc_1', identifier: 'toby@lobe.id', status: 'active' } as any}
-        agentId={'agt_1'}
-        channel={mailChannel}
-        onChanged={vi.fn()}
-      />,
-    );
-
-    // Copy comes first; the release action is the card's last control.
-    const release = screen.getAllByRole('button').at(-1)!;
-    fireEvent.click(release);
-
-    expect(ui.confirmModal).not.toHaveBeenCalled();
-    expect(service.revoke).not.toHaveBeenCalled();
   });
 });
 
@@ -177,9 +91,11 @@ describe('InboxSection', () => {
     service.listInbox.mockResolvedValue(rows);
     service.getInboxUnreadCount.mockResolvedValue(73);
 
-    fresh(<InboxSection agentId={'agt_1'} />);
+    fresh(<InboxSection agentId={'agt_1'} onOpen={vi.fn()} />);
 
-    await waitFor(() => expect(service.getInboxUnreadCount).toHaveBeenCalledWith('agt_1'));
+    await waitFor(() =>
+      expect(service.getInboxUnreadCount).toHaveBeenCalledWith('agt_1', undefined),
+    );
     expect(await screen.findByText('identity.inbox.unread')).toBeInTheDocument();
   });
 
@@ -188,14 +104,15 @@ describe('InboxSection', () => {
     service.getInboxUnreadCount.mockResolvedValue(1);
     service.markInboxRead.mockResolvedValue({ count: 1 });
 
-    fresh(<InboxSection agentId={'agt_1'} />);
+    const onOpen = vi.fn();
+    fresh(<InboxSection agentId={'agt_1'} onOpen={onOpen} />);
 
     const row = await screen.findByRole('button', { name: /friend@example.com/ });
     expect(row).toHaveAttribute('tabindex', '0');
 
     fireEvent.keyDown(row, { key: 'Enter' });
 
-    await waitFor(() => expect(ui.createModal).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onOpen).toHaveBeenCalledTimes(1));
     expect(service.markInboxRead).toHaveBeenCalledWith(['msg_1']);
   });
 
@@ -215,7 +132,7 @@ describe('InboxSection', () => {
     );
     service.getInboxUnreadCount.mockResolvedValue(0);
 
-    fresh(<InboxSection agentId={'agt_1'} />);
+    fresh(<InboxSection agentId={'agt_1'} onOpen={vi.fn()} />);
 
     // Two clicks: beyond the server's 100-row cap if the window just grew.
     fireEvent.click(await screen.findByRole('button', { name: 'identity.inbox.loadMore' }));
@@ -246,7 +163,7 @@ describe('InboxSection', () => {
     });
     service.getInboxUnreadCount.mockResolvedValue(0);
 
-    fresh(<InboxSection agentId={'agt_1'} />);
+    fresh(<InboxSection agentId={'agt_1'} onOpen={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'identity.inbox.loadMore' }));
 
@@ -260,7 +177,7 @@ describe('InboxSection', () => {
     service.listInbox.mockResolvedValueOnce([]).mockRejectedValue(new Error('inbox unavailable'));
     service.getInboxUnreadCount.mockResolvedValue(0);
 
-    fresh(<InboxSection agentId={'agt_1'} />);
+    fresh(<InboxSection agentId={'agt_1'} onOpen={vi.fn()} />);
     await screen.findByText('identity.inbox.empty');
 
     await vi.advanceTimersByTimeAsync(INBOX_REFRESH_INTERVAL_MS + 100);
@@ -285,7 +202,7 @@ describe('InboxSection', () => {
     ]);
     service.getInboxUnreadCount.mockResolvedValue(1);
 
-    fresh(<InboxSection agentId={'agt_1'} />);
+    fresh(<InboxSection agentId={'agt_1'} onOpen={vi.fn()} />);
     await screen.findByRole('button', { name: /friend@example.com/ });
 
     await vi.advanceTimersByTimeAsync(INBOX_REFRESH_INTERVAL_MS + 100);

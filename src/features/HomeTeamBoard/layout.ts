@@ -128,6 +128,28 @@ export const resolveRowLabel = (runs: PlacedRun[]): RowLabelPlacement => {
   return { anchor: 'end', offset: 100 - end, room: end };
 };
 
+export interface TopicSpan {
+  /** Whether the span must also cover the wait mark drawn past its last bar. */
+  endsWaiting: boolean;
+  left: number;
+  width: number;
+}
+
+const placedEnd = ({ left, width }: PlacedRun) => left + width;
+
+/** The stretch of a row from the topic's first turn to its last, idle gaps included. */
+export const resolveTopicSpan = (runs: PlacedRun[]): TopicSpan => {
+  const left = Math.min(...runs.map((placed) => placed.left));
+  // Not simply the last run: an earlier turn can outlast the ones started after it.
+  const latest = runs.reduce((a, b) => (placedEnd(b) >= placedEnd(a) ? b : a));
+
+  return {
+    endsWaiting: latest.run.status === 'needs_human',
+    left,
+    width: placedEnd(latest) - left,
+  };
+};
+
 const HOUR_MS = 60 * 60_000;
 const DAY_HOURS = 24;
 

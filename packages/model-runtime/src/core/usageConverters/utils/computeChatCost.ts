@@ -10,7 +10,7 @@ import type {
 } from 'model-bank';
 
 import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
-import { DEFAULT_CACHE_TTL } from '../../anthropicCompatibleFactory/resolveCacheTTL';
+import { DEFAULT_CACHE_TTL } from '../../protocols/anthropicMessages/resolveCacheTTL';
 
 const log = debug('lobe-cost:computeChatPricing');
 

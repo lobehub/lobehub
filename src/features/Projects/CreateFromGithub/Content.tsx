@@ -14,16 +14,18 @@ import { useTranslation } from 'react-i18next';
 
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeStore } from '@/store/home';
 import { useProjectStore } from '@/store/project';
 
 import {
+  buildCreateProjectRequest,
   getCreateProjectInput,
   getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
+  reserveProjectIds,
 } from '../createProjectForm';
-import MainAgentField from '../MainAgentField';
-import { useDefaultMainAgent } from '../useDefaultMainAgent';
+import MainAgentSection from '../MainAgentSection';
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
 
@@ -34,8 +36,6 @@ interface FormState {
   duplicate?: 'identifier' | 'name';
   identifier: string;
   loading: boolean;
-  /** Explicit pick in this dialog; otherwise the workspace inbox agent, LobeAI. */
-  mainAgentId?: string;
   name: string;
   nameEdited: boolean;
   url: string;
@@ -43,8 +43,8 @@ interface FormState {
 
 /**
  * New project from a GitHub repository: pick one the connected GitHub App can
- * read, or paste a URL, and the project is named after it, led by the default
- * main agent, and created with the repository attached as its environment —
+ * read, or paste a URL, and the project is named after it, led by an agent of
+ * its own, and created with the repository attached as its environment —
  * no fields to fill unless the defaults are wrong.
  */
 const CreateFromGithubContent = () => {
@@ -60,10 +60,11 @@ const CreateFromGithubContent = () => {
     url: '',
   });
 
+  // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
+  const [reservedIds] = useState(reserveProjectIds);
+
   const repository = parseGithubRepository(form.url);
   const urlInvalid = Boolean(form.url.trim()) && !repository;
-  const defaultMainAgentId = useDefaultMainAgent();
-  const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
   const identifierInvalid =
     (Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier)) ||
     form.duplicate === 'identifier';
@@ -102,14 +103,16 @@ const CreateFromGithubContent = () => {
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
-        ...createInput,
-        coordinatorAgentId: mainAgentId,
+        ...buildCreateProjectRequest(createInput, { ids: reservedIds }),
         repository: {
           defaultBranch: form.defaultBranch,
           name: repository.fullName,
           url: repository.url,
         },
       });
+      // The project created an agent and maybe the Project label; show both.
+      const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+      void Promise.all([refreshAgentList(), refreshAgentLabels()]);
       close();
       navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
@@ -207,16 +210,7 @@ const CreateFromGithubContent = () => {
           </Text>
         )}
         {repository && (
-          <Flexbox gap={6}>
-            <Text fontSize={13} weight={500}>
-              {t('create.mainAgentLabel')}
-            </Text>
-            <MainAgentField
-              agentId={mainAgentId}
-              disabled={form.loading}
-              onChange={(id) => setForm((current) => ({ ...current, mainAgentId: id }))}
-            />
-          </Flexbox>
+          <MainAgentSection dedicatedAgentId={reservedIds.agentId} projectName={form.name} />
         )}
       </Flexbox>
       <ModalFooter>

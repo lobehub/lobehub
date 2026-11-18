@@ -4,11 +4,11 @@ import type OpenAI from 'openai';
 import { AzureOpenAI } from 'openai';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import {
   applyImageOutputParams,
   resolveImageOutputMimeType,
-} from '../../core/openaiCompatibleFactory/imageOutputParams';
+} from '../../core/openaiCompatible/imageOutputParams';
 import { refineErrorCode } from '../../errors';
 import type {
   ASROptions,

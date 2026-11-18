@@ -1,3 +1,5 @@
+import type { TaskStatus } from './task';
+
 /**
  * What a sidebar favorite points at. A resource type identifies the row by
  * `targetId`; `route` keeps any other in-app page, identified by its path.
@@ -39,6 +41,8 @@ export interface FavoriteItem {
    * client adds the active workspace prefix when it navigates.
    */
   path: string;
+  /** Current status of a `task` favorite; absent for other types or when the task is gone. */
+  status?: TaskStatus;
   /** Resource id for resource types, the path for `route`. */
   targetId: string;
   /** Title snapshot; refreshed while the favorited page is open. */

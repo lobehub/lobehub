@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
 
 import EnvironmentVariables from './EnvironmentVariables';
@@ -85,8 +86,11 @@ const BranchField = memo<{
 }>(({ onSave, owner, repository, value }) => {
   const { t } = useTranslation('setting');
   const [editing, setEditing] = useState(false);
+  // Keyed by workspace: which branches can be listed depends on that
+  // workspace's GitHub App installations.
+  const workspaceId = useActiveWorkspaceId();
   const { data, error, isLoading } = useSWR(
-    editing ? ['sandbox-github-branches', owner, repository] : null,
+    editing ? ['sandbox-github-branches', workspaceId, owner, repository] : null,
     () => environmentService.listGithubBranches({ owner, repository }),
   );
 

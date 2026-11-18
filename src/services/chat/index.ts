@@ -13,6 +13,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   type ChatMessageError,
+  getAutoPluginIds,
   getDisabledPluginIds,
   type RequestTrigger,
   type RuntimeAdditionalContextFragment,
@@ -27,6 +28,7 @@ import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
+import { resolveAgentConnectorActivation } from '@/helpers/toolEngineering/connectorActivation';
 import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -235,7 +237,16 @@ class ChatService {
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
-      disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
+      autoSkillIds: getAutoPluginIds(agentConfig.plugins),
+      // A connector the agent has not turned on is off for it, so it leaves the
+      // discovery list too; one this turn already enabled (an @-mention) stays.
+      disabledPluginIds: [
+        ...getDisabledPluginIds(agentConfig.plugins),
+        ...resolveAgentConnectorActivation(
+          { chatConfig, plugins: agentConfig.plugins },
+          enabledToolIds,
+        ).offIds,
+      ],
       // The stored mode passes through: a model without function calling is
       // not demoted to chat mode here, matching the server runtime.
       enableAgentMode: modelParams.enableAgentMode,

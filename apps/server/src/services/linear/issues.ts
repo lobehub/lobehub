@@ -19,7 +19,14 @@ export interface LinearIssue {
   description?: string | null;
   id: string;
   identifier: string;
-  labels?: { nodes: { name: string }[] };
+  labels?: {
+    nodes: {
+      color?: string | null;
+      name: string;
+      /** The label group it sits in; a group itself is never on an issue. */
+      parent?: { color?: string | null; name: string } | null;
+    }[];
+  };
   parent?: { id: string } | null;
   priority: number;
   project?: { id: string; name: string } | null;
@@ -35,7 +42,7 @@ const ISSUE_FIELDS = `
   state { name type }
   parent { id }
   assignee { displayName }
-  labels(first: 10) { nodes { name } }
+  labels(first: 20) { nodes { name color parent { name color } } }
   project { id name }
   team { id key }
 `;

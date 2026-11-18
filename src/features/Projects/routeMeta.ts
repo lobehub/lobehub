@@ -2,7 +2,11 @@ import { ClipboardCheckIcon, FolderClosedIcon } from 'lucide-react';
 import { lazy } from 'react';
 
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import ProjectHomeSkeleton from '@/components/Skeleton/ProjectHome';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
+import { tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
 
 // Route metas load with the router on first paint; the runner reads the chat
@@ -29,10 +33,12 @@ export const projectDirectoriesRouteMeta = routeMeta({
   titleKey: 'project:settings.title',
 });
 
+// The home is a centered composer page, not a detail surface: its skeleton keeps
+// the title/subtitle and the tray + card instead of an avatar header and pills.
 export const projectHomeRouteMeta = routeMeta({
   DynamicMeta: ProjectSectionDynamicMeta,
   icon: FolderClosedIcon,
-  Skeleton: createSurfaceSkeleton('detail'),
+  Skeleton: ProjectHomeSkeleton,
   titleKey: 'project:sections.home',
 });
 
@@ -51,4 +57,21 @@ export const projectAcceptanceRouteMeta = routeMeta({
   icon: ClipboardCheckIcon,
   Skeleton: createSurfaceSkeleton('detail'),
   titleKey: 'project:sections.acceptance',
+});
+
+// Shared list metas mounted inside a project take on the project's avatar like its other
+// sections, so two projects' Goals / Tasks / Dashboards are told apart in tabs and history.
+export const projectGoalsRouteMeta = routeMeta({
+  ...goalsRouteMeta,
+  DynamicMeta: ProjectSectionDynamicMeta,
+});
+
+export const projectTasksRouteMeta = routeMeta({
+  ...tasksRouteMeta,
+  DynamicMeta: ProjectSectionDynamicMeta,
+});
+
+export const projectDashboardsRouteMeta = routeMeta({
+  ...dashboardsRouteMeta,
+  DynamicMeta: ProjectSectionDynamicMeta,
 });

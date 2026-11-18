@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   environmentChipState,
   pickableEnvironments,
+  repositorySelection,
   repositorySlug,
 } from './sandboxEnvironmentOptions';
 
@@ -68,5 +69,13 @@ describe('repositorySlug', () => {
   it('says nothing without a parsable source', () => {
     expect(repositorySlug({ configuration: null })).toBeUndefined();
     expect(repositorySlug(withUrl('not a url'))).toBeUndefined();
+  });
+});
+
+describe('repositorySelection', () => {
+  const repo = { id: 'env-repo', name: 'lobehub-biz/agent-mail' };
+
+  it('clones a repository into a temporary sandbox', () => {
+    expect(repositorySelection(repo)).toEqual({ environmentId: 'env-repo' });
   });
 });

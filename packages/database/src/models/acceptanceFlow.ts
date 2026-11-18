@@ -6,6 +6,7 @@ import type {
   AcceptanceFlowReview,
   AcceptanceFlowVerdict,
   AcceptanceReviewAnnotation,
+  VerifyCheckDefinition,
   VerifyCheckItem,
   VerifyFlowSnapshot,
 } from '@lobechat/types';
@@ -28,6 +29,18 @@ import {
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { VerifyCriterionModel } from './verifyCriterion';
+
+/** Append a branch's trigger and condition to a check's preconditions. */
+const withBranchPreconditions = (
+  definition: VerifyCheckDefinition | undefined,
+  branch: { condition: string | null; trigger: string } | undefined,
+): VerifyCheckDefinition => ({
+  ...definition,
+  preconditions: [
+    ...(definition?.preconditions ?? []),
+    ...(branch ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])] : []),
+  ],
+});
 
 export function validateFlow(definition: AcceptanceFlowDefinition) {
   const ids = new Set(definition.nodes.map((n) => n.id));
@@ -475,17 +488,7 @@ export class AcceptanceFlowModel {
                   ? prefix + item.sourceFlowNode.incomingEdgeId
                   : undefined,
               },
-              definition: {
-                ...item.definition,
-                preconditions: [
-                  /* v8 ignore start -- unreachable: child plan items come from graph(), which always builds definition.preconditions as an array, and materialize() keeps item.definition as-is, so `?? []` never applies */
-                  ...(item.definition?.preconditions ?? []),
-                  /* v8 ignore stop */
-                  ...(branch
-                    ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
-                    : []),
-                ],
-              },
+              definition: withBranchPreconditions(item.definition, branch),
             })),
           );
         }
@@ -523,15 +526,7 @@ export class AcceptanceFlowModel {
             category: flow.title,
             sourceCriterionId: asset.id,
             sourceFlowNode: { flowId, nodeId: node.id, incomingEdgeId: branch?.id },
-            definition: {
-              ...definition,
-              preconditions: [
-                ...(definition.preconditions ?? []),
-                ...(branch
-                  ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
-                  : []),
-              ],
-            },
+            definition: withBranchPreconditions(definition, branch),
             documentId: asset.documentId,
             verifierType: asset.verifierType,
             verifierConfig: asset.verifierConfig ?? {},

@@ -21,6 +21,16 @@ const stale = {
 };
 
 describe('pruneHiddenFields', () => {
+  it('keeps the HTTP connection choice and drops it after switching to stdio', () => {
+    const http = pruneHiddenFields(plugin({ ...stale, connectVia: 'device', type: 'http' }))
+      .customParams!.mcp!;
+    expect(http.connectVia).toBe('device');
+
+    const stdio = pruneHiddenFields(plugin({ ...stale, connectVia: 'device', type: 'stdio' }))
+      .customParams!.mcp!;
+    expect(stdio).not.toHaveProperty('connectVia');
+  });
+
   it('drops http fields after switching to stdio', () => {
     const mcp = pruneHiddenFields(plugin({ ...stale, type: 'stdio' })).customParams!.mcp!;
 
@@ -81,5 +91,26 @@ describe('pruneHiddenFields', () => {
 
     expect(pruneHiddenFields(cloud)).toBe(cloud);
     expect(pruneHiddenFields(legacy)).toBe(legacy);
+  });
+
+  it('keeps a device binding only for a server that runs on the device', () => {
+    const stdio = pruneHiddenFields(plugin({ ...stale, boundDeviceId: 'nas', type: 'stdio' }))
+      .customParams!.mcp!;
+    expect(stdio.boundDeviceId).toBe('nas');
+
+    const lan = pruneHiddenFields(
+      plugin({ ...stale, boundDeviceId: 'nas', type: 'http', url: 'http://192.168.1.10/mcp' }),
+    ).customParams!.mcp!;
+    expect(lan.boundDeviceId).toBe('nas');
+
+    const viaDevice = pruneHiddenFields(
+      plugin({ ...stale, boundDeviceId: 'nas', connectVia: 'device', type: 'http' }),
+    ).customParams!.mcp!;
+    expect(viaDevice.boundDeviceId).toBe('nas');
+
+    // Switched to a public server the cloud reaches itself
+    const publicHttp = pruneHiddenFields(plugin({ ...stale, boundDeviceId: 'nas', type: 'http' }))
+      .customParams!.mcp!;
+    expect(publicHttp).not.toHaveProperty('boundDeviceId');
   });
 });

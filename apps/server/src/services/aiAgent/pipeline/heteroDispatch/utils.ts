@@ -52,3 +52,21 @@ export const failHeteroDispatch = async (
   });
   return heteroErrorResult(run, { ...result, terminalReported });
 };
+
+/**
+ * `Promise.all` for reads that used to run one after another: waits for every
+ * one to settle, then rethrows the first failure in ARGUMENT order, so the
+ * error a caller sees is the one the sequential code would have hit first.
+ * Nothing is left running unobserved when one of them fails.
+ */
+export const settleInOrder = async <T extends readonly unknown[] | []>(
+  promises: T,
+): Promise<{ -readonly [K in keyof T]: Awaited<T[K]> }> => {
+  const settled = await Promise.allSettled(promises as readonly Promise<unknown>[]);
+  const values: unknown[] = [];
+  for (const result of settled) {
+    if (result.status === 'rejected') throw result.reason;
+    values.push(result.value);
+  }
+  return values as { -readonly [K in keyof T]: Awaited<T[K]> };
+};

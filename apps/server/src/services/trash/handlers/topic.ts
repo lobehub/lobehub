@@ -1,3 +1,5 @@
+import { resolveOwnedWorktrees } from '@lobechat/types';
+
 import { serverDBEnv } from '@/config/db';
 import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
@@ -9,6 +11,7 @@ import {
   type TrashCascade,
   type TrashHandler,
   type TrashHandlerContext,
+  TrashPurgeBlockedError,
   TrashRestoreError,
 } from './types';
 
@@ -29,8 +32,45 @@ export const topicEntry = (topic: TopicItem, removeFiles?: boolean): TrashRegist
 export const topicCascades = (topics: TopicItem[], removeFiles?: boolean): TrashCascade[] =>
   topics.map((topic) => ({ children: [], root: topicEntry(topic, removeFiles) }));
 
+/**
+ * How long a cleanup waiting on an offline device holds its topic in the
+ * recycle bin. Long enough for a machine that is merely off; a device that
+ * never returns must not keep the topic forever.
+ */
+export const PENDING_WORKTREE_PURGE_HOLD_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Whether any of these topics still has a worktree cleanup waiting on its device. */
+export const hasWaitingWorktreeCleanup = (
+  rows: { metadata?: Parameters<typeof resolveOwnedWorktrees>[0] }[],
+  now = Date.now(),
+) =>
+  rows.some((row) =>
+    resolveOwnedWorktrees(row.metadata).some(
+      (entry) =>
+        (entry.cleanup?.state === 'pending' || entry.cleanup?.state === 'running') &&
+        now - new Date(entry.cleanup.at).getTime() < PENDING_WORKTREE_PURGE_HOLD_MS,
+    ),
+  );
+
+export const WORKTREE_CLEANUP_WAITING_MESSAGE =
+  'The worktree cleanup is waiting for its device to connect';
+
+/**
+ * The cleanup of the worktree the app created for a topic lives only in the
+ * topic's metadata. Purging the topic while that cleanup still waits on its
+ * device would leave the folder untracked for good, so the purge waits for it
+ * (the root stays in the bin and the next purge or sweep retries).
+ */
+const assertNoPendingWorktreeCleanup = async (topicModel: TopicModel, topicId: string) => {
+  if (hasWaitingWorktreeCleanup(await topicModel.findOwnedWorktreeTopics([topicId])))
+    throw new TrashPurgeBlockedError(WORKTREE_CLEANUP_WAITING_MESSAGE);
+};
+
 export const topicHandler: TrashHandler = {
   purge: async (ctx, root) => {
+    const topicModel = new TopicModel(ctx.db, ctx.userId, ctx.workspaceId);
+    await assertNoPendingWorktreeCleanup(topicModel, root.resourceId);
+
     // `removeFiles` was requested at delete time: collect the attachments only
     // this topic still references (same reference-safe set the hard delete
     // used). Computed now, not at trash time, so a file that got attached
@@ -41,9 +81,7 @@ export const topicHandler: TrashHandler = {
       ? await fileModel.findDeletableFilesByTopicId(root.resourceId)
       : [];
 
-    const purged = await new TopicModel(ctx.db, ctx.userId, ctx.workspaceId).purge([
-      root.resourceId,
-    ]);
+    const purged = await topicModel.purge([root.resourceId]);
     // Nothing deleted means the topic was restored in the meantime: leave its
     // attachments alone too.
     if (purged.length === 0 || fileIds.length === 0) return;

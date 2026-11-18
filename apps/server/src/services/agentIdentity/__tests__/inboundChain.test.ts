@@ -328,6 +328,8 @@ describe('Agent inbound webhook — end to end over the real route', () => {
     expect(instruction).toContain('direct Channel');
     // Nobody watches this run: it must end, not park on an approval its report would miss.
     expect(agentCalls[0].execAgent.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+    // Whoever wrote the mail steers this run, so it gets its mailbox and nothing else.
+    expect(agentCalls[0].execAgent.exclusivePluginIds).toEqual(['lobe-agent-account']);
     expect(agentCalls[0].execAgent.hooks).toEqual([
       expect.objectContaining({ id: `agent-inbox-report:${accountId}`, type: 'onComplete' }),
     ]);

@@ -6,7 +6,7 @@ import {
 } from '@lobechat/types';
 import { and, eq, or, sql } from 'drizzle-orm';
 
-import { type TopicItem, topics } from '../../schemas';
+import { topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import type { TopicModelContext } from './context';
@@ -69,6 +69,34 @@ export const armScheduledRun = async (
   });
 };
 
+/** Re-arm the same persisted turn and reservation after a failed checkout. */
+export const retryWorktreeStart = async (ctx: TopicModelContext, id: string) =>
+  ctx.db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ metadata: topics.metadata, status: topics.status })
+      .from(topics)
+      .where(and(eq(topics.id, id), ctx.ownership(), notTrashed(topics.isDeleted)))
+      .for('update');
+    const run = row?.metadata?.scheduledRun;
+    if (row?.status !== 'failed' || run?.kind !== 'worktree_start' || !run.retryable) return;
+
+    const now = new Date().toISOString();
+    const scheduledRun = {
+      ...run,
+      claim: undefined,
+      error: undefined,
+      retryable: undefined,
+      runAt: now,
+      updatedAt: now,
+      waitingForDevice: false,
+    };
+    await tx
+      .update(topics)
+      .set({ metadata: { ...row.metadata, scheduledRun }, status: 'scheduled' })
+      .where(and(eq(topics.id, id), ctx.ownership()));
+    return scheduledRun;
+  });
+
 /**
  * Topics with a scheduled run that has come due.
  * System-level sweep (no ownership filter) used by the cron dispatcher.
@@ -90,7 +118,8 @@ export const armScheduledRun = async (
 export async function getDueScheduledTopics(
   db: LobeChatDatabase,
   now: Date = new Date(),
-): Promise<TopicItem[]> {
+  topicId?: string,
+) {
   const nowIso = now.toISOString();
   const nowEpochSeconds = Math.floor(now.getTime() / 1000);
 
@@ -105,6 +134,7 @@ export async function getDueScheduledTopics(
     .where(
       and(
         eq(topics.status, 'scheduled'),
+        topicId ? eq(topics.id, topicId) : undefined,
         notTrashed(topics.isDeleted),
         or(
           // `''` is the absent-runAt sentinel, and it never satisfies this pair —
@@ -124,6 +154,50 @@ export async function getDueScheduledTopics(
         sql`COALESCE(${topics.metadata}#>>'{scheduledRun,claim,expiresAt}', '') <= ${nowIso}`,
       ),
     );
+}
+
+/** Complete only the worker that still owns this first send's claim. */
+export async function finishWorktreeStart(
+  db: LobeChatDatabase,
+  id: string,
+  claimId: string,
+  result: { error?: string; retryAt?: string; retryable?: boolean; success: boolean },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ metadata: topics.metadata, status: topics.status })
+      .from(topics)
+      .where(eq(topics.id, id))
+      .for('update');
+    const run = row?.metadata?.scheduledRun;
+    if (run?.kind !== 'worktree_start' || run.claim?.id !== claimId) return;
+
+    await tx
+      .update(topics)
+      .set({
+        metadata: {
+          ...row.metadata,
+          scheduledRun: result.success
+            ? null
+            : result.retryAt
+              ? { ...run, claim: undefined, runAt: result.retryAt, waitingForDevice: true }
+              : {
+                  ...run,
+                  claim: undefined,
+                  error: result.error ?? '',
+                  retryable: result.retryable,
+                },
+        },
+        status:
+          (row.status === 'scheduled' || (row.status === 'active' && !result.success)) &&
+          !result.retryAt
+            ? result.success
+              ? 'running'
+              : 'failed'
+            : row.status,
+      })
+      .where(eq(topics.id, id));
+  });
 }
 
 /**
@@ -155,6 +229,7 @@ export async function claimScheduledTopic(
 
     const scheduledRun = row.metadata?.scheduledRun;
     if (!scheduledRun) return false;
+    if (scheduledRun.kind === 'worktree_start' && new Date(scheduledRun.runAt) > now) return false;
 
     const existingClaim = scheduledRun.claim;
     const claimLive = existingClaim && new Date(existingClaim.expiresAt) > now;
@@ -165,7 +240,11 @@ export async function claimScheduledTopic(
       .set({
         metadata: {
           ...row.metadata,
-          scheduledRun: { ...scheduledRun, claim },
+          scheduledRun: {
+            ...scheduledRun,
+            ...(scheduledRun.kind === 'worktree_start' && { waitingForDevice: false }),
+            claim,
+          },
         } as ChatTopicMetadata,
       })
       .where(eq(topics.id, id));

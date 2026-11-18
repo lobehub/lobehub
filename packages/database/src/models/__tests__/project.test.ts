@@ -35,7 +35,7 @@ const userId = 'project-model-user';
 const otherUserId = 'project-model-other-user';
 let projectIdentifierSequence = 0;
 
-const createProject = (repo: ProjectModel, input: Omit<CreateProjectInput, 'identifier'>) =>
+const createProject = (repo: ProjectRepository, input: Omit<CreateProjectInput, 'identifier'>) =>
   repo.create({
     ...input,
     identifier: `P${String(++projectIdentifierSequence).padStart(5, '0')}`,
@@ -174,7 +174,7 @@ describe('ProjectModel', () => {
       .set({ coordinatorAgentId: shared.id })
       .where(eq(projects.userId, userId));
 
-    await model.delete(first.id);
+    await repo.delete(first.id);
 
     expect(await serverDB.select().from(agents).where(eq(agents.id, shared.id))).toHaveLength(1);
     expect((await model.findById(second.id))?.coordinatorAgentId).toBe(shared.id);
@@ -188,7 +188,7 @@ describe('ProjectModel', () => {
       .set({ coordinatorAgentId: inbox.id })
       .where(eq(projects.id, project.id));
 
-    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await serverDB.select().from(agents).where(eq(agents.id, inbox.id))).toHaveLength(1);
   });
 
@@ -209,7 +209,7 @@ describe('ProjectModel', () => {
     expect(await model.resolveCoordinatorAgents([cleared])).toEqual([
       expect.objectContaining({ coordinatorAgentId: inbox?.id, id: project.id }),
     ]);
-    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
   });
 
   it('tells whether replacing a main agent retires it', async () => {
@@ -273,7 +273,7 @@ describe('ProjectModel', () => {
         .where(eq(projectAgents.projectId, project.id)),
     ).toEqual([{ role: 'coordinator' }]);
 
-    await model.delete(project.id);
+    await repo.delete(project.id);
     expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
   });
 
@@ -320,7 +320,7 @@ describe('ProjectModel', () => {
 
     const updated = await model.update(project.id, { name: 'Apollo 2' });
     expect(updated?.name).toBe('Apollo 2');
-    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await model.findById(project.id)).toBeNull();
     // The main agent is an ordinary agent and stays with the user.
     expect(
@@ -367,13 +367,15 @@ describe('ProjectModel', () => {
     const hidden = await createProject(otherRepo, { name: 'Hidden', visibility: 'private' });
 
     expect(await model.findByIds([])).toEqual([]);
-    expect(await model.findByIds([first.id, second.id, hidden.id])).toEqual(
+    const readableProjects = await model.findByIds([first.id, second.id, hidden.id]);
+
+    expect(readableProjects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: first.id }),
         expect.objectContaining({ id: second.id }),
       ]),
     );
-    expect(await model.findByIds([first.id, second.id, hidden.id])).toHaveLength(2);
+    expect(readableProjects).toHaveLength(2);
   });
 
   it('filters and paginates projects', async () => {
@@ -433,7 +435,7 @@ describe('ProjectModel', () => {
     const project = await createProject(otherRepo, { name: 'Private effort' });
     expect(await model.findById(project.id)).toBeNull();
     expect(await model.update(project.id, { name: 'Hacked' })).toBeNull();
-    expect(await model.delete(project.id)).toBeNull();
+    expect(await repo.delete(project.id)).toBeNull();
     expect(await model.findManageableById(project.id)).toBeNull();
   });
 
@@ -874,12 +876,12 @@ describe('ProjectModel', () => {
     await model.updateStatus(project.id, 'active');
     await model.requestCompletion(project.id);
 
-    const rejected = await model.reviewCompletion(project.id, 'rejected', 'Needs evidence');
+    const rejected = await repo.reviewCompletion(project.id, 'rejected', 'Needs evidence');
     expect(rejected?.project.status).toBe('active');
     expect(rejected?.review.round).toBe(1);
 
     await model.requestCompletion(project.id);
-    const accepted = await model.reviewCompletion(project.id, 'accepted', 'Approved');
+    const accepted = await repo.reviewCompletion(project.id, 'accepted', 'Approved');
     expect(accepted?.project.status).toBe('completed');
     expect(accepted?.project.completedReviewId).toBe(accepted?.review.id);
     expect(accepted?.review.round).toBe(2);
@@ -908,7 +910,7 @@ describe('ProjectModel', () => {
     const project = await createProject(repo, { name: 'Archived completion' });
     await model.updateStatus(project.id, 'active');
     await model.requestCompletion(project.id);
-    await model.reviewCompletion(project.id, 'accepted');
+    await repo.reviewCompletion(project.id, 'accepted');
     await model.updateStatus(project.id, 'archived');
 
     await expect(model.updateStatus(project.id, 'active')).rejects.toThrow(
@@ -937,11 +939,11 @@ describe('ProjectModel', () => {
     await expect(model.updateStatus(project.id, 'paused')).rejects.toThrow(
       'A project awaiting review must be accepted or rejected',
     );
-    await expect(model.reviewCompletion('missing', 'accepted')).resolves.toBeNull();
-    await expect(model.reviewCompletion(project.id, 'rejected')).resolves.toEqual(
+    await expect(repo.reviewCompletion('missing', 'accepted')).resolves.toBeNull();
+    await expect(repo.reviewCompletion(project.id, 'rejected')).resolves.toEqual(
       expect.objectContaining({ project: expect.objectContaining({ status: 'active' }) }),
     );
-    await expect(model.reviewCompletion(project.id, 'accepted')).rejects.toThrow(
+    await expect(repo.reviewCompletion(project.id, 'accepted')).rejects.toThrow(
       'Project is not awaiting review',
     );
     expect(await model.reopen(project.id)).toBeNull();
@@ -951,7 +953,7 @@ describe('ProjectModel', () => {
     const completed = await createProject(repo, { name: 'Completed' });
     await model.updateStatus(completed.id, 'active');
     await model.requestCompletion(completed.id);
-    await model.reviewCompletion(completed.id, 'accepted');
+    await repo.reviewCompletion(completed.id, 'accepted');
     await expect(model.updateStatus(completed.id, 'active')).rejects.toThrow(
       'A completed project must be reopened',
     );
@@ -995,6 +997,16 @@ describe('ProjectModel', () => {
     await expect(model.attachEnvironment(project.id, randomUUID())).rejects.toThrow(
       'access denied',
     );
+
+    await expect(otherModel.detachEnvironment(project.id, env.id)).rejects.toThrow('access denied');
+    await model.detachEnvironment(project.id, env.id);
+    await model.detachEnvironment(project.id, env.id);
+    expect(await model.listEnvironments(project.id)).toEqual([]);
+    // Unlinking leaves the environment itself for the other places using it.
+    await model.attachEnvironment(project.id, env.id);
+    expect(await model.listEnvironments(project.id)).toEqual([
+      expect.objectContaining({ id: env.id }),
+    ]);
   });
 
   it('lists project conversations with or without directories, retaining each agent', async () => {
@@ -1093,6 +1105,38 @@ describe('ProjectModel', () => {
     expect(await model.listTopics(project.id)).toEqual([
       expect.objectContaining({ agentId: null, agentTitle: null, id: topic.id }),
     ]);
+  });
+
+  // A Channel run topic carries the requester's Channel request and the history
+  // the Agent read there; the project sidebar must not become a second door into
+  // that transcript for members who are not in the Channel.
+  it("keeps a Channel's run topics out of the project conversation listing", async () => {
+    const project = await createProject(repo, { name: 'Channel host' });
+    const [channelAgent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Channel responder', userId, visibility: 'public' })
+      .returning();
+    await serverDB.insert(topics).values([
+      {
+        agentId: channelAgent.id,
+        id: 'project-regular-topic',
+        projectId: project.id,
+        title: 'Planning',
+        userId,
+      },
+      {
+        agentId: channelAgent.id,
+        id: 'project-channel-topic',
+        projectId: project.id,
+        title: 'Launch checklist from the Channel',
+        trigger: 'channel',
+        userId,
+      },
+    ]);
+
+    const list = await model.listTopics(project.id);
+
+    expect(list.map((topic) => topic.id)).toEqual(['project-regular-topic']);
   });
 
   // The project sidebar renders a running row's elapsed clock from this. Rows

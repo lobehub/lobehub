@@ -10,6 +10,7 @@ import type {
   CreatedApiKeyResponse,
   UpdateApiKeyRequest,
 } from '../types/api-key.type';
+import type { DeletedResource } from '../types/common.type';
 
 const projectApiKey = (value: ApiKeyItem): ApiKeyResponse => ({
   createdAt: value.createdAt,
@@ -58,11 +59,11 @@ export class ApiKeyService extends BaseService {
     return this.getApiKey(id);
   }
 
-  async deleteApiKey(id: string): Promise<{ id: string }> {
+  async deleteApiKey(id: string): Promise<DeletedResource> {
     const existing = await this.apiKeyModel.findById(id);
     if (!existing) throw this.createNotFoundError('API key not found');
 
     await this.apiKeyModel.delete(id);
-    return { id };
+    return { deleted: true, id };
   }
 }

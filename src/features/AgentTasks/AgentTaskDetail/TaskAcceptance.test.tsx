@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   bundle: undefined as
     | undefined
     | {
-        acceptance: { id: string; requirement: string };
+        acceptance: { completedAt?: string; id: string; requirement: string; status?: string };
         checks: Array<{
           category: string;
           id: string;
@@ -120,8 +120,11 @@ vi.mock('@/features/Acceptance/Viewer/AcceptanceScope', () => ({
 }));
 
 vi.mock('@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory', () => ({
-  default: ({ toolbar }: { toolbar?: ReactNode }) => (
-    <div data-testid="acceptance-check-inventory">{toolbar}</div>
+  default: ({ titleExtra, toolbar }: { titleExtra?: ReactNode; toolbar?: ReactNode }) => (
+    <div data-testid="acceptance-check-inventory">
+      {titleExtra}
+      {toolbar}
+    </div>
   ),
 }));
 
@@ -300,6 +303,25 @@ describe('TaskAcceptance', () => {
     expect(screen.getByTestId('acceptance-decision')).toBeInTheDocument();
     // No collapsible 交付验收 section header — the inventory brings its own.
     expect(screen.queryByText('taskDetail.acceptance.title')).not.toBeInTheDocument();
+  });
+
+  it('moves a signed-off verdict into the checklist title and drops the decision bar', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: {
+        completedAt: '2026-11-10T10:50:00.000Z',
+        id: 'acceptance-1',
+        requirement: 'Everything is verifiable.',
+        status: 'accepted',
+      },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance variant={'result'} />);
+
+    expect(screen.getByText('taskDetail.acceptanceState.accepted')).toBeInTheDocument();
+    expect(screen.queryByTestId('acceptance-decision')).not.toBeInTheDocument();
   });
 
   it('keeps the report link reachable from the inventory toolbar in the result panel', () => {

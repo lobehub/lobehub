@@ -17,6 +17,7 @@ type LabFeatureI18nKey =
   | 'agentGraphConfig'
   | 'agentIdentity'
   | 'artifactDeployment'
+  | 'betterCodingExperience'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
@@ -27,6 +28,7 @@ type LabFeatureI18nKey =
   | 'imessage'
   | 'messageTextSelectionActions'
   | 'oauthApps'
+  | 'pageCollab'
   | 'projects'
   | 'selfLearning'
   | 'topicBugReport';
@@ -118,6 +120,12 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableBetterCodingExperience',
+    i18nKey: 'betterCodingExperience',
+    searchKeywords: ['coding', 'code', 'developer', 'programming', 'IDE'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableProjects',
     i18nKey: 'projects',
     searchKeywords: ['project', 'workspace'],
@@ -134,6 +142,14 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'artifactDeployment',
     searchKeywords: ['artifact', 'deploy', 'publish'],
     stage: 'beta',
+  },
+  {
+    businessOnly: true,
+    flag: 'enablePageCollab',
+    i18nKey: 'pageCollab',
+    searchKeywords: ['collaboration', 'co-editing', 'realtime', 'live editing', 'page'],
+    stage: 'alpha',
+    workspaceOnly: true,
   },
   {
     desktopOnly: true,
@@ -157,7 +173,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    desktopOnly: true,
     flag: 'enableCodexAppServer',
     i18nKey: 'codexAppServer',
     searchKeywords: ['codex', 'app server'],

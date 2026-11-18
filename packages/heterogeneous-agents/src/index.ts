@@ -12,6 +12,13 @@ export {
   collectHeteroAttachedFiles,
   type HeteroAttachedFileRef,
 } from './attachedFiles';
+export {
+  buildClaudeCodeEntrypointEnv,
+  CLAUDE_CODE_ENTRYPOINT_ENV,
+  DEFAULT_CLAUDE_CODE_ENTRYPOINT,
+  normalizeClaudeCodeEntrypoint,
+  resolveDispatchedClaudeCodeEntrypoint,
+} from './claudeCodeEntrypoint';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,
@@ -93,6 +100,7 @@ export type {
   MainResolveToolResultIntent,
   MainSetToolInterventionIntent,
   MainStreamContentIntent,
+  MainUpdateBackgroundTaskIntent,
   MainUpdateToolStateIntent,
   PersistAssistantIntent,
   SetErrorIntent,
@@ -164,6 +172,9 @@ export {
 export type {
   AgentEventAdapter,
   AgentProcessConfig,
+  BackgroundTaskEventData,
+  HeteroBackgroundTask,
+  HeteroBackgroundTaskStatus,
   HeterogeneousAgentEvent,
   HeterogeneousEventType,
   HeterogeneousTerminalErrorData,

@@ -1,11 +1,18 @@
 import { createIndexedDBLocalDatabaseAdapter } from './indexedDBAdapter';
-import type { LocalDatabaseAdapter, LocalDatabaseBatchOperation } from './types';
+import type {
+  LocalDatabaseAdapter,
+  LocalDatabaseBatchOperation,
+  LocalDatabaseKeyQuery,
+} from './types';
 
 export type {
   LocalDatabaseAdapter,
   LocalDatabaseBatchOperation,
   LocalDatabaseCollectionInfo,
   LocalDatabaseEntry,
+  LocalDatabaseKeyGroup,
+  LocalDatabaseKeyPage,
+  LocalDatabaseKeyQuery,
 } from './types';
 
 let activeAdapter: LocalDatabaseAdapter = createIndexedDBLocalDatabaseAdapter();
@@ -35,6 +42,10 @@ export const localDatabase = {
   get: <T>(collection: string, key: string): Promise<T | undefined> =>
     activeAdapter.get<T>(collection, key),
   initialize: (): Promise<void> => activeAdapter.initialize(),
+  keyGroupsByPrefix: (collection: string, prefix: string, delimiter: string) =>
+    activeAdapter.keyGroupsByPrefix(collection, prefix, delimiter),
+  keysByPrefix: (collection: string, prefix: string, query?: LocalDatabaseKeyQuery) =>
+    activeAdapter.keysByPrefix(collection, prefix, query),
   listCollections: () => activeAdapter.listCollections(),
   set: (collection: string, key: string, value: unknown): Promise<void> =>
     activeAdapter.set(collection, key, value),

@@ -49,32 +49,24 @@ describe('createAgent direct Channel', () => {
     expect(refreshChannelListIfEnabled).toHaveBeenCalledTimes(1);
   });
 
-  it('names this desktop so a local Agent can answer in its direct Channel here', async () => {
-    mocks.isDesktop = true;
-    mocks.resolveGatewayDeviceId.mockResolvedValue('desktop-device');
-    vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-new' });
-    const { result } = renderHook(() => useAgentStore());
+  // The direct Channel binds no device, so creating an Agent never asks for this desktop's id.
+  it.each([true, false])(
+    'sends no device when creating an Agent (desktop: %s)',
+    async (desktop) => {
+      mocks.isDesktop = desktop;
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-new' });
+      const { result } = renderHook(() => useAgentStore());
 
-    await act(async () => {
-      await result.current.createAgent(params);
-    });
+      await act(async () => {
+        await result.current.createAgent(params);
+      });
 
-    expect(vi.mocked(agentService.createAgent).mock.calls[0][0].localDeviceId).toBe(
-      'desktop-device',
-    );
-  });
-
-  it('sends no device from the web', async () => {
-    vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-new' });
-    const { result } = renderHook(() => useAgentStore());
-
-    await act(async () => {
-      await result.current.createAgent(params);
-    });
-
-    expect(mocks.resolveGatewayDeviceId).not.toHaveBeenCalled();
-    expect(vi.mocked(agentService.createAgent).mock.calls[0][0].localDeviceId).toBeUndefined();
-  });
+      expect(mocks.resolveGatewayDeviceId).not.toHaveBeenCalled();
+      expect(vi.mocked(agentService.createAgent).mock.calls[0][0]).not.toHaveProperty(
+        'localDeviceId',
+      );
+    },
+  );
 
   it('refetches nothing when the Agent was not created', async () => {
     vi.mocked(agentService.createAgent).mockRejectedValue(new Error('forbidden'));

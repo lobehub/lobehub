@@ -95,4 +95,17 @@ describe('createGroupAgentTopic', () => {
       }),
     );
   });
+
+  // Regression: a message sent as "[Image #1] [Image #2] dup test" was titled
+  // "Image #1 dup test".
+  it('leaves inline image references out of the fallback title', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'topic-new' });
+
+    await createGroupAgentTopic(
+      { ...deps(), topicRepo: { create } as never },
+      { agentId: 'agent-a', groupId: 'group-1', message: '[Image #1] [Image #2] dup test' },
+    );
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ title: 'dup test' }));
+  });
 });

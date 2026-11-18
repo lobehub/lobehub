@@ -7,6 +7,7 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
+import type { DeletedResource } from '../types/common.type';
 import type {
   CreateGoalRequest,
   GoalListQuery,
@@ -178,11 +179,12 @@ export class GoalRestService extends BaseService {
     return this.goalService.graph(id);
   }
 
-  async deleteGoal(id: string): ServiceResult<void> {
+  async deleteGoal(id: string): ServiceResult<DeletedResource> {
     const goal = await this.requireGoal(id);
     // Same rule as `restart`: visibility is not manageability, so only the
     // goal's creator (or a workspace owner) may cascade its graph away.
     await this.assertRowManageable(goal.userId, 'AGENT_UPDATE', 'goal');
     await this.goalService.delete(id);
+    return { deleted: true, id };
   }
 }

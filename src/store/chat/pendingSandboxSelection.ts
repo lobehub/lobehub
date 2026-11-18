@@ -58,6 +58,25 @@ export const setPendingSandboxSelection = (agentId: string, selection?: SandboxS
 };
 
 /**
+ * Selections the composer filled in itself rather than the person choosing
+ * them: the plan's default placement. Kept by identity, so a pick — always a
+ * new object — is never mistaken for one. The server needs the difference: a
+ * project conversation started on the default is given the project's
+ * repository checkout instead, while one the person placed keeps their choice.
+ */
+const seeded = new WeakSet<SandboxSelection>();
+
+/** Whether a selection is the composer's default rather than anyone's pick. */
+export const isSeededSandboxSelection = (selection: SandboxSelection): boolean =>
+  seeded.has(selection);
+
+/** Fill an agent's empty slot with the default placement, marked as not chosen by anyone. */
+export const seedPendingSandboxSelection = (agentId: string, selection: SandboxSelection): void => {
+  seeded.add(selection);
+  setPendingSandboxSelection(agentId, selection);
+};
+
+/**
  * The place an agent's next conversation starts when nobody picks one, and
  * the plan turns out to include a drive. Registered by the composer as soon as
  * it knows the agent runs in the sandbox — before the entitlement has loaded —
@@ -69,8 +88,27 @@ const defaults = new Map<string, SandboxSelection>();
 
 /** Register an agent's default placement; `undefined` clears it. */
 export const setSandboxDefaultSelection = (agentId: string, selection?: SandboxSelection): void => {
+  if (selection) seeded.add(selection);
   if (selection) defaults.set(agentId, selection);
   else defaults.delete(agentId);
+};
+
+/**
+ * Where an agent's next conversation starts when it runs in the temporary
+ * sandbox — the repository its last temporary sandbox used. Registered beside
+ * the drive default so a first send made before the entitlement is known
+ * still carries it once the plan turns out to have no drive.
+ */
+const temporaryDefaults = new Map<string, SandboxSelection>();
+
+/** Register an agent's temporary-sandbox default; `undefined` clears it. */
+export const setSandboxTemporaryDefaultSelection = (
+  agentId: string,
+  selection?: SandboxSelection,
+): void => {
+  if (selection) seeded.add(selection);
+  if (selection) temporaryDefaults.set(agentId, selection);
+  else temporaryDefaults.delete(agentId);
 };
 
 /**
@@ -95,8 +133,9 @@ const isDriveEntitled = async (): Promise<boolean> => {
 
 /**
  * The selection the first send carries: the pick, if one was made; otherwise
- * the registered default, once the plan is confirmed to include a drive. The
- * default then becomes the pick, so every later reader of this send sees it.
+ * the registered drive default, once the plan is confirmed to include a drive;
+ * otherwise the registered temporary-sandbox default. That default then
+ * becomes the pick, so every later reader of this send sees it.
  */
 export const resolvePendingSandboxSelection = async (
   agentId: string,
@@ -104,8 +143,9 @@ export const resolvePendingSandboxSelection = async (
   const picked = map.get(agentId);
   if (picked) return picked;
 
-  const fallback = defaults.get(agentId);
-  if (!fallback || !(await isDriveEntitled())) return undefined;
+  const drive = defaults.get(agentId);
+  const fallback = drive && (await isDriveEntitled()) ? drive : temporaryDefaults.get(agentId);
+  if (!fallback) return map.get(agentId);
 
   // A pick made while the entitlement was in flight wins over the default.
   if (!map.has(agentId)) setPendingSandboxSelection(agentId, fallback);
@@ -130,7 +170,13 @@ export const consumePendingSandboxSelection = (agentId: string): SandboxSelectio
   return selection;
 };
 
-/** The topic metadata a pending selection becomes when the topic is created with it. */
+/**
+ * The topic metadata a pending selection becomes when the topic is created with
+ * it. An empty selection is the temporary sandbox picked on purpose, and says so:
+ * otherwise it would arrive as nothing picked, and a project conversation would
+ * be given the project's checkout instead. A default nobody picked says that
+ * too, so the project's checkout can take its place.
+ */
 export const toSandboxTopicMetadata = (
   selection: SandboxSelection | undefined,
 ): ChatTopicMetadata | undefined =>
@@ -139,4 +185,8 @@ export const toSandboxTopicMetadata = (
     sandboxEnvironmentId: selection.environmentId,
     sandboxInstanceId: selection.instanceId,
     sandboxWorkingDirectory: selection.workingDirectory,
+    ...(seeded.has(selection) && { sandboxSeeded: true }),
+    ...(!selection.environmentId &&
+      !selection.instanceId &&
+      selection.workingDirectory === undefined && { sandboxTemporary: true }),
   };

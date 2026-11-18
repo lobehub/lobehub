@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentStateManager } from '../AgentStateManager';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
+
+import { AgentStateManager, resetStripOperationToolsetCache } from '../AgentStateManager';
 
 // Mock Redis client. Hoisted so individual tests can assert on the exact
 // payloads handed to `setex` / `lpush`.
@@ -19,6 +21,7 @@ const { redisMock, pipelineMock } = vi.hoisted(() => {
     exists: vi.fn(),
     expire: vi.fn(),
     get: vi.fn(),
+    hget: vi.fn(),
     hgetall: vi.fn(),
     hmset: vi.fn(),
     keys: vi.fn(),
@@ -34,11 +37,22 @@ vi.mock('../redis', () => ({
   getAgentRuntimeRedisClient: () => redisMock,
 }));
 
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn(),
+}));
+
+const mockStripFlag = (enabled: boolean) =>
+  vi
+    .mocked(getServerFeatureFlagsStateFromRuntimeConfig)
+    .mockResolvedValue({ enableStripOperationToolset: enabled } as any);
+
 describe('AgentStateManager', () => {
   let stateManager: AgentStateManager;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetStripOperationToolsetCache();
+    mockStripFlag(false);
     stateManager = new AgentStateManager();
   });
 
@@ -96,6 +110,28 @@ describe('AgentStateManager', () => {
       await expect(stateManager.saveAgentState(operationId, state as any)).resolves.not.toThrow();
     });
 
+    it('writes the status to the metadata hash in the same MULTI as the blob', async () => {
+      await stateManager.saveAgentState('op-meta', {
+        cost: { total: 2 },
+        status: 'interrupted',
+        stepCount: 3,
+      } as any);
+
+      expect(redisMock.multi).toHaveBeenCalledTimes(1);
+      expect(pipelineMock.setex).toHaveBeenCalledWith(
+        'agent_runtime_state:op-meta',
+        2 * 3600,
+        expect.any(String),
+      );
+      expect(pipelineMock.hmset).toHaveBeenCalledWith(
+        'agent_runtime_meta:op-meta',
+        expect.objectContaining({ status: 'interrupted', totalCost: 2 }),
+      );
+      expect(pipelineMock.exec).toHaveBeenCalledTimes(1);
+      expect(redisMock.setex).not.toHaveBeenCalled();
+      expect(redisMock.hmset).not.toHaveBeenCalled();
+    });
+
     it('omits the messages array from the persisted state blob', async () => {
       const state = {
         cost: { total: 1 },
@@ -107,7 +143,7 @@ describe('AgentStateManager', () => {
 
       await stateManager.saveAgentState('op-strip', state as any);
 
-      const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+      const serialized = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
       expect(JSON.parse(serialized).messages).toBeUndefined();
       // Other fields are retained.
       expect(JSON.parse(serialized).status).toBe('running');
@@ -119,7 +155,7 @@ describe('AgentStateManager', () => {
         const messages = [{ content: 'private transcript', id: 'private-1', role: 'user' }];
         const state = { messages, origin, status: 'running', stepCount: 1 };
         await stateManager.saveAgentState('private-op', state as any);
-        const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+        const serialized = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
         expect(JSON.parse(serialized).messages).toEqual(messages);
 
         await stateManager.saveStepResult('private-op', {
@@ -146,10 +182,35 @@ describe('AgentStateManager', () => {
 
       await stateManager.saveAgentState('op-ephemeral', state as any);
 
-      const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+      const serialized = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
       const persisted = JSON.parse(serialized);
       expect(persisted.messages).toHaveLength(2);
       expect(persisted.messages[1].content).toBe('respond to the group');
+    });
+  });
+
+  describe('loadAgentStatus', () => {
+    it('reads the status from the metadata hash without loading the blob', async () => {
+      redisMock.hget.mockResolvedValueOnce('interrupted');
+
+      await expect(stateManager.loadAgentStatus('op-status')).resolves.toBe('interrupted');
+      expect(redisMock.hget).toHaveBeenCalledWith('agent_runtime_meta:op-status', 'status');
+      expect(redisMock.get).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the blob when the hash has no status', async () => {
+      redisMock.hget.mockResolvedValueOnce(null);
+      redisMock.get.mockResolvedValueOnce(JSON.stringify({ status: 'done', stepCount: 2 }));
+
+      await expect(stateManager.loadAgentStatus('op-legacy')).resolves.toBe('done');
+      expect(redisMock.get).toHaveBeenCalledWith('agent_runtime_state:op-legacy');
+    });
+
+    it('returns null when neither the hash nor the blob exists', async () => {
+      redisMock.hget.mockResolvedValueOnce(null);
+      redisMock.get.mockResolvedValueOnce(null);
+
+      await expect(stateManager.loadAgentStatus('op-missing')).resolves.toBeNull();
     });
   });
 
@@ -256,7 +317,7 @@ describe('AgentStateManager', () => {
         2 * 3600,
         JSON.stringify(toolSet),
       );
-      const blob = redisMock.setex.mock.calls.find(
+      const blob = pipelineMock.setex.mock.calls.find(
         (c) => c[0] === 'agent_runtime_state:op-ots-strip',
       );
       expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
@@ -274,7 +335,7 @@ describe('AgentStateManager', () => {
         (c) => c[0] === `agent_runtime_toolset:${op}`,
       );
       expect(writes).toHaveLength(1);
-      expect(redisMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+      expect(pipelineMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
     });
 
     it('refreshes the tool-set TTL inside the step pipeline and strips the blob', async () => {
@@ -351,11 +412,11 @@ describe('AgentStateManager', () => {
       expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
         false,
       );
-      expect(redisMock.expire).not.toHaveBeenCalledWith(
+      expect(pipelineMock.expire).not.toHaveBeenCalledWith(
         `agent_runtime_toolset:${op}`,
         expect.anything(),
       );
-      const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
     });
 
@@ -376,6 +437,401 @@ describe('AgentStateManager', () => {
       );
       const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
       expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
+    });
+  });
+
+  // The runtime feature flag `agent_runtime_strip_operation_toolset` gates
+  // stripping without a redeploy; the env var overrides it either way.
+  describe('operationToolSet externalization · feature flag', () => {
+    const STRIP_FLAG = 'AGENT_RUNTIME_STRIP_OPERATION_TOOLSET';
+    const originalFlag = process.env[STRIP_FLAG];
+    const toolSet = { enabledToolIds: ['ff'], manifestMap: { ff: { api: [] } }, tools: [{}] };
+    const origin = { userId: 'user-ff' };
+
+    beforeEach(() => {
+      delete process.env[STRIP_FLAG];
+      delete process.env.AGENT_RUNTIME_SLIM_STATE;
+    });
+
+    afterAll(() => {
+      if (originalFlag === undefined) delete process.env[STRIP_FLAG];
+      else process.env[STRIP_FLAG] = originalFlag;
+      delete process.env.AGENT_RUNTIME_SLIM_STATE;
+    });
+
+    it('strips the saveAgentState blob when the flag is on, resolved for the owner', async () => {
+      mockStripFlag(true);
+      const op = 'op-ff-save-on';
+
+      await stateManager.saveAgentState(op, {
+        operationToolSet: toolSet,
+        origin,
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-ff');
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        `agent_runtime_toolset:${op}`,
+        2 * 3600,
+        JSON.stringify(toolSet),
+      );
+      expect(pipelineMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
+    });
+
+    it('strips the saveStepResult blob when the flag is on', async () => {
+      mockStripFlag(true);
+      const op = 'op-ff-step-on';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { operationToolSet: toolSet, origin, status: 'running', stepCount: 1 },
+        stepIndex: 1,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-ff');
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        `agent_runtime_toolset:${op}`,
+        2 * 3600,
+        JSON.stringify(toolSet),
+      );
+      expect(pipelineMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
+    });
+
+    it('keeps both blobs byte-for-byte inline and writes no external key when the flag is off', async () => {
+      mockStripFlag(false);
+      const op = 'op-ff-off';
+      const state = { operationToolSet: toolSet, origin, status: 'running', stepCount: 1 };
+
+      await stateManager.saveAgentState(op, state as any);
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: state,
+        stepIndex: 1,
+      } as any);
+
+      // Both saves write the blob through a MULTI: saveAgentState first.
+      const [saveBlob, stepBlob] = pipelineMock.setex.mock.calls.filter(
+        (c) => c[0] === `agent_runtime_state:${op}`,
+      );
+      expect(saveBlob![2]).toBe(JSON.stringify(state));
+      expect(stepBlob![2]).toBe(JSON.stringify(state));
+      expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
+        false,
+      );
+      expect(pipelineMock.expire).not.toHaveBeenCalledWith(
+        `agent_runtime_toolset:${op}`,
+        expect.anything(),
+      );
+    });
+
+    it("env '0' overrides an enabled flag without consulting the flag provider", async () => {
+      process.env[STRIP_FLAG] = '0';
+      mockStripFlag(true);
+      const op = 'op-ff-kill';
+
+      await stateManager.saveAgentState(op, {
+        operationToolSet: toolSet,
+        origin,
+        status: 'running',
+        stepCount: 1,
+      } as any);
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { operationToolSet: toolSet, origin, status: 'running', stepCount: 2 },
+        stepIndex: 2,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
+      expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
+        false,
+      );
+      const [saveBlob, stepBlob] = pipelineMock.setex.mock.calls.filter(
+        (c) => c[0] === `agent_runtime_state:${op}`,
+      );
+      expect(JSON.parse(saveBlob![2] as string).operationToolSet).toEqual(toolSet);
+      expect(JSON.parse(stepBlob![2] as string).operationToolSet).toEqual(toolSet);
+    });
+
+    it("env '1' forces stripping without consulting the flag provider", async () => {
+      process.env[STRIP_FLAG] = '1';
+      process.env.AGENT_RUNTIME_SLIM_STATE = '0';
+      const op = 'op-ff-force';
+
+      await stateManager.saveAgentState(op, {
+        operationToolSet: toolSet,
+        origin,
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
+    });
+
+    it('keeps the blob inline when the flag provider fails', async () => {
+      vi.mocked(getServerFeatureFlagsStateFromRuntimeConfig).mockRejectedValue(new Error('down'));
+      const op = 'op-ff-error';
+
+      await stateManager.saveAgentState(op, {
+        operationToolSet: toolSet,
+        origin,
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
+    });
+
+    it('rehydrates a stripped blob from its external key while the flag is off', async () => {
+      mockStripFlag(false);
+      const op = 'op-ff-rehydrate';
+      redisMock.get.mockImplementation((key: string) =>
+        key === `agent_runtime_state:${op}`
+          ? JSON.stringify({ origin, status: 'running', stepCount: 3 })
+          : key === `agent_runtime_toolset:${op}`
+            ? JSON.stringify(toolSet)
+            : null,
+      );
+
+      const loaded = await stateManager.loadAgentState(op);
+
+      expect(loaded?.operationToolSet).toEqual(toolSet);
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
+    });
+
+    it('resolves the flag once per cache window for one owner', async () => {
+      mockStripFlag(true);
+      const op = 'op-ff-cache-hit';
+      const state = { operationToolSet: toolSet, origin, status: 'running', stepCount: 1 };
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: state,
+        stepIndex: 1,
+      } as any);
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { ...state, stepCount: 2 },
+        stepIndex: 2,
+      } as any);
+
+      // The per-step write must not pay a flag lookup on every step.
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves the flag per operation owner', async () => {
+      mockStripFlag(true);
+
+      await stateManager.saveAgentState('op-ff-owner-a', {
+        operationToolSet: toolSet,
+        origin: { userId: 'user-a' },
+        status: 'running',
+        stepCount: 1,
+      } as any);
+      await stateManager.saveAgentState('op-ff-owner-b', {
+        operationToolSet: toolSet,
+        origin: { userId: 'user-b' },
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-a');
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledWith('user-b');
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a failed resolution', async () => {
+      vi.mocked(getServerFeatureFlagsStateFromRuntimeConfig)
+        .mockRejectedValueOnce(new Error('down'))
+        .mockResolvedValue({ enableStripOperationToolset: true } as any);
+      const op = 'op-ff-error-retry';
+      const state = { operationToolSet: toolSet, origin, status: 'running', stepCount: 1 };
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: state,
+        stepIndex: 1,
+      } as any);
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { ...state, stepCount: 2 },
+        stepIndex: 2,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(2);
+      const blobs = pipelineMock.setex.mock.calls.filter(
+        (c) => c[0] === `agent_runtime_state:${op}`,
+      );
+      // First save keeps the blob inline, the retry strips it.
+      expect(JSON.parse(blobs[0][2] as string).operationToolSet).toEqual(toolSet);
+      expect(JSON.parse(blobs.at(-1)![2] as string).operationToolSet).toBeUndefined();
+    });
+  });
+
+  describe('slim state (agent_runtime_slim_state)', () => {
+    const manifest = { api: [{ name: 'x' }], identifier: 'x' };
+    const toolSet = {
+      enabledToolIds: ['x'],
+      manifestMap: { x: manifest },
+      sourceMap: {},
+      tools: [{ function: { name: 'x' } }],
+    };
+    const expertise = { renderedContext: 'expert' };
+    const origin = { userId: 'user-slim' };
+    const buildState = () => ({
+      activatedStepTools: [{ activatedAtStep: 1, id: 'x', manifest, source: 'discovery' }],
+      expertise,
+      initialContext: { payload: { tools: toolSet.tools }, phase: 'user_input' },
+      operationToolSet: toolSet,
+      origin,
+      status: 'running',
+      stepCount: 2,
+      world: { expertise },
+    });
+    const ENVS = ['AGENT_RUNTIME_STRIP_OPERATION_TOOLSET', 'AGENT_RUNTIME_SLIM_STATE'];
+
+    const mockFlags = (flags: { slim: boolean; strip: boolean }) =>
+      vi.mocked(getServerFeatureFlagsStateFromRuntimeConfig).mockResolvedValue({
+        enableSlimAgentState: flags.slim,
+        enableStripOperationToolset: flags.strip,
+      } as any);
+
+    const stepBlob = (op: string) =>
+      JSON.parse(
+        pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`)![2],
+      );
+
+    beforeEach(() => {
+      for (const name of ENVS) delete process.env[name];
+    });
+
+    afterAll(() => {
+      for (const name of ENVS) delete process.env[name];
+    });
+
+    it('leaves the copies out of the step blob when the flag is on', async () => {
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-on';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      const blob = stepBlob(op);
+      expect(blob.initialContext.payload.tools).toBeUndefined();
+      expect(blob.activatedStepTools[0].manifest).toBeUndefined();
+      expect(blob.expertise).toBeUndefined();
+      expect(blob.world.expertise).toEqual(expertise);
+      expect(blob.__slim).toEqual({ activatedManifests: [0], expertise: true, payloadTools: true });
+    });
+
+    it('loads a slimmed blob back to the full state', async () => {
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-load';
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+      const stored = pipelineMock.setex.mock.calls.find(
+        (c) => c[0] === `agent_runtime_state:${op}`,
+      )![2];
+      redisMock.get.mockImplementation(async (key: string) =>
+        key === `agent_runtime_toolset:${op}` ? JSON.stringify(toolSet) : stored,
+      );
+
+      const loaded = await stateManager.loadAgentState(op);
+
+      expect(loaded).toMatchObject(JSON.parse(JSON.stringify(buildState())));
+      expect((loaded as any).__slim).toBeUndefined();
+    });
+
+    it('slims with the tool set kept inline too', async () => {
+      mockFlags({ slim: true, strip: false });
+      const op = 'op-slim-inline-toolset';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      const blob = stepBlob(op);
+      expect(blob.operationToolSet).toEqual(toolSet);
+      expect(blob.initialContext.payload.tools).toBeUndefined();
+      redisMock.get.mockResolvedValueOnce(JSON.stringify(blob));
+      const loaded = await stateManager.loadAgentState(op);
+      expect((loaded as any).initialContext.payload.tools).toEqual(toolSet.tools);
+    });
+
+    it('keeps the blob unchanged when the flag is off', async () => {
+      mockFlags({ slim: false, strip: true });
+      const op = 'op-slim-off';
+      const { operationToolSet: _toolSet, ...expected } = buildState();
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      expect(stepBlob(op)).toEqual(JSON.parse(JSON.stringify(expected)));
+    });
+
+    it('the tool set kill switch turns slimming off without consulting the provider', async () => {
+      process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET = '0';
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-kill';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
+      expect(stepBlob(op)).toEqual(JSON.parse(JSON.stringify(buildState())));
+    });
+
+    it("AGENT_RUNTIME_SLIM_STATE='0' overrides an enabled flag", async () => {
+      process.env.AGENT_RUNTIME_SLIM_STATE = '0';
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-env-off';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      const blob = stepBlob(op);
+      expect(blob.__slim).toBeUndefined();
+      expect(blob.initialContext.payload.tools).toEqual(toolSet.tools);
+      expect(blob.operationToolSet).toBeUndefined();
+    });
+
+    it('resolves both flags with one provider read per owner', async () => {
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-one-read';
+
+      for (const stepIndex of [2, 3]) {
+        await stateManager.saveStepResult(op, {
+          executionTime: 1,
+          newState: buildState(),
+          stepIndex,
+        } as any);
+      }
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(1);
     });
   });
 

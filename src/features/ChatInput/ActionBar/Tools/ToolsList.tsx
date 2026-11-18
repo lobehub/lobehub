@@ -1,47 +1,46 @@
 import type { ItemType } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Divider, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
+import { Divider, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { Fragment, isValidElement, memo } from 'react';
 
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useScrollSignal } from './ScrollSignalContext';
 
-export const toolsListStyles = createStaticStyles(({ css }) => ({
-  groupLabel: css`
-    padding-block: 12px 4px;
-    padding-inline: 12px;
-  `,
-  item: css`
-    cursor: pointer;
+const styles = stylex.create({
+  groupLabel: { paddingBlockStart: '12px', paddingBlockEnd: '4px', paddingInline: '12px' },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '6px',
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemContent: { flex: '1', minWidth: '0' },
+  itemIcon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+  },
+});
 
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 6px;
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemContent: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  itemIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-  `,
-}));
+/**
+ * Class names for callers outside this file (the profile editor popover reuses the row look).
+ */
+export const toolsListStyles = {
+  item: stylex.props(styles.item).className,
+  itemContent: stylex.props(styles.itemContent).className,
+  itemIcon: stylex.props(styles.itemIcon).className,
+};
 
 interface ToolItemData {
   children?: ToolItemData[];
@@ -89,14 +88,14 @@ const RegularItem = memo<{
 
   const row = (
     <div
-      className={toolsListStyles.item}
+      {...stylex.props(styles.item)}
       key={item.key || `item-${index}`}
       role="button"
       tabIndex={0}
       onClick={item.onClick}
     >
-      {iconNode && <div className={toolsListStyles.itemIcon}>{iconNode}</div>}
-      <div className={toolsListStyles.itemContent}>{item.label}</div>
+      {iconNode && <div {...stylex.props(styles.itemIcon)}>{iconNode}</div>}
+      <div {...stylex.props(styles.itemContent)}>{item.label}</div>
       {item.extra}
     </div>
   );
@@ -129,7 +128,7 @@ const GroupItem = memo<{
   item: ToolItemData;
 }>(({ detailPopoverDisabled, item, index }) => (
   <Fragment key={item.key || `group-${index}`}>
-    <Text className={toolsListStyles.groupLabel} fontSize={12} type="secondary">
+    <Text className={stylex.props(styles.groupLabel).className} fontSize={12} type="secondary">
       {item.label}
     </Text>
     {item.children?.map((child, childIndex) => (

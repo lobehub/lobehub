@@ -1,8 +1,6 @@
-import {
-  type ConversationContext,
-  type SendMessageParams,
-  type UploadFileItem,
-} from '@lobechat/types';
+import type { ConversationContext, SendMessageParams, UploadFileItem } from '@lobechat/types';
+
+import type { DraftGitSendResult } from '@/features/ChatInput/ControlBar/DraftGit/prepareSend';
 
 type SendMessage = (
   params: SendMessageParams & { conversationContext?: ConversationContext },
@@ -11,6 +9,12 @@ type SendMessage = (
 interface SendVoiceMessageOptions {
   context?: ConversationContext;
   optimisticUserMessageId?: string;
+  /**
+   * Run before anything is dispatched — the composer's send-time git step for a
+   * new topic. `ok: false` (cancelled or failed) rejects the send, which keeps
+   * the recording as a retryable failed turn.
+   */
+  prepare?: () => Promise<DraftGitSendResult>;
   signal?: AbortSignal;
   /**
    * Resolve the turn text from the uploaded recording. Runtimes that cannot take audio input
@@ -33,10 +37,18 @@ export const sendVoiceMessage = async (
   file: UploadFileItem,
   options: SendVoiceMessageOptions = {},
 ) => {
-  const { context, optimisticUserMessageId, signal, transcribe } = options;
+  const { context, optimisticUserMessageId, prepare, signal, transcribe } = options;
   if (signal?.aborted) throw getAbortError(signal);
 
   const message = transcribe ? await transcribe(file, signal) : '';
+  if (signal?.aborted) throw getAbortError(signal);
+
+  // After transcription, the last step that can fail before dispatch: a retry
+  // after a failed transcript must still find the branch pick unspent and no
+  // worktree made for it.
+  const prepared = prepare ? await prepare() : undefined;
+  if (prepared && !prepared.ok)
+    throw new Error('Voice message was not sent: git step did not complete');
   if (signal?.aborted) throw getAbortError(signal);
 
   return new Promise<void>((resolve, reject) => {
@@ -49,6 +61,13 @@ export const sendVoiceMessage = async (
         accepted = true;
         resolve();
       },
+      ...(prepared?.ok
+        ? {
+            firstSendWorktree: prepared.firstSendWorktree,
+            newTopicWorkingDirectory: prepared.newTopicWorkingDirectory,
+            onMessagePersisted: prepared.onMessagePersisted,
+          }
+        : {}),
       preserveComposer: true,
       ...(context ? { conversationContext: context } : {}),
       ...(optimisticUserMessageId ? { optimisticUserMessageId } : {}),

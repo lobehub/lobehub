@@ -6,6 +6,7 @@ import { ChannelCoordinator } from './ChannelCoordinator';
 const { executions, findLatest } = vi.hoisted(() => ({
   executions: {
     accepted: vi.fn(),
+    deliverAnswerToAsker: vi.fn(),
     publish: vi.fn(),
     // An untouched reservation short-circuits the physical stop: not what these tests are about.
     retireReservation: vi.fn().mockResolvedValue(true),

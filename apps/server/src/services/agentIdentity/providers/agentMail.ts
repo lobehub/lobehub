@@ -145,9 +145,10 @@ export const createAgentMailProvider = (
 
     provision: async (input: AgentAccountProvisionInput): Promise<AgentAccountProvisionResult> => {
       // `clientId` is the mail API's idempotency key: a retry for the same agent
-      // gets the inbox it already opened instead of a second, billable one.
+      // and prefix gets the inbox it already opened instead of a second, billable
+      // one, while a different prefix is a further mailbox the agent asked for.
       const inbox = await client.createInbox({
-        clientId: input.agentId,
+        clientId: input.prefix ? `${input.agentId}-${input.prefix}` : input.agentId,
         displayName: input.displayName,
         endUserId: input.agentId,
         // The caller's preferred local part. The provider either honours it or

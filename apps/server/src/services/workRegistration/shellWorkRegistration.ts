@@ -8,6 +8,7 @@ import debug from 'debug';
 
 import type { WorkModel } from '@/database/models/work';
 
+import type { ShellPullRequestLinking } from './pullRequestLinking';
 import { SHELL_WORK_SCANNERS } from './shellWorkScanners';
 
 const log = debug('lobe-server:shell-work-registration');
@@ -19,7 +20,7 @@ const log = debug('lobe-server:shell-work-registration');
  * shell `apiName`:
  *
  * - codex `command_execution` — stdout in `state.stdout` / `state.output`,
- *   `state.exitCode` on completion (`adapters/codex.ts`).
+ *   `state.exitCode` on completion (`adapters/codex/`).
  * - claude-code `Bash` — stdout is the tool MESSAGE CONTENT (the adapter
  *   persists the tool_result text as content, no structured state); failures
  *   surface via the plugin `error` column (is_error), never an exit code.
@@ -81,6 +82,56 @@ const stringField = (record: Record<string, unknown> | undefined, key: string) =
 };
 
 /**
+ * A shell tool record that ran to success, as the command text plus what it
+ * printed — or null for a non-shell tool, a failed or unexecuted call, or
+ * unparseable arguments. The success gating mirrors fileEditScan.
+ */
+export const readShellCommandRecord = (
+  record: ShellWorkScanRecord,
+): {
+  data: { command: string; exitCode?: number; output?: string };
+  /** Every text the run left, joined; see `ShellWorkScanner` `transcript`. */
+  transcript: string;
+} | null => {
+  if (!record.identifier || SHELL_COMMAND_SOURCES[record.identifier] !== record.apiName)
+    return null;
+  // A plugin-level error means the command never ran / failed (claude-code
+  // is_error rides here); state-level failure signals mirror fileEditScan.
+  if (record.error != null && record.error !== '') return null;
+  const state = isRecord(record.state) ? record.state : undefined;
+  if (state?.success === false) return null;
+  if (state?.error != null && state.error !== '') return null;
+
+  let command: unknown;
+  try {
+    command = JSON.parse(record.arguments ?? '')?.command;
+  } catch {
+    return null;
+  }
+  if (typeof command !== 'string') return null;
+
+  const transcript = [
+    stringField(state, 'stdout'),
+    stringField(state, 'stderr'),
+    stringField(state, 'output'),
+    typeof record.content === 'string' ? record.content : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    data: {
+      command,
+      // Absent for claude-code (no exit code is persisted); its failures were
+      // already excluded via the plugin error above.
+      exitCode: typeof state?.exitCode === 'number' ? state.exitCode : undefined,
+      output: stringField(state, 'stdout') ?? stringField(state, 'output') ?? record.content,
+    },
+    transcript,
+  };
+};
+
+/**
  * Register external Works from the shell tool calls of a completed operation:
  * heterogeneous CLI agents (codex / claude-code) and the device
  * `lobe-local-system` tool run CLIs like `gh` through their OWN shell
@@ -99,6 +150,11 @@ export const registerShellWorks = async (params: {
   cumulativeCost: number | null;
   cumulativeUsage: WorkVersionCumulativeUsage | null;
   operationId: string;
+  /**
+   * Better Coding Experience pull request linking; omitted (lab off) the scan
+   * registers exactly what it always did.
+   */
+  pullRequestLinking?: ShellPullRequestLinking;
   records: ShellWorkScanRecord[];
   threadId?: string | null;
   topicId: string;
@@ -112,31 +168,13 @@ export const registerShellWorks = async (params: {
   };
 
   for (const record of params.records) {
-    if (!record.identifier || SHELL_COMMAND_SOURCES[record.identifier] !== record.apiName) continue;
-    // A plugin-level error means the command never ran / failed (claude-code
-    // is_error rides here); state-level failure signals mirror fileEditScan.
-    if (record.error != null && record.error !== '') continue;
-    const state = isRecord(record.state) ? record.state : undefined;
-    if (state?.success === false) continue;
-    if (state?.error != null && state.error !== '') continue;
-
-    let command: unknown;
-    try {
-      command = JSON.parse(record.arguments ?? '')?.command;
-    } catch {
-      continue;
-    }
-    if (typeof command !== 'string') continue;
-
-    const data = {
-      command,
-      // Absent for claude-code (no exit code is persisted); its failures were
-      // already excluded via the plugin error above.
-      exitCode: typeof state?.exitCode === 'number' ? state.exitCode : undefined,
-      output: stringField(state, 'stdout') ?? stringField(state, 'output') ?? record.content,
-    };
+    const shell = readShellCommandRecord(record);
+    if (!shell) continue;
+    const { data, transcript } = shell;
+    const { command } = data;
 
     for (const scanner of SHELL_WORK_SCANNERS) {
+      if (scanner.requiresPullRequestLinking && !params.pullRequestLinking) continue;
       if (!scanner.matches(command)) continue;
 
       try {
@@ -146,15 +184,18 @@ export const registerShellWorks = async (params: {
           cumulativeUsage: params.cumulativeUsage,
           data,
           messageId: record.id,
+          pullRequestLinking: params.pullRequestLinking,
           rootOperationId: params.operationId,
           threadId: params.threadId ?? null,
           toolCallId: record.toolCallId || null,
-          toolIdentifier: record.identifier,
+          // Non-null: readShellCommandRecord only accepts known shell sources.
+          toolIdentifier: record.identifier!,
           toolName: record.apiName,
           topicId: params.topicId,
+          transcript,
           workModel: params.workModel,
         });
-        if (!work) continue;
+        if (!work || (Array.isArray(work) && work.length === 0)) continue;
         outcome.attempted += 1;
         outcome.registered += 1;
         outcome.anchorCandidateMessageId = record.id;

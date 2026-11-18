@@ -2,38 +2,15 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import {
-  Button,
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
-import {
-  CircleDollarSign,
-  Clock,
-  Edit,
-  EllipsisVertical,
-  Layers,
-  Server,
-  Trash2,
-  Trophy,
-  User,
-} from 'lucide-react';
-import { type LucideIcon } from 'lucide-react';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { CircleDollarSign, Clock, Layers, type LucideIcon, Trophy } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useEvalStore } from '@/store/eval';
-
-import { createBenchmarkEditModal } from '../../../../features/BenchmarkEditModal';
 import Sparkline from '../../../../features/Sparkline';
 import { formatDuration, formatDurationMinutes } from '../../../../utils';
+import BenchmarkTitleBar from './TitleBar';
+import { topPerformersOf } from './topPerformers';
 
 const RANK_COLORS = [cssVar.colorPrimary, cssVar.colorSuccess, cssVar.colorTextQuaternary];
 
@@ -49,22 +26,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 600;
     line-height: 1;
     color: ${cssVar.colorText};
-  `,
-  description: css`
-    margin: 0;
-    margin-block-start: 2px;
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadiusLG};
   `,
   statCard: css`
     flex: 1;
@@ -88,12 +49,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
   `,
-  title: css`
-    margin: 0;
-    font-size: ${cssVar.fontSizeHeading3};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
 }));
 
 interface BenchmarkHeaderProps {
@@ -103,79 +58,25 @@ interface BenchmarkHeaderProps {
   onBenchmarkUpdate?: (benchmark: any) => void;
   runCount: number;
   systemIcon?: LucideIcon;
+  /** Label of the top-performers card; defaults to "Top Agents". */
+  topLabel?: string;
   totalCases: number;
 }
 
 const BenchmarkHeader = memo<BenchmarkHeaderProps>(
-  ({
-    benchmark,
-    completedRuns,
-    datasets,
-    onBenchmarkUpdate,
-    runCount,
-    systemIcon = Server,
-    totalCases,
-  }) => {
+  ({ benchmark, completedRuns, datasets, onBenchmarkUpdate, systemIcon, topLabel, totalCases }) => {
     const { t } = useTranslation('eval');
-    const navigate = useWorkspaceAwareNavigate();
-    const deleteBenchmark = useEvalStore((s) => s.deleteBenchmark);
-    const refreshBenchmarkDetail = useEvalStore((s) => s.refreshBenchmarkDetail);
-
-    const handleEditSuccess = async () => {
-      await refreshBenchmarkDetail(benchmark.id);
-      onBenchmarkUpdate?.(benchmark);
-    };
-
-    const handleEdit = () => createBenchmarkEditModal({ benchmark, onSuccess: handleEditSuccess });
-
-    const handleDelete = () => {
-      confirmModal({
-        content: t('benchmark.actions.delete.confirm'),
-        okButtonProps: { danger: true },
-        okText: t('benchmark.actions.delete'),
-        onOk: async () => {
-          await deleteBenchmark(benchmark.id);
-          navigate('/eval');
-        },
-        title: t('benchmark.actions.delete'),
-      });
-    };
-
-    const menuItems: DropdownItem[] = [
-      {
-        danger: true,
-        icon: <Trash2 size={16} />,
-        key: 'delete',
-        label: t('common.delete'),
-        onClick: handleDelete,
-      },
-    ];
 
     // === Stats Computations ===
 
     const hasDatasets = datasets.length > 0;
     const hasCompletedRuns = completedRuns.length > 0;
 
-    // Top Agents: group by targetAgent, compute avg passRate, sort desc, take top 3
-    const topAgents = useMemo(() => {
-      if (!hasCompletedRuns) return [];
-      const agentMap = new Map<string, { name: string; passRates: number[] }>();
-      for (const run of completedRuns) {
-        const agentName = run.targetAgent?.title || run.targetAgent?.id || 'Unknown';
-        const agentId = run.targetAgentId || run.targetAgent?.id || agentName;
-        if (!agentMap.has(agentId)) {
-          agentMap.set(agentId, { name: agentName, passRates: [] });
-        }
-        agentMap.get(agentId)!.passRates.push(run.passRate ?? run.metrics?.passRate ?? 0);
-      }
-      return [...agentMap.entries()]
-        .map(([, v]) => ({
-          avgPassRate: v.passRates.reduce((a, b) => a + b, 0) / v.passRates.length,
-          name: v.name,
-        }))
-        .sort((a, b) => b.avgPassRate - a.avgPassRate)
-        .slice(0, 3);
-    }, [completedRuns, hasCompletedRuns]);
+    // Top performers: an Agent's runs, or a model contender's runs (Lobe Bench), by average pass rate.
+    const topAgents = useMemo(
+      () => (hasCompletedRuns ? topPerformersOf(completedRuns) : []),
+      [completedRuns, hasCompletedRuns],
+    );
 
     // Best agent for the summary line
     const bestAgent = topAgents.length > 0 ? topAgents[0] : null;
@@ -225,42 +126,11 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     return (
       <>
         {/* Header */}
-        <Flexbox gap={16}>
-          <Flexbox horizontal align="start" justify="space-between">
-            <Flexbox horizontal align="start" gap={12}>
-              <div
-                className={styles.iconBox}
-                style={{
-                  background:
-                    benchmark.source === 'user' ? cssVar.colorSuccessBg : cssVar.colorPrimaryBg,
-                }}
-              >
-                <Icon
-                  icon={benchmark.source === 'user' ? User : systemIcon}
-                  size={20}
-                  style={{
-                    color: benchmark.source === 'user' ? cssVar.colorSuccess : cssVar.colorPrimary,
-                  }}
-                />
-              </div>
-              <Flexbox gap={4}>
-                <h1 className={styles.title}>{benchmark.name}</h1>
-                {benchmark.description && (
-                  <p className={styles.description}>{benchmark.description}</p>
-                )}
-              </Flexbox>
-            </Flexbox>
-
-            <Flexbox horizontal gap={8}>
-              <Button icon={Edit} size="small" onClick={handleEdit}>
-                {t('common.edit')}
-              </Button>
-              <DropdownMenu items={menuItems} placement="bottomRight">
-                <Button icon={EllipsisVertical} size="small" />
-              </DropdownMenu>
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
+        <BenchmarkTitleBar
+          benchmark={benchmark}
+          systemIcon={systemIcon}
+          onBenchmarkUpdate={onBenchmarkUpdate}
+        />
 
         {/* Results hero — headline best pass rate + trend across completed runs.
             Always rendered (shows a muted dash before the first completed run) so
@@ -297,7 +167,9 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorWarningBg }}>
                   <Trophy size={16} style={{ color: cssVar.colorWarning }} />
                 </div>
-                <span className={styles.statLabel}>{t('benchmark.detail.stats.topAgents')}</span>
+                <span className={styles.statLabel}>
+                  {topLabel ?? t('benchmark.detail.stats.topAgents')}
+                </span>
               </Flexbox>
 
               {!hasDatasets && !hasCompletedRuns && (
@@ -332,8 +204,14 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
               {hasCompletedRuns && topAgents.length > 0 && (
                 <Flexbox gap={6}>
                   {topAgents.map((agent, idx) => (
-                    <Flexbox horizontal align="center" justify="space-between" key={agent.name}>
-                      <Flexbox horizontal align="center" gap={8}>
+                    <Flexbox
+                      horizontal
+                      align="center"
+                      gap={8}
+                      justify="space-between"
+                      key={agent.name}
+                    >
+                      <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
                         <span
                           style={{
                             color: RANK_COLORS[idx] || RANK_COLORS[2],
@@ -347,10 +225,14 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                           {idx + 1}
                         </span>
                         <span
+                          title={agent.name}
                           style={{
                             color: cssVar.colorText,
                             fontSize: cssVar.fontSize,
                             fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           {agent.name}
@@ -359,8 +241,10 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                       <span
                         style={{
                           color: cssVar.colorTextSecondary,
+                          flex: 'none',
                           fontFamily: cssVar.fontFamilyCode,
                           fontSize: cssVar.fontSize,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {(agent.avgPassRate * 100).toFixed(1)}%

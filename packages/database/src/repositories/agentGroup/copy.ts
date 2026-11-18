@@ -101,7 +101,9 @@ export const duplicateGroup = async (
         // public item's folder only against public folders, so the copy would
         // land in Ungrouped rather than beside its source.
         visibility: sourceGroup.visibility,
-        pinned: sourceGroup.pinned,
+        // In a workspace `pinned` on a public group is the owner/admin team pin;
+        // a copy never inherits it.
+        pinned: scope.workspaceId ? false : sourceGroup.pinned,
         title: newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
         userId: scope.userId,
         workspaceId: scope.workspaceId ?? null,
@@ -349,7 +351,8 @@ export const copyGroupToWorkspace = async (
         content: sourceGroup.content,
         description: sourceGroup.description,
         editorData: sourceGroup.editorData,
-        pinned: sourceGroup.pinned,
+        // A workspace copy never inherits a pin: there `pinned` is the team pin.
+        pinned: targetWorkspaceId ? false : sourceGroup.pinned,
         title: options.newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
         userId: targetUserId,
         ...(targetVisibility ? { visibility: targetVisibility } : {}),

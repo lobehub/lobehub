@@ -46,6 +46,11 @@ export interface State {
   quotaPanelMap: Record<string, QuotaPanelSnapshot>;
   /** Replica bookkeeping of `quotaPanelMap`. */
   quotaPanelReplica: ReplicaState<QuotaPanelSnapshot>;
+  /**
+   * Accounts whose last readings request failed, keyed by account id. Cleared
+   * by the next answer, so a view can tell a failed read from one in flight.
+   */
+  quotaReadingsFailed: Record<string, true>;
   /** Replica view of each account's newest readings, keyed by account id. */
   quotaReadingsMap: Record<string, QuotaLatestReading[]>;
   /** Replica bookkeeping of `quotaReadingsMap`. */
@@ -68,4 +73,5 @@ export const initialState: State = {
   quotaPanelReplica: createReplicaState(),
   quotaReadingsMap: {},
   quotaReadingsReplica: createReplicaState(),
+  quotaReadingsFailed: {},
 };

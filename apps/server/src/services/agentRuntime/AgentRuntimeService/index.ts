@@ -114,7 +114,7 @@ if (process.env.VERCEL) {
   debug.log = console.info.bind(console);
 }
 
-export { createEvalToolForwardingHook } from './evalToolForwardingHook';
+export { createEvalToolGateHook, EVAL_TOOL_BLOCKED_ERROR } from './evalToolGateHook';
 export type { AgentRuntimeDelegate, AgentRuntimeServiceOptions } from './types';
 
 /**

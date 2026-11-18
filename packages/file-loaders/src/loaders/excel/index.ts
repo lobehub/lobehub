@@ -3,8 +3,11 @@ import { readFile } from 'node:fs/promises';
 import debug from 'debug';
 import * as xlsx from 'xlsx';
 
+import { isFileParseBudgetError } from '../../fileParseBudget';
 import type { DocumentPage, FileLoaderInterface } from '../../types';
 import { promptTemplate } from './prompt';
+import { clampSheetRefToData } from './sheetBounds';
+import { preflightXlsxZip } from './zipBudget';
 
 const log = debug('file-loaders:excel');
 
@@ -67,6 +70,9 @@ export class ExcelLoader implements FileLoaderInterface {
       const dataBuffer = await readFile(filePath);
       log('Excel file read successfully, size:', dataBuffer.length, 'bytes');
 
+      // Refuse oversized ZIP structures before SheetJS inflates them
+      await preflightXlsxZip(dataBuffer);
+
       log('Parsing Excel workbook');
       const workbook = xlsx.read(dataBuffer, { type: 'buffer' });
       log('Excel workbook parsed successfully, sheets:', workbook.SheetNames.length);
@@ -74,6 +80,8 @@ export class ExcelLoader implements FileLoaderInterface {
       for (const sheetName of workbook.SheetNames) {
         log(`Processing sheet: ${sheetName}`);
         const worksheet = workbook.Sheets[sheetName];
+        // A declared used range can span a million styled-but-empty rows: clamp it to the real data
+        clampSheetRefToData(worksheet);
         // Use sheet_to_json to get array of objects for our custom markdown function
         const jsonData = xlsx.utils.sheet_to_json<Record<string, any>>(worksheet, {
           // Get formatted strings, not raw values
@@ -117,6 +125,8 @@ export class ExcelLoader implements FileLoaderInterface {
       log('Excel loading completed, total pages:', pages.length);
       return pages;
     } catch (e) {
+      // A budget refusal is not a corrupt file: let callers tell the user the file is too large
+      if (isFileParseBudgetError(e)) throw e;
       const error = e as Error;
       log('Error encountered while loading Excel file');
       console.error(`Error loading Excel file ${filePath}: ${error.message}`);

@@ -141,7 +141,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     inset-inline-end: 8px;
   `,
 
-  agentAuthorName: css`
+  profileAuthorName: css`
     cursor: pointer;
     transition: color 0.15s ease;
 
