@@ -40,7 +40,7 @@ tags:
 当字段、参数或端点被替代时：
 
 1. 旧形式继续可用，OpenAPI 规范将其标记为 `deprecated: true`。SDK 在类型文档中显示弃用信息。
-2. 替代方案连同迁移说明记录在[变更日志](/zh/docs/development/api/versioning)中。
+2. 替代方案连同迁移说明记录在[变更日志](#api-changelog)中。
 3. 旧形式只会在新的主版本中移除。
 
 当前的弃用项，自 [#23231](https://github.com/lobehub/lobehub/pull/23231) 发布后生效：
@@ -51,11 +51,15 @@ tags:
 | 错误响应体中的 `error` 文本                                                        | `code` 和 `message`                           |
 | `GET /agent-groups`、`/api-keys`、`/mcp-servers` 上的 `format=array`（旧的裸数组响应） | 分页响应 `{ items, total, hasMore, nextCursor }` |
 
+**兼容规则的例外。**[#23231](https://github.com/lobehub/lobehub/pull/23231) 上线后，`GET /agent-groups`、`GET /api-keys` 和 `GET /mcp-servers` 的默认响应会从数组改为分页对象。这是 `v1` 内的破坏性变更。把这些列表当作数组读取的客户端，需要在该版本发布前发送 `format=array`，或改用分页响应。
+
 ## SDK 版本
 
 - SDK 有改动时，`@lobehub/sdk` 会从 `canary` 自动发布到 npm，版本号为 `1.0.<UTC timestamp>`，使用 `latest` 标签。
 - [#23246](https://github.com/lobehub/lobehub/pull/23246) 合并后，版本遵循语义化版本并维护 `CHANGELOG.md`：有变更日志条目的版本以 `latest` 发布，其余改动以 `x.y.z-canary.<timestamp>` 发布在 `canary` 标签下。生产环境请固定使用 `latest` 版本。届时，修改了规范却未重新生成 SDK 的 PR 会在 CI 中失败。
 - Python SDK `lobehub`（[#23337](https://github.com/lobehub/lobehub/pull/23337)）从 `0.1.0` 起步。
+
+<a id="api-changelog" />
 
 ## API 变更日志
 

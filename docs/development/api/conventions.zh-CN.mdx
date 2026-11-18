@@ -68,6 +68,8 @@ tags:
 
 `details[].path` 以请求中出错的部分开头：`json`、`query`、`param` 或 `header`。
 
+<a id="error-codes" />
+
 #### 错误码
 
 错误码只会新增，不会重命名或删除。遇到未知错误码时，按其 HTTP 状态码处理。
@@ -108,6 +110,8 @@ tags:
 { "success": true, "data": { "agents": [], "total": 42 } }
 ```
 
+有三个列表例外，目前直接返回包含全部条目的数组：`GET /agent-groups`、`GET /api-keys` 和 `GET /mcp-servers`。
+
 ### 即将推出：游标
 
 在 [#23231](https://github.com/lobehub/lobehub/pull/23231) 中，列表接受 `limit`（1–100，默认 20）和 `cursor`，并返回 `hasMore` 和 `nextCursor`：
@@ -125,13 +129,14 @@ curl "https://app.lobehub.com/api/v1/agent-groups?limit=50&cursor=bzo1MA" -H "Au
 - 将 `nextCursor` 视为不透明值，原样传回。最后一页时它为 `null`。无效游标会在 `query.cursor` 上返回 `400` `validation_error`。
 - 只有在计算成本较低时才返回 `total`。
 - 新端点使用 `items`。现有列表保留原来的数组键（`agents`、`topics` 等），并新增 `hasMore` 和 `nextCursor`。
+- **返回结构变化：**`GET /agent-groups`、`GET /api-keys` 和 `GET /mcp-servers` 将从数组改为 `{ items, total, hasMore, nextCursor }`。迁移期间可以发送 `format=array`（已弃用）继续获得包含全部条目的旧数组。
 - `page`、`pageSize` 和 `offset` 仍可使用，但已弃用。同时发送多个时，`cursor` 优先于 `offset`，`offset` 优先于 `page`。
 
 ## 限流
 
 目前公开 API 不发送限流相关的响应头。
 
-**即将推出**（[#23231](https://github.com/lobehub/lobehub/pull/23231)）：每个 API Key 默认获得每 60 秒 600 个请求的固定窗口（自托管实例通过 `OPENAPI_RATE_LIMIT_PER_MINUTE` 设置）。届时每个响应都会携带：
+**即将推出**（[#23231](https://github.com/lobehub/lobehub/pull/23231)）：每个 API Key 默认获得每 60 秒 600 个请求的固定窗口（自托管实例通过 `OPENAPI_RATE_LIMIT_PER_MINUTE` 设置）。届时每个 API Key 请求的响应都会携带：
 
 | 响应头                     | 含义                |
 | ----------------------- | ----------------- |
@@ -139,7 +144,7 @@ curl "https://app.lobehub.com/api/v1/agent-groups?limit=50&cursor=bzo1MA" -H "Au
 | `X-RateLimit-Remaining` | 当前窗口剩余的请求数        |
 | `X-RateLimit-Reset`     | 窗口重置时间，单位为 Unix 秒 |
 
-超出限制的请求返回 `429` `rate_limited`，并带有以秒为单位的 `Retry-After`。OIDC 会话不受此窗口限流。
+超出限制的请求返回 `429` `rate_limited`，并带有以秒为单位的 `Retry-After`。限流及其响应头只作用于 API Key 请求，OIDC 会话不计入。自托管实例未配置 Redis 时不限流，也不发送这些响应头。
 
 ## 幂等
 

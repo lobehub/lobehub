@@ -51,6 +51,8 @@ Current deprecations, effective when [#23231](https://github.com/lobehub/lobehub
 | `error` text in error bodies                                                                     | `code` and `message`                                           |
 | `format=array` on `GET /agent-groups`, `/api-keys`, `/mcp-servers` (the old bare-array response) | The paginated `{ items, total, hasMore, nextCursor }` response |
 
+**Exception to the compatibility rule.** When [#23231](https://github.com/lobehub/lobehub/pull/23231) ships, `GET /agent-groups`, `GET /api-keys`, and `GET /mcp-servers` change their default response from a bare array to the paginated object. This is a breaking change inside `v1`. A client that reads these lists as arrays must send `format=array` or move to the paginated response before that release.
+
 ## SDK Versions
 
 - `@lobehub/sdk` is published to npm from `canary` automatically when the SDK changes, as `1.0.<UTC timestamp>` under the `latest` tag.

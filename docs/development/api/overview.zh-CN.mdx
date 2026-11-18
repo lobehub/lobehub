@@ -48,14 +48,14 @@ tags:
 | OAuth 开放平台（动态注册、`client_credentials`、API scope）                | 即将推出 | [#23322](https://github.com/lobehub/lobehub/pull/23322) |
 | Python SDK `lobehub`                                           | 即将推出 | [#23337](https://github.com/lobehub/lobehub/pull/23337) |
 
-已合并和待合并变更的完整列表见 [API 变更日志](/zh/docs/development/api/versioning)。
+已合并和待合并变更的完整列表见 [API 变更日志](/zh/docs/development/api/versioning#api-changelog)。
 
 ## 快速开始
 
 ### 1. 创建 API Key
 
 1. 打开数据所在的工作区，进入 **设置 → API Keys**（`/<workspace>/settings/apikey`）。
-2. 创建一个 Key。选择 **完全访问**，或只勾选集成所需的 [scope](/zh/docs/development/api/authentication)。
+2. 创建一个 Key。选择 **完全访问**，或只勾选集成所需的 [scope](/zh/docs/development/api/authentication#scopes)。
 3. 复制 Key。它以 `sk-lh-` 开头，后跟 16 位小写字母和数字。
 
 之后可以在 Key 的详情页修改 scope，只有 Key 的创建者可以修改。
@@ -89,7 +89,7 @@ curl https://app.lobehub.com/api/v1/agents \
   -H "X-Workspace-Id: $WORKSPACE_ID"
 ```
 
-完整规则见[工作区选择](/zh/docs/development/api/authentication)。
+完整规则见[工作区选择](/zh/docs/development/api/authentication#workspace-selection)。
 
 ### 4. 查阅规范
 

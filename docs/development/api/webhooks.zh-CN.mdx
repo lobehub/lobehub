@@ -18,7 +18,7 @@ tags:
   LobeHub Cloud。本页介绍该 PR 中实现的投递格式和签名方案，方便你提前准备接收端；正式发布前，名称和限制仍可能调整。
 </Callout>
 
-Webhook 端点是你提供的一个 URL。当你的个人空间或工作区中发生特定事件（例如运行结束、消息创建、文件解析完成）时，LobeHub 会向它发送一个带签名的 `POST` 请求。端点通过 `/api/v1/webhooks` 管理，需要 `webhook:read` 和 `webhook:write` scope。
+Webhook 端点是你提供的一个 URL。当你的个人空间或工作区中发生特定事件（例如运行结束、消息创建、文件解析完成）时，LobeHub 会向它发送一个带签名的 `POST` 请求。端点通过 `/api/v1/webhooks` 管理，需要 `webhook:read` 和 `webhook:write` scope；也可以在应用的 **设置 → Webhook** 中管理，该页面由同一 PR 添加。
 
 ## 管理端点
 
@@ -44,19 +44,19 @@ curl -X POST https://app.lobehub.com/api/v1/webhooks \
 
 ## 事件目录
 
-| 事件                           | 触发时机                                           | `data`                                                  | 读取 scope     |
-| ---------------------------- | ---------------------------------------------- | ------------------------------------------------------- | ------------ |
-| `run.started`                | Agent 运行开始                                     | `{ runId, agentId, topicId }`                           | `run:read`   |
-| `run.completed`              | 运行结束                                           | 运行字段，外加 `assistantMessageId`、`steps`                    | `run:read`   |
-| `run.failed`                 | 运行失败                                           | 运行字段，外加 `error`                                         | `run:read`   |
-| `run.intervention_requested` | 运行等待[人工审批](/zh/docs/development/api/streaming) | `{ runId, agentId, topicId }`                           | `run:read`   |
-| `message.created`            | 创建了一条消息                                        | `{ messageId, role, topicId, threadId, agentId }`       | `chat:read`  |
-| `topic.created`              | 创建了一个话题                                        | `{ topicId, title, agentId }`                           | `chat:read`  |
-| `task.status_changed`        | 任务状态变化                                         | `{ taskId, identifier, status, previousStatus }`        | `agent:read` |
-| `goal.status_changed`        | 目标状态变化                                         | `{ goalId, status, previousStatus }`                    | `agent:read` |
-| `file.parsed`                | 文件解析完成                                         | `{ fileId, name, status: "success" \| "error", error }` | `file:read`  |
-| `notification.created`       | 创建了一条通知                                        | `{ notificationId, category, type, title }`             | `user:read`  |
-| `webhook.test`               | 调用 `POST /webhooks/{id}/test` 时                | `{ webhookId, message }`                                | 不可订阅         |
+| 事件                           | 触发时机                                                          | `data`                                                  | 读取 scope     |
+| ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------- | ------------ |
+| `run.started`                | Agent 运行开始                                                    | `{ runId, agentId, topicId }`                           | `run:read`   |
+| `run.completed`              | 运行结束                                                          | 运行字段，外加 `assistantMessageId`、`steps`                    | `run:read`   |
+| `run.failed`                 | 运行失败                                                          | 运行字段，外加 `error`                                         | `run:read`   |
+| `run.intervention_requested` | 运行等待[人工审批](/zh/docs/development/api/streaming#human-approval) | `{ runId, agentId, topicId }`                           | `run:read`   |
+| `message.created`            | 创建了一条消息                                                       | `{ messageId, role, topicId, threadId, agentId }`       | `chat:read`  |
+| `topic.created`              | 创建了一个话题                                                       | `{ topicId, title, agentId }`                           | `chat:read`  |
+| `task.status_changed`        | 任务状态变化                                                        | `{ taskId, identifier, status, previousStatus }`        | `agent:read` |
+| `goal.status_changed`        | 目标状态变化                                                        | `{ goalId, status, previousStatus }`                    | `agent:read` |
+| `file.parsed`                | 文件解析完成                                                        | `{ fileId, name, status: "success" \| "error", error }` | `file:read`  |
+| `notification.created`       | 创建了一条通知                                                       | `{ notificationId, category, type, title }`             | `user:read`  |
+| `webhook.test`               | 调用 `POST /webhooks/{id}/test` 时                               | `{ webhookId, message }`                                | 不可订阅         |
 
 ## 投递格式
 

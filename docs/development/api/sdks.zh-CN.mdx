@@ -95,11 +95,13 @@ while (true) {
 }
 ```
 
-事件类型见[流式响应](/zh/docs/development/api/streaming)。
+事件类型见[流式响应](/zh/docs/development/api/streaming#with-streaming)。
+
+<a id="sign-in-with-oidc-and-pkce" />
 
 ### 使用 OIDC 和 PKCE 登录
 
-适用于由每位用户自行登录的原生应用和桌面应用：
+适用于每位用户通过**公开客户端**（没有客户端密钥，例如 LobeHub 内置客户端）登录的原生应用和桌面应用。这些辅助函数不会发送客户端密钥，因此不适用于在设置中注册的 Web OAuth 应用（机密客户端）；见 [OIDC 与 PKCE](/zh/docs/development/api/authentication#oidc-with-pkce)。
 
 ```ts
 import {
@@ -111,7 +113,7 @@ import {
   refreshAccessToken,
 } from '@lobehub/sdk';
 
-const client = { clientId: 'your-client-id', redirectUri: 'com.example.app://auth/callback' };
+const client = { clientId: 'your-public-client-id', redirectUri: 'http://127.0.0.1:8765/callback' };
 const state = crypto.randomUUID();
 const pkce = await createPkcePair();
 const url = createAuthorizationUrl({ ...client, codeChallenge: pkce.challenge, state });

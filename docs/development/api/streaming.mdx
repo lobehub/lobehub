@@ -129,7 +129,7 @@ Each SSE frame has `event: <type>`, `data: <json>`, and an `id:` when the event 
 
 ## Human Approval
 
-When a run uses `approvalMode: "manual"`, or `allow-list` and the tool is not on the list, the Agent stops before calling the tool and asks a person.
+When a run uses `approvalMode: "manual"`, or `allow-list` and the tool is not on the list, the Agent stops before calling the tool and asks a person. `auto-run` also stops for calls that always need a person, such as a question to the user or a call flagged by the security check.
 
 1. The stream sends `intervention.requested`, then `run.waiting` with `status: "waiting_for_human"`, and closes. A webhook subscriber also receives `run.intervention_requested`.
 

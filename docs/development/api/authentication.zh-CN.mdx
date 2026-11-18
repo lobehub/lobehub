@@ -29,12 +29,12 @@ Authorization: Bearer <token>
 
 ## 选择凭证
 
-| 你要构建的是                   | 使用                                     |
-| ------------------------ | -------------------------------------- |
-| 以你本人身份运行的服务端集成、脚本或 CI 任务 | 仅授予必要最小 scope 的 API Key                |
-| 由每位用户各自登录的原生或桌面应用        | 带 PKCE 的 OIDC 授权码流程                    |
-| 由用户授权的第三方 Web 应用         | 在设置中注册的 OAuth 应用（见下文）                  |
-| 运行在无浏览器设备上的命令行工具         | OIDC 设备流程（内置的 `lobehub-cli` 客户端即使用此流程） |
+| 你要构建的是                   | 使用                                                                 |
+| ------------------------ | ------------------------------------------------------------------ |
+| 以你本人身份运行的服务端集成、脚本或 CI 任务 | 仅授予必要最小 scope 的 API Key                                            |
+| 由每位用户各自登录的原生或桌面应用        | 带 PKCE 的 OIDC 授权码流程，使用部署提供的公开客户端（见 [OIDC 与 PKCE](#oidc-with-pkce)） |
+| 由用户授权的第三方 Web 应用         | 在设置中注册的 OAuth 应用：客户端密钥加 PKCE（见下文）                                  |
+| 运行在无浏览器设备上的命令行工具         | OIDC 设备流程（内置的 `lobehub-cli` 客户端即使用此流程）                             |
 
 ## API Key
 
@@ -43,6 +43,8 @@ Authorization: Bearer <token>
 - Key 的权限是其创建者自身权限（工作区角色与 RBAC）与 Key 的 scope 的**交集**。scope 只会收窄访问范围，永远不会超出创建者拥有的权限。
 - 创建者之后可以在 Key 详情页（**编辑权限**）修改 scope。工作区管理员可以吊销其他成员的 Key，但不能修改其 scope。
 - 在 scope 机制引入之前创建的 Key，或以 **完全访问** 创建的 Key，拥有全部 scope。
+
+<a id="oidc-with-pkce" />
 
 ## OIDC 与 PKCE
 
@@ -59,6 +61,12 @@ LobeHub 在 `<origin>/oidc` 运行 OpenID Connect 提供方。
 | 撤销   | `/oidc/token/revocation`                 |
 
 每个授权码请求都必须使用 PKCE，且使用 `code_challenge_method=S256`。
+
+可以使用哪种客户端：
+
+- **LobeHub 自己的应用**使用内置的公开客户端（`lobehub-desktop`、`lobehub-mobile` 等）。公开客户端没有密钥，因此下面的令牌请求只发送 `client_id`。
+- **你在 LobeHub Cloud 上的应用**需要在设置中注册 Web OAuth 应用（见 [OAuth 应用](#oauth-apps)）。它是机密客户端：令牌请求需要附加 `client_secret`，重定向 URI 使用 `https` 或回环地址上的 `http`。自行注册的应用目前不支持 `myapp://` 这类自定义 URL scheme。
+- **第三方原生应用的公开客户端**将随动态客户端注册（`token_endpoint_auth_method: none`）提供，即将推出，见 [#23322](https://github.com/lobehub/lobehub/pull/23322)。
 
 ### 授权码流程
 
@@ -92,13 +100,17 @@ LobeHub 在 `<origin>/oidc` 运行 OpenID Connect 提供方。
      -d code=<code> \
      -d redirect_uri=<redirect uri> \
      -d code_verifier=<code_verifier>
+   # confidential clients (a web OAuth app) also send:
+   #  -d client_secret=<client secret>
    ```
 
 5. 使用 `Authorization: Bearer <access_token>` 调用 API。在访问令牌过期前使用 `grant_type=refresh_token` 刷新。
 
 刷新令牌会轮换：每次刷新都会返回新的刷新令牌，旧令牌随即失效，因此务必保存最新的那个。刷新令牌和会话有效期为 30 天。
 
-TypeScript SDK 将上述步骤实现为 `createPkcePair`、`createAuthorizationUrl`、`parseAuthorizationCallback`、`exchangeAuthorizationCode` 和 `refreshAccessToken`。见 [SDK](/zh/docs/development/api/sdks)。
+TypeScript SDK 将上述步骤实现为 `createPkcePair`、`createAuthorizationUrl`、`parseAuthorizationCallback`、`exchangeAuthorizationCode` 和 `refreshAccessToken`，适用于公开客户端，不会发送客户端密钥。见 [SDK](/zh/docs/development/api/sdks#sign-in-with-oidc-and-pkce)。
+
+<a id="oauth-apps" />
 
 ### OAuth 应用
 
@@ -116,20 +128,25 @@ TypeScript SDK 将上述步骤实现为 `createPkcePair`、`createAuthorizationU
   `client_credentials` 授权类型。每项能力都按部署通过环境变量开启。
 </Callout>
 
+<a id="workspace-selection" />
+
 ## 工作区选择
 
 请求要么在调用者的个人空间中执行，要么在某一个工作区中执行。工作区由凭证和可选的 `X-Workspace-Id` 请求头决定：
 
-| 凭证          | `X-Workspace-Id` | 结果                                                             |
-| ----------- | ---------------- | -------------------------------------------------------------- |
-| 工作区 API Key | 未发送              | 在 Key 所属工作区中执行                                                 |
-| 工作区 API Key | 同一工作区            | 在 Key 所属工作区中执行                                                 |
-| 工作区 API Key | 不同工作区            | `403` `Workspace API Key cannot access a different workspace`  |
-| 个人 API Key  | 已发送              | `403` `Personal API Key cannot access workspace data`          |
-| OIDC 令牌     | 已发送              | 用户是该工作区成员时在该工作区中执行，否则返回 `403` `Not a member of this workspace` |
-| 任意          | 未知的工作区 id        | `404` `Workspace not found`                                    |
+| 凭证          | `X-Workspace-Id`   | 结果                                                             |
+| ----------- | ------------------ | -------------------------------------------------------------- |
+| 工作区 API Key | 未发送                | 在 Key 所属工作区中执行                                                 |
+| 工作区 API Key | 同一工作区              | 在 Key 所属工作区中执行                                                 |
+| 工作区 API Key | 不同工作区              | `403` `Workspace API Key cannot access a different workspace`  |
+| 个人 API Key  | 已发送                | `403` `Personal API Key cannot access workspace data`          |
+| OIDC 令牌     | 已发送                | 用户是该工作区成员时在该工作区中执行，否则返回 `403` `Not a member of this workspace` |
+| OIDC 令牌     | 未知的工作区 id          | `404` `Workspace not found`                                    |
+| 工作区 API Key | 所属工作区不允许使用 API Key | `403` `Workspace API Key access is not available`              |
 
 在工作区内，部分操作还要求最低工作区角色（`viewer` \< `member` \< `admin` \< `owner`）。角色不足时返回 `403` `Requires <role> role or higher`。
+
+<a id="scopes" />
 
 ## Scope
 
@@ -157,7 +174,7 @@ scope 定义在 [`packages/const/src/apiKeyScope.ts`](https://github.com/lobehub
 
 受限 Key 无论持有哪些 scope，都无法访问 API Key 管理、角色与 RBAC 管理或计费。
 
-scope 校验失败时返回 `403`。统一错误码上线后，错误码为 `insufficient_scope`；见[错误](/zh/docs/development/api/conventions)。
+scope 校验失败时返回 `403`。统一错误码上线后，错误码为 `insufficient_scope`；见[错误](/zh/docs/development/api/conventions#error-codes)。
 
 ### 即将推出的 scope
 

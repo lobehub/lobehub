@@ -39,6 +39,8 @@ tags:
 
 响应是裸的响应对象（没有 `success` 信封）。运行失败时仍返回 `200`，并带有 `"status": "failed"` 和 `error`。务必检查 `status`。
 
+<a id="with-streaming" />
+
 ### 流式
 
 ```bash
@@ -126,9 +128,11 @@ data: {"type":"response.completed","sequence_number":31,"response":{"id":"resp_�
 - 连接中断后，使用 `Last-Event-ID` 请求头（或 `?after=<id>`）**恢复**，值为你收到的最后一个 `id`。不带它时，流会从第一个事件开始重放。
 - 流也会在 5 分钟后关闭；使用 `Last-Event-ID` 重新连接即可继续。空闲期间，服务端每 15 秒发送一次 `: ping` 注释。
 
+<a id="human-approval" />
+
 ## 人工审批
 
-当运行使用 `approvalMode: "manual"`，或使用 `allow-list` 且工具不在列表中时，Agent 会在调用工具前停下并请求人工处理。
+当运行使用 `approvalMode: "manual"`，或使用 `allow-list` 且工具不在列表中时，Agent 会在调用工具前停下并请求人工处理。`auto-run` 模式下，始终需要人工处理的调用（例如向用户提问，或被安全检查拦下的调用）同样会停下。
 
 1. 流发送 `intervention.requested`，随后发送 `status: "waiting_for_human"` 的 `run.waiting`，然后关闭。Webhook 订阅者也会收到 `run.intervention_requested`。
 

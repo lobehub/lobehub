@@ -29,12 +29,12 @@ There is no `X-API-Key` header. A missing or invalid token returns `401`.
 
 ## Choose a Credential
 
-| You are building                                                | Use                                                              |
-| --------------------------------------------------------------- | ---------------------------------------------------------------- |
-| A server-side integration, script, or CI job acting as yourself | An API key with the narrowest scopes that work                   |
-| A native or desktop app where each user signs in                | OIDC authorization code with PKCE                                |
-| A third-party web app that users authorize                      | An OAuth app registered in Settings (see below)                  |
-| A command-line tool on a device without a browser               | The OIDC device flow (used by the built-in `lobehub-cli` client) |
+| You are building                                                | Use                                                                                                                     |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| A server-side integration, script, or CI job acting as yourself | An API key with the narrowest scopes that work                                                                          |
+| A native or desktop app where each user signs in                | OIDC authorization code with PKCE, with a public client the deployment provides (see [OIDC with PKCE](#oidc-with-pkce)) |
+| A third-party web app that users authorize                      | An OAuth app registered in Settings: client secret plus PKCE (see below)                                                |
+| A command-line tool on a device without a browser               | The OIDC device flow (used by the built-in `lobehub-cli` client)                                                        |
 
 ## API Keys
 
@@ -59,6 +59,12 @@ LobeHub runs an OpenID Connect provider at `<origin>/oidc`.
 | Revocation           | `/oidc/token/revocation`                 |
 
 PKCE is required for every authorization code request. Use `code_challenge_method=S256`.
+
+Which client you can use:
+
+- **LobeHub's own apps** use built-in public clients (`lobehub-desktop`, `lobehub-mobile`, and others). A public client has no secret, so the token request below sends only `client_id`.
+- **Your own app on LobeHub Cloud** registers a web OAuth app in Settings (see [OAuth Apps](#oauth-apps)). It is a confidential client: add `client_secret` to the token request, and use an `https` or loopback `http` redirect URI. Custom URL schemes such as `myapp://` are not accepted for self-registered apps today.
+- **Public clients for third-party native apps** become possible with dynamic client registration (`token_endpoint_auth_method: none`), which is coming soon in [#23322](https://github.com/lobehub/lobehub/pull/23322).
 
 ### Authorization Code Flow
 
@@ -92,13 +98,15 @@ PKCE is required for every authorization code request. Use `code_challenge_metho
      -d code=<code> \
      -d redirect_uri=<redirect uri> \
      -d code_verifier=<code_verifier>
+   # confidential clients (a web OAuth app) also send:
+   #  -d client_secret=<client secret>
    ```
 
 5. Call the API with `Authorization: Bearer <access_token>`. Refresh with `grant_type=refresh_token` before it expires.
 
 Refresh tokens rotate: every refresh returns a new refresh token and the old one stops working, so always store the latest. Refresh tokens and sessions last 30 days.
 
-The TypeScript SDK implements these steps as `createPkcePair`, `createAuthorizationUrl`, `parseAuthorizationCallback`, `exchangeAuthorizationCode`, and `refreshAccessToken`. See [SDKs](/docs/development/api/sdks#sign-in-with-oidc-and-pkce).
+The TypeScript SDK implements these steps as `createPkcePair`, `createAuthorizationUrl`, `parseAuthorizationCallback`, `exchangeAuthorizationCode`, and `refreshAccessToken` for public clients; they do not send a client secret. See [SDKs](/docs/development/api/sdks#sign-in-with-oidc-and-pkce).
 
 ### OAuth Apps
 
@@ -122,14 +130,15 @@ Today an OAuth access token is a full user token: it reaches the same API as its
 
 Requests run in either the caller's personal space or one Workspace. The Workspace is resolved from the credential and the optional `X-Workspace-Id` header:
 
-| Credential        | `X-Workspace-Id`     | Result                                                                                           |
-| ----------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
-| Workspace API key | Not sent             | Runs in the key's Workspace                                                                      |
-| Workspace API key | Same Workspace       | Runs in the key's Workspace                                                                      |
-| Workspace API key | Different Workspace  | `403` `Workspace API Key cannot access a different workspace`                                    |
-| Personal API key  | Sent                 | `403` `Personal API Key cannot access workspace data`                                            |
-| OIDC token        | Sent                 | Runs in that Workspace if the user is a member, otherwise `403` `Not a member of this workspace` |
-| Any               | Unknown Workspace id | `404` `Workspace not found`                                                                      |
+| Credential        | `X-Workspace-Id`                      | Result                                                                                           |
+| ----------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Workspace API key | Not sent                              | Runs in the key's Workspace                                                                      |
+| Workspace API key | Same Workspace                        | Runs in the key's Workspace                                                                      |
+| Workspace API key | Different Workspace                   | `403` `Workspace API Key cannot access a different workspace`                                    |
+| Personal API key  | Sent                                  | `403` `Personal API Key cannot access workspace data`                                            |
+| OIDC token        | Sent                                  | Runs in that Workspace if the user is a member, otherwise `403` `Not a member of this workspace` |
+| OIDC token        | Unknown Workspace id                  | `404` `Workspace not found`                                                                      |
+| Workspace API key | Its Workspace does not allow API keys | `403` `Workspace API Key access is not available`                                                |
 
 Inside a Workspace, some operations also need a minimum Workspace role (`viewer` \< `member` \< `admin` \< `owner`). A request below it returns `403` `Requires <role> role or higher`.
 

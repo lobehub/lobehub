@@ -99,7 +99,7 @@ Event types are listed in [Streaming](/docs/development/api/streaming#with-strea
 
 ### Sign In with OIDC and PKCE
 
-For native and desktop apps where each user signs in:
+For native and desktop apps where each user signs in through a **public client** (no client secret), such as LobeHub's built-in clients. These helpers never send a client secret, so they do not work with a web OAuth app registered in Settings, which is a confidential client; see [OIDC with PKCE](/docs/development/api/authentication#oidc-with-pkce).
 
 ```ts
 import {
@@ -111,7 +111,7 @@ import {
   refreshAccessToken,
 } from '@lobehub/sdk';
 
-const client = { clientId: 'your-client-id', redirectUri: 'com.example.app://auth/callback' };
+const client = { clientId: 'your-public-client-id', redirectUri: 'http://127.0.0.1:8765/callback' };
 const state = crypto.randomUUID();
 const pkce = await createPkcePair();
 const url = createAuthorizationUrl({ ...client, codeChallenge: pkce.challenge, state });

@@ -109,6 +109,8 @@ List endpoints accept `page` (from 1) and `pageSize` (1–100, default 20). Most
 { "success": true, "data": { "agents": [], "total": 42 } }
 ```
 
+Three lists are exceptions and return a bare array of every item today: `GET /agent-groups`, `GET /api-keys`, and `GET /mcp-servers`.
+
 ### Coming Soon: Cursors
 
 With [#23231](https://github.com/lobehub/lobehub/pull/23231), lists accept `limit` (1–100, default 20) and `cursor`, and return `hasMore` and `nextCursor`:
@@ -126,13 +128,14 @@ curl "https://app.lobehub.com/api/v1/agent-groups?limit=50&cursor=bzo1MA" -H "Au
 - Treat `nextCursor` as opaque and pass it back unchanged. It is `null` on the last page. An invalid cursor returns `400` `validation_error` on `query.cursor`.
 - `total` is returned only where it is cheap to compute.
 - New endpoints use `items`. Existing lists keep their array key (`agents`, `topics`, …) and gain `hasMore` and `nextCursor`.
+- **Shape change:** `GET /agent-groups`, `GET /api-keys`, and `GET /mcp-servers` switch from a bare array to `{ items, total, hasMore, nextCursor }`. Send `format=array` (deprecated) to keep the old bare array with every item while you migrate.
 - `page`, `pageSize`, and `offset` keep working but are deprecated. If several are sent, `cursor` wins over `offset`, which wins over `page`.
 
 ## Rate Limits
 
 Today the public API does not send rate limit headers.
 
-**Coming soon** ([#23231](https://github.com/lobehub/lobehub/pull/23231)): each API key gets a fixed window of 600 requests per 60 seconds by default (self-hosted instances set it with `OPENAPI_RATE_LIMIT_PER_MINUTE`). Every response then carries:
+**Coming soon** ([#23231](https://github.com/lobehub/lobehub/pull/23231)): each API key gets a fixed window of 600 requests per 60 seconds by default (self-hosted instances set it with `OPENAPI_RATE_LIMIT_PER_MINUTE`). Every API key response then carries:
 
 | Header                  | Meaning                                 |
 | ----------------------- | --------------------------------------- |
@@ -140,7 +143,7 @@ Today the public API does not send rate limit headers.
 | `X-RateLimit-Remaining` | Requests left in the current window     |
 | `X-RateLimit-Reset`     | When the window resets, in Unix seconds |
 
-A request over the limit returns `429` `rate_limited` with `Retry-After` in seconds. OIDC sessions are not rate limited by this window.
+A request over the limit returns `429` `rate_limited` with `Retry-After` in seconds. The limit and its headers apply to API key requests only; OIDC sessions are not counted. On a self-hosted instance without Redis, requests are not limited and the headers are not sent.
 
 ## Idempotency
 
