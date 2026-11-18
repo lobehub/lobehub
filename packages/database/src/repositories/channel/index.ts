@@ -56,6 +56,7 @@ import { joinPublicChannel, listJoinableChannels } from './publicAccess';
 import { retryJob } from './retry';
 import { retryRouting } from './routing';
 import { type ChannelSearchOptions, searchChannelMessages } from './search';
+import { ChannelSectionRepository } from './sections';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
@@ -90,6 +91,7 @@ export type {
 } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
+export { ChannelSectionRepository } from './sections';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
@@ -124,6 +126,8 @@ const withMemberWake = (
 
 export class ChannelRepository {
   private readonly workspaceId: string | null;
+  /** The caller's own sidebar sections in this scope. */
+  readonly sections: ChannelSectionRepository;
 
   constructor(
     private readonly db: LobeChatDatabase,
@@ -131,6 +135,7 @@ export class ChannelRepository {
     workspaceId?: string | null,
   ) {
     this.workspaceId = normalizeWorkspaceId(workspaceId);
+    this.sections = new ChannelSectionRepository(db, userId, this.workspaceId);
   }
 
   /** Opens the unique direct conversation, or creates a group with its initial members. */
@@ -557,6 +562,35 @@ export class ChannelRepository {
     );
 
   /**
+   * Files the conversation under one of the caller's own sections, or back into its built-in
+   * section with `null`; nobody else sees it.
+   */
+  moveToSection = async (channelId: string, sectionId: string | null) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        if (sectionId) await this.sections.assertOwned(tx, sectionId);
+        await tx.update(channelMembers).set({ sectionId }).where(eq(channelMembers.id, member.id));
+        return sectionId;
+      },
+      { allowArchived: true, allowTrashed: true },
+    );
+
+  /**
+   * Hides the conversation from the caller's own list, or shows it again; the next message
+   * brings it back by itself.
+   */
+  setHidden = async (channelId: string, hidden: boolean) =>
+    this.write(
+      channelId,
+      async (tx, { member }) => {
+        await tx.update(channelMembers).set({ hidden }).where(eq(channelMembers.id, member.id));
+        return hidden;
+      },
+      { allowArchived: true, allowTrashed: true },
+    );
+
+  /**
    * Channels the caller belongs to in the current scope, newest first. Archived ones are
    * included with their `status`, so they stay readable outside the active list. Active open
    * project Channels the caller has not joined follow with `joined: false`.
@@ -572,8 +606,10 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         memberRole: ChannelMemberRole | null;
         mentionCount: number;
+        hidden: boolean;
         pinnedAt: Date | null;
         replyJobs: ChannelReplyJob[];
+        sectionId: string | null;
         sharedAgentHandle: string | null;
         threadMentions: ChannelThreadMention[];
         unreadCount: number;
@@ -586,10 +622,12 @@ export class ChannelRepository {
         agentVisibility: agents.visibility,
         agentWorkspaceId: agents.workspaceId,
         channel: channels,
+        hidden: channelMembers.hidden,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
         pinnedAt: channelMembers.pinnedAt,
         role: this.callerRole(),
+        sectionId: channelMembers.sectionId,
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
@@ -702,7 +740,17 @@ export class ChannelRepository {
     }
 
     const joined = rows.map(
-      ({ channel, lastReadSequence, pinnedAt, role, shareId, shareSlug, ...agent }) => {
+      ({
+        channel,
+        hidden,
+        lastReadSequence,
+        pinnedAt,
+        role,
+        sectionId,
+        shareId,
+        shareSlug,
+        ...agent
+      }) => {
         const sharedAgent = isSharedAgentChannel(channel, agent, this.userId);
         return {
           ...channel,
@@ -711,6 +759,7 @@ export class ChannelRepository {
           // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
           sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
           canDelete: hasRole(role, 'admin'),
+          hidden,
           joined: true,
           lastMessage: lastMessageOf.get(channel.id) ?? null,
           memberAvatars: avatarsOf.get(channel.id) ?? [],
@@ -719,6 +768,7 @@ export class ChannelRepository {
           peerUserId: peerOf(channel, this.userId),
           pinnedAt,
           replyJobs: replyJobsOf.get(channel.id) ?? [],
+          sectionId,
           threadMentions: threadMentionsOf.get(channel.id) ?? [],
           unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
         };
@@ -733,6 +783,7 @@ export class ChannelRepository {
         sharedAgent: false,
         sharedAgentHandle: null,
         canDelete: false,
+        hidden: false,
         joined: false,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
@@ -741,6 +792,7 @@ export class ChannelRepository {
         peerUserId: peerOf(channel, this.userId),
         pinnedAt: null,
         replyJobs: [],
+        sectionId: null,
         threadMentions: [],
         unreadCount: 0,
       })),

@@ -591,6 +591,11 @@ export interface ChannelListItem {
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
+  /**
+   * The caller hid the conversation from their list; new activity brings it back. Set by the
+   * Channel list. Personal: other members never see it.
+   */
+  hidden?: boolean;
   id: string;
   /**
    * False for a project Channel the caller can read through the project but has not joined; it
@@ -628,6 +633,11 @@ export interface ChannelListItem {
    * show them without loading the conversation; set by the Channel list.
    */
   replyJobs?: ChannelReplyJob[];
+  /**
+   * The caller's own sidebar section holding the conversation; null keeps it in the built-in one.
+   * Set by the Channel list. Personal: other members never see it.
+   */
+  sectionId?: string | null;
   sequence: number;
   /**
    * A direct conversation with another person's Agent, reached through the caller's contact entry
