@@ -4,6 +4,7 @@ import {
   isCronOccurrence,
 } from '@lobechat/utils/cronEval';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { TaskModel } from '@/database/models/task';
 import { getServerDB } from '@/database/server';
@@ -14,6 +15,20 @@ import { runScheduleTick } from '@/server/services/taskRunner/scheduleTick';
 const log = debug('lobe-server:workflows:task:schedule-dispatch');
 
 const SCHEDULE_EXECUTE_PATH = '/api/workflows/task/schedule-execute';
+
+/** Cap on concurrent reservation writes and QStash publishes in one sweep. */
+const FANOUT_CONCURRENCY = 10;
+/**
+ * Cap on schedule ticks started at once when running inline (no QStash): a busy
+ * minute on a self-hosted server must not start every due task in one burst.
+ */
+const INLINE_TICK_CONCURRENCY = 5;
+
+const settle = <T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> =>
+  promise.then(
+    (value) => ({ status: 'fulfilled', value }),
+    (reason: unknown) => ({ reason, status: 'rejected' }),
+  );
 
 export interface ScheduleDispatchPayload {
   /** When true, only return what would be dispatched without firing executes. */
@@ -141,7 +156,7 @@ export async function dispatchScheduledTasks(
   } catch (error) {
     // Nothing was handed off, so give every reservation back; otherwise
     // later sweeps would treat these occurrences as covered and drop them.
-    await Promise.all(reserved.map((d) => release(db, d)));
+    await pMap(reserved, (d) => release(db, d), { concurrency: FANOUT_CONCURRENCY });
     throw error;
   }
 
@@ -174,10 +189,18 @@ type ServerDB = Awaited<ReturnType<typeof getServerDB>>;
  * published twice.
  */
 const reserve = async (db: ServerDB, due: DueTask[]): Promise<DueTask[]> => {
-  const results = await Promise.allSettled(
-    due.map((d) =>
-      TaskModel.swapDispatchedScheduleOccurrence(db, d.taskId, d.previousOccurrence, d.occurrence),
-    ),
+  const results = await pMap(
+    due,
+    (d) =>
+      settle(
+        TaskModel.swapDispatchedScheduleOccurrence(
+          db,
+          d.taskId,
+          d.previousOccurrence,
+          d.occurrence,
+        ),
+      ),
+    { concurrency: FANOUT_CONCURRENCY },
   );
   const reserved: DueTask[] = [];
   for (const [i, r] of results.entries()) {
@@ -230,18 +253,21 @@ const fanout = async (db: ServerDB, due: DueTask[]): Promise<number> => {
     }
     const url = `${process.env.APP_URL.replace(/\/$/, '')}${SCHEDULE_EXECUTE_PATH}`;
 
-    const results = await Promise.allSettled(
-      due.map((d) =>
-        qstashClient.publishJSON(
-          d.deliverAtOccurrence
-            ? {
-                body: { occurrence: d.occurrence, taskId: d.taskId, userId: d.userId },
-                notBefore: Math.floor(new Date(d.occurrence).getTime() / 1000),
-                url,
-              }
-            : { body: { taskId: d.taskId, userId: d.userId }, url },
+    const results = await pMap(
+      due,
+      (d) =>
+        settle(
+          qstashClient.publishJSON(
+            d.deliverAtOccurrence
+              ? {
+                  body: { occurrence: d.occurrence, taskId: d.taskId, userId: d.userId },
+                  notBefore: Math.floor(new Date(d.occurrence).getTime() / 1000),
+                  url,
+                }
+              : { body: { taskId: d.taskId, userId: d.userId }, url },
+          ),
         ),
-      ),
+      { concurrency: FANOUT_CONCURRENCY },
     );
 
     let dispatched = 0;
@@ -264,7 +290,9 @@ const fanout = async (db: ServerDB, due: DueTask[]): Promise<number> => {
   // Local / dev: invoke runScheduleTick directly. Errors are logged but don't
   // fail the dispatch — one bad task shouldn't block the rest. A failed tick
   // releases its reservation so the next sweep retries the occurrence.
-  const results = await Promise.allSettled(due.map((d) => runScheduleTick(d.taskId, d.userId)));
+  const results = await pMap(due, (d) => settle(runScheduleTick(d.taskId, d.userId)), {
+    concurrency: INLINE_TICK_CONCURRENCY,
+  });
   let dispatched = 0;
   for (const [i, r] of results.entries()) {
     if (r.status === 'fulfilled') {

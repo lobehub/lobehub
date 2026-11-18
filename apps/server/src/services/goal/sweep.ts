@@ -1,4 +1,5 @@
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { GoalModel } from '@/database/models/goal';
 import { getServerDB } from '@/database/server';
@@ -19,6 +20,17 @@ const log = debug('lobe-server:workflows:goal:sweep');
  * swept while it is between heartbeats.
  */
 const DEFAULT_STALE_AFTER_MS = 15 * 60 * 1000;
+
+/** Goals advanced at once: each advance reads and writes the graph and may start Work. */
+const ADVANCE_CONCURRENCY = 5;
+/** Concurrent QStash publishes in queue mode. */
+const PUBLISH_CONCURRENCY = 10;
+
+const settle = <T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> =>
+  promise.then(
+    (value) => ({ status: 'fulfilled', value }),
+    (reason: unknown) => ({ reason, status: 'rejected' }),
+  );
 
 export interface GoalSweepPayload {
   /** Only report what would be advanced. */
@@ -97,7 +109,7 @@ interface StalledGoal {
 const fanout = async (goals: StalledGoal[]): Promise<number> => {
   const results = appEnv.enableQueueAgentRuntime
     ? await publishAll(goals)
-    : await Promise.allSettled(goals.map((goal) => advanceGoal(goal)));
+    : await pMap(goals, (goal) => settle(advanceGoal(goal)), { concurrency: ADVANCE_CONCURRENCY });
 
   let advanced = 0;
   for (const [index, result] of results.entries()) {
@@ -114,5 +126,7 @@ const publishAll = async (goals: StalledGoal[]) => {
   }
   const url = `${process.env.APP_URL.replace(/\/$/, '')}${GOAL_ADVANCE_PATH}`;
 
-  return Promise.allSettled(goals.map((body) => qstashClient.publishJSON({ body, url })));
+  return pMap(goals, (body) => settle(qstashClient.publishJSON({ body, url })), {
+    concurrency: PUBLISH_CONCURRENCY,
+  });
 };
