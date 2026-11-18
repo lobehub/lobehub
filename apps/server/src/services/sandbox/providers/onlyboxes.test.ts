@@ -99,6 +99,67 @@ describe('OnlyboxesSandboxProvider', () => {
     });
   });
 
+  it('runs sandbox commands from the selected working directory', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          exit_code: 0,
+          session_id: 'lobe-user-1-topic-1',
+          stderr: '',
+          stdout: 'ok\n',
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { OnlyboxesSandboxProvider } = await import('./onlyboxes');
+    const provider = new OnlyboxesSandboxProvider({
+      marketService: {} as MarketService,
+      sandboxCwd: 'projects/project-1/environment-1',
+      sandboxMode: 'drive',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await provider.callTool('runCommand', { command: 'pwd' });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { command: string };
+    expect(body.command).toBe(
+      "mkdir -p 'projects/project-1/environment-1' && cd 'projects/project-1/environment-1' && pwd",
+    );
+  });
+
+  it('uses a clean workspace for an ephemeral sandbox without a selected folder', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          exit_code: 0,
+          session_id: 'lobe-user-1-topic-1',
+          stderr: '',
+          stdout: 'ok\n',
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { OnlyboxesSandboxProvider } = await import('./onlyboxes');
+    const provider = new OnlyboxesSandboxProvider({
+      marketService: {} as MarketService,
+      sandboxMode: 'ephemeral',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    await provider.callTool('runCommand', { command: 'pwd' });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { command: string };
+    expect(body.command).toBe("mkdir -p '/workspace' && cd '/workspace' && pwd");
+  });
+
   it('treats non-zero terminal exit codes as successful tool transport results', async () => {
     vi.stubGlobal(
       'fetch',

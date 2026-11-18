@@ -190,7 +190,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
 
       const task = await this.submitTask('terminalResource', {
         action: 'export',
-        file_path: path,
+        file_path: this.resolveWorkingPath(path),
         headers: uploadHeaders,
         session_id: this.sessionId,
         signed_url: uploadUrl,
@@ -332,7 +332,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
       const task = await this.submitTask(
         'terminalExec',
         {
-          command,
+          command: this.inWorkingDirectory(command),
           create_if_missing: true,
           lease_ttl_sec: this.leaseTTLSec,
           session_id: this.sessionId,
@@ -621,7 +621,7 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
   private async execTerminal(command: string, timeoutMs = DEFAULT_TIMEOUT_MS) {
     return this.request<TerminalExecResult>('/api/v1/commands/terminal', {
       body: JSON.stringify({
-        command,
+        command: this.inWorkingDirectory(command),
         create_if_missing: true,
         lease_ttl_sec: this.leaseTTLSec,
         session_id: this.sessionId,
@@ -633,6 +633,32 @@ export class OnlyboxesSandboxProvider implements SandboxProvider {
 
   private async ensureSession() {
     await this.execTerminal(':', DEFAULT_TIMEOUT_MS);
+  }
+
+  /**
+   * Onlyboxes starts sessions in `/tmp`; keep it aligned with the execution
+   * plane's sandbox working-directory contract before running any command.
+   */
+  private inWorkingDirectory(command: string) {
+    const cwd =
+      this.options.sandboxCwd ||
+      (this.options.sandboxMode !== undefined || this.options.sandboxInitialization
+        ? '/workspace'
+        : undefined);
+    if (!cwd || cwd === '.') return command;
+
+    return `mkdir -p ${this.shellQuote(cwd)} && cd ${this.shellQuote(cwd)} && ${command}`;
+  }
+
+  private resolveWorkingPath(path: string) {
+    const cwd =
+      this.options.sandboxCwd ||
+      (this.options.sandboxMode !== undefined || this.options.sandboxInitialization
+        ? '/workspace'
+        : undefined);
+    if (!cwd || cwd === '.' || path.startsWith('/')) return path;
+
+    return `${cwd.replace(/\/+$/, '')}/${path}`;
   }
 
   private async submitTask(

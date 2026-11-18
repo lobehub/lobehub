@@ -41,6 +41,7 @@
 - 团队公开 agent 的上下文排除调用者自己的私有 TFS 环境，与初始化的可见性限制保持一致。普通 Topic、无 Topic 的任务、浏览器 RPC 和 CLI 共用该过滤；执行 agent 与 Topic agent 不同时，只要其中一个公开就应用限制。
 - `tfs.git` 按登录用户和 Topic USE 权限执行；`tfs.gitOperation` 重新验证活动 Operation Token、成员资格和操作状态，目标固定为该 operation 自己的 Topic。不能通过参数选择别的用户、Topic 或任意仓库。
 - `lh tfs git` 只操作当前选中环境的 Git 来源，`sourceIndex` 在仓库上下文中给出；无分支配置时要求明确分支。只支持 fetch、快进 pull 和非强制 push；本地 commit 仍用普通 Git，推送依用户授权执行。
+- `clone`、`init` 和 credential helper 不作为 CLI 子命令提供。云端沙盒首次调用由服务端初始化器完成检出，Onlyboxes 也会先切换到选中的沙盒工作目录；CLI 只负责已有检出目录的后续网络 Git 操作。
 - 执行前校验工作目录真实路径、Git 元数据路径及 origin 与所选来源相符。临时凭据只用于明确 URL 的网络操作，禁止重定向、hooks、Git trace 和自动维护；pull 合并前清除凭据。错误输出脱敏，Git 进程退出码失败会传递到 RPC 和 CLI。
 - 普通云端工具的 `lh` 预处理器与 TFS 云端 CLI 启动路径下发不含个人 TFS 凭据的命令 shim，避免依赖公共 npm CLI 已发布新子命令；其他 `lh` 命令仍走原入口。桌面 / 自行安装的 CLI 同时增加原生子命令，但它明确操作云端目录，不代表给设备 Git 注入服务端密码。
 - 临时沙箱即使带有 workspace 默认的 public 盘标记也可以操作；实际公共盘仍禁止。旧环境实例构建协议仍不承接 NTLM，继续明确拒绝并引导到工作目录初始化，不把个人密码塞进共享构建协议。
