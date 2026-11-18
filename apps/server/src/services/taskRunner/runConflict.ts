@@ -6,7 +6,6 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TaskRunClaimRepo } from '@/database/repositories/taskRunClaim';
-import type { AgentOperationItem, TaskTopicItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import {
@@ -15,6 +14,14 @@ import {
 } from '@/server/services/taskLifecycle/reconcile';
 
 const log = debug('task-runner:run-conflict');
+
+/** The run-row fields this check reads. */
+interface BlockingRunRow {
+  operationId: string | null;
+  topicId: string | null;
+}
+
+type OperationRecord = NonNullable<Awaited<ReturnType<AgentOperationModel['findById']>>>;
 
 /**
  * What a `running` run row that stands in the way of a new run really is.
@@ -32,7 +39,7 @@ type BlockingRun =
   /** The run ended a moment ago and its completion hook may still land. */
   | { kind: 'settling'; endedAt: Date; operationId: string; status: AgentOperationStatus }
   /** The run ended long ago and nothing on the topic is in flight. */
-  | { kind: 'stale'; operation: AgentOperationItem }
+  | { kind: 'stale'; operation: OperationRecord }
   /** No operation to judge the row against; leave the call to a person. */
   | { kind: 'unknown' };
 
@@ -42,12 +49,12 @@ interface RunConflictContext {
   workspaceId?: string;
 }
 
-const endedAt = (operation: AgentOperationItem): Date =>
+const endedAt = (operation: OperationRecord): Date =>
   new Date(operation.completedAt ?? operation.updatedAt);
 
 const inspectBlockingRun = async (
   ctx: RunConflictContext,
-  row: TaskTopicItem,
+  row: BlockingRunRow,
   now: number,
 ): Promise<BlockingRun> => {
   if (!row.operationId || !row.topicId) return { kind: 'unknown' };
@@ -94,7 +101,7 @@ const inspectBlockingRun = async (
 };
 
 /** The run status the lost completion hook would have written. */
-const settledRunStatus = (operation: AgentOperationItem): string => {
+const settledRunStatus = (operation: OperationRecord): string => {
   if (operation.status === 'done') return 'completed';
   // Same status a user's Stop and the interrupted-run sweep write.
   if (operation.status === 'interrupted') return 'canceled';
@@ -144,7 +151,7 @@ const conflictMessage = (topicId: string, continuing: boolean, run: BlockingRun)
  */
 export const clearBlockingRun = async (
   ctx: RunConflictContext,
-  row: TaskTopicItem,
+  row: BlockingRunRow,
   options: { continuing: boolean; now?: number },
 ): Promise<void> => {
   const topicId = row.topicId ?? 'unknown';

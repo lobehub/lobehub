@@ -1,3 +1,4 @@
+import { TRANSIENT_FAILED_RUN_STATUS } from '@lobechat/const/goal';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ORPHANED_RUN_GRACE_MS } from '@/server/services/taskLifecycle/reconcile';
@@ -81,24 +82,42 @@ describe('clearBlockingRun', () => {
       expect(mocks.claim).toHaveBeenCalledWith('tpc_stale', 'op_old', 'canceled');
     });
 
-    it('classifies a dead run the same way the orphaned-run sweep does', async () => {
-      // No recorded error: the sweep settles this as a lost run, not a judged failure.
+    it('settles an abandoned run with no recorded error as failed, like the sweep', async () => {
       mocks.findById.mockResolvedValue(
         operation({ completionReason: 'lease_expired', status: 'abandoned' }),
       );
-      const { resolveFailedRunStatus } = await import('@/server/services/goal/recoveryPolicy');
-      const { resolveOrphanedRunError } = await import('@/server/services/taskLifecycle/reconcile');
 
       await clearBlockingRun(ctx, row(), { continuing: false, now: NOW });
 
-      const expected = resolveFailedRunStatus(
-        resolveOrphanedRunError({
-          completionReason: 'lease_expired',
-          operationError: null,
-          operationStatus: 'abandoned',
+      expect(mocks.claim).toHaveBeenCalledWith('tpc_stale', 'op_old', 'failed');
+    });
+
+    it('keeps a transient provider failure retryable', async () => {
+      mocks.findById.mockResolvedValue(
+        operation({
+          completionReason: 'error',
+          error: { message: 'fetch failed' },
+          status: 'error',
         }),
       );
-      expect(mocks.claim).toHaveBeenCalledWith('tpc_stale', 'op_old', expected);
+
+      await clearBlockingRun(ctx, row(), { continuing: false, now: NOW });
+
+      expect(mocks.claim).toHaveBeenCalledWith('tpc_stale', 'op_old', TRANSIENT_FAILED_RUN_STATUS);
+    });
+
+    it('settles a run that recorded a plain failure as failed', async () => {
+      mocks.findById.mockResolvedValue(
+        operation({
+          completionReason: 'error',
+          error: { message: 'Tool call failed: invalid arguments' },
+          status: 'error',
+        }),
+      );
+
+      await clearBlockingRun(ctx, row(), { continuing: false, now: NOW });
+
+      expect(mocks.claim).toHaveBeenCalledWith('tpc_stale', 'op_old', 'failed');
     });
 
     it('goes ahead when another writer settled the row first', async () => {

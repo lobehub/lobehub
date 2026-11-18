@@ -246,8 +246,11 @@ export interface SettledRunQuery {
  * Task still `running` is a settle that broke midway, and is let through so the
  * retry can finish it.
  *
- * Only failures are fenced — the sweep never settles a successful or interrupted
- * run, so those deliveries keep their existing behaviour.
+ * Any outcome is fenced once the Task has started its next run: the runner
+ * settles a leftover run of any outcome before starting a new one (see
+ * `taskRunner/runConflict`), and a delivery for it that lands afterwards would
+ * pause, reschedule or complete the Task under that live run. Otherwise only
+ * failures are fenced — the sweep never settles a successful or interrupted run.
  */
 export const isRunAlreadySettled = async (
   db: LobeChatDatabase,
@@ -255,11 +258,17 @@ export const isRunAlreadySettled = async (
   workspaceId: string | undefined,
   { operationId, reason, taskId, topicId }: SettledRunQuery,
 ): Promise<boolean> => {
-  if (reason !== 'error' || !topicId) return false;
+  if (!topicId) return false;
 
-  const run = await new TaskTopicModel(db, userId, workspaceId).findByTopicId(topicId);
+  const taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
+  const run = await taskTopicModel.findByTopicId(topicId);
   if (!run || run.taskId !== taskId || run.operationId !== operationId) return false;
   if (run.status === 'running') return false;
+
+  const running = await taskTopicModel.findRunningByTaskIds([taskId]);
+  if (running.some((row) => row.topicId !== topicId)) return true;
+
+  if (reason !== 'error') return false;
 
   const task = await new TaskModel(db, userId, workspaceId).findById(taskId);
   return !!task && task.status !== 'running';
