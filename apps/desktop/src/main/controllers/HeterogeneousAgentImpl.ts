@@ -3222,8 +3222,8 @@ export default class HeterogeneousAgentCtr {
   }
 
   /** Switch a running Claude Code's permission mode (the mode chip); see the helper. */
-  async setPermissionMode({ mode, sessionId }: SetPermissionModeParams): Promise<void> {
-    await setSessionPermissionMode(this.sessions.get(sessionId), mode);
+  async setPermissionMode({ mode, sessionId }: SetPermissionModeParams) {
+    return setSessionPermissionMode(this.sessions.get(sessionId), mode);
   }
 
   /**

@@ -1,4 +1,5 @@
 import type { HeteroPermissionMode } from '@lobechat/types';
+import { isHeteroPermissionMode } from '@lobechat/types';
 
 import { sendHeteroControl } from './heteroControl';
 import { type HeteroStopTaskResult, toHeteroStopTaskResult } from './heteroStopTask';
@@ -15,12 +16,15 @@ export const HETERO_SET_PERMISSION_MODE_TIMEOUT_MS = 20_000;
  * its mode report then reaches the topic through the run's own stream. An `lh`
  * without the handler answers `unsupported`; one that predates control
  * messages leaves it `unreachable`. The caller owns authorization.
+ *
+ * An accepted switch also says which mode the session took, which differs from
+ * the pick when the device runs as root (`bypassPermissions` → `acceptEdits`).
  */
 export const setHeteroPermissionMode = async (
   operationId: string,
   mode: HeteroPermissionMode,
   options: { pollMs?: number; timeoutMs?: number } = {},
-): Promise<HeteroStopTaskResult> => {
+): Promise<HeteroStopTaskResult | { mode?: HeteroPermissionMode; status: 'accepted' }> => {
   const { state } = await sendHeteroControl(
     operationId,
     HETERO_SET_PERMISSION_MODE_COMMAND,
@@ -30,5 +34,10 @@ export const setHeteroPermissionMode = async (
       timeoutMs: options.timeoutMs ?? HETERO_SET_PERMISSION_MODE_TIMEOUT_MS,
     },
   );
-  return toHeteroStopTaskResult(state);
+  const result = toHeteroStopTaskResult(state);
+  const taken =
+    state?.status === 'ok' ? (state.data as { mode?: unknown } | undefined)?.mode : undefined;
+  return result.status === 'accepted' && isHeteroPermissionMode(taken)
+    ? { mode: taken, status: 'accepted' }
+    : result;
 };

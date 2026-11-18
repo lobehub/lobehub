@@ -130,7 +130,10 @@ export const effectivePermissionMode = (
       : mode;
 
 /** Switches the permission mode of a run hosted in this window (desktop IPC). */
-export type LocalPermissionModeSwitcher = (mode: HeteroPermissionMode) => Promise<void>;
+/** Resolves with the mode the session took, when the host says. */
+export type LocalPermissionModeSwitcher = (
+  mode: HeteroPermissionMode,
+) => Promise<HeteroPermissionMode | void>;
 
 const localSwitchers = new Map<string, LocalPermissionModeSwitcher>();
 

@@ -94,7 +94,7 @@ describe('setSessionPermissionMode', () => {
         type: 'control_response',
       }),
     );
-    await expect(switching).resolves.toBeUndefined();
+    await expect(switching).resolves.toBe('acceptEdits');
   });
 
   it('refuses a run that has ended', async () => {

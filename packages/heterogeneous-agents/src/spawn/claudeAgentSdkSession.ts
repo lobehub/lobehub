@@ -376,11 +376,14 @@ export class ClaudeAgentSdkSession {
    * Switch the running session's permission mode (the mode chip). Claude Code
    * confirms with a `status` record, which the mode report follows.
    *
+   * @returns the mode the session took (`acceptEdits` for a bypass pick as root)
    * @throws When no query is running any more.
    */
-  async setPermissionMode(mode: HeteroPermissionMode): Promise<void> {
+  async setPermissionMode(mode: HeteroPermissionMode): Promise<HeteroPermissionMode> {
     if (!this.queryHandle) throw new Error('The Claude Code session is no longer running');
-    await this.queryHandle.setPermissionMode(buildSetPermissionModeRequest(mode, this.isRoot).mode);
+    const taken = buildSetPermissionModeRequest(mode, this.isRoot).mode;
+    await this.queryHandle.setPermissionMode(taken);
+    return taken;
   }
 
   /**

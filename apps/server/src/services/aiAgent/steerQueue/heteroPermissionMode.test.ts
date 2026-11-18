@@ -28,9 +28,13 @@ describe('setHeteroPermissionMode', () => {
       command: 'set_permission_mode',
       params: { mode: 'acceptEdits' },
     });
-    await reportHeteroControlResult('op-1', message!.id, { status: 'ok' });
+    // As root, `lh` takes acceptEdits for a bypass pick and says so.
+    await reportHeteroControlResult('op-1', message!.id, {
+      data: { mode: 'acceptEdits' },
+      status: 'ok',
+    });
 
-    await expect(switching).resolves.toEqual({ status: 'accepted' });
+    await expect(switching).resolves.toEqual({ mode: 'acceptEdits', status: 'accepted' });
   });
 
   it('tells an lh without the handler apart from an unreachable run', async () => {

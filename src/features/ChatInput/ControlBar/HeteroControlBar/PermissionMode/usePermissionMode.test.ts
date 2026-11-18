@@ -130,6 +130,48 @@ describe('usePermissionMode', () => {
     expect(result.current.switchPending).toBe(false);
   });
 
+  it('still switches the run when remembering the directory pick fails', async () => {
+    seedTopic({ heteroPermissionMode: 'bypassPermissions' });
+    setDir.mockRejectedValueOnce(new Error('offline'));
+    const switcher = vi.fn(async () => 'plan' as const);
+    const unregister = registerLocalPermissionModeSwitcher('topic-1', switcher);
+    const { result } = renderHook(() => usePermissionMode('agent-1', 'topic-1'));
+
+    await act(() => result.current.select('plan'));
+
+    expect(switcher).toHaveBeenCalledWith('plan');
+    expect(result.current).toMatchObject({
+      mode: 'plan',
+      runningMode: 'plan',
+      switchPending: false,
+    });
+    expect(toast.error).toHaveBeenCalledWith('heteroAgent.permissionMode.saveFailed');
+    unregister();
+  });
+
+  it('keeps a bypass pick but shows the root stand-in the session took', async () => {
+    seedTopic({
+      heteroPermissionMode: 'default',
+      runningOperation: { assistantMessageId: 'a', operationId: 'op-root' },
+    });
+    vi.mocked(aiAgentService.setHeteroPermissionMode).mockResolvedValue({
+      mode: 'acceptEdits',
+      status: 'accepted',
+    } as any);
+    const { result } = renderHook(() => usePermissionMode('agent-1', 'topic-1'));
+
+    await act(() => result.current.select('bypassPermissions'));
+
+    expect(updateTopicMetadata).toHaveBeenLastCalledWith('topic-1', {
+      heteroPermissionModeFallback: 'root',
+    });
+    expect(result.current).toMatchObject({
+      fallback: 'root',
+      mode: 'bypassPermissions',
+      runningMode: 'acceptEdits',
+    });
+  });
+
   it('shows the mode a fallback ran in', () => {
     seedTopic({ heteroPermissionMode: 'plan', heteroPermissionModeFallback: 'outdatedCli' });
     const { result } = renderHook(() => usePermissionMode('agent-1', 'topic-1'));

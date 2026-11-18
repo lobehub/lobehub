@@ -48,17 +48,21 @@ const selectPermissionModeDirs =
 /** Why a mid-run switch did not reach the session, as the user should read it. */
 type SwitchFailure = 'switchFailed' | 'switchUnsupported';
 
+/**
+ * Switch the topic's running session, if it has one. `taken` is the mode the
+ * session reports it took — `acceptEdits` for a bypass pick as root — when
+ * the host says.
+ */
 const switchRunningSession = async (
   topicId: string,
   mode: HeteroPermissionMode,
-): Promise<SwitchFailure | undefined> => {
+): Promise<{ failure?: SwitchFailure; taken?: HeteroPermissionMode }> => {
   const local = getLocalPermissionModeSwitcher(topicId);
   if (local) {
     try {
-      await local(mode);
-      return;
+      return { taken: (await local(mode)) || undefined };
     } catch {
-      return 'switchFailed';
+      return { failure: 'switchFailed' };
     }
   }
   const state = useChatStore.getState();
@@ -67,19 +71,22 @@ const switchRunningSession = async (
     topicId,
     topicSelectors.getTopicById(topicId)(state)?.metadata,
   );
-  if (!runningOperationId) return;
+  if (!runningOperationId) return {};
 
   try {
     const result = await aiAgentService.setHeteroPermissionMode({
       mode,
       operationId: runningOperationId,
     });
-    if (result.status === 'accepted') return;
-    return result.status === 'unsupported' || result.status === 'unreachable'
-      ? 'switchUnsupported'
-      : 'switchFailed';
+    if (result.status === 'accepted') return { taken: 'mode' in result ? result.mode : undefined };
+    return {
+      failure:
+        result.status === 'unsupported' || result.status === 'unreachable'
+          ? 'switchUnsupported'
+          : 'switchFailed',
+    };
   } catch {
-    return 'switchFailed';
+    return { failure: 'switchFailed' };
   }
 };
 
@@ -147,33 +154,43 @@ export const usePermissionMode = (
 
   const select = useCallback(
     async (next: HeteroPermissionMode) => {
-      if (!topicId) setPendingHeteroPermissionMode(agentId, next);
+      // Remembering the pick for the directory is independent of this topic and
+      // its run: a failure there must not stop the switch.
+      void setPermissionModeDir(key, next).catch((error) => {
+        console.error('[usePermissionMode] remembering the mode failed', error);
+        toast.error(t('heteroAgent.permissionMode.saveFailed'));
+      });
+      if (!topicId) {
+        setPendingHeteroPermissionMode(agentId, next);
+        return;
+      }
+
       try {
-        await Promise.all([
-          setPermissionModeDir(key, next),
-          topicId
-            ? updateTopicMetadata(topicId, {
-                heteroPermissionMode: next,
-                heteroPermissionModeFallback: null,
-              })
-            : undefined,
-        ]);
+        await updateTopicMetadata(topicId, {
+          heteroPermissionMode: next,
+          heteroPermissionModeFallback: null,
+        });
       } catch (error) {
         console.error('[usePermissionMode] save failed', error);
         toast.error(t('heteroAgent.permissionMode.saveFailed'));
         return;
       }
-      if (!topicId) return;
 
       // The mode the live session is in before this pick, should it not take it.
       const liveBefore = runningMode;
-      const failure = await switchRunningSession(topicId, next);
-      if (!failure) {
-        clearSwitchUnapplied(topicId);
+      const { failure, taken } = await switchRunningSession(topicId, next);
+      if (failure) {
+        if (liveBefore !== next) markSwitchUnapplied(topicId, liveBefore);
+        toast.info(t(`heteroAgent.permissionMode.${failure}`));
         return;
       }
-      if (liveBefore !== next) markSwitchUnapplied(topicId, liveBefore);
-      toast.info(t(`heteroAgent.permissionMode.${failure}`));
+      clearSwitchUnapplied(topicId);
+      // As root a bypass pick runs as acceptEdits: keep the pick, say why.
+      if (taken && taken !== next) {
+        await updateTopicMetadata(topicId, { heteroPermissionModeFallback: 'root' }).catch(
+          () => {},
+        );
+      }
     },
     [agentId, key, runningMode, setPermissionModeDir, t, topicId, updateTopicMetadata],
   );

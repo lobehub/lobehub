@@ -64,16 +64,17 @@ interface ControllableSession {
 
 /**
  * Switch a running session's permission mode (the composer's mode chip).
- * Resolves once Claude Code confirmed; its mode report follows on the stream.
+ * Resolves once Claude Code confirmed, with the mode the session took (it
+ * differs from the pick as root); its mode report follows on the stream.
  */
 export const setSessionPermissionMode = async (
   session: ControllableSession | undefined,
   mode: HeteroPermissionMode,
-): Promise<void> => {
+): Promise<HeteroPermissionMode> => {
   if (session?.sdkSession) return session.sdkSession.setPermissionMode(mode);
   const live = session?.liveInput;
   if (!live) throw new Error('This run cannot switch its permission mode');
-  await setClaudeCodePermissionMode((request) => live.sendControlRequest(request), mode, {
+  return setClaudeCodePermissionMode((request) => live.sendControlRequest(request), mode, {
     isRoot: isRunningAsRoot(),
   });
 };
