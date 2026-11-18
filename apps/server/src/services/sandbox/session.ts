@@ -12,6 +12,7 @@ import {
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { withRepositorySetup } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
@@ -123,9 +124,11 @@ export interface SandboxSessionConfig {
  * session of every environment that gained one.
  */
 const toSessionSpecification = (
-  configuration: EnvironmentConfiguration | null | undefined,
+  stored: EnvironmentConfiguration | null | undefined,
 ): SandboxSessionSpecification | undefined => {
-  if (!configuration) return undefined;
+  if (!stored) return undefined;
+  // Each repository's own setup rides in the one command the plane runs.
+  const configuration = withRepositorySetup(stored);
 
   const specification: SandboxSessionSpecification = {
     ...(configuration.bootstrapCommand && { bootstrapCommand: configuration.bootstrapCommand }),

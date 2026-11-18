@@ -30,6 +30,8 @@ const environmentSourceSchema = z.object({
   /** Where the checkout lands, relative to the instance's own directory. */
   path: relativePathSchema.optional(),
   ref: z.string().trim().min(1).max(255).optional(),
+  /** Run inside this repository's folder before the environment's own setup. */
+  setupCommand: z.string().max(8000).optional(),
   url: z
     .string()
     .url()

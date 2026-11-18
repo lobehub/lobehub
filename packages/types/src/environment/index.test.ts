@@ -4,6 +4,7 @@ import {
   type EnvironmentConfiguration,
   layoutRepositorySources,
   toExecutionConfiguration,
+  withRepositorySetup,
 } from './index';
 
 describe('toExecutionConfiguration', () => {
@@ -71,5 +72,54 @@ describe('layoutRepositorySources', () => {
         sources: [git('https://github.com/a/one'), git('https://github.com/a/two')],
       }).sources,
     ).toEqual([git('https://github.com/a/one', 'one'), git('https://github.com/a/two', 'two')]);
+  });
+});
+
+describe('withRepositorySetup', () => {
+  it('leaves a definition without repository setup untouched', () => {
+    const configuration = {
+      bootstrapCommand: 'pnpm i',
+      sources: [{ kind: 'git' as const, url: 'https://github.com/a/one' }],
+    };
+    expect(withRepositorySetup(configuration)).toBe(configuration);
+  });
+
+  it("runs each repository's setup in its folder, then the environment's own", () => {
+    const result = withRepositorySetup({
+      bootstrapCommand: 'make all',
+      sources: [
+        { kind: 'git', setupCommand: 'pnpm i', url: 'https://github.com/a/web' },
+        { kind: 'git', url: 'https://github.com/a/docs' },
+        { kind: 'git', setupCommand: "echo 'hi'", url: 'https://github.com/a/api' },
+      ],
+    });
+    expect(result.bootstrapCommand).toBe(
+      "(cd 'web' && pnpm i\n) && (cd 'api' && echo 'hi'\n) && (make all\n)",
+    );
+    expect(result.sources).toEqual([
+      { kind: 'git', url: 'https://github.com/a/web' },
+      { kind: 'git', url: 'https://github.com/a/docs' },
+      { kind: 'git', url: 'https://github.com/a/api' },
+    ]);
+  });
+
+  it('runs a lone repository setup at the top, where that repository is checked out', () => {
+    expect(
+      withRepositorySetup({
+        sources: [{ kind: 'git', setupCommand: 'npm ci', url: 'https://github.com/a/one' }],
+      }).bootstrapCommand,
+    ).toBe("(cd '.' && npm ci\n)");
+  });
+
+  it('is applied on the way to the execution plane', () => {
+    expect(
+      toExecutionConfiguration({
+        kind: 'code',
+        sources: [{ kind: 'git', setupCommand: 'npm ci', url: 'https://github.com/a/one' }],
+      }),
+    ).toEqual({
+      bootstrapCommand: "(cd '.' && npm ci\n)",
+      sources: [{ kind: 'git', url: 'https://github.com/a/one' }],
+    });
   });
 });

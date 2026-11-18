@@ -1,5 +1,5 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
-import { layoutRepositorySources } from '@lobechat/types';
+import { layoutRepositorySources, withRepositorySetup } from '@lobechat/types';
 
 /** Long enough for a shallow clone and a dependency install. */
 export const SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS = 600_000;
@@ -53,7 +53,8 @@ export const toSandboxInitialization = (environment: {
   id: string;
   name: string;
 }): SandboxInitialization | undefined => {
-  const configuration = environment.configuration ?? {};
+  // Each repository's own setup folded into the one setup command.
+  const configuration = withRepositorySetup(environment.configuration ?? {});
   // One repository at the top, several side by side — see `layoutRepositorySources`.
   const sources = layoutRepositorySources(configuration.sources ?? []).flatMap((source) =>
     source.kind === 'git' && source.url

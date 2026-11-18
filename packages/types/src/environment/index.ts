@@ -9,7 +9,20 @@ export type EnvironmentVisibility = 'private' | 'public';
 
 /** Abstract source material; paths are relative destinations within an instance. */
 export type EnvironmentSource =
-  | { kind: 'git'; path?: string; ref?: string; url: string }
+  | {
+      kind: 'git';
+      path?: string;
+      ref?: string;
+      /**
+       * Setup for this repository alone, run inside its folder once it is
+       * checked out and before the environment's own
+       * {@link EnvironmentConfiguration.bootstrapCommand}. Folded into that one
+       * command by {@link withRepositorySetup} before anything reaches the
+       * execution plane, which only knows the environment-wide one.
+       */
+      setupCommand?: string;
+      url: string;
+    }
   | { kind: 'files'; path?: string; uri: string };
 
 export interface EnvironmentResourceRequirements {
@@ -122,7 +135,7 @@ export const DEFAULT_REGENERABLE_PATHS = ['node_modules', '.venv', 'target'] as 
 export const toExecutionConfiguration = (
   configuration: EnvironmentConfiguration,
 ): EnvironmentConfiguration => {
-  const { kind: _kind, ...rest } = configuration;
+  const { kind: _kind, ...rest } = withRepositorySetup(configuration);
 
   return rest.sources ? { ...rest, sources: layoutRepositorySources(rest.sources) } : rest;
 };
@@ -199,4 +212,47 @@ export const layoutRepositorySources = (sources: EnvironmentSource[]): Environme
       ? { ...source, path: claim(source.url) }
       : source,
   );
+};
+
+const shellQuote = (value: string): string => `'${value.replaceAll("'", String.raw`'\''`)}'`;
+
+/**
+ * The definition with each repository's own setup folded into the one setup
+ * command the execution plane runs, and taken off the sources.
+ *
+ * Every repository's setup runs in its own folder, in the order the
+ * repositories are checked out, each in a subshell so a `cd` in one does not
+ * move the next; then the environment's own setup at the top of the working
+ * directory. Chained with `&&`: the first failure stops the rest, as one
+ * command failing always did.
+ *
+ * A definition without any repository setup comes back as it was, so the
+ * digest of every build made before repositories had one is unchanged.
+ */
+export const withRepositorySetup = (
+  configuration: EnvironmentConfiguration,
+): EnvironmentConfiguration => {
+  const sources = configuration.sources ?? [];
+  const hasRepositorySetup = sources.some(
+    (source) => source.kind === 'git' && source.setupCommand?.trim(),
+  );
+  if (!hasRepositorySetup) return configuration;
+
+  const steps = layoutRepositorySources(sources).flatMap((source) => {
+    const command = source.kind === 'git' ? source.setupCommand?.trim() : undefined;
+    if (!command) return [];
+    const folder = isRootPath(source.path) ? '.' : source.path!.trim();
+    return [`(cd ${shellQuote(folder)} && ${command}\n)`];
+  });
+  const own = configuration.bootstrapCommand?.trim();
+
+  return {
+    ...configuration,
+    bootstrapCommand: [...steps, ...(own ? [`(${own}\n)`] : [])].join(' && '),
+    sources: sources.map((source) => {
+      if (source.kind !== 'git' || source.setupCommand === undefined) return source;
+      const { setupCommand: _setupCommand, ...rest } = source;
+      return rest;
+    }),
+  };
 };
