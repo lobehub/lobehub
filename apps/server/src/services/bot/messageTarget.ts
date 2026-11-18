@@ -27,6 +27,8 @@ import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
+import { toCallbackTarget } from '@/server/services/bot/platforms/webhook/client';
+import { WebhookMessageService } from '@/server/services/bot/platforms/webhook/service';
 import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
 import { getInstallationStore } from '@/server/services/messenger/installations';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
@@ -102,6 +104,9 @@ export const createMessageServiceForCredentials = (
         new WechatApiClient(credentials.botToken, credentials.botId, credentials.baseUrl),
         applicationId,
       );
+    }
+    case 'webhook': {
+      return new WebhookMessageService(toCallbackTarget(applicationId, credentials));
     }
     case 'imessage': {
       if (options.userId) {

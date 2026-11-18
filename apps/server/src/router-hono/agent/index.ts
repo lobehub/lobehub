@@ -10,6 +10,7 @@ import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
 import { channelAdvance, channelCallback } from './handlers/channel';
+import { customBotWebhook } from './handlers/customBotWebhook';
 import { deviceToolCompletion } from './handlers/deviceToolCompletion';
 import {
   documentAccess,
@@ -149,6 +150,9 @@ app.post('/webhooks/subagent-callback', qstashAuth(), subAgentCallback);
 
 // POST /api/agent/webhooks/group-member-callback — group-action member bridge (QStash)
 app.post('/webhooks/group-member-callback', qstashAuth(), groupMemberCallback);
+
+// POST /api/agent/webhooks/custom/:botId — custom webhook bots (signed with the bot's secret)
+app.post('/webhooks/custom/:botId', customBotWebhook);
 
 // POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
 app.post('/webhooks/:platform/:appId?', platformWebhook);

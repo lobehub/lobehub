@@ -1,4 +1,3 @@
-import { isSSRFBlockedError, ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   WEBHOOK_DELIVERY_POLICY,
   WEBHOOK_HEADERS,
@@ -7,15 +6,12 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
-import {
-  type WebhookAttemptResult,
-  WebhookDeliveryWorkerModel,
-} from '@/database/models/developerWebhook';
+import { WebhookDeliveryWorkerModel } from '@/database/models/developerWebhook';
 import type { WebhookDeliveryRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { openWebhookSecret, WebhookSecretUnavailableError } from './secretVault';
-import { signWebhookPayload } from './signature';
+import { postSignedWebhook, type SignedWebhookResult } from './send';
 
 const log = debug('lobe-server:developer-webhook:deliver');
 
@@ -31,90 +27,24 @@ export type WebhookDeliveryOutcome =
       reason: 'already_claimed' | 'already_settled' | 'endpoint_disabled' | 'not_due' | 'not_found';
     };
 
-interface SendResult extends WebhookAttemptResult {
-  /** A retry cannot succeed (e.g. the URL resolves to a private address). */
-  permanent: boolean;
-}
+type SendResult = SignedWebhookResult;
 
-const readCappedText = async (response: Response) => {
-  try {
-    const text = await response.text();
-    return text.slice(0, WEBHOOK_DELIVERY_POLICY.maxResponseBodyBytes);
-  } catch {
-    return null;
-  }
-};
-
-/** POST one signed request; every outcome, a thrown error included, becomes a result. */
+/** POST one signed delivery; every outcome, a thrown error included, becomes a result. */
 const send = async (
   url: string,
   secret: string,
   delivery: Pick<WebhookDeliveryRow, 'eventId' | 'eventType' | 'id' | 'payload'>,
-): Promise<SendResult> => {
-  const body = JSON.stringify(delivery.payload);
-  const timestamp = Math.floor(Date.now() / 1000);
-  const startedAt = performance.now();
-  const elapsed = () => Math.round(performance.now() - startedAt);
-
-  try {
-    // Only the SSRF-filtering fetch may reach a developer-supplied URL.
-    const response = await ssrfSafeFetch(
-      url,
-      {
-        body,
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'LobeHub-Webhooks/1.0',
-          [WEBHOOK_HEADERS.deliveryId]: delivery.id,
-          [WEBHOOK_HEADERS.eventId]: delivery.eventId,
-          [WEBHOOK_HEADERS.eventType]: delivery.eventType,
-          [WEBHOOK_HEADERS.signature]: signWebhookPayload(secret, timestamp, body),
-          [WEBHOOK_HEADERS.timestamp]: String(timestamp),
-        },
-        method: 'POST',
-        // A redirect would re-send the signed body to a URL the owner never registered.
-        redirect: 'manual',
-        signal: AbortSignal.timeout(WEBHOOK_DELIVERY_POLICY.timeoutMs),
-      },
-      { maxContentLength: WEBHOOK_DELIVERY_POLICY.maxResponseBodyBytes },
-    );
-    const responseBody = await readCappedText(response);
-    const ok = response.status >= 200 && response.status < 300;
-    return {
-      durationMs: elapsed(),
-      error: ok ? null : `HTTP ${response.status}`,
-      permanent: false,
-      responseBody,
-      responseStatus: response.status,
-    };
-  } catch (error) {
-    const durationMs = elapsed();
-    if (isSSRFBlockedError(error))
-      return {
-        durationMs,
-        error: 'Blocked: the URL resolves to a private or reserved address',
-        permanent: true,
-        responseBody: null,
-        responseStatus: null,
-      };
-    const name = (error as { name?: string })?.name;
-    const timedOut =
-      name === 'TimeoutError' ||
-      name === 'AbortError' ||
-      (error instanceof Error && /timeout|aborted/i.test(error.message));
-    return {
-      durationMs,
-      error: timedOut
-        ? `Timed out after ${WEBHOOK_DELIVERY_POLICY.timeoutMs} ms`
-        : error instanceof Error
-          ? error.message.slice(0, 500)
-          : 'Request failed',
-      permanent: false,
-      responseBody: null,
-      responseStatus: null,
-    };
-  }
-};
+): Promise<SendResult> =>
+  postSignedWebhook({
+    body: JSON.stringify(delivery.payload),
+    headers: {
+      [WEBHOOK_HEADERS.deliveryId]: delivery.id,
+      [WEBHOOK_HEADERS.eventId]: delivery.eventId,
+      [WEBHOOK_HEADERS.eventType]: delivery.eventType,
+    },
+    secret,
+    url,
+  });
 
 /**
  * Make the next attempt of one delivery and record it. A failed attempt is retried
