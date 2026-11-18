@@ -10,8 +10,11 @@ import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { type AgentOperationItem, agentOperations, messages } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { createAgentStateManager } from '@/server/modules/AgentRuntime/factory';
-import type { IAgentStateManager } from '@/server/modules/AgentRuntime/types';
+import {
+  createAgentStateManager,
+  createStreamEventManager,
+} from '@/server/modules/AgentRuntime/factory';
+import type { IAgentStateManager, IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { assertOperationVisibleToCaller } from '@/server/routers/lambda/_helpers/operationReadGuard';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { bridgeLegacyResumeToSourceIntervention } from '@/server/routers/lambda/aiAgent/exec';
@@ -103,15 +106,20 @@ export const pendingCallerToolCallsOf = (
 /**
  * Public status of a run: the settled database row wins; while it is in
  * flight the live runtime state is fresher than the row.
+ *
+ * The runtime state is only saved between steps, so it still reads `idle`
+ * for the whole first step (the model streaming its first reply). `started`
+ * says a step has begun executing; such a run is `running`, not `queued`.
  */
 export const toRunStatus = (
   rowStatus: AgentOperationStatus,
   state?: AgentState | null,
+  started = false,
 ): RunStatus => {
   const status = isAgentOperationSettled(rowStatus) ? rowStatus : (state?.status ?? rowStatus);
   switch (status) {
     case 'idle': {
-      return 'queued';
+      return started ? 'running' : 'queued';
     }
     case 'waiting_for_human': {
       return 'waiting_for_human';
@@ -159,9 +167,14 @@ const iso = (value?: Date | string | null) =>
   value ? (value instanceof Date ? value : new Date(value)).toISOString() : null;
 
 export interface RunRestServiceOptions {
+  /** The run event journal; defaults to the deployment's stream event store. */
+  journal?: Pick<IStreamEventManager, 'getStreamHistory'>;
   /** Defaults to the deployment's runtime state store (Redis, or in-memory). */
   stateManager?: IAgentStateManager;
 }
+
+/** Journal events written before any step runs; anything else means one has started. */
+const PRE_START_EVENT_TYPES = new Set<string>(['agent_runtime_init']);
 
 /**
  * Agent runs REST service.
@@ -173,6 +186,7 @@ export interface RunRestServiceOptions {
  */
 export class RunRestService extends BaseService {
   private readonly stateManager: IAgentStateManager;
+  private journal?: Pick<IStreamEventManager, 'getStreamHistory'>;
 
   constructor(
     db: LobeChatDatabase,
@@ -182,6 +196,7 @@ export class RunRestService extends BaseService {
   ) {
     super(db, userId, workspaceId);
     this.stateManager = options.stateManager ?? createAgentStateManager();
+    this.journal = options.journal;
   }
 
   private aiAgentService() {
@@ -228,6 +243,23 @@ export class RunRestService extends BaseService {
 
   loadState(id: string) {
     return this.stateManager.loadAgentState(id).catch(() => null);
+  }
+
+  /**
+   * Public status of a run row and its state. A state still `idle` behind a
+   * started row is either waiting for its first step or inside it; the
+   * journal tells which, as every step publishes `step_start` before it runs.
+   */
+  async resolveStatus(row: AgentOperationItem, state: AgentState | null): Promise<RunStatus> {
+    const status = toRunStatus(row.status, state);
+    if (status !== 'queued' || row.status === 'idle') return status;
+    return toRunStatus(row.status, state, await this.hasStartedStep(row.id));
+  }
+
+  private async hasStartedStep(id: string): Promise<boolean> {
+    this.journal ??= createStreamEventManager();
+    const [latest] = await this.journal.getStreamHistory(id, 1).catch(() => []);
+    return !!latest && !PRE_START_EVENT_TYPES.has(latest.type);
   }
 
   // ==================== Create ====================
@@ -394,7 +426,7 @@ export class RunRestService extends BaseService {
 
   /** Public shape of a run row, overlaid with its live runtime state. */
   async toRun(row: AgentOperationItem, state: AgentState | null): Promise<Run> {
-    const status = toRunStatus(row.status, state);
+    const status = await this.resolveStatus(row, state);
     const tokens = state?.usage?.llm?.tokens;
     const continuedBy = row.metadata?.[CONTINUED_BY_METADATA_KEY];
 
@@ -465,7 +497,7 @@ export class RunRestService extends BaseService {
   async cancelRun(id: string): ServiceResult<CancelRunResult> {
     const row = await this.requireWritableRun(id);
     const state = await this.loadState(id);
-    const status = toRunStatus(row.status, state);
+    const status = await this.resolveStatus(row, state);
     if (TERMINAL_RUN_STATUSES.includes(status)) return { cancelled: false, id, status };
 
     const aiAgentService = this.aiAgentService();

@@ -195,9 +195,52 @@ describe('toRunStatus', () => {
   ])('row %s + state %j → %s', (row, state, expected) => {
     expect(toRunStatus(row, state as any)).toBe(expected);
   });
+
+  it('reports a started run whose state is still idle as running', () => {
+    expect(toRunStatus('running', { status: 'idle' } as any, true)).toBe('running');
+    expect(toRunStatus('running', { status: 'idle' } as any, false)).toBe('queued');
+  });
 });
 
 describe('RunRestService.getRun', () => {
+  const journal = (types: string[]) => ({
+    getStreamHistory: vi.fn(async () => types.map((type) => ({ type }) as any)),
+  });
+
+  it('reports running while the first step streams, before the idle state is saved again', async () => {
+    mocks.loadAgentState.mockResolvedValue({ status: 'idle' });
+    const service = new RunRestService(fakeDb([baseRow]), 'user-1', undefined, {
+      journal: journal(['stream_chunk']),
+    });
+
+    await expect(service.getRun('op-1')).resolves.toMatchObject({ status: 'running' });
+  });
+
+  it('reports queued until a step starts', async () => {
+    mocks.loadAgentState.mockResolvedValue({ status: 'idle' });
+    const service = new RunRestService(fakeDb([baseRow]), 'user-1', undefined, {
+      journal: journal(['agent_runtime_init']),
+    });
+
+    await expect(service.getRun('op-1')).resolves.toMatchObject({ status: 'queued' });
+  });
+
+  it('reports an idle reservation as queued without reading the journal', async () => {
+    mocks.loadAgentState.mockResolvedValue(null);
+    const events = journal(['stream_chunk']);
+    const service = new RunRestService(
+      fakeDb([{ ...baseRow, status: 'idle' }]),
+      'user-1',
+      undefined,
+      {
+        journal: events,
+      },
+    );
+
+    await expect(service.getRun('op-1')).resolves.toMatchObject({ status: 'queued' });
+    expect(events.getStreamHistory).not.toHaveBeenCalled();
+  });
+
   it('reports a parked run with its pending interventions and live usage', async () => {
     mocks.loadAgentState.mockResolvedValue(approvalState);
     const service = new RunRestService(fakeDb([baseRow]), 'user-1');
