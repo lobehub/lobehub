@@ -13,7 +13,10 @@ vi.mock('@/database/repositories/channel', () => ({
     }
   },
 }));
-vi.mock('@/server/services/bot/wake/opener', () => ({ createReplyOpener: vi.fn() }));
+vi.mock('./opener', () => ({
+  CHANNEL_REPLY_OPENER_TIMEOUT_MS: 5000,
+  createChannelReplyOpener: vi.fn(),
+}));
 
 const candidate = {
   addressed: true,
@@ -34,6 +37,7 @@ const candidate = {
   ],
   request: { author: { id: 'user-1', name: 'Mia', type: 'user' }, content: 'Why?', id: 'm3' },
   requesterUserId: 'user-1',
+  threads: [],
   workspaceId: null,
 };
 
@@ -55,19 +59,52 @@ describe('openChannelReply', () => {
 
     expect(opener).toHaveBeenCalledWith(
       {
-        ackPlacement: 'before-thread',
         agent: { name: 'Coder', title: 'Engineer' },
         botNames: ['Coder'],
         canOpenThread: true,
         coAddressed: [],
         message: 'Why?',
         recentMessages: ['Mia: The deploy is red again', 'Assistant: Looking'],
+        threads: [],
       },
       expect.any(AbortSignal),
     );
     expect(executions.open).toHaveBeenCalledWith('channel', 'job', {
       ack: 'Got it, I will check the deploy logs first.',
       threadTitle: 'Red deploy',
+    });
+  });
+
+  it('shows the open Threads by label and continues in the one the opener picks', async () => {
+    executions.openingCandidate.mockResolvedValue({
+      ...candidate,
+      threads: [
+        { id: 'cht_near', lastMessage: `latest ${'x'.repeat(200)}`, title: 'Red deploy' },
+        { id: 'cht_far', root: 'Emoji  reactions\nplan' },
+      ],
+    });
+    const opener = vi.fn().mockResolvedValue({
+      ack: 'I will pick this up in the earlier thread.',
+      placement: 'existing_thread',
+      thread: 'T2',
+    });
+
+    await openChannelReply({} as never, 'channel', 'job', { createOpener: () => opener });
+
+    const [input] = opener.mock.calls[0];
+    expect(input.threads).toEqual([
+      {
+        label: 'T1',
+        lastMessage: `latest ${'x'.repeat(153)}…`,
+        root: undefined,
+        title: 'Red deploy',
+      },
+      { label: 'T2', lastMessage: undefined, root: 'Emoji reactions plan', title: undefined },
+    ]);
+    expect(executions.open).toHaveBeenCalledWith('channel', 'job', {
+      ack: 'I will pick this up in the earlier thread.',
+      threadId: 'cht_far',
+      threadTitle: undefined,
     });
   });
 

@@ -57,7 +57,12 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
     // A message deleted after the manifest froze leaves the context it was in.
     messageStands(),
     threadId
-      ? or(eq(channelMessages.threadId, threadId), mainPrefix)
+      ? // A request on the main timeline continued in an earlier Thread sits after its root.
+        or(
+          eq(channelMessages.threadId, threadId),
+          mainPrefix,
+          eq(channelMessages.id, manifest.requestMessageId),
+        )
       : isNull(channelMessages.threadId),
   );
 };

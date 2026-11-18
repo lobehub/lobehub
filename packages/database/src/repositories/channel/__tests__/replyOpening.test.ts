@@ -507,4 +507,120 @@ describe('Channel reply opening', () => {
     expect(await execution.openingCandidate(channel.id, job.id)).toBeUndefined();
     expect(await execution.open(channel.id, job.id, { ack: 'Late' })).toBe(false);
   });
+
+  describe('continuing in an open Thread', () => {
+    /** A first request answered in its own Thread, then a follow-up on the main timeline. */
+    const answeredInThread = async () => {
+      const team = await mentionAgent();
+      await execution.open(team.channel.id, team.job.id, {
+        ack: 'On it.',
+        threadTitle: 'Deploy failure',
+      });
+      await execution.claim(team.channel.id, team.job.id, lease);
+      await execution.accepted(team.channel.id, team.job.id);
+      await execution.saveDraft(team.channel.id, team.job.id, 'The token expired.');
+      await execution.publish(team.channel.id, team.job.id);
+      await execution.releaseWriter(team.channel.id, team.job.id);
+      const [thread] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.channelId, team.channel.id));
+      const followUp = await team.asMember.send(team.channel.id, {
+        content: 'And how do we stop the token expiring again?',
+        mentions: [team.agent.id],
+        requestKey: 'follow-up',
+        routing: 'decision',
+      });
+      const [job] = await jobsOf(db, followUp.id);
+      return { ...team, followUp, followUpJob: job, thread };
+    };
+
+    it('shows the opener the open Threads started before the request', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+
+      const candidate = await execution.openingCandidate(channel.id, followUpJob.id);
+
+      expect(candidate?.threads).toEqual([
+        {
+          id: thread.id,
+          lastMessage: 'The token expired.',
+          root: 'Why did yesterday’s deploy fail?',
+          title: 'Deploy failure',
+        },
+      ]);
+    });
+
+    it('leaves out archived Threads', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+      await db
+        .update(channelThreads)
+        .set({ status: 'archived' })
+        .where(eq(channelThreads.id, thread.id));
+
+      expect((await execution.openingCandidate(channel.id, followUpJob.id))?.threads).toEqual([]);
+    });
+
+    it('acknowledges on the main timeline with the Thread linked and answers inside it', async () => {
+      const { channel, followUp, followUpJob, member, thread } = await answeredInThread();
+
+      expect(
+        await execution.open(channel.id, followUpJob.id, {
+          ack: 'I will pick this up in the earlier thread.',
+          threadId: thread.id,
+        }),
+      ).toBe(true);
+
+      const [ack] = await db
+        .select()
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channel.id),
+            eq(channelMessages.requestKey, `opening:${followUpJob.id}`),
+          ),
+        );
+      expect(ack).toMatchObject({
+        content: `I will pick this up in the earlier thread. <#${thread.id}>`,
+        replyToId: followUp.id,
+        threadId: null,
+      });
+      expect((await jobById(db, followUpJob.id)).threadId).toBe(thread.id);
+      const [joined] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.id, thread.id));
+      expect(joined.followerMemberIds).toEqual(expect.arrayContaining([member.id]));
+
+      // The run reads the Thread and the request, which stays on the main timeline.
+      expect(await execution.claim(channel.id, followUpJob.id, lease)).toBeTruthy();
+      const input = await execution.input(channel.id, followUpJob.id);
+      expect(input.at(-1)?.id).toBe(followUp.id);
+      await execution.accepted(channel.id, followUpJob.id);
+      await execution.saveDraft(channel.id, followUpJob.id, 'Rotate it with the cron.');
+      const replyId = await execution.publish(channel.id, followUpJob.id);
+      const [reply] = await db
+        .select()
+        .from(channelMessages)
+        .where(eq(channelMessages.id, replyId));
+      expect(reply).toMatchObject({ replyToId: followUp.id, threadId: thread.id });
+      const [moved] = await db
+        .select()
+        .from(channelMessages)
+        .where(eq(channelMessages.id, followUp.id));
+      expect(moved.threadId).toBeNull();
+    });
+
+    it('starts in place when the Thread was not one the opener could pick', async () => {
+      const { channel, followUpJob, thread } = await answeredInThread();
+      await db
+        .update(channelThreads)
+        .set({ status: 'archived' })
+        .where(eq(channelThreads.id, thread.id));
+
+      await execution.open(channel.id, followUpJob.id, { ack: 'Looking.', threadId: thread.id });
+
+      expect((await jobById(db, followUpJob.id)).threadId).toBeNull();
+      expect(await execution.openingReply(channel.id, followUpJob.id)).toBe('Looking.');
+    });
+  });
 });
