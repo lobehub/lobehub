@@ -17,6 +17,7 @@ import {
 import { nanoid as secureNanoid } from 'nanoid';
 import { nanoid } from 'nanoid/non-secure';
 
+import { agents } from '../schemas/agent';
 import { devices } from '../schemas/device';
 import { messengerAccountLinks } from '../schemas/messengerAccountLink';
 import { projectMembers } from '../schemas/projectReview';
@@ -24,6 +25,7 @@ import { tasks } from '../schemas/task';
 import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers, workspaceTeamMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+import { removeDeviceFromAgents } from '../utils/agencyConfigDevices';
 import { ilikeContains as containsIgnoreCase } from '../utils/like';
 import { ResourcePermissionModel } from './resourcePermission';
 
@@ -251,6 +253,11 @@ export class WorkspaceMemberModel {
         .update(tasks)
         .set({ assigneeUserId: null })
         .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.assigneeUserId, userId)));
+
+      // The dropped devices must not stay bound to the workspace's agents.
+      for (const { deviceId } of removedDevices) {
+        await removeDeviceFromAgents(tx, eq(agents.workspaceId, workspaceId), deviceId);
+      }
     });
 
     // Surfaced so callers can best-effort unenroll any still-connected gateway

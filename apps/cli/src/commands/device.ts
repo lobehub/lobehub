@@ -131,6 +131,13 @@ export function registerDeviceCommand(program: Command) {
         ? devices.filter((d: any) => d.scope === 'workspace')
         : devices;
       const byId = new Map<string, any>(candidates.map((d: any) => [d.deviceId, d]));
+      // Without a workspace context only personal devices are listed, so a
+      // workspace device the web UI shows reads as missing here.
+      const searchedWorkspace =
+        !!options.workspace || devices.some((d: any) => d.scope === 'workspace');
+      const workspaceHint = searchedWorkspace
+        ? ''
+        : ' To remove a workspace device, pass --workspace <id|slug>.';
 
       let failed = 0;
       for (const deviceId of deviceIds) {
@@ -138,7 +145,7 @@ export function registerDeviceCommand(program: Command) {
         if (!device) {
           failed += 1;
           log.error(
-            `Device "${deviceId}" was not found. Run 'lh device list' to see available devices.`,
+            `Device "${deviceId}" was not found. Run 'lh device list' to see available devices.${workspaceHint}`,
           );
           continue;
         }

@@ -5,6 +5,7 @@ import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { DeviceItem } from '../schemas';
 import { agents, devices, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { removeDeviceFromAgents } from '../utils/agencyConfigDevices';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export type DeviceVisibility = 'private' | 'public';
@@ -396,16 +397,27 @@ export class DeviceModel {
    * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
    */
   delete = async (deviceId: string): Promise<DeviceItem[]> => {
-    return this.db
-      .delete(devices)
-      .where(
-        and(
-          eq(devices.userId, this.userId),
-          eq(devices.deviceId, deviceId),
-          isNull(devices.workspaceId),
-        ),
-      )
-      .returning();
+    return this.db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(devices)
+        .where(
+          and(
+            eq(devices.userId, this.userId),
+            eq(devices.deviceId, deviceId),
+            isNull(devices.workspaceId),
+          ),
+        )
+        .returning();
+      // Personal devices are bound only by the caller's personal agents.
+      if (removed.length > 0) {
+        await removeDeviceFromAgents(
+          tx,
+          and(eq(agents.userId, this.userId), isNull(agents.workspaceId)),
+          deviceId,
+        );
+      }
+      return removed;
+    });
   };
 
   /**
@@ -456,11 +468,20 @@ export class DeviceModel {
    * `undefined` without a current workspace.
    */
   deleteWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
-    if (!this.workspaceId) return;
-    return this.db
-      .delete(devices)
-      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
-      .returning();
+    const workspaceId = this.workspaceId;
+    if (!workspaceId) return;
+    return this.db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(devices)
+        .where(and(eq(devices.workspaceId, workspaceId), eq(devices.deviceId, deviceId)))
+        .returning();
+      // Any member's agent in the workspace may have picked this device,
+      // private ones included.
+      if (removed.length > 0) {
+        await removeDeviceFromAgents(tx, eq(agents.workspaceId, workspaceId), deviceId);
+      }
+      return removed;
+    });
   };
 
   /**

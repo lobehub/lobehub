@@ -234,5 +234,27 @@ describe('device command', () => {
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('was not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
+
+    it('should point at --workspace when only personal devices were searched', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'other', scope: 'personal' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'delete', 'ws-only', '--yes']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--workspace <id|slug>'));
+    });
+
+    it('should not suggest --workspace once the workspace pool was searched', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'ws1', scope: 'workspace' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'delete', 'missing', '--yes']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.not.stringContaining('--workspace'));
+    });
   });
 });

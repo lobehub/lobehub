@@ -673,8 +673,8 @@ export interface LobeAgentAgencyConfig {
    * metadata; when `git.activeWorktree` is present, that active worktree is the
    * effective cwd while `path` remains the source/recent entry.
    * Each device value is a complete selection: updating it replaces the value,
-   * including Git metadata. Other devices are preserved; `undefined` deletes
-   * an explicitly patched device entry.
+   * including Git metadata. Other devices are preserved; `undefined` or `null`
+   * deletes an explicitly patched device entry.
    *
    * Keyed per device so switching the bound device never resolves a path that
    * only exists on another machine. Persisted (server-synced) so the choice
@@ -882,7 +882,10 @@ export const resolveAgentAgencyConfig = (
  * Run after a config deep-merge. Only explicitly marked devices are complete
  * selections: omitted Git fields must not survive from the previous repository.
  * Unmarked entries retain legacy deep-merge semantics because older clients
- * send cached complete maps. Explicit `undefined` values still remove entries.
+ * send cached complete maps. Explicit `undefined` or `null` values still remove
+ * entries: `null` is the only delete a JSON patch (`lh agent edit
+ * --agency-config-file`) can express, and the deep merge would otherwise store
+ * it as a `null` selection under the old key.
  *
  * Mutates `merged` in place (safe on an immer draft) and is a no-op when the
  * patch touches no device entries.
@@ -897,7 +900,7 @@ export const applyWorkingDirByDevicePatch = (
   if (!incoming || !target) return;
 
   for (const key of Object.keys(incoming)) {
-    if (incoming[key] === undefined) delete target[key];
+    if (incoming[key] == null) delete target[key];
     else if (replaceDeviceIds.includes(key)) target[key] = incoming[key];
   }
 };
