@@ -285,7 +285,7 @@ const publicJobColumns = {
   createdAt: channelJobs.createdAt,
   publicationRevoked: channelJobs.publicationRevoked,
   // Read only to redact the error of a shared Agent's run, then dropped by `readJobs`.
-  sharedRun: sql<boolean>`${channelJobs.executionConfig}->'share' IS NOT NULL`,
+  sharedRun: sql<boolean>`COALESCE(jsonb_exists(${channelJobs.executionConfig}, 'share'), false)`,
   shareShowsErrorDetails: sql<boolean>`COALESCE(${agentShares.shareConfig}->>'showErrorDetails' = 'true', false)`,
 };
 
