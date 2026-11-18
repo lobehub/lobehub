@@ -404,6 +404,19 @@ describe('discoverTools — connectors are opt-in per agent', () => {
     expect(engineManifestIds()).toEqual(['lobehub-notion']);
   });
 
+  it('invokes a connector that is on directly in custom mode, which has no activator either', async () => {
+    const result = await run({
+      ...sources,
+      agentConfig: { chatConfig: { toolMode: 'custom' }, plugins: ['lobehub-notion'] },
+      autoSkillIds: ['community-mcp'],
+    }).promise;
+
+    expect(result.agentPlugins).toEqual(
+      expect.arrayContaining(['lobehub-notion', 'community-mcp']),
+    );
+    expect(result.agentPlugins).not.toContain('composio-gmail');
+  });
+
   it('keeps a connector the turn mentions even when the agent has it off', async () => {
     const result = await run({
       ...sources,

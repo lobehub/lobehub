@@ -156,6 +156,12 @@ export const createAgentToolsEngine = (
      * `readAttachment` so the preview can be paged, as the server's tool discovery does.
      */
     hasOversizedFiles?: boolean;
+    /**
+     * The agent that is executing, when it is not the active one (a sub-agent
+     * or group member). Its own connector switches decide what the run can
+     * reach — the active agent's must not hide a connector it turned on.
+     */
+    runAgent?: Parameters<typeof resolveAgentConnectorActivation>[0];
   } = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
@@ -166,7 +172,10 @@ export const createAgentToolsEngine = (
   // through the activator instead of being invoked up front, one that is off
   // leaves the pool. `pluginIds` already carries what this turn brings in.
   const connectors = resolveAgentConnectorActivation(
-    { chatConfig, plugins: agentSelectors.currentAgentConfig(agentState)?.plugins },
+    options.runAgent ?? {
+      chatConfig,
+      plugins: agentSelectors.currentAgentConfig(agentState)?.plugins,
+    },
     pluginIds,
   );
 

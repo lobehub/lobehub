@@ -21,6 +21,7 @@ import type {
 import {
   applyConnectorActivation,
   dropInvalidManifests,
+  hasConnectorActivator,
   resolveClientExecutors,
   resolveConnectorActivation,
   resolveDiscoveryPool,
@@ -224,7 +225,7 @@ export const discoverTools = async (
     exclusivePluginIds || isGoalTurn
       ? undefined
       : resolveConnectorActivation({
-          hasActivator: agentConfig.chatConfig?.skillActivateMode !== 'manual',
+          hasActivator: hasConnectorActivator(agentConfig.chatConfig),
           optedInIds,
           turnIds: [
             ...(additionalPluginIds || []),

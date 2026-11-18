@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyConnectorActivation, resolveConnectorActivation } from './connectorActivation';
+import {
+  applyConnectorActivation,
+  hasConnectorActivator,
+  resolveConnectorActivation,
+} from './connectorActivation';
+
+describe('hasConnectorActivator', () => {
+  it('has the activator in agent mode, the default', () => {
+    expect(hasConnectorActivator(undefined)).toBe(true);
+    expect(hasConnectorActivator({})).toBe(true);
+    expect(hasConnectorActivator({ skillActivateMode: 'auto' })).toBe(true);
+  });
+
+  it('has none once manual skill-activate mode strips it', () => {
+    expect(hasConnectorActivator({ skillActivateMode: 'manual' })).toBe(false);
+  });
+
+  it('has none in custom mode, which exposes exactly the declared plugins', () => {
+    expect(hasConnectorActivator({ toolMode: 'custom' })).toBe(false);
+  });
+
+  it('has none in chat mode', () => {
+    expect(hasConnectorActivator({ enableAgentMode: false })).toBe(false);
+    expect(hasConnectorActivator({ toolMode: 'chat' })).toBe(false);
+  });
+});
 
 describe('resolveConnectorActivation', () => {
   it('leaves a connector the agent never turned on out of reach', () => {

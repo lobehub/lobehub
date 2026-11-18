@@ -226,6 +226,7 @@ let mockCurrentChatConfig: {
   enableAgentMode?: boolean;
   memory?: { enabled?: boolean };
   skillActivateMode?: 'auto' | 'manual';
+  toolMode?: 'agent' | 'chat' | 'custom';
 } = {};
 let mockImageOutputSupport = false;
 
@@ -917,6 +918,50 @@ describe('toolEngineering', () => {
       mockCurrentChatConfig = { skillActivateMode: 'manual' };
 
       expect(generate().enabledToolIds).toEqual(['gmail-mcp']);
+    });
+
+    it('invokes a connector that is on directly in custom mode, which has no activator either', () => {
+      mockCurrentAgentAutoPlugins = ['gmail-mcp'];
+      mockCurrentChatConfig = { toolMode: 'custom' };
+
+      expect(generate().enabledToolIds).toEqual(['gmail-mcp']);
+    });
+
+    it('reads the switches of the agent that is executing, not the active one', () => {
+      // The active (parent) agent has the connector off; the sub-agent turned it on.
+      const runAgent = { plugins: [{ identifier: 'gmail-mcp', mode: 'auto' as const }] };
+      const generateFor = (explicit: boolean) =>
+        createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' }, undefined, undefined, {
+          runAgent,
+        }).generateToolsDetailed({
+          context: explicit ? { isExplicitActivation: true } : undefined,
+          model: 'gpt-4',
+          provider: 'openai',
+          skipDefaultTools: true,
+          toolIds: ['gmail-mcp'],
+        });
+
+      expect(generateFor(false).enabledToolIds).toEqual([]);
+      expect(generateFor(true).enabledToolIds).toEqual(['gmail-mcp']);
+    });
+
+    it('hides a connector the active agent has on from an executing agent that has it off', () => {
+      mockCurrentAgentAutoPlugins = ['gmail-mcp'];
+
+      const result = createAgentToolsEngine(
+        { model: 'gpt-4', provider: 'openai' },
+        undefined,
+        undefined,
+        { runAgent: { plugins: [] } },
+      ).generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+        toolIds: ['gmail-mcp'],
+      });
+
+      expect(result.enabledToolIds).toEqual([]);
     });
 
     it('invokes a connector this turn mentions even when the agent has it off', () => {
