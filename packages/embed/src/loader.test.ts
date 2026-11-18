@@ -101,6 +101,8 @@ describe('createLobeHubEmbed', () => {
     );
     expect(onSent).toHaveBeenCalledWith({ topicId: 'tpc_1', type: 'messageSent' });
 
+    const onClose = vi.fn();
+    embed.on('close', onClose);
     window.dispatchEvent(
       new MessageEvent('message', {
         data: { source: EMBED_MESSAGE_SOURCE, type: 'close', version: 1 },
@@ -109,6 +111,8 @@ describe('createLobeHubEmbed', () => {
       }),
     );
     expect(embed.isOpen).toBe(false);
+    // One close per closing, whether the host or the panel asked for it.
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('removes itself on destroy', () => {

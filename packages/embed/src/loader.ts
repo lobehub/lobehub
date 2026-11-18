@@ -173,7 +173,11 @@ export const createLobeHubEmbed = (options: LobeHubEmbedOptions): LobeHubEmbed =
       if (isReady) return;
       isReady = true;
     }
-    if (message.type === 'close') close();
+    // Closing from inside goes through `setOpen`, which emits the one `close` event.
+    if (message.type === 'close') {
+      close();
+      return;
+    }
     emit(message);
   };
   window.addEventListener('message', onMessage);
