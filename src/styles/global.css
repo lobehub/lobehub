@@ -154,3 +154,8 @@ html[data-density='compact'] .lobe-tabs__tab {
   min-height: var(--lobe-density-control-height);
   font-size: var(--lobe-density-font-size);
 }
+
+html[data-density='compact'] .lobe-segmented[data-size='small'] .lobe-segmented__item {
+  height: calc(var(--lobe-density-control-height) - 8px);
+  min-height: 0;
+}

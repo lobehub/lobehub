@@ -79,7 +79,7 @@ const Header = memo(() => {
     <NavHeader
       left={
         <>
-          {onBack && <ActionIcon icon={ArrowLeftIcon} onClick={onBack} />}
+          {onBack && <ActionIcon icon={ArrowLeftIcon} size={headerActionSize} onClick={onBack} />}
           {/* Breadcrumb - show when page has a parent folder */}
           {parentId && <Breadcrumb />}
           {/* Show icon and title only when there's no parent folder */}
