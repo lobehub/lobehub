@@ -434,6 +434,50 @@ describe('people to message', () => {
   });
 });
 
+describe('address book of a scope', () => {
+  const dave = 'contact-test-dave';
+  const ids = (people: { id: string }[]) => people.map((person) => person.id);
+
+  it('holds personal contacts only, and only for their owner', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await aliceModel.listAddressBookPeople())).toEqual([bob]);
+    expect(await aliceModel.filterAddressBookPeople([bob, carol, alice])).toEqual([bob]);
+    expect(await carolModel.filterAddressBookPeople([bob])).toEqual([]);
+  });
+
+  it('holds every member and every external contact of a workspace', async () => {
+    await serverDB.insert(users).values({ id: dave, username: 'dave' });
+    // Alice invites Bob; Carol, who did not invite him, still finds him in the workspace's book.
+    const { requestId } = await aliceInTeam.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await carolInTeam.listAddressBookPeople())).toEqual([alice, bob]);
+    expect(await carolInTeam.filterAddressBookPeople([alice, bob, dave, carol])).toEqual([
+      alice,
+      bob,
+    ]);
+    // Personal contacts never count for a workspace.
+    const { requestId: personal } = await carolModel.sendRequest(dave);
+    await new ContactModel(serverDB, dave).acceptRequest(personal);
+    expect(await carolInTeam.filterAddressBookPeople([dave])).toEqual([]);
+  });
+
+  it('drops someone who leaves the workspace or the address book', async () => {
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, carol));
+    expect(await aliceInTeam.filterAddressBookPeople([carol])).toEqual([]);
+
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+    await aliceModel.removeUser(bob);
+    expect(await aliceModel.filterAddressBookPeople([bob])).toEqual([]);
+  });
+});
+
 describe('search', () => {
   it('finds people by exact username, case-insensitively, with their relation', async () => {
     const [result] = await aliceModel.search('@BOB');

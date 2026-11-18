@@ -282,13 +282,30 @@ describe('prepareHeteroRun — overlapping reads', () => {
     ]);
   });
 
-  it('never resolves pasted images for a share visitor', async () => {
-    const { deps } = createDeps();
+  it('never resolves pasted images or the GitHub credential for a share visitor', async () => {
+    // A share run skips the GitHub read, so the barrier would never open.
+    const { credsGet, deps, messageModel, topicModel } = createDeps();
+    messageModel.query.mockResolvedValue([]);
+    topicModel.findById.mockResolvedValue({ metadata: {} });
+    mocks.getResumeSessionId.mockResolvedValue(undefined);
+    mocks.signHeteroOperationJWT.mockResolvedValue('jwt');
 
-    const prepared = await prepareHeteroRun(deps, { ...ctx, shareGate: {} }, input, 'op-1');
+    const prepared = await prepareHeteroRun(
+      deps,
+      { ...ctx, shareGate: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+      input,
+      'op-1',
+    );
 
     expect(mocks.resolveInlineImages).not.toHaveBeenCalled();
     expect(prepared.heteroParams.imageList).toBeUndefined();
+    expect(deps.getMarketService).not.toHaveBeenCalled();
+    expect(credsGet).not.toHaveBeenCalled();
+    expect(mocks.signHeteroOperationJWT).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+      }),
+    );
   });
 
   it('dispatches without pasted images when resolving them fails', async () => {

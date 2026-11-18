@@ -203,6 +203,7 @@ const VISITOR_SAFE_ERROR_TYPES = new Set<string>([
   ChatErrorType.ShareTopicLimitExceeded,
   ChatErrorType.ShareSpendLimitExceeded,
   ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  ChatErrorType.ShareHeteroDeviceUnavailable,
   ChatErrorType.AgentShareProviderNotSupported,
 ]);
 
