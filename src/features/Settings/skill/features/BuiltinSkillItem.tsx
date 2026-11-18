@@ -20,6 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
+import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -96,7 +97,11 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
               },
             ]}
           >
-            <Button disabled={!canEdit} icon={MoreHorizontalIcon} />
+            <Button
+              aria-label={t('connectorMarket.action.manage')}
+              disabled={!canEdit}
+              icon={MoreHorizontalIcon}
+            />
           </DropdownMenu>
         );
       }
@@ -108,11 +113,35 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
       );
     };
 
+    // Page row: `+` installs in place; once installed it becomes the manage menu.
+    const renderPageExtra = () =>
+      isInstalled ? (
+        <RowMoreMenu
+          items={[
+            {
+              danger: true,
+              disabled: !canEdit,
+              icon: <Icon icon={Trash2} />,
+              key: 'uninstall',
+              label: t('store.actions.uninstall', { ns: 'plugin' }),
+              onClick: handleUninstall,
+            },
+          ]}
+          onOpenDetail={onSelect}
+        />
+      ) : (
+        <RowAddAction
+          disabled={!canCreate}
+          label={t('connectorMarket.action.install')}
+          onClick={handleInstall}
+        />
+      );
+
     if (onSelect) {
       return (
         <SkillListRow
           active={isSelected}
-          extra={isPage && !isInstalled ? renderStatus() : undefined}
+          extra={isPage ? renderPageExtra() : undefined}
           icon={() => <Avatar avatar={avatar} size={isPage ? 20 : 18} />}
           title={title}
           titleColor={!isInstalled ? cssVar.colorTextDescription : undefined}

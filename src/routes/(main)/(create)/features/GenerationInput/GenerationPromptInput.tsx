@@ -6,6 +6,13 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
 interface GenerationPromptInputProps {
+  /** Extra inputs rendered under the prompt, inside the input box */
+  bottomContent?: ReactNode;
+  /**
+   * Whether the draft can be submitted. Defaults to a non-empty prompt; pages whose other
+   * inputs can stand in for the prompt (music lyrics or style) pass their own check.
+   */
+  canSubmit?: boolean;
   centerActions?: ReactNode;
   className?: string;
   disabled?: boolean;
@@ -26,7 +33,7 @@ interface GenerationPromptInputProps {
   value?: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   textarea: css`
     padding: 0;
     border-radius: 0;
@@ -35,6 +42,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const GenerationPromptInput = memo<GenerationPromptInputProps>(
   ({
+    bottomContent,
+    canSubmit,
     centerActions,
     className,
     header,
@@ -54,11 +63,15 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
     minRows = 3,
     maxRows = 6,
   }) => {
+    // Enter ignores a whitespace-only prompt; the button keeps its original non-empty check
+    const hasInput = canSubmit ?? !!value?.trim();
+    const canClickGenerate = canSubmit ?? !!value;
+
     const handleKeyDown = async (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
 
       e.preventDefault();
-      if (disabled || disableGenerate || isCreating || !value?.trim()) return;
+      if (disabled || disableGenerate || isCreating || !hasInput) return;
 
       await onGenerate();
     };
@@ -109,7 +122,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
               >
                 {rightActions}
                 <SendButton
-                  disabled={disabled || disableGenerate || !value}
+                  disabled={disabled || disableGenerate || !canClickGenerate}
                   loading={isCreating}
                   title={isCreating ? generatingLabel : generateLabel}
                   onClick={() => {
@@ -127,7 +140,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
                 <Flexbox horizontal align={'center'} gap={8}>
                   {rightActions}
                   <SendButton
-                    disabled={disabled || disableGenerate || !value}
+                    disabled={disabled || disableGenerate || !canClickGenerate}
                     loading={isCreating}
                     title={isCreating ? generatingLabel : generateLabel}
                     onClick={() => {
@@ -150,6 +163,7 @@ const GenerationPromptInput = memo<GenerationPromptInputProps>(
         ) : (
           textarea
         )}
+        {bottomContent}
       </ChatInput>
     );
   },

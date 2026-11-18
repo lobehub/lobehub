@@ -223,15 +223,21 @@ describe('AgentModel - characterization', () => {
       expect(await model.getAgentAgencyConfig('foreign-slug')).toBeNull();
     });
 
-    it('getAgentVisibilityMeta returns slug, author and visibility', async () => {
+    it('getAgentVisibilityMeta returns pin, slug, author and visibility', async () => {
       const model = new AgentModel(serverDB, userId);
 
       expect(await model.getAgentVisibilityMeta('own-private')).toEqual({
+        pinned: false,
         slug: 'own-private-slug',
         userId,
         visibility: 'private',
       });
       expect(await model.getAgentVisibilityMeta('foreign')).toBeNull();
+
+      // Publishing reads this flag to move a private pin onto the creator's
+      // personal pin list instead of turning it into a team pin.
+      await serverDB.update(agents).set({ pinned: true }).where(eq(agents.id, 'own-private'));
+      expect(await model.getAgentVisibilityMeta('own-private')).toMatchObject({ pinned: true });
     });
 
     it('resolveIdBySlug trims, and ignores blank or foreign slugs', async () => {

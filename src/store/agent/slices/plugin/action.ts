@@ -49,8 +49,17 @@ export class PluginSliceActionImpl {
    * Sets one identifier's explicit mode (pinned / auto / disabled). Only the
    * touched entry is upgraded to object shape — every other entry, including
    * untouched legacy strings, is left exactly as-is (lazy per-item upgrade).
+   *
+   * `implicitMode` is what the identifier resolves to with no entry at all:
+   * `'auto'` for tools and builtin skills, `'disabled'` for a library skill
+   * (`LIBRARY_SKILL_IMPLICIT_MODE`). Setting that mode drops the entry; any
+   * other is written explicitly, so a library skill set to `'auto'` is kept.
    */
-  setPluginMode = async (id: string, mode: AgentPluginMode): Promise<void> => {
+  setPluginMode = async (
+    id: string,
+    mode: AgentPluginMode,
+    implicitMode: AgentPluginMode = 'auto',
+  ): Promise<void> => {
     const originConfig = agentSelectors.currentAgentConfig(this.#get());
     if (!originConfig) return;
 
@@ -61,7 +70,12 @@ export class PluginSliceActionImpl {
       // runtime value legitimately becomes mixed-shape here (JSONB has no
       // schema enforcement), so this cast is the one deliberate boundary
       // where that mismatch is intentional.
-      draft.plugins = upsertPluginMode(draft.plugins, id, mode) as unknown as string[];
+      draft.plugins = upsertPluginMode(
+        draft.plugins,
+        id,
+        mode,
+        implicitMode,
+      ) as unknown as string[];
     });
 
     await this.#get().updateAgentConfig(config);

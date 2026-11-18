@@ -1035,6 +1035,39 @@ describe('linearRouter', () => {
       );
     });
 
+    it('brings labels along on a rule run only when that run asks for them', async () => {
+      const connection = await connect({ userId });
+      mocks.getToken.mockResolvedValue('token');
+      mocks.runSync.mockResolvedValue({ ok: true });
+      mocks.syncByFilter.mockResolvedValue(syncResult);
+      const rule = await caller({ userId }).createSyncRule({
+        connectionId: connection.id,
+        projectId,
+        stateTypes: ['completed'],
+        teamId: 'team-1',
+        teamName: 'Engineering',
+      });
+
+      const plain = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+      await new LinearSyncJobService(serverDB, userId).run(plain.id);
+      expect(mocks.syncByFilter).toHaveBeenLastCalledWith(
+        'token',
+        expect.anything(),
+        expect.objectContaining({ syncLabels: undefined }),
+      );
+
+      const labelled = await caller({ userId }).startRuleSync({
+        ruleId: rule.id,
+        syncLabels: true,
+      });
+      await new LinearSyncJobService(serverDB, userId).run(labelled.id);
+      expect(mocks.syncByFilter).toHaveBeenLastCalledWith(
+        'token',
+        expect.anything(),
+        expect.objectContaining({ syncLabels: true }),
+      );
+    });
+
     it('leaves archived issues out of a rule run unless that run asks for them', async () => {
       const connection = await connect({ userId });
       mocks.getToken.mockResolvedValue('token');

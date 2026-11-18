@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+} from '@/server/services/connector/tokens';
 
 import {
   ForbiddenWidgetCredentialsError,
@@ -13,6 +16,7 @@ import {
 
 vi.mock('@/server/services/connector/tokens', () => ({
   ensureFreshConnectorToken: vi.fn(async (connector) => connector),
+  ensureFreshLinkToken: vi.fn(async (_connector, link) => link),
 }));
 
 const connector = (overrides: Partial<DecryptedConnector>): DecryptedConnector =>
@@ -27,7 +31,8 @@ const connector = (overrides: Partial<DecryptedConnector>): DecryptedConnector =
     ...overrides,
   }) as DecryptedConnector;
 
-const modelReturning = (rows: DecryptedConnector[]) => ({
+const modelReturning = (rows: DecryptedConnector[], accounts: object[] = []) => ({
+  getLinkModel: () => ({ listByConnectorIds: async () => accounts }),
   resolveByIdentifiers: vi.fn().mockResolvedValue(rows),
   update: vi.fn(),
 });
@@ -262,6 +267,57 @@ describe('resolveWidgetEnv', () => {
 
       expect(env).toEqual({ GITHUB_TOKEN: 'tok' });
       expect(isWorkspaceOwner).not.toHaveBeenCalled();
+    });
+
+    // A script can read and send its environment anywhere
+    describe("an OAuth connector's accounts", () => {
+      const oauth = connector({
+        credentials: null,
+        id: 'c1',
+        oidcConfig: { clientId: 'client', scheme: 'dcr' },
+        workspaceId: 'ws1',
+      } as Partial<DecryptedConnector>);
+      const account = (id: string, userId: string, createdAt: number) => ({
+        createdAt: new Date(createdAt),
+        credentials: { accessToken: `token-${id}`, type: 'oauth2' },
+        id,
+        name: id,
+        status: 'connected',
+        tokenExpiresAt: null,
+        userConnectorId: 'c1',
+        userId,
+      });
+      const teammateFirst = [account('lnk_teammate', 'u2', 1), account('lnk_mine', 'u1', 2)];
+
+      it("never hands the creator a teammate's token, even the primary one", async () => {
+        const { env } = await resolveWidgetEnv({} as any, workspace, requirement, {
+          connectorModel: modelReturning([oauth], teammateFirst) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(false),
+        });
+
+        expect(env).toEqual({ GITHUB_TOKEN: 'token-lnk_mine' });
+      });
+
+      it('refuses when only teammates connected accounts, before refreshing any', async () => {
+        vi.mocked(ensureFreshLinkToken).mockClear();
+        const error = await resolveWidgetEnv({} as any, workspace, requirement, {
+          connectorModel: modelReturning([oauth], [account('lnk_teammate', 'u2', 1)]) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(false),
+        }).catch((e) => e);
+
+        expect(error).toBeInstanceOf(ForbiddenWidgetCredentialsError);
+        expect(error.connectors).toEqual(['github']);
+        expect(ensureFreshLinkToken).not.toHaveBeenCalled();
+      });
+
+      it("lets the workspace owner use a member's account when they have none", async () => {
+        const { env } = await resolveWidgetEnv({} as any, workspace, requirement, {
+          connectorModel: modelReturning([oauth], [account('lnk_teammate', 'u2', 1)]) as any,
+          isWorkspaceOwner: vi.fn().mockResolvedValue(true),
+        });
+
+        expect(env).toEqual({ GITHUB_TOKEN: 'token-lnk_teammate' });
+      });
     });
 
     it('injects nothing once the author no longer exists', async () => {

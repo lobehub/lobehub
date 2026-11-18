@@ -1,13 +1,17 @@
 'use client';
 
+import { goalClarificationIslandKey } from '@lobechat/const/goal';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { toast } from '@lobehub/ui';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { usePermission } from '@/hooks/usePermission';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import ApprovalCard from './ApprovalCard';
 import GoalClarificationCard from './GoalClarificationCard';
@@ -15,7 +19,7 @@ import GoalDecisionCard from './GoalDecisionCard';
 import { styles } from './styles';
 import { useApprovalIslandCollapse } from './useApprovalIslandCollapse';
 import { useGlobalPendingApprovals } from './useGlobalPendingApprovals';
-import { goalClarificationIslandKey, useIslandDismissals } from './useIslandDismissals';
+import { useIslandDismissals } from './useIslandDismissals';
 import { usePendingGoalClarifications } from './usePendingGoalClarifications';
 import { usePendingGoalDecisions } from './usePendingGoalDecisions';
 
@@ -37,25 +41,26 @@ const GlobalApprovalNotification = memo(() => {
   const groups = useGlobalPendingApprovals();
   // A goal waiting on its clarification round asks through the same island.
   // Run approvals go first: a run is blocked mid-turn, a goal has not started.
-  const pendingGoalGroups = usePendingGoalClarifications();
+  const goalGroups = usePendingGoalClarifications();
   // Then the gates a running goal stopped on, then finished goals awaiting
   // sign-off — each blocks less than the one before it.
-  const pendingGoalItems = usePendingGoalDecisions();
+  const goalItems = usePendingGoalDecisions();
   // Goal asks the user waved off leave the island but stay in the Home inbox,
   // so they are never lost — a run approval has no such fallback and stays.
-  const { dismiss: dismissKey, dismissed } = useIslandDismissals();
-  const dismiss = (key: string) => {
-    dismissKey(key);
-    toast.info({ placement: 'top', title: t('globalApproval.dismissed') });
+  // The server leaves dismissed asks out of both lists, on every client.
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
+  const { allowed: canAnswerGoals } = usePermission('create_content');
+  const dismissKey = useIslandDismissals(enableGoals && canAnswerGoals);
+  // Confirm only once the server kept it; on failure the card comes back.
+  const dismiss = async (key: string) => {
+    try {
+      await dismissKey(key);
+      toast.info({ placement: 'top', title: t('globalApproval.dismissed') });
+    } catch (error) {
+      console.error('[island] failed to dismiss', error);
+      toast.error({ placement: 'top', title: t('globalApproval.dismissFailed') });
+    }
   };
-  const goalGroups = useMemo(
-    () => pendingGoalGroups.filter((group) => !dismissed.has(goalClarificationIslandKey(group))),
-    [dismissed, pendingGoalGroups],
-  );
-  const goalItems = useMemo(
-    () => pendingGoalItems.filter((item) => !dismissed.has(item.key)),
-    [dismissed, pendingGoalItems],
-  );
   const total = groups.length + goalGroups.length + goalItems.length;
   const [collapsed, setCollapsed] = useApprovalIslandCollapse(total);
 

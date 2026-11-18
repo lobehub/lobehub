@@ -1,11 +1,14 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import {
   AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
+  AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT,
   AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
 import { assembleSkillPool } from '@lobechat/mecha';
 import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
@@ -15,14 +18,17 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { AgentShareProfileModel } from '@/database/models/agentShareProfile';
 import { AgentSkillModel } from '@/database/models/agentSkill';
+import { ContactModel } from '@/database/models/contact';
 import { FileModel } from '@/database/models/file';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
+import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
@@ -64,6 +70,13 @@ export const agentShareConfigSchema = z
           .strict(),
       )
       .max(20)
+      .optional(),
+    deviceAccess: z.enum(['none', 'allowlist']).optional(),
+    /** Each id must also be in the scope's address book; `updateShareConfig` checks that. */
+    deviceAllowUserIds: z
+      .array(z.string().trim().min(1).max(64))
+      .max(AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT)
+      .refine((ids) => new Set(ids).size === ids.length, 'Duplicate user')
       .optional(),
     featuredWorkIds: z
       .array(z.string().trim().min(1))
@@ -182,6 +195,27 @@ const assertCanManageAgentShare = async (
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+};
+
+/**
+ * The address book a share's device grant draws from: the owner's personal
+ * contacts for a personal Agent, the workspace's members and external
+ * contacts for a workspace Agent. Keyed by the Agent's owner, exactly as the
+ * runtime re-check (`resolveShareVisitorDeviceAccess`) is, so a workspace
+ * manager other than the owner lists and saves the same people the run then
+ * accepts. `enabled` mirrors the runtime's Channels gate on the same owner.
+ */
+const shareAddressBook = async (ctx: AgentSharePermissionContext, agentId: string) => {
+  const [agent] = await ctx.serverDB
+    .select({ userId: agents.userId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+  const ownerId = agent?.userId ?? ctx.userId;
+  return {
+    book: new ContactModel(ctx.serverDB, ownerId, ctx.workspaceId),
+    enabled: await isChannelEnabled(ownerId),
+  };
 };
 
 /** `updateConfig` / `updateVisibility` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
@@ -431,6 +465,32 @@ export const agentShareRouter = router({
     }));
   }),
 
+  /**
+   * Who the execution-environment grant can name: the address book of the
+   * share's scope (`ContactModel.listAddressBookPeople`). `unlisted` resolves
+   * the profiles of already-granted people who have since left that book, so
+   * the settings page can show them as no longer authorized instead of an id.
+   * `enabled` is false while the address book itself is off for the caller
+   * (Channels flag): nobody can be added then, and runtime grants nothing.
+   */
+  listDeviceGrantablePeople: agentShareProcedure
+    .input(agentIdInput)
+    .query(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      const share = requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+
+      const { book, enabled } = await shareAddressBook(ctx, input.agentId);
+      const people = enabled ? await book.listAddressBookPeople() : [];
+      const inBook = new Set(people.map((person) => person.id));
+      const unlisted = await pMap(
+        (share.shareConfig.deviceAllowUserIds ?? []).filter((id) => !inBook.has(id)),
+        (id) => book.findUser(id),
+        { concurrency: 5 },
+      );
+
+      return { enabled, people, unlisted: unlisted.filter((user) => !!user) };
+    }),
+
   updateShareConfig: agentShareProcedure
     .input(
       z
@@ -442,6 +502,27 @@ export const agentShareRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       await assertCanManageAgentShare(ctx, input.agentId);
+
+      const { deviceAccess, deviceAllowUserIds } = input.config;
+      if (deviceAccess === 'allowlist' || deviceAllowUserIds?.length) {
+        const { book, enabled } = await shareAddressBook(ctx, input.agentId);
+        // The runtime grants nothing while contacts are off, so refuse to store
+        // a grant that would silently do nothing (or wake up when they turn on).
+        if (!enabled)
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Device access needs contacts, which are not available',
+          });
+        const inBook = new Set(
+          deviceAllowUserIds?.length ? await book.filterAddressBookPeople(deviceAllowUserIds) : [],
+        );
+        if (deviceAllowUserIds?.some((id) => !inBook.has(id)))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Device access can only be granted to people in your contacts',
+          });
+      }
+
       return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
     }),
 

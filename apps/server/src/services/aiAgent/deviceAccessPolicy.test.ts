@@ -72,9 +72,20 @@ describe('resolveDeviceAccessPolicy', () => {
     expect(
       resolveDeviceAccessPolicy({
         botContext: baseBotContext({ isDeviceTrusted: true }),
-        shareVisitor: true,
+        shareVisitor: { canUseDevice: false },
       }),
     ).toEqual({ canUseDevice: false, reason: 'share-visitor' });
+  });
+
+  it('grants devices to a shared-agent visitor only through the share grant', () => {
+    expect(resolveDeviceAccessPolicy({ shareVisitor: { canUseDevice: true } })).toEqual({
+      canUseDevice: true,
+      reason: 'share-visitor-granted',
+    });
+    expect(resolveDeviceAccessPolicy({ shareVisitor: { canUseDevice: false } })).toEqual({
+      canUseDevice: false,
+      reason: 'share-visitor',
+    });
   });
 
   describe('personal-scope bot platforms', () => {

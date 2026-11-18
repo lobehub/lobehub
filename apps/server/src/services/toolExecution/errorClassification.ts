@@ -26,6 +26,8 @@ const STOP_CODES = new Set([
   'CONTENT_POLICY_VIOLATION',
   'FORBIDDEN',
   'INSUFFICIENT_PERMISSIONS',
+  // The server's SSRF policy refused the MCP server address; a retry gets the same answer
+  'MCP_SSRF_BLOCKED',
   'NOT_IMPLEMENTED',
   'PERMISSION_DENIED',
   'UNAUTHORIZED',

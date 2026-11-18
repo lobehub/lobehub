@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 
 import { BaseController } from '../common/base.controller';
 import { MessageService } from '../services/message.service';
+import type { DeletedResource } from '../types/common.type';
 import type {
   MessagesCountQuery,
   MessagesCreateRequest,
@@ -132,9 +133,14 @@ export class MessageController extends BaseController {
 
       const db = await this.getDatabase();
       const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
-      await messageService.deleteMessage(id);
+      const removed = await messageService.deleteMessage(id);
+      if (!removed) return this.error(c, 'Message not found', 404);
 
-      return this.success(c, null, 'Message deleted successfully');
+      return this.success<DeletedResource>(
+        c,
+        { deleted: true, id },
+        'Message deleted successfully',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

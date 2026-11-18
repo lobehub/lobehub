@@ -1101,13 +1101,12 @@ describe('ToolsEngine', () => {
     const defaultToolIds = [
       'lobe-activator',
       'lobe-skills',
-      'lobe-skill-store',
       'lobe-web-browsing',
       'lobe-cloud-sandbox',
     ];
 
-    const alwaysOnToolIds = ['lobe-activator', 'lobe-skills', 'lobe-skill-store'];
-    const manualModeExcludeToolIds = ['lobe-activator', 'lobe-skill-store'];
+    const alwaysOnToolIds = ['lobe-activator', 'lobe-skills'];
+    const manualModeExcludeToolIds = ['lobe-activator'];
 
     it('should NOT inject lobe-activator and lobe-skill-store in manual mode', () => {
       const engine = new ToolsEngine({
@@ -1139,7 +1138,7 @@ describe('ToolsEngine', () => {
       expect(result.enabledToolIds).toContain('lobe-cloud-sandbox');
     });
 
-    it('should inject lobe-activator and lobe-skill-store in auto mode (no excludeDefaultToolIds)', () => {
+    it('should inject the activator but defer Skill Store in auto mode', () => {
       const engine = new ToolsEngine({
         manifestSchemas: builtinManifests,
         defaultToolIds,
@@ -1162,7 +1161,7 @@ describe('ToolsEngine', () => {
 
       // All default tools should be injected in auto mode
       expect(result.enabledToolIds).toContain('lobe-activator');
-      expect(result.enabledToolIds).toContain('lobe-skill-store');
+      expect(result.enabledToolIds).not.toContain('lobe-skill-store');
       expect(result.enabledToolIds).toContain('lobe-skills');
       expect(result.enabledToolIds).toContain('lobe-web-browsing');
       expect(result.enabledToolIds).toContain('lobe-cloud-sandbox');

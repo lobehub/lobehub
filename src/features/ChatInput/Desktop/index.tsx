@@ -12,12 +12,10 @@ import { useTranslation } from 'react-i18next';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
 import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
-import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
-import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -31,6 +29,7 @@ import { useDocumentDrop } from '../InputEditor/ReferDocument/useDocumentDrop';
 import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
 import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import { composerHoverMarker } from '../markers.stylex';
+import { McpAppContextChips } from '../McpAppContextChips';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -126,18 +125,11 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       systemStatusSelectors.chatInputHeight(s),
       s.updateSystemStatus,
     ]);
-    const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
-    const hasContextSelections = useFileStore(
-      fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
-    );
-    const uploadContextKey = useChatInputUploadKey();
-    const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem(uploadContextKey));
-    const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
+    const [slashMenuRef, expand, showTypoBar, editor] = useChatInputStore((s) => [
       s.slashMenuRef,
       s.expand,
       s.showTypoBar,
       s.editor,
-      s.leftActions,
     ]);
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
@@ -172,9 +164,15 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       setExpand(false);
     }, [chatKey, editor, setExpand]);
 
-    const shouldShowContextContainer =
-      leftActions.flat().includes('fileUpload') || hasContextSelections || hasFiles;
-    const contextContainerNode = shouldShowContextContainer && <ContextContainer />;
+    // Always mounted, at zero height while empty: mounting it with the first attachment
+    // would skip its height transition (its first measurement never animates), and
+    // unmounting it with the last would cut the card's exit and the collapse.
+    const contextContainerNode = (
+      <>
+        <McpAppContextChips />
+        <ContextContainer />
+      </>
+    );
 
     const loadingLeftSlot = isConfigLoading ? (
       <Flexbox horizontal align="center" gap={6} paddingInline={4}>
@@ -245,15 +243,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
                 style={actionBarStyle ?? { paddingRight: 8 }}
                 right={
                   loadingRightSlot ??
-                  rightContent ??
-                  (sendAreaPrefix ? (
-                    <Flexbox horizontal align={'center'} gap={6}>
-                      {sendAreaPrefix}
-                      <SendArea hideContextWindow={hasControlBar} />
-                    </Flexbox>
-                  ) : (
-                    <SendArea hideContextWindow={hasControlBar} />
-                  ))
+                  rightContent ?? (
+                    <SendArea hideContextWindow={hasControlBar} prefix={sendAreaPrefix} />
+                  )
                 }
               />
             )

@@ -1,3 +1,4 @@
+import { getConnectorMode, upsertConnectorEnabled, upsertPluginMode } from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -191,20 +192,20 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
 
     // Get plugin ID for this server (use identifier as pluginId)
     const pluginId = server ? server.identifier : '';
-    const plugins =
-      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
-    const checked = plugins.includes(pluginId);
+    const plugins = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins;
+    // A connector is two-state: on is any entry that is not disabled.
+    const checked = getConnectorMode(plugins, pluginId) === 'auto';
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
     // Toggle plugin for the effective agent
     const togglePlugin = useCallback(
       async (pluginIdToToggle: string) => {
         if (!effectiveAgentId) return;
-        const currentPlugins = plugins;
-        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
-        const newPlugins = hasPlugin
-          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
-          : [...currentPlugins, pluginIdToToggle];
+        // Turning it on writes the explicit entry; turning it off here takes it off the agent.
+        const isOn = getConnectorMode(plugins, pluginIdToToggle) === 'auto';
+        const newPlugins = isOn
+          ? upsertPluginMode(plugins, pluginIdToToggle, 'auto')
+          : upsertConnectorEnabled(plugins, pluginIdToToggle, true);
         await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
       },
       [effectiveAgentId, plugins, updateAgentConfigById],

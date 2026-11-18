@@ -66,4 +66,26 @@ describe('formatModelPricingLabels', () => {
   it('returns nothing without pricing', () => {
     expect(formatModelPricingLabels('tts', undefined, t)).toEqual([]);
   });
+
+  describe('text2music', () => {
+    it('shows the per-song price of music models in USD', () => {
+      const labels = formatModelPricingLabels(
+        'text2music',
+        { units: [{ name: 'musicGeneration', rate: 0.03, strategy: 'fixed', unit: 'song' }] },
+        t,
+      );
+
+      expect(labels).toEqual(['song:0.03']);
+    });
+
+    it('shows the per-second price of music models billed by length', () => {
+      const labels = formatModelPricingLabels(
+        'text2music',
+        { units: [{ name: 'musicGeneration', rate: 0.002, strategy: 'fixed', unit: 'second' }] },
+        t,
+      );
+
+      expect(labels).toEqual(['second:0.002']);
+    });
+  });
 });

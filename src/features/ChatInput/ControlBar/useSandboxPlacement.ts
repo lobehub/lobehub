@@ -1,3 +1,4 @@
+import debug from 'debug';
 import { useCallback, useSyncExternalStore } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -7,6 +8,8 @@ import {
   subscribePendingSandboxSelection,
 } from '@/store/chat/pendingSandboxSelection';
 import { topicSelectors } from '@/store/chat/selectors';
+
+const log = debug('lobe-client:sandbox:placement');
 
 /**
  * Where a conversation's cloud sandbox works, and what it starts from. Nothing
@@ -101,7 +104,15 @@ export const useSandboxPlacement = (agentId: string, scopeTopicId?: string | nul
       });
       // Written straight to the server when no list holds the topic; read it
       // back so the pick shows rather than looking ignored until a reload.
-      if (isUnlisted) await refreshTopicDetail(topicId, true);
+      // The save itself has landed by now; a failed read-back only delays
+      // the chip showing it, and must not make the pick look failed.
+      if (isUnlisted) {
+        try {
+          await refreshTopicDetail(topicId, true);
+        } catch (error) {
+          log('Failed to read back topic %s after a sandbox pick: %O', topicId, error);
+        }
+      }
     },
     [agentId, isUnlisted, refreshTopicDetail, topicId, updateTopicMetadata],
   );

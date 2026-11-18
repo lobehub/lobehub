@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -8,27 +9,18 @@ import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canViewAcceptanceHistory } from '../visibility';
 
-const styles = createStaticStyles(({ css }) => ({
-  link: css`
-    cursor: pointer;
-
-    padding: 0;
-    border: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    @media (width <= 767px) {
-      min-height: 44px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    cursor: 'pointer',
+    padding: '0',
+    borderStyle: 'none',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    minHeight: { 'default': null, '@media (width <= 767px)': '44px' },
+  },
+});
 
 const AcceptanceViewReportLink = () => {
   const { t } = useTranslation('verify');
@@ -41,7 +33,7 @@ const AcceptanceViewReportLink = () => {
 
   return (
     <button
-      className={styles.link}
+      {...stylex.props(styles.link)}
       type={'button'}
       onClick={() => {
         if (round?.run.roundIndex == null) return;

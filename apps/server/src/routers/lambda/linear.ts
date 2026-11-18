@@ -169,6 +169,8 @@ export const linearRouter = router({
         issueIds: z.array(z.string().min(1)).min(1).max(MAX_IMPORT_ISSUES),
         /** Also copy each issue's Linear comments onto its task. */
         syncComments: z.boolean().optional(),
+        /** Also bring each issue's Linear labels onto its task, creating the missing ones. */
+        syncLabels: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -182,6 +184,7 @@ export const linearRouter = router({
         kind: 'issues',
         projectId: input.projectId,
         syncComments: input.syncComments || undefined,
+        syncLabels: input.syncLabels || undefined,
       });
       return { id };
     }),
@@ -273,6 +276,8 @@ export const linearRouter = router({
         ruleId: z.string().uuid(),
         /** Also copy each issue's Linear comments onto its task. */
         syncComments: z.boolean().optional(),
+        /** Also bring each issue's Linear labels onto its task, creating the missing ones. */
+        syncLabels: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -296,6 +301,7 @@ export const linearRouter = router({
           projectId: rule.projectId,
           ruleId: rule.id,
           syncComments: input.syncComments || undefined,
+          syncLabels: input.syncLabels || undefined,
         },
       );
       return { id };

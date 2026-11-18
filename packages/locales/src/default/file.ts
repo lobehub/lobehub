@@ -562,6 +562,8 @@ export default {
   'resourceList.viewTransferred': 'View',
   'portal.openInPageEditor': 'Edit in Page',
   'preview.tooLarge': 'This file is too large to preview. Download it to view its contents.',
+  'preview.audioLoadFailed':
+    'This audio could not be played in the browser. Download it to listen.',
   'preview.downloadFile': 'Download File',
   'preview.raw': 'Raw',
   'preview.render': 'Preview',

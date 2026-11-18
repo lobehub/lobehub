@@ -4,7 +4,10 @@ import type { TTSAudioFormat } from 'model-bank';
 import { DEFAULT_TTS_AUDIO_FORMAT } from 'model-bank';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import { convertTextToSpeechUsage } from '../../core/usageConverters/tts';
+import {
+  convertTextToSpeechUsage,
+  countMiniMaxSpeechCharacters,
+} from '../../core/usageConverters/tts';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import type {
   TextToSpeechOptions,
@@ -38,16 +41,6 @@ const MINIMAX_AUDIO_FORMATS: Partial<Record<TTSAudioFormat, string>> = {
 };
 
 const HEX_PATTERN = /^(?:[\da-f]{2})+$/i;
-
-const HAN_PATTERN = /\p{Script=Han}/u;
-
-/**
- * Billed characters when MiniMax omits `usage_characters`: a Chinese character counts
- * as 2, every other character (letters, punctuation, spaces, emoji) as 1.
- * @see https://platform.minimaxi.com/docs/guides/pricing-paygo
- */
-export const countMiniMaxSpeechCharacters = (input: string) =>
-  [...input].reduce((count, char) => count + (HAN_PATTERN.test(char) ? 2 : 1), 0);
 
 /**
  * `base_resp.status_code` values that map onto a specific runtime error type; everything

@@ -5,7 +5,18 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import Nav from './Nav';
+import Nav from './index';
+
+vi.mock('./Agent', () => ({ default: () => null }));
+vi.mock('@/features/NavPanel/backOrigin', () => ({ useBackButtonProps: () => ({}) }));
+vi.mock('@/features/NavPanel/SideBarHeaderLayout', () => ({
+  default: ({ left, right }: { left: ReactNode; right?: ReactNode }) => (
+    <header>
+      {left}
+      {right}
+    </header>
+  ),
+}));
 
 const mutateMock = vi.hoisted(() => vi.fn());
 const openNewTopicOrSaveTopicMock = vi.hoisted(() => vi.fn());
@@ -104,14 +115,19 @@ vi.mock('@/store/global', () => ({
 }));
 
 interface ServerConfigTestState {
-  featureFlags: { isAgentEditable: boolean };
+  featureFlags: { isAgentEditable: boolean | undefined };
   serverConfigInit: boolean;
 }
+
+const serverConfigMock = vi.hoisted((): ServerConfigTestState => ({
+  featureFlags: { isAgentEditable: true },
+  serverConfigInit: true,
+}));
 
 vi.mock('@/store/serverConfig', () => ({
   featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
   useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
-    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
+    selector(serverConfigMock),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -129,6 +145,10 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 describe('Agent sidebar header nav', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     mutateMock.mockReset();
     openNewTopicOrSaveTopicMock.mockReset();
@@ -137,6 +157,7 @@ describe('Agent sidebar header nav', () => {
     toggleCommandMenuMock.mockReset();
     useParamsMock.mockReset();
     usePathnameMock.mockReset();
+    serverConfigMock.featureFlags.isAgentEditable = true;
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
@@ -199,7 +220,8 @@ describe('Agent sidebar header nav', () => {
     ['/agent/agt_eH4zL98zBx5u/channel'],
     ['/agent/agt_eH4zL98zBx5u/channel/slack'],
     ['/agent/agt_eH4zL98zBx5u/statistics'],
-  ])('keeps the profile entry active on %s', (pathname) => {
+  ])('keeps the mobile profile entry active on %s', (pathname) => {
+    vi.stubGlobal('__MOBILE__', true);
     usePathnameMock.mockReturnValue(pathname);
 
     render(<Nav />);
@@ -208,6 +230,34 @@ describe('Agent sidebar header nav', () => {
       'data-active',
       'true',
     );
+  });
+
+  it('opens the agent profile from the desktop header settings button', () => {
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+    const settingsButton = screen.getByRole('button', { name: 'tab.profile' });
+    expect(screen.getByRole('banner')).toContainElement(settingsButton);
+    fireEvent.click(settingsButton);
+
+    expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u/profile');
+  });
+
+  it.each([
+    [false, false],
+    [false, undefined],
+    [true, false],
+    [true, undefined],
+  ])('hides profile when mobile=%s and isAgentEditable=%s', (mobile, isAgentEditable) => {
+    vi.stubGlobal('__MOBILE__', mobile);
+    serverConfigMock.featureFlags.isAgentEditable = isAgentEditable;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'title' })).toBeInTheDocument();
   });
 
   it('navigates to the agent goals page', () => {
@@ -297,14 +347,19 @@ describe('Agent sidebar header nav', () => {
     });
   });
 
-  it('places topics above profile, goals, self-learning, and tasks in the agent navigation', () => {
+  it('places topics above goals and tasks, with profile settings in the header', () => {
     usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
 
     render(<Nav />);
 
     const labels = screen.getAllByRole('button').map((button) => button.textContent);
-    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
-    expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
+    expect(labels).not.toContain('tab.profile');
+    expect(screen.getByRole('banner')).toContainElement(
+      screen.getByRole('button', { name: 'tab.profile' }),
+    );
+    expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(
+      labels.indexOf('goalList.title'),
+    );
     expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
   });
 

@@ -370,6 +370,31 @@ describe('ShellCommandCtr (thin wrapper)', () => {
       );
     });
 
+    it('fences to an explicit sandboxRoot while running from cwd', async () => {
+      // Skill scripts start in the shared skill cache, which must stay outside
+      // the fence; their caller names the run's working directory instead.
+      mockProcessOutput = 'output\n';
+      setTimeout(() => {
+        mockChildProcess.exitCode = 0;
+        emitChildProcess('exit', 0);
+        emitChildProcess('close', 0);
+      }, 10);
+
+      await ctr.handleRunCommand({
+        command: 'echo test',
+        cwd: '/skills/extracted/hash',
+        sandbox: true,
+        sandboxRoot: '/repo',
+      });
+
+      expect(mockCreateSandboxLaunchPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/skills/extracted/hash',
+          policy: expect.objectContaining({ writableRoots: ['/repo'] }),
+        }),
+      );
+    });
+
     it('refuses a sandboxed run with no working directory to confine', async () => {
       // Falling back to process.cwd() would fence the app install directory and
       // still report success — a guarantee about the wrong place.

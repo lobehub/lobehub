@@ -87,11 +87,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: transparent;
     outline: none;
 
-    /* The global focus ring would box the whole popover top; the divider takes its place. */
-    &:focus-visible {
-      border-block-end-color: ${cssVar.colorPrimary};
-    }
-
     &::placeholder {
       color: ${cssVar.colorTextPlaceholder};
     }

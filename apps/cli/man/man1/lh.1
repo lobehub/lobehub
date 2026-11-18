@@ -90,7 +90,7 @@ Inspect and trigger Agent Signal source events
 Manage bot integrations
 .TP
 .B channel
-Read the current Agent run’s Channel conversation
+Read the current Agent run’s Channel conversation, and message Agents in other Channels
 .TP
 .B generate
 Generate content (text, image, video, speech) Alias: gen.
@@ -154,6 +154,12 @@ Manage legacy 1.0 plugins (user_installed_plugins) Alias: plugin.
 .TP
 .B connector
 Manage MCP connectors (user connectors and their synced tools) Alias: mcp.
+.TP
+.B webhook
+Manage custom webhooks: URLs any system calls to wake an agent (MCP Events subscriptions are under lh automation) Alias: webhooks.
+.TP
+.B automation
+Manage automations: MCP Events subscriptions that run an agent on a connector event (an agent creates them in a conversation) Alias: automations.
 .TP
 .B workspace
 Manage workspaces and the workspace scope commands run under Alias: ws.

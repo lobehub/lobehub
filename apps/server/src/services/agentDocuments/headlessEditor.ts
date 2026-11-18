@@ -17,6 +17,8 @@ import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
+import { AgentDocumentEditRejectedError } from './editRejectedError';
+
 export type AgentDocumentEditorData = Record<string, any>;
 
 export type AgentDocumentLiteXMLOperation =
@@ -331,13 +333,17 @@ export const applyLiteXMLOperations = async ({
 
         const malformed = 'litexml' in operation && findMalformedLiteXML(operation.litexml);
         if (malformed) {
-          throw new Error(
+          throw new AgentDocumentEditRejectedError(
             `${label} failed: ${malformed}. No operations were saved; fix the litexml and retry the whole batch.`,
           );
         }
 
         const problem = findLiteXMLEditStepProblem(operation, document);
-        if (problem) throw new Error(`${label} failed: ${problem}. ${NOTHING_SAVED_HINT}`);
+        if (problem) {
+          throw new AgentDocumentEditRejectedError(
+            `${label} failed: ${problem}. ${NOTHING_SAVED_HINT}`,
+          );
+        }
 
         await editor.applyLiteXML(
           toHeadlessLiteXMLOperation(operation, canApplyAsReviewDiff(operation, document)),
@@ -348,7 +354,7 @@ export const applyLiteXMLOperations = async ({
           next.litexml === current.litexml &&
           JSON.stringify(next.editorData) === JSON.stringify(current.editorData)
         ) {
-          throw new Error(
+          throw new AgentDocumentEditRejectedError(
             `${label} did not change the document; the editor rejected it. ${NOTHING_SAVED_HINT}`,
           );
         }

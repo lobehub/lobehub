@@ -1,7 +1,7 @@
 name: Release CLI
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 on:
@@ -9,8 +9,22 @@ on:
     branches:
       - canary
     paths:
-      - apps/cli/package.json
-      - .github/workflows/release-cli.yml
+      - 'apps/cli/src/**'
+      - 'apps/cli/scripts/**'
+      - 'apps/cli/package.json'
+      - 'apps/cli/pnpm-workspace.yaml'
+      - 'apps/cli/tsconfig.json'
+      - 'apps/cli/tsdown.config.ts'
+      - '!apps/cli/**/*.test.*'
+      - '!apps/cli/**/*.spec.*'
+      - '!apps/cli/**/__tests__/**'
+      - '!apps/cli/**/__fixtures__/**'
+      - '!apps/cli/**/fixtures/**'
+      - '!apps/cli/**/testUtils.*'
+      - '!apps/cli/**/*.md'
+      - '!apps/cli/**/*.mdx'
+      - '.github/workflows/release-cli.yml'
+      - '.github/scripts/cliRelease.mjs'
   workflow_dispatch: {}
 
 # Never interrupt a publish or let two runs publish the same version concurrently.
@@ -25,43 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
-      - name: Check release version
+      - name: Prepare release version
         id: release
-        run: |
-          node --input-type=module <<'NODE'
-          import { appendFile, readFile } from 'node:fs/promises';
-
-          const { name, version } = JSON.parse(await readFile('apps/cli/package.json', 'utf8'));
-          if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
-            throw new Error(`Only stable versions can be published to latest: ${version}`);
-          }
-          const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
-            signal: AbortSignal.timeout(30_000),
-          });
-          if (!response.ok) throw new Error(`Registry lookup failed: HTTP ${response.status}`);
-          const metadata = await response.json();
-          if (!metadata.versions || !metadata['dist-tags']?.latest) {
-            throw new Error('Registry response is missing versions or latest');
-          }
-          if (Object.hasOwn(metadata.versions, version)) {
-            console.log(`${name}@${version} is already published; skipping.`);
-            await appendFile(process.env.GITHUB_OUTPUT, 'publish=false\n');
-          } else {
-            const latest = metadata['dist-tags'].latest;
-            if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(latest)) {
-              throw new Error(`Unexpected latest version: ${latest}`);
-            }
-            const currentParts = version.split('.').map(BigInt);
-            const latestParts = latest.split('.').map(BigInt);
-            const firstDifference = currentParts.findIndex((part, i) => part !== latestParts[i]);
-            if (firstDifference < 0 || currentParts[firstDifference] < latestParts[firstDifference]) {
-              throw new Error(`${version} must be newer than latest (${latest})`);
-            }
-            await appendFile(process.env.GITHUB_OUTPUT, 'publish=true\n');
-            console.log(`Publishing ${name}@${version}`);
-          }
-          NODE
+        run: node .github/scripts/cliRelease.mjs prepare
 
       - name: Setup environment
         if: steps.release.outputs.publish == 'true'
@@ -109,9 +92,17 @@ jobs:
         run: npm pack --ignore-scripts
         working-directory: apps/cli
 
+      - name: Reserve version for retries
+        if: steps.release.outputs.publish == 'true'
+        run: node .github/scripts/cliRelease.mjs reserve
+
       - name: Publish to npm
         if: steps.release.outputs.publish == 'true'
         run: npm publish ./lobehub-cli-*.tgz --provenance --access public --tag latest
         working-directory: apps/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify npm publication
+        if: steps.release.outputs.publish == 'true'
+        run: node .github/scripts/cliRelease.mjs verify

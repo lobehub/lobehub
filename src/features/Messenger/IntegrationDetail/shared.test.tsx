@@ -120,9 +120,7 @@ vi.mock('@/store/serverConfig', () => ({
   serverConfigSelectors: {
     enableBusinessFeatures: () => true,
   },
-  useServerConfigStore: (
-    selector: (state: { featureFlags: { enableWorkspace: boolean } }) => unknown,
-  ) => selector({ featureFlags: { enableWorkspace: true } }),
+  useServerConfigStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/user', () => ({

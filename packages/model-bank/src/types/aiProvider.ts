@@ -149,6 +149,13 @@ export interface AiProviderSettings {
    */
   authType?: AiProviderAuthType;
   /**
+   * How the connectivity checker verifies the provider.
+   * - `chat` (default): sends a chat message to the selected check model.
+   * - `credentials`: asks the provider runtime to verify the key without a model
+   *   (e.g. a balance endpoint), for providers that serve no chat models.
+   */
+  checkMode?: 'chat' | 'credentials';
+  /**
    * whether provider show browser request option by default
    *
    * @default false
@@ -232,8 +239,9 @@ const OAuthDeviceFlowConfigSchema = z.object({
   tokenExchangeEndpoint: z.string().optional(),
 });
 
-const AiProviderSettingsSchema = z.object({
+export const AiProviderSettingsSchema = z.object({
   authType: z.enum(AiProviderAuthTypes).optional(),
+  checkMode: z.enum(['chat', 'credentials']).optional(),
   defaultShowBrowserRequest: z.boolean().optional(),
   disableBrowserRequest: z.boolean().optional(),
   maxToolCount: z.number().optional(),

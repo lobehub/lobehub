@@ -375,7 +375,7 @@ const ActionDropdown = memo<ActionDropdownProps>(
         minHeight,
         minWidth: isMobile ? undefined : minWidth,
         overflowX: 'hidden',
-        overflowY: 'scroll',
+        overflowY: 'auto',
         width: isMobile ? '100vw' : undefined,
       };
       const popupStyle = popupProps?.style;

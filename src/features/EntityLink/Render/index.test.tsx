@@ -69,21 +69,23 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mockNavigate,
 }));
 
-// What the shared preview/title read answers for this case (null = unresolved).
+// What the entity preview replica holds for this case (null = unresolved).
 let mockEntityPreview: {
+  acceptance?: { exceptions: number; passed: number; rounds: number; total: number };
   description?: string;
-  meta?: string;
-  secondaryMeta?: string;
   title?: string;
 } | null = null;
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: (key: unknown) => {
-    if (key === null) return { data: undefined, mutate: vi.fn() };
-    if (Array.isArray(key) && key[0] === 'internal-entity-preview')
-      return { data: mockEntityPreview, mutate: vi.fn() };
-    return { data: undefined, mutate: vi.fn() };
-  },
+vi.mock('./useEntityPreview', () => ({
+  useEntityPreview: () => ({
+    error: undefined,
+    isConfirmed: true,
+    isHydrated: true,
+    isValidating: false,
+    preview: mockEntityPreview ?? undefined,
+    revalidate: vi.fn(),
+    title: mockEntityPreview?.title,
+  }),
 }));
 
 // The active agent's document-list replica, already loaded.
@@ -250,9 +252,8 @@ describe('Link Render — message link icon toggle', () => {
 describe('Link Render — internal entities', () => {
   it('preserves preview details during dismissal and refreshes them when reopened', () => {
     mockEntityPreview = {
+      acceptance: { exceptions: 0, passed: 4, rounds: 3, total: 4 },
       description: 'Publish external workspace resources',
-      meta: '4/4 passed · 0 exceptions',
-      secondaryMeta: '3 verification rounds',
       title: 'Workspace publishing',
     };
     const { container, getByText } = render(
@@ -272,8 +273,9 @@ describe('Link Render — internal entities', () => {
 
     fireEvent.mouseLeave(container.firstElementChild!);
     expect(getByText('Publish external workspace resources')).toBeInTheDocument();
-    expect(getByText('4/4 passed · 0 exceptions')).toBeInTheDocument();
-    expect(getByText('3 verification rounds')).toBeInTheDocument();
+    // Counts are formatted at render time (the test i18n echoes the key).
+    expect(getByText('internalLink.preview.acceptanceCounts')).toBeInTheDocument();
+    expect(getByText('internalLink.preview.acceptanceRounds')).toBeInTheDocument();
 
     mockEntityPreview = { description: 'Updated requirement', title: 'Updated acceptance' };
     fireEvent.mouseEnter(container.firstElementChild!);
@@ -686,6 +688,36 @@ describe('Link Render — open an external link in the side browser', () => {
     expect(mockOpenInBrowserTab).toHaveBeenCalledWith(
       'http://localhost:3022/observability/context',
     );
+  });
+
+  it("opens the page in the host's side browser when the host has one", () => {
+    mockConst.isDesktop = true;
+    const openInHostBrowser = vi.fn();
+
+    const { container } = render(
+      <EntityLinkHostProvider portal={['acceptance']} onOpenSideBrowser={openInHostBrowser}>
+        <Render
+          id="msg-1"
+          tagName="lobeLink"
+          type="element"
+          node={{
+            properties: {
+              linkDomain: 'localhost',
+              linkHref: 'http://localhost:3022/observability/context',
+              linkKind: 'generic',
+              linkLabel: 'http://localhost:3022/observability/context',
+            },
+          }}
+        >
+          {null}
+        </Render>
+      </EntityLinkHostProvider>,
+    );
+    fireEvent.click(container.querySelector('[data-side-browser]')!);
+
+    expect(openInHostBrowser).toHaveBeenCalledWith('http://localhost:3022/observability/context');
+    // The working sidebar is not on this page; a request left for it would pop it open later.
+    expect(mockOpenInBrowserTab).not.toHaveBeenCalled();
   });
 
   it('keeps the action OUTSIDE the anchor, or the preload would swallow its click', () => {

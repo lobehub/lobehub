@@ -1,6 +1,6 @@
 import { useDebounce } from 'ahooks';
 import { useTheme as useNextThemesTheme } from 'next-themes';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
@@ -19,10 +19,13 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { type ThemeMode } from './types';
+import { withoutGatedGoals } from './utils/goalResults';
 
 /**
  * Shared methods for CommandMenu
@@ -60,14 +63,16 @@ export const useCommandMenu = () => {
   // Search functionality
   const hasSearch = debouncedSearch.trim().length > 0;
   const searchQuery = debouncedSearch.trim();
+  // Goals sit behind a lab: with it off the menu neither asks for them nor shows any.
+  const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
 
   const {
-    data: searchResults,
+    data: rawSearchResults,
     error: searchError,
     isLoading: isSearching,
     isValidating: isSearchValidating,
   } = useSWR<FtsSearchResult[]>(
-    hasSearch ? ['search', searchQuery, agentId, typeFilter] : null,
+    hasSearch ? ['search', searchQuery, agentId, typeFilter, goalsEnabled] : null,
     async () => {
       const locale = globalHelpers.getCurrentLanguage();
       return lambdaClient.search.query.query({
@@ -76,6 +81,9 @@ export const useCommandMenu = () => {
         // through the permanent typed-search entries instead of gating every
         // keystroke on three remote marketplace round-trips.
         includeMarketplace: false,
+        // Goals are not in the full-text index; the server looks them up by
+        // title/requirement only when asked, and the menu renders them.
+        includeGoals: goalsEnabled,
         limitPerType: typeFilter ? 50 : 5, // Show more results when filtering by type
         locale,
         query: searchQuery,
@@ -86,6 +94,10 @@ export const useCommandMenu = () => {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
     },
+  );
+  const searchResults = useMemo(
+    () => withoutGatedGoals(rawSearchResults, goalsEnabled),
+    [goalsEnabled, rawSearchResults],
   );
 
   // Close on Escape key and prevent body scroll

@@ -11,6 +11,7 @@ import {
   registerDynamicClient,
   registeredAuthMethod,
   resolveConnectorClient,
+  resolveConnectorOAuthScopes,
   selectRegistrationAuthMethod,
   toClientInformation,
 } from './oauth';
@@ -414,5 +415,53 @@ describe('OAuth metadata issuer validation', () => {
     await expect(discoverConnectorOAuth('https://auth.example.com/mcp')).rejects.toThrow(
       'Check the connector authorization server configuration.',
     );
+  });
+});
+
+describe('identity scopes are opt-in on initial automatic client registration', () => {
+  const discovery = {
+    authorizationServerUrl: 'https://as',
+    metadata: { ...metadataWith(), scopes_supported: ['tools', 'openid', 'profile', 'email'] },
+    scopes: ['tools'],
+  };
+  it('adds only advertised identity scopes to nonempty initial scopes', () => {
+    expect(resolveConnectorOAuthScopes({ discovery })).toEqual([
+      'tools',
+      'openid',
+      'profile',
+      'email',
+    ]);
+    expect(
+      resolveConnectorOAuthScopes({
+        discovery: {
+          ...discovery,
+          metadata: { ...discovery.metadata, scopes_supported: ['tools', 'openid'] },
+        },
+      }),
+    ).toEqual(['tools', 'openid']);
+  });
+  it('preserves nonempty frozen scopes, pre-registered clients and empty resources', () => {
+    expect(resolveConnectorOAuthScopes({ discovery, existingScopes: ['tools'] })).toEqual([
+      'tools',
+    ]);
+
+    expect(resolveConnectorOAuthScopes({ discovery, preRegistered: true })).toEqual(['tools']);
+    expect(
+      resolveConnectorOAuthScopes({ discovery: { ...discovery, scopes: [] } }),
+    ).toBeUndefined();
+  });
+  it('falls back to discovery when Marketplace supplies an empty stored scope array', () => {
+    expect(resolveConnectorOAuthScopes({ discovery, existingScopes: [] })).toEqual([
+      'tools',
+      'openid',
+      'profile',
+      'email',
+    ]);
+    expect(resolveConnectorOAuthScopes({ discovery, existingScopes: undefined })).toEqual([
+      'tools',
+      'openid',
+      'profile',
+      'email',
+    ]);
   });
 });

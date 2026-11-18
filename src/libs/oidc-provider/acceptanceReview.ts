@@ -36,6 +36,45 @@ export const extensionCorsDecision = (clientId: string | undefined, origin: stri
   return ACCEPTANCE_EXTENSION_IDS.some((id) => origin === `chrome-extension://${id}`);
 };
 
+// The extension is first-party, so a reviewer with a web session signs in without the login and
+// consent pages. PKCE and the registered redirect keep web pages out, but another browser
+// extension that can read tab URLs could start this flow and redeem the code without a click;
+// that was accepted for the acceptance:extension scope only.
+export const EXTENSION_SIGN_IN_PATH = '/oidc/extension-sign-in';
+
+export const interactionPathFor = (clientId: string | undefined, prompt: string, uid: string) =>
+  isAcceptanceExtensionClient(clientId) && prompt === 'login'
+    ? `${EXTENSION_SIGN_IN_PATH}/${uid}`
+    : `/oauth/consent/${uid}`;
+
+export const extensionGrantScopes = (clientId: string | undefined) =>
+  isAcceptanceExtensionClient(clientId)
+    ? {
+        oidc: `openid profile ${ACCEPTANCE_EXTENSION_SCOPE}`,
+        resource: ACCEPTANCE_EXTENSION_RESOURCE,
+        resourceScope: ACCEPTANCE_EXTENSION_SCOPE,
+      }
+    : null;
+
+// oidc-provider drops offline_access from a request that does not prompt for consent, and with
+// it the refresh token; the extension cannot stay signed in without one.
+export const issuesRefreshToken = (
+  client: { clientId: string; grantTypeAllowed: (type: string) => boolean },
+  scopes: Set<string>,
+) =>
+  client.grantTypeAllowed('refresh_token') &&
+  (scopes.has('offline_access') || isAcceptanceExtensionClient(client.clientId));
+
+// A token issued without offline_access normally dies with the browser's provider session, which
+// would sign the extension out whenever the reviewer signs out of the web app.
+export const expiresWithSession = (source: { clientId?: string; scopes: Set<string> }) =>
+  !source.scopes.has('offline_access') && !isAcceptanceExtensionClient(source.clientId);
+
+// Without this the provider reuses whatever account its own session cookie holds, which can be a
+// different person than the one signed in to the web app.
+export const needsWebSessionLogin = (clientId: string | undefined, loggedIn: boolean) =>
+  isAcceptanceExtensionClient(clientId) && !loggedIn;
+
 export const defaultResourceFor = (clientId: string | undefined, fallback: string) =>
   isAcceptanceExtensionClient(clientId) ? ACCEPTANCE_EXTENSION_RESOURCE : fallback;
 

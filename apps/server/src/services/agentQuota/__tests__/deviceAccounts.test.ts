@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   AgentAccountBindingModel,
   AgentDeviceAccountBindingModel,
+  AgentProviderAccountModel,
 } from '@/database/models/agentQuota';
 import { agents, devices, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -234,6 +235,137 @@ describe('AgentQuotaService.planDeviceRouting per device', () => {
     ).toEqual({
       candidates: [{ externalAccountId: 'acc-a', name: 'acc-a@example.com' }],
       mode: 'pinned',
+    });
+  });
+});
+
+describe('AgentQuotaService.resolveAgentAvailability', () => {
+  const HOUR = 3_600_000;
+  const now = Date.now();
+  const resetsAt = now + 2 * HOUR;
+
+  /** An account signed in on `deviceId` whose 5-hour window is at `utilization`. */
+  const withSession = (externalAccountId: string, deviceId: string, utilization: number) =>
+    service.ingestSnapshot({
+      deviceId,
+      identity: { email: `${externalAccountId}@example.com`, externalAccountId },
+      provider: 'claude-code',
+      readings: [
+        { capturedAt: now - HOUR, limitType: 'session', resetsAt, scopeKey: '', utilization },
+      ],
+    });
+
+  // Regression: presence judged the whole pool, so an agent whose device pin
+  // was spent read "idle" while every run on that device hit the limit.
+  it('judges a device pin alone, even when the rest of the pool has headroom', async () => {
+    const spent = await withSession('acc-spent', deviceA, 100);
+    const free = await withSession('acc-free', deviceA, 0);
+    for (const account of [spent, free])
+      await bindings.upsert({ accountId: account.id, agentId, role: QuotaBindingRole.pool });
+    await service.setDeviceAccount(agentId, deviceA, spent.id);
+
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [spent.id],
+      mode: 'pinned',
+      resetsAt,
+      status: 'exhausted',
+    });
+    // The dispatcher routes the run to that same spent account.
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toMatchObject({ candidates: [{ externalAccountId: 'acc-spent' }], mode: 'pinned' });
+    // Back on Auto, the free account takes the run.
+    await service.setDeviceAccount(agentId, deviceA, null);
+    expect(
+      await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now }),
+    ).toMatchObject({ mode: 'balanced', status: 'available' });
+  });
+
+  // Regression: Auto mode was narrowed to the logins recorded for the device.
+  // That record is partial (a remote device only has the accounts sampled
+  // there) and an emptied set read like one never reported, so the verdict
+  // flipped while the dispatcher kept offering the same candidates.
+  it('judges Auto mode on the candidates the dispatcher sends, whatever logins are recorded', async () => {
+    const spent = await withSession('acc-spent', deviceA, 100);
+    const free = await withSession('acc-free', deviceB, 0);
+    for (const account of [spent, free])
+      await bindings.upsert({ accountId: account.id, agentId, role: QuotaBindingRole.pool });
+    const expected = {
+      accountIds: [spent.id, free.id],
+      mode: 'balanced',
+      status: 'available',
+    };
+
+    // Only the spent account was ever sampled on device A.
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual(
+      expected,
+    );
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toMatchObject({ candidates: [{ externalAccountId: 'acc-free' }], mode: 'balanced' });
+
+    // Device A then reports it holds no login at all.
+    await service.syncDeviceLogins(deviceA, 'claude-code', []);
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual(
+      expected,
+    );
+  });
+
+  it('is exhausted in Auto mode once every candidate is spent, and says when one returns', async () => {
+    const early = await withSession('acc-early', deviceA, 100);
+    await bindings.upsert({ accountId: early.id, agentId, role: QuotaBindingRole.pool });
+
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [early.id],
+      mode: 'balanced',
+      resetsAt,
+      status: 'exhausted',
+    });
+  });
+
+  // Regression: an all-disabled Auto pool read "exhausted" with no reset, so
+  // presence showed the agent off duty for good, while the dispatcher routes
+  // nothing there and the device's default login runs.
+  it('does not judge an Auto pool whose accounts are all disabled', async () => {
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    const spent = await withSession('acc-spent', deviceA, 100);
+    const free = await withSession('acc-free', deviceA, 0);
+    for (const account of [spent, free]) {
+      await bindings.upsert({ accountId: account.id, agentId, role: QuotaBindingRole.pool });
+      await accounts.update(account.id, { enabled: false });
+    }
+
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toBeNull();
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [],
+      mode: 'balanced',
+      status: 'untracked',
+    });
+  });
+
+  it('still judges a device pin on a disabled account: the run is sent to it', async () => {
+    const spent = await withSession('acc-spent', deviceA, 100);
+    await bindings.upsert({ accountId: spent.id, agentId, role: QuotaBindingRole.pool });
+    await service.setDeviceAccount(agentId, deviceA, spent.id);
+    await new AgentProviderAccountModel(serverDB, userId).update(spent.id, { enabled: false });
+
+    expect(
+      await service.planDeviceRouting(agentId, { deviceId: deviceA, now, provider: 'claude-code' }),
+    ).toMatchObject({ candidates: [{ externalAccountId: 'acc-spent' }], mode: 'pinned' });
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [spent.id],
+      mode: 'pinned',
+      resetsAt,
+      status: 'exhausted',
+    });
+  });
+
+  it('does not judge an agent without accounts', async () => {
+    expect(await service.resolveAgentAvailability(agentId, { deviceId: deviceA, now })).toEqual({
+      accountIds: [],
+      status: 'untracked',
     });
   });
 });

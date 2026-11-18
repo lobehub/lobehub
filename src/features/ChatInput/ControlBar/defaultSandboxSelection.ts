@@ -1,11 +1,13 @@
 import { SANDBOX_DRIVE_ROOT } from '@lobechat/builtin-tool-cloud-sandbox';
 
+import type { RememberedSandboxDirectory } from './rememberedSandboxDirectory';
 import type { SandboxSelection } from './useSandboxPlacement';
 
 /**
  * Where a new conversation's cloud sandbox works when the person has not
- * picked anything, for an account whose plan includes a drive: the root of a
- * drive that is theirs alone.
+ * picked anything, for an account whose plan includes a drive: the folder the
+ * agent's last conversation was put in, when one is remembered; otherwise the
+ * root of a drive that is theirs alone.
  *
  * - personal account — the root of their own drive;
  * - workspace — the root of the member's personal drive, for every agent. The
@@ -13,7 +15,12 @@ import type { SandboxSelection } from './useSandboxPlacement';
  *   anyone may work in, so a shared agent starts on the member's own drive too;
  *   moving to a folder on the public drive is an explicit pick.
  */
-export const resolveDefaultSandboxSelection = (workspaceId?: string | null): SandboxSelection =>
-  workspaceId
-    ? { drive: 'personal', workingDirectory: SANDBOX_DRIVE_ROOT }
-    : { workingDirectory: SANDBOX_DRIVE_ROOT };
+export const resolveDefaultSandboxSelection = (
+  workspaceId?: string | null,
+  remembered?: RememberedSandboxDirectory,
+): SandboxSelection =>
+  remembered?.workingDirectory
+    ? { ...remembered }
+    : workspaceId
+      ? { drive: 'personal', workingDirectory: SANDBOX_DRIVE_ROOT }
+      : { workingDirectory: SANDBOX_DRIVE_ROOT };

@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
+import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
 import {
   ActionIcon,
   confirmModal,
@@ -36,6 +36,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import { type AgentProfileTab } from '@/features/AgentProfileTabs/tabOptions';
 import NavHeader from '@/features/NavHeader';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
 import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
@@ -111,7 +112,12 @@ const buildAgentProfileMarkdown = (params: {
   return `${sections.join('\n\n')}\n`;
 };
 
-const Header = memo(() => {
+interface HeaderProps {
+  /** The profile page being shown, so the page switcher highlights it. */
+  active?: AgentProfileTab;
+}
+
+const Header = memo<HeaderProps>(({ active = 'profile' }) => {
   const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
@@ -197,9 +203,10 @@ const Header = memo(() => {
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config?.model,
-        // Pinned identifiers only — a disabled plugin shouldn't be advertised
-        // as "enabled" in the exported markdown.
-        plugins: getActivePluginIds(config?.plugins),
+        // Everything turned on — a disabled plugin shouldn't be advertised
+        // as "enabled" in the exported markdown, while a connector is on
+        // through an `auto` entry rather than a pin.
+        plugins: getOptedInPluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,
@@ -464,7 +471,7 @@ const Header = memo(() => {
         },
       }}
     >
-      {activeAgentId && <AgentProfileTabs active={'profile'} agentId={activeAgentId} />}
+      {activeAgentId && <AgentProfileTabs active={active} agentId={activeAgentId} />}
     </NavHeader>
   );
 });

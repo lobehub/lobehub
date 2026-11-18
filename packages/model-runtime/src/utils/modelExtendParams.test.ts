@@ -44,6 +44,26 @@ describe('applyModelExtendParams', () => {
     expect(result.thinkingLevel).toBe('high');
   });
 
+  it('defaults Gemini 4 Hydrogen thinkingLevel to high (thinkingLevel5)', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({}),
+      extendParams: ['thinkingLevel5', 'urlContext'],
+      model: 'gemini-4-hydrogen',
+    });
+
+    expect(result.thinkingLevel).toBe('high');
+  });
+
+  it('forwards the xhigh thinkingLevel5 config value', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ thinkingLevel5: 'xhigh' }),
+      extendParams: ['thinkingLevel5'],
+      model: 'gemini-4-hydrogen',
+    });
+
+    expect(result.thinkingLevel).toBe('xhigh');
+  });
+
   it('honors an explicit thinkingLevel3 config value', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({ thinkingLevel3: 'medium' }),

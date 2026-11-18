@@ -303,6 +303,26 @@ describe('localSystemRuntime', () => {
       expect(parseArgs().sandbox).toBe(true);
     });
 
+    it('never lets a model-supplied sandboxRoot move the fence', async () => {
+      // `sandboxRoot` overrides the fence root on the device; only the skills
+      // runtime may set it, so a guessed one is dropped like a guessed `cwd`.
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      const proxy = localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        localSandbox: true,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory: '/Users/me/repo',
+      });
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'echo owned > ~/.zshrc',
+        sandboxRoot: '/Users/me',
+      } as never);
+
+      expect(parseArgs()).not.toHaveProperty('sandboxRoot');
+      expect(parseArgs().sandbox).toBe(true);
+    });
+
     it('forwards the network allowance for a fenced run', async () => {
       mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
       const proxy = localSystemRuntime.factory({

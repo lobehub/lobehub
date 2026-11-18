@@ -21,6 +21,7 @@ import {
 } from '../utils';
 import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
+import { resetUnresolvedToolFeedback } from './resolveTools';
 import {
   createToolMessage,
   isBlockedBeforeExecution,
@@ -451,7 +452,8 @@ const persistActivatedTools = ({
 
 export const callTool =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state, runtimeContext) => {
+  async (instruction, entryState, runtimeContext) => {
+    const state = resetUnresolvedToolFeedback(entryState);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tool' }>;
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
@@ -754,7 +756,8 @@ export const callTool =
 
 export const callToolsBatch =
   (host: AgentRuntimeHost): InstructionExecutor =>
-  async (instruction, state, runtimeContext) => {
+  async (instruction, entryState, runtimeContext) => {
+    const state = resetUnresolvedToolFeedback(entryState);
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];

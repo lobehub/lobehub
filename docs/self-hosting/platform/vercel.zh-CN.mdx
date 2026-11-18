@@ -381,7 +381,7 @@ tags:
 
 ## 故障排查
 
-**部署失败** — 在 Vercel 控制台 → 部署记录 → 点击失败的部署 → 构建日志中查看详情。常见原因：环境变量缺失、TypeScript 报错、内存不足（通过 `NODE_OPTIONS=--max-old-space-size=4096` 修复）。
+**部署失败** — 在 Vercel 控制台 → 部署记录 → 点击失败的部署 → 构建日志中查看详情。常见原因：环境变量缺失、TypeScript 报错、内存不足（通过 `NODE_OPTIONS=--max-old-space-size=4096` 修复，最好只在构建步骤设置：若运行时也生效，更大的堆参数会覆盖解析 worker 的 768 MB 内存上限，文件解析会按这个更大的上限运行，并记录一次 `file_parse.heap_budget_overridden`）。
 
 **函数超时** — 在 Hobby 套餐遇到超时时：升级到 Pro（60 秒超时）、使用更快的模型（如 GPT-4o-mini 代替 GPT-4o）、减少最大 token 数，或确认已启用流式响应。
 

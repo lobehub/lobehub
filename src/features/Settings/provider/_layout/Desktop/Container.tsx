@@ -25,7 +25,8 @@ const Container: FC<PropsWithChildren> = ({ children }) => {
       <NavHeader />
       <SettingContainer
         maxWidth={1024}
-        padding={24}
+        paddingBlock={'24px 128px'}
+        paddingInline={24}
         ref={scrollRef}
         style={{
           minHeight: '100%',

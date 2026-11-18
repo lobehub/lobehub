@@ -1,4 +1,4 @@
-import type { ChannelDetail, ChannelListItem } from '@lobechat/types';
+import type { ChannelDetail, ChannelJoinableItem, ChannelListItem } from '@lobechat/types';
 
 import { defineReplica, type ReplicaEntityAdapter } from '@/libs/replica';
 import { channelService, type ChannelViewParams } from '@/services/channel';
@@ -39,6 +39,19 @@ export const channelListResource = defineReplica<Record<string, never>, ChannelL
   key: () => 'all',
   name: 'channelList',
   storage: 'indexedDB',
+  version: 1,
+});
+
+export interface ChannelJoinableParams {
+  search: string;
+}
+
+/** Public Channels the user can join, per search; only worth what the server says now. */
+export const channelJoinableResource = defineReplica<ChannelJoinableParams, ChannelJoinableItem[]>({
+  fetcher: ({ search }) => channelService.listJoinable(search),
+  key: ({ search }) => search,
+  name: 'channelJoinable',
+  storage: 'memory',
   version: 1,
 });
 

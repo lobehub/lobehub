@@ -114,6 +114,26 @@ export const passRecord = (
   };
 };
 
+export const AGENT_SIGNER = 'agent';
+
+export const agentPassRecord = (
+  item: ReviewItem,
+  finding: string,
+  now: string,
+): SignoffRecord | undefined => {
+  if (item.category !== 'needs-signoff') return undefined;
+  if (item.state !== 'todo' && item.state !== 'waiting-agent') return undefined;
+  return {
+    hash: item.hash,
+    key: item.key,
+    note: finding.trim(),
+    reason: REVIEW_PASS,
+    reasons: allowedReasons(item).sort(),
+    signedAt: now,
+    signer: AGENT_SIGNER,
+  };
+};
+
 export interface ReworkMeta {
   base: string;
   head: string;
@@ -151,3 +171,6 @@ export const resolvedReworks = (items: VerdictEntry[], reviews: Reviews, now: st
     })
     .map((rework) => ({ ...rework, resolvedAt: now }));
 };
+
+export const asksAgentNote = (item: { category: string; state: ReviewState }) =>
+  item.category === 'needs-signoff' && (item.state === 'todo' || item.state === 'waiting-agent');

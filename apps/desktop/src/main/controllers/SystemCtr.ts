@@ -1,10 +1,22 @@
 import { access, readdir } from 'node:fs/promises';
+import os from 'node:os';
 import process from 'node:process';
 
-import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
+import type {
+  DebugLoggingDuration,
+  DebugLoggingSettings,
+  DiagnosticsBundleResult,
+  ElectronAppState,
+  RemoteDebuggingSettings,
+  ThemeMode,
+} from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 
 import { legacyLocalDbDir } from '@/const/dir';
+import { setDebugLogging } from '@/modules/debugLogging';
+import { writeDiagnosticsBundle } from '@/modules/diagnostics/bundle';
+import { getRemoteDebuggingLaunchState, REMOTE_DEBUGGING_PORT } from '@/modules/remoteDebugging';
+import { BUILD_CHANNEL } from '@/modules/updater/configs';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -16,6 +28,7 @@ import {
   requestScreenCaptureAccess,
 } from '@/utils/permissions';
 import * as electronIs from '@/utils/platform';
+import { flushStructuredLogs, getStructuredLogDirectory } from '@/utils/structuredLog';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
 import { safeGetPath } from '@/utils/user-path';
 
@@ -196,6 +209,117 @@ export default class SystemController extends ControllerModule {
   async openFullDiskAccessSettings() {
     if (await this.app.permissionGuide.open('fullDisk')) return;
     return openFullDiskAccessSettings();
+  }
+
+  /**
+   * Settings → About → Debug logs. `alwaysOn` is true in dev, which records
+   * `debug` regardless of the setting.
+   */
+  @IpcMethod()
+  getDebugLoggingSettings(): DebugLoggingSettings {
+    const enabled = this.app.storeManager.get('debugLoggingEnabled', false);
+    const expiresAt = enabled ? this.app.storeManager.get('debugLoggingExpiresAt') : undefined;
+    return {
+      alwaysOn: !app.isPackaged,
+      enabled,
+      ...(expiresAt === undefined ? undefined : { expiresAt }),
+    };
+  }
+
+  /** Turns debug logging off, or on for a duration; a timed one turns itself off quietly. */
+  @IpcMethod()
+  setDebugLogging(duration: DebugLoggingDuration | 'off'): DebugLoggingSettings {
+    setDebugLogging(this.app.storeManager, duration);
+    logger.info(`Debug logging set to ${duration}`);
+    return this.getDebugLoggingSettings();
+  }
+
+  @IpcMethod()
+  getRemoteDebuggingSettings(): RemoteDebuggingSettings {
+    return {
+      ...getRemoteDebuggingLaunchState(),
+      enabled: this.app.storeManager.get('remoteDebuggingEnabled', false),
+      port: REMOTE_DEBUGGING_PORT,
+    };
+  }
+
+  /** Persists the toggle; Chromium reads the CDP switch only at startup, so it applies on restart. */
+  @IpcMethod()
+  setRemoteDebuggingEnabled(enabled: boolean): RemoteDebuggingSettings {
+    this.app.storeManager.set('remoteDebuggingEnabled', enabled);
+    logger.info(`Remote debugging ${enabled ? 'enabled' : 'disabled'} for the next launch`);
+    return this.getRemoteDebuggingSettings();
+  }
+
+  /** Reveals `<userData>/logs/` so a user can attach the files to a bug report. */
+  @IpcMethod()
+  async openLogDirectory(): Promise<void> {
+    const directory = getStructuredLogDirectory();
+    if (!directory) return;
+    const error = await shell.openPath(directory);
+    if (error) logger.warn(`Failed to open log directory: ${error}`);
+  }
+
+  /**
+   * Writes a zip of the last day of logs plus app and system details to Downloads
+   * (the log directory when Downloads is unavailable) and selects it in the file
+   * manager, so a user can attach one file to a report.
+   */
+  @IpcMethod()
+  async exportDiagnostics(): Promise<DiagnosticsBundleResult> {
+    const logDirectory = getStructuredLogDirectory();
+    if (!logDirectory) throw new Error('Structured logs are not open');
+    // Queued lines would otherwise miss the bundle, including the click that made it.
+    await flushStructuredLogs();
+
+    const options = { logDirectory, now: new Date(), systemInfo: this.getDiagnosticsSystemInfo() };
+    const downloads = safeGetPath('downloads');
+    let result: DiagnosticsBundleResult | undefined;
+    if (downloads) {
+      // Downloads can resolve yet be missing or unwritable (redirected, sandboxed, removed).
+      result = await writeDiagnosticsBundle({ ...options, outputDirectory: downloads }).catch(
+        (error) => {
+          logger.warn('Diagnostics could not be written to Downloads; using the log folder', error);
+          return undefined;
+        },
+      );
+    }
+    result ??= await writeDiagnosticsBundle({ ...options, outputDirectory: logDirectory });
+    shell.showItemInFolder(result.filePath);
+    logger.info(`Diagnostics exported: ${result.fileName} (${result.size} bytes)`);
+    return result;
+  }
+
+  /** `system.json` in the diagnostics zip; no host name, account or user content. */
+  private getDiagnosticsSystemInfo() {
+    const cpus = os.cpus();
+    return {
+      app: {
+        buildChannel: BUILD_CHANNEL,
+        isPackaged: app.isPackaged,
+        locale: app.getLocale(),
+        updateChannel: this.app.storeManager.get('updateChannel'),
+        version: app.getVersion(),
+      },
+      debugLogging: this.getDebugLoggingSettings(),
+      os: {
+        arch: process.arch,
+        cpu: cpus[0]?.model,
+        cpuCount: cpus.length,
+        freeMemory: os.freemem(),
+        platform: process.platform,
+        release: os.release(),
+        totalMemory: os.totalmem(),
+        uptimeSeconds: Math.round(os.uptime()),
+        version: os.version(),
+      },
+      remoteDebugging: this.getRemoteDebuggingSettings(),
+      runtime: {
+        chrome: process.versions.chrome,
+        electron: process.versions.electron,
+        node: process.versions.node,
+      },
+    };
   }
 
   @IpcMethod()

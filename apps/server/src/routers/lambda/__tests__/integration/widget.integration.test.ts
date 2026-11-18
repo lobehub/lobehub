@@ -29,6 +29,7 @@ import { runWidgetSchedulerTick } from '@/server/services/widget/scheduler';
 import { dashboardRouter } from '../../dashboard';
 import { metricRouter } from '../../metric';
 import { widgetRouter } from '../../widget';
+import { signedCallbackRequest } from './callbackRequest';
 import { cleanupTestUser, createTestAgent, createTestUser } from './setup';
 
 vi.hoisted(() => {
@@ -100,6 +101,7 @@ describe('widget + dashboard routers integration', () => {
   let workspaceId: string;
 
   beforeEach(async () => {
+    vi.stubEnv('APP_URL', 'https://app.test/');
     runSandbox.mockReset();
     db = await getTestDB();
     testDB = db;
@@ -1137,11 +1139,7 @@ describe('widget + dashboard routers integration', () => {
         .set({ nextRunAt: new Date(Date.now() - 60_000) })
         .where(eq(widgets.id, widget.id));
 
-      const response = await widgetWorkflowApp.request('/tick', {
-        body: '{}',
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      });
+      const response = await widgetWorkflowApp.request(signedCallbackRequest('/tick', {}));
       const body = await response.json();
       expect(body).toMatchObject({
         claimed: 1,
@@ -1161,19 +1159,13 @@ describe('widget + dashboard routers integration', () => {
       expect(runs).toHaveLength(1);
 
       // The slot moved forward, so an immediate second tick has nothing to do.
-      const second = await widgetWorkflowApp.request('/tick', { body: '{}', method: 'POST' });
+      const second = await widgetWorkflowApp.request(signedCallbackRequest('/tick', {}));
       expect(await second.json()).toMatchObject({ claimed: 0, due: 0 });
     });
 
     describe('dispatch and recovery', () => {
       const post = async (path: string, body: unknown) =>
-        (
-          await widgetWorkflowApp.request(path, {
-            body: JSON.stringify(body),
-            headers: { 'content-type': 'application/json' },
-            method: 'POST',
-          })
-        ).json();
+        (await widgetWorkflowApp.request(signedCallbackRequest(path, body))).json();
 
       /** A published, scheduled widget whose slot is due. */
       const dueWidget = async () => {

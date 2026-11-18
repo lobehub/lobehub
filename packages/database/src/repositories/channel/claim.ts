@@ -1,4 +1,5 @@
-import type { ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
+import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -9,18 +10,17 @@ import {
   channelMemberGrants,
   channelMembers,
   channelMessages,
-  channelThreads,
   devices,
 } from '../../schemas';
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
-import { notTrashed } from '../../utils/softDelete';
-import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
-import { findThread } from './delivery';
+import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
-import { resolveTopic } from './topic';
+import type { ChannelTopicScope } from './topic';
+import { continuationTopic, resolveTopic } from './topic';
 import { audit } from './transaction';
+import { assignedWorktree } from './worktree';
 
 export interface ChannelClaimOptions {
   /** How long the claimer may go without a heartbeat before reconcile takes over. */
@@ -29,8 +29,35 @@ export interface ChannelClaimOptions {
   leaseOwner: string;
   /** Trusted presence snapshot from the current Gateway scope; omitted by storage-only callers. */
   onlineDeviceIds?: string[];
+  /**
+   * The device a run with no device picked in the Channel will route to, from the Agent's own
+   * settings as the requester's ordinary conversation would resolve them, and whether it is
+   * online for that requester; undefined when it needs none or would wake it. Lets an offline
+   * Agent-bound device wait like a Channel one. Its presence is the requester's, which may
+   * include their personal device, so it stays out of `onlineDeviceIds`. Only consulted with
+   * `onlineDeviceIds`.
+   */
+  routedDevice?: (run: ChannelRoutedDeviceInput) => Promise<ChannelRoutedDevice | undefined>;
   /** Trusted server defaults from getServerDefaultAgentConfig(); use {} when unconfigured. */
   serverDefaultAgentConfig: PartialDeep<LobeAgentConfig>;
+}
+
+export interface ChannelRoutedDevice {
+  deviceId: string;
+  online: boolean;
+}
+
+export interface ChannelRoutedDeviceInput {
+  agentId: string;
+  /**
+   * The topic this run will continue, if any. A conversation stays on the device it ran on, so
+   * its pin can outrank the Agent's binding.
+   */
+  continuation?: Pick<TopicItem, 'agentId' | 'groupId' | 'metadata' | 'projectWorkingDirectoryId'>;
+  executionConfig: ChannelExecutionConfig;
+  /** The requester: the run executes as them, with their device preference for the Agent. */
+  userId: string;
+  workspaceId: string | null;
 }
 
 export interface ChannelClaim {
@@ -41,22 +68,29 @@ export interface ChannelClaim {
   topic: TopicItem;
 }
 
-const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
+/** Jobs in the same conversation branch: one Thread, or the main timeline. */
+export const sameBranch = (threadId: string | null) =>
+  threadId ? eq(channelJobs.threadId, threadId) : isNull(channelJobs.threadId);
 
-/** Records why a queued job cannot start; clients read the code, never the text. */
+/**
+ * Records why a queued job cannot start; clients read the code, never the text. A job waiting
+ * for a device also records which one in `deviceId`, so it can be shown before any claim sets
+ * it. Only a claim gives a job its writer, so a queued job's device holds no directory.
+ */
 const block = async (
   tx: Transaction,
   job: ChannelJobItem,
   code: ChannelJobBlockCode,
   reason: string,
+  deviceId: string | null = null,
 ) => {
-  if (job.blockedCode === code && job.blockedReason === reason) return;
+  if (job.blockedCode === code && job.blockedReason === reason && job.deviceId === deviceId) return;
 
   await tx
     .update(channelJobs)
-    .set({ blockedCode: code, blockedReason: reason })
+    .set({ blockedCode: code, blockedReason: reason, deviceId })
     .where(eq(channelJobs.id, job.id));
-  await audit(tx, job.channelId, 'job_blocked', job.id, { code, reason });
+  await audit(tx, job.channelId, 'job_blocked', job.id, { code, deviceId, reason });
 };
 
 /** Settles a job that must never run, e.g. its requester left or its branch was archived. */
@@ -126,14 +160,22 @@ const deviceBlock = async (
     return { code: 'unavailable', reason: 'The device owner did not allow this environment' };
 };
 
-/** Another channel's live writer in the same device directory. */
+/**
+ * Another live writer in the same device directory, from any channel or member. Holds the
+ * directory's advisory lock until the claim commits, so two claims never both take it.
+ */
 const directoryBlock = async (
   tx: Transaction,
-  member: ChannelMemberItem,
+  deviceId: string | undefined,
+  workingDirectory: string | undefined,
 ): Promise<Block | undefined> => {
-  const { deviceId, workingDirectory } = member.config ?? {};
   if (!deviceId || !workingDirectory) return;
 
+  // Claims in other channels race for the same directory, and no channel lock covers them:
+  // this lock orders them, so the read below sees a writer the other claim just committed.
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`channel-directory:${JSON.stringify([deviceId, workingDirectory])}`}))`,
+  );
   const [busy] = await tx
     .select({ id: channelJobs.id })
     .from(channelJobs)
@@ -147,6 +189,47 @@ const directoryBlock = async (
     .limit(1);
   if (busy) return { code: 'directory_locked', reason: 'Another run is using this directory' };
 };
+
+/**
+ * Blocks that wait on a device or a person, not on work that will finish by itself. A primary
+ * responder stuck on one of these no longer holds back the follow-ups deferred behind it: they
+ * run without its reply rather than wait indefinitely.
+ */
+const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
+  'device_approval_pending',
+  'device_offline',
+  'device_required',
+  'unavailable',
+  'workspace_changed',
+]);
+
+/** The job of the member a deferred follow-up waits for, on the same message. */
+const primaryJob = async (tx: Transaction, job: ChannelJobItem, memberId: string) => {
+  const [primary] = await tx
+    .select({
+      blockedCode: channelJobs.blockedCode,
+      publishedMessageId: channelJobs.publishedMessageId,
+      status: channelJobs.status,
+    })
+    .from(channelJobs)
+    .where(
+      and(
+        eq(channelJobs.channelId, job.channelId),
+        eq(channelJobs.messageId, job.messageId),
+        eq(channelJobs.memberId, memberId),
+      ),
+    );
+  return primary;
+};
+
+/**
+ * Whether the primary responder may still answer: running, or queued behind work that will
+ * finish. Completed, silent, failed and cancelled jobs have settled; a missing job (the primary
+ * was not delivered) never holds anyone back.
+ */
+const awaitsPrimary = (primary: { blockedCode: ChannelJobBlockCode | null; status: string }) =>
+  primary.status === 'running' ||
+  (primary.status === 'queued' && !(primary.blockedCode && STUCK_BLOCKS.has(primary.blockedCode)));
 
 /**
  * Starts the job if it is at the head of its member's queue and nothing holds the member,
@@ -184,28 +267,42 @@ export const claimJob = async (
     return null;
   }
 
+  // A deferred follow-up waits for the message's primary responder, then sees its reply.
+  const primary = job.wake?.afterMemberId
+    ? await primaryJob(tx, job, job.wake.afterMemberId)
+    : undefined;
+  if (primary && awaitsPrimary(primary)) {
+    await block(tx, job, 'awaiting_primary', AWAITING_PRIMARY_REASON);
+    return null;
+  }
+
   const [request] = await tx
     .select()
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
-  // An earlier undecided message may still enqueue this member. Checking only jobs
-  // would let an explicit follow-up overtake it while another worker routes it.
+  // A request deleted while this job waited must not run: its tombstone carries no text or
+  // mentions, so the run would answer a message that no longer exists.
+  if (channelMessageDeletedAt(request.metadata)) {
+    await cancel(tx, job, 'request_deleted');
+    return null;
+  }
+  // An earlier undecided message in this branch may still enqueue this member ahead of it, and
+  // so may the Thread's root while it is undecided. Checking only jobs would let a later
+  // request overtake it while another worker routes it. Other branches never hold this one.
   const [pendingRoute] = await tx
     .select({ id: channelMessages.id })
     .from(channelMessages)
-    .leftJoin(channelThreads, eq(channelThreads.id, channelMessages.threadId))
     .where(
       and(
         eq(channelMessages.channelId, channel.id),
         eq(channelMessages.routingStatus, 'pending'),
         lt(channelMessages.sequence, request.sequence),
-        or(
-          isNull(channelMessages.threadId),
-          and(
-            notTrashed(channelThreads.isDeleted),
-            sql`${channelThreads.followerMemberIds} @> ${JSON.stringify([job.memberId])}::jsonb`,
-          ),
-        ),
+        job.threadId
+          ? or(
+              eq(channelMessages.threadId, job.threadId),
+              thread ? eq(channelMessages.id, thread.rootMessageId) : undefined,
+            )
+          : isNull(channelMessages.threadId),
       ),
     )
     .limit(1);
@@ -214,15 +311,44 @@ export const claimJob = async (
     return null;
   }
 
-  // Each member answers in message order.
+  // Each member answers a branch in message order; its other branches run alongside.
   const [head] = await tx
     .select({ id: channelJobs.id })
     .from(channelJobs)
     .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-    .where(and(eq(channelJobs.memberId, job.memberId), eq(channelJobs.status, 'queued')))
+    .where(
+      and(
+        eq(channelJobs.memberId, job.memberId),
+        eq(channelJobs.status, 'queued'),
+        sameBranch(job.threadId),
+      ),
+    )
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
     .limit(1);
   if (head?.id !== job.id) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
+
+  // A Thread follows its root: the member answers the root on the main timeline first.
+  const [rootReply] = thread
+    ? await tx
+        .select({ id: channelJobs.id })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.memberId, job.memberId),
+            eq(channelJobs.messageId, thread.rootMessageId),
+            isNull(channelJobs.threadId),
+            or(
+              eq(channelJobs.status, 'queued'),
+              and(eq(channelJobs.writerHeld, true), isNull(channelJobs.isolatedAt)),
+            ),
+          ),
+        )
+        .limit(1)
+    : [];
+  if (rootReply) {
     await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
     return null;
   }
@@ -241,6 +367,7 @@ export const claimJob = async (
         eq(channelJobs.memberId, member.id),
         eq(channelJobs.writerHeld, true),
         isNull(channelJobs.isolatedAt),
+        sameBranch(job.threadId),
       ),
     )
     .limit(1);
@@ -266,97 +393,133 @@ export const claimJob = async (
     return null;
   }
 
-  const executionConfig = await resolveExecutionConfig(
+  const resolved = await resolveExecutionConfig(
     tx,
     channel,
     member,
     requester.userId,
     options.serverDefaultAgentConfig,
   );
+  // A branch that moved into its own worktree runs there; the grant still covers the
+  // configured directory it was cut from.
+  const worktree = assignedWorktree(member, job.threadId);
+  const executionConfig =
+    resolved && worktree
+      ? { ...resolved, workingDirectory: worktree.path, worktreeBranch: worktree.branch }
+      : resolved;
   if (!executionConfig) {
     await block(tx, job, 'unavailable', 'The Agent is unavailable');
     return null;
   }
 
-  // An external Agent runs on a device; its direct conversation can open before one is chosen.
-  if (executionConfig.runtime !== 'native' && !member.config?.deviceId) {
-    await block(tx, job, 'device_required', 'Choose a device for this Agent to run on');
-    return null;
-  }
-
-  const blocked = (await deviceBlock(tx, channel, member)) ?? (await directoryBlock(tx, member));
+  const blocked =
+    (await deviceBlock(tx, channel, member)) ??
+    (await directoryBlock(tx, member.config.deviceId, executionConfig.workingDirectory));
   if (blocked) {
     await block(tx, job, blocked.code, blocked.reason);
     return null;
   }
 
-  if (
-    member.config?.deviceId &&
-    options.onlineDeviceIds &&
-    !options.onlineDeviceIds.includes(member.config.deviceId)
-  ) {
-    await block(tx, job, 'device_offline', 'Waiting for the configured device to connect');
+  // The execution identity the topic belongs to: a shared Agent's owner (with the requester as
+  // `senderId`), else the requester. The routing pre-check below and the claim itself resolve
+  // the same topic, so they have to agree on this scope.
+  const { share } = executionConfig;
+  const scope: ChannelTopicScope = share
+    ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
+    : { userId: requester.userId!, workspaceId: channel.workspaceId };
+
+  // A device picked in the Channel, else the one the Agent's own settings route the run to.
+  const channelDeviceId = member.config?.deviceId;
+  const routed =
+    options.onlineDeviceIds && !channelDeviceId
+      ? await options.routedDevice?.({
+          agentId: member.agentId!,
+          continuation: await continuationTopic(
+            tx,
+            channel,
+            job,
+            member,
+            scope,
+            request.sequence,
+            executionConfig,
+          ),
+          executionConfig,
+          userId: requester.userId!,
+          workspaceId: channel.workspaceId,
+        })
+      : undefined;
+  const offlineDeviceId = !options.onlineDeviceIds
+    ? undefined
+    : channelDeviceId
+      ? options.onlineDeviceIds.includes(channelDeviceId)
+        ? undefined
+        : channelDeviceId
+      : routed && !routed.online
+        ? routed.deviceId
+        : undefined;
+  if (offlineDeviceId) {
+    await block(
+      tx,
+      job,
+      'device_offline',
+      'Waiting for the configured device to connect',
+      offlineDeviceId,
+    );
     return null;
   }
 
   const now = new Date();
-  let claimed: Omit<ChannelClaim, 'member'>;
-  try {
-    // A savepoint, so losing the directory race to another channel keeps this transaction
-    // and leaves no topic or operation behind.
-    claimed = await tx.transaction(async (savepoint) => {
-      const topic = await resolveTopic(
-        savepoint,
-        channel,
-        job,
-        member,
-        requester.userId!,
-        request.sequence,
-        executionConfig,
-      );
-      const manifest = buildManifest({ job, member, request, thread });
-      // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
-      // derives the Agent and topic from the operation ID.
-      const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
-      await savepoint.insert(agentOperations).values({
-        id: operationId,
-        userId: requester.userId!,
-        workspaceId: channel.workspaceId,
-        topicId: topic.id,
-        agentId: member.agentId,
-        trigger: 'channel',
-        status: 'idle',
-        model: executionConfig.model,
-        provider: executionConfig.provider,
-      });
-      const [updated] = await savepoint
-        .update(channelJobs)
-        .set({
-          claimedAt: sql`clock_timestamp()`,
-          blockedCode: null,
-          blockedReason: null,
-          deviceId: member.config!.deviceId,
-          executionConfig,
-          leaseExpiresAt: new Date(now.getTime() + options.leaseMs),
-          leaseOwner: options.leaseOwner,
-          manifest,
-          operationId,
-          topicId: topic.id,
-          status: 'running',
-          workingDirectory: member.config!.workingDirectory,
-          writerHeld: true,
-        })
-        .where(eq(channelJobs.id, job.id))
-        .returning();
-      return { job: updated, topic };
-    });
-  } catch (error) {
-    const constraint = uniqueViolationConstraint(error);
-    if (constraint === undefined) throw error;
-    if (constraint === DIRECTORY_LOCK)
-      await block(tx, job, 'directory_locked', 'Another run is using this directory');
-    return null;
-  }
+  const topic = await resolveTopic(
+    tx,
+    channel,
+    job,
+    member,
+    scope,
+    request.sequence,
+    executionConfig,
+  );
+  const manifest = buildManifest({
+    job,
+    member,
+    primaryReplyMessageId: primary?.publishedMessageId ?? undefined,
+    request,
+    thread,
+  });
+  // Same shape as ordinary runs (`op_{ts}_{agentId}_{topicId}_{rand}`): trace storage
+  // derives the Agent and topic from the operation ID.
+  const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
+  await tx.insert(agentOperations).values({
+    id: operationId,
+    userId: scope.userId,
+    workspaceId: scope.workspaceId,
+    topicId: topic.id,
+    agentId: member.agentId,
+    trigger: 'channel',
+    status: 'idle',
+    model: executionConfig.model,
+    provider: executionConfig.provider,
+  });
+  const [updated] = await tx
+    .update(channelJobs)
+    .set({
+      claimedAt: sql`clock_timestamp()`,
+      blockedCode: null,
+      blockedReason: null,
+      // Only a device picked in the Channel; a wait marker from `block` must not linger.
+      deviceId: member.config!.deviceId ?? null,
+      executionConfig,
+      leaseExpiresAt: new Date(now.getTime() + options.leaseMs),
+      leaseOwner: options.leaseOwner,
+      manifest,
+      operationId,
+      topicId: topic.id,
+      status: 'running',
+      workingDirectory: executionConfig.workingDirectory,
+      writerHeld: true,
+    })
+    .where(eq(channelJobs.id, job.id))
+    .returning();
+  const claimed = { job: updated, topic };
 
   await audit(tx, channel.id, 'run_claimed', job.id, {
     cutoff: claimed.job.manifest!.cutoffSequence,
