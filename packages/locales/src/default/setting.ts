@@ -333,6 +333,32 @@ export default {
   'agentSkillModal.descriptionPlaceholder': 'Briefly describe this skill',
   'agentSkillModal.github.desc':
     'Paste the URL of a skill directory from a public GitHub repository. The directory must contain a SKILL.md file.',
+  'agentSkillModal.github.clear': 'Clear selection',
+  'agentSkillModal.github.collectionHint':
+    'Enter a public GitHub repository or skill directory URL.',
+  'agentSkillModal.github.empty':
+    'No SKILL.md found at this URL. Try another repository or directory.',
+  'agentSkillModal.github.find': 'Find skills',
+  'agentSkillModal.github.findFailed':
+    'Couldn’t read this GitHub link. Check the URL and try again.',
+  'agentSkillModal.github.importFailed':
+    'Couldn’t import the selected skills. Find skills again, then retry.',
+  'agentSkillModal.github.install': 'Import {{count}} ({{updates}} updates)',
+  'agentSkillModal.github.noMatch': 'No matching skills',
+  'agentSkillModal.github.retry': 'Retry failed imports',
+  'agentSkillModal.github.sameName': 'Choose one of the skills with this name.',
+  'agentSkillModal.github.search': 'Search by name, description or path',
+  'agentSkillModal.github.select': 'Select all unambiguous matches',
+  'agentSkillModal.github.status.conflict': 'Conflict · check the library and scan again',
+  'agentSkillModal.github.status.created': 'Imported',
+  'agentSkillModal.github.status.failed': 'Import failed',
+  'agentSkillModal.github.status.forbidden': 'Update requires the creator or a workspace owner',
+  'agentSkillModal.github.status.invalid': 'Invalid SKILL.md',
+  'agentSkillModal.github.status.new': 'New',
+  'agentSkillModal.github.status.unchanged': 'Up to date',
+  'agentSkillModal.github.status.update': 'Update available',
+  'agentSkillModal.github.status.updated': 'Updated',
+  'agentSkillModal.github.summary': '{{success}} imported or up to date · {{failed}} failed',
   'agentSkillModal.github.title': 'Import from GitHub',
   'agentSkillModal.github.urlPlaceholder':
     'https://github.com/username/repo/tree/main/skills/my-skill',
@@ -1512,6 +1538,11 @@ export default {
   'settingAppearance.contextMenuMode.desc': 'Enable the right-click menu for some list items.',
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
+  'settingAppearance.density.compact': 'Compact',
+  'settingAppearance.density.desc':
+    'Row height and spacing in the sidebars. Compact fits more on screen; Loose gives each row more room.',
+  'settingAppearance.density.loose': 'Loose',
+  'settingAppearance.density.title': 'Interface Density',
   'settingAppearance.desktop.title': 'Desktop',
   'settingAppearance.font.antialiasing.desc':
     'Render text with grayscale antialiasing for a thinner, crisper look. Turn off to use the system default rendering. Only affects macOS.',
@@ -1845,8 +1876,9 @@ export default {
   'serviceModel.systemRecommended': 'System recommended',
   'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
-  'serviceModel.tier.embedding.desc': 'Memory retrieval',
-  'serviceModel.tier.embedding.title': 'Embedding Model',
+  'serviceModel.tier.embedding.desc':
+    'Embeds memories for semantic search. Not used for files or knowledge bases (set via the DEFAULT_FILES_CONFIG env var)',
+  'serviceModel.tier.embedding.title': 'Memory Embedding Model',
   'serviceModel.tier.flash.desc':
     'Frequent tasks such as naming, translation, compression and memory',
   'serviceModel.tier.flash.title': 'Flash Model',
@@ -4307,6 +4339,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-artifacts.readme':
     'Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.',
   'tools.builtins.lobe-artifacts.title': 'Artifacts',
+  'tools.builtins.lobe-canvas.title': 'Canvas',
   'tools.builtins.lobe-calculator.title': 'Calculator',
   'tools.builtins.lobe-calculator.description':
     'Perform mathematical calculations, solve equations, and work with symbolic expressions',
@@ -4665,6 +4698,8 @@ When I am ___, I need ___
     'This skill is not currently installed, which may affect agent functionality.',
   'tools.picker.disabled': 'This model does not support tool calling.',
   'tools.picker.management': 'Manage tools',
+  'tools.picker.emptyGroup': 'No tools in this group',
+  'tools.picker.noMatches': 'No matching tools',
   'tools.picker.search': 'Search tools…',
   'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
@@ -4673,12 +4708,12 @@ When I am ___, I need ___
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
   'tools.search': 'Search skills...',
+  'tools.loading.onDemand': 'Load on demand',
   'tools.activation.action.auto': 'Auto',
-  'tools.activation.action.disable': 'Disable',
+  'tools.loading.never': 'Never load',
   'tools.activation.action.pin': 'Pin',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
-  'tools.activation.disabled': 'Disabled',
   'tools.activation.disabled.desc': 'Turned Off',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
   'tools.activation.pinned': 'Pinned',

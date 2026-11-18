@@ -10,11 +10,14 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SectionTitle, { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
+
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 import { formatTimeGroupId } from './timeGroupTitle';
 
 const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { t } = useTranslation('topic');
   const { id, title, children } = group;
 
@@ -26,11 +29,11 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   return (
     <AccordionItem value={id}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
-            <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
-              {title || timeTitle}
-            </Text>
+            <Flexbox flex={1} style={{ minWidth: 0 }}>
+              <SectionTitle>{title || timeTitle}</SectionTitle>
+            </Flexbox>
           </Flexbox>
         </AccordionTrigger>
       </AccordionHeader>

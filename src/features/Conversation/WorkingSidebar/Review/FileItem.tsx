@@ -19,11 +19,15 @@ import path from 'path-browserify-esm';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import FileIcon from '@/components/FileIcon';
 import { gitService } from '@/services/git';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
 import type { ComposerTarget } from '../../types';
+import { reviewFileRowMarker } from './markers.stylex';
 import type { DiffSelectedLineRange } from './selection';
 import { buildCodeContextSelection } from './selection';
 
@@ -32,16 +36,24 @@ const styles = stylex.create({
   // Hover-revealed row actions, anchored to the right edge with a gradient
   // mask that fades in from transparent → row hover-bg so any path/stats
   // text behind the icons softly disappears instead of being abruptly
-  // overlapped. The row (FileRow) is the hover marker.
+  // overlapped. The row (FileRow) carries the marker.
   actions: {
-    pointerEvents: { default: 'none', [stylex.when.ancestor(':hover')]: 'auto' },
+    pointerEvents: {
+      default: 'none',
+      [stylex.when.ancestor(':hover', reviewFileRowMarker)]: 'auto',
+      [stylex.when.ancestor(':focus-within', reviewFileRowMarker)]: 'auto',
+    },
     position: 'absolute',
     insetBlock: 0,
-    insetInlineEnd: '-8px',
+    insetInlineEnd: '-2px',
     alignItems: 'center',
     paddingInlineStart: '28px',
     paddingInlineEnd: 0,
-    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', reviewFileRowMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', reviewFileRowMarker)]: 1,
+    },
     backgroundImage: `linear-gradient(to right, transparent 0, ${cssVar.colorFillTertiary} 28px), linear-gradient(to right, transparent 0, ${cssVar.colorBgContainer} 28px)`,
     transition: 'opacity 0.15s',
   },
@@ -72,14 +84,23 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
   },
   fileName: { flex: 'none', color: cssVar.colorText, whiteSpace: 'nowrap' },
+  fileIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: sidebarRow.iconBox,
+    height: sidebarRow.iconBox,
+  },
   header: {
     position: 'relative',
     display: 'flex',
-    gap: '8px',
+    gap: sidebarRow.gap,
     alignItems: 'center',
     width: '100%',
     minWidth: 0,
-    fontSize: '12px',
+    fontSize: sidebarRow.textFontSize,
+    lineHeight: sidebarRow.textLineHeight,
   },
   pathWrapper: {
     overflow: 'hidden',
@@ -95,7 +116,7 @@ const styles = stylex.create({
   stats: {
     flex: 'none',
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: '12px',
+    fontSize: sidebarRow.metaFontSize,
     fontVariantNumeric: 'tabular-nums',
   },
 });
@@ -177,6 +198,7 @@ interface FileItemHeaderProps {
 export const FileItemHeader = memo<FileItemHeaderProps>(
   ({ filePath, additions, deletions, hideDir, revertContext, revertDisabled, onReverted }) => {
     const { t } = useTranslation('chat');
+    const { iconSize } = useDensityTokens();
     const revealInFilesTab = useGlobalStore((s) => s.revealInFilesTab);
 
     const lastSlash = filePath.lastIndexOf('/');
@@ -243,6 +265,9 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
 
     return (
       <div {...stylex.props(styles.header)}>
+        <span {...stylex.props(styles.fileIcon)}>
+          <FileIcon fileName={fileName} size={iconSize} />
+        </span>
         <span {...stylex.props(styles.pathWrapper)} title={filePath}>
           {!hideDir && dir && (
             // bdi keeps the dir's visual order LTR while the span is

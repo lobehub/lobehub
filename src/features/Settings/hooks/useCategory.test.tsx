@@ -87,13 +87,14 @@ describe('settings useCategory', () => {
       SettingsTabs.Messenger,
       SettingsTabs.Integrations,
       SettingsTabs.Connector,
-      SettingsTabs.Creds,
     ]);
 
     // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
     // environment definitions.
     const keys = groupKeys(SettingsGroupKey.Resource);
     expect(keys).toContain(SettingsTabs.Environments);
+    // Credentials sit right below Environments, the runs that read them.
+    expect(keys?.indexOf(SettingsTabs.Creds)).toBe(keys!.indexOf(SettingsTabs.Environments) + 1);
     expect(keys).not.toContain('drive');
   });
 

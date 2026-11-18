@@ -1308,8 +1308,6 @@
   "serviceModel.desc": "LobeHub'un arka plan görevleri için kullandığı modeller. Varsayılan olarak sistem önerisini izler ve yeni modeller geldiğinde otomatik olarak yükseltilir.",
   "serviceModel.off": "Kapalı",
   "serviceModel.systemRecommended": "Sistem önerisi",
-  "serviceModel.tier.embedding.desc": "Bellek erişimi",
-  "serviceModel.tier.embedding.title": "Gömme Modeli",
   "serviceModel.tier.flash.desc": "Adlandırma, çeviri, sıkıştırma ve bellek gibi sık yapılan görevler",
   "serviceModel.tier.flash.title": "Flash Modeli",
   "serviceModel.tier.main.desc": "Yazma ve akıl yürütme gibi kaliteye duyarlı görevler",

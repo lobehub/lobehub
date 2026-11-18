@@ -4,12 +4,13 @@ import { ActionIcon, Tooltip } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { usePermission } from '@/hooks/usePermission';
+import { useHeaderActionSize } from '@/styles/density';
 
 import { createCreateNewProviderModal } from '../features/CreateNewProvider';
 
 const AddNewProvider = () => {
+  const headerActionSize = useHeaderActionSize(true);
   const { t } = useTranslation('modelProvider');
   const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
 
@@ -17,7 +18,7 @@ const AddNewProvider = () => {
     <ActionIcon
       disabled={!canManageProvider}
       icon={PlusIcon}
-      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      size={headerActionSize}
       title={canManageProvider ? t('menu.addCustomProvider') : undefined}
       onClick={() => {
         if (!canManageProvider) return;

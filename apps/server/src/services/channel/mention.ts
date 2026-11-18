@@ -18,10 +18,11 @@ interface MentionedMessage {
  */
 export const notifyChannelMentions = (
   db: LobeChatDatabase,
-  context: { userId: string; workspaceId?: string },
+  /** `includeActor` notifies `userId` too: an Agent wrote the message on their behalf. */
+  context: { includeActor?: boolean; userId: string; workspaceId?: string },
   message: MentionedMessage,
 ) => {
-  const { userId, workspaceId } = context;
+  const { includeActor, userId, workspaceId } = context;
   if (!workspaceId || !message.mentions.length) return;
 
   after(async () => {
@@ -48,7 +49,7 @@ export const notifyChannelMentions = (
         );
       const recipientUserIds = [
         ...new Set(members.flatMap((member) => (member.userId ? [member.userId] : []))),
-      ].filter((id) => id !== userId);
+      ].filter((id) => includeActor || id !== userId);
       if (!recipientUserIds.length) return;
 
       await notifyChannelMention({

@@ -1308,8 +1308,6 @@
   "serviceModel.desc": "مدل‌هایی که LobeHub برای وظایف پس‌زمینه استفاده می‌کند. به‌طور پیش‌فرض از توصیه سیستم پیروی می‌کنند و با عرضه مدل‌های جدید به‌طور خودکار ارتقا می‌یابند.",
   "serviceModel.off": "خاموش",
   "serviceModel.systemRecommended": "توصیه‌شده سیستم",
-  "serviceModel.tier.embedding.desc": "بازیابی حافظه",
-  "serviceModel.tier.embedding.title": "مدل Embedding",
   "serviceModel.tier.flash.desc": "وظایف پرتکرار مانند نام‌گذاری، ترجمه، فشرده‌سازی و حافظه",
   "serviceModel.tier.flash.title": "مدل Flash",
   "serviceModel.tier.main.desc": "وظایف حساس به کیفیت مانند نوشتن و استدلال",

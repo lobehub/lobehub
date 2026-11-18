@@ -16,6 +16,7 @@ import {
   TOPIC_GROUP_VISUALS,
   TOPIC_STATUS_VISUALS,
 } from '@/components/ExecutionStatus';
+import { useSectionTriggerStyle } from '@/features/NavPanel/components/SectionTitle';
 
 import TopicItem from '../../List/Item';
 import { useTopicListScope } from '../../TopicListScope';
@@ -30,6 +31,7 @@ const STATUS_ICON: Record<string, ExecutionStatusVisual> = {
 };
 
 const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
+  const sectionTriggerStyle = useSectionTriggerStyle();
   const { id, title, children } = group;
   const statusIcon = STATUS_ICON[id];
   // An agent's own status buckets mix topics from different projects, so each
@@ -39,7 +41,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   return (
     <AccordionItem value={id}>
       <AccordionHeader>
-        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger style={sectionTriggerStyle}>
           <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
             {statusIcon && (
               <Center flex={'none'} height={16} width={16}>

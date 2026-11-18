@@ -13,8 +13,8 @@ describe('hasConnectorActivator', () => {
     expect(hasConnectorActivator({ skillActivateMode: 'auto' })).toBe(true);
   });
 
-  it('has none once manual skill-activate mode strips it', () => {
-    expect(hasConnectorActivator({ skillActivateMode: 'manual' })).toBe(false);
+  it('ignores the retired tool discovery switch', () => {
+    expect(hasConnectorActivator({ skillActivateMode: 'manual' })).toBe(true);
   });
 
   it('has none in custom mode, which exposes exactly the declared plugins', () => {

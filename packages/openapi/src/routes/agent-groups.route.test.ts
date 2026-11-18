@@ -21,6 +21,7 @@ vi.mock('../middleware/auth', () => ({
 const { default: AgentGroupRoutes } = await import('./agent-groups.route');
 const { AgentGroupSchema, CreatedAgentGroupSchema } = await import('../types/agent-group.type');
 const { DeletedResourceSchema } = await import('../types/common.type');
+const { paginatedListSchema } = await import('../helpers/pagination');
 
 const USER = 'agent-group-user';
 
@@ -61,7 +62,58 @@ describe('agent groups', () => {
     expect(() => AgentGroupSchema.parse(detail)).not.toThrow();
 
     const list = await json(await request('/'));
-    expect(() => AgentGroupSchema.array().parse(list)).not.toThrow();
+    expect(() => paginatedListSchema(AgentGroupSchema, { total: true }).parse(list)).not.toThrow();
+    expect(list).toMatchObject({ hasMore: false, nextCursor: null, total: 1 });
+  });
+
+  describe('pagination', () => {
+    const seed = async (count: number) => {
+      for (let i = 0; i < count; i++) {
+        await request('/', { body: { name: `G${i}`, sort: i }, method: 'POST' });
+      }
+    };
+
+    it('pages with limit + cursor until nextCursor is null', async () => {
+      await seed(3);
+
+      const first = await json(await request('/?limit=2'));
+      expect(first.items).toHaveLength(2);
+      expect(first).toMatchObject({ hasMore: true, total: 3 });
+      expect(first.nextCursor).toEqual(expect.any(String));
+
+      const second = await json(
+        await request(`/?limit=2&cursor=${encodeURIComponent(first.nextCursor)}`),
+      );
+      expect(second).toMatchObject({ hasMore: false, nextCursor: null, total: 3 });
+      expect(second.items).toHaveLength(1);
+
+      const seen = [...first.items, ...second.items].map((group: { id: string }) => group.id);
+      expect(new Set(seen).size).toBe(3);
+    });
+
+    it('rejects a cursor it did not issue as a validation error', async () => {
+      const res = await request('/?cursor=not-a-cursor');
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({
+        code: 'validation_error',
+        success: false,
+      });
+    });
+
+    it('rejects a limit above the maximum', async () => {
+      const res = await request('/?limit=101');
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({ code: 'validation_error' });
+    });
+
+    it('still answers the legacy bare array of every group for format=array', async () => {
+      await seed(3);
+
+      const legacy = await json(await request('/?format=array&limit=1'));
+      expect(Array.isArray(legacy)).toBe(true);
+      expect(legacy).toHaveLength(3);
+      expect(() => AgentGroupSchema.array().parse(legacy)).not.toThrow();
+    });
   });
 
   it('answers an update with the updated group', async () => {

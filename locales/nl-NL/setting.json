@@ -1308,8 +1308,6 @@
   "serviceModel.desc": "Modellen die LobeHub gebruikt voor achtergrondtaken. Ze volgen standaard de systeemaanbeveling en worden automatisch bijgewerkt wanneer er nieuwe modellen zijn.",
   "serviceModel.off": "Uit",
   "serviceModel.systemRecommended": "Systeemaanbevolen",
-  "serviceModel.tier.embedding.desc": "Geheugen ophalen",
-  "serviceModel.tier.embedding.title": "Embeddingmodel",
   "serviceModel.tier.flash.desc": "Frequente taken zoals naamgeving, vertaling, compressie en geheugen",
   "serviceModel.tier.flash.title": "Flashmodel",
   "serviceModel.tier.main.desc": "Kwaliteitsgevoelige taken zoals schrijven en redeneren",

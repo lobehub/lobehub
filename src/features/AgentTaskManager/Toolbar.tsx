@@ -3,7 +3,6 @@ import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
 import TopicItem from '@/features/PageEditor/Copilot/TopicSelector/TopicItem';
@@ -11,9 +10,11 @@ import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 import { useGlobalStore } from '@/store/global';
+import { useHeaderActionSize } from '@/styles/density';
 
 const Toolbar = memo(() => {
   const { t } = useTranslation('topic');
+  const headerActionSmallSize = useHeaderActionSize(true);
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
@@ -54,7 +55,7 @@ const Toolbar = memo(() => {
         <>
           <ActionIcon
             icon={PlusIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSmallSize}
             title={t('actions.addNewTopic')}
             onClick={handleCreate}
           />
@@ -102,12 +103,12 @@ const Toolbar = memo(() => {
               disabled={isLoadingTopics}
               icon={Clock3Icon}
               loading={isLoadingTopics}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
             />
           </Popover>
           <ActionIcon
             icon={PanelRightCloseIcon}
-            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            size={headerActionSmallSize}
             onClick={() => toggleTaskAgentPanel()}
           />
         </>

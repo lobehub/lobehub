@@ -21,6 +21,7 @@ import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
+import { useDensityTokens } from '@/styles/density';
 
 import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
 import GoalDecisionCase, {
@@ -630,6 +631,7 @@ AddTaskButton.displayName = 'GoalAddTaskButton';
 
 const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, planning }) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const [showBlocked, setShowBlocked] = useState(false);
 
   const numbers = new Map(
@@ -666,7 +668,7 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
     <Flexbox gap={8}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'}>
         <Flexbox horizontal align={'baseline'} gap={8}>
-          <Text fontSize={16} weight={600}>
+          <Text fontSize={pageTitleFontSize} weight={600}>
             {t('goalProcess.frontier.title')}
           </Text>
           {graph.frontier.length > 0 && (

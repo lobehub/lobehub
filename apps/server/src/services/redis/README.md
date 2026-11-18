@@ -14,6 +14,10 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   operation, handed out through its `waitHeteroSteer` poll. At most once: a claim pops the message
   and nothing re-queues it; unclaimed past its expiry it reads `expired`, and the run's reported
   result stays readable for an hour. Writes throw without Redis; reads answer `undefined`.
+- `openapi`: the public REST API's per-caller rate-limit windows (fixed, epoch-aligned) and
+  `Idempotency-Key` records — a five minute in-flight claim, then the first response for 24 hours,
+  per user and hashed key. Every method returns `undefined` without Redis; the REST layer then
+  admits the request (fail open).
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
 - `connectorOAuth`: how each connector OAuth flow ended (account and outcome), for ten minutes,
   read back by the window that started the flow. `null` without Redis.

@@ -6,8 +6,8 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
-import { DESKTOP_HEADER_ICON_SIZE, DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useUserMemoryStore } from '@/store/userMemory';
+import { useHeaderActionSize } from '@/styles/density';
 
 export const MEMORY_DETAIL_QUERY_KEYS = [
   'activityId',
@@ -27,6 +27,8 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
   const purgeAllMemories = useUserMemoryStore((s) => s.purgeAllMemories);
   const [loading, setLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const headerActionSize = useHeaderActionSize();
+  const headerActionSmallSize = useHeaderActionSize(true);
 
   const handleClick = () => {
     confirmModal({
@@ -64,7 +66,7 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
           danger
           icon={Trash2Icon}
           loading={loading}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          size={headerActionSmallSize}
           tooltipProps={{ placement: 'bottom' }}
           onClick={handleClick}
         />
@@ -75,7 +77,7 @@ const PurgeButton = memo<Props>(({ iconOnly }) => {
   return (
     <Button
       danger
-      icon={<Icon icon={Trash2Icon} size={DESKTOP_HEADER_ICON_SIZE} />}
+      icon={<Icon icon={Trash2Icon} size={headerActionSize} />}
       loading={loading}
       size={'small'}
       style={{ maxWidth: 300 }}

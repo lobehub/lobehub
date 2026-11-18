@@ -3,64 +3,11 @@ import * as stylex from '@stylexjs/stylex';
 
 // StyleX can only fold constants declared in this module (or in a `.stylex.ts` file), so
 // these mirror ./constants — keep the two in sync.
-const SKILL_ICON_SIZE = 18;
 const SKILL_ICON_GAP = 14;
 const SKILL_TRAILING_CONTROL_SIZE = 20;
 
 // Shared by the policy menu rows; kept in one place so hover/disabled stay in sync.
 export const styles = stylex.create({
-  activationGroupActions: { display: 'flex', flex: 'none', gap: '8px', alignItems: 'center' },
-  activationGroupChevron: {
-    display: 'flex',
-    flex: 'none',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: `${SKILL_TRAILING_CONTROL_SIZE}px`,
-    height: `${SKILL_TRAILING_CONTROL_SIZE}px`,
-    color: cssVar.colorTextTertiary,
-  },
-  activationGroupHeader: {
-    cursor: 'pointer',
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    minWidth: '0',
-    paddingBlock: '4px',
-  },
-  activationGroupIcon: {
-    display: 'flex',
-    flex: 'none',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: `${SKILL_ICON_SIZE}px`,
-  },
-  activationGroupTitleBlock: {
-    display: 'flex',
-    gap: `${SKILL_ICON_GAP}px`,
-    alignItems: 'center',
-    minWidth: '0',
-  },
-  activationGroupTitleBody: {
-    display: 'flex',
-    flexGrow: '0',
-    flexShrink: '1',
-    flexBasis: 'auto',
-    gap: '6px',
-    alignItems: 'center',
-    minWidth: '0',
-  },
-  activationGroupTitleText: {
-    overflow: 'hidden',
-    minWidth: '0',
-    fontSize: '14px',
-    fontWeight: 500,
-    color: cssVar.colorText,
-    textOverflow: 'ellipsis',
-    textTransform: 'none',
-    whiteSpace: 'nowrap',
-  },
   addSkillLabel: { flex: '1', textAlign: 'start' },
   addSkillRow: {
     display: 'flex',
@@ -81,7 +28,6 @@ export const styles = stylex.create({
     backgroundImage: { 'default': 'none', ':hover': 'none' },
     transition: `background 150ms ${cssVar.motionEaseOut}`,
   },
-  count: { flex: 'none', color: cssVar.colorTextTertiary },
   deleteButton: {
     cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
     display: 'flex',
@@ -194,7 +140,6 @@ export const styles = stylex.create({
   // standalone popovers instead of the compact 132px policy list.
   policyPanelWide: { width: '320px' },
   policyText: { flex: '1', textAlign: 'start' },
-  switchWrap: { display: 'inline-flex', flex: 'none', alignItems: 'center' },
   toolLabel: {
     display: 'flex',
     flex: '1',

@@ -144,6 +144,8 @@ export interface ChannelMemberWorktree {
 
 /** Free-form member state that does not need its own column. */
 export type ChannelMemberMetadata = Record<string, unknown> & {
+  /** The member who added this one; absent when they joined on their own or before it was kept. */
+  invitedBy?: string;
   /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
   worktrees?: Record<string, ChannelMemberWorktree>;
   /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
@@ -555,6 +557,13 @@ export interface ChannelAvatarMember {
 
 /** A Channel's newest message as its list row previews it. */
 export interface ChannelLastMessage {
+  /**
+   * The first attachment's MIME type and how many there are, so a message of only an image
+   * still has a preview line; null without attachments.
+   */
+  attachments: { count: number; fileType: string } | null;
+  /** Who sent it, so a list can read "Me: …" or "Alice: …"; `id` is null after deletion. */
+  author: { id: string | null; name: string | null; type: ChannelMemberActorType };
   content: string;
   createdAt: Date;
   /**
@@ -663,6 +672,8 @@ export interface ChannelPublicMember {
   /** Agent members only; null when the Channel sets no device or directory for it. */
   environment?: ChannelMemberEnvironmentPreview | null;
   id: string;
+  /** The member who added this one; null when they joined on their own or the adder is unknown. */
+  invitedBy: string | null;
   joinedAt: Date;
   /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
   muted?: boolean;

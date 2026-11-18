@@ -153,11 +153,6 @@ vi.mock('@/store/tool/selectors', () => ({
       })),
   },
 }));
-vi.mock('./UserSkillsManagement', () => ({
-  UserSkillsManagement: ({ onClose }: { onClose: () => void }) => (
-    <button onClick={onClose}>Cancel skill changes</button>
-  ),
-}));
 vi.mock('@/features/ChatInput/InputEditor/ActionTag/skillDragData', () => ({
   startSkillDrag: () => undefined,
 }));
@@ -324,17 +319,14 @@ describe('AgentDocumentsGroup', () => {
     userSkillInventory.canManage = true;
   });
 
-  it('keeps management reachable with every user skill disabled and returns after cancelling', () => {
+  it('opens the agent skills settings even when every user skill is disabled', () => {
     documentListMock.mockReturnValue({ data: [] });
     userSkillInventory.items = [{ id: 'disabled-skill', name: 'Disabled skill' }];
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Manage user skills' }));
-    expect(
-      screen.queryByPlaceholderText('workingPanel.skills.searchPlaceholder'),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel skill changes' }));
-    expect(screen.getByRole('button', { name: 'Manage user skills' })).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/skills');
+    expect(screen.queryByText('Disabled skill')).not.toBeInTheDocument();
   });
 
   it('keeps the user skills collapsible with an independently clickable settings action', () => {
@@ -349,12 +341,15 @@ describe('AgentDocumentsGroup', () => {
     expect(header.contains(settings)).toBe(false);
     fireEvent.click(header);
     expect(header).toHaveAttribute('aria-expanded', 'false');
-    expect(settings).toBeVisible();
+    // The action stays mounted and focusable while collapsed; the compact header
+    // only reveals it on hover / focus-within.
+    expect(settings).toBeInTheDocument();
+    expect(settings).toBeEnabled();
     fireEvent.click(header);
     expect(header).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(header);
     fireEvent.click(settings);
-    expect(screen.getByRole('button', { name: 'Cancel skill changes' })).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/skills');
   });
 
   it('does not offer management to a read-only viewer', () => {

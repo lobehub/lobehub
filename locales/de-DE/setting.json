@@ -1308,8 +1308,6 @@
   "serviceModel.desc": "Modelle, die LobeHub für Hintergrundaufgaben verwendet. Standardmäßig folgen sie der Systemempfehlung und werden automatisch aktualisiert, wenn neue Modelle verfügbar sind.",
   "serviceModel.off": "Aus",
   "serviceModel.systemRecommended": "Vom System empfohlen",
-  "serviceModel.tier.embedding.desc": "Gedächtnisabruf",
-  "serviceModel.tier.embedding.title": "Embedding-Modell",
   "serviceModel.tier.flash.desc": "Häufige Aufgaben wie Benennung, Übersetzung, Komprimierung und Gedächtnis",
   "serviceModel.tier.flash.title": "Flash-Modell",
   "serviceModel.tier.main.desc": "Qualitätskritische Aufgaben wie Schreiben und Schlussfolgern",

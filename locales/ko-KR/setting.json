@@ -1308,8 +1308,6 @@
   "serviceModel.desc": "LobeHub가 백그라운드 작업에 사용하는 모델입니다. 기본적으로 시스템 권장 사항을 따르며 새 모델이 나오면 자동으로 업그레이드됩니다.",
   "serviceModel.off": "꺼짐",
   "serviceModel.systemRecommended": "시스템 권장",
-  "serviceModel.tier.embedding.desc": "메모리 검색",
-  "serviceModel.tier.embedding.title": "임베딩 모델",
   "serviceModel.tier.flash.desc": "이름 지정, 번역, 압축, 메모리 등 자주 발생하는 작업",
   "serviceModel.tier.flash.title": "플래시 모델",
   "serviceModel.tier.main.desc": "글쓰기 및 추론과 같이 품질이 중요한 작업",

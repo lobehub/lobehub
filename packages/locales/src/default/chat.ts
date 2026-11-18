@@ -4208,24 +4208,14 @@ export default {
   'workingPanel.skills.convert.titlePlaceholder': 'e.g. Weekly Report',
   'workingPanel.skills.detail.title': 'Skill details',
   'workingPanel.skills.empty': 'No skills available',
-  'workingPanel.skills.manualOnly': 'Manual only',
   'workingPanel.skills.noSearchResults': 'No matching skills',
   'workingPanel.skills.searchPlaceholder': 'Filter skills...',
   'workingPanel.skills.section.agent': 'Agent skills',
   'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',
   'workingPanel.skills.section.user': 'User skills',
-  'workingPanel.skills.manage.noneEnabled':
-    'No skills selected. Use the settings icon to choose skills.',
-  'workingPanel.skills.manage.noPermission':
-    'You do not have permission to change skills for this agent.',
-  'workingPanel.skills.manage.save': 'Save',
-  'workingPanel.skills.manage.saveFailed':
-    'Could not save changes. Your selections are kept; try saving again.',
-  'workingPanel.skills.manage.selected': 'Selected skills: {{count}}',
-  'workingPanel.skills.manage.selectResults': 'Select all results ({{count}})',
-  'workingPanel.skills.manage.title': 'Choose the skills this agent can use',
-  'workingPanel.skills.manage.unsaved': 'Unsaved changes',
+  'workingPanel.skills.manage.noneEnabled': 'No user skills enabled.',
+  'workingPanel.skills.manage.title': 'Open agent skill settings',
   'workingPanel.skills.title': 'Skills',
   'workingPanel.files.openNeedsTopic':
     'Send a message first — this environment’s files open once the conversation has a session.',

@@ -21,6 +21,12 @@ import {
   scheduleTimezoneSchema,
 } from '@/server/services/task/scheduleValidation';
 
+import {
+  CursorPaginationQuerySchema,
+  legacyOffsetQueryShape,
+  pageInfoShape,
+  totalShape,
+} from '../helpers/pagination';
 import { dateTimeSchema, jsonObjectSchema } from './common.type';
 
 export const TaskIdParamSchema = z.object({
@@ -31,8 +37,8 @@ export type TaskIdParam = z.infer<typeof TaskIdParamSchema>;
 /** Query strings carry lists as comma-separated text: `?statuses=running,paused`. */
 export const TaskListQuerySchema = z.object({
   assigneeAgentId: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+  ...CursorPaginationQuerySchema.shape,
+  ...legacyOffsetQueryShape,
   projectId: z.string().optional(),
   statuses: z
     .string()
@@ -210,7 +216,7 @@ export const TaskListItemSchema = z
   .meta({ id: 'TaskListItem' });
 
 export const TaskListResponseSchema = z
-  .object({ tasks: z.array(TaskListItemSchema), total: z.number().int() })
+  .object({ ...pageInfoShape, tasks: z.array(TaskListItemSchema), ...totalShape })
   .strict()
   .meta({ id: 'TaskList' });
 
