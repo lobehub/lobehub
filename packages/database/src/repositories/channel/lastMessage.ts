@@ -1,4 +1,4 @@
-import type { ChannelLastMessage } from '@lobechat/types';
+import type { ChannelLastMessage, ContactCardType } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -59,6 +59,8 @@ export const channelLastMessages = async (
       agentId: channelMessages.agentId,
       agentName: agents.name,
       agentTitle: agentTitleSql(),
+      cardName: sql<string | null>`${channelMessages.metadata} -> 'card' ->> 'name'`,
+      cardType: sql<ContactCardType | null>`${channelMessages.metadata} -> 'card' ->> 'type'`,
       channelId: channelMessages.channelId,
       content: sql<string>`left(${channelMessages.content}, ${LIST_PREVIEW_LENGTH})`,
       createdAt: channelMessages.createdAt,
@@ -113,6 +115,7 @@ export const channelLastMessages = async (
             name: isAgent ? row.agentName || row.agentTitle : row.userFullName || row.username,
             type: isAgent ? ('agent' as const) : ('user' as const),
           },
+          card: row.cardType ? { name: row.cardName, type: row.cardType } : null,
           content: row.content,
           createdAt: row.createdAt,
           thread: row.threadId ? { id: row.threadId, title: row.threadTitle } : null,
