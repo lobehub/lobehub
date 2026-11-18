@@ -121,6 +121,31 @@ describe('a connector bound to a device', () => {
     expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
   });
 
+  it('leaves a stdio connector bound to another machine to the server', async () => {
+    const { lambdaClient } = await import('@/libs/trpc/client');
+    mockGetToolStoreState.mockReturnValue({
+      connectors: [
+        {
+          id: 'coach-id',
+          identifier: 'nas',
+          isEnabled: true,
+          mcpConnectionType: 'stdio',
+          metadata: { boundDeviceId: 'office-pc' },
+        },
+      ],
+    });
+    vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+      content: 'ok',
+      success: true,
+    } as never);
+
+    await mcpService.invokeMcpToolCall(payload, {});
+
+    expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledOnce();
+    expect(lambdaClient.connector.getForEdit.query).not.toHaveBeenCalled();
+    expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+  });
+
   it('runs a call here over IPC when this desktop is the bound device', async () => {
     const { lambdaClient } = await import('@/libs/trpc/client');
     mockGetToolStoreState.mockReturnValue({ connectors: [lanConnector('this-desktop')] });

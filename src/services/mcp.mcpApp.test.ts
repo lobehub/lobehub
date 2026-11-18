@@ -757,14 +757,19 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
     expect(ipcCall).not.toHaveBeenCalled();
   });
 
-  it('keeps conversation calls on the gateway route', async () => {
+  // T-14428: the connector route refuses an unbound stdio server, so a
+  // conversation call sent there never ran
+  it('runs an unbound conversation call on this desktop too, without view flags', async () => {
     await mcpService.invokeMcpToolCall(list, {});
 
-    expect(ipcCall).not.toHaveBeenCalled();
-    expect(connectorCall).toHaveBeenCalledWith(
-      { agentId: undefined, args: '{"dir":"/tmp"}', identifier: 'files', toolName: 'list' },
-      expect.anything(),
-    );
+    expect(connectorCall).not.toHaveBeenCalled();
+    expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toEqual({
+      args: { dir: '/tmp' },
+      env: { TOKEN: 'fresh-secret' },
+      mcpApps: true,
+      params: { args: ['mcp.js'], command: 'node', name: 'files', type: 'stdio' },
+      toolName: 'list',
+    });
   });
 });
 
