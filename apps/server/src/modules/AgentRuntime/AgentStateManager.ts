@@ -93,44 +93,31 @@ const writeToolSetCache = (operationId: string, json: string, ttlSeconds: number
 };
 
 /**
- * Whether a persisted blob may leave its tool set out.
+ * Whether a persisted blob leaves its tool set out.
  *
- * Reading the external key and writing it are two separate deploys. A queue
- * continuation targets the shared runtime URL, not a versioned deployment, so
- * during a rolling deploy (or a rollback) an operation saved by this build can
- * next execute on a worker running the previous one — and that worker's
- * `loadAgentState` never reads `agent_runtime_toolset`. Stripping on the first
- * deploy would hand it a blob with no tool set, and the next LLM call would go
- * out with the empty set `selectOperationToolSet` falls back to.
+ * The immutable per-operation tool set is written once to its own key and
+ * re-attached on load instead of riding along in the blob rewritten at every
+ * step. This is always on; `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET=0` is the
+ * kill switch that restores the inline blob. Flipping it either way is safe for
+ * operations already in flight: the load path re-attaches an external tool set
+ * unconditionally and leaves an inline one alone, so a blob written under
+ * either setting loads the same.
  *
- * So stripping is opt-in: while it is off nothing changes — the blob keeps its
- * inline tool set byte-for-byte and no external key is written. It is gated by
- * the runtime feature flag `agent_runtime_strip_operation_toolset` (published
- * without a redeploy, per-user allowlists keyed on the operation's owner), and
- * `AGENT_RUNTIME_STRIP_OPERATION_TOOLSET` overrides it: `0` is the kill switch
- * and never touches the flag provider, `1` forces it on.
- *
- * Flipping the flag either way is safe for operations already in flight: the
- * load path re-attaches an external tool set unconditionally and leaves an
- * inline one alone, so a blob written under either setting loads the same.
- *
- * Resolution is cached here per operation owner for a few seconds on top of the
- * runtime-config provider's own snapshot cache, so a publish still lands within
- * seconds without a redeploy and a save pays no per-owner lookup. If resolution
- * fails, the blob stays inline — the pre-flag behaviour — rather than failing
- * the save.
- */
-const STRIP_FLAG_CACHE_TTL_MS = 5000;
-const STRIP_FLAG_CACHE_MAX = 1024;
-
-/**
  * Whether a persisted blob may also leave out the copies `slimStateForPersist`
  * drops (see `slimAgentState.ts`): runtime flag `agent_runtime_slim_state`,
  * overridden by `AGENT_RUNTIME_SLIM_STATE` (`0` kill switch, `1` force on).
- * Same rollout contract as the tool set: the load path restores them
- * unconditionally, so this build must be everywhere before the flag is
- * published, and flipping it either way is safe for operations in flight.
+ * The load path restores them unconditionally, so flipping it either way is
+ * safe for operations in flight.
+ *
+ * The flag is resolved per operation owner and cached here for a few seconds
+ * on top of the runtime-config provider's own snapshot cache, so a publish
+ * still lands within seconds without a redeploy and a save pays no per-owner
+ * lookup. If resolution fails, the blob is not slimmed rather than failing the
+ * save.
  */
+const SLIM_FLAG_CACHE_TTL_MS = 5000;
+const SLIM_FLAG_CACHE_MAX = 1024;
+
 interface PersistOptions {
   slim: boolean;
   stripToolSet: boolean;
@@ -144,71 +131,59 @@ const envOverride = (name: string): boolean | undefined => {
 };
 
 /**
- * Resolved values, keyed by owner ('' for the global value). One provider read
- * resolves both flags.
+ * Resolved values, keyed by owner ('' for the global value).
  *
  * `getMergedFeatureFlags` always reads the per-user override record when it is
  * given a user id, and that provider does not cache a missing record
  * (`cacheNullSnapshots: false`). Resolving with the owner on every save would
  * therefore put a Redis GET on the per-step write path for every operation
- * whose owner has no override — the common case, and the one that pays nothing
- * back because stripping stays inline. This cache bounds the lookup to once per
- * owner per TTL.
+ * whose owner has no override. This cache bounds the lookup to once per owner
+ * per TTL.
  */
-const persistFlagCache = new Map<string, { expiresAt: number; value: PersistOptions }>();
+const slimFlagCache = new Map<string, { expiresAt: number; value: boolean }>();
 
-/** Clear the persistence-flag resolution cache (for testing). */
-export const resetStripOperationToolsetCache = () => {
-  persistFlagCache.clear();
+/** Clear the slim-state flag resolution cache (for testing). */
+export const resetSlimAgentStateCache = () => {
+  slimFlagCache.clear();
 };
 
-const resolveFlags = async (userId?: string): Promise<PersistOptions> => {
+const resolveSlimFlag = async (userId?: string): Promise<boolean> => {
   // Owners without a user id all resolve the global value, so they share a key.
   const cacheKey = userId ?? '';
-  const cached = persistFlagCache.get(cacheKey);
+  const cached = slimFlagCache.get(cacheKey);
   if (cached) {
     if (cached.expiresAt > Date.now()) return cached.value;
-    persistFlagCache.delete(cacheKey);
+    slimFlagCache.delete(cacheKey);
   }
 
   try {
     const flags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
-    const value: PersistOptions = {
-      slim: flags.enableSlimAgentState === true,
-      stripToolSet: flags.enableStripOperationToolset === true,
-    };
+    const value = flags.enableSlimAgentState === true;
 
     // Evict the oldest entry instead of growing with the number of owners.
-    if (persistFlagCache.size >= STRIP_FLAG_CACHE_MAX) {
-      const oldestKey = persistFlagCache.keys().next().value;
-      if (oldestKey !== undefined) persistFlagCache.delete(oldestKey);
+    if (slimFlagCache.size >= SLIM_FLAG_CACHE_MAX) {
+      const oldestKey = slimFlagCache.keys().next().value;
+      if (oldestKey !== undefined) slimFlagCache.delete(oldestKey);
     }
-    persistFlagCache.set(cacheKey, { expiresAt: Date.now() + STRIP_FLAG_CACHE_TTL_MS, value });
+    slimFlagCache.set(cacheKey, { expiresAt: Date.now() + SLIM_FLAG_CACHE_TTL_MS, value });
 
     return value;
   } catch (error) {
-    // Deliberately not cached: a transient read failure must not pin the flags
+    // Deliberately not cached: a transient read failure must not pin the flag
     // off for a whole TTL.
-    log('Failed to resolve agent state persistence flags, keeping inline: %O', error);
-    return { slim: false, stripToolSet: false };
+    log('Failed to resolve agent state slim flag, keeping copies inline: %O', error);
+    return false;
   }
 };
 
 const resolvePersistOptions = async (userId?: string): Promise<PersistOptions> => {
-  const stripOverride = envOverride('AGENT_RUNTIME_STRIP_OPERATION_TOOLSET');
+  const stripToolSet = process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET !== '0';
   // The tool set kill switch restores the fully inline blob, so it turns
   // slimming off too unless that is forced on separately.
   const slimOverride =
-    envOverride('AGENT_RUNTIME_SLIM_STATE') ?? (stripOverride === false ? false : undefined);
-  // Both pinned by env: never touch the flag provider.
-  if (stripOverride !== undefined && slimOverride !== undefined) {
-    return { slim: slimOverride, stripToolSet: stripOverride };
-  }
-  const flags = await resolveFlags(userId);
-  return {
-    slim: slimOverride ?? flags.slim,
-    stripToolSet: stripOverride ?? flags.stripToolSet,
-  };
+    envOverride('AGENT_RUNTIME_SLIM_STATE') ?? (stripToolSet ? undefined : false);
+  const slim = slimOverride ?? (await resolveSlimFlag(userId));
+  return { slim, stripToolSet };
 };
 
 export interface StepResult {
