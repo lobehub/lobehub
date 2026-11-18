@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   drain: vi.fn(),
   findById: vi.fn(),
   isRunAlive: vi.fn(),
+  queryByIds: vi.fn(),
   renew: vi.fn(),
   resolveAttachmentMetadata: vi.fn(),
   resolveInlineImages: vi.fn(),
@@ -89,7 +90,11 @@ const followUp = (
 const scope = { threadId: null, topicId: 'tpc-1', userId: 'user-1' };
 const ctx = { db: {} as any, userId: 'user-1', workspaceId: 'ws-1' };
 const take = () => takeHeteroSteer(ctx, { agentId: 'agt-1', operationId: 'op-1', scope });
-const messageModel = { create: mocks.create, findById: mocks.findById } as any;
+const messageModel = {
+  create: mocks.create,
+  findById: mocks.findById,
+  queryByIds: mocks.queryByIds,
+} as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -97,6 +102,7 @@ beforeEach(() => {
   mocks.boundOperations.mockResolvedValue({ operationIds: ['op-1'], total: 1 });
   mocks.drain.mockResolvedValue([]);
   mocks.findById.mockResolvedValue(undefined);
+  mocks.queryByIds.mockResolvedValue([]);
   mocks.settle.mockResolvedValue(undefined);
   mocks.renew.mockResolvedValue(true);
   mocks.resolveAttachmentMetadata.mockResolvedValue([]);
@@ -233,13 +239,17 @@ describe('takeHeteroSteer', () => {
         requiresImages: true,
       });
 
-      await consumeHeteroSteer(messageModel, {
-        agentId: 'agt-1',
-        messageId: 'msg-a',
-        operationId: 'op-1',
-        parentId: 'asst-1',
-        topicId: 'tpc-1',
-      });
+      const imageList = [{ alt: screenshot.name, id: screenshot.id, url: '/f/file_screen' }];
+      mocks.queryByIds.mockResolvedValue([{ id: 'msg-a', imageList }]);
+      await expect(
+        consumeHeteroSteer(messageModel, {
+          agentId: 'agt-1',
+          messageId: 'msg-a',
+          operationId: 'op-1',
+          parentId: 'asst-1',
+          topicId: 'tpc-1',
+        }),
+      ).resolves.toMatchObject({ id: 'msg-a', imageList });
       expect(mocks.create).toHaveBeenCalledWith(
         expect.objectContaining({ files: [screenshot.id] }),
         'msg-a',
@@ -406,17 +416,21 @@ describe('consumeHeteroSteer', () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it('returns the written message on a retried batch', async () => {
-    mocks.findById.mockResolvedValue({
-      content: 'use pnpm',
+  it('returns the written message with its attachments on a retried batch', async () => {
+    const imageList = [{ alt: 'screen.png', id: 'file_screen', url: '/f/file_screen' }];
+    const written = {
+      content: 'see the screenshot',
       id: 'msg-a',
+      imageList,
       metadata: { steer: true },
       parentId: 'asst-1',
       role: 'user',
       topicId: 'tpc-1',
-    });
+    };
+    mocks.findById.mockResolvedValue(written);
+    mocks.queryByIds.mockResolvedValue([written]);
 
-    await expect(consume()).resolves.toMatchObject({ id: 'msg-a', parentId: 'asst-1' });
+    await expect(consume()).resolves.toMatchObject({ id: 'msg-a', imageList, parentId: 'asst-1' });
     expect(mocks.create).not.toHaveBeenCalled();
   });
 });

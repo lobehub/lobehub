@@ -1,9 +1,10 @@
-import type { AgentSenderMetadata, FollowUpMode } from '@lobechat/types';
+import type { AgentSenderMetadata, ChatImageItem, FollowUpMode } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
 import { isModelImageFileType } from '@/database/models/message/attachments';
+import { getFileProxyUrl } from '@/server/services/file';
 import {
   collectMarkdownImageUrls,
   type InlineImage,
@@ -294,6 +295,13 @@ export const releaseHeteroSteers = async (operationId: string) => {
   }
 };
 
+const readSteerImages = async (messageModel: MessageModel, messageId: string) => {
+  const [message] = await messageModel.queryByIds([messageId], {
+    postProcessUrl: async (path, file) => (file.id ? getFileProxyUrl(file.id) : (path ?? '')),
+  });
+  return message?.imageList?.length ? message.imageList : undefined;
+};
+
 /**
  * The agent replayed a delivered message: write it into the conversation as a
  * steer user message under `parentId`, and acknowledge its follow-up.
@@ -313,7 +321,13 @@ export const consumeHeteroSteer = async (
     messageId: string;
   },
 ): Promise<
-  | { content: string; id: string; metadata: Record<string, unknown>; parentId: string | null }
+  | {
+      content: string;
+      id: string;
+      imageList?: ChatImageItem[];
+      metadata: Record<string, unknown>;
+      parentId: string | null;
+    }
   | undefined
 > => {
   const { messageId, operationId } = params;
@@ -323,10 +337,13 @@ export const consumeHeteroSteer = async (
   if (!delivery) {
     const written = await messageModel.findById(messageId);
     if (written?.role !== 'user' || written.topicId !== params.topicId) return;
+    const metadata = (written.metadata ?? {}) as Record<string, unknown>;
+    const imageList = metadata.steer ? await readSteerImages(messageModel, messageId) : undefined;
     return {
       content: written.content ?? '',
       id: written.id,
-      metadata: (written.metadata ?? {}) as Record<string, unknown>,
+      ...(imageList && { imageList }),
+      metadata,
       parentId: written.parentId ?? null,
     };
   }
@@ -359,8 +376,18 @@ export const consumeHeteroSteer = async (
     );
   }
 
+  const imageList = delivery.fileIds?.length
+    ? await readSteerImages(messageModel, messageId)
+    : undefined;
+
   await ackFollowUps(delivery.scope, delivery);
   await redisService.steerQueue.removeHeteroDelivery(operationId, messageId);
 
-  return { content: delivery.content, id: messageId, metadata, parentId: params.parentId };
+  return {
+    content: delivery.content,
+    id: messageId,
+    ...(imageList && { imageList }),
+    metadata,
+    parentId: params.parentId,
+  };
 };
