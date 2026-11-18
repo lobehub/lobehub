@@ -592,9 +592,10 @@ export class ChannelExecutionRepository {
         .from(channelMembers)
         .leftJoin(users, eq(users.id, channelMembers.userId))
         .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
-      const mentions = findTextMentions(
-        row.reply.content,
-        members.filter((member) => member.id !== job.memberId),
+      // Resolve against everyone, the speaker included, so a longer or shared name is still
+      // recognised as the speaker's; only then drop the speaker naming itself.
+      const mentions = findTextMentions(row.reply.content, members).filter(
+        (id) => id !== job.memberId,
       );
       if (!mentions.length) return none;
 

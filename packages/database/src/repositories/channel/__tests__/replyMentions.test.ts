@@ -75,6 +75,31 @@ describe('@mentions in Agent replies', () => {
     });
   });
 
+  it("never resolves the speaker's own name to a shorter or shared one", async () => {
+    const team = await fixture.createTeamChannel();
+    const speaker = await fixture.addAgent(team.channel.id, 'Sam Smith');
+    // A shorter name it starts with, and another member sharing it.
+    await fixture.addAgent(team.channel.id, 'Sam');
+    await fixture.addAgent(team.channel.id, 'Sam Smith');
+    const request = await team.asOwner.send(team.channel.id, {
+      content: '@Sam Smith start',
+      mentions: [speaker.id],
+      requestKey: 'person',
+      routing: 'fallback',
+    });
+    const [job] = (await jobsOf(db, request.id)).filter((item) => item.memberId === speaker.id);
+    await execution.claim(team.channel.id, job.id, lease);
+    await execution.accepted(team.channel.id, job.id);
+    await execution.saveDraft(team.channel.id, job.id, 'I am @Sam Smith');
+    const replyId = await execution.publish(team.channel.id, job.id);
+
+    expect(await execution.deliverReplyMentions(team.channel.id, replyId)).toMatchObject({
+      mentions: [],
+      woke: false,
+    });
+    expect(await jobsOf(db, replyId)).toEqual([]);
+  });
+
   it('stops waking after the ping-pong limit but keeps the mention', async () => {
     const { alpha, answer, beta, channelId, reply, request } = await setup();
     let messageId = request.id;
