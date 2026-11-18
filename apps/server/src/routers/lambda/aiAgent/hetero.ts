@@ -153,6 +153,8 @@ const WaitHeteroSteerSchema = z.object({
    * it: they never get one, so a control message for their run expires.
    */
   acceptsControl: z.boolean().optional(),
+  /** The producer can deliver uploaded images without falling back to text on failure. */
+  acceptsImageAttachments: z.boolean().optional(),
   /**
    * The producer types image blocks into the session (`imageList` on the
    * message). Older producers omit it and only ever get text-only follow-ups.
@@ -601,7 +603,14 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
-      const { acceptsControl, acceptsImages, holdSteer, operationId, blockMs } = input;
+      const {
+        acceptsControl,
+        acceptsImageAttachments,
+        acceptsImages,
+        blockMs,
+        holdSteer,
+        operationId,
+      } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -667,6 +676,7 @@ export const heteroRouter = router({
         }
         if (scope && followUpMode !== 'queue' && !holdSteer) {
           const message = await takeHeteroSteer(storeCtx, {
+            acceptsImageAttachments,
             acceptsImages,
             agentId: operation.agentId,
             mode: followUpMode,
