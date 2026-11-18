@@ -6,6 +6,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { agents, channelJobs, channelMessages, channelThreads } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobById, jobsOf, lease } from './testUtils';
 
 const db: LobeChatDatabase = await getTestDB();
@@ -561,7 +562,8 @@ describe('Channel reply opening', () => {
     });
 
     it('acknowledges on the main timeline with the Thread linked and answers inside it', async () => {
-      const { channel, followUp, followUpJob, member, thread } = await answeredInThread();
+      const { agent, asMember, channel, followUp, followUpJob, member, thread } =
+        await answeredInThread();
 
       expect(
         await execution.open(channel.id, followUpJob.id, {
@@ -608,6 +610,24 @@ describe('Channel reply opening', () => {
         .from(channelMessages)
         .where(eq(channelMessages.id, followUp.id));
       expect(moved.threadId).toBeNull();
+      await execution.releaseWriter(channel.id, followUpJob.id);
+
+      // A later run in the Thread still reads the request that continued there.
+      const later = await asMember.send(channel.id, {
+        content: 'Summarize what was asked here',
+        mentions: [agent.id],
+        requestKey: 'later',
+        routing: 'decision',
+        threadId: thread.id,
+      });
+      const [laterJob] = await jobsOf(db, later.id);
+      expect(await execution.claim(channel.id, laterJob.id, lease)).toBeTruthy();
+      const history = await readManifestMessages(
+        db,
+        channel.id,
+        (await jobById(db, laterJob.id)).manifest!,
+      );
+      expect(history.map(({ id }) => id)).toContain(followUp.id);
     });
 
     it('keeps the main-timeline message the request quotes in the continued run', async () => {
