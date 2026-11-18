@@ -1,3 +1,5 @@
+import { AgentRuntimeErrorType } from '@lobechat/types';
+
 import type {
   AgentRuntimeHost,
   ContextBuildOutput,
@@ -17,6 +19,8 @@ import { getLLMRetryDelayMs, shouldRetryLLM } from '../utils/runtimeRetry';
 import { finalizeCallLlmTurn, persistInterruptedCallLlmResult } from './callLlmFinalizer';
 
 const CONVERSATION_PARENT_MISSING_ERROR_TYPE = 'ConversationParentMissing';
+const MAX_TOOL_CALL_ID_BYTES = 100;
+const toolCallIdEncoder = new TextEncoder();
 
 interface LLMCallTransport {
   retryPolicy: LLMRetryPolicy;
@@ -95,6 +99,24 @@ const executePreparedCall = async (
       lastOutput = execution.output;
 
       if (execution.ok) {
+        for (const { id } of [...execution.output.toolCalls, ...execution.output.toolsCalling]) {
+          const actualBytes = toolCallIdEncoder.encode(id).byteLength;
+          if (actualBytes <= MAX_TOOL_CALL_ID_BYTES) continue;
+
+          // A concurrent Stop may still save partial text, but the rejected batch is unusable.
+          lastOutput = { ...execution.output, toolCalls: [], toolsCalling: [] };
+          throw Object.assign(
+            new Error(
+              `The model returned a tool_call_id of ${actualBytes} bytes. The maximum is ${MAX_TOOL_CALL_ID_BYTES} bytes.`,
+            ),
+            {
+              body: { actualBytes, maxBytes: MAX_TOOL_CALL_ID_BYTES },
+              errorType: AgentRuntimeErrorType.UpstreamMalformedResponse,
+              provider: prepared.provider,
+            },
+          );
+        }
+
         return await finalizeCallLlmTurn({
           assistantMessageId: prepared.assistantMessageId,
           events,

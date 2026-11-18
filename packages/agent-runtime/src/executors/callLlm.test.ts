@@ -170,6 +170,69 @@ const createHost = (
 });
 
 describe('callLlm executor', () => {
+  it('passes a 100-byte tool call ID through unchanged', async () => {
+    const id = '🛠'.repeat(25);
+    const output = createAttemptOutput();
+    output.toolsCalling = [
+      { apiName: 'run', arguments: '{}', id, identifier: 'tool', type: 'default' },
+    ];
+    const runAttempt = vi.fn().mockResolvedValue({ ok: true, output });
+    const { llm } = createCallTransport({ runAttempt });
+    const messages = createMessageTransport();
+
+    await callLlm(createHost(llm, messages))(instruction, createState());
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ tools: [expect.objectContaining({ id })] }),
+    );
+  });
+
+  it.each([
+    { bytes: 101, id: 'x'.repeat(101), raw: false },
+    { bytes: 102, id: '工'.repeat(34), raw: true },
+  ])(
+    'rejects the entire completed batch when a tool call ID is $bytes bytes',
+    async ({ bytes, id, raw }) => {
+      const output = createAttemptOutput();
+      output.toolsCalling = [
+        { apiName: 'run', arguments: '{}', id: 'valid-call', identifier: 'tool', type: 'default' },
+      ];
+      if (raw) {
+        output.toolCalls = [{ function: { arguments: '{}', name: 'run' }, id, type: 'function' }];
+      } else {
+        output.toolsCalling.push({
+          apiName: 'run',
+          arguments: '{}',
+          id,
+          identifier: 'tool',
+          type: 'default',
+        });
+      }
+      const runAttempt = vi.fn().mockResolvedValue({ ok: true, output });
+      const { llm } = createCallTransport({ runAttempt });
+      const messages = createMessageTransport();
+      const stream = createStreamSink();
+      const error = {
+        body: { actualBytes: bytes, maxBytes: 100 },
+        errorType: 'UpstreamMalformedResponse',
+        message: `The model returned a tool_call_id of ${bytes} bytes. The maximum is 100 bytes.`,
+      };
+
+      await expect(
+        callLlm(createHost(llm, messages, stream))(instruction, createState()),
+      ).rejects.toMatchObject(error);
+
+      expect(stream.publishError).toHaveBeenCalledWith({
+        error: expect.objectContaining(error),
+        phase: 'llm_execution',
+        stepIndex: 0,
+      });
+      expect(messages.update).not.toHaveBeenCalled();
+      expect(runAttempt).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('prepares the assistant message and delegates call_llm execution to the LLM transport', async () => {
     const state = createState();
     const transport = createCallTransport();
