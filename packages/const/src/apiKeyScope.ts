@@ -51,6 +51,13 @@ export const API_KEY_SCOPES = [
   'knowledge:write',
   'mcp:read',
   'mcp:write',
+  /**
+   * Public share links (topics, pages, agents, artifacts). Turning one on puts
+   * content in front of anyone holding the URL, so it is its own tier: a key
+   * that may edit a topic must not by that alone be able to publish it.
+   */
+  'share:read',
+  'share:write',
   'usage:read',
   'workspace:read',
   'workspace:write',

@@ -56,8 +56,8 @@ const hasMinWorkspaceRole = (role: string | undefined, minRole: string) =>
  * Require at least `minRole` for workspace-scoped requests; personal requests
  * pass through untouched.
  *
- * `workspaceAuthMiddleware` only enforces the admin role for `apikey` auth, so
- * without this an OIDC/session-authenticated member could reach routes whose
+ * `workspaceAuthMiddleware` only checks membership, not role, so without this
+ * a member of any role could reach routes whose
  * models use a workspace-wide (not row-owner) predicate. Mirrors the tRPC
  * `requireWorkspaceRoleWhenScoped` guard so both transports gate identically.
  */
@@ -72,15 +72,12 @@ export const requireWorkspaceRoleWhenScoped =
     return next();
   };
 
-export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
-  const workspaceId = resolveWorkspaceId(c);
-
-  if (!workspaceId) {
-    c.set('workspaceId', undefined);
-    c.set('workspaceRole', undefined);
-    return next();
-  }
-
+/**
+ * Resolve the caller's membership in `workspaceId` and pin it on the context
+ * (`workspaceId` / `workspaceRole`): 404 for a workspace that does not exist,
+ * `workspace_mismatch` for one the caller is not a member of.
+ */
+const bindWorkspace = async (c: Context, workspaceId: string) => {
   const userId = c.get('userId');
   if (!userId) {
     throw new HTTPException(401, {
@@ -122,5 +119,55 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
 
   c.set('workspaceId', workspaceId);
   c.set('workspaceRole', membership.role);
+};
+
+export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
+  const workspaceId = resolveWorkspaceId(c);
+
+  if (!workspaceId) {
+    c.set('workspaceId', undefined);
+    c.set('workspaceRole', undefined);
+    return next();
+  }
+
+  await bindWorkspace(c, workspaceId);
   return next();
 };
+
+/**
+ * For `/workspaces/{id}/…` routes, where the path names the workspace: the
+ * path id becomes the request's workspace context. It must agree with
+ * whatever `workspaceAuthMiddleware` already resolved — a workspace-bound key
+ * or an `X-Workspace-Id` header naming another workspace is a
+ * `workspace_mismatch`, and a personal API key cannot reach workspace data at
+ * all, exactly as with the header.
+ */
+export const workspaceFromPath =
+  (param: string = 'id') =>
+  async (c: Context, next: Next) => {
+    const pathWorkspaceId = c.req.param(param);
+    if (!pathWorkspaceId) return next();
+
+    const current = c.get('workspaceId') as string | undefined;
+    if (current) {
+      if (current !== pathWorkspaceId) {
+        throw new ApiException(
+          403,
+          'workspace_mismatch',
+          'The workspace in the path does not match the request workspace',
+        );
+      }
+      return next();
+    }
+
+    if (c.get('authType') === 'apikey') {
+      throw new ApiException(
+        403,
+        'workspace_mismatch',
+        'Personal API Key cannot access workspace data',
+      );
+    }
+
+    await bindWorkspace(c, pathWorkspaceId);
+    return next();
+  };

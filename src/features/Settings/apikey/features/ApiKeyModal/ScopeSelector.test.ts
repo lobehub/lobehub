@@ -33,4 +33,15 @@ describe('toggleScopeSelection', () => {
       'agent:read',
     ]);
   });
+
+  it('offers share links as their own read/write pair', () => {
+    expect(sorted(toggleScopeSelection(['chat:write'], 'share:write', true))).toEqual([
+      'chat:write',
+      'share:read',
+      'share:write',
+    ]);
+    expect(toggleScopeSelection(['share:read', 'share:write'], 'share:write', false)).toEqual([
+      'share:read',
+    ]);
+  });
 });

@@ -30,6 +30,8 @@ export const TRPC_CODE_TO_STATUS: Record<string, number> = {
   INTERNAL_SERVER_ERROR: 500,
   METHOD_NOT_SUPPORTED: 405,
   NOT_FOUND: 404,
+  // Open-source business stubs answer cloud-only procedures with this.
+  NOT_IMPLEMENTED: 501,
   PAYLOAD_TOO_LARGE: 413,
   PRECONDITION_FAILED: 412,
   TIMEOUT: 408,

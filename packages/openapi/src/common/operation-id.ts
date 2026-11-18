@@ -4,7 +4,7 @@
  * (`lobehub.agents.list()`), so an operationId is also a public SDK method name
  * and must never change once shipped.
  *
- * `<resource>` is the camelCased first path segment after `/api/v1`. The method
+ * `<resource>` is the camelCased first static path segment after `/api/v1`. The method
  * is derived from `{method} {path}` unless the route's `routeDoc()` declares
  * its own dotted `operationId` (for verbs the rule cannot express —
  * `notifications.markRead`, `tasks.run`):
@@ -28,9 +28,19 @@ const camel = (segment: string) => {
   return name.charAt(0).toLowerCase() + name.slice(1);
 };
 
-/** `/api/v1/knowledge-bases/{id}` → `knowledgeBases` */
+/**
+ * `/api/v1/knowledge-bases/{id}` → `knowledgeBases`. A path led by a parameter
+ * groups under its first static segment:
+ * `/api/v1/{resourceType}/{resourceId}/collaborators` → `collaborators`.
+ */
 export const operationResource = (path: string) =>
-  camel(path.split('/').filter(Boolean)[2] ?? 'root');
+  camel(
+    path
+      .split('/')
+      .filter(Boolean)
+      .slice(2)
+      .find((segment) => !segment.startsWith('{')) ?? 'root',
+  );
 
 /** The mechanical method name for `{method} {path}`. */
 export const operationMethodName = (method: string, path: string): string => {

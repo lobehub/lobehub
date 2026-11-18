@@ -305,6 +305,8 @@ describe('generated OpenAPI document', () => {
       'GET /api/v1/users/me': 'users.me',
       'POST /api/v1/files/batches': 'files.uploadBatch',
       'POST /api/v1/tasks/{id}/runs': 'tasks.run',
+      // A parameter-led path groups under its first static segment.
+      'GET /api/v1/{resourceType}/{resourceId}/collaborators': 'collaborators.list',
     });
   });
 

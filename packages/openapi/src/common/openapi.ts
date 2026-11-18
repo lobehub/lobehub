@@ -37,7 +37,7 @@ export interface RequestExample {
  * route shares. `400` is also derived automatically for any route with a
  * request validator, so declare it only when the handler itself rejects input.
  */
-export type RouteErrorStatus = 400 | 402 | 404 | 409 | 412 | 413 | 422 | 429 | 502 | 503;
+export type RouteErrorStatus = 400 | 402 | 404 | 409 | 412 | 413 | 422 | 429 | 501 | 502 | 503;
 
 const ERROR_DESCRIPTIONS: Record<number, string> = {
   400: 'Invalid request',
@@ -51,6 +51,7 @@ const ERROR_DESCRIPTIONS: Record<number, string> = {
   422: 'Unprocessable content',
   429: 'Rate limit exceeded',
   500: 'Internal server error',
+  501: 'Not available on this deployment',
   502: 'Upstream error',
   503: 'Service unavailable',
 };
