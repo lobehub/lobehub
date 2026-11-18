@@ -504,9 +504,12 @@ export default {
   'createFromGithub.removeRepository': 'Remove',
   'createFromGithub.openIntegrations': 'Open GitHub settings',
   'environment.none': 'No environment \u2014 start in an empty folder',
-  'createFromGithub.repositoriesTitle': 'Repositories',
   'createFromGithub.addAnother': 'Add repository',
   'createFromGithub.alreadyAdded': 'This repository is already added.',
   'createFromGithub.layoutHint':
     "Each repository is checked out in a folder of its own, side by side. You can change them later in the project's settings.",
+  'createFromGithub.repositoryTitle': 'Repository',
+  'createFromGithub.advanced': 'Advanced settings',
+  'createFromGithub.advancedWithCount': 'Advanced settings · {{count}} extra',
+  'createFromGithub.extraRepositoriesLabel': 'More repositories',
 };

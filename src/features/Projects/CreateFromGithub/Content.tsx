@@ -26,7 +26,7 @@ import {
 } from '../createProjectForm';
 import MainAgentSection from '../MainAgentSection';
 import { parseGithubRepository } from './githubRepository';
-import RepositoryField, { type PickedRepository } from './RepositoryField';
+import RepositoryField, { AdvancedRepositories, type PickedRepository } from './RepositoryField';
 
 interface FormState {
   /** The field another project already holds, as the last create reported it. */
@@ -137,7 +137,6 @@ const CreateFromGithubContent = () => {
     <>
       <Flexbox gap={16} padding={16}>
         <RepositoryField
-          layoutHint={t('createFromGithub.layoutHint')}
           value={repositories}
           onChange={changeRepositories}
           onConnect={connectGithub}
@@ -193,6 +192,12 @@ const CreateFromGithubContent = () => {
         {repository && (
           <MainAgentSection dedicatedAgentId={reservedIds.agentId} projectName={form.name} />
         )}
+        <AdvancedRepositories
+          layoutHint={t('createFromGithub.layoutHint')}
+          value={repositories}
+          onChange={changeRepositories}
+          onConnect={connectGithub}
+        />
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>

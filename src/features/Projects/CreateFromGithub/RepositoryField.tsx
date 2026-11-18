@@ -3,7 +3,7 @@ import { Github } from '@lobehub/icons';
 import { ActionIcon, Button, Flexbox, Icon, Input, Popover, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { PlusIcon, XIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon, XIcon } from 'lucide-react';
 import { type ClipboardEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -119,45 +119,57 @@ const RepositoryPicker = ({ onConnect, onPick, picked }: RepositoryPickerProps) 
   );
 };
 
+interface RepositoryItemProps {
+  onRemove: () => void;
+  repository: PickedRepository;
+}
+
+const RepositoryItem = ({ onRemove, repository }: RepositoryItemProps) => {
+  const { t } = useTranslation('project');
+  return (
+    <div {...stylex.props(styles.item)}>
+      <Github size={14} />
+      <Text ellipsis style={{ flex: 1 }} weight={500}>
+        {repository.fullName}
+      </Text>
+      <ActionIcon
+        icon={XIcon}
+        size={'small'}
+        title={t('createFromGithub.removeRepository')}
+        onClick={onRemove}
+      />
+    </div>
+  );
+};
+
 interface RepositoryFieldProps {
   /** Under the field while nothing is picked, e.g. that a repository is optional. */
   emptyHint?: string;
-  /** Under the picked repositories once there are several: how they are laid out. */
-  layoutHint: string;
   onChange: (repositories: PickedRepository[]) => void;
   /** Leave the dialog for the GitHub integration settings. */
   onConnect: () => void;
+  /** Every picked repository; this field shows the first, the main one. */
   value: PickedRepository[];
 }
 
 /**
- * The repositories a new project or environment checks out. Before the first
- * pick the picker is the dialog's main content; after it, the picks are a short
- * list and more are added from a popover, so the rest of the form stays in view.
+ * The main repository of a new project or environment. Before the pick the
+ * picker is the dialog's main content; after it, one row. More repositories are
+ * an advanced setting ({@link AdvancedRepositories}); removing the main one
+ * promotes the next.
  */
-const RepositoryField = ({
-  emptyHint,
-  layoutHint,
-  onChange,
-  onConnect,
-  value,
-}: RepositoryFieldProps) => {
+const RepositoryField = ({ emptyHint, onChange, onConnect, value }: RepositoryFieldProps) => {
   const { t } = useTranslation('project');
-  const [adding, setAdding] = useState(false);
+  const [main, ...extras] = value;
 
-  /** Picking a repository already there removes it, as in any multi-select list. */
-  const toggle = (repository: PickedRepository) => {
-    if (value.some((item) => sameRepository(item.fullName, repository.fullName)))
-      return onChange(value.filter((item) => !sameRepository(item.fullName, repository.fullName)));
-    if (value.length >= MAX_REPOSITORIES) return;
-    onChange([...value, repository]);
-    setAdding(false);
-  };
-
-  if (value.length === 0)
+  if (!main)
     return (
       <Flexbox gap={6}>
-        <RepositoryPicker picked={value} onConnect={onConnect} onPick={toggle} />
+        <RepositoryPicker
+          picked={value}
+          onConnect={onConnect}
+          onPick={(repo) => onChange([repo])}
+        />
         {emptyHint && (
           <Text fontSize={12} type={'secondary'}>
             {emptyHint}
@@ -169,44 +181,98 @@ const RepositoryField = ({
   return (
     <Flexbox gap={6}>
       <Text fontSize={13} weight={500}>
-        {t('createFromGithub.repositoriesTitle')}
+        {t('createFromGithub.repositoryTitle')}
       </Text>
-      {value.map((repository) => (
-        <div key={repository.fullName} {...stylex.props(styles.item)}>
-          <Github size={14} />
-          <Text ellipsis style={{ flex: 1 }} weight={500}>
-            {repository.fullName}
+      <RepositoryItem repository={main} onRemove={() => onChange(extras)} />
+    </Flexbox>
+  );
+};
+
+interface AdvancedRepositoriesProps {
+  /** How several repositories are laid out, in the caller's wording. */
+  layoutHint: string;
+  onChange: (repositories: PickedRepository[]) => void;
+  onConnect: () => void;
+  /** Every picked repository, the main one first; this section edits the rest. */
+  value: PickedRepository[];
+}
+
+/**
+ * Advanced settings: repositories checked out beside the main one. Collapsed
+ * by default — one repository is what most people need — and added from a
+ * popover with the same list and paste box as the main pick.
+ */
+export const AdvancedRepositories = ({
+  layoutHint,
+  onChange,
+  onConnect,
+  value,
+}: AdvancedRepositoriesProps) => {
+  const { t } = useTranslation('project');
+  const [main, ...extras] = value;
+  const [open, setOpen] = useState(extras.length > 0);
+  const [adding, setAdding] = useState(false);
+
+  /** Picking a repository already there removes it; the main one stays put. */
+  const toggle = (repository: PickedRepository) => {
+    if (main && sameRepository(main.fullName, repository.fullName)) return;
+    if (extras.some((item) => sameRepository(item.fullName, repository.fullName)))
+      return onChange(value.filter((item) => !sameRepository(item.fullName, repository.fullName)));
+    if (value.length >= MAX_REPOSITORIES) return;
+    onChange([...value, repository]);
+    setAdding(false);
+  };
+
+  if (!main) return null;
+
+  return (
+    <Flexbox gap={8}>
+      <Flexbox horizontal>
+        <Button
+          icon={<Icon icon={open ? ChevronDownIcon : ChevronRightIcon} />}
+          size={'small'}
+          type={'text'}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {extras.length > 0
+            ? t('createFromGithub.advancedWithCount', { count: extras.length })
+            : t('createFromGithub.advanced')}
+        </Button>
+      </Flexbox>
+      {open && (
+        <Flexbox gap={6}>
+          <Text fontSize={13} weight={500}>
+            {t('createFromGithub.extraRepositoriesLabel')}
           </Text>
-          <ActionIcon
-            icon={XIcon}
-            size={'small'}
-            title={t('createFromGithub.removeRepository')}
-            onClick={() => toggle(repository)}
-          />
-        </div>
-      ))}
-      {value.length > 1 && (
-        <Text fontSize={12} type={'secondary'}>
-          {layoutHint}
-        </Text>
-      )}
-      {value.length < MAX_REPOSITORIES && (
-        <Flexbox horizontal>
-          <Popover
-            open={adding}
-            placement={'bottomLeft'}
-            trigger={'click'}
-            content={
-              <div {...stylex.props(styles.popover)}>
-                <RepositoryPicker picked={value} onConnect={onConnect} onPick={toggle} />
-              </div>
-            }
-            onOpenChange={setAdding}
-          >
-            <Button icon={<Icon icon={PlusIcon} />} size={'small'} type={'text'}>
-              {t('createFromGithub.addAnother')}
-            </Button>
-          </Popover>
+          <Text fontSize={12} type={'secondary'}>
+            {layoutHint}
+          </Text>
+          {extras.map((repository) => (
+            <RepositoryItem
+              key={repository.fullName}
+              repository={repository}
+              onRemove={() => toggle(repository)}
+            />
+          ))}
+          {value.length < MAX_REPOSITORIES && (
+            <Flexbox horizontal>
+              <Popover
+                open={adding}
+                placement={'bottomLeft'}
+                trigger={'click'}
+                content={
+                  <div {...stylex.props(styles.popover)}>
+                    <RepositoryPicker picked={value} onConnect={onConnect} onPick={toggle} />
+                  </div>
+                }
+                onOpenChange={setAdding}
+              >
+                <Button icon={<Icon icon={PlusIcon} />} size={'small'}>
+                  {t('createFromGithub.addAnother')}
+                </Button>
+              </Popover>
+            </Flexbox>
+          )}
         </Flexbox>
       )}
     </Flexbox>

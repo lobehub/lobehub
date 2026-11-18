@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { parseGithubRepository } from '@/features/Projects/CreateFromGithub/githubRepository';
 import RepositoryField, {
+  AdvancedRepositories,
   type PickedRepository,
 } from '@/features/Projects/CreateFromGithub/RepositoryField';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -150,7 +151,6 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
             person invent something they are about to be handed. */}
           <RepositoryField
             emptyHint={t('environments.form.repositoryOptional')}
-            layoutHint={t('environments.form.layoutHint')}
             value={repositories}
             onChange={changeRepositories}
             onConnect={connectGithub}
@@ -180,6 +180,13 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
               </Text>
             )}
           </Flexbox>
+
+          <AdvancedRepositories
+            layoutHint={t('environments.form.layoutHint')}
+            value={repositories}
+            onChange={changeRepositories}
+            onConnect={connectGithub}
+          />
         </Flexbox>
         <ModalFooter>
           <Button onClick={close}>{t('environments.cancel')}</Button>
