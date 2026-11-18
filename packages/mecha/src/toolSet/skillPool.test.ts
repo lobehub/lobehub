@@ -19,6 +19,10 @@ describe('isBuiltinSkillEnabled', () => {
 });
 
 describe('assembleSkillPool', () => {
+  const all = {
+    availableSkillIds: ['project:review', 'db-review', 'agent-skills:review', 'builtin-review'],
+  };
+
   it('resolves a name collision as project > db > agent-skills > builtin', () => {
     const pool = assembleSkillPool(
       {
@@ -27,7 +31,7 @@ describe('assembleSkillPool', () => {
         db: [skill('db-review', 'review')],
         project: [skill('project:review', 'review')],
       },
-      { autoSkillIds: ['db-review'] },
+      all,
     );
     expect(pool.skills.map((s) => s.identifier)).toEqual(['project:review']);
 
@@ -37,7 +41,7 @@ describe('assembleSkillPool', () => {
         builtin: [skill('builtin-review', 'review')],
         db: [skill('db-review', 'review')],
       },
-      { autoSkillIds: ['db-review'] },
+      all,
     );
     expect(withoutProject.skills.map((s) => s.identifier)).toEqual(['db-review']);
   });
@@ -50,7 +54,7 @@ describe('assembleSkillPool', () => {
         db: [skill('my-skill')],
         project: [skill('project:deploy', 'deploy')],
       },
-      { autoSkillIds: ['my-skill'] },
+      { availableSkillIds: ['project:deploy', 'my-skill', 'agent-skills:notes', 'artifacts'] },
     );
     expect(pool.skills.map((s) => s.identifier)).toEqual([
       'project:deploy',
@@ -63,116 +67,47 @@ describe('assembleSkillPool', () => {
   it('drops disabled skills from the pool, so they are neither listed nor activatable', () => {
     const pool = assembleSkillPool(
       { builtin: [skill('artifacts')], db: [skill('gone'), skill('kept')] },
-      { autoSkillIds: ['gone', 'kept'], disabledIds: ['gone'] },
+      { availableSkillIds: ['gone', 'kept', 'artifacts'], disabledIds: ['gone'] },
     );
     expect(pool.skills.map((s) => s.identifier)).toEqual(['kept', 'artifacts']);
   });
 
-  it('leaves out a library skill the agent never turned on, while builtin skills stay listed', () => {
-    const sources = {
-      agentSkills: [skill('agent-skills:notes')],
-      builtin: [skill('artifacts')],
-      db: [skill('pinned'), skill('auto'), skill('untouched')],
-      project: [skill('project:deploy', 'deploy')],
-    };
-    const pool = assembleSkillPool(sources, {
-      autoSkillIds: ['auto'],
-      enabledPluginIds: ['pinned'],
-    });
-    expect(pool.skills.map((s) => s.identifier)).toEqual([
-      'project:deploy',
-      'pinned',
-      'auto',
-      'agent-skills:notes',
-      'artifacts',
-    ]);
-
-    // Manual mode is still "only what the user picked": an `auto` library skill goes too.
-    expect(
-      assembleSkillPool(sources, {
-        autoSkillIds: ['auto'],
-        enabledPluginIds: ['pinned'],
-        skillActivateMode: 'manual',
-      }).skills.map((s) => s.identifier),
-    ).toEqual(['project:deploy', 'pinned']);
-  });
-
   it('withholds everything a share configuration does not allow', () => {
     const sources = { builtin: [skill('artifacts')], db: [skill('shared'), skill('private')] };
-    const autoSkillIds = ['shared', 'private'];
     expect(
-      assembleSkillPool(sources, { autoSkillIds, shareAllowedIds: ['shared'] }).skills.map(
-        (s) => s.identifier,
-      ),
+      assembleSkillPool(sources, {
+        availableSkillIds: ['shared', 'private', 'artifacts'],
+        shareAllowedIds: ['shared'],
+      }).skills.map((s) => s.identifier),
     ).toEqual(['shared']);
     // An empty allowlist collapses the pool; no allowlist means no gate.
-    expect(assembleSkillPool(sources, { autoSkillIds, shareAllowedIds: [] }).skills).toEqual([]);
-    expect(assembleSkillPool(sources, { autoSkillIds }).skills).toHaveLength(3);
+    expect(assembleSkillPool(sources, { shareAllowedIds: [] }).skills).toEqual([]);
+    expect(
+      assembleSkillPool(sources, { availableSkillIds: ['shared', 'private', 'artifacts'] }).skills,
+    ).toHaveLength(3);
   });
 
   it('gates the device-only builtin on the run, not on the host', () => {
     const sources = { builtin: [skill(AgentBrowserIdentifier), skill('artifacts')] };
-    expect(assembleSkillPool(sources).skills.map((s) => s.identifier)).toEqual(['artifacts']);
+    const availableSkillIds = [AgentBrowserIdentifier, 'artifacts'];
     expect(
-      assembleSkillPool(sources, { canExecuteOnDevice: true }).skills.map((s) => s.identifier),
+      assembleSkillPool(sources, { availableSkillIds }).skills.map((s) => s.identifier),
+    ).toEqual(['artifacts']);
+    expect(
+      assembleSkillPool(sources, { availableSkillIds, canExecuteOnDevice: true }).skills.map(
+        (s) => s.identifier,
+      ),
     ).toEqual([AgentBrowserIdentifier, 'artifacts']);
   });
 
-  it('keeps a turn skill selectable in manual mode without pinning it', () => {
-    const pool = assembleSkillPool(
-      { builtin: [skill('lobehub'), skill('artifacts')], db: [skill('picked')] },
-      { enabledPluginIds: ['picked'], skillActivateMode: 'manual', turnSkillIds: ['lobehub'] },
-    );
-
-    expect(pool.skills.map((s) => s.identifier)).toEqual(['picked', 'lobehub']);
-    expect(pool.enabledPluginIds).toEqual(['picked']);
-  });
-
-  it('still lets a share configuration withhold a turn skill', () => {
-    const pool = assembleSkillPool(
-      { builtin: [skill('lobehub')] },
-      { shareAllowedIds: [], skillActivateMode: 'manual', turnSkillIds: ['lobehub'] },
-    );
-
-    expect(pool.skills).toEqual([]);
-  });
-
-  it('exposes only the selected skills in manual mode, keeping the discovered project ones', () => {
-    const sources = {
-      agentSkills: [skill('agent-skills:notes', 'agent-skills:notes')],
-      builtin: [skill('artifacts')],
-      db: [skill('picked'), skill('not-picked')],
-      // Project / device skills come from the working directory and can never
-      // be picked in the UI, so the mode does not speak about them.
-      project: [skill('project:deploy', 'deploy')],
-    };
-
-    const manual = assembleSkillPool(sources, {
-      enabledPluginIds: ['picked'],
-      skillActivateMode: 'manual',
+  it('exposes only enabled skills, without pre-activating them', () => {
+    const sources = { builtin: [skill('on'), skill('off')], db: [skill('disabled')] };
+    expect(assembleSkillPool(sources).skills).toEqual([]);
+    const pool = assembleSkillPool(sources, {
+      availableSkillIds: ['on', 'disabled'],
+      disabledIds: ['disabled'],
     });
-    expect(manual.skills.map((s) => s.identifier)).toEqual(['project:deploy', 'picked']);
-
-    const auto = assembleSkillPool(sources, {
-      enabledPluginIds: ['picked'],
-      skillActivateMode: 'auto',
-    });
-    // Auto mode brings back the sources the agent does not opt into one by one;
-    // a library skill it never turned on stays out either way.
-    expect(auto.skills.map((s) => s.identifier)).toEqual([
-      'project:deploy',
-      'picked',
-      'agent-skills:notes',
-      'artifacts',
-    ]);
-  });
-
-  it('pairs the pool with the run’s enabled plugin ids for the resolver', () => {
-    const pool = assembleSkillPool(
-      { db: [skill('pinned'), skill('listed')] },
-      { autoSkillIds: ['listed'], enabledPluginIds: ['pinned'] },
-    );
-    expect(pool.enabledPluginIds).toEqual(['pinned']);
-    expect(pool.skills.map((s) => s.identifier)).toEqual(['pinned', 'listed']);
+    expect(pool.skills.map((s) => s.identifier)).toEqual(['on']);
+    expect(pool.enabledPluginIds).toEqual([]);
   });
 });

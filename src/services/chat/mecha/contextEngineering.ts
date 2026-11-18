@@ -1,4 +1,3 @@
-import { LobeHubIdentifier } from '@lobechat/builtin-skills/manifests';
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { isDesktop } from '@lobechat/const';
@@ -6,11 +5,9 @@ import type {
   AgentGroupConfig,
   LobeToolManifest,
   MemoryContext,
-  OperationSkillSet,
   ToolDiscoveryConfig,
   UserMemoryData,
 } from '@lobechat/context-engine';
-import { mentionsTopic } from '@lobechat/context-engine';
 import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from '@lobechat/mecha';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
@@ -306,25 +303,9 @@ export const contextEngineering = async ({
     createBrowserContextFactProviders({ agentId, groupId, shareVisitor }),
   );
 
-  // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
-  // In auto mode: expose all installed skills so the AI can discover and activate them.
-  // In manual mode: only expose user-selected skills (filtered by pluginIds).
-  let enabledSkills: OperationSkillSet['skills'] | undefined;
-  if (plugins) {
-    // Manual mode narrows the pool itself, so an unselected skill is neither
-    // listed nor resolvable by `activateSkill`.
-    enabledSkills = (
-      await resolveClientSkills(
-        plugins,
-        disabledPluginIds,
-        agentChatConfigSelectors.skillActivateMode(agentStoreState),
-        // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
-        // which the lobehub skill teaches.
-        mentionsTopic(messages) ? [LobeHubIdentifier] : undefined,
-        autoSkillIds,
-      )
-    ).skills;
-  }
+  const enabledSkills = plugins
+    ? (await resolveClientSkills([...plugins, ...(autoSkillIds ?? [])], disabledPluginIds)).skills
+    : undefined;
 
   // One timezone for every date the prompt renders — the core's temporal
   // placeholders (including `session_date`) and the system-date line — so a

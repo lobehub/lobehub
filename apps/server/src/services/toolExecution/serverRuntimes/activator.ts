@@ -102,7 +102,9 @@ export const activatorRuntime: ServerRuntimeRegistration = {
       // the same model-supplied-name hole the skills runtime closes with its
       // own `isSkillGranted` predicate (`skills.ts`).
       const shareVisitor = context.agentShareVisitor;
+      const available = context.availableSkillIds && new Set(context.availableSkillIds);
       const isSkillReachable = (identifier: string) =>
+        (!available || available.has(identifier)) &&
         !disabledSkillIds.has(identifier) &&
         (!shareVisitor || resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0);
       const isLibrarySkillReachable = (identifier: string) =>
@@ -118,7 +120,8 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         service: {
           findAll: async () => {
             const result = await skillModel.findAll();
-            if (!shareVisitor && !isLibrarySkillEnabled) return result;
+            if (!shareVisitor && !available && !isLibrarySkillEnabled && !disabledSkillIds.size)
+              return result;
 
             const data = result.data.filter((skill) => isLibrarySkillReachable(skill.identifier));
             return { data, total: data.length };

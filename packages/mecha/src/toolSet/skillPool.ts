@@ -24,41 +24,19 @@ export interface SkillPoolSources {
 }
 
 export interface AssembleSkillPoolOptions {
-  /**
-   * Library (`db`) skills the agent set to `auto`. A library skill is opt-in
-   * per agent — the profile is where one is turned on — so unlike every other
-   * source it is listed only when named here, in `enabledPluginIds` or in
-   * `turnSkillIds`. `manual` mode still narrows it to the latter two.
-   */
-  autoSkillIds?: readonly string[];
+  /** Explicit invocations (e.g. a composer selection or a task's plan). */
+  activatedSkillIds?: readonly string[];
+  /** Persisted enabled skills are discoverable by name and description only. */
+  availableSkillIds?: readonly string[];
   /** Gates the device-only builtin skills. */
   canExecuteOnDevice?: boolean;
   /** Skills the agent explicitly disabled; neither listed nor activatable. */
   disabledIds?: readonly string[];
   /**
-   * The run's enabled plugin ids, paired with the pool for the resolver: a
-   * skill matching one is auto-activated and its content injected directly.
-   */
-  enabledPluginIds?: readonly string[];
-  /**
    * Identifiers a share configuration allows. `undefined` means the run is not
    * shared; an empty list collapses the pool to nothing.
    */
   shareAllowedIds?: readonly string[];
-  /**
-   * The agent's skill activation mode. `manual` means what the UI promises —
-   * "only user-selected tools and skills are available to AI" — so the
-   * selectable sources collapse to `enabledPluginIds`. Withholding the
-   * discovery tools is not enough on its own: `activateSkill` ships with the
-   * always-on `lobe-skills` tool and resolves against this pool.
-   */
-  skillActivateMode?: 'auto' | 'manual';
-  /**
-   * Skills this turn needs to stay selectable even in `manual` mode (e.g. the
-   * lobehub skill for a `<refer_topic>` turn). They are not pinned, so their
-   * content is only loaded through `activateSkill`.
-   */
-  turnSkillIds?: readonly string[];
 }
 
 /**
@@ -73,41 +51,20 @@ export const assembleSkillPool = (
   sources: SkillPoolSources,
   options: AssembleSkillPoolOptions = {},
 ): OperationSkillSet => {
-  const enabledPluginIds = new Set(options.enabledPluginIds ?? []);
-  const turnSkillIds = new Set(options.turnSkillIds ?? []);
-  // Manual mode exposes only what the user picked. Project / device skills are
-  // discovered from the run's working directory and can never be picked in the
-  // UI, so the mode does not speak about them and they stay.
-  const selectable =
-    options.skillActivateMode === 'manual'
-      ? (skills: readonly SkillMeta[] = []) =>
-          skills.filter(
-            (skill) => enabledPluginIds.has(skill.identifier) || turnSkillIds.has(skill.identifier),
-          )
-      : (skills: readonly SkillMeta[] = []) => skills;
-
-  // A library skill the agent never turned on is disabled for it, whatever the
-  // mode: installing a skill into the library does not hand it to every agent.
-  const autoSkillIds = new Set(options.autoSkillIds ?? []);
-  const optedIn = (sources.db ?? []).filter(
-    (skill) =>
-      enabledPluginIds.has(skill.identifier) ||
-      autoSkillIds.has(skill.identifier) ||
-      turnSkillIds.has(skill.identifier),
-  );
-
+  const activated = new Set(options.activatedSkillIds);
+  const available = new Set([...(options.availableSkillIds ?? []), ...activated]);
   const ordered = [
     ...(sources.project ?? []),
-    ...selectable(optedIn),
-    ...selectable(sources.agentSkills),
-    ...selectable(sources.builtin),
+    ...(sources.db ?? []),
+    ...(sources.agentSkills ?? []),
+    ...(sources.builtin ?? []),
   ];
   const disabled = new Set(options.disabledIds ?? []);
   const shareAllowed = options.shareAllowedIds ? new Set(options.shareAllowedIds) : undefined;
   const seenNames = new Set<string>();
 
   const skills = ordered.filter((skill) => {
-    if (disabled.has(skill.identifier)) return false;
+    if (!available.has(skill.identifier) || disabled.has(skill.identifier)) return false;
     if (shareAllowed && !shareAllowed.has(skill.identifier)) return false;
     // Agent-document skills carry their prefix in `name`, so they can only
     // collide with each other; dedupe by name keeps one shape for the engine.
@@ -131,7 +88,11 @@ export const assembleSkillPool = (
       isBuiltinSkillEnabled(skill.identifier, {
         canExecuteOnDevice: options.canExecuteOnDevice ?? false,
       }),
-    skills,
+    skills: skills.map((skill) => {
+      if (activated.has(skill.identifier)) return skill;
+      const { content: _content, activated: _activated, ...metadata } = skill;
+      return metadata;
+    }),
   });
-  return engine.generate([...enabledPluginIds]);
+  return engine.generate([...activated]);
 };

@@ -306,40 +306,19 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     service = new AiAgentService({} as any, 'test-user-id');
   });
 
-  it('injects a pinned DB skill body into the operation skill set, leaving auto skills content-less', async () => {
-    mockGetAgentConfig.mockResolvedValue(
-      createAgentConfig(['db-skill-pinned', { identifier: 'db-skill-auto', mode: 'auto' }]),
-    );
-
-    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
-
-    expect(operationSkillSetArg()?.enabledPluginIds).toContain('db-skill-pinned');
-    expect(skillById('db-skill-pinned')?.content).toBe('PINNED SKILL BODY');
-    // The auto skill is still listed (activatable) but carries no body.
-    expect(skillById('db-skill-auto')).toBeDefined();
-    expect(skillById('db-skill-auto')?.content).toBeUndefined();
-  });
-
-  it('leaves a library skill the agent never turned on out of the operation skill set', async () => {
-    // db-skill-auto is installed in the library but absent from this agent's plugins.
+  it('lists only enabled DB skill metadata without preloading the body', async () => {
     mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-pinned']));
-
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
-
-    expect(skillById('db-skill-pinned')).toBeDefined();
+    expect(skillById('db-skill-pinned')).toEqual({
+      description: 'd',
+      identifier: 'db-skill-pinned',
+      name: 'db-skill-pinned',
+    });
     expect(skillById('db-skill-auto')).toBeUndefined();
+    expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
   });
 
-  it('fetches bodies only for the pinned subset to keep the op-param payload bounded', async () => {
-    mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-pinned']));
-
-    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
-
-    // Only the pinned skill's row id is fetched — not the auto skill (sk-2).
-    expect(mockSkillFindByIds).toHaveBeenCalledWith(['sk-1']);
-  });
-
-  it('injects a pinned agent-document skill body without an extra fetch', async () => {
+  it('lists an enabled agent-document skill without its body', async () => {
     mockGetAgentSkills.mockResolvedValue([
       {
         content: 'AGENT DOC SKILL BODY',
@@ -354,7 +333,11 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
-    expect(skillById('agent-skills:foo')?.content).toBe('AGENT DOC SKILL BODY');
+    expect(skillById('agent-skills:foo')).toEqual({
+      description: 'd',
+      identifier: 'agent-skills:foo',
+      name: 'agent-skills:foo',
+    });
     // Agent-document bodies come from `getAgentSkills`, never the DB skill fetch.
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
   });
@@ -374,8 +357,6 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
 
     await service.execAgent({ agentId: 'agent-1', prompt: '/goal ship it' } as any);
 
-    expect(operationSkillSetArg()?.enabledPluginIds).toContain('builtin-goal');
-    expect(operationSkillSetArg()?.enabledPluginIds).not.toContain('lobe-task');
     expect(toolsEngineConfigArg()?.agentConfig).toEqual({
       chatConfig: { toolMode: 'custom' },
       plugins: ['builtin-goal'],
@@ -398,7 +379,6 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
       selectedToolIds: ['selected-tool'],
     } as any);
 
-    expect(operationSkillSetArg()?.enabledPluginIds).toEqual(['builtin-goal']);
     expect(toolsEngineConfigArg()?.agentConfig).toEqual({
       chatConfig: { toolMode: 'custom' },
       plugins: ['builtin-goal'],
@@ -426,14 +406,12 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
   });
 
-  it('lists the user skill library to every run, content-less until a run names a skill', async () => {
+  it('does not list the account skill library to an unconfigured agent', async () => {
     mockGetAgentConfig.mockResolvedValue(createAgentConfig([]));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
-    // A hand-made skill is listed, without its body.
-    expect(skillById('user-skills:review')).toBeDefined();
-    expect(skillById('user-skills:review')?.content).toBeUndefined();
+    expect(skillById('user-skills:review')).toBeUndefined();
     // A batch's generated plan skill is not listed to an unrelated run, and the
     // catalog is asked to leave generated skills out.
     expect(skillById('user-skills:goal-plan-x')).toBeUndefined();
@@ -455,17 +433,13 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     expect(skillById('user-skills:goal-plan-x')?.content).toBe('PLAN BODY + FILES');
   });
 
-  it('appends the resource tree to a pinned skill body, mirroring activateSkill', async () => {
+  it('does not expose the resource tree of an enabled ZIP until activation', async () => {
     mockGetAgentConfig.mockResolvedValue(createAgentConfig(['db-skill-with-resources']));
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
-    const injected = skillById('db-skill-with-resources')?.content;
-    // Body plus the readReference resource tree — so a pinned ZIP/GitHub skill
-    // keeps its resource paths even though it's removed from <available_skills>.
-    expect(injected).toContain('ZIP SKILL BODY');
-    expect(injected).toContain('Available Resources');
-    expect(injected).toContain('guide.md');
+    expect(skillById('db-skill-with-resources')).toBeDefined();
+    expect(skillById('db-skill-with-resources')?.content).toBeUndefined();
   });
 });
 

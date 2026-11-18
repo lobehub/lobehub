@@ -916,21 +916,15 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // tri-state is enforced here too (see `resolveAgentSkillGates`).
     const { disabledSkillIds, isLibrarySkillEnabled } = await resolveAgentSkillGates(context);
 
-    // The share's own opt-out, for the same reason: the creator named the
-    // skills a visitor may load (`shareConfig.skillGrants`), and the
-    // operation's skill pool was already intersected with that grant at
-    // assembly (`filterSkillsByShareGate`) — but `activateSkill` /
-    // `readReference` / `execScript` all resolve a MODEL-SUPPLIED name, so a
-    // name the pool never offered still arrives here. This predicate is that
-    // second, authoritative check.
-    //
-    // `resolveShareAllowedSkillIds` intersects candidates with the grant, so
-    // passing the single id under test makes each call exactly the membership
-    // question this predicate asks.
+    // Both the operation pool and any share grant constrain fresh lookups by name.
     const shareVisitor = context.agentShareVisitor;
-    const isSkillGranted = shareVisitor
-      ? (identifier: string) => resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0
-      : undefined;
+    const available = context.availableSkillIds && new Set(context.availableSkillIds);
+    const isSkillGranted =
+      available || shareVisitor
+        ? (id: string) =>
+            (!available || available.has(id)) &&
+            (!shareVisitor || resolveShareAllowedSkillIds([id], shareVisitor).length > 0)
+        : undefined;
 
     /**
      * The same two opt-outs `SkillServerRuntimeService.isSkillReachable`

@@ -1,6 +1,5 @@
-import { builtinSkills, LobeHubIdentifier } from '@lobechat/builtin-skills';
+import { builtinSkills } from '@lobechat/builtin-skills';
 import type { OperationSkillSet } from '@lobechat/context-engine';
-import { mentionsTopic } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { assembleSkillPool } from '@lobechat/mecha';
 import { resourcesTreePrompt } from '@lobechat/prompts';
@@ -45,7 +44,7 @@ export interface OperationSkillSetInput {
   /**
    * Skills the user selected in this topic, from this turn's request and the
    * `metadata.selectedSkillIds` of earlier user turns (see
-   * {@link collectSelectedSkillIds}). Injected with their bodies like pinned skills.
+   * {@link collectSelectedSkillIds}). These are explicit invocations, not agent settings.
    */
   selectedSkillIds: string[];
   shareGate: ExecRunContext['shareGate'];
@@ -100,7 +99,6 @@ export const buildOperationSkillSet = async (
     autoSkillIds,
     disabledPluginIds,
     executionPlan,
-    prompt,
     resolvedAgentId,
     selectedSkillIds,
     shareGate,
@@ -118,23 +116,9 @@ export const buildOperationSkillSet = async (
     const skillModel = new AgentSkillModel(deps.db, deps.userId, deps.workspaceId);
     const { data: dbSkills } = await skillModel.findAll();
 
-    // Pinned skills need their SKILL.md body injected into context directly,
-    // not lazily via the `activateSkill` tool. Gate on the agent's genuinely
-    // pinned entries (`getActivePluginIds(agentConfig.plugins)`), NOT the
-    // fully-expanded `agentPlugins`: the latter also carries turn-scoped tool
-    // ids (mentions, selected tools, `lobe-message`, …), which would
-    // eager-activate an auto-mode skill whose identifier merely collides with
-    // one of them. `findAll` uses `skillListColumns` (no `content`), so fetch
-    // bodies only for the pinned subset to keep the op-param payload bounded.
-    // Non-pinned skills stay content-less here and remain lazily activatable.
-    // Content lives in the DB `content` column already (SKILL.md body), so no
-    // zip unpack is needed; mirror `activateSkill` by appending the resource
-    // tree so pinned ZIP/GitHub skills keep their `readReference` paths.
-    //
-    // Skills the user explicitly selected in this topic are injected the same
-    // way: the selection names them directly, so no tool id can collide into it.
+    // Enabling a skill lists its metadata. Only a deliberate invocation needs its body.
     const pinnedSkillIds = new Set(getActivePluginIds(agentConfig.plugins));
-    const injectedSkillIds = new Set([...pinnedSkillIds, ...selectedSkillIds]);
+    const injectedSkillIds = new Set(selectedSkillIds);
     const pinnedDbSkillIds = dbSkills
       .filter((s) => injectedSkillIds.has(s.identifier))
       .map((s) => s.id);
@@ -164,22 +148,14 @@ export const buildOperationSkillSet = async (
     // carry the same value.
     const agentSkills = await deps.agentDocumentsService.getAgentSkills(resolvedAgentId);
     const agentSkillMetas = agentSkills.map((skill) => ({
-      // `getAgentSkills` already resolves the bundle body, so pinned
-      // agent-document skills inject directly without an extra fetch; only
-      // attach it for the pinned subset to keep the payload lean.
+      // Only explicit invocations need the resolved bundle body.
       content: injectedSkillIds.has(skill.identifier) ? skill.content : undefined,
       description: skill.description,
       identifier: skill.identifier,
       name: skill.name,
     }));
 
-    // The user's own skill library: listed to every run, and injected up front
-    // when the agent pins one or the run names it in its plugins — a goal
-    // batch's unit runs name the batch's plan skill that way.
-    // The catalog carries no bodies; only the pinned / run-named skills read
-    // theirs, so a library that grows with every batch stays cheap to list.
-    // A workspace-public agent never reads its caller's private skills — every
-    // user skill is private — so its runs see none of them.
+    // The catalog supplies summaries; only explicitly invoked user skills need bodies.
     const userSkills = new UserSkillService(
       deps.db,
       deps.userId,
@@ -195,7 +171,11 @@ export const buildOperationSkillSet = async (
         )
       : [];
     const namedUserSkills = await userSkills.loadRuntimeSkills(
-      [...injectedSkillIds, ...(agentPlugins ?? []), ...taskSkillIds],
+      [
+        ...injectedSkillIds,
+        ...(agentPlugins ?? []).filter((id) => !pinnedSkillIds.has(id)),
+        ...taskSkillIds,
+      ],
       { trustedGenerated: taskSkillIds },
     );
     // Skills the system generated for one job (a goal batch's plan) are not
@@ -259,15 +239,11 @@ export const buildOperationSkillSet = async (
         )
       : undefined;
 
-    // Whether a skill is PINNED is the agent's own configuration; the share
-    // only decides whether the visitor may reach it. `agentPlugins` has already
-    // been narrowed by the TOOL grants (`filterPluginsByShareGate` in
-    // `toolDiscovery`), which drops a skill the creator granted as a skill
-    // rather than as a tool — leaving it un-pinned for the visitor (no content
-    // injection) and, under `manual` mode, dropped from the pool entirely. Add
-    // back exactly the ids that are both genuinely pinned on the agent AND
-    // allowed by this share's skill grants; nothing else widens.
-    const shareEnabledSkillIds = shareAllowedSkillIds?.filter((id) => pinnedSkillIds.has(id)) ?? [];
+    // Run-named user skills include a goal batch's generated plan. A stored pin
+    // is availability only, not an invocation.
+    const invokedUserSkillIds = namedUserSkills
+      .filter((skill) => !pinnedSkillIds.has(skill.identifier))
+      .map((skill) => skill.identifier);
 
     // Device-only builtin skills are gated on the run's execution plan, not
     // the compile-time `isDesktop` constant (always false on the server). Use
@@ -289,19 +265,11 @@ export const buildOperationSkillSet = async (
         // `auto` are listed, the ones it never turned on are not. A share's
         // skill grant is the creator opting the visitor in by name, so a
         // granted skill stays reachable without also being turned on.
-        autoSkillIds: [...autoSkillIds, ...(shareAllowedSkillIds ?? [])],
         canExecuteOnDevice: executionPlan ? isDeviceCapablePlan(executionPlan) : false,
         disabledIds: disabledPluginIds,
-        // Selected skills join the enabled set so the resolver auto-activates
-        // them; a share allowlist or a disabled entry still drops them above.
-        enabledPluginIds: [
-          ...new Set([...(agentPlugins ?? []), ...shareEnabledSkillIds, ...selectedSkillIds]),
-        ],
+        availableSkillIds: [...pinnedSkillIds, ...autoSkillIds, ...(shareAllowedSkillIds ?? [])],
+        activatedSkillIds: [...selectedSkillIds, ...invokedUserSkillIds, ...taskSkillIds],
         shareAllowedIds: shareAllowedSkillIds,
-        skillActivateMode: agentConfig.chatConfig?.skillActivateMode,
-        // Reading another topic (`<refer_topic>` or a raw `tpc_` id) goes through `lh topic view`,
-        // which the lobehub skill teaches.
-        turnSkillIds: mentionsTopic([{ content: prompt ?? '' }]) ? [LobeHubIdentifier] : [],
       },
     );
   } catch (error) {

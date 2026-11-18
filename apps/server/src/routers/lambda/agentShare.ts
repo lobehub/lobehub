@@ -5,7 +5,7 @@ import {
   AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
 import { assembleSkillPool } from '@lobechat/mecha';
-import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
+import { getActivePluginIds, getAutoPluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -398,10 +398,7 @@ export const agentShareRouter = router({
    *   filesystem, and a visitor run never routes a device;
    * - `canExecuteOnDevice: false`, for the same reason.
    *
-   * Skills are NOT filtered to the agent's pinned set: a skill is on-demand by
-   * default, so an unpinned skill is exactly the normal case. `manual` mode is
-   * the one exception, and `assembleSkillPool` applies it from
-   * `enabledPluginIds` on its own.
+   * Only skills enabled on this agent can be granted to a visitor.
    *
    * Authorization matches the other share reads: `assertCanManageAgentShare`
    * for the workspace case, then `requireShare` on the ownership-scoped
@@ -453,8 +450,10 @@ export const agentShareRouter = router({
       {
         canExecuteOnDevice: false,
         disabledIds: getDisabledPluginIds(agentConfig?.plugins ?? undefined),
-        enabledPluginIds: getActivePluginIds(agentConfig?.plugins ?? undefined),
-        skillActivateMode: agentConfig?.chatConfig?.skillActivateMode,
+        availableSkillIds: [
+          ...getActivePluginIds(agentConfig?.plugins ?? undefined),
+          ...getAutoPluginIds(agentConfig?.plugins ?? undefined),
+        ],
       },
     );
 

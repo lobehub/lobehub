@@ -229,6 +229,8 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /** Skills offered by the current operation. An empty list allows none. */
+  availableSkillIds?: string[];
   /**
    * Who started this run from an IM conversation (`state.principal.actor.bot`): the platform
    * sender of the message the run answers and whether they are the bot's owner. Built per inbound

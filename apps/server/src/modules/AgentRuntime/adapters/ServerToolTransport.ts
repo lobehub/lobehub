@@ -315,6 +315,7 @@ export class ServerToolTransport implements ToolTransport {
               messageId: context.state.origin?.sourceMessageId,
               operationId,
               projectId: context.state.origin?.projectId,
+              availableSkillIds: context.state.plan?.skills?.skills.map((s) => s.identifier) ?? [],
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
               runSkillIds: context.state.plan?.skills?.skills?.map((skill) => skill.identifier),
