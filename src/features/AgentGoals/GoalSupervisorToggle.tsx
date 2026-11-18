@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
-import { MessageSquareTextIcon } from 'lucide-react';
+import { PanelRightOpenIcon } from 'lucide-react';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
@@ -18,12 +18,14 @@ interface GoalSupervisorToggleProps {
 }
 
 /**
- * The goal panel's single header entry: a conversation glyph.
+ * The goal panel's single header entry once the panel is folded.
  *
- * The panel opens by default, so this only shows once someone folds it. It used
- * to be the supervising agent's avatar, which people did not read as a way back
- * into the conversation; a conversation icon says what pressing it opens, and the
- * tooltip still names the agent.
+ * The panel opens by default, so this only shows after someone folds it. It is
+ * the same open-panel glyph the task detail page and the document editor use,
+ * and the mirror of the panel's own fold button, so folding and unfolding read
+ * as one control. It used to be the supervising agent's avatar, which people
+ * did not read as a way back into the conversation; the tooltip still names
+ * the agent and what the panel holds.
  */
 const GoalSupervisorToggle = ({
   agentId,
@@ -36,7 +38,7 @@ const GoalSupervisorToggle = ({
 
   if (hideWhenExpanded && expand) return null;
 
-  // The icon carries the action; the tooltip adds whose conversation it is.
+  // The icon carries the action; the tooltip says whose conversation it reopens.
   const title = meta?.title ? `${meta.title} · ${label}` : label;
 
   return (
@@ -44,7 +46,7 @@ const GoalSupervisorToggle = ({
       active={expand}
       aria-label={title}
       data-testid={'goal-supervisor-toggle'}
-      icon={MessageSquareTextIcon}
+      icon={PanelRightOpenIcon}
       size={DESKTOP_HEADER_ICON_SMALL_SIZE}
       title={title}
       onClick={onToggle}
