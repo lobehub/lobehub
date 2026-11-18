@@ -73,3 +73,63 @@ export const planDriverRollback = ({
     agencyConfig: { heterogeneousProvider },
     provider,
   }) as unknown as PartialDeep<LobeAgentConfig>;
+
+interface DriverWriteOptions {
+  rethrow: true;
+  showErrorMessage: false;
+}
+
+/**
+ * The store's config writer: by default it reports a failed save with its own toast and resolves,
+ * so a caller cannot tell success from failure. A driver switch needs the failure to roll back and
+ * to replace the success toast, so every write here asks for the error and keeps the store quiet.
+ */
+type DriverConfigWriter = (
+  agentId: string,
+  patch: PartialDeep<LobeAgentConfig>,
+  options: DriverWriteOptions,
+) => Promise<void>;
+
+const DRIVER_WRITE_OPTIONS: DriverWriteOptions = { rethrow: true, showErrorMessage: false };
+
+const isAbortError = (error: unknown) =>
+  error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted'));
+
+/**
+ * Land a driver switch plan and say how it ended, so the caller shows exactly one outcome.
+ *
+ * - `switched`: every write was saved.
+ * - `failed`: a write was rejected; a clear-then-write switch has been rolled back to `previous`.
+ * - `superseded`: a newer config write for this agent aborted ours, and that write owns the outcome.
+ */
+export const runDriverSwitch = async ({
+  agentId,
+  plan,
+  previous,
+  write,
+}: {
+  agentId: string;
+  plan: PartialDeep<LobeAgentConfig>[];
+  previous: { heterogeneousProvider: unknown; provider?: string };
+  write: DriverConfigWriter;
+}): Promise<'failed' | 'superseded' | 'switched'> => {
+  try {
+    // Sequential on purpose: the second write must merge into the cleared block.
+    for (const patch of plan) await write(agentId, patch, DRIVER_WRITE_OPTIONS);
+    return 'switched';
+  } catch (error) {
+    if (isAbortError(error)) return 'superseded';
+
+    // Switching between two external drivers is clear-then-write. If the write fails after the
+    // clear, put the previous driver back rather than leave the agent on LobeHub with a stale
+    // provider stamp.
+    if (plan.length > 1 && previous.heterogeneousProvider) {
+      try {
+        await write(agentId, planDriverRollback(previous), DRIVER_WRITE_OPTIONS);
+      } catch {
+        // The caller's failure message still tells the person the switch did not happen.
+      }
+    }
+    return 'failed';
+  }
+};

@@ -1,5 +1,10 @@
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL, DEFAUTT_AGENT_TTS_CONFIG, isDesktop } from '@lobechat/const';
+import {
+  DEFAULT_MODEL,
+  DEFAUTT_AGENT_TTS_CONFIG,
+  isAgentShareModelRestrictionExempt,
+  isDesktop,
+} from '@lobechat/const';
 import { type AgentBuilderContext } from '@lobechat/context-engine';
 import {
   type AgentMode,
@@ -207,6 +212,15 @@ const isAgentHeterogeneousById =
     !!getAgencyConfigById(agentId)(s)?.heterogeneousProvider;
 
 /**
+ * Whether a shared agent is exempt from the share model-provider restriction
+ * (a Claude Code / Codex agent) — by agentId. Mirrors the server check.
+ */
+const isAgentShareModelRestrictionExemptById =
+  (agentId: string) =>
+  (s: AgentStoreState): boolean =>
+    isAgentShareModelRestrictionExempt(getAgencyConfigById(agentId)(s));
+
+/**
  * Get full agent data by agentId
  * Returns the complete agent object including metadata fields like updatedAt
  */
@@ -244,5 +258,6 @@ export const agentByIdSelectors = {
   isAgentConfigLoadingById,
   isAgentHeterogeneousById,
   isAgentNotFoundById,
+  isAgentShareModelRestrictionExemptById,
   isWorkspaceAgentById,
 };

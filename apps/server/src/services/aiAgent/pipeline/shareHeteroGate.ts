@@ -1,4 +1,4 @@
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import { isAgentShareVisitorHeteroType, isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { LobeAgentAgencyConfig, RequestTrigger } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
@@ -8,13 +8,6 @@ import { resolveExecutionPlan } from '@/helpers/executionTarget';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import type { AgentShareGate } from '../shareGate';
-
-/**
- * Heterogeneous runtimes a share visitor may run, on a device the share grants
- * them. Both run as a local CLI on that device; platform agents (OpenClaw /
- * Hermes) and the other CLIs have no visitor-scoped dispatch.
- */
-const SHARE_VISITOR_HETERO_TYPES = new Set<string>(['claude-code', 'codex']);
 
 export interface AssertShareHeteroAllowedParams {
   agencyConfig?: LobeAgentAgencyConfig;
@@ -61,7 +54,7 @@ export const assertShareHeteroAllowed = async ({
   if (!shareGate) return;
   const type = heterogeneousType ?? (isHeterogeneousAgentModelId(model) ? model : undefined);
   if (!type) return;
-  if (!shareGate.canUseDevice || !SHARE_VISITOR_HETERO_TYPES.has(type))
+  if (!shareGate.canUseDevice || !isAgentShareVisitorHeteroType(type))
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: ChatErrorType.ShareHeterogeneousAgentUnsupported,

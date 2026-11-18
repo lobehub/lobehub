@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasShareToolGrant,
+  isAgentShareModelRestrictionExempt,
   isShareToolApiGranted,
   resolveShareAllowedSkillIds,
   resolveShareToolGrants,
@@ -108,5 +109,25 @@ describe('resolveShareAllowedSkillIds', () => {
     // Default-closed: no grant means no skill, and `toolGrants` is never read
     // as a skill list even though the two share one identifier namespace.
     expect(resolveShareAllowedSkillIds(['pdf-report'], {})).toEqual([]);
+  });
+});
+
+describe('isAgentShareModelRestrictionExempt', () => {
+  it('exempts Claude Code and Codex agents, which run no provider model', () => {
+    expect(
+      isAgentShareModelRestrictionExempt({ heterogeneousProvider: { type: 'claude-code' } }),
+    ).toBe(true);
+    expect(isAgentShareModelRestrictionExempt({ heterogeneousProvider: { type: 'codex' } })).toBe(
+      true,
+    );
+  });
+
+  it('keeps LobeHub agents and runtimes a visitor cannot run restricted', () => {
+    expect(isAgentShareModelRestrictionExempt(undefined)).toBe(false);
+    expect(isAgentShareModelRestrictionExempt(null)).toBe(false);
+    expect(isAgentShareModelRestrictionExempt({ heterogeneousProvider: null })).toBe(false);
+    expect(
+      isAgentShareModelRestrictionExempt({ heterogeneousProvider: { type: 'openclaw' } }),
+    ).toBe(false);
   });
 });

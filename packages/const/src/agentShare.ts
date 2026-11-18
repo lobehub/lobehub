@@ -242,3 +242,29 @@ export const isShareToolApiGranted = (
  * over the creator's machine, so it is meant for a handful of trusted people.
  */
 export const AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT = 100;
+
+/**
+ * Heterogeneous runtimes a share visitor may run, on a device the share grants
+ * them. Both run as a local CLI on that device; platform agents (OpenClaw /
+ * Hermes) and the other CLIs have no visitor-scoped dispatch.
+ */
+export const AGENT_SHARE_VISITOR_HETERO_TYPES: readonly string[] = ['claude-code', 'codex'];
+
+/** Whether a share visitor may run this heterogeneous runtime type. */
+export const isAgentShareVisitorHeteroType = (type?: string | null): boolean =>
+  !!type && AGENT_SHARE_VISITOR_HETERO_TYPES.includes(type);
+
+/**
+ * Whether an agent's effective config is exempt from the shared-agent model
+ * provider restriction (`AGENT_SHARE_ALLOWED_PROVIDERS`).
+ *
+ * The restriction keeps visitors from spending the creator's third-party model
+ * quota. A Claude Code / Codex agent runs its own CLI on the creator's device and
+ * calls none of `provider`'s models — `provider` only stamps the runtime type — so
+ * it is exempt. Every other driver, including heterogeneous runtimes a visitor
+ * cannot run, stays restricted. Server save/publish checks and every client hint
+ * must use this one predicate so they never disagree.
+ */
+export const isAgentShareModelRestrictionExempt = (
+  agencyConfig?: { heterogeneousProvider?: { type?: string } | null } | null,
+): boolean => isAgentShareVisitorHeteroType(agencyConfig?.heterogeneousProvider?.type);

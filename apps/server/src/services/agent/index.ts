@@ -1,7 +1,7 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
 import { DEFAULT_PROVIDER } from '@lobechat/business-const';
-import { DEFAULT_MODEL } from '@lobechat/const';
+import { DEFAULT_MODEL, isAgentShareModelRestrictionExempt } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentItem,
@@ -112,12 +112,30 @@ export class AgentService {
     return { agentId: agent.id };
   }
 
-  /** Validate the effective selection at configuration boundaries, including inherited defaults. */
+  /**
+   * Validate the effective selection at configuration boundaries, including inherited defaults.
+   *
+   * Returns the resolved selection to pin, or `undefined` when there is nothing to check.
+   * A Claude Code / Codex agent is exempt (`isAgentShareModelRestrictionExempt`): it runs on the
+   * creator's device and calls none of `provider`'s models. The decision reads the effective
+   * driver, the stored one merged with the patch, so switching back to LobeHub
+   * (`heterogeneousProvider: null`) is checked as usual.
+   */
   async assertShareModelAllowed(agentId: string, patch: PartialDeep<AgentItem> = {}) {
     if (!AGENT_SHARE_ALLOWED_PROVIDERS) return;
 
     const agent = await this.agentModel.getAgentConfigById(agentId);
     if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+    // `agencyConfig: null` clears the whole block, so it must not fall back to the stored driver.
+    const effectiveAgencyConfig =
+      'agencyConfig' in patch
+        ? patch.agencyConfig === null
+          ? null
+          : { ...agent.agencyConfig, ...patch.agencyConfig }
+        : agent.agencyConfig;
+    if (isAgentShareModelRestrictionExempt(effectiveAgencyConfig as AgentItem['agencyConfig']))
+      return;
 
     const selection = await this.resolveModelSelection({ ...agent, ...patch });
     const { provider } = selection;
