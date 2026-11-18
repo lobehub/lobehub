@@ -14,6 +14,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  like,
   lt,
   or,
   type SQL,
@@ -178,7 +179,20 @@ const sourceTopicsByMessage = async (
 
 const THREAD_PREVIEW_LENGTH = 240;
 
+/**
+ * Request keys of the acknowledgements an Agent posts before its run (`openingRequestKey` in
+ * `./opening`, which imports this module, so the prefix is repeated here).
+ */
+const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
+
+/** An Agent's acknowledgement before its run: it says the work started, not what came of it. */
+const isOpeningAck = and(
+  eq(channelMessages.routingStatus, 'reply'),
+  like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
+);
+
 type ThreadSummary = {
+  lastNewsAt: Date | null;
   lastReply: Pick<ReturnType<typeof publicMessage>, 'author' | 'content' | 'createdAt' | 'id'>;
   replyCount: number;
 };
@@ -192,7 +206,14 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
   );
   const [counts, latest] = await Promise.all([
     tx
-      .select({ replyCount: count(), threadId: channelMessages.threadId })
+      .select({
+        lastNewsAt:
+          sql<Date | null>`max(${channelMessages.createdAt}) filter (where not (${isOpeningAck}))`.mapWith(
+            channelMessages.createdAt,
+          ),
+        replyCount: count(),
+        threadId: channelMessages.threadId,
+      })
       .from(channelMessages)
       .where(scope)
       .groupBy(channelMessages.threadId),
@@ -204,15 +225,16 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
       .where(scope)
       .orderBy(asc(channelMessages.threadId), desc(channelMessages.sequence)),
   ]);
-  const replyCounts = new Map(counts.map((row) => [row.threadId, row.replyCount]));
+  const countsByThread = new Map(counts.map((row) => [row.threadId, row]));
   return new Map<string, ThreadSummary>(
     latest.map((row) => {
       const { author, content, createdAt, id } = publicMessage(row, []);
       return [
         row.threadId!,
         {
+          lastNewsAt: countsByThread.get(row.threadId)?.lastNewsAt ?? null,
           lastReply: { author, content: content.slice(0, THREAD_PREVIEW_LENGTH), createdAt, id },
-          replyCount: replyCounts.get(row.threadId) ?? 0,
+          replyCount: countsByThread.get(row.threadId)?.replyCount ?? 0,
         },
       ];
     }),
@@ -519,6 +541,7 @@ export const readChannelView = async (
       return summarized.includes(entry.id)
         ? {
             ...named,
+            lastNewsAt: summaries.get(entry.id)?.lastNewsAt ?? null,
             lastReply: summaries.get(entry.id)?.lastReply ?? null,
             replyCount: summaries.get(entry.id)?.replyCount ?? 0,
           }
