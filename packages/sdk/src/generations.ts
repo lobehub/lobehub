@@ -14,24 +14,47 @@ export interface GenerationWaitOptions {
   pollInterval?: number;
   /** Stops waiting (rejecting with the signal's reason) when aborted. */
   signal?: AbortSignal;
-  /** Give up after this many milliseconds. Defaults to 10 minutes; videos can take several. */
+  /**
+   * Give up after this many milliseconds, including a status request still in
+   * flight. Defaults to 10 minutes; videos can take several.
+   */
   timeout?: number;
 }
 
-/** `generations.wait` ran out of time; `generation` is the last state it read. */
+/**
+ * `generations.wait` ran out of time; `generation` is the last state it read
+ * (absent when no status request finished in time).
+ */
 export class GenerationWaitTimeoutError extends Error {
-  readonly generation: Generation;
+  readonly generation?: Generation;
   readonly timeout: number;
 
-  constructor(generation: Generation, timeout: number) {
+  constructor(id: string, timeout: number, generation?: Generation) {
     super(
-      `Generation ${generation.id} is still ${generation.status} after ${timeout} ms; call generations.wait again to keep waiting`,
+      `Generation ${id} is still ${generation?.status ?? 'unread'} after ${timeout} ms; call generations.wait again to keep waiting`,
     );
     this.name = 'GenerationWaitTimeoutError';
     this.generation = generation;
     this.timeout = timeout;
   }
 }
+
+/** Abort when any of `signals` does (`AbortSignal.any`, with a fallback for older hosts). */
+const anySignal = (signals: AbortSignal[]) => {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), {
+      once: true,
+      signal: controller.signal,
+    });
+  }
+  return controller.signal;
+};
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -69,16 +92,38 @@ export class GenerationsResource extends Generations {
       timeout = DEFAULT_GENERATION_WAIT_TIMEOUT,
     } = options;
     const deadline = Date.now() + timeout;
+    // The deadline also aborts a status request in flight (and its retries),
+    // so a slow or stalled request cannot outlive `timeout`.
+    const expiry = new AbortController();
+    const timer = setTimeout(() => expiry.abort(), timeout);
+    const waitSignal = signal ? anySignal([signal, expiry.signal]) : expiry.signal;
+    let last: Generation | undefined;
 
-    for (;;) {
-      const { data } = await this.get({ path: { id }, signal, throwOnError: true });
-      const generation = data.data;
-      onPoll?.(generation);
-      if (TERMINAL_GENERATION_STATUSES.includes(generation.status)) return generation;
+    try {
+      for (;;) {
+        const { data } = await this.get({
+          path: { id },
+          signal: waitSignal,
+          throwOnError: true,
+          timeout: Math.max(1, deadline - Date.now()),
+        });
+        last = data.data;
+        onPoll?.(last);
+        if (TERMINAL_GENERATION_STATUSES.includes(last.status)) return last;
 
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw new GenerationWaitTimeoutError(generation, timeout);
-      await sleep(Math.min(pollInterval, remaining), signal);
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new GenerationWaitTimeoutError(id, timeout, last);
+        await sleep(Math.min(pollInterval, remaining), waitSignal);
+      }
+    } catch (error) {
+      // A caller's own abort keeps its reason; running out of time is a timeout.
+      if (!signal?.aborted && (expiry.signal.aborted || Date.now() >= deadline)) {
+        if (error instanceof GenerationWaitTimeoutError) throw error;
+        throw new GenerationWaitTimeoutError(id, timeout, last);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

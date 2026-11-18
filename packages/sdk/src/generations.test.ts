@@ -88,6 +88,29 @@ describe('generations.wait', () => {
     expect((error as GenerationWaitTimeoutError).generation.status).toBe('processing');
   });
 
+  it('bounds a slow status request by the wait timeout', async () => {
+    const fetch = (async (input: Request) => {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 2000);
+        input.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(input.signal.reason);
+        });
+      });
+      return json({ data: generation('success'), success: true, timestamp: 't' });
+    }) as typeof globalThis.fetch;
+    const lobehub = createLobeHub({ apiKey: 'sk-lh-test', fetch });
+
+    const started = Date.now();
+    const error = await lobehub.generations
+      .wait('gen_1', { timeout: 50 })
+      .catch((error_: unknown) => error_);
+
+    expect(error).toBeInstanceOf(GenerationWaitTimeoutError);
+    expect((error as GenerationWaitTimeoutError).generation).toBeUndefined();
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   it('rejects with the API error when the generation cannot be read', async () => {
     const { fetch, urls } = statusFetch([
       json(
