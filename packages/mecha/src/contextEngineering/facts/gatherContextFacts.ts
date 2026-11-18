@@ -518,6 +518,8 @@ const gatherAgentManagementContext = async (
           title: a.title ?? 'Untitled',
         })),
         availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
+        // A group has no hand-off API (`lobe-agent` drops `callSubAgent` there).
+        ...(request.groupId && { canHandOff: false }),
         ...(currentAgent && { currentAgent }),
       };
     } else if (currentAgent) {

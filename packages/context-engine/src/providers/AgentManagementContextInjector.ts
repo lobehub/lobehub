@@ -95,6 +95,12 @@ export interface AgentManagementContext {
   /** Available providers and models */
   availableProviders?: AvailableProviderInfo[];
   /**
+   * `false` where no hand-off API exists for this run (a group conversation:
+   * `lobe-agent` drops `callSubAgent` there and members speak through the
+   * group tools). The listed agents then serve management only.
+   */
+  canHandOff?: boolean;
+  /**
    * The current responding agent's id and title.
    * Exposed so the model can use Agent Management tools (updateAgent, getAgentDetail,
    * installPlugin, etc.) to manage itself when the user asks to modify the current agent.
@@ -249,7 +255,9 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   }
   if (hasAgents) {
     instructionParts.push(
-      "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may hand the work to it with the `lobe-agent` `callSubAgent` tool (activating `lobe-agent` first if it is not already enabled) and its id as `agentId`. If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
+      context.canHandOff === false
+        ? "The `available_agents` section lists the user's other existing agents (you are not in this list), for the Agent Management tools. Use `searchAgent` to look further (including the marketplace)."
+        : "The `available_agents` section lists the user's other existing agents (you are not in this list). When the user's request clearly matches one of them, you may hand the work to it with the `lobe-agent` `callSubAgent` tool (activating `lobe-agent` first if it is not already enabled) and its id as `agentId`. If no listed agent matches, use `searchAgent` to look further (including the marketplace).",
     );
   }
 

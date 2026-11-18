@@ -369,6 +369,16 @@ describe('gatherContextFacts', () => {
       expect(ctx.availableAgentsHasMore).toBe(true);
       expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
       expect(ctx.availablePlugins).toBeUndefined();
+      expect(ctx.canHandOff).toBeUndefined();
+    });
+
+    // `lobe-agent` drops callSubAgent in a group; members speak through the group tools.
+    it('marks the listed agents as not a hand-off target in a group', async () => {
+      const facts = await gatherContextFacts(request({ groupId: 'grp_1' }), {
+        listRecentAgents: async () => recent,
+      });
+
+      expect(facts.step.agentManagementContext?.canHandOff).toBe(false);
     });
 
     it.each([{ enabledToolIds: [] }, { enabledToolIds: ['lobe-agent-management'] }])(

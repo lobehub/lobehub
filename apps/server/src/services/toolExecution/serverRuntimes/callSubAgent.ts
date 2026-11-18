@@ -4,6 +4,7 @@ import {
   buildSteeredSubAgentReceipt,
   withLegacyCallAgentNote,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
@@ -152,7 +153,10 @@ export const runCallSubAgent = async (
       );
     }
     targetTitle = target.title || undefined;
-    targetIsExternal = !!target.agencyConfig?.heterogeneousProvider;
+    // A legacy external agent is stored as a bare model id (`claude-code`)
+    // without a provider config; the run still launches its CLI.
+    targetIsExternal =
+      !!target.agencyConfig?.heterogeneousProvider || isHeterogeneousAgentModelId(target.model);
   }
 
   const description =

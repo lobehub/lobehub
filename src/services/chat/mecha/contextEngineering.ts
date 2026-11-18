@@ -297,6 +297,7 @@ export const contextEngineering = async ({
       editingGroupId: chatStoreState.activeGroupId || undefined,
       enabledToolIds: tools ?? [],
       features: resolveBrowserConnectorFeatures(),
+      groupId,
       mentionedAgents: initialContext?.mentionedAgents,
       messages,
       shareVisitor,

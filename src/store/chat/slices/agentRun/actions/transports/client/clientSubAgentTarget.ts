@@ -1,3 +1,4 @@
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeAgentConfig } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
@@ -34,7 +35,8 @@ export const resolveClientSubAgentTarget = async (
 
   const title = (cachedMeta?.title ?? (config as { title?: string } | undefined)?.title) || agentId;
 
-  if (config?.agencyConfig?.heterogeneousProvider) {
+  // A legacy external agent is stored as a bare model id without a provider config.
+  if (config?.agencyConfig?.heterogeneousProvider || isHeterogeneousAgentModelId(config?.model)) {
     return {
       error: `Agent "${title}" is an external agent (such as Claude Code). This conversation runs its tools in the app itself instead of on the server, where external agents are started, so it cannot be called from here. Answer yourself, or ask the user to call it directly.`,
     };

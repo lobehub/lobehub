@@ -165,6 +165,19 @@ describe('runCallSubAgent', () => {
       );
     });
 
+    it('marks a legacy external agent (bare claude-code model) as not steerable', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ model: 'claude-code', title: 'Old CC' });
+      const run = started();
+
+      await runCallSubAgent(
+        { agentId: 'agent-old-cc', description: 'Fix', instruction: 'Fix the bug' },
+        ctxWith(run),
+        scope,
+      );
+
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ canSteer: false }));
+    });
+
     it('starts it in the background with a follow-up handle', async () => {
       const run = started();
 
