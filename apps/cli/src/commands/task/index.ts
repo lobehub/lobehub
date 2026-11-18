@@ -31,6 +31,17 @@ import {
 import { registerLifecycleCommands } from './lifecycle';
 import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
 import { type TaskOriginInput, toCreateOrigin } from './origin';
+import {
+  canCreateViaRest,
+  canListViaRest,
+  canUpdateViaRest,
+  createTaskViaRest,
+  deleteTaskViaRest,
+  getTaskDetailViaRest,
+  listTasksViaRest,
+  updateTaskStatusViaRest,
+  updateTaskViaRest,
+} from './rest';
 import { registerReviewCommands } from './review';
 import { registerTopicCommands } from './topic';
 import { resolveAppUrl, resolveAppUrlBuilder, taskPath } from './url';
@@ -102,7 +113,11 @@ export function registerTaskCommand(program: Command) {
           delete input.offset;
         }
 
-        const result = await client.task.list.query(input as any);
+        // `--json` stays on tRPC: REST rows carry no `participants`.
+        const result =
+          canListViaRest(input) && options.json === undefined
+            ? await listTasksViaRest(input)
+            : await client.task.list.query(input as any);
 
         if (options.json !== undefined) {
           outputJson(
@@ -304,7 +319,7 @@ export function registerTaskCommand(program: Command) {
       }
 
       // Default: task detail
-      const result = await client.task.detail.query({ id });
+      const result = await getTaskDetailViaRest(id);
       const t = result.data;
       const url = await resolveAppUrl(client, taskPath(t.identifier, t.name));
 
@@ -644,7 +659,9 @@ export function registerTaskCommand(program: Command) {
         if (modelConfig) input.config = modelConfig;
         if (origin) input.context = { origin };
 
-        const result = await client.task.create.mutate(input);
+        const result = canCreateViaRest(input)
+          ? await createTaskViaRest(input)
+          : await client.task.create.mutate(input);
         const url = buildUrl(taskPath(result.data.identifier, result.data.name));
 
         if (options.json !== undefined) {
@@ -755,7 +772,7 @@ export function registerTaskCommand(program: Command) {
         // (not the whole set replaced), so a teammate's concurrent label edit
         // survives and the command never half-applies.
         const hasOtherEdits = hasFieldEdits || !!options.status;
-        const readLabels = async () => (await client.task.detail.query({ id })).data?.labels ?? [];
+        const readLabels = async () => (await getTaskDetailViaRest(id)).data?.labels ?? [];
         const previousLabels = hasLabelEdits && hasOtherEdits ? await readLabels() : undefined;
         let labels: Awaited<ReturnType<typeof client.taskLabel.changeForTask.mutate>> | undefined;
         const restoreLabelsOnFailure = async (error: unknown): Promise<never> => {
@@ -809,9 +826,9 @@ export function registerTaskCommand(program: Command) {
         // atomically.
         if (options.status) {
           if (!hasFieldEdits) {
-            const result = await client.task.updateStatus
-              .mutate({ id, status: options.status })
-              .catch(restoreLabelsOnFailure);
+            const result = await updateTaskStatusViaRest(id, options.status).catch(
+              restoreLabelsOnFailure,
+            );
             if (options.json !== undefined) {
               outputJson(
                 withUrl(
@@ -831,7 +848,12 @@ export function registerTaskCommand(program: Command) {
           input.status = options.status;
         }
 
-        const result = await client.task.update.mutate(input as any).catch(restoreLabelsOnFailure);
+        // Combined status edits stay on tRPC: only it applies both in one transaction.
+        const result = await (
+          canUpdateViaRest(input)
+            ? updateTaskViaRest(input)
+            : client.task.update.mutate(input as any)
+        ).catch(restoreLabelsOnFailure);
 
         if (options.json !== undefined) {
           // task.update returns the bare row; overlay the post-edit labels.
@@ -861,8 +883,7 @@ export function registerTaskCommand(program: Command) {
         if (!ok) return;
       }
 
-      const client = await getTrpcClient();
-      const result = await client.task.delete.mutate({ id });
+      const result = await deleteTaskViaRest(id);
       log.info(`Task ${pc.bold(result.data.identifier)} (id: ${result.data.id}) deleted.`);
     });
 

@@ -1,9 +1,11 @@
 import path from 'node:path';
 
+import { LobeHubAPIError } from '@lobehub/sdk';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getSdkClient } from '../api/sdk';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
@@ -27,6 +29,21 @@ function formatFileType(fileType: string): string {
   // For other types, extract subtype (e.g. "image/png" → "png")
   const parts = fileType.split('/');
   return parts.length > 1 ? parts[1] : fileType;
+}
+
+/**
+ * `POST|DELETE /knowledge-bases/{id}/files/batch` takes file ids only; the
+ * tRPC procedures also resolve a document (`docs_…`) to its mirror file, so a
+ * batch that names a document keeps going through tRPC.
+ */
+const namesDocument = (ids: string[]) => ids.some((id) => id.startsWith('docs_'));
+
+/** Per-file failures of a REST batch: report each one and exit non-zero. */
+function reportBatchFailures(failed: { fileId: string; reason: string }[]): boolean {
+  if (failed.length === 0) return false;
+  for (const { fileId, reason } of failed) log.error(`${fileId}: ${reason}`);
+  process.exit(1);
+  return true;
 }
 
 export function registerKbCommand(program: Command) {
@@ -160,16 +177,17 @@ export function registerKbCommand(program: Command) {
     .option('-d, --description <desc>', 'Description')
     .option('--avatar <url>', 'Avatar URL')
     .action(async (options: { avatar?: string; description?: string; name: string }) => {
-      const client = await getTrpcClient();
-      const buildUrl = await resolveAppUrlBuilder(client);
+      const sdk = await getSdkClient();
+      const buildUrl = await resolveAppUrlBuilder(await getTrpcClient());
 
-      const input: { avatar?: string; description?: string; name: string } = {
+      const body: { avatar?: string; description?: string; name: string } = {
         name: options.name,
       };
-      if (options.description) input.description = options.description;
-      if (options.avatar) input.avatar = options.avatar;
+      if (options.description) body.description = options.description;
+      if (options.avatar) body.avatar = options.avatar;
 
-      const id = await client.knowledgeBase.createKnowledgeBase.mutate(input);
+      const { data } = await sdk.knowledgeBases.create({ body });
+      const id = data.data.knowledgeBase.id;
       const url = buildUrl(`/resource/library/${encodeURIComponent(String(id))}`);
       console.log(`${pc.green('✓')} Created knowledge base ${pc.bold(String(id))}`);
       console.log(`${pc.bold('knowledge base')}: ${url}`);
@@ -189,14 +207,23 @@ export function registerKbCommand(program: Command) {
           process.exit(1);
         }
 
-        const client = await getTrpcClient();
+        const sdk = await getSdkClient();
 
-        const value: Record<string, any> = {};
-        if (options.name) value.name = options.name;
-        if (options.description) value.description = options.description;
-        if (options.avatar) value.avatar = options.avatar;
+        const body: { avatar?: string; description?: string; name?: string } = {};
+        if (options.name) body.name = options.name;
+        if (options.description) body.description = options.description;
+        if (options.avatar) body.avatar = options.avatar;
 
-        await client.knowledgeBase.updateKnowledgeBase.mutate({ id, value });
+        try {
+          await sdk.knowledgeBases.update({ body, path: { id } });
+        } catch (error) {
+          if (error instanceof LobeHubAPIError && error.status === 404) {
+            log.error(`Knowledge base not found: ${id}`);
+            process.exit(1);
+            return;
+          }
+          throw error;
+        }
         console.log(`${pc.green('✓')} Updated knowledge base ${pc.bold(id)}`);
       },
     );
@@ -230,11 +257,20 @@ export function registerKbCommand(program: Command) {
     .description('Add files to a knowledge base')
     .requiredOption('--ids <ids...>', 'File IDs to add')
     .action(async (knowledgeBaseId: string, options: { ids: string[] }) => {
-      const client = await getTrpcClient();
-      await client.knowledgeBase.addFilesToKnowledgeBase.mutate({
-        ids: options.ids,
-        knowledgeBaseId,
-      });
+      if (namesDocument(options.ids)) {
+        const client = await getTrpcClient();
+        await client.knowledgeBase.addFilesToKnowledgeBase.mutate({
+          ids: options.ids,
+          knowledgeBaseId,
+        });
+      } else {
+        const sdk = await getSdkClient();
+        const { data } = await sdk.knowledgeBases.addFiles({
+          body: { fileIds: options.ids },
+          path: { id: knowledgeBaseId },
+        });
+        if (reportBatchFailures(data.data.failed)) return;
+      }
       console.log(
         `${pc.green('✓')} Added ${options.ids.length} file(s) to knowledge base ${pc.bold(knowledgeBaseId)}`,
       );
@@ -257,11 +293,20 @@ export function registerKbCommand(program: Command) {
         }
       }
 
-      const client = await getTrpcClient();
-      await client.knowledgeBase.removeFilesFromKnowledgeBase.mutate({
-        ids: options.ids,
-        knowledgeBaseId,
-      });
+      if (namesDocument(options.ids)) {
+        const client = await getTrpcClient();
+        await client.knowledgeBase.removeFilesFromKnowledgeBase.mutate({
+          ids: options.ids,
+          knowledgeBaseId,
+        });
+      } else {
+        const sdk = await getSdkClient();
+        const { data } = await sdk.knowledgeBases.removeFiles({
+          body: { fileIds: options.ids },
+          path: { id: knowledgeBaseId },
+        });
+        if (reportBatchFailures(data.data.failed)) return;
+      }
       console.log(
         `${pc.green('✓')} Removed ${options.ids.length} file(s) from knowledge base ${pc.bold(knowledgeBaseId)}`,
       );

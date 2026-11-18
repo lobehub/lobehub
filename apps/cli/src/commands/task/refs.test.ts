@@ -6,8 +6,9 @@ import { registerCheckpointCommands } from './checkpoint';
 import { registerDepCommands } from './dep';
 import { registerLifecycleCommands } from './lifecycle';
 
-const { client, info } = vi.hoisted(() => ({
+const { client, info, sdk } = vi.hoisted(() => ({
   info: vi.fn(),
+  sdk: { tasks: { create: vi.fn(), delete: vi.fn(), get: vi.fn() } },
   client: {
     task: {
       create: { mutate: vi.fn() },
@@ -20,6 +21,7 @@ const { client, info } = vi.hoisted(() => ({
   },
 }));
 vi.mock('../../api/client', () => ({ getTrpcClient: async () => client }));
+vi.mock('../../api/sdk', () => ({ getSdkClient: async () => sdk }));
 vi.mock('../../api/workspace', () => ({ resolveWorkspaceId: () => undefined }));
 vi.mock('../../settings', () => ({ resolveServerUrl: () => 'https://app.example.com' }));
 vi.mock('../../utils/logger', () => ({
@@ -91,15 +93,20 @@ describe('task reference output', () => {
     expect(info).toHaveBeenCalledWith('Heartbeat sent for T-1 (id: task_1).');
   });
   it('uses returned identity for delete acknowledgements', async () => {
-    client.task.delete.mutate.mockResolvedValue({ data: { id: 'task_1', identifier: 'T-1' } });
+    // DELETE answers only the row id; the identifier comes from the detail read.
+    sdk.tasks.get.mockResolvedValue({ data: { data: { id: 'task_1', identifier: 'T-1' } } });
+    sdk.tasks.delete.mockResolvedValue({ data: { data: { deleted: true, id: 'task_1' } } });
     const root = new Command();
     registerTaskCommand(root);
     await root.parseAsync(['node', 'test', 'task', 'delete', 't-1', '--yes']);
+    expect(sdk.tasks.get).toHaveBeenCalledWith({ path: { id: 't-1' } });
+    expect(sdk.tasks.delete).toHaveBeenCalledWith({ path: { id: 't-1' } });
+    expect(client.task.delete.mutate).not.toHaveBeenCalled();
     expect(info).toHaveBeenCalledWith('Task T-1 (id: task_1) deleted.');
   });
   it('prints a stable id and a public identifier link after create', async () => {
-    client.task.create.mutate.mockResolvedValue({
-      data: { id: 'task_1', identifier: 'T-1', name: 'Ship' },
+    sdk.tasks.create.mockResolvedValue({
+      data: { data: { id: 'task_1', identifier: 'T-1', name: 'Ship' }, success: true },
     });
     const root = new Command();
     registerTaskCommand(root);
@@ -113,6 +120,9 @@ describe('task reference output', () => {
       '--name',
       'Ship',
     ]);
+    expect(sdk.tasks.create).toHaveBeenCalledWith({
+      body: { instruction: 'Ship it', name: 'Ship', priority: 0 },
+    });
     expect(printed()).toContain('ID: task_1');
     expect(printed()).toContain('/task/T-1/ship');
   });

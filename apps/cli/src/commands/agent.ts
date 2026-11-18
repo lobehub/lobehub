@@ -5,6 +5,7 @@ import { type Command, InvalidArgumentError, Option } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getSdkClient } from '../api/sdk';
 import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
@@ -398,7 +399,21 @@ export function registerAgentCommand(program: Command) {
 
         const client = await getTrpcClient();
         const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
-        const result: any = await client.agent.updateAgentConfig.mutate({ agentId, value });
+
+        // The dedicated flags map onto `PATCH /api/v1/agents/{id}`, whose body is
+        // a closed schema; the JSON files may carry any config key, which only
+        // the tRPC passthrough accepts. `--json` stays on tRPC too: it prints
+        // the stored config, and the REST agent lacks `name`, `tags`, … .
+        const viaRest =
+          !options.configFile && !options.agencyConfigFile && options.json === undefined;
+        let result: any;
+        if (viaRest) {
+          const sdk = await getSdkClient();
+          const { data } = await sdk.agents.update({ body: value, path: { id: agentId } });
+          result = data.data;
+        } else {
+          result = await client.agent.updateAgentConfig.mutate({ agentId, value });
+        }
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;

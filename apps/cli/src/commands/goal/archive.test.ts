@@ -68,13 +68,9 @@ describe('goal archive', () => {
     write.mockRestore();
   });
 
+  // Plain `list` reads `GET /goals` (see crud.test.ts), which has no archived switch.
   it('lists archived goals only with --archived', async () => {
     mockClient.goal.list.query.mockResolvedValue({ goals: [], total: 0 });
-
-    await run('list');
-    expect(mockClient.goal.list.query).toHaveBeenLastCalledWith(
-      expect.objectContaining({ archived: undefined }),
-    );
 
     await run('list', '--archived');
     expect(mockClient.goal.list.query).toHaveBeenLastCalledWith(

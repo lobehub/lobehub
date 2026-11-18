@@ -1,11 +1,30 @@
+import type { FileListItem } from '@lobehub/sdk';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getSdkClient } from '../api/sdk';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
+
+/** `GET /knowledge-bases/{id}/files` accepts at most this many items per page. */
+const REST_PAGE_SIZE_MAX = 100;
+
+/** A library's files through the public REST API, walking cursor pages up to `limit`. */
+async function listKnowledgeBaseFiles(knowledgeBaseId: string, limit: number) {
+  const sdk = await getSdkClient();
+  const items: FileListItem[] = [];
+  const pages = sdk.paginate(
+    sdk.knowledgeBases.listFiles,
+    { path: { id: knowledgeBaseId }, query: { limit: Math.min(REST_PAGE_SIZE_MAX, limit) } },
+    { maxItems: limit },
+  );
+  for await (const file of pages) items.push(file);
+
+  return items;
+}
 
 export function registerFileCommand(program: Command) {
   const file = program.command('file').description('Manage files');
@@ -19,18 +38,29 @@ export function registerFileCommand(program: Command) {
     .option('-L, --limit <n>', 'Maximum number of items', '30')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .action(async (options: { json?: string | boolean; kbId?: string; limit?: string }) => {
-      const client = await getTrpcClient();
-      const input: any = {};
-      if (options.kbId) input.knowledgeBaseId = options.kbId;
-      if (options.limit) input.limit = Number.parseInt(options.limit, 10);
+      const limit = options.limit ? Number.parseInt(options.limit, 10) : 30;
+      let items: any[];
 
-      const result = await client.file.getFiles.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+      if (options.kbId && options.json === undefined) {
+        // A library's files come from the public REST API. `--json` stays on
+        // tRPC: REST rows nest chunking/embedding and carry no `userId`, so the
+        // printed objects would change. The drive listing (no --kb-id) stays
+        // too: `GET /files` has no "not filed in any library" filter and does
+        // not hide chat attachments the way the drive does.
+        items = await listKnowledgeBaseFiles(options.kbId, limit);
+      } else {
+        const client = await getTrpcClient();
+        const input: any = {};
+        if (options.kbId) input.knowledgeBaseId = options.kbId;
+        if (options.limit) input.limit = limit;
+        const result = await client.file.getFiles.query(input);
+        items = Array.isArray(result) ? result : ((result as any).items ?? []);
+      }
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
         outputJson(
-          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+          withUrls(items, await resolveUrlBuilder(await getTrpcClient()), (item: any) =>
             resourcePath.file({ ...item, knowledgeBaseId: item.knowledgeBaseId ?? options.kbId }),
           ),
           fields,

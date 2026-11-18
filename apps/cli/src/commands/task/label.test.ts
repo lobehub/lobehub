@@ -35,6 +35,20 @@ const { client } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../api/client', () => ({ getTrpcClient: vi.fn(async () => client) }));
+// Detail reads and plain patches go over REST; bridge them to the tRPC mocks
+// above so these label cases keep one source of task fixtures.
+vi.mock('../../api/sdk', () => ({
+  getSdkClient: vi.fn(async () => ({
+    tasks: {
+      get: async ({ path }: { path: { id: string } }) => ({
+        data: { data: (await client.task.detail.query({ id: path.id })).data },
+      }),
+      update: async ({ body, path }: { body: object; path: { id: string } }) => ({
+        data: { data: (await client.task.update.mutate({ id: path.id, ...body })).data },
+      }),
+    },
+  })),
+}));
 vi.mock('./url', () => ({
   resolveAppUrl: vi.fn(async () => 'https://app/task'),
   resolveAppUrlBuilder: vi.fn(async () => () => 'https://app/task'),

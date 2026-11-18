@@ -1,3 +1,4 @@
+import { LobeHubAPIError } from '@lobehub/sdk';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +27,22 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
+const { mockSdk } = vi.hoisted(() => ({
+  mockSdk: {
+    knowledgeBases: {
+      addFiles: vi.fn(),
+      create: vi.fn(),
+      removeFiles: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}));
+
+/** The success envelope every REST answer arrives in, as the SDK returns it. */
+const envelope = (data: unknown) => ({ data: { data, success: true } });
+
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../api/sdk', () => ({ getSdkClient: vi.fn(async () => mockSdk) }));
 describe('kb command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -43,6 +59,7 @@ describe('kb command', () => {
         }
       }
     }
+    for (const fn of Object.values(mockSdk.knowledgeBases)) fn.mockReset();
     // Default: file queries return empty
     mockTrpcClient.file.getFiles.query.mockResolvedValue([]);
     mockTrpcClient.file.getKnowledgeItems.query.mockResolvedValue({ hasMore: false, items: [] });
@@ -132,7 +149,9 @@ describe('kb command', () => {
 
   describe('create', () => {
     it('should create a knowledge base', async () => {
-      mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate.mockResolvedValue('kb-new');
+      mockSdk.knowledgeBases.create.mockResolvedValue(
+        envelope({ knowledgeBase: { id: 'kb-new', name: 'New KB' } }),
+      );
 
       const program = createProgram();
       await program.parseAsync([
@@ -146,24 +165,42 @@ describe('kb command', () => {
         'Test desc',
       ]);
 
-      expect(mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({ description: 'Test desc', name: 'New KB' }),
-      );
+      expect(mockSdk.knowledgeBases.create).toHaveBeenCalledWith({
+        body: { description: 'Test desc', name: 'New KB' },
+      });
+      expect(mockTrpcClient.knowledgeBase.createKnowledgeBase.mutate).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('kb-new'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('/resource/library/kb-new'));
     });
   });
 
   describe('edit', () => {
     it('should update knowledge base', async () => {
-      mockTrpcClient.knowledgeBase.updateKnowledgeBase.mutate.mockResolvedValue({});
+      mockSdk.knowledgeBases.update.mockResolvedValue(envelope({ knowledgeBase: { id: 'kb1' } }));
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'kb', 'edit', 'kb1', '--name', 'Updated']);
 
-      expect(mockTrpcClient.knowledgeBase.updateKnowledgeBase.mutate).toHaveBeenCalledWith({
-        id: 'kb1',
-        value: { name: 'Updated' },
+      expect(mockSdk.knowledgeBases.update).toHaveBeenCalledWith({
+        body: { name: 'Updated' },
+        path: { id: 'kb1' },
       });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Updated knowledge base'));
+    });
+
+    it('should report a missing knowledge base instead of claiming success', async () => {
+      mockSdk.knowledgeBases.update.mockRejectedValue(
+        new LobeHubAPIError(404, { code: 'not_found', message: 'Knowledge base not found' }),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'kb', 'edit', 'kb-x', '--name', 'Updated']);
+
+      expect(log.error).toHaveBeenCalledWith('Knowledge base not found: kb-x');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining('Updated knowledge base'),
+      );
     });
 
     it('should exit when no changes specified', async () => {
@@ -203,15 +240,92 @@ describe('kb command', () => {
 
   describe('add-files', () => {
     it('should add files to knowledge base', async () => {
-      mockTrpcClient.knowledgeBase.addFilesToKnowledgeBase.mutate.mockResolvedValue({});
+      mockSdk.knowledgeBases.addFiles.mockResolvedValue(
+        envelope({ failed: [], successed: ['f1', 'f2'] }),
+      );
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'kb', 'add-files', 'kb1', '--ids', 'f1', 'f2']);
 
+      expect(mockSdk.knowledgeBases.addFiles).toHaveBeenCalledWith({
+        body: { fileIds: ['f1', 'f2'] },
+        path: { id: 'kb1' },
+      });
+      expect(mockTrpcClient.knowledgeBase.addFilesToKnowledgeBase.mutate).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Added 2 file(s)'));
+    });
+
+    it('should report files the API refused and exit non-zero', async () => {
+      mockSdk.knowledgeBases.addFiles.mockResolvedValue(
+        envelope({ failed: [{ fileId: 'f2', reason: 'not accessible' }], successed: ['f1'] }),
+      );
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'kb', 'add-files', 'kb1', '--ids', 'f1', 'f2']);
+
+      expect(log.error).toHaveBeenCalledWith('f2: not accessible');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(consoleSpy).not.toHaveBeenCalledWith(expect.stringContaining('Added'));
+    });
+
+    it('should keep documents on tRPC, which resolves them to their mirror file', async () => {
+      mockTrpcClient.knowledgeBase.addFilesToKnowledgeBase.mutate.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'kb', 'add-files', 'kb1', '--ids', 'docs_1', 'f1']);
+
       expect(mockTrpcClient.knowledgeBase.addFilesToKnowledgeBase.mutate).toHaveBeenCalledWith({
-        ids: ['f1', 'f2'],
+        ids: ['docs_1', 'f1'],
         knowledgeBaseId: 'kb1',
       });
+      expect(mockSdk.knowledgeBases.addFiles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove-files', () => {
+    it('should remove files through the REST API', async () => {
+      mockSdk.knowledgeBases.removeFiles.mockResolvedValue(
+        envelope({ failed: [], successed: ['f1'] }),
+      );
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'kb',
+        'remove-files',
+        'kb1',
+        '--ids',
+        'f1',
+        '--yes',
+      ]);
+
+      expect(mockSdk.knowledgeBases.removeFiles).toHaveBeenCalledWith({
+        body: { fileIds: ['f1'] },
+        path: { id: 'kb1' },
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Removed 1 file(s)'));
+    });
+
+    it('should keep documents on tRPC', async () => {
+      mockTrpcClient.knowledgeBase.removeFilesFromKnowledgeBase.mutate.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'kb',
+        'remove-files',
+        'kb1',
+        '--ids',
+        'docs_1',
+        '--yes',
+      ]);
+
+      expect(mockTrpcClient.knowledgeBase.removeFilesFromKnowledgeBase.mutate).toHaveBeenCalledWith(
+        { ids: ['docs_1'], knowledgeBaseId: 'kb1' },
+      );
+      expect(mockSdk.knowledgeBases.removeFiles).not.toHaveBeenCalled();
     });
   });
 });

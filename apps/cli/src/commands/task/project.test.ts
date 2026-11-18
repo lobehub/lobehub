@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerTaskCommand } from './index';
 
-const { client } = vi.hoisted(() => ({
+const { client, sdk } = vi.hoisted(() => ({
+  sdk: { tasks: { update: vi.fn() } },
   client: {
     task: {
       update: { mutate: vi.fn() },
@@ -14,6 +15,7 @@ const { client } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../api/client', () => ({ getTrpcClient: vi.fn(async () => client) }));
+vi.mock('../../api/sdk', () => ({ getSdkClient: vi.fn(async () => sdk) }));
 vi.mock('./url', () => ({
   resolveAppUrl: vi.fn(async () => 'https://app/task'),
   resolveAppUrlBuilder: vi.fn(async () => () => 'https://app/task'),
@@ -34,26 +36,44 @@ describe('lh task edit --project', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    client.task.update.mutate.mockResolvedValue({ data: { id: 'task_1', identifier: 'T-1' } });
+    sdk.tasks.update.mockResolvedValue({
+      data: { data: { id: 'task_1', identifier: 'T-1' }, success: true },
+    });
   });
 
   it('moves the task to the project', async () => {
     await run('edit', 'T-1', '--project', 'proj_1');
-    expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', projectId: 'proj_1' });
+    expect(sdk.tasks.update).toHaveBeenCalledWith({
+      body: { projectId: 'proj_1' },
+      path: { id: 'T-1' },
+    });
+    expect(client.task.update.mutate).not.toHaveBeenCalled();
   });
 
   it('removes the task from its project with "null"', async () => {
     await run('edit', 'T-1', '--project', 'null');
-    expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', projectId: null });
+    expect(sdk.tasks.update).toHaveBeenCalledWith({
+      body: { projectId: null },
+      path: { id: 'T-1' },
+    });
+    expect(client.task.update.mutate).not.toHaveBeenCalled();
   });
 
   it('sends an empty project so the server rejects it instead of silently ignoring it', async () => {
     await run('edit', 'T-1', '--project', '');
-    expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', projectId: '' });
+    expect(sdk.tasks.update).toHaveBeenCalledWith({
+      body: { projectId: '' },
+      path: { id: 'T-1' },
+    });
+    expect(client.task.update.mutate).not.toHaveBeenCalled();
   });
 
   it('does not send a project when the option is absent', async () => {
     await run('edit', 'T-1', '--name', 'Renamed');
-    expect(client.task.update.mutate).toHaveBeenCalledWith({ id: 'T-1', name: 'Renamed' });
+    expect(sdk.tasks.update).toHaveBeenCalledWith({
+      body: { name: 'Renamed' },
+      path: { id: 'T-1' },
+    });
+    expect(client.task.update.mutate).not.toHaveBeenCalled();
   });
 });

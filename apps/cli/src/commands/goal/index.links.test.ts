@@ -15,7 +15,6 @@ const { files, mockClient } = vi.hoisted(() => ({
       create: { mutate: vi.fn() },
       createConversationGoal: { mutate: vi.fn() },
       graph: { query: vi.fn() },
-      list: { query: vi.fn() },
     },
   },
 }));
@@ -81,16 +80,6 @@ describe('goal links', () => {
     vi.mocked(console.log).mockClear();
     await run('show', 'goal-1', '--json');
     expect(JSON.parse(output())).toMatchObject({ url: 'https://app.lobehub.com/goal/goal-1' });
-  });
-
-  it('list --json carries each goal page', async () => {
-    mockClient.goal.list.query.mockResolvedValue({ goals: [{ goal: { id: 'goal-1' } }] });
-
-    await run('list', '--json');
-
-    expect(JSON.parse(output())).toEqual([
-      { goal: { id: 'goal-1' }, url: 'https://app.lobehub.com/goal/goal-1' },
-    ]);
   });
 });
 
