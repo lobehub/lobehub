@@ -3,7 +3,13 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, channelJobs, channelMessages, channelThreads } from '../../../schemas';
+import {
+  agents,
+  channelJobs,
+  channelMembers,
+  channelMessages,
+  channelThreads,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { readManifestMessages } from '../manifest';
@@ -93,6 +99,60 @@ describe('Channel reply opening', () => {
         status: 'failed',
       }),
     ]);
+  });
+
+  it('names the device picked for the Agent, and finds its newest finished reply on it', async () => {
+    const { agent, asMember, channel, job } = await mentionAgent();
+    const claimed = (await execution.claim(channel.id, job.id, lease))!;
+    await execution.fail(channel.id, claimed.job.id, { message: "You've hit your 5-hour limit" });
+    // The member runs on a device picked in the Channel; the claim records it on the job.
+    await db.update(channelJobs).set({ deviceId: 'device-a' }).where(eq(channelJobs.id, job.id));
+    await db
+      .update(channelMembers)
+      .set({ config: { deviceId: 'device-a' } })
+      .where(eq(channelMembers.id, agent.id));
+    const next = await asMember.send(channel.id, {
+      content: 'Can you retry now?',
+      mentions: [agent.id],
+      requestKey: 'req-retry',
+      routing: 'decision',
+    });
+    const [nextJob] = await jobsOf(db, next.id);
+    const since = new Date(Date.now() - 60_000);
+
+    expect(await execution.openingCandidate(channel.id, nextJob.id)).toMatchObject({
+      deviceId: 'device-a',
+      memberId: agent.id,
+    });
+    // The queued reply is not finished yet: the failed one is the newest on the device.
+    expect(
+      await execution.lastSettledReplyOnDevice(channel.id, {
+        deviceId: 'device-a',
+        memberId: agent.id,
+        since,
+      }),
+    ).toMatchObject({ error: { message: "You've hit your 5-hour limit" }, status: 'failed' });
+    // Another device has no history of its own.
+    expect(
+      await execution.lastSettledReplyOnDevice(channel.id, {
+        deviceId: 'device-b',
+        memberId: agent.id,
+        since,
+      }),
+    ).toBeUndefined();
+
+    // A newer reply that finished on the device takes over.
+    await db
+      .update(channelJobs)
+      .set({ deviceId: 'device-a', status: 'completed' })
+      .where(eq(channelJobs.id, nextJob.id));
+    expect(
+      await execution.lastSettledReplyOnDevice(channel.id, {
+        deviceId: 'device-a',
+        memberId: agent.id,
+        since,
+      }),
+    ).toMatchObject({ status: 'completed' });
   });
 
   it('names no acknowledgement on a job that opened without one', async () => {

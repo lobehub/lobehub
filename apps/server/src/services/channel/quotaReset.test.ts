@@ -3,14 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { knownQuotaReset } from './quotaReset';
 
-const { model } = vi.hoisted(() => ({
-  model: { construct: vi.fn(), findLatestSettledByAgent: vi.fn() },
+const { executions, quota } = vi.hoisted(() => ({
+  executions: { lastSettledReplyOnDevice: vi.fn() },
+  quota: { construct: vi.fn(), planDeviceRouting: vi.fn(), resolveDeviceRowId: vi.fn() },
 }));
-vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: class {
+vi.mock('@/database/repositories/channel', () => ({
+  ChannelExecutionRepository: class {
+    constructor() {
+      return executions;
+    }
+  },
+}));
+vi.mock('@/server/services/agentQuota', () => ({
+  AgentQuotaService: class {
     constructor(...args: unknown[]) {
-      model.construct(...args);
-      return model;
+      quota.construct(...args);
+      return quota;
     }
   },
 }));
@@ -19,11 +27,13 @@ const now = Date.parse('2026-11-18T04:41:00Z');
 const resetsAt = Date.parse('2026-11-18T07:00:00Z');
 const candidate = {
   agent: { id: 'agt-cook', name: 'Cook', title: null },
+  deviceId: 'device-cloud-1',
+  memberId: 'member-cook',
   requesterUserId: 'user-lijian',
   workspaceId: 'ws-1',
 };
 
-/** What a Claude Code run refused by its 5-hour window stores on its operation. */
+/** A reply whose Claude Code run its 5-hour window refused, as the job and operation store it. */
 const refusal = (patch: { resetsAt?: number; status?: string } = {}) => ({
   error: {
     body: {
@@ -39,49 +49,84 @@ const refusal = (patch: { resetsAt?: number; status?: string } = {}) => ({
     message: "You've hit your 5-hour limit · resets 3pm (Asia/Shanghai)",
     type: 'AgentRuntimeError',
   },
-  status: 'error',
+  status: 'failed',
 });
 
 describe('knownQuotaReset', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    quota.resolveDeviceRowId.mockResolvedValue('device-row-1');
+    quota.planDeviceRouting.mockResolvedValue(null);
   });
 
-  it('returns the reset of a window that refused the requester’s last run and is still closed', async () => {
-    model.findLatestSettledByAgent.mockResolvedValue(refusal());
+  it('returns the reset of a window that refused the last reply on the picked device', async () => {
+    executions.lastSettledReplyOnDevice.mockResolvedValue(refusal());
 
-    await expect(knownQuotaReset({} as never, candidate, now)).resolves.toBe(resetsAt);
-    // The run happens as the requester, in the Channel's workspace.
-    expect(model.construct).toHaveBeenCalledWith({}, 'user-lijian', 'ws-1');
-    expect(model.findLatestSettledByAgent).toHaveBeenCalledWith(
-      'agt-cook',
-      new Date(now - 8 * 24 * 60 * 60 * 1000),
-    );
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBe(resetsAt);
+    expect(executions.lastSettledReplyOnDevice).toHaveBeenCalledWith('channel', {
+      deviceId: 'device-cloud-1',
+      memberId: 'member-cook',
+      since: new Date(now - 8 * 24 * 60 * 60 * 1000),
+    });
+    // The login is resolved the way the device dispatch resolves it, as the requester.
+    expect(quota.construct).toHaveBeenCalledWith({}, 'user-lijian', 'ws-1');
+    expect(quota.planDeviceRouting).toHaveBeenCalledWith('agt-cook', {
+      deviceId: 'device-row-1',
+      provider: 'claude-code',
+    });
+  });
+
+  it('assumes nothing when no device is picked in the Channel, since only the claim resolves it', async () => {
+    await expect(
+      knownQuotaReset({} as never, 'channel', { ...candidate, deviceId: undefined }, now),
+    ).resolves.toBeUndefined();
+    expect(executions.lastSettledReplyOnDevice).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the Agent balances several logins on the device', async () => {
+    executions.lastSettledReplyOnDevice.mockResolvedValue(refusal());
+    quota.planDeviceRouting.mockResolvedValue({
+      candidates: [{ externalAccountId: 'a' }, { externalAccountId: 'b' }],
+      mode: 'balanced',
+    });
+
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBeUndefined();
+  });
+
+  it('keeps the refusal when the device runs one login, pinned or default', async () => {
+    executions.lastSettledReplyOnDevice.mockResolvedValue(refusal());
+    quota.planDeviceRouting.mockResolvedValue({
+      candidates: [{ externalAccountId: 'a' }],
+      mode: 'pinned',
+    });
+
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBe(resetsAt);
   });
 
   it('says nothing once the window has reopened', async () => {
-    model.findLatestSettledByAgent.mockResolvedValue(refusal({ resetsAt: now - 60_000 }));
+    executions.lastSettledReplyOnDevice.mockResolvedValue(refusal({ resetsAt: now - 60_000 }));
 
-    await expect(knownQuotaReset({} as never, candidate, now)).resolves.toBeUndefined();
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBeUndefined();
   });
 
-  it('says nothing after a run that finished, or one that failed for another reason', async () => {
-    model.findLatestSettledByAgent.mockResolvedValueOnce({ error: null, status: 'done' });
-    await expect(knownQuotaReset({} as never, candidate, now)).resolves.toBeUndefined();
+  it('says nothing after a reply that finished, or one that failed for another reason', async () => {
+    executions.lastSettledReplyOnDevice.mockResolvedValueOnce({ error: null, status: 'completed' });
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBeUndefined();
 
-    model.findLatestSettledByAgent.mockResolvedValueOnce({
+    executions.lastSettledReplyOnDevice.mockResolvedValueOnce({
       error: { message: 'Device is offline', type: 'DeviceUnreachable' },
-      status: 'error',
+      status: 'failed',
     });
-    await expect(knownQuotaReset({} as never, candidate, now)).resolves.toBeUndefined();
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBeUndefined();
 
-    model.findLatestSettledByAgent.mockResolvedValueOnce(null);
-    await expect(knownQuotaReset({} as never, candidate, now)).resolves.toBeUndefined();
+    executions.lastSettledReplyOnDevice.mockResolvedValueOnce(undefined);
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBeUndefined();
+    expect(quota.planDeviceRouting).not.toHaveBeenCalled();
   });
 
   it('ignores window details stamped on a run the window allowed', async () => {
-    model.findLatestSettledByAgent.mockResolvedValue(refusal({ status: 'allowed' }));
+    executions.lastSettledReplyOnDevice.mockResolvedValue(refusal({ status: 'allowed' }));
 
-    await expect(knownQuotaReset({} as never, candidate, now)).resolves.toBeUndefined();
+    await expect(knownQuotaReset({} as never, 'channel', candidate, now)).resolves.toBeUndefined();
   });
 });

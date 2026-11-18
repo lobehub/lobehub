@@ -19,11 +19,7 @@ import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
-import {
-  findLatestSettledAgentRun,
-  findLiveTopicOperations,
-  findScopedOperation,
-} from './agentOperationQueries';
+import { findLiveTopicOperations, findScopedOperation } from './agentOperationQueries';
 
 /**
  * Verify rollup states. Aliases the single `VerifyRunStatus` source of truth in
@@ -863,15 +859,6 @@ export class AgentOperationModel {
    */
   async findById(operationId: string) {
     return findScopedOperation(this.db, this.ownership(), operationId);
-  }
-
-  /** This user's newest finished (done or failed) run of an Agent since `since`. */
-  async findLatestSettledByAgent(agentId: string, since: Date) {
-    return findLatestSettledAgentRun(this.db, this.ownership(), {
-      agentId,
-      since,
-      userId: this.userId,
-    });
   }
 
   /** All resumable operations in a proven topic, independent of its UI marker. */
