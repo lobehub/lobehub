@@ -44,9 +44,8 @@ const NOTES = [
   'A field marked ? is optional.',
   '"ref" is a name you choose on an add op; later ops in the same call can use it wherever an id is expected.',
   'x and y are page coordinates; w and h default to 640×400. A board without pageId lands on the page of its group or round, otherwise on the first page.',
-  'An image source takes the file id that `lh file upload --json` returns as "fileRef".',
-  'A canvas source takes the canvasId and version that `lh artifact save` returns (`lh artifact guide canvas` has the page rules).',
-  'A board of type "decision" has no source and no "expected". Type "html" goes with a canvas source and "image" with an image source; "video" is refused.',
+  'A file source names a file of the artboard: put it there with `lh artboard push <id> <dir>` or --files, then point the board at its relative path.',
+  'A board of type "decision" has no source and no "expected". An .html file makes an "html" board and an image file an "image" board; "video" is refused.',
   '"recommended" marks a board as the option you would pick in its round; it needs "roundId", and a board with a "roundId" must sit in an options group.',
 ];
 

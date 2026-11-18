@@ -41,13 +41,12 @@ describe('lh artboard ops', () => {
     expect(printed).toMatch(/"type": "removeEdge", "id": string/);
   });
 
-  it('marks optional fields and spells out enums and the two board sources', async () => {
+  it('marks optional fields and spells out enums and the file source', async () => {
     await run();
 
     expect(printed).toContain('"ref"?: string');
     expect(printed).toContain('"kind": "journey" | "options" | "references" | "other"');
-    expect(printed).toContain('{ "kind": "image", "fileRef": string }');
-    expect(printed).toContain('{ "kind": "canvas", "canvasId": string,');
+    expect(printed).toContain('"source"?: { "kind": "file", "path": string }');
   });
 
   it('warns about the board types and option rules the shapes cannot show', async () => {

@@ -126,13 +126,14 @@ describe('lh artboard skill init', () => {
     expect(await readFile(path.join(elsewhere, 'keep.md'), 'utf8')).toBe('not ours');
   });
 
-  it('builds screens as saved Canvases, which needs no publishing', async () => {
+  it('builds screens as plain HTML files of the artboard, pushed with lh artboard push', async () => {
     await run('--dir', directory);
 
     const skill = await readFile(skillPath('SKILL.md'), 'utf8');
-    expect(skill).toMatch(/build each screen as a canvas/i);
-    expect(skill).toContain('lh artifact save <file> --json');
-    expect(skill).toMatch(/do not publish it/i);
+
+    expect(skill).toMatch(/plain HTML/i);
+    expect(skill).toContain('lh artboard push');
+    expect(skill).not.toMatch(/lh artifact save|Canvas/);
   });
 
   it('states what the journey needs before it can be finalized', async () => {
@@ -182,7 +183,9 @@ describe('lh artboard skill init', () => {
     const skill = await readFile(skillPath('SKILL.md'), 'utf8');
     expect(skill).toContain('lh man artboard');
     expect(skill).toContain('lh artboard ops');
-    expect(skill).not.toMatch(/lh artboard (?!create|update|read|list|ops|--help|skill)[a-z]/);
+    expect(skill).not.toMatch(
+      /lh artboard (?!create|update|read|list|ops|push|files|cat|--help|skill)[a-z]/,
+    );
     expect(skill).not.toMatch(/listArtboardComments|replyArtboardComment|askArtboardQuestion/);
   });
 });
