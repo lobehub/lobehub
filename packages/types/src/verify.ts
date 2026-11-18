@@ -14,7 +14,7 @@ export * from './verify/evidence';
  * `@lobechat/const/verify`. The duplication is deliberate: this package is
  * replaced by a hand-written stub inside the isolated desktop workspace, so a
  * runtime value exported from here is unreachable for members of that workspace
- * (`@lobehub/cli`), while `@lobechat/types` must stay dependency-free of
+ * (`@lichao0223/lobehub-cli`), while `@lobechat/types` must stay dependency-free of
  * `@lobechat/const`. `packages/const/src/verify.test.ts` fails the type-check the
  * moment the two sides drift apart.
  */

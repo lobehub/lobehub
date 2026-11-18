@@ -76,7 +76,7 @@ describe('cloudSandboxRuntime', () => {
   it('preprocesses lh commands with the run workspace scope', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
       command:
-        'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_1 -t x',
+        'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lichao0223/lobehub-cli "$@"; }\nlh agent edit agt_1 -t x',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -101,7 +101,7 @@ describe('cloudSandboxRuntime', () => {
       'runCommand',
       expect.objectContaining({
         command:
-          'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_1 -t x',
+          'lh() { LOBEHUB_WORKSPACE_ID=\'ws-42\' npx -y @lichao0223/lobehub-cli "$@"; }\nlh agent edit agt_1 -t x',
       }),
     );
   });

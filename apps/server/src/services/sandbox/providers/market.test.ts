@@ -209,13 +209,13 @@ describe('MarketSandboxProvider', () => {
     it('redacts auth env assignments from command logs without changing other params', () => {
       const params = {
         command:
-          'LOBEHUB_JWT=mock-jwt LOBEHUB_SERVER=https://app.lobehub.com npx -y @lobehub/cli topic list && GITHUB_TOKEN="ghp_token" gh repo view',
+          'LOBEHUB_JWT=mock-jwt LOBEHUB_SERVER=https://app.lobehub.com npx -y @lichao0223/lobehub-cli topic list && GITHUB_TOKEN="ghp_token" gh repo view',
         timeout: 1000,
       };
 
       expect(redactSandboxParams(params)).toEqual({
         command:
-          'LOBEHUB_JWT=[redacted] LOBEHUB_SERVER=https://app.lobehub.com npx -y @lobehub/cli topic list && GITHUB_TOKEN=[redacted] gh repo view',
+          'LOBEHUB_JWT=[redacted] LOBEHUB_SERVER=https://app.lobehub.com npx -y @lichao0223/lobehub-cli topic list && GITHUB_TOKEN=[redacted] gh repo view',
         timeout: 1000,
       });
     });

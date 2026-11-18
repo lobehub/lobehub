@@ -391,7 +391,7 @@ describe('skillsRuntime', () => {
 
   it('passes workspace scope when preprocessing sandbox lh commands', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
-      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lichao0223/lobehub-cli agent edit agt_123',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -413,13 +413,13 @@ describe('skillsRuntime', () => {
       undefined,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
-      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lichao0223/lobehub-cli agent edit agt_123',
     });
   });
 
   it('recovers workspace scope for sandbox lh commands when context lost it', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
-      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
+      command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lichao0223/lobehub-cli agent edit agt_123',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -483,7 +483,7 @@ describe('skillsRuntime', () => {
   it('preprocesses lh commands passed to execScript, not just runCommand', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
       command:
-        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_123 -t x',
+        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lichao0223/lobehub-cli "$@"; }\nlh agent edit agt_123 -t x',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -513,7 +513,7 @@ describe('skillsRuntime', () => {
       'execScript',
       expect.objectContaining({
         command:
-          'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent edit agt_123 -t x',
+          'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lichao0223/lobehub-cli "$@"; }\nlh agent edit agt_123 -t x',
       }),
     );
   });

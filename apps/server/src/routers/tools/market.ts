@@ -214,7 +214,7 @@ const execInSandboxHandler = async ({
   try {
     let enhancedParams = params;
 
-    // Preprocess lh commands: rewrite to npx @lobehub/cli + inject auth env vars
+    // Preprocess lh commands: rewrite to the Fork CLI + inject auth env vars
     //
     // The minted credential is always scoped to `ctx.userId`, i.e. the caller
     // themselves. This route is an `authedProcedure` invoked directly by a

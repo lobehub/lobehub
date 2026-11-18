@@ -49,20 +49,20 @@ describe('isNewerVersion', () => {
 
 describe('buildInstallCommand', () => {
   it('builds the global install command per package manager', () => {
-    expect(buildInstallCommand('npm', '@lobehub/cli@1.0.0')).toEqual({
-      args: ['install', '-g', '@lobehub/cli@1.0.0'],
+    expect(buildInstallCommand('npm', '@lichao0223/lobehub-cli@1.0.0')).toEqual({
+      args: ['install', '-g', '@lichao0223/lobehub-cli@1.0.0'],
       command: 'npm',
     });
-    expect(buildInstallCommand('pnpm', '@lobehub/cli@1.0.0')).toEqual({
-      args: ['add', '-g', '@lobehub/cli@1.0.0'],
+    expect(buildInstallCommand('pnpm', '@lichao0223/lobehub-cli@1.0.0')).toEqual({
+      args: ['add', '-g', '@lichao0223/lobehub-cli@1.0.0'],
       command: 'pnpm',
     });
-    expect(buildInstallCommand('bun', '@lobehub/cli@1.0.0')).toEqual({
-      args: ['add', '-g', '@lobehub/cli@1.0.0'],
+    expect(buildInstallCommand('bun', '@lichao0223/lobehub-cli@1.0.0')).toEqual({
+      args: ['add', '-g', '@lichao0223/lobehub-cli@1.0.0'],
       command: 'bun',
     });
-    expect(buildInstallCommand('yarn', '@lobehub/cli@1.0.0')).toEqual({
-      args: ['global', 'add', '@lobehub/cli@1.0.0'],
+    expect(buildInstallCommand('yarn', '@lichao0223/lobehub-cli@1.0.0')).toEqual({
+      args: ['global', 'add', '@lichao0223/lobehub-cli@1.0.0'],
       command: 'yarn',
     });
   });
@@ -70,7 +70,7 @@ describe('buildInstallCommand', () => {
 
 describe('reportInstalledConnectStatus', () => {
   let originalArgv: string[];
-  const entry = '/global/node_modules/@lobehub/cli/dist/index.js';
+  const entry = '/global/node_modules/@lichao0223/lobehub-cli/dist/index.js';
   const installedReports = (version: string) =>
     execFile.mockImplementation((_command, _args, _options, callback) =>
       callback(null, `${version}\n`),

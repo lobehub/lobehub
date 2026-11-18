@@ -13,6 +13,7 @@
 | CUST-003 | 部署脚本接入 Onlyboxes / Market     | 菜单切换、保留配置；从一次性应用容器真实探测 Onlyboxes JIT 与 terminalExec                  | 同上；`scripts/deploy-custom-image.test.py`                                  | 历史已有；仅登记脚本接入，Onlyboxes provider 本身不算本项新增 |
 | CUST-004 | Fork 发布工作流隔离                 | 官方专用发布 / 同步任务在 Fork 默认跳过，防止误执行官方发布路径                             | 下方列出的五个 `.github/workflows/` 文件                                     | 历史已有                                                      |
 | CUST-005 | 个人 TFS / Azure DevOps Server 接入 | 设置 → 集成绑定个人身份；从 TFS 建项目；环境 Git 来源；PR / 构建 / 发布 / TFVC 只读浏览     | 独立 `tfs` 模块及现有入口接点；[详细维护说明](TFS_CUSTOMIZATION.md)          | 本次新增，REST / 本机 Git 已实测，产品页面和部署验收待完成    |
+| CUST-006 | Fork CLI npm 发布                   | canary 推送或手动 Actions 发布 `@lichao0223/lobehub-cli`；本机命令仍为 `lh`                | `.github/workflows/release-cli.yml`、`apps/cli/package.json`                  | 本次新增；需要 Fork 自己的 npm Token                        |
 
 ## CUST-001：自定义镜像
 
@@ -80,6 +81,12 @@
 - 共享 agent 仓库上下文排除调用者私有环境，覆盖 Topic 和无 Topic 任务；GitHub 上下文不改。
 - 新增独立 `tfs.git/gitOperation`、`lh tfs git` 和随服务端交付的 TFS CLI shim。后续云端 fetch / 快进 pull / 非强制 push 按当前调用者重新授权，只操作当前 Topic 选中来源，凭据不返回 agent、不落 Git 配置；临时沙箱可用，实际公共盘和旧实例继续拒绝。
 - 合并时保留 `services/tfs/{git,gitCommand,cliShim}.ts`、`routers/lambda/tfsGit.ts`、`apps/cli/src/commands/tfs.ts`，以及普通云端 `lh` 预处理和 TFS CLI 启动的派发接点。详细协议、测试和待验收项见 TFS 说明。
+
+## CUST-006：Fork CLI 发布
+
+- npm 包名是 `@lichao0223/lobehub-cli`，避免占用官方 `@lobehub/cli`。三个本机命令别名仍保留为 `lh`、`lobe`、`lobehub`，因为设备 agent 和连接服务依赖当前可执行入口。
+- `.github/workflows/release-cli.yml` 仅在 `lichao0223/lobehub` 的 `canary` 分支运行发布 Job。发布前读取 Fork 包自己的 npm 版本记录，创建 `cli-release/v*` 版本预留标签，构建、打包、发布并校验 npm latest。
+- 合并上游 CLI 发布工作流时保留 Fork 的仓库条件、包名、`.tgz` 通配符和 `NPM_TOKEN` 配置。官方包名与官方发布条件不能恢复。
 
 ### TFS 仓库上下文补全（2026-11-16）
 

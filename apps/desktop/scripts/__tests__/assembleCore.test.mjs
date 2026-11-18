@@ -48,7 +48,7 @@ const setup = async () => {
   await write('cli/dist/index.js', 'cli');
   await write(
     'cli/package.json',
-    JSON.stringify({ name: '@lobehub/cli', version: '1.2.3', bin: {} }),
+    JSON.stringify({ name: '@lichao0223/lobehub-cli', version: '1.2.3', bin: {} }),
   );
   return {
     cliDir: path.join(root, 'cli'),
@@ -86,7 +86,7 @@ describe('assembleCore', () => {
       type: 'commonjs',
     });
     expect(JSON.parse(await readFile(path.join(options.out, 'cli/package.json'), 'utf8'))).toEqual({
-      name: '@lobehub/cli',
+      name: '@lichao0223/lobehub-cli',
       type: 'module',
       version: '1.2.3',
     });

@@ -84,7 +84,7 @@ describe('tools marketRouter', () => {
     } as any);
     mockPreprocessLhCommand.mockResolvedValue({
       command:
-        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent view agt_1',
+        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lichao0223/lobehub-cli "$@"; }\nlh agent view agt_1',
       isLhCommand: true,
       skipSkillLookup: true,
     });
@@ -103,7 +103,7 @@ describe('tools marketRouter', () => {
     );
     expect(mockSandboxCallTool).toHaveBeenCalledWith('runCommand', {
       command:
-        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lobehub/cli "$@"; }\nlh agent view agt_1',
+        'lh() { LOBEHUB_WORKSPACE_ID=\'workspace-1\' npx -y @lichao0223/lobehub-cli "$@"; }\nlh agent view agt_1',
     });
   });
 

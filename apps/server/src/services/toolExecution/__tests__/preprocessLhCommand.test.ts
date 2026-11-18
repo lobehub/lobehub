@@ -35,7 +35,7 @@ const wrap = (command: string, extraEnv = '') =>
   [
     `__lobehub_lh_bin=$(mktemp -d) && trap '[ -s "$__lobehub_lh_bin"/.jobs ] || rm -rf "$__lobehub_lh_bin"' EXIT && trap 'exit 129' HUP && trap 'exit 130' INT && trap 'exit 143' TERM && cat > "$__lobehub_lh_bin"/lh <<'__LOBEHUB_LH_SHIM__' && chmod 700 "$__lobehub_lh_bin"/lh && export PATH="$__lobehub_lh_bin":"$PATH" || { echo 'lh: could not set up LobeHub CLI credentials' >&2; exit 1; }`,
     '#!/bin/sh',
-    `${CREDS}${extraEnv} exec npx -y @lobehub/cli "$@"`,
+    `${CREDS}${extraEnv} exec npx -y @lichao0223/lobehub-cli "$@"`,
     '__LOBEHUB_LH_SHIM__',
     '(',
     `trap 'jobs -l > "$__lobehub_lh_bin"/.jobs; sed -n "s/^[[][0-9]*[]][ +-]*//; s/^ *\\([0-9][0-9]*\\).*/\\1/p" "$__lobehub_lh_bin"/.jobs > "$__lobehub_lh_bin"/.pids; mv "$__lobehub_lh_bin"/.pids "$__lobehub_lh_bin"/.jobs; if [ -s "$__lobehub_lh_bin"/.jobs ]; then (n=0; while read -r p; do while [ "$n" -lt 300 ] && kill -0 "$p" 2>/dev/null; do case "$(cat /proc/"$p"/stat 2>/dev/null)" in *") Z "*) break ;; esac; sleep 1; n=$((n + 1)); done; done < "$__lobehub_lh_bin"/.jobs; rm -rf "$__lobehub_lh_bin") >/dev/null 2>&1 </dev/null & fi' EXIT`,

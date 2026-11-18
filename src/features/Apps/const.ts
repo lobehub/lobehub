@@ -1,4 +1,4 @@
-export const CLI_INSTALL_COMMAND = 'npm install -g @lobehub/cli';
+export const CLI_INSTALL_COMMAND = 'npm install -g @lichao0223/lobehub-cli';
 
 const LANDING_CDN = 'https://hub-apac-1.lobeobjects.space/images';
 

@@ -31,6 +31,14 @@ test('increments the registry patch without a checked-in version bump', async ()
   assert.equal((await plan({ sourceVersion: '0.0.1' })).version, '0.0.79');
 });
 
+test('starts a new package at its checked-in version when npm has no package metadata', async () => {
+  assert.deepEqual(await plan({ metadata: { unpublished: true } }), {
+    publish: true,
+    version: '0.0.78',
+    reserved: false,
+  });
+});
+
 test('allocates beyond every stable version even when latest was rolled back', async () => {
   assert.equal(
     (await plan({ metadata: registry('0.0.78', { '0.0.80': {}, '1.0.0-beta.1': {} }) })).version,
@@ -118,12 +126,12 @@ test('rejects prereleases and malformed registry metadata', async () => {
 test('does not interpret registry authentication, outage or malformed JSON as an unpublished version', async () => {
   for (const status of [401, 404, 500]) {
     await assert.rejects(
-      readRegistry('@lobehub/cli', async () => new Response('', { status })),
+      readRegistry('@lichao0223/lobehub-cli', async () => new Response('', { status })),
       new RegExp(`HTTP ${status}`),
     );
   }
   await assert.rejects(
-    readRegistry('@lobehub/cli', async () => new Response('not JSON')),
+    readRegistry('@lichao0223/lobehub-cli', async () => new Response('not JSON')),
     /JSON/,
   );
 });
@@ -131,7 +139,7 @@ test('does not interpret registry authentication, outage or malformed JSON as an
 test('waits for public registry visibility, verifies source and latest, and bounds pending publications', async () => {
   let calls = 0;
   const opts = {
-    name: '@lobehub/cli',
+    name: '@lichao0223/lobehub-cli',
     version: '0.0.79',
     sha: 'current',
     sleep: async () => {},
@@ -172,27 +180,33 @@ test('persists a reservation in Git, reuses it after a failed run, and skips aft
   await git('config', 'user.name', 'Test');
   await mkdir(path.join(checkout, 'apps/cli'), { recursive: true });
   const pkgPath = path.join(checkout, 'apps/cli/package.json');
-  const pkg = { name: '@lobehub/cli', version: '0.0.78' };
+  const pkg = { name: '@lichao0223/lobehub-cli', version: '0.0.78' };
   await writeFile(pkgPath, JSON.stringify(pkg));
   await git('add', '.');
   await git('commit', '-m', 'source');
   const sha = (await git('rev-parse', 'HEAD')).stdout.trim();
   const script = pathToScript();
-  const invoke = async (metadata) => {
+  const invoke = async (metadata, reserve = true) => {
     const runner = `
       const { prepareRelease, reserveRelease } = await import(process.argv[1]);
       const metadata = JSON.parse(process.argv[2]);
-      const plan = await prepareRelease({ env: {}, read: async () => metadata });
-      if (plan.publish) await reserveRelease();
+      const read = metadata === null
+        ? async () => { throw new Error('Registry lookup failed: HTTP 404'); }
+        : async () => metadata;
+      const plan = await prepareRelease({ env: {}, read });
+      if (plan.publish && process.argv[3] === 'true') await reserveRelease();
     `;
     await exec(
       process.execPath,
-      ['--input-type=module', '-e', runner, script, JSON.stringify(metadata)],
+      ['--input-type=module', '-e', runner, script, JSON.stringify(metadata), String(reserve)],
       {
         cwd: checkout,
       },
     );
   };
+  await invoke(null, false);
+  assert.equal(JSON.parse(await readFile(pkgPath, 'utf8')).version, '0.0.78');
+  await git('restore', 'apps/cli/package.json');
   await invoke(registry());
   const publishedPackage = JSON.parse(await readFile(pkgPath, 'utf8'));
   assert.equal(publishedPackage.version, '0.0.79');

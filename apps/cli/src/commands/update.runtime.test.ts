@@ -14,7 +14,7 @@ const state = vi.hoisted(() => ({
 }));
 const spawn = vi.hoisted(() => vi.fn());
 
-vi.mock('../pkg', () => ({ cliPackageName: '@lobehub/cli', cliVersion: '0.0.71' }));
+vi.mock('../pkg', () => ({ cliPackageName: '@lichao0223/lobehub-cli', cliVersion: '0.0.71' }));
 vi.mock('../daemon/manager', () => ({
   getRunningDaemonPid: () => null,
   readStatus: () => ({
@@ -130,7 +130,7 @@ describe('update with a running connector', () => {
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(spawn.mock.calls[0].slice(0, 2)).toEqual([
       'npm',
-      ['install', '-g', '@lobehub/cli@0.0.72'],
+      ['install', '-g', '@lichao0223/lobehub-cli@0.0.72'],
     ]);
   });
 });

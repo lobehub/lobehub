@@ -14,7 +14,7 @@ describe('roff manual generator', () => {
 
     const output = generateRootManPage(program, '1.2.3');
 
-    expect(output).toContain('.TH LH 1 "" "@lobehub/cli 1.2.3" "User Commands"');
+    expect(output).toContain('.TH LH 1 "" "@lichao0223/lobehub-cli 1.2.3" "User Commands"');
     expect(output).toContain('.SH COMMANDS');
     expect(output).toContain('.B generate');
     expect(output).toContain('Generate content Alias: gen.');

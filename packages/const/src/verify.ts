@@ -5,7 +5,7 @@
  * Deliberately kept here rather than in `@lobechat/types`: these are runtime
  * values, and `@lobechat/types` is replaced by a hand-written stub inside the
  * isolated desktop workspace (`apps/desktop/stubs/types`), so a value imported
- * from it is unreachable for members of that workspace — `@lobehub/cli` among
+ * from it is unreachable for members of that workspace — `@lichao0223/lobehub-cli` among
  * them. This module imports nothing, so it resolves from every workspace.
  *
  * `packages/types/src/verify.ts` declares the same unions independently (it must

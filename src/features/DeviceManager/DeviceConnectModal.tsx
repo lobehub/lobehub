@@ -109,7 +109,7 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(
     const cliSteps = (
       <Flexbox>
         <Step index={1} title={t('devices.connectWizard.cli.installTitle')}>
-          <CommandLine command={'npm install -g @lobehub/cli'} />
+          <CommandLine command={'npm install -g @lichao0223/lobehub-cli'} />
         </Step>
         <Step index={2} title={t('devices.connectWizard.cli.loginTitle')}>
           <CommandLine command={'lh login'} />

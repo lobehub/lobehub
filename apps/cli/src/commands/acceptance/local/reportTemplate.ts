@@ -31,7 +31,7 @@ export const resolveReportTemplate = (): string => {
   const found = candidates().find((file) => existsSync(file));
   if (!found)
     throw new Error(
-      `The local report page is missing from this CLI (${REPORT_TEMPLATE_FILE}). Reinstall @lobehub/cli, or build it with \`bun run build:report\` in apps/workbench.`,
+      `The local report page is missing from this CLI (${REPORT_TEMPLATE_FILE}). Reinstall @lichao0223/lobehub-cli, or build it with \`bun run build:report\` in apps/workbench.`,
     );
   return found;
 };

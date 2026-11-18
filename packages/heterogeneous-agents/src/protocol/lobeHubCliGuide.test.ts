@@ -13,7 +13,7 @@ describe('lobeHubCliGuide', () => {
   });
 
   it('names a one-off latest-CLI run when the installed lh is too old', () => {
-    expect(lobeHubCliGuide).toContain('`pnpm --package @lobehub/cli@latest dlx lh …`');
-    expect(lobeHubCliGuide).toContain('`npx -y -p @lobehub/cli@latest lh …`');
+    expect(lobeHubCliGuide).toContain('`pnpm --package @lichao0223/lobehub-cli@latest dlx lh …`');
+    expect(lobeHubCliGuide).toContain('`npx -y -p @lichao0223/lobehub-cli@latest lh …`');
   });
 });

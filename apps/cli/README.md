@@ -1,10 +1,10 @@
-# @lobehub/cli
+# @lichao0223/lobehub-cli
 
 LobeHub command-line interface.
 
 ## Release to npm
 
-The `Release CLI` GitHub Actions workflow publishes to npm's `latest` tag when
+The `Release Fork CLI` GitHub Actions workflow publishes to npm's `latest` tag when
 CLI production inputs change on `canary`. Merge the feature or fix PR after its
 checks and required product acceptance; no separate version-bump PR is needed.
 
@@ -12,14 +12,14 @@ Automatic inputs are `apps/cli/src/**`, build scripts, `package.json`, the CLI
 workspace/TypeScript/tsdown configuration, and the release workflow/helper.
 Tests, fixtures, Markdown documentation, E2E-only changes and generated manuals
 are excluded. Changes only to shared workspace packages or the offline report
-can be released by manually dispatching `Release CLI` on `canary`.
+can be released by manually dispatching `Release Fork CLI` on `canary`.
 
 CI allocates the next patch above the highest stable npm version (for example,
 `0.0.78` → `0.0.79`). A higher stable version intentionally set in `package.json`
 is honored for a minor/major release. The generated version is used for the
 bundle and manual; CI does not commit version changes back to the branch. The
 checked-in version is therefore a development baseline, not necessarily npm's
-latest release. Use `npm view @lobehub/cli version` to check the published version.
+latest release. Use `npm view @lichao0223/lobehub-cli version` to check the published version.
 
 The workflow tests the bundle, runs the complete `prepublishOnly` build, checks
 the built CLI and packs it. Immediately before publication it creates a
@@ -42,7 +42,7 @@ newer commit includes the earlier merged changes. This publishes source snapshot
 not necessarily one version per merged PR.
 
 Publishing uses the repository's `NPM_TOKEN` secret, as the SDK release does.
-It must have publish permission for `@lobehub/cli` and support unattended
+It must have publish permission for `@lichao0223/lobehub-cli` and support unattended
 publishing under the package's npm authentication policy. PR previews continue
 to publish separately to `pkg.pr.new`.
 

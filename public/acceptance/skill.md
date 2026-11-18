@@ -8,7 +8,7 @@ Run the following setup from the root of the project the user wants to verify.
 Install or update the LobeHub CLI (requires Node.js 22.15 or later):
 
 ```sh
-npm install -g @lobehub/cli
+npm install -g @lichao0223/lobehub-cli
 ```
 
 ## 2. Install the Acceptance skill

@@ -30,7 +30,7 @@ vi.mock('../../pkg', () => ({
   get cliNodeEngine() {
     return pkg.engine;
   },
-  cliPackageName: '@lobehub/cli',
+  cliPackageName: '@lichao0223/lobehub-cli',
   cliVersion: '0.0.55',
 }));
 

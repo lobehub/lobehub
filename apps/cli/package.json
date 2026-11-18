@@ -1,9 +1,9 @@
 {
-  "name": "@lobehub/cli",
+  "name": "@lichao0223/lobehub-cli",
   "version": "0.0.78",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lobehub/lobehub",
+    "url": "https://github.com/lichao0223/lobehub",
     "directory": "apps/cli"
   },
   "type": "module",

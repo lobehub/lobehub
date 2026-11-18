@@ -158,7 +158,7 @@ const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", St
  * ```sh
  * __lobehub_lh_bin=$(mktemp -d) && trap 'rm -rf …' EXIT && … && cat > …/lh <<'…' && chmod 700 … && export PATH=…
  * #!/bin/sh
- * LOBEHUB_JWT='…' LOBEHUB_SERVER='…' LOBEHUB_WORKSPACE_ID='…' exec npx -y @lobehub/cli "$@"
+ * LOBEHUB_JWT='…' LOBEHUB_SERVER='…' LOBEHUB_WORKSPACE_ID='…' exec npx -y @lichao0223/lobehub-cli "$@"
  * …
  * (
  * <original command>
@@ -276,7 +276,7 @@ export const preprocessLhCommand = async (
         ` || { echo 'lh: could not set up LobeHub CLI credentials' >&2; exit 1; }`,
       '#!/bin/sh',
       ...(/\btfs\b/.test(command) ? [buildTfsCliDispatch(envAssignments)] : []),
-      `${envAssignments} exec npx -y @lobehub/cli "$@"`,
+      `${envAssignments} exec npx -y @lichao0223/lobehub-cli "$@"`,
       LH_SHIM_EOF,
       // A subshell, so the command's own `trap … EXIT` or `exit` cannot skip the
       // outer cleanup, and it exits with the command's own status. Jobs it left

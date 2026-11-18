@@ -1,4 +1,4 @@
-name: Release CLI
+name: Release Fork CLI
 
 permissions:
   contents: write
@@ -35,7 +35,7 @@ concurrency:
 jobs:
   publish:
     name: Publish CLI
-    if: github.repository == 'lobehub/lobehub' && github.ref == 'refs/heads/canary'
+    if: github.repository == 'lichao0223/lobehub' && github.ref == 'refs/heads/canary'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -98,7 +98,7 @@ jobs:
 
       - name: Publish to npm
         if: steps.release.outputs.publish == 'true'
-        run: npm publish ./lobehub-cli-*.tgz --provenance --access public --tag latest
+        run: npm publish ./*.tgz --provenance --access public --tag latest
         working-directory: apps/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

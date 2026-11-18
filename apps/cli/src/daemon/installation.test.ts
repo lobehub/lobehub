@@ -12,8 +12,8 @@ afterEach(() => {
 
 describe('installation paths', () => {
   it('resolves the invoked entry to its canonical installation', async () => {
-    vi.mocked(realpath).mockResolvedValueOnce('/opt/npm/@lobehub/cli/dist/index.js');
-    expect(await getCliInstallationPath()).toBe('/opt/npm/@lobehub/cli/dist/index.js');
+    vi.mocked(realpath).mockResolvedValueOnce('/opt/npm/@lichao0223/lobehub-cli/dist/index.js');
+    expect(await getCliInstallationPath()).toBe('/opt/npm/@lichao0223/lobehub-cli/dist/index.js');
   });
 
   it('uses the connector report without reading its arguments', async () => {

@@ -27,6 +27,22 @@ function compare(a, b) {
 /** Pure release decisions; tags reserve versions even while npm is processing. */
 export async function planRelease({ sourceVersion, metadata, reservations, sha, isAncestor }) {
   parts(sourceVersion);
+  const ordered = [...reservations].sort((a, b) => compare(b.version, a.version));
+  if (metadata?.unpublished) {
+    const existing = ordered.find((entry) => entry.sha === sha);
+    if (existing) return { publish: true, version: existing.version, reserved: true };
+    for (const entry of ordered) {
+      if (entry.sha !== sha && (await isAncestor(sha, entry.sha))) {
+        return { publish: false, reason: 'A newer source commit already has a release reservation' };
+      }
+      if (entry.sha !== sha) {
+        throw new Error(
+          `Release ${entry.version} (${entry.sha}) is unfinished; rerun its original workflow first`,
+        );
+      }
+    }
+    return { publish: true, version: sourceVersion, reserved: false };
+  }
   if (!metadata.versions || !metadata['dist-tags']?.latest) {
     throw new Error('Registry response is missing versions or latest');
   }
@@ -36,7 +52,6 @@ export async function planRelease({ sourceVersion, metadata, reservations, sha, 
     throw new Error('Registry latest is missing from versions');
   }
   const newest = versions.sort(compare).at(-1);
-  const ordered = [...reservations].sort((a, b) => compare(b.version, a.version));
   const existing = ordered.find((entry) => entry.sha === sha);
   if (existing) {
     const published = metadata.versions[existing.version];
@@ -129,9 +144,19 @@ export async function prepareRelease({ env = process.env, read = readRegistry } 
         return { version: tag.slice(tagPrefix.length), sha: commit };
       })
     : [];
+  let metadata;
+  try {
+    metadata = await read(pkg.name);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Registry lookup failed: HTTP 404') {
+      metadata = { unpublished: true };
+    } else {
+      throw error;
+    }
+  }
   const plan = await planRelease({
     sourceVersion: pkg.version,
-    metadata: await read(pkg.name),
+    metadata,
     reservations,
     sha,
     isAncestor: async (ancestor, descendant) => {
