@@ -9,6 +9,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
     aiProvider: {
       checkProviderConnectivity: { mutate: vi.fn() },
+      createAiProvider: { mutate: vi.fn() },
       getAiProviderById: { query: vi.fn() },
       getAiProviderList: { query: vi.fn() },
       toggleProviderEnabled: { mutate: vi.fn() },
@@ -19,7 +20,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
 
 const { mockSdk } = vi.hoisted(() => ({
   mockSdk: {
-    providers: { create: vi.fn(), delete: vi.fn(), update: vi.fn() },
+    providers: { delete: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -128,7 +129,7 @@ describe('provider command', () => {
 
   describe('create', () => {
     it('should create a provider', async () => {
-      mockSdk.providers.create.mockResolvedValue(envelope({ id: 'my-provider' }));
+      mockTrpcClient.aiProvider.createAiProvider.mutate.mockResolvedValue('my-provider');
 
       const program = createProgram();
       await program.parseAsync([
@@ -146,28 +147,16 @@ describe('provider command', () => {
         'openai',
       ]);
 
-      expect(mockSdk.providers.create).toHaveBeenCalledWith({
-        body: {
-          description: 'Test desc',
+      expect(mockTrpcClient.aiProvider.createAiProvider.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
           id: 'my-provider',
-          logo: undefined,
           name: 'My Provider',
+          description: 'Test desc',
+          sdkType: 'openai',
           source: 'custom',
-        },
-      });
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created provider'));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('my-provider'));
-    });
-
-    it('should keep the English duplicate message tRPC gave', async () => {
-      mockSdk.providers.create.mockRejectedValue(
-        new LobeHubAPIError(409, { code: 'conflict', message: 'Provider "dup" 已存在' }),
+        }),
       );
-
-      const program = createProgram();
-      await expect(
-        program.parseAsync(['node', 'test', 'provider', 'create', '--id', 'dup', '-n', 'Dup']),
-      ).rejects.toThrow('Provider "dup" already exists');
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created provider'));
     });
   });
 

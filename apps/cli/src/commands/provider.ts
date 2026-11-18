@@ -14,7 +14,8 @@ const isNotFound = (error: unknown) => error instanceof LobeHubAPIError && error
 /**
  * `list`, `view`, `config`, `test` and `toggle` stay on tRPC: they merge or
  * upsert the builtin providers that have no database row yet, which the REST
- * API (`/api/v1/providers`, rows only) does not.
+ * API (`/api/v1/providers`, rows only) does not. `create` stays too: REST
+ * answers a duplicate id with a Chinese `400`, not tRPC's `CONFLICT`.
  */
 export function registerProviderCommand(program: Command) {
   const provider = program.command('provider').description('Manage AI providers');
@@ -109,27 +110,19 @@ export function registerProviderCommand(program: Command) {
         sdkType?: string;
         source?: string;
       }) => {
-        const sdk = await getSdkClient();
+        const client = await getTrpcClient();
 
-        const { data } = await sdk.providers
-          .create({
-            body: {
-              description: options.description || undefined,
-              id: options.id,
-              logo: options.logo || undefined,
-              name: options.name,
-              source: (options.source || 'custom') as 'builtin' | 'custom',
-              // `--sdk-type` has no provider column: tRPC dropped it as well.
-            },
-          })
-          .catch((error: unknown) => {
-            // REST words its conflict in Chinese; keep the message tRPC gave.
-            if (error instanceof LobeHubAPIError && error.status === 409) {
-              throw new Error(`Provider "${options.id}" already exists`);
-            }
-            throw error;
-          });
-        console.log(`${pc.green('✓')} Created provider ${pc.bold(data.data.id || options.id)}`);
+        const input: Record<string, any> = {
+          id: options.id,
+          name: options.name,
+          source: options.source || 'custom',
+        };
+        if (options.description) input.description = options.description;
+        if (options.logo) input.logo = options.logo;
+        if (options.sdkType) input.sdkType = options.sdkType;
+
+        const resultId = await client.aiProvider.createAiProvider.mutate(input as any);
+        console.log(`${pc.green('✓')} Created provider ${pc.bold(resultId || options.id)}`);
       },
     );
 

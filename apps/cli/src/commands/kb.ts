@@ -1,6 +1,5 @@
 import path from 'node:path';
 
-import { LobeHubAPIError } from '@lobehub/sdk';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -192,23 +191,14 @@ export function registerKbCommand(program: Command) {
           process.exit(1);
         }
 
-        const sdk = await getSdkClient();
+        const client = await getTrpcClient();
 
-        const body: { avatar?: string; description?: string; name?: string } = {};
-        if (options.name) body.name = options.name;
-        if (options.description) body.description = options.description;
-        if (options.avatar) body.avatar = options.avatar;
+        const value: Record<string, any> = {};
+        if (options.name) value.name = options.name;
+        if (options.description) value.description = options.description;
+        if (options.avatar) value.avatar = options.avatar;
 
-        try {
-          await sdk.knowledgeBases.update({ body, path: { id } });
-        } catch (error) {
-          if (error instanceof LobeHubAPIError && error.status === 404) {
-            log.error(`Knowledge base not found: ${id}`);
-            process.exit(1);
-            return;
-          }
-          throw error;
-        }
+        await client.knowledgeBase.updateKnowledgeBase.mutate({ id, value });
         console.log(`${pc.green('✓')} Updated knowledge base ${pc.bold(id)}`);
       },
     );

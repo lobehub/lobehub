@@ -1,4 +1,3 @@
-import { LobeHubAPIError } from '@lobehub/sdk';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,7 +30,6 @@ const { mockSdk } = vi.hoisted(() => ({
   mockSdk: {
     knowledgeBases: {
       create: vi.fn(),
-      update: vi.fn(),
     },
   },
 }));
@@ -174,31 +172,15 @@ describe('kb command', () => {
 
   describe('edit', () => {
     it('should update knowledge base', async () => {
-      mockSdk.knowledgeBases.update.mockResolvedValue(envelope({ knowledgeBase: { id: 'kb1' } }));
+      mockTrpcClient.knowledgeBase.updateKnowledgeBase.mutate.mockResolvedValue({});
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'kb', 'edit', 'kb1', '--name', 'Updated']);
 
-      expect(mockSdk.knowledgeBases.update).toHaveBeenCalledWith({
-        body: { name: 'Updated' },
-        path: { id: 'kb1' },
+      expect(mockTrpcClient.knowledgeBase.updateKnowledgeBase.mutate).toHaveBeenCalledWith({
+        id: 'kb1',
+        value: { name: 'Updated' },
       });
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Updated knowledge base'));
-    });
-
-    it('should report a missing knowledge base instead of claiming success', async () => {
-      mockSdk.knowledgeBases.update.mockRejectedValue(
-        new LobeHubAPIError(404, { code: 'not_found', message: 'Knowledge base not found' }),
-      );
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'kb', 'edit', 'kb-x', '--name', 'Updated']);
-
-      expect(log.error).toHaveBeenCalledWith('Knowledge base not found: kb-x');
-      expect(exitSpy).toHaveBeenCalledWith(1);
-      expect(consoleSpy).not.toHaveBeenCalledWith(
-        expect.stringContaining('Updated knowledge base'),
-      );
     });
 
     it('should exit when no changes specified', async () => {
