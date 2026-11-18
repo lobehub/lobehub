@@ -43,6 +43,17 @@ describe('resolveToolRules', () => {
     expect(chatMode.rules['lobe-attachments']).toBe(true);
   });
 
+  it('enables the attachments tool when an attached document reached the model without text', () => {
+    const { rules } = resolveToolRules(request({ hasUnextractedFiles: true }));
+    expect(rules['lobe-attachments']).toBe(true);
+    expect(rules['lobe-knowledge-base']).toBe(false);
+
+    const chatMode = resolveToolRules(
+      request({ agent: { chatConfig: { enableAgentMode: false } }, hasUnextractedFiles: true }),
+    );
+    expect(chatMode.rules['lobe-attachments']).toBe(true);
+  });
+
   it('chat mode is a strict whitelist with no activator and no always-on tools', () => {
     const resolved = resolveToolRules(
       request({

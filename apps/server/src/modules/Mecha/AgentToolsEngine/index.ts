@@ -114,6 +114,7 @@ export const createServerAgentToolsEngine = (
     hasIdentityAccount = false,
     hasEventConnector = false,
     hasOversizedFiles = false,
+    hasUnextractedFiles = false,
     isBotConversation = false,
     isGroupSupervisor = false,
     manifestContext,
@@ -164,6 +165,7 @@ export const createServerAgentToolsEngine = (
     hasIdentityAccount,
     hasEventConnector,
     hasOversizedFiles,
+    hasUnextractedFiles,
     isBotConversation,
     isGroupSupervisor,
     // Local tools reach a machine only through an online, auto-activated

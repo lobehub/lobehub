@@ -110,6 +110,14 @@ export const toPersistedInitRequest = (request: OperationInitRequest): Operation
 };
 
 /**
+ * Whether a document attached to this turn carries no text: its parse failed at
+ * turn setup (bodies detached for a deferred init are back by now), so the model
+ * would see only its id and name.
+ */
+export const hasUnextractedAttachment = (request: OperationInitRequest): boolean =>
+  !!request.runAttachments.fileList?.some((file) => file.content === undefined);
+
+/**
  * How many detached bodies are read back at once. Each read hits the documents
  * table (and may re-parse), and the attachment list is caller-sized.
  */
@@ -185,6 +193,7 @@ export const runOperationInit = async (
         functionTools: request.functionTools,
         globalMemoryEnabled: request.globalMemoryEnabled,
         hasMentionedAgents: request.hasMentionedAgents,
+        hasUnextractedAttachments: hasUnextractedAttachment(request),
         isFixedDeviceTarget: request.isFixedDeviceTarget,
         requireDevice: request.requireDevice,
         loadHistoryMessages: deps.loadHistoryMessages,

@@ -64,6 +64,11 @@ export interface ToolRuleRequest {
    * attachments tool is enabled so the model can read the rest with `readAttachment`.
    */
   hasOversizedFiles?: boolean;
+  /**
+   * An attached document reached the model without its text (its parse failed or never ran); the
+   * attachments tool is enabled so `readAttachment` can parse it on demand or say why it cannot.
+   */
+  hasUnextractedFiles?: boolean;
   isBotConversation?: boolean;
   /** Verified against the persisted roster, never a client claim. */
   isGroupSupervisor?: boolean;

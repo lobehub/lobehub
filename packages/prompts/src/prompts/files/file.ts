@@ -89,18 +89,30 @@ export const previewLongFileContent = (
   };
 };
 
+/**
+ * Body for a file whose text was never extracted (no parsed document: the parse failed or has
+ * not run). With `readAttachment` available the model is told to read it, which parses on first
+ * read; without it the tag stays empty, as before. A tombstoned file the viewer lost access to
+ * also has no text, but there is nothing to read, so it keeps the empty tag.
+ */
+const unextractedFileBody = (fileId: string) =>
+  `[The text of this file is not included here. Call readAttachment with fileId="${fileId}" to read it.]`;
+
 const filePrompt = (
   item: ChatFileItem,
   addUrl: boolean,
   canReadAttachment: boolean,
   previewFileIds?: ReadonlySet<string>,
 ) => {
-  const { attributes, body } = previewLongFileContent(item.content || '', {
-    canReadAttachment,
-    fileId: item.id,
-    forcePreview: previewFileIds?.has(item.id),
-    originalChars: item.originalCharCount,
-  });
+  const { attributes, body } =
+    item.content === undefined && canReadAttachment && !item.inaccessible
+      ? { attributes: '', body: unextractedFileBody(item.id) }
+      : previewLongFileContent(item.content || '', {
+          canReadAttachment,
+          fileId: item.id,
+          forcePreview: previewFileIds?.has(item.id),
+          originalChars: item.originalCharCount,
+        });
   return addUrl
     ? `<file id="${item.id}" name="${item.name}" type="${item.fileType}" size="${item.size}" url="${item.url}"${attributes}>${body}</file>`
     : `<file id="${item.id}" name="${item.name}" type="${item.fileType}" size="${item.size}"${attributes}>${body}</file>`;

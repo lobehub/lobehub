@@ -57,6 +57,7 @@ import {
   scheduleConnectorRefresh,
 } from './connectors';
 import { resolveDevicePlan } from './devicePlan';
+import { findMissingPinnedTools, warnMissingPinnedTools } from './missingPinnedTools';
 import { resolveModelContext, startModelMetadataRead } from './modelFacts';
 import { readCredentialFacts, startToolReads } from './reads';
 import { resolveOperationGroup, resolveTurnScopedPluginIds } from './turnContext';
@@ -114,6 +115,7 @@ export const discoverTools = async (
     functionTools,
     globalMemoryEnabled,
     hasMentionedAgents,
+    hasUnextractedAttachments,
     loadHistoryMessages,
     localDeviceId,
     requestedDeviceId,
@@ -178,21 +180,18 @@ export const discoverTools = async (
   // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
   // connector) is both queried for manifests and enabled by the tools engine.
   const isGoalTurn = isGoalPrompt(prompt);
+  // An agent that pinned the goal or dashboard tool before its rename still
+  // carries the legacy id; resolve it to the current one.
+  const pinnedPluginIds = getActivePluginIds(agentConfig?.plugins).map((id) =>
+    isGoalIdentifier(id) ? GoalIdentifier : isDashboardIdentifier(id) ? DashboardIdentifier : id,
+  );
   let agentPlugins: string[] = exclusivePluginIds
     ? [...new Set(exclusivePluginIds)]
     : isGoalTurn
       ? [GoalIdentifier]
       : [
           ...new Set([
-            // An agent that pinned the goal or dashboard tool before its
-            // rename still carries the legacy id; resolve it to the current one.
-            ...getActivePluginIds(agentConfig?.plugins).map((id) =>
-              isGoalIdentifier(id)
-                ? GoalIdentifier
-                : isDashboardIdentifier(id)
-                  ? DashboardIdentifier
-                  : id,
-            ),
+            ...pinnedPluginIds,
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
@@ -293,14 +292,6 @@ export const discoverTools = async (
       discoverableConnectorsMcp,
       discoverableConnectorTools,
     } = await toolReads.connectors;
-
-    // 5a-1b. Model awareness: tell the model whose connected account each
-    // borrowed tool runs on (see `buildOwnershipNote`).
-    connectorOwnershipNote = await buildOwnershipNote(
-      deps,
-      connectors.map((c) => connectorsMcp.find((mcp) => mcp.id === c.id) ?? c),
-      !!shareGate,
-    );
 
     connectorManifests = [
       ...buildConnectorManifests(
@@ -465,6 +456,16 @@ export const discoverTools = async (
       discoverableConnectorManifests,
     );
 
+    // Model awareness: tell the model whose connected account each borrowed
+    // tool runs on (see `buildOwnershipNote`). Only connectors that put tools
+    // into this run count, so the note never names a tool the run lacks.
+    connectorOwnershipNote = await buildOwnershipNote(
+      deps,
+      connectors.map((c) => connectorsMcp.find((mcp) => mcp.id === c.id) ?? c),
+      new Set([...activeConnectorManifests, ...activeComposioManifests].map((m) => m.identifier)),
+      !!shareGate,
+    );
+
     // Context-aware builtin manifests: inside a sub-agent (or group) run,
     // lobe-agent drops `callSubAgent` so the model can't recurse into nested
     // sub-agents (which the runtime rejects, looping until the inactivity
@@ -532,6 +533,7 @@ export const discoverTools = async (
       hasIdentityAccount,
       hasEventConnector,
       hasOversizedFiles,
+      hasUnextractedFiles: hasUnextractedAttachments,
       isBotConversation,
       isGroupSupervisor,
       modelAbilities,
@@ -557,16 +559,30 @@ export const discoverTools = async (
 
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
 
-    toolsResult = toolsEngine.generateToolsDetailed({
+    const generated = toolsEngine.generateToolsDetailed({
       excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model,
       provider,
       skipDefaultTools: !!exclusivePluginIds,
       toolIds: pluginIds,
     });
+    toolsResult = generated;
 
     tools = toolsResult.tools;
     log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
+    warnMissingPinnedTools(
+      findMissingPinnedTools({
+        disabledPluginIds,
+        filteredTools: generated.filteredTools,
+        pinnedPluginIds,
+      }),
+      {
+        agentId: resolvedAgentId,
+        topicId: ctx.topicId,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      },
+    );
 
     // Only a run that can inject credentials renders {{CREDS_LIST}}. Kick the
     // read off here and await it at the end: it is one Market round trip, and

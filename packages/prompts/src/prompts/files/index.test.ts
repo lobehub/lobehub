@@ -470,6 +470,33 @@ describe('filesPrompts', () => {
       expect(result).toContain('only the first 4 of the original 9000000 characters were kept');
     });
 
+    it('tells the model to read a file whose text was never extracted', () => {
+      const result = filesPrompts({ addUrl: false, canReadAttachment: true, fileList: [mockFile] });
+
+      expect(result).toContain(
+        `size="1024">[The text of this file is not included here. Call readAttachment with fileId="${mockFile.id}" to read it.]</file>`,
+      );
+    });
+
+    it('keeps the tag of an unextracted file empty when readAttachment is unavailable', () => {
+      const result = filesPrompts({ addUrl: false, fileList: [mockFile] });
+
+      expect(result).toContain('size="1024"></file>');
+      expect(result).not.toContain('readAttachment');
+    });
+
+    it('does not offer readAttachment for a file the viewer lost access to', () => {
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [
+          { fileType: '', id: 'file-gone', inaccessible: true, name: '', size: 0, url: '' },
+        ],
+      });
+
+      expect(result).not.toContain('readAttachment');
+    });
+
     it('counts lines of oversized content', () => {
       const content = 'line\n'.repeat(FILE_INLINE_MAX_CHARS / 5 + 1);
       const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });

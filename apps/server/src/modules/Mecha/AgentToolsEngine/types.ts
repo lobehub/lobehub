@@ -131,6 +131,8 @@ export interface ServerCreateAgentToolsEngineParams {
   hasIdentityAccount?: boolean;
   /** Whether an attached or agent-assigned file is previewed because it is too long to inline */
   hasOversizedFiles?: boolean;
+  /** Whether an attached document reached the model without its extracted text */
+  hasUnextractedFiles?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */
   isBotConversation?: boolean;
   /**
