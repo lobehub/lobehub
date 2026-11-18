@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -75,6 +76,7 @@ const KEYS = {
 } as const;
 
 const storage = {
+  buildStatus: vi.fn(),
   listFiles: vi.fn(),
   listInstances: vi.fn(),
   readFile: vi.fn(),
@@ -204,6 +206,26 @@ describe('sandboxes', () => {
 
     const one = await call(`/sandboxes/${sandbox.id}`, { key: KEYS.read });
     expect(SandboxSchema.parse((await json(one)).data).id).toBe(sandbox.id);
+  });
+
+  it('settles a finished build before answering a detail poll', async () => {
+    const sandbox = await createSandbox();
+
+    // A build whose verdict never landed: `POST /sandboxes` told the caller to
+    // poll this endpoint, so the row still reads `pending` against a build the
+    // runtime has already finished.
+    await serverDB
+      .update(environmentInstances)
+      .set({ buildId: 'build-1', status: 'pending' })
+      .where(eq(environmentInstances.id, sandbox.id));
+    storage.buildStatus.mockResolvedValue({ chunk: '', logOffset: 0, state: 'succeeded' });
+
+    const res = await call(`/sandboxes/${sandbox.id}`, { key: KEYS.read });
+    expect(res.status).toBe(200);
+    expect(SandboxSchema.parse((await json(res)).data)).toMatchObject({ status: 'ready' });
+    expect(storage.buildStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ buildId: 'build-1', name: sandbox.id }),
+    );
   });
 
   it('refuses another user’s environment and hides another user’s sandbox', async () => {

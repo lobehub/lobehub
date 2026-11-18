@@ -131,7 +131,28 @@ export class SandboxRestService extends BaseService {
   }
 
   async getSandbox(id: string): Promise<SandboxResponse> {
-    return toSandbox(await this.requireInstance(id));
+    return toSandbox(await this.settleBuild(await this.requireInstance(id)));
+  }
+
+  /**
+   * A build's verdict lands in the row only when someone asks the storage how
+   * the build went — the Instances tab does, and a caller told by `POST
+   * /sandboxes` to poll this endpoint is the other. So settle a build that
+   * still has an id here before answering: without it a client following the
+   * documented flow keeps reading `pending` after the build has finished,
+   * because nothing else in this surface writes the verdict.
+   *
+   * A storage that cannot answer leaves the row as it was — the next poll is
+   * where that belongs, not this reply.
+   */
+  private async settleBuild(instance: Instance): Promise<Instance> {
+    if (!instance.buildId) return instance;
+
+    await this.caller
+      .instanceBuildStatus({ id: instance.id, topicId: sandboxApiTopicId(instance.id) })
+      .catch(() => undefined);
+
+    return this.requireInstance(instance.id);
   }
 
   async createSandbox(request: CreateSandboxRequest): Promise<SandboxResponse> {
