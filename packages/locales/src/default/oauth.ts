@@ -37,6 +37,8 @@ export default {
   'consent.scope.offline_access': 'Allow the client to access your data',
   'consent.scope.openid': 'Authenticate using your LobeHub account',
   'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',
+  'consent.scope.share-read': 'View your public share links',
+  'consent.scope.share-write': 'Create and revoke public share links to your content',
   'consent.scope.sync-read': 'Read your synchronized data',
   'consent.scope.sync-write': 'Write and update your synchronized data',
   'consent.thirdParty.developedBy': 'By {{developerName}}',
