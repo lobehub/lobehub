@@ -4,7 +4,6 @@ import type { DeviceListItem } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { Building2Icon, LockKeyholeIcon, MonitorSmartphoneIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { summarizeDeviceGroup } from './deviceGroupSummary';
 import GroupSubmenu from './GroupSubmenu';
@@ -29,17 +28,12 @@ interface DeviceGroupSubmenuProps {
 
 /**
  * One device group in the execution environment menu: the first level keeps a
- * single row per group — how many machines are online, and the current pick by
- * name — and the machines themselves open beside it. A growing fleet then
+ * single row per group — its title, and the current pick by name — and the machines themselves open beside it. A growing fleet then
  * lengthens the submenu, not the menu the other environments live in.
  */
 const DeviceGroupSubmenu = memo<DeviceGroupSubmenuProps>(
   ({ activeDeviceId, devices, kind, label, renderDevice }) => {
-    const { t } = useTranslation('chat');
-    const { activeDevice, online, presenceUnknown, total } = summarizeDeviceGroup(
-      devices,
-      activeDeviceId,
-    );
+    const { activeDevice } = summarizeDeviceGroup(devices, activeDeviceId);
 
     return (
       <GroupSubmenu
@@ -48,13 +42,6 @@ const DeviceGroupSubmenu = memo<DeviceGroupSubmenuProps>(
         icon={<Icon icon={GROUP_ICONS[kind]} size={14} />}
         label={label}
         testId={`device-group-${kind}`}
-        desc={
-          // Until presence is confirmed the count would read "0 online";
-          // say it is still checking, as the device rows themselves do.
-          presenceUnknown
-            ? t('heteroAgent.executionTarget.presenceChecking')
-            : t('heteroAgent.executionTarget.deviceGroupSummary', { online, total })
-        }
       >
         {devices.map((d) => renderDevice(d))}
       </GroupSubmenu>

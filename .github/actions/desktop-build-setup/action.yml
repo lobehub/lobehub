@@ -121,6 +121,17 @@ runs:
         echo "CLOUD_DESKTOP=1" >> "$GITHUB_ENV"
         echo "✅ Cloud repository $resolved_cloud_ref overlaid at $cloud_root"
 
+    # Shared with the isolated desktop install below. The root `pnpm-lock.yaml` is
+    # gitignored, so hash the tracked dependency declarations — hashing an absent
+    # file would pin one key forever and stop the store from ever taking new tarballs.
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/pnpm-store
+        key: pnpm-store-${{ runner.os }}-v1-${{ hashFiles('package.json', 'pnpm-workspace.yaml', 'apps/*/package.json', 'packages/*/package.json', 'patches/*.patch', 'apps/desktop/pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-v1-
+
     - name: Install dependencies
       shell: bash
       run: |
@@ -128,7 +139,7 @@ runs:
         if [ "${CLOUD_DESKTOP:-}" = "1" ]; then
           cd ..
         fi
-        pnpm install --node-linker=hoisted
+        pnpm install --node-linker=hoisted --store-dir "$RUNNER_TEMP/pnpm-store" --prefer-offline
 
     # 移除国内 electron 镜像配置，GitHub Actions 使用官方源更快
     - name: Remove China electron mirror from .npmrc
@@ -143,6 +154,10 @@ runs:
 
     - name: Install deps on Desktop
       shell: bash
+      env:
+        # Reuse the store restored above instead of the ephemeral global one.
+        # pnpm reads its own `pnpm_config_*` env namespace, not `npm_config_*`.
+        pnpm_config_store_dir: ${{ runner.temp }}/pnpm-store
       run: |
         set -euo pipefail
         if [ "${CLOUD_DESKTOP:-}" = "1" ]; then

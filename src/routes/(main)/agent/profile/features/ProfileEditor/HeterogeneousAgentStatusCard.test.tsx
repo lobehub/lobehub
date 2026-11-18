@@ -539,7 +539,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('claude-alt')).toBeInTheDocument();
   });
 
-  it('persists command edits on blur', async () => {
+  it('reports the edited command through onCommandChange on blur', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
     getClaudeAuthStatus.mockResolvedValue(null);
     const onCommandChange = vi.fn();

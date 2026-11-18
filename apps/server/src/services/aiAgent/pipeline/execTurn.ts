@@ -569,6 +569,7 @@ export const execAgentTurn = async (
             bindTopicWorkingDirectory({ topicModel: deps.topicModel }, p),
           db: deps.db,
           getMarketService: (options) => deps.getMarketService(runFacts, options),
+          includeShareVisitor: !!runContext.shareGate,
           messageModel: deps.messageModel,
           resolveDeviceWorkspaceId: deps.resolveDeviceWorkspaceId,
           topicModel: deps.topicModel,

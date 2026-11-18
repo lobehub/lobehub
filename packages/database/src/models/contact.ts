@@ -349,6 +349,79 @@ export class ContactModel {
     return { hasMore: people.length > options.limit, people: people.slice(0, options.limit) };
   };
 
+  /**
+   * Everyone in this scope's address book except the caller: personal contacts; in a workspace,
+   * its other members and every external contact of it, whoever invited them. Unlike
+   * {@link listPeople} this ignores who the caller is in the scope, because it answers for a
+   * resource the scope owns (an Agent's share), not for the caller's own conversations.
+   */
+  listAddressBookPeople = async (): Promise<ContactUserProfile[]> => {
+    if (!this.workspaceId) {
+      const rows = await this.db
+        .select(userProfileColumns)
+        .from(userContacts)
+        .innerJoin(users, eq(users.id, userContacts.contactUserId))
+        .where(and(this.userEntryWhere(), eq(userContacts.userId, this.userId)))
+        .orderBy(desc(userContacts.createdAt));
+      return rows;
+    }
+
+    const [members, externals] = await Promise.all([
+      this.db
+        .select(userProfileColumns)
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, this.workspaceId),
+            isNull(workspaceMembers.deletedAt),
+            not(eq(workspaceMembers.userId, this.userId)),
+          ),
+        )
+        .orderBy(users.fullName, users.username),
+      this.listExternals(),
+    ]);
+    return [...members, ...externals.map((item) => item.user)];
+  };
+
+  /**
+   * The subset of `userIds` that {@link listAddressBookPeople} would list, without loading it:
+   * the check an access grant re-runs on every use, so removing someone from the address book
+   * (or from the workspace) ends what was granted to them.
+   */
+  filterAddressBookPeople = async (userIds: string[]): Promise<string[]> => {
+    const candidates = [...new Set(userIds)].filter((id) => id !== this.userId);
+    if (candidates.length === 0) return [];
+
+    const entries = await this.db
+      .select({ userId: userContacts.contactUserId })
+      .from(userContacts)
+      .where(
+        and(
+          this.userEntryWhere(),
+          inArray(userContacts.contactUserId, candidates),
+          // Personal: my own entries. Workspace: any member's external contact; the paired
+          // member side of the same pair is a member, matched below instead.
+          this.workspaceId ? not(this.contactIsMember()) : eq(userContacts.userId, this.userId),
+        ),
+      );
+    const members = this.workspaceId
+      ? await this.db
+          .select({ userId: workspaceMembers.userId })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, this.workspaceId),
+              isNull(workspaceMembers.deletedAt),
+              inArray(workspaceMembers.userId, candidates),
+            ),
+          )
+      : [];
+
+    const found = new Set([...entries, ...members].map((row) => row.userId));
+    return candidates.filter((id) => found.has(id));
+  };
+
   relationTo = async (otherUserId: string): Promise<ContactRelation> => {
     if (otherUserId === this.userId) return 'self';
     if ((await this.scopeRole()) === 'member' && (await this.isMember(otherUserId)))

@@ -14,7 +14,6 @@ import type {
 } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
-  ChatErrorType,
   ordinaryFileAccessScope,
   resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
@@ -47,6 +46,7 @@ import type { InternalExecAgentParams } from '../types';
 import { buildNewTopicMetadata } from './newTopicMetadata';
 import { createUserTurnAnchor } from './resolveUserMessageParentId';
 import { createStageTracer, openStageMark } from './sendTracing';
+import { assertShareHeteroAllowed } from './shareHeteroGate';
 import { resolveTurnProjectId, withProjectSandbox } from './topicProject';
 import { buildUserTurnMetadata } from './userTurnMetadata';
 
@@ -552,22 +552,30 @@ export const setupTurn = async (
     : providerOverride;
   let topicEditingGroupId: string | undefined;
 
-  // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
-  // Codex / …) agent BEFORE any topic/message row is written. Heterogeneous
-  // agents are not available for shared visitor runs, even when the share
-  // grants device access (`shareGate.canUseDevice`): the hetero dispatch path
-  // signs its gateway token for the run's user (the creator) and registers no
-  // visitor stream owner, so opening it would hand the visitor creator account
-  // access. Checked here (using the agent-level config, before any
-  // topic-pinned model override) rather than at the later hetero-detection
-  // site (`isHeteroAgent`) so it runs ahead of ALL row creation, not just the
-  // message rows.
-  if (shareGate && (heterogeneousProvider?.type || isHeterogeneousAgentModelId(model))) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
+  // Share visitors run Claude Code / Codex only on the granted device. Checked
+  // against the agent-level config before any row is written, and re-asserted
+  // once a reused topic's pinned model and device are applied.
+  const assertShareHetero = async (runModel: string) => {
+    const shareDeviceId = await assertShareHeteroAllowed({
+      agencyConfig: agentConfig.agencyConfig,
+      db: deps.db,
+      heterogeneousType: heterogeneousProvider?.type,
+      model: runModel,
+      ownerUserId: deps.userId,
+      requestedDeviceId: resolvedRequestedDeviceId,
+      shareGate,
+      trigger,
+      workspaceId: deps.workspaceId,
     });
-  }
+    // Route the dispatch to the device the gate selected (an `auto` Agent's
+    // single online device), which the dispatch would not find on its own.
+    // Only the dispatch gets it: pinning the topic to an automatic pick would
+    // keep a later turn on that device after it goes offline and another one
+    // is online.
+    if (shareDeviceId && !resolvedRequestedDeviceId && !isFixedExecutionTargetSelection)
+      resolvedRequestedDeviceId = shareDeviceId;
+  };
+  await assertShareHetero(model);
 
   const assertProjectDirectoryAccess = () => {
     if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
@@ -836,14 +844,9 @@ export const setupTurn = async (
         log('execAgent: routing topic %s to its bound device %s', topicId, topicPinnedDeviceId);
       }
 
-      // Re-assert the share restriction after topic overrides are applied.
-      // Heterogeneous agents are not available for shared visitor runs (see above).
-      if (shareGate && isHeterogeneousAgentModelId(model)) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: ChatErrorType.ShareHeterogeneousAgentUnsupported,
-        });
-      }
+      // Re-assert the share restriction after topic overrides are applied: a
+      // topic pin can switch the run to another heterogeneous runtime or device.
+      await assertShareHetero(model);
 
       // A builder conversation edits exactly one agent, stamped on the topic when
       // it was created. Continuations rebuilt from the durable operation (approval

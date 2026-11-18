@@ -17,6 +17,7 @@ import GoalSkeleton from '@/components/Skeleton/Goal';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import MemorySkeleton from '@/components/Skeleton/Memory';
 import ProfileSkeleton, { GroupProfileRouteSkeleton } from '@/components/Skeleton/Profile';
+import ProjectHomeSkeleton from '@/components/Skeleton/ProjectHome';
 import ResourceHomeSkeleton from '@/components/Skeleton/ResourceHome';
 import RouteSegmentSkeleton from '@/components/Skeleton/RouteSegment';
 import SettingsPageSkeleton from '@/components/Skeleton/Settings/Page';
@@ -191,6 +192,21 @@ describe('desktop router shared definition', () => {
       expect(matches?.at(-1)?.route.path).toBe('self-evolving/new');
       expect(matches?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
       expect(matches?.at(-1)?.params).not.toHaveProperty('domainId');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s renders the project home skeleton on the composer layout',
+    (_, factory) => {
+      // Regression: the home is a centered composer page (title, subtitle, then the
+      // tray + card), but its route skeleton was the generic avatar/detail surface,
+      // so the first paint and the loaded page had different layouts.
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1');
+      const Skeleton = resolveRouteSkeleton(
+        matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
+      );
+
+      expect(Skeleton).toBe(ProjectHomeSkeleton);
     },
   );
 

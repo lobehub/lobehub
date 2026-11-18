@@ -173,6 +173,89 @@ describe('activatorRuntime', () => {
     });
   });
 
+  describe('activateTools — what the run already offers and what it reports', () => {
+    const webBrowsingManifest = {
+      api: [{ name: 'search', parameters: {} }],
+      identifier: 'lobe-web-browsing',
+      meta: { title: 'Web Browsing' },
+      type: 'builtin',
+    } as never;
+
+    it('answers "Already active" for a tool the run already offers', async () => {
+      // The runtime is rebuilt for every tool call, so an in-memory list of
+      // what it activated is always empty; what the run offers comes from
+      // `enabledToolIds` (operation tool set plus earlier activations).
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        enabledToolIds: ['lobe-web-browsing'],
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-web-browsing'] });
+
+      expect(result.content).toContain('Already active: lobe-web-browsing');
+      expect(result.content).not.toContain('Successfully activated');
+      expect(result.state.alreadyActive).toEqual(['lobe-web-browsing']);
+      expect(result.state.activatedTools).toEqual([]);
+    }, 20_000);
+
+    it('reports an activated tool as a tool, outside the skill domain', async () => {
+      // Activating a tool used to be reported as `activateSkill` on
+      // `skill:builtin-skill` with the tool id as a skill object, which wrote
+      // skill procedure records, markers and receipts for something that is
+      // not a skill.
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+        userId: 'user-1',
+      });
+
+      await runtime.activateTools({ identifiers: ['lobe-web-browsing'] });
+
+      await vi.waitFor(() => expect(emitToolOutcomeSafely).toHaveBeenCalledTimes(1));
+      const outcome = vi.mocked(emitToolOutcomeSafely).mock.calls[0][0];
+      expect(outcome).toMatchObject({
+        apiName: 'activateTools',
+        relatedObjects: [
+          { objectId: 'lobe-web-browsing', objectType: 'tool', relation: 'selected' },
+        ],
+        status: 'succeeded',
+        toolAction: 'activate',
+      });
+      expect(outcome.domainKey).toBeUndefined();
+    }, 20_000);
+
+    it('still reports a skill opened through the activateTools fallback as a skill', async () => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === 'user-skill' ? userSkillRow() : undefined,
+      );
+      mocks.getAgentConfigById.mockResolvedValue({
+        plugins: [{ identifier: 'user-skill-identifier', mode: 'auto' }],
+      });
+      const { emitToolOutcomeSafely } = await import('@/server/services/agentSignal/procedure');
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        agentId: 'agent-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      await runtime.activateTools({ identifiers: ['user-skill'] });
+
+      expect(emitToolOutcomeSafely).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(emitToolOutcomeSafely).mock.calls[0][0]).toMatchObject({
+        apiName: 'activateSkill',
+        domainKey: 'skill:builtin-skill',
+        relatedObjects: [{ objectId: 'user-skill', objectType: 'skill', relation: 'selected' }],
+      });
+    }, 20_000);
+  });
+
   describe('activateTools — wire-name resolution', () => {
     // Production vent: the model requested `lobe-web-browsing____search` — the
     // wire name from `tools[]` — while the manifest map is keyed by the plugin

@@ -65,6 +65,7 @@ const DeviceOptionRow = ({
         onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !selectable, onSelect })}
       >
         <OptionRow
+          compact
           active={active}
           disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
