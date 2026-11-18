@@ -51,6 +51,28 @@ const assertCanSubscribe = (c: Context, events: WebhookEventType[] | undefined) 
 };
 
 /**
+ * A PATCH decides a second thing the body may not spell out: whether the endpoint
+ * keeps receiving the events it already carries. When `events` is omitted the set
+ * stays as it is, so pointing the endpoint at another URL (or turning it back on)
+ * keeps delivering those events there — judge that effective set, otherwise a key
+ * that may manage webhooks but not read those domains could redirect the stream.
+ */
+const assertCanRedirect = async (
+  c: Context,
+  service: WebhookRestService,
+  id: string,
+  body: UpdateWebhookRequest,
+) => {
+  // An `events`-bearing PATCH is already judged on the set it is about to apply.
+  if (body.events) return;
+  // Renaming or turning an endpoint off moves no data to a new destination.
+  if (body.url === undefined && body.enabled !== true) return;
+
+  const { events } = await service.get(id);
+  assertCanSubscribe(c, events);
+};
+
+/**
  * Developer webhooks controller.
  * Handles HTTP concerns only — endpoint management and delivery live in
  * `DeveloperWebhookService`, wrapped by `WebhookRestService`.
@@ -108,6 +130,7 @@ export class WebhookController extends BaseController {
       const body = await this.getBody<UpdateWebhookRequest>(c);
       assertCanSubscribe(c, body.events);
       const service = await this.service(c);
+      await assertCanRedirect(c, service, id, body);
       return this.success(c, await service.update(id, body), 'Webhook updated');
     } catch (error) {
       return this.handleError(c, error);
