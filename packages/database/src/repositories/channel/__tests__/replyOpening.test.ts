@@ -610,6 +610,63 @@ describe('Channel reply opening', () => {
       expect(moved.threadId).toBeNull();
     });
 
+    it('takes a follow-up deferred behind it into the Thread, where it reads the answer', async () => {
+      const team = await fixture.createTeamChannel();
+      const coder = await fixture.addAgent(team.channel.id, 'Coder');
+      const reviewer = await fixture.addAgent(team.channel.id, 'Reviewer');
+      const first = await team.asMember.send(team.channel.id, {
+        content: 'Why did the deploy fail?',
+        mentions: [coder.id],
+        requestKey: 'first',
+        routing: 'decision',
+      });
+      const [firstJob] = await jobsOf(db, first.id);
+      await execution.open(team.channel.id, firstJob.id, { threadTitle: 'Deploy failure' });
+      await execution.claim(team.channel.id, firstJob.id, lease);
+      await execution.accepted(team.channel.id, firstJob.id);
+      await execution.saveDraft(team.channel.id, firstJob.id, 'The token expired.');
+      await execution.publish(team.channel.id, firstJob.id);
+      await execution.releaseWriter(team.channel.id, firstJob.id);
+      const [thread] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.channelId, team.channel.id));
+
+      const followUp = await team.asMember.send(team.channel.id, {
+        content: 'How do we stop it expiring again?',
+        mentions: [coder.id, reviewer.id],
+        requestKey: 'second',
+        routing: 'decision',
+      });
+      const jobs = await jobsOf(db, followUp.id);
+      const coderJob = jobs.find((job) => job.memberId === coder.id)!;
+      const reviewerJob = jobs.find((job) => job.memberId === reviewer.id)!;
+      await asFollowup(reviewerJob.id, { afterMemberId: coder.id, reason: 'routing-deferred' });
+
+      await execution.open(team.channel.id, coderJob.id, {
+        ack: 'Picking this up.',
+        threadId: thread.id,
+      });
+
+      expect((await jobById(db, reviewerJob.id)).threadId).toBe(thread.id);
+      const [joined] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.id, thread.id));
+      expect(joined.followerMemberIds).toEqual(expect.arrayContaining([reviewer.id]));
+
+      await execution.claim(team.channel.id, coderJob.id, lease);
+      await execution.accepted(team.channel.id, coderJob.id);
+      await execution.saveDraft(team.channel.id, coderJob.id, 'Rotate it with the cron.');
+      await execution.publish(team.channel.id, coderJob.id);
+      await execution.releaseWriter(team.channel.id, coderJob.id);
+
+      expect(await execution.claim(team.channel.id, reviewerJob.id, lease)).not.toBeNull();
+      expect(await execution.primaryReply(team.channel.id, reviewerJob.id)).toMatchObject({
+        content: 'Rotate it with the cron.',
+      });
+    });
+
     it('starts in place when the Thread was not one the opener could pick', async () => {
       const { channel, followUpJob, thread } = await answeredInThread();
       await db

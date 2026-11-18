@@ -400,21 +400,13 @@ const hasSeveralPeople = async (tx: Transaction, channelId: string) => {
 };
 
 /**
- * Opens (or joins) the Thread under `rootMessageId` and moves the job into it, with every answer
- * still waiting on the same request: the follow-ups deferred behind it, and the peers that chose
- * to answer in place before the Thread existed. Returns the Thread's id.
+ * Every answer still waiting on the job's request, and the active members who follow it: the
+ * follow-ups deferred behind it (they must read it to stay silent), and the peers that already
+ * chose to answer in place — a run that started before the move must not publish outside the
+ * Thread, or the same request's answers split between the timeline and the Thread.
  */
-const openReplyThread = async (
-  tx: Transaction,
-  job: ChannelJobItem,
-  rootMessageId: string,
-  title: string,
-) => {
+const waitingOnRequest = async (tx: Transaction, job: ChannelJobItem) => {
   const { channelId } = job;
-  // Every answer still waiting on this request moves with it: the follow-ups deferred behind this
-  // one (they must read it to stay silent), and the peers that already chose to answer in place —
-  // a run that started before the Thread opened must not publish outside it, or the same request's
-  // answers split between the timeline and the Thread.
   const siblings = await tx
     .select({ id: channelJobs.id, memberId: channelJobs.memberId })
     .from(channelJobs)
@@ -444,6 +436,22 @@ const openReplyThread = async (
         ),
       )
   ).map(({ id }) => id);
+  return { followers, siblings };
+};
+
+/**
+ * Opens (or joins) the Thread under `rootMessageId` and moves the job into it, with every answer
+ * still waiting on the same request: the follow-ups deferred behind it, and the peers that chose
+ * to answer in place before the Thread existed. Returns the Thread's id.
+ */
+const openReplyThread = async (
+  tx: Transaction,
+  job: ChannelJobItem,
+  rootMessageId: string,
+  title: string,
+) => {
+  const { channelId } = job;
+  const { followers, siblings } = await waitingOnRequest(tx, job);
   const thread = await createChannelThread(tx, channelId, {
     followerMemberIds: followers,
     rootMessageId,
@@ -586,26 +594,21 @@ const continuableThread = async (tx: Transaction, job: ChannelJobItem, threadId:
   return threads.find((thread) => thread.id === threadId);
 };
 
-/** Moves the job into an open Thread, which the requester and the answering Agent then follow. */
+/**
+ * Moves the job into an open Thread with every answer still waiting on its request, as
+ * {@link openReplyThread} does; the requester and the answering Agents then follow it.
+ */
 const joinThread = async (
   tx: Transaction,
   job: ChannelJobItem,
   thread: { followerMemberIds: string[]; id: string },
 ) => {
-  const followers = (
-    await tx
-      .select({ id: channelMembers.id })
-      .from(channelMembers)
-      .where(
-        and(
-          eq(channelMembers.channelId, job.channelId),
-          eq(channelMembers.status, 'active'),
-          inArray(channelMembers.id, [job.requesterMemberId, job.memberId]),
-        ),
-      )
-  ).map(({ id }) => id);
+  const { followers, siblings } = await waitingOnRequest(tx, job);
   await followThread(tx, thread, followers);
-  await tx.update(channelJobs).set({ threadId: thread.id }).where(eq(channelJobs.id, job.id));
+  await tx
+    .update(channelJobs)
+    .set({ threadId: thread.id })
+    .where(inArray(channelJobs.id, [job.id, ...siblings.map(({ id }) => id)]));
 };
 
 const nameThread = async (tx: Transaction, threadId: string, title: string) => {
