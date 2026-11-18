@@ -83,17 +83,44 @@ const spawnDriver = async (flags: { args?: string[]; nodeOptions?: string }, oom
   const env = { ...process.env };
   delete env.NODE_OPTIONS;
   if (flags.nodeOptions !== undefined) env.NODE_OPTIONS = flags.nodeOptions;
-  const { stdout } = await run(
+  const { stderr, stdout } = await run(
     process.execPath,
     [...(flags.args ?? []), driverPath, workerPath, marker, oomLimitMb],
     { env, timeout: 60_000 },
   );
-  return { marker, results: JSON.parse(stdout.trim().split('\n').pop()!) as any[] };
+  const overrideWarnings = stderr
+    .split('\n')
+    .filter((line) => line.includes('"file_parse.heap_budget_overridden"'))
+    .map((line) => JSON.parse(line));
+  return {
+    marker,
+    overrideWarnings,
+    results: JSON.parse(stdout.trim().split('\n').pop()!) as any[],
+  };
+};
+
+/**
+ * A parent heap flag above the budget cannot be undone for a worker thread, and hosts such as
+ * Vercel set one on the function process themselves. The parse runs with the parent's limit,
+ * still on its own thread, and the override is logged once per runner.
+ */
+const expectRunsWithParentHeap = (
+  outcome: Awaited<ReturnType<typeof spawnDriver>>,
+  parentHeapMb: number,
+) => {
+  for (const result of outcome.results.slice(0, 2)) {
+    expect(result.value).toBeGreaterThanOrEqual(parentHeapMb);
+  }
+  expect(existsSync(outcome.marker)).toBe(true);
+  expect(outcome.results[2]).toEqual({ active: 0, queued: 0 });
+  expect(outcome.overrideWarnings).toHaveLength(1);
+  expect(outcome.overrideWarnings[0]).toMatchObject({ budgetMb: BUDGET_MB });
+  expect(outcome.overrideWarnings[0].workerHeapMb).toBeGreaterThanOrEqual(parentHeapMb);
 };
 
 describe('parent V8 heap flags vs the worker memory budget', () => {
   it('runs with the configured heap when the parent sets no heap flag, and recovers from OOM', async () => {
-    const { marker, results } = await spawnDriver({}, '64');
+    const { marker, overrideWarnings, results } = await spawnDriver({}, '64');
 
     // Young generation is on top of the old generation budget; both runs are the same bounded thread.
     expect(results[0].value).toBeGreaterThan(BUDGET_MB);
@@ -105,6 +132,7 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
     expect(results[4]).toEqual({ active: 0, queued: 0 });
     expect(results[5]).toEqual({ active: 0, queued: 0 });
     expect(existsSync(marker)).toBe(true);
+    expect(overrideWarnings).toEqual([]);
   }, 60_000);
 
   // Every form that gives the parent a larger old-space limit: CLI or NODE_OPTIONS, `-` or `_`.
@@ -115,17 +143,9 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
     ['NODE_OPTIONS --max_old_space_size', { nodeOptions: '--max_old_space_size=4096' }],
     ['CLI --max-heap-size', { args: ['--max-heap-size=4096'] }],
   ])(
-    'refuses before loading any parser when the parent has %s above the budget',
+    'still parses, warning once, when the parent has %s above the budget',
     async (_, flags) => {
-      const { marker, results } = await spawnDriver(flags);
-
-      for (const result of results.slice(0, 2)) {
-        expect(result).toMatchObject({ code: 'START_FAILED' });
-        expect(result.message).toMatch(/--max-old-space-size/);
-      }
-      // The scenario (the parser entry) never ran, the slot is free and the queue still moves.
-      expect(existsSync(marker)).toBe(false);
-      expect(results[2]).toEqual({ active: 0, queued: 0 });
+      expectRunsWithParentHeap(await spawnDriver(flags), 4096);
     },
     60_000,
   );
@@ -137,19 +157,20 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
   ])(
     'keeps working when the parent flag is %s (the heap is not larger)',
     async (_, flags, mb) => {
-      const { marker, results } = await spawnDriver(flags);
+      const { marker, overrideWarnings, results } = await spawnDriver(flags);
 
       expect(results[0].value).toBeGreaterThanOrEqual(mb);
       expect(results[0].value).toBeLessThan(mb + 400);
       expect(results[1].value).toBe(results[0].value);
       expect(existsSync(marker)).toBe(true);
+      expect(overrideWarnings).toEqual([]);
     },
     60_000,
   );
 
-  // Node versions differ in which heap option forms they accept. An accepted form must fail
-  // closed in the runner (START_FAILED, parser never started); otherwise Node must reject the
-  // specific option at startup, rather than crash or time out.
+  // Node versions differ in which heap option forms they accept. An accepted form parses with the
+  // parent's heap and warns once; otherwise Node must reject the specific option at startup,
+  // rather than crash or time out.
   it.each([
     [
       'CLI --max-old-space-size (space-separated)',
@@ -167,7 +188,7 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
       /--max-heap-size=? is not allowed in NODE_OPTIONS/,
     ],
   ])(
-    'never starts a parser with a larger heap for version-dependent option forms (%s)',
+    'either parses with a warning or is rejected by Node for version-dependent option forms (%s)',
     async (_, flags, rejection) => {
       const outcome = await spawnDriver(flags).then(
         (value) => ({ value }),
@@ -181,11 +202,7 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
         expect(outcome.error.stderr).toMatch(rejection);
         return;
       }
-      for (const result of outcome.value.results.slice(0, 2)) {
-        expect(result).toMatchObject({ code: 'START_FAILED' });
-        expect(result.message).toMatch(/--max-old-space-size/);
-      }
-      expect(existsSync(outcome.value.marker)).toBe(false);
+      expectRunsWithParentHeap(outcome.value, 4096);
     },
     60_000,
   );

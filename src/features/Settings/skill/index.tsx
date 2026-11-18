@@ -1,24 +1,24 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ArrowLeft, ChevronLeft } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
+import { Activity, memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
-import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
+import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
+import DetailBreadcrumb from './features/DetailBreadcrumb';
 import LeftPanel from './features/LeftPanel';
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
 import { type SkillViewMode } from './features/SkillList';
 import {
   encodeMobileSelection,
-  isStackedLayout,
   MOBILE_SELECTION_PARAM,
   parseMobileSelection,
 } from './mobileSelection';
@@ -54,7 +54,7 @@ const styles = stylex.create({
     minHeight: '100%',
     paddingBlockEnd: '104px',
   },
-  root: { overflow: 'hidden', display: 'flex', flex: '1', height: '100%' },
+  resourceDetailPage: { height: '100%', minHeight: 0, paddingBlockEnd: '24px' },
 });
 
 interface ToolSettingsProps {
@@ -71,13 +71,9 @@ const PUSHED_DETAIL_STATE = 'skillDetailPushed';
 export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const { t } = useTranslation(['common', 'setting']);
   const mobile = isMobileSurface();
-  const stacked = isStackedLayout(mobile, viewMode);
   const [searchParams, setSearchParams] = useSearchParams();
   const querySkillIdentifier = searchParams.get('skill');
-  const [selected, setSelected] = useState<SelectedTool | null>(null);
-  const stackedSelected = stacked
-    ? parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM))
-    : undefined;
+  const stackedSelected = parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM));
 
   // Stacked: opening a detail is a history entry, so back returns to the list.
   const openStackedDetail = useCallback(
@@ -113,43 +109,8 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
     );
   };
 
-  const builtinTools = useToolStore((s) => s.builtinTools, isEqual);
-  const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
-  const installedBuiltinIds = useToolStore(
-    (s) => builtinToolSelectors.installedAllMetaList(s).map((tool) => tool.identifier),
-    isEqual,
-  );
-
-  useEffect(() => {
-    // A stacked page shows one pane at a time and opens on the list, so nothing
-    // is pre-selected there.
-    if (stacked) return;
-    if (selected) return;
-    if (viewMode === 'skill' && querySkillIdentifier) return;
-    if (viewMode === 'connector') {
-      const firstTool = builtinTools.find(
-        (tool) => !tool.hidden && installedBuiltinIds.includes(tool.identifier),
-      );
-      if (firstTool) {
-        setSelected({ identifier: firstTool.identifier, type: 'builtin' });
-      }
-    } else {
-      const firstSkill = builtinSkills[0];
-      if (firstSkill) {
-        setSelected({ identifier: firstSkill.identifier, type: 'builtin-skill' });
-      }
-    }
-  }, [
-    builtinTools,
-    builtinSkills,
-    installedBuiltinIds,
-    querySkillIdentifier,
-    selected,
-    stacked,
-    viewMode,
-  ]);
 
   useEffect(() => {
     if (viewMode !== 'skill' || !querySkillIdentifier) return;
@@ -158,106 +119,83 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
       (item) => item.identifier === querySkillIdentifier,
     );
     if (!skill) return;
-    // Mobile turns the deep link into the detail entry once (dropping `skill`),
+    // Turn the deep link into the detail entry once (dropping `skill`),
     // so a later store refresh cannot reopen a detail the user closed.
-    if (stacked) openStackedDetail({ identifier: skill.id, type: 'agent-skill' }, true);
-    else setSelected({ identifier: skill.id, type: 'agent-skill' });
-  }, [
-    marketAgentSkills,
-    openStackedDetail,
-    querySkillIdentifier,
-    stacked,
-    userAgentSkills,
-    viewMode,
-  ]);
+    openStackedDetail({ identifier: skill.id, type: 'agent-skill' }, true);
+  }, [marketAgentSkills, openStackedDetail, querySkillIdentifier, userAgentSkills, viewMode]);
 
   const handleSelect = (identifier: string, type: ToolDetailType) => {
-    if (stacked) openStackedDetail({ identifier, type });
-    else setSelected({ identifier, type });
+    openStackedDetail({ identifier, type });
   };
+
+  // Keep the list mounted across detail navigation, preserving search and expanded groups.
+  const list = (
+    <Activity mode={stackedSelected ? 'hidden' : 'visible'}>
+      <LeftPanel
+        fullWidth
+        page={!mobile || viewMode === 'skill'}
+        viewMode={viewMode}
+        onDeleteSelected={closeStackedDetail}
+        onSelect={handleSelect}
+      />
+    </Activity>
+  );
 
   // Mobile: the settings layout owns the header; list and detail take turns
   // full-width instead of a 300px list squeezing the detail.
   if (mobile)
-    return stackedSelected ? (
-      <Flexbox className={stylex.props(styles.detail).className}>
-        <Flexbox horizontal align={'center'} paddingBlock={4} paddingInline={8}>
-          <ActionIcon icon={ChevronLeft} title={t('back')} onClick={closeStackedDetail} />
-        </Flexbox>
-        <SkillDetail
-          identifier={stackedSelected.identifier}
-          type={stackedSelected.type}
-          onDelete={closeStackedDetail}
-        />
+    return (
+      <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
+        {list}
+        {stackedSelected && (
+          <Flexbox className={stylex.props(styles.detail).className}>
+            <Flexbox horizontal align={'center'} paddingBlock={4} paddingInline={8}>
+              <ActionIcon icon={ChevronLeft} title={t('back')} onClick={closeStackedDetail} />
+            </Flexbox>
+            <SkillDetail
+              identifier={stackedSelected.identifier}
+              type={stackedSelected.type}
+              onDelete={closeStackedDetail}
+            />
+          </Flexbox>
+        )}
       </Flexbox>
-    ) : (
-      <div {...stylex.props(styles.root)}>
-        <LeftPanel
-          fullWidth
-          viewMode={viewMode}
-          onDeleteSelected={closeStackedDetail}
-          onSelect={handleSelect}
-        />
-      </div>
     );
 
-  // Desktop connectors: a full-width list; a row opens its detail as a second
+  // A full-width list; a row opens its detail as a second
   // level page whose back link names the list it returns to.
-  if (stacked)
-    return (
-      <>
-        <NavHeader styles={{ center: { alignItems: 'center' } }}>
-          <Text weight={500}>{t('tab.connector', { ns: 'setting' })}</Text>
-        </NavHeader>
-        <div {...stylex.props(styles.page)}>
-          <div {...stylex.props(styles.pageBody)}>
-            {stackedSelected ? (
-              <>
-                <Flexbox horizontal align={'center'} paddingBlock={12} paddingInline={4}>
-                  <Button icon={ArrowLeft} type={'text'} onClick={closeStackedDetail}>
-                    {t('skillView.connectors', { ns: 'setting' })}
-                  </Button>
-                </Flexbox>
+  return (
+    <>
+      {/* The page itself carries the title (list) or the breadcrumb (detail). */}
+      <NavHeader />
+      <div {...stylex.props(styles.page)}>
+        <div
+          {...stylex.props(
+            styles.pageBody,
+            stackedSelected?.type === 'agent-skill' && styles.resourceDetailPage,
+          )}
+        >
+          {list}
+          {stackedSelected && (
+            <>
+              <DetailBreadcrumb
+                identifier={stackedSelected.identifier}
+                type={stackedSelected.type}
+                listLabel={t(viewMode === 'skill' ? 'skillView.skills' : 'skillView.connectors', {
+                  ns: 'setting',
+                })}
+                onBack={closeStackedDetail}
+              />
+              <Flexbox flex={1} style={{ minHeight: 0 }}>
                 <SkillDetail
                   identifier={stackedSelected.identifier}
                   type={stackedSelected.type}
                   onDelete={closeStackedDetail}
                 />
-              </>
-            ) : (
-              <LeftPanel
-                fullWidth
-                page
-                viewMode={viewMode}
-                onDeleteSelected={closeStackedDetail}
-                onSelect={handleSelect}
-              />
-            )}
-          </div>
+              </Flexbox>
+            </>
+          )}
         </div>
-      </>
-    );
-
-  return (
-    <>
-      <NavHeader />
-      <div {...stylex.props(styles.root)}>
-        <LeftPanel
-          selectedIdentifier={selected?.identifier}
-          viewMode={viewMode}
-          onDeleteSelected={() => setSelected(null)}
-          onSelect={handleSelect}
-        />
-
-        {selected && (
-          <div {...stylex.props(styles.detail)}>
-            <SkillDetail
-              identifier={selected.identifier}
-              type={selected.type}
-              onDelete={() => setSelected(null)}
-            />
-          </div>
-        )}
       </div>
     </>
   );

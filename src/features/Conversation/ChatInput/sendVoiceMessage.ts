@@ -1,9 +1,6 @@
-import {
-  type ConversationContext,
-  type SendMessageParams,
-  type UploadFileItem,
-  type WorkingDirConfig,
-} from '@lobechat/types';
+import type { ConversationContext, SendMessageParams, UploadFileItem } from '@lobechat/types';
+
+import type { DraftGitSendResult } from '@/features/ChatInput/ControlBar/DraftGit/prepareSend';
 
 type SendMessage = (
   params: SendMessageParams & { conversationContext?: ConversationContext },
@@ -17,9 +14,7 @@ interface SendVoiceMessageOptions {
    * new topic. `ok: false` (cancelled or failed) rejects the send, which keeps
    * the recording as a retryable failed turn.
    */
-  prepare?: () => Promise<
-    { ok: false } | { newTopicWorkingDirectory?: WorkingDirConfig; ok: true }
-  >;
+  prepare?: () => Promise<DraftGitSendResult>;
   signal?: AbortSignal;
   /**
    * Resolve the turn text from the uploaded recording. Runtimes that cannot take audio input
@@ -66,10 +61,14 @@ export const sendVoiceMessage = async (
         accepted = true;
         resolve();
       },
-      preserveComposer: true,
-      ...(prepared?.ok && prepared.newTopicWorkingDirectory
-        ? { newTopicWorkingDirectory: prepared.newTopicWorkingDirectory }
+      ...(prepared?.ok
+        ? {
+            firstSendWorktree: prepared.firstSendWorktree,
+            newTopicWorkingDirectory: prepared.newTopicWorkingDirectory,
+            onMessagePersisted: prepared.onMessagePersisted,
+          }
         : {}),
+      preserveComposer: true,
       ...(context ? { conversationContext: context } : {}),
       ...(optimisticUserMessageId ? { optimisticUserMessageId } : {}),
       ...(signal ? { signal } : {}),

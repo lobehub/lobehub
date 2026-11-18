@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
+import { getOptedInPluginIds, type LobeAgentConfig } from '@lobechat/types';
 import {
   ActionIcon,
   confirmModal,
@@ -203,9 +203,10 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
       const profileMarkdown = buildAgentProfileMarkdown({
         description: meta?.description,
         model: config?.model,
-        // Pinned identifiers only — a disabled plugin shouldn't be advertised
-        // as "enabled" in the exported markdown.
-        plugins: getActivePluginIds(config?.plugins),
+        // Everything turned on — a disabled plugin shouldn't be advertised
+        // as "enabled" in the exported markdown, while a connector is on
+        // through an `auto` entry rather than a pin.
+        plugins: getOptedInPluginIds(config?.plugins),
         provider: config?.provider,
         systemRole: editorMarkdown ?? systemRole,
         t,

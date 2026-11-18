@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HeteroDeviceSwitcher from '../HeteroDeviceSwitcher';
 
 const state = vi.hoisted(() => ({
+  devices: [] as object[],
   driveStatus: 'ready' as 'hidden' | 'loading' | 'ready' | 'upgrade',
   openUpsell: vi.fn(),
   persistent: false,
@@ -17,7 +18,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-// The menu, open: which rows it offers and what they do is the question.
+// The menu, open: which rows it offers and what they do is the question. The
+// sandbox submenu is a popover too, so the first `chip` is the composer's.
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Popover: ({ children, content }: { children: ReactNode; content: ReactNode }) => (
@@ -70,8 +72,9 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (s: object) => unknown) => selector({ agentMap: {} }),
 }));
 vi.mock('@/store/device', () => ({
+  isDevicePresenceUnknown: () => false,
   useDeviceList: () => ({
-    data: [],
+    data: state.devices,
     error: undefined,
     isConfirmed: true,
     isValidating: false,
@@ -83,6 +86,10 @@ vi.mock('@/store/electron', () => ({
     selector({ gatewayDeviceInfo: undefined, useFetchGatewayDeviceInfo: () => () => undefined }),
 }));
 vi.mock('../../hooks/useTopicId', () => ({ useTopicId: () => 'topic-1' }));
+// A device group is one row here; its submenu has tests of its own.
+vi.mock('../DeviceGroupSubmenu', () => ({
+  default: ({ label }: { label: string }) => <div>{label}</div>,
+}));
 vi.mock('../useSandboxNetworkToggle', () => ({ useSandboxNetworkToggle: () => vi.fn() }));
 vi.mock('../useTopicAwareTargetSelect', () => ({
   useTopicAwareTargetSelect: () => ({ selectTarget: state.selectTarget, topicDeviceId: undefined }),
@@ -97,9 +104,11 @@ vi.mock('../useSandboxModeSelect', () => ({
 }));
 
 const SANDBOX = 'heteroAgent.executionTarget.sandbox';
+const TEMPORARY = 'heteroAgent.executionTarget.temporarySandbox';
 const PERSISTENT = 'heteroAgent.executionTarget.persistentSandbox';
 
 beforeEach(() => {
+  state.devices = [];
   state.driveStatus = 'ready';
   state.persistent = false;
   state.openUpsell.mockReset();
@@ -117,8 +126,17 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
   it('offers the persistent sandbox next to the temporary one', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.getAllByText(SANDBOX).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(TEMPORARY).length).toBeGreaterThan(0);
     expect(screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc')).toBeTruthy();
+  });
+
+  // Next to the persistent sandbox, the plain one is called the temporary
+  // sandbox, on its row and on the chip.
+  it('names the plain sandbox temporary next to the persistent one', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getAllByTestId('chip')[0].textContent).toContain(TEMPORARY);
+    expect(screen.queryByText(SANDBOX)).toBeNull();
   });
 
   // The persistent sandbox is where everyday work belongs, so it comes first;
@@ -141,13 +159,15 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
 
     expect(screen.getByText('heteroAgent.executionTarget.sandboxDesc')).toBeTruthy();
     expect(screen.queryByText('heteroAgent.executionTarget.temporarySandboxDesc')).toBeNull();
+    expect(screen.getAllByText(SANDBOX).length).toBeGreaterThan(0);
+    expect(screen.queryByText(TEMPORARY)).toBeNull();
   });
 
   it('names the persistent sandbox on the chip when the conversation keeps its files', () => {
     state.persistent = true;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
-    expect(screen.getByTestId('chip').textContent).toContain(PERSISTENT);
+    expect(screen.getAllByTestId('chip')[0].textContent).toContain(PERSISTENT);
   });
 
   it('switches to the sandbox and onto the drive when the persistent row is picked', async () => {
@@ -187,5 +207,65 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
     expect(screen.queryByText(PERSISTENT)).toBeNull();
+  });
+});
+
+// T-14345: the first level is a plain list of titles, without section labels
+// or descriptions; the sandboxes sit one level down, as the device groups do.
+describe('HeteroDeviceSwitcher — first level', () => {
+  const follows = (a: Element, b: Element) =>
+    !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  beforeEach(() => {
+    state.devices = [
+      {
+        channels: [],
+        deviceId: 'd1',
+        hostname: 'box',
+        online: true,
+        platform: 'linux',
+        scope: 'personal',
+      },
+    ];
+  });
+
+  it('has no section labels', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.queryByText('heteroAgent.executionTarget.builtinGroup')).toBeNull();
+    expect(screen.queryByText('heteroAgent.executionTarget.devicesGroup')).toBeNull();
+  });
+
+  it('shows the first-level rows by title only', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByText('heteroAgent.executionTarget.none')).toBeTruthy();
+    expect(screen.getByText('heteroAgent.executionTarget.auto')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.executionTarget.noneDesc')).toBeNull();
+    expect(screen.queryByText('heteroAgent.executionTarget.autoDesc')).toBeNull();
+    expect(screen.getByTestId('sandbox-group').textContent).not.toContain('Desc');
+  });
+
+  it('puts the sandboxes in a submenu after auto and before the device groups', () => {
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    const group = screen.getByTestId('sandbox-group');
+    expect(group.textContent).toContain('heteroAgent.executionTarget.sandboxGroup');
+    // The row itself lists no sandbox; they are the submenu's.
+    expect(group.textContent).not.toContain('persistentSandboxDesc');
+
+    const auto = screen.getByText('heteroAgent.executionTarget.auto');
+    const persistent = screen.getByText('heteroAgent.executionTarget.persistentSandboxDesc');
+    const devices = screen.getByText('heteroAgent.executionTarget.myDevicesGroup');
+    expect(follows(auto, group)).toBe(true);
+    expect(follows(group, persistent)).toBe(true);
+    expect(follows(persistent, devices)).toBe(true);
+  });
+
+  it('names the sandbox in use on the group row', () => {
+    state.persistent = true;
+    render(<HeteroDeviceSwitcher agentId="agent-1" />);
+
+    expect(screen.getByTestId('sandbox-group').textContent).toContain(PERSISTENT);
   });
 });

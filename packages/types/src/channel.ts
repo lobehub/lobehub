@@ -163,8 +163,9 @@ export type ChannelThreadMetadata = Record<string, unknown>;
 export type ChannelMessageMetadata = Record<string, unknown>;
 
 /**
- * The Agent that wrote a request on its requester's behalf (`lobe-channel.sendMessage`). The
- * person stays the sender and execution identity; this only says who relayed it.
+ * The Agent that wrote a message on its requester's behalf (`lobe-channel.sendMessage` /
+ * `messagePerson`). The person stays the sender and execution identity; this only says who
+ * relayed it.
  */
 export interface ChannelMessageVia {
   agentId: string;
@@ -185,6 +186,11 @@ export interface ChannelRelayOrigin {
  * relayed the original message. Its `via` names the Agent that answered.
  */
 export interface ChannelMessageReceipt {
+  /**
+   * The Agent whose answer the message reports, on an Agent's report from a conversation between
+   * Agents. Absent on a relay receipt, which names that Agent in `via`.
+   */
+  agent?: { agentId: string; name: string };
   channelId: string;
   channelTitle: string;
   /** The published reply in that Channel. */
@@ -200,6 +206,29 @@ export const channelRelayOrigin = (
     : undefined;
 };
 
+/**
+ * `metadata.exchange` of a request one Agent wrote to another in their conversation: where the
+ * asking began (what the asking Agent concludes is posted there), and how many asks the exchange
+ * has taken, counting this one. A request it carries is never a relay, so it has no `via`.
+ */
+export interface ChannelAgentExchange {
+  hops: number;
+  origin: ChannelRelayOrigin;
+}
+
+export const channelAgentExchange = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelAgentExchange | undefined => {
+  const exchange = metadata?.exchange as
+    { hops?: unknown; origin?: Partial<ChannelRelayOrigin> } | undefined;
+  const { hops, origin } = exchange ?? {};
+  if (typeof origin?.channelId !== 'string') return;
+  return {
+    hops: typeof hops === 'number' && Number.isSafeInteger(hops) && hops > 0 ? hops : 1,
+    origin: { channelId: origin.channelId, threadId: origin.threadId ?? null },
+  };
+};
+
 export const channelMessageReceipt = (
   metadata: ChannelMessageMetadata | null | undefined,
 ): ChannelMessageReceipt | undefined => {
@@ -208,11 +237,23 @@ export const channelMessageReceipt = (
     typeof receipt.channelTitle === 'string' &&
     typeof receipt.messageId === 'string'
     ? {
+        ...(typeof receipt.agent?.agentId === 'string' &&
+          typeof receipt.agent.name === 'string' && {
+            agent: { agentId: receipt.agent.agentId, name: receipt.agent.name },
+          }),
         channelId: receipt.channelId,
         channelTitle: receipt.channelTitle,
         messageId: receipt.messageId,
       }
     : undefined;
+};
+
+/** When the message was deleted (`metadata.deletedAt`); null while it stands. */
+export const channelMessageDeletedAt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): Date | null => {
+  const deletedAt = metadata?.deletedAt;
+  return typeof deletedAt === 'string' ? new Date(deletedAt) : null;
 };
 
 /** When a person last edited their message (`metadata.editedAt`); null if never. */
@@ -391,8 +432,11 @@ export interface ChannelDirectoryEntry {
   /** The Channel this run answers in. */
   current: boolean;
   id: string;
-  /** `direct`: one person and its bound Agent; `group`: everything else. */
-  kind: 'direct' | 'group';
+  /**
+   * `direct`: one person and its bound Agent; `agents`: where two of the person's Agents ask each
+   * other; `group`: everything else.
+   */
+  kind: 'agents' | 'direct' | 'group';
   projectId: string | null;
   title: string;
 }
@@ -405,9 +449,13 @@ export interface ChannelDirectoryPage {
 
 /** A request posted into another Channel for the run's requester, @mentioning its Agents. */
 export interface ChannelSendMessageParams {
-  /** Agents to address; each must be an active member of the target Channel. */
+  /**
+   * Agents to address. One Agent is asked in the conversation between the two Agents; several are
+   * addressed in `channelId`, a group Channel they are all active members of.
+   */
   agentIds: string[];
-  channelId: string;
+  /** Required for several Agents; for one, only a hint of where the person reaches it. */
+  channelId?: string;
   content: string;
 }
 
@@ -417,6 +465,39 @@ export interface ChannelSentMessage {
   channelTitle: string;
   messageId: string;
   /** Link to the Channel the message was posted in, for the reply that mentions it. */
+  url: string;
+}
+
+/** People the run's requester can message one-on-one in the run's scope. */
+export interface ChannelListPeopleParams {
+  limit?: number;
+  /** Case-insensitive part of the person's display name or @handle. */
+  query?: string;
+}
+
+export interface ChannelPerson {
+  name: string;
+  userId: string;
+  username: string | null;
+}
+
+export interface ChannelPeoplePage {
+  /** More people matched than were returned; narrow with `query`. */
+  hasMore: boolean;
+  people: ChannelPerson[];
+}
+
+/** A message for one person, posted in the requester's conversation with them. */
+export interface ChannelMessagePersonParams {
+  content: string;
+  userId: string;
+}
+
+export interface ChannelSentPersonMessage {
+  channelId: string;
+  messageId: string;
+  person: ChannelPerson;
+  /** Link to the requester's conversation with the person. */
   url: string;
 }
 
@@ -472,6 +553,23 @@ export interface ChannelAvatarMember {
   name: string | null;
 }
 
+/** A Channel's newest message as its list row previews it. */
+export interface ChannelLastMessage {
+  content: string;
+  createdAt: Date;
+  /**
+   * The Thread it was posted in, named by its title or else the first line of its root message;
+   * null for the main conversation.
+   */
+  thread: { id: string; title: string | null } | null;
+}
+
+/** The newest message in a Thread that @mentions the caller. */
+export interface ChannelThreadMention {
+  createdAt: Date;
+  threadId: string;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -485,13 +583,23 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
-  /** The newest main-channel message, cut for a preview; set by the Channel list. */
-  lastMessage?: { content: string; createdAt: Date } | null;
+  /**
+   * False for a project Channel the caller can read through the project but has not joined; it
+   * belongs in that project's list only. Absent means joined.
+   */
+  joined?: boolean;
+  /** The newest message, Threads included, cut for a preview; set by the Channel list. */
+  lastMessage?: ChannelLastMessage | null;
   /**
    * The first members besides the caller, oldest first, for a group Channel's list avatar;
    * set by the Channel list.
    */
   memberAvatars?: ChannelAvatarMember[];
+  /**
+   * The caller's own role here; null for an open project Channel they have not joined. Set by the
+   * Channel list. Everyone but the owner may leave a group Channel.
+   */
+  memberRole?: ChannelMemberRole | null;
   /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
   mentionCount?: number;
   /**
@@ -499,6 +607,11 @@ export interface ChannelListItem {
    * the only entry of `memberAvatars`; null otherwise.
    */
   peerUserId?: string | null;
+  /**
+   * When the caller pinned the conversation atop their own list, null when not pinned; set by the
+   * Channel list. Personal: other members never see it.
+   */
+  pinnedAt?: Date | null;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
   /**
@@ -518,6 +631,12 @@ export interface ChannelListItem {
    */
   sharedAgentHandle?: string | null;
   status: ChannelStatus;
+  /**
+   * The newest @mention of the caller in each Thread from the last 30 days, read or not; set by
+   * the Channel list. The read position cannot tell whether one was seen, so the client's
+   * per-Thread reads decide.
+   */
+  threadMentions?: ChannelThreadMention[];
   title: string;
   /** Main-channel messages the caller has not read; set by the Channel list. */
   unreadCount?: number;
@@ -528,11 +647,21 @@ export interface ChannelListItem {
   workspaceId: string | null;
 }
 
+/** Where an Agent member runs in this Channel, readable by every member. */
+export interface ChannelMemberEnvironmentPreview {
+  deviceId: string | null;
+  /** The device's friendly name, else its hostname; null when the device row is gone. */
+  deviceName: string | null;
+  workingDirectory: string | null;
+}
+
 export interface ChannelPublicMember {
   actorType: ChannelMemberActorType;
   agentId: string | null;
   avatar: string | null;
   description: string | null;
+  /** Agent members only; null when the Channel sets no device or directory for it. */
+  environment?: ChannelMemberEnvironmentPreview | null;
   id: string;
   joinedAt: Date;
   /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
@@ -556,6 +685,11 @@ export interface ChannelPublicMessage {
   };
   content: string;
   createdAt: Date;
+  /**
+   * Set once the message was deleted. Its row stays as a tombstone, without text, mentions or
+   * attachments, so Threads, replies and jobs that point at it still resolve.
+   */
+  deletedAt?: Date | null;
   /** Set once the author has edited the text; shown as "(edited)". */
   editedAt?: Date | null;
   fileIds: string[];
@@ -567,7 +701,7 @@ export interface ChannelPublicMessage {
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
     ChannelPublicMessage,
-    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+    'id' | 'author' | 'content' | 'deletedAt' | 'sequence' | 'threadId'
   > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
@@ -647,6 +781,8 @@ export interface ChannelDetail {
    * running, or holding the writer); filter by `threadId` for one conversation's own.
    */
   jobs: ChannelPublicJob[];
+  /** False while the caller reads an open project Channel without being a member; sending joins. */
+  joined?: boolean;
   members: ChannelPublicMember[];
   messages: ChannelPublicMessage[];
   rootMessage: ChannelPublicMessage | null;

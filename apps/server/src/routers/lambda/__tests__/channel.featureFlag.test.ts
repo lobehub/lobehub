@@ -7,9 +7,9 @@ vi.mock('@/database/core/db-adaptor', () => ({
   }),
 }));
 
-vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
   const { authedProcedure } = await import('@/libs/trpc/lambda');
-  return { wsCompatProcedure: authedProcedure };
+  return { ...(await importOriginal<object>()), wsExternalCompatProcedure: authedProcedure };
 });
 
 const flags = vi.hoisted(() => ({ enableChannels: false as boolean | undefined }));

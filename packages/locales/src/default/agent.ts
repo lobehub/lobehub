@@ -958,6 +958,34 @@ export default {
   'share.settings.permissions.allowReadMemory': 'Allow reading my memory',
   'share.settings.permissions.allowReadMemoryHint':
     'The Agent may draw on your long-term memory while answering a visitor.',
+  'share.settings.permissions.deviceAccess': 'Execution environment',
+  'share.settings.permissions.deviceAccessHint':
+    'Lets the people you pick run this Agent on its execution environment, including Claude Code and Codex. Everyone else can’t run a Claude Code or Codex Agent.',
+  'share.settings.permissions.deviceAccessOption.allowlist': 'People from contacts',
+  'share.settings.permissions.deviceAccessOption.none': 'No visitors',
+  'share.settings.permissions.deviceAccessConfirm.commands':
+    'They can run any command and read or write any file on the machine this Agent runs on, including through Claude Code or Codex.',
+  'share.settings.permissions.deviceAccessConfirm.intro':
+    'People you add will run this Agent on your execution environment:',
+  'share.settings.permissions.deviceAccessConfirm.limits':
+    'The monthly spend cap does not limit that usage. Only the turn limit per topic does.',
+  'share.settings.permissions.deviceAccessConfirm.ok': 'Allow listed people',
+  'share.settings.permissions.deviceAccessConfirm.subscription':
+    'Claude Code and Codex runs use the model subscription signed in on that machine.',
+  'share.settings.permissions.deviceAccessConfirm.title':
+    'Let people use your execution environment?',
+  'share.settings.permissions.deviceAllowContactsUnavailable':
+    'Only people in your contacts can be added, and contacts aren’t available for your account yet.',
+  'share.settings.permissions.deviceAllowHint':
+    'Only people in this Agent’s contacts can be added. Removing someone from contacts also removes their access.',
+  'share.settings.permissions.deviceAllowLimitReached': 'You can add up to {{limit}} people.',
+  'share.settings.permissions.deviceAllowLoadFailed':
+    'Couldn’t load your contacts. Refresh to try again.',
+  'share.settings.permissions.deviceAllowNoContacts':
+    'Your contacts are empty. Add people to your contacts first.',
+  'share.settings.permissions.deviceAllowPlaceholder': 'Choose people from your contacts',
+  'share.settings.permissions.deviceAllowUnlisted':
+    'No longer in contacts, so they can’t use it: {{names}}. They’re removed the next time you edit this list.',
   'share.settings.permissions.desc':
     'What a visitor’s run may read, and what the visitor gets to see back.',
   'share.settings.permissions.showErrorDetails': 'Show error details to visitors',
@@ -1041,8 +1069,10 @@ export default {
   'share.visitor.errors.fileUnavailable':
     'One of the attachments is no longer available. Remove it and try again.',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
+  'share.visitor.errors.heteroDeviceUnavailable':
+    "The creator's device is offline. Try again later.",
   'share.visitor.errors.heterogeneousUnsupported':
-    "This shared agent isn't available for visitor chat yet. Please contact its owner.",
+    "This agent can run for you only with its creator's permission. Ask its creator for access.",
   'share.visitor.errors.insufficientBudget':
     'This shared agent has run out of budget. Please contact its owner.',
   'share.visitor.errors.promptTooLong':
@@ -1278,6 +1308,13 @@ export default {
   'webhook.actions.test': 'Send test',
   'webhook.actions.usage': 'How to call',
   'webhook.autoApproveTag': 'Auto-approve',
+  'webhook.untitledAgent': 'Untitled agent',
+  'webhook.wakes': 'Wakes {{agent}}',
+  'webhook.identifier': 'Identifier {{identifier}}',
+  'webhook.renamed': 'Renamed',
+  'webhook.actions.rename': 'Rename',
+  'webhook.channel.readOnly':
+    'Results are posted to this Channel. What it runs is changed with the lh CLI or by asking the Agent; here you can rename or delete it.',
   'webhook.cancel': 'Cancel',
   'webhook.create': 'Create webhook',
   'webhook.created.done': 'Done',

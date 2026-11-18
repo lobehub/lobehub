@@ -11,6 +11,8 @@ import {
   useProjectSkills,
 } from '@/features/SkillsList';
 
+import { useSelectSkill } from './useSelectSkill';
+
 // Project skills are resolved by the underlying CLI agent itself, so
 // we serialize them as a literal `/skill-name` (projectSkill chip).
 const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
@@ -37,8 +39,8 @@ interface ProjectLevelSkillsProps {
 const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
   ({ deviceId, hideHeader, searchQuery = '', workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { error, getRowActions, mutate, onOpenFile, onOpenSkill, projectItems } =
-      useProjectSkills(workingDirectory, deviceId);
+    const onSelectSkill = useSelectSkill('projectSkill');
+    const { error, mutate, projectItems } = useProjectSkills(workingDirectory, deviceId);
 
     const items = useMemo(
       () => filterSkillItems(projectItems, searchQuery),
@@ -64,10 +66,8 @@ const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
 
     const list = (
       <SkillsList
-        getRowActions={getRowActions}
         items={items}
-        onOpenFile={onOpenFile}
-        onOpenSkill={onOpenSkill}
+        onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
       />
     );

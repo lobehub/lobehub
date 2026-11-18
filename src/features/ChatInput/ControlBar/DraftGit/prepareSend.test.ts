@@ -1,9 +1,11 @@
-import { DEVICE_GIT_OUTDATED, getWorktreeModeKey } from '@lobechat/types';
+import type * as LobechatConstModule from '@lobechat/const';
+import { getWorktreeModeKey } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceService } from '@/services/device';
 import { DeviceGitOutdatedError, gitService } from '@/services/git';
+import { useAgentStore } from '@/store/agent';
 import { useGitStatusStore } from '@/store/device/gitStatus/store';
 import { useUserStore } from '@/store/user';
 
@@ -21,6 +23,15 @@ import {
   prepareDraftGitSend,
   snapshotDraftGit,
 } from './prepareSend';
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobechatConstModule>()),
+  isDesktop: true,
+}));
+
+vi.mock('@/services/ownedWorktree', () => ({
+  issueWorktreeReceipt: async () => undefined,
+}));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => null,
@@ -86,6 +97,7 @@ const pick = (branch: string) => setDraftBranch(draftBranchKey(target), branch);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAgentStore.setState({ agentMap: {} });
   useDraftGitStore.setState({ selections: {}, targets: {} });
   useGitStatusStore.setState({ gitAheadBehindMap: {} });
   registerDraftGitTarget(target);
@@ -342,86 +354,90 @@ describe('prepareDraftGitSend — switch in place', () => {
 });
 
 describe('prepareDraftGitSend — new worktree', () => {
-  beforeEach(() => {
-    setWorktreeMode(true);
-    vi.mocked(gitService.addGitWorktree).mockImplementation(async ({ branch, startPoint }) => ({
-      ...(startPoint ? { startPoint } : {}),
-      success: true,
-      worktreePath: `/Users/me/.lobehub/worktrees/lobehub-0000beef/${branch.split('/').at(-1)}`,
-    }));
-  });
+  beforeEach(() => setWorktreeMode(true));
 
-  it('forks the picked branch into a new worktree that becomes the topic directory', async () => {
+  it('captures the picked branch and device before handing the send to the server', async () => {
     pick('feat');
     const p = prompts();
     const result = await prepareDraftGitSend(context, { prompts: p, t });
 
-    const call = vi.mocked(gitService.addGitWorktree).mock.calls[0][0];
-    expect(call).toMatchObject({
-      deviceId: 'dev-1',
-      path: '/code/lobehub',
-      sourcePath: '/code/lobehub',
-      startPoint: 'feat',
-      stripBranchPrefix: true,
-    });
-    expect(call.branch).toMatch(/^[a-z]+\/\d{12}-[a-z]+-[a-z]+$/);
     expect(result).toEqual({
-      acted: true,
-      newTopicWorkingDirectory: {
-        git: {
-          activeWorktree: expect.stringContaining('/.lobehub/worktrees/'),
-          autoCreated: true,
-          autoCreatedAt: expect.any(String),
-          branch: call.branch,
-          isWorktree: true,
-        },
+      firstSendWorktree: {
+        baseBranch: 'feat',
+        deviceId: 'dev-1',
         path: '/code/lobehub',
         repoType: 'github',
-        sessionPath: expect.stringContaining('/.lobehub/worktrees/'),
+        sourcePath: '/code/lobehub',
       },
       ok: true,
+      onMessagePersisted: expect.any(Function),
     });
-    // Nothing touches the source directory, so nothing is asked.
-    expect(gitService.checkoutGitBranch).not.toHaveBeenCalled();
-    expect(p.confirmSwitchRisks).not.toHaveBeenCalled();
-    expect(deviceService.countRunningTopicsInDirectory).not.toHaveBeenCalled();
+    expect(gitService.getGitBranch).not.toHaveBeenCalled();
+    expect(gitService.addGitWorktree).not.toHaveBeenCalled();
+    expect(p.showProgress).not.toHaveBeenCalled();
+    expect(getDraftBranch(draftBranchKey(target))).toBe('feat');
+    if (result.ok) result.onMessagePersisted?.();
+    expect(getDraftBranch(draftBranchKey(target))).toBeUndefined();
   });
 
-  it('forks from HEAD without a start point when nothing else was picked', async () => {
-    await prepareDraftGitSend(context, { prompts: prompts(), t });
+  it('uses the local desktop gateway id when the repository is on this machine', async () => {
+    registerDraftGitTarget({ ...target, deviceId: undefined });
+    const result = await prepareDraftGitSend(context, { prompts: prompts(), t });
 
-    expect(vi.mocked(gitService.addGitWorktree).mock.calls[0][0].startPoint).toBeUndefined();
-    expect(gitService.getGitAheadBehind).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ firstSendWorktree: { deviceId: 'dev-1' }, ok: true });
+    expect(result.ok && result.firstSendWorktree?.baseBranch).toBeUndefined();
   });
 
-  it('reports a failed worktree and sends nothing', async () => {
-    pick('feat');
-    vi.mocked(gitService.addGitWorktree).mockResolvedValue({
-      error: 'fatal: a branch named x already exists',
-      success: false,
-    });
+  it('keeps the draft when the local device is not registered with the gateway', async () => {
+    registerDraftGitTarget({ ...target, deviceId: undefined, keyDeviceId: undefined });
+    useUserStore.setState({
+      preference: {
+        ...useUserStore.getState().preference,
+        worktreeModeDirs: [getWorktreeModeKey('local', target.path)],
+      },
+    } as any);
     const p = prompts();
 
     expect(await prepareDraftGitSend(context, { prompts: p, t })).toEqual({ ok: false });
     expect(p.notifyError).toHaveBeenCalledWith({
-      description: 'fatal: a branch named x already exists',
+      description: 'workingDirectory.worktreeDeviceRequired',
       title: 'workingDirectory.worktreeCreateFailed',
     });
-    expect(getDraftBranch(draftBranchKey(target))).toBe('feat');
+    expect(gitService.addGitWorktree).not.toHaveBeenCalled();
   });
 
-  it('says to update the device when it ignored the start point', async () => {
-    pick('feat');
-    vi.mocked(gitService.addGitWorktree).mockResolvedValue({
-      error: 'outdated',
-      reason: DEVICE_GIT_OUTDATED,
-      success: false,
+  it('creates a Desktop API-bound agent checkout in-process without a gateway registration', async () => {
+    useAgentStore.setState({
+      agentMap: {
+        [target.agentId]: {
+          agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'claude-code' } },
+        },
+      },
     });
-    const p = prompts();
+    const localTarget = { ...target, deviceId: undefined, keyDeviceId: undefined };
+    const checkoutPath = '/local/checkout';
+    vi.mocked(gitService.addGitWorktree).mockResolvedValue({
+      success: true,
+      worktreePath: checkoutPath,
+    });
+    const result = await prepareDraftGitSend(context, {
+      prompts: prompts(),
+      snapshot: { picked: 'feat', target: localTarget, worktreeMode: true },
+      t,
+    });
 
-    expect(await prepareDraftGitSend(context, { prompts: p, t })).toEqual({ ok: false });
-    expect(p.notifyError).toHaveBeenCalledWith(
-      expect.objectContaining({ description: 'workingDirectory.deviceOutdated' }),
+    expect(gitService.addGitWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ path: target.path, startPoint: 'feat' }),
     );
+    expect(vi.mocked(gitService.addGitWorktree).mock.calls[0][0].deviceId).toBeUndefined();
+    expect(result).not.toHaveProperty('firstSendWorktree');
+    expect(result).toMatchObject({
+      newTopicWorkingDirectory: {
+        git: { activeWorktree: checkoutPath, autoCreated: true },
+        path: target.sourcePath,
+        sessionPath: checkoutPath,
+      },
+      ok: true,
+    });
   });
 });

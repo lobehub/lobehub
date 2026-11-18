@@ -129,6 +129,13 @@ export interface AgentShareVisitorContext {
    */
   allowReadMemory?: boolean;
   /**
+   * Whether this visitor may run on the agent's execution environment, as
+   * resolved from `shareConfig.deviceAccess` when the run started. Lets the
+   * dispatch-time gates (device builtins, device-only MCP) re-apply the same
+   * decision the assembled tool set was built with.
+   */
+  canUseDevice?: boolean;
+  /**
    * The agent's OWN persisted knowledge-base assignment, never derived from
    * visitor input, so `isShareBlockedDataToolCall` can id-scope
    * `viewKnowledgeBase`'s `id` argument. Always empty today (a share grants no

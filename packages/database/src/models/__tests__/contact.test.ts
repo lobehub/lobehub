@@ -9,6 +9,7 @@ import {
   userContactRequests,
   userContacts,
   users,
+  workspaceMembers,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -28,6 +29,9 @@ const carolModel = new ContactModel(serverDB, carol);
 const teamId = 'contact-test-team';
 const aliceInTeam = new ContactModel(serverDB, alice, teamId);
 const carolInTeam = new ContactModel(serverDB, carol, teamId);
+// A model resolves the caller's role in the scope once, like one request; Bob's changes as he
+// joins, so each use gets a fresh one.
+const bobInTeam = () => new ContactModel(serverDB, bob, teamId);
 
 let bobShareId: string;
 
@@ -41,6 +45,11 @@ beforeEach(async () => {
   await serverDB
     .insert(workspaces)
     .values({ id: teamId, name: 'Team', primaryOwnerId: alice, slug: teamId });
+  // Alice owns the team and Carol is a member; Bob stays outside it.
+  await serverDB.insert(workspaceMembers).values([
+    { role: 'owner', userId: alice, workspaceId: teamId },
+    { role: 'member', userId: carol, workspaceId: teamId },
+  ]);
   await serverDB.insert(agents).values([
     { id: bobAgent, title: 'Bob Helper', userId: bob },
     { id: aliceAgent, title: 'Alice Helper', userId: alice },
@@ -112,7 +121,7 @@ describe('contact requests', () => {
     await expect(carolModel.declineRequest(requestId)).rejects.toThrow('Request not found');
     await expect(bobModel.cancelRequest(requestId)).rejects.toThrow('Request not found');
 
-    await aliceModel.cancelRequest(requestId);
+    await expect(aliceModel.cancelRequest(requestId)).resolves.toEqual({ addresseeId: bob });
     expect(await bobModel.listRequests()).toEqual([]);
     // A new request may follow a cancelled one.
     expect((await aliceModel.sendRequest(bob)).status).toBe('pending');
@@ -259,7 +268,9 @@ describe('shared Agents in a workspace', () => {
     expect(await aliceModel.list()).toMatchObject([{ type: 'user', user: { id: bob } }]);
     // A personal contact is not a colleague: the workspace lists its members instead.
     expect(await aliceInTeam.list()).toEqual([]);
-    expect(await aliceInTeam.isContact(bob)).toBe(true);
+    expect(await aliceInTeam.isContact(bob)).toBe(false);
+    // Nor does it let Bob into the workspace.
+    await expect(bobInTeam().list()).rejects.toThrow('Not a member of this workspace');
   });
 
   it('holds an Agent once per workspace, apart from personal entries', async () => {
@@ -272,6 +283,198 @@ describe('shared Agents in a workspace', () => {
     await carolInTeam.removeAgent(bobAgent);
     expect(await aliceInTeam.list()).toEqual([]);
     expect(await aliceModel.list()).toHaveLength(1);
+  });
+});
+
+describe('external contacts of a workspace', () => {
+  /** Alice invites Bob from the team and Bob accepts it from his personal space. */
+  const inviteBob = async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    const [invitation] = await bobModel.listRequests();
+    expect(invitation).toMatchObject({
+      direction: 'incoming',
+      id: requestId,
+      user: { id: alice },
+      workspace: { id: teamId, name: 'Team' },
+    });
+    expect(await bobModel.acceptRequest(requestId)).toEqual({
+      contactUserId: alice,
+      workspaceId: teamId,
+    });
+  };
+
+  it('keeps the invitation in its own scope until it is answered', async () => {
+    await aliceInTeam.sendRequest(bob);
+    // The inviter sees it in the team, not in her personal space.
+    expect(await aliceInTeam.listRequests()).toMatchObject([
+      { direction: 'outgoing', user: { id: bob } },
+    ]);
+    expect(await aliceModel.listRequests()).toEqual([]);
+    expect(await carolInTeam.listRequests()).toEqual([]);
+    expect(await aliceInTeam.relationTo(bob)).toBe('request_sent');
+    expect(await aliceModel.relationTo(bob)).toBe('none');
+    // A personal request between the same two people is separate.
+    expect(await aliceModel.sendRequest(bob)).toMatchObject({ status: 'pending' });
+  });
+
+  it('invites only people outside the workspace, and only as a member', async () => {
+    await expect(aliceInTeam.sendRequest(carol)).rejects.toThrow('Already a member');
+    expect(await aliceInTeam.relationTo(carol)).toBe('member');
+    await inviteBob();
+    await expect(bobInTeam().sendRequest(carol)).rejects.toThrow('Only members add contacts');
+  });
+
+  it('shows an external contact only the inviter, and nothing else of the workspace', async () => {
+    await carolInTeam.addAgent('bob-helper');
+    await inviteBob();
+
+    expect(await bobInTeam().list()).toMatchObject([{ type: 'user', user: { id: alice } }]);
+    expect(await bobInTeam().search('carol')).toEqual([]);
+    expect(await bobInTeam().listRequests()).toEqual([]);
+    expect(await bobInTeam().findAgentAccess(bobAgent)).toBeUndefined();
+    // His personal address book is untouched.
+    expect(await bobModel.list()).toEqual([]);
+  });
+
+  it('lists every external contact to every member, marking who is open to them', async () => {
+    await inviteBob();
+    const externals = (items: Awaited<ReturnType<ContactModel['list']>>) =>
+      items.filter((item) => item.type === 'user');
+
+    expect(externals(await aliceInTeam.list())).toMatchObject([
+      { external: { openedToMe: true }, user: { id: bob } },
+    ]);
+    expect(externals(await carolInTeam.list())).toMatchObject([
+      { external: { openedToMe: false }, user: { id: bob } },
+    ]);
+
+    // Carol opens herself; Bob now sees her too.
+    await carolInTeam.openTo(bob);
+    expect(externals(await carolInTeam.list())).toMatchObject([
+      { external: { openedToMe: true }, user: { id: bob } },
+    ]);
+    expect((await bobInTeam().list()).map((item) => item.type === 'user' && item.user.id)).toEqual(
+      expect.arrayContaining([alice, carol]),
+    );
+
+    // Closing again only removes her own pairing.
+    await carolInTeam.removeUser(bob);
+    expect(await bobInTeam().list()).toMatchObject([{ user: { id: alice } }]);
+  });
+
+  it('opens only to an external contact, never a stranger or a colleague', async () => {
+    await expect(carolInTeam.openTo(bob)).rejects.toThrow('External contact not found');
+    await expect(carolInTeam.openTo(alice)).rejects.toThrow('External contact not found');
+  });
+
+  it('lets an owner or admin remove an external contact from the workspace', async () => {
+    await inviteBob();
+    await carolInTeam.openTo(bob);
+    await expect(carolInTeam.removeExternal(bob)).rejects.toThrow('Only owners and admins');
+
+    await aliceInTeam.removeExternal(bob);
+    expect(await carolInTeam.list()).toEqual([]);
+    await expect(bobInTeam().list()).rejects.toThrow('Not a member of this workspace');
+  });
+
+  it('lists the workspaces I am an external contact of, while a member is paired with me', async () => {
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+    await inviteBob();
+    expect(await bobModel.listExternalWorkspaces()).toEqual([
+      { avatar: null, id: teamId, name: 'Team' },
+    ]);
+    // Members are never external, and the workspace goes once no member is paired with me.
+    expect(await aliceModel.listExternalWorkspaces()).toEqual([]);
+    await aliceInTeam.removeUser(bob);
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+  });
+
+  it('lets the invitation lapse once the inviter leaves the workspace', async () => {
+    const { requestId } = await carolInTeam.sendRequest(bob);
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, carol));
+    await expect(bobModel.acceptRequest(requestId)).rejects.toThrow('Request not found');
+  });
+});
+
+describe('people to message', () => {
+  const ids = (page: Awaited<ReturnType<ContactModel['listPeople']>>) =>
+    page.people.map((person) => person.id);
+
+  it('lists personal contacts only, narrowed by name or handle', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(await aliceModel.listPeople({ limit: 10 })).toEqual({
+      hasMore: false,
+      people: [{ avatar: null, fullName: 'Bob', id: bob, username: 'Bob' }],
+    });
+    expect(ids(await aliceModel.listPeople({ limit: 10, query: ' bo ' }))).toEqual([bob]);
+    expect(ids(await aliceModel.listPeople({ limit: 10, query: '@bo' }))).toEqual([bob]);
+    expect(ids(await aliceModel.listPeople({ limit: 10, query: 'carol' }))).toEqual([]);
+    expect(ids(await carolModel.listPeople({ limit: 10 }))).toEqual([]);
+  });
+
+  it('lists fellow members, then the external contacts paired with the caller', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await aliceInTeam.listPeople({ limit: 10 }))).toEqual([carol, bob]);
+    // Bob is not paired with Carol, so she cannot message him.
+    expect(ids(await carolInTeam.listPeople({ limit: 10 }))).toEqual([alice]);
+    expect(ids(await aliceInTeam.listPeople({ limit: 10, query: '@CAR' }))).toEqual([carol]);
+    expect(await aliceInTeam.listPeople({ limit: 1 })).toMatchObject({
+      hasMore: true,
+      people: [{ id: carol }],
+    });
+    // An external contact reaches only the members paired with them.
+    expect(ids(await bobInTeam().listPeople({ limit: 10 }))).toEqual([alice]);
+  });
+});
+
+describe('address book of a scope', () => {
+  const dave = 'contact-test-dave';
+  const ids = (people: { id: string }[]) => people.map((person) => person.id);
+
+  it('holds personal contacts only, and only for their owner', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await aliceModel.listAddressBookPeople())).toEqual([bob]);
+    expect(await aliceModel.filterAddressBookPeople([bob, carol, alice])).toEqual([bob]);
+    expect(await carolModel.filterAddressBookPeople([bob])).toEqual([]);
+  });
+
+  it('holds every member and every external contact of a workspace', async () => {
+    await serverDB.insert(users).values({ id: dave, username: 'dave' });
+    // Alice invites Bob; Carol, who did not invite him, still finds him in the workspace's book.
+    const { requestId } = await aliceInTeam.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(ids(await carolInTeam.listAddressBookPeople())).toEqual([alice, bob]);
+    expect(await carolInTeam.filterAddressBookPeople([alice, bob, dave, carol])).toEqual([
+      alice,
+      bob,
+    ]);
+    // Personal contacts never count for a workspace.
+    const { requestId: personal } = await carolModel.sendRequest(dave);
+    await new ContactModel(serverDB, dave).acceptRequest(personal);
+    expect(await carolInTeam.filterAddressBookPeople([dave])).toEqual([]);
+  });
+
+  it('drops someone who leaves the workspace or the address book', async () => {
+    await serverDB
+      .update(workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(workspaceMembers.userId, carol));
+    expect(await aliceInTeam.filterAddressBookPeople([carol])).toEqual([]);
+
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+    await aliceModel.removeUser(bob);
+    expect(await aliceModel.filterAddressBookPeople([bob])).toEqual([]);
   });
 });
 
@@ -290,5 +493,127 @@ describe('search', () => {
     await aliceModel.addAgent('bob-helper');
     const [added] = await aliceModel.search('bob-helper');
     expect(added).toMatchObject({ relation: 'contact' });
+  });
+});
+
+describe('contact edge cases', () => {
+  it('treats a bare @ as no handle at all', () => {
+    expect(parseContactHandle('@')).toBeUndefined();
+  });
+
+  it('reports a person already in the address book as a contact', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    await bobModel.acceptRequest(requestId);
+
+    expect(await aliceModel.relationTo(bob)).toBe('contact');
+  });
+
+  it('lists a request in both directions', async () => {
+    await aliceModel.sendRequest(bob);
+
+    const [outgoing] = await aliceModel.listRequests();
+    expect(outgoing).toMatchObject({ direction: 'outgoing', user: { id: bob } });
+
+    const [incoming] = await bobModel.listRequests();
+    expect(incoming).toMatchObject({ direction: 'incoming', user: { id: alice } });
+  });
+
+  it('declines a pending request without creating a contact', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+
+    await expect(bobModel.declineRequest(requestId)).resolves.toEqual({ requesterId: alice });
+
+    expect(await aliceModel.list()).toEqual([]);
+    expect(await aliceModel.relationTo(bob)).toBe('none');
+    const [row] = await serverDB
+      .select({ status: userContactRequests.status })
+      .from(userContactRequests)
+      .where(eq(userContactRequests.id, requestId));
+    expect(row.status).toBe('declined');
+  });
+
+  it('rejects a request to somebody who does not exist', async () => {
+    await expect(aliceModel.sendRequest('contact-test-missing')).rejects.toThrow('User not found');
+  });
+
+  it('rejects a request id that is not a uuid', async () => {
+    await expect(aliceModel.cancelRequest('not-a-uuid')).rejects.toThrow('Request not found');
+    await expect(bobModel.acceptRequest('not-a-uuid')).rejects.toThrow('Request not found');
+    await expect(bobModel.declineRequest('not-a-uuid')).rejects.toThrow('Request not found');
+  });
+
+  it('refuses to add an Agent when the handle names nothing', async () => {
+    await expect(aliceModel.addAgent('@')).rejects.toThrow('Agent not found');
+    expect(await aliceModel.search('@')).toEqual([]);
+  });
+
+  it('removes a shared Agent from the address book', async () => {
+    await aliceModel.addAgent('bob-helper');
+
+    await aliceModel.removeAgent(bobAgent);
+
+    expect(await aliceModel.list()).toEqual([]);
+    expect(await aliceModel.findAgentAccess(bobAgent)).toBeUndefined();
+  });
+
+  it('reports an Agent that has no title as having none', async () => {
+    await serverDB.insert(agents).values({ id: 'agt_contact_untitled', userId: bob });
+    await serverDB.insert(agentShares).values({
+      agentId: 'agt_contact_untitled',
+      shareConfig: { monthlySpendLimit: 1, slug: 'untitled-helper' },
+      visibility: 'link',
+    });
+
+    const [found] = await aliceModel.search('untitled-helper');
+
+    expect(found.type).toBe('agent');
+    expect(found.agent?.title).toBeNull();
+  });
+
+  it('marks your own Agent share as your own', async () => {
+    await serverDB
+      .update(agentShares)
+      .set({ shareConfig: { monthlySpendLimit: 1, slug: 'alice-helper' } })
+      .where(eq(agentShares.agentId, aliceAgent));
+
+    const [own] = await aliceModel.search('alice-helper');
+
+    expect(own).toMatchObject({ agent: { agentId: aliceAgent }, relation: 'self', type: 'agent' });
+  });
+});
+
+describe('answering an invitation after the caller joined', () => {
+  it('refuses the invitation once the invitee is already a member', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    // Bob became a member by another route before answering, so the invitation is moot.
+    await serverDB
+      .insert(workspaceMembers)
+      .values({ role: 'member', userId: bob, workspaceId: teamId });
+
+    await expect(bobInTeam().acceptRequest(requestId)).rejects.toThrow(
+      'Already a member of this workspace',
+    );
+  });
+
+  it('only a member of the workspace may open themselves to an external contact', async () => {
+    // In the personal space there is nothing to open: the caller is not a member of a team.
+    await expect(aliceModel.openTo(bob)).rejects.toThrow('Only members open themselves');
+  });
+
+  it('refuses an invitation whose sender is no longer a member', async () => {
+    const { requestId } = await aliceInTeam.sendRequest(bob, 'Join us');
+    await serverDB.delete(workspaceMembers).where(eq(workspaceMembers.userId, alice));
+
+    await expect(bobModel.acceptRequest(requestId)).rejects.toThrow('Request not found');
+  });
+});
+
+describe('removing an external contact who is not one', () => {
+  it('refuses a member, and a person the workspace never paired', async () => {
+    // Carol is a member of the team, not an external contact.
+    await expect(aliceInTeam.removeExternal(carol)).rejects.toThrow('External contact not found');
+    await expect(aliceInTeam.removeExternal('contact-test-missing')).rejects.toThrow(
+      'External contact not found',
+    );
   });
 });

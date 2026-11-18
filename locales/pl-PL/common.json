@@ -147,6 +147,8 @@
   "cmdk.search.files": "Pliki",
   "cmdk.search.folder": "Folder",
   "cmdk.search.folders": "Foldery",
+  "cmdk.search.goal": "Cel",
+  "cmdk.search.goals": "Cele",
   "cmdk.search.knowledgeBase": "Biblioteka",
   "cmdk.search.knowledgeBases": "Biblioteki",
   "cmdk.search.loading": "Wyszukiwanie...",

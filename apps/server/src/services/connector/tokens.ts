@@ -1,10 +1,15 @@
-import type { OAuthTokens } from '@modelcontextprotocol/client';
+import { randomUUID } from 'node:crypto';
+
+import { OAuthError, OAuthErrorCode, type OAuthTokens } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import pMap from 'p-map';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
-import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
-import type { ConnectorCredentials } from '@/database/schemas';
+import {
+  type DecryptedConnectorLink,
+  LEGACY_LINK_ID,
+  type OAuthCredentials,
+} from '@/database/models/connectorLink';
 
 import {
   discoverConnectorAuthorizationServerMetadata,
@@ -21,7 +26,7 @@ const EXPIRY_SKEW_MS = 60_000;
 export const tokensToCredentials = (
   tokens: OAuthTokens,
   opts: { clientSecret?: string; fallbackRefreshToken?: string } = {},
-): { credentials: ConnectorCredentials; tokenExpiresAt: Date | null } => {
+): { credentials: OAuthCredentials; tokenExpiresAt: Date | null } => {
   const expiresAt = tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined;
   return {
     credentials: {
@@ -37,307 +42,328 @@ export const tokensToCredentials = (
   };
 };
 
-/** Whether the connector holds a refreshable OAuth token that is expired or about to expire. */
-const isRefreshDue = (connector: DecryptedConnector): boolean => {
-  const creds = connector.credentials;
-  if (!creds || creds.type !== 'oauth2' || !creds.refreshToken) return false;
-  return !creds.expiresAt || creds.expiresAt - EXPIRY_SKEW_MS <= Date.now();
+const RUN_TOKEN_REFRESH_TIMEOUT_MS = 5000;
+const RUN_TOKEN_REFRESH_CONCURRENCY = 5;
+const REFRESH_REQUEST_TIMEOUT_MS = 20_000;
+const REFRESH_ATTEMPT_TTL_MS = 30_000;
+const REFRESH_POLL_INTERVAL_MS = 500;
+
+const isRefreshDue = (
+  credentials: DecryptedConnector['credentials'],
+): credentials is OAuthCredentials & { refreshToken: string } =>
+  credentials?.type === 'oauth2' &&
+  !!credentials.refreshToken &&
+  (!credentials.expiresAt || credentials.expiresAt - EXPIRY_SKEW_MS <= Date.now());
+
+interface RefreshSlot {
+  connector: DecryptedConnector;
+  credentials: OAuthCredentials;
+  link?: DecryptedConnectorLink;
+  linkCount: number;
+}
+
+const readSlot = async (
+  connector: DecryptedConnector,
+  model: ConnectorModel,
+  linkId?: string,
+): Promise<RefreshSlot | undefined> => {
+  if (!linkId && connector.credentials?.type === 'oauth2') {
+    return { connector, credentials: connector.credentials, linkCount: 0 };
+  }
+  // An older single-token row can be migrated to an account while a run
+  // still holds the old snapshot. Both entry points target that same slot.
+  const links = await model.getLinkModel().listByConnectorIds([connector.id]);
+  const link = links.find((item) => item.id === (linkId ?? LEGACY_LINK_ID));
+  if (link) return { connector, credentials: link.credentials, link, linkCount: links.length };
 };
 
-const hasKnownExpiry = (connector: DecryptedConnector): boolean =>
-  connector.credentials?.type === 'oauth2' && !!connector.credentials.expiresAt;
+const writeSlot = async (
+  model: ConnectorModel,
+  slot: RefreshSlot,
+  credentials: OAuthCredentials,
+  update?: {
+    authMethod?: NonNullable<DecryptedConnector['oidcConfig']>['tokenEndpointAuthMethod'];
+    status: 'connected' | 'error';
+  },
+): Promise<RefreshSlot> => {
+  const { connector, link, linkCount } = slot;
+  const tokenExpiresAt = credentials.expiresAt ? new Date(credentials.expiresAt) : null;
+  const oidcConfig =
+    update?.authMethod && connector.oidcConfig
+      ? { ...connector.oidcConfig, tokenEndpointAuthMethod: update.authMethod }
+      : undefined;
+  const status = linkCount <= 1 && update?.status === 'error' ? update.status : undefined;
 
-/**
- * Lazily refresh a connector's OAuth access token when it is expired (or about
- * to expire). Persists the rotated credentials and returns the connector with
- * fresh credentials in memory. No-op for non-oauth2 connectors or when the
- * token is still valid / not refreshable.
- */
-export const ensureFreshConnectorToken = async (
-  connector: DecryptedConnector,
-  connectorModel: ConnectorModel,
-): Promise<DecryptedConnector> => {
-  const creds = connector.credentials;
-  const oidc = connector.oidcConfig;
-
-  if (!creds || creds.type !== 'oauth2' || !creds.refreshToken || !isRefreshDue(connector)) {
-    return connector;
+  if (link && connector.credentials?.type !== 'oauth2') {
+    await model
+      .getLinkModel()
+      .updateCredentials(connector.id, link.id, credentials, update?.status ?? link.status);
+    if (status || oidcConfig) {
+      await model.update(connector.id, {
+        ...(status && { status }),
+        ...(oidcConfig && { oidcConfig }),
+      });
+    }
+  } else {
+    await model.update(connector.id, {
+      credentials: JSON.stringify(credentials),
+      tokenExpiresAt,
+      ...(status && { status }),
+      ...(oidcConfig && { oidcConfig }),
+    });
   }
-  if (!oidc?.issuer || !oidc.clientId) return connector;
+
+  return {
+    ...slot,
+    connector: { ...connector, ...(status && { status }), ...(oidcConfig && { oidcConfig }) },
+    credentials,
+    link: link && { ...link, credentials, status: update?.status ?? link.status, tokenExpiresAt },
+  };
+};
+
+const reconnectCredentials = (credentials: OAuthCredentials): OAuthCredentials => ({
+  ...credentials,
+  refreshState: { status: 'reconnect_required' },
+  refreshToken: undefined,
+});
+
+const isSameCredential = (current: OAuthCredentials, original: OAuthCredentials) =>
+  current.refreshToken === original.refreshToken &&
+  current.accessToken === original.accessToken &&
+  current.expiresAt === original.expiresAt &&
+  current.refreshState?.status === original.refreshState?.status &&
+  (current.refreshState?.status !== 'complete' ||
+    (original.refreshState?.status === 'complete' &&
+      current.refreshState.id === original.refreshState.id));
+
+type RefreshDecision =
+  | { kind: 'done'; slot?: RefreshSlot }
+  | { kind: 'send'; attemptId: string; deadline: number; slot: RefreshSlot }
+  | { kind: 'wait'; deadline: number; slot: RefreshSlot };
+
+const claimRefresh = (
+  connector: DecryptedConnector,
+  original: OAuthCredentials,
+  model: ConnectorModel,
+  linkId?: string,
+) =>
+  model.withOAuthRefreshLock<RefreshDecision>(connector, async (row, lockedModel) => {
+    const slot = await readSlot(row, lockedModel, linkId);
+    if (!slot) return { kind: 'done' };
+    const { credentials } = slot;
+    const state = credentials.refreshState;
+    if (state?.status === 'pending') {
+      if (state.deadline > Date.now()) return { deadline: state.deadline, kind: 'wait', slot };
+      // The owner may have submitted the token before exiting. Its outcome
+      // is unknown, so allowing a new owner to send the same token is unsafe.
+      const failed = await writeSlot(lockedModel, slot, reconnectCredentials(credentials), {
+        status: 'error',
+      });
+      return { kind: 'done', slot: failed };
+    }
+
+    if (
+      !row.isEnabled ||
+      !row.oidcConfig?.issuer ||
+      !row.oidcConfig.clientId ||
+      !isSameCredential(credentials, original) ||
+      !isRefreshDue(credentials)
+    ) {
+      return { kind: 'done', slot };
+    }
+
+    const attemptId = randomUUID();
+    const deadline = Date.now() + REFRESH_ATTEMPT_TTL_MS;
+    await writeSlot(lockedModel, slot, {
+      ...credentials,
+      refreshState: { deadline, id: attemptId, status: 'pending' },
+    });
+    // The claim commits before the OAuth request starts. No database lock or
+    // transaction needs to stay open while waiting on the provider.
+    return { attemptId, deadline, kind: 'send', slot };
+  });
+
+const fetchRefresh = async (slot: RefreshSlot, attemptId: string, signal: AbortSignal) => {
+  const { connector, credentials } = slot;
+  const oidc = connector.oidcConfig;
+  if (!oidc?.issuer || !credentials.refreshToken) return;
+  const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer, signal);
+  if (!metadata) return;
+  signal.throwIfAborted();
 
   try {
-    const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer);
-    if (!metadata) return connector;
-
     const { authMethod, tokens } = await refreshConnectorToken({
       authorizationServerUrl: oidc.issuer,
       clientInformation: toClientInformation(oidc),
       metadata,
-      refreshToken: creds.refreshToken,
+      refreshToken: credentials.refreshToken,
       resource: connector.mcpServerUrl ?? undefined,
+      signal,
     });
+    return {
+      authMethod,
+      credentials: {
+        ...tokensToCredentials(tokens, {
+          clientSecret: oidc.clientSecret,
+          fallbackRefreshToken: credentials.refreshToken,
+        }).credentials,
+        refreshState: { id: attemptId, status: 'complete' as const },
+      },
+      status: 'connected' as const,
+    };
+  } catch (error) {
+    if (
+      !signal.aborted &&
+      OAuthError.isInstance(error) &&
+      error.code !== OAuthErrorCode.InvalidGrant &&
+      error.code !== OAuthErrorCode.ServerError
+    ) {
+      // The provider explicitly rejected the request without issuing tokens.
+      return;
+    }
+    // A rejected grant or an uncertain transport/server failure must not
+    // cause another submission. The provider may already have rotated it.
+    return { credentials: reconnectCredentials(credentials), status: 'error' as const };
+  }
+};
 
-    const { credentials, tokenExpiresAt } = tokensToCredentials(tokens, {
-      clientSecret: oidc.clientSecret,
-      fallbackRefreshToken: creds.refreshToken,
-    });
+const runClaimedRefresh = async (
+  decision: Extract<RefreshDecision, { kind: 'send' }>,
+  model: ConnectorModel,
+  linkId?: string,
+) => {
+  const { attemptId, deadline, slot } = decision;
+  let result: Awaited<ReturnType<typeof fetchRefresh>>;
+  try {
+    const remaining = Math.min(REFRESH_REQUEST_TIMEOUT_MS, deadline - Date.now());
+    if (remaining > 0) result = await fetchRefresh(slot, attemptId, AbortSignal.timeout(remaining));
+  } catch (error) {
+    // Discovery failed before the token request was sent.
+    log(
+      'OAuth discovery failed for connector=%s errorType=%s',
+      slot.connector.id,
+      error instanceof Error ? error.name : typeof error,
+    );
+  }
 
-    await connectorModel.update(connector.id, {
-      credentials: JSON.stringify(credentials),
-      ...(authMethod && { oidcConfig: { ...oidc, tokenEndpointAuthMethod: authMethod } }),
-      tokenExpiresAt,
-    });
+  return model.withOAuthRefreshLock(slot.connector, async (row, lockedModel) => {
+    const current = await readSlot(row, lockedModel, linkId);
+    if (!current) return;
+    const state = current.credentials.refreshState;
+    // Reauthorization, account removal or a newer outcome won while the
+    // OAuth request was in flight. Leave that state alone.
+    if (state?.status !== 'pending' || state.id !== attemptId) return current;
+    return writeSlot(lockedModel, current, result?.credentials ?? slot.credentials, result);
+  });
+};
 
-    return { ...connector, credentials };
+const refreshSlot = async (
+  connector: DecryptedConnector,
+  credentials: DecryptedConnector['credentials'],
+  model: ConnectorModel,
+  linkId?: string,
+  waitUntil = Date.now() + REFRESH_ATTEMPT_TTL_MS,
+): Promise<RefreshSlot | undefined> => {
+  if (!isRefreshDue(credentials)) return;
+  try {
+    while (true) {
+      const decision = await claimRefresh(connector, credentials, model, linkId);
+      if (!decision || decision.kind === 'done') return decision?.slot;
+      if (decision.kind === 'send') return await runClaimedRefresh(decision, model, linkId);
+      if (Date.now() >= waitUntil) return decision.slot;
+      const now = Date.now();
+      const delay = Math.min(REFRESH_POLL_INTERVAL_MS, decision.deadline - now, waitUntil - now);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   } catch (error) {
     log(
-      'token refresh failed for connector=%s errorType=%s',
+      'OAuth refresh state failed for connector=%s errorType=%s',
       connector.id,
       error instanceof Error ? error.name : typeof error,
     );
-    return reloadIfRotatedElsewhere(connector, connectorModel);
   }
 };
 
-/**
- * How long a failed refresh waits for a concurrent winner to persist the
- * rotated token before re-reading once more.
- */
-const ROTATION_PERSIST_GRACE_MS = 1000;
-
-const readRotatedCredentials = async (
+export const ensureFreshConnectorToken = async (
   connector: DecryptedConnector,
-  connectorModel: ConnectorModel,
-): Promise<DecryptedConnector | undefined> => {
-  const staleCreds = connector.credentials;
-  const latestCreds = (await connectorModel.findById(connector.id))?.credentials;
-  if (
-    latestCreds?.type === 'oauth2' &&
-    staleCreds?.type === 'oauth2' &&
-    latestCreds.accessToken !== staleCreds.accessToken &&
-    // Servers may omit `expires_in`, so a rotated token can lack an expiry.
-    (!latestCreds.expiresAt || latestCreds.expiresAt - EXPIRY_SKEW_MS > Date.now())
-  ) {
-    return { ...connector, credentials: latestCreds };
-  }
-};
-
-/**
- * A rotating authorization server invalidates a refresh token once it is used,
- * so when two runs refresh the same connector concurrently the loser fails
- * with credentials the winner already replaced. Re-read the row — once more
- * after a short grace, since the winner may still be persisting — and use the
- * winner's token instead of failing the run with a stale one.
- */
-const reloadIfRotatedElsewhere = async (
-  connector: DecryptedConnector,
-  connectorModel: ConnectorModel,
+  model: ConnectorModel,
+  waitUntil?: number,
 ): Promise<DecryptedConnector> => {
-  try {
-    const rotated = await readRotatedCredentials(connector, connectorModel);
-    if (rotated) return rotated;
-
-    await new Promise((resolve) => setTimeout(resolve, ROTATION_PERSIST_GRACE_MS));
-    return (await readRotatedCredentials(connector, connectorModel)) ?? connector;
-  } catch {
-    log('reloading connector=%s after a failed refresh failed', connector.id);
-    return connector;
-  }
+  const slot = await refreshSlot(connector, connector.credentials, model, undefined, waitUntil);
+  if (!slot) return connector;
+  const { credentials } = slot;
+  return {
+    ...slot.connector,
+    credentials,
+    tokenExpiresAt: credentials.expiresAt ? new Date(credentials.expiresAt) : null,
+  };
 };
 
-/**
- * Upper bound a run waits on one authorization server. On timeout the run
- * keeps the stored credentials; the refresh still finishes and persists.
- */
-const RUN_TOKEN_REFRESH_TIMEOUT_MS = 5000;
-
-/**
- * Concurrent authorization-server calls per run. Runs rarely hold more due
- * OAuth connectors than this, so the common case still finishes in one wave.
- */
-const RUN_TOKEN_REFRESH_CONCURRENCY = 5;
-
-/**
- * Refreshes in flight on this instance, keyed by connector id, so concurrent
- * runs of one shared agent spend the refresh token once instead of racing.
- */
-const inFlightRefreshes = new Map<string, Promise<DecryptedConnector>>();
-
-const refreshOnce = (
+export const ensureFreshLinkToken = async (
   connector: DecryptedConnector,
-  connectorModel: ConnectorModel,
-): Promise<DecryptedConnector> => {
-  const pending = inFlightRefreshes.get(connector.id);
-  if (pending) return pending;
+  link: DecryptedConnectorLink,
+  model: ConnectorModel,
+  waitUntil?: number,
+): Promise<DecryptedConnectorLink> =>
+  (await refreshSlot(connector, link.credentials, model, link.id, waitUntil))?.link ?? link;
 
-  const refresh = ensureFreshConnectorToken(connector, connectorModel).finally(() => {
-    if (inFlightRefreshes.get(connector.id) === refresh) inFlightRefreshes.delete(connector.id);
+/** Bound the caller's wait while a claimed refresh continues to persist its outcome. */
+const waitForRunRefresh = async <T>(
+  original: T,
+  refresh: (waitUntil: number) => Promise<T>,
+  onTimeout?: () => void,
+): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const waitUntil = Date.now() + RUN_TOKEN_REFRESH_TIMEOUT_MS;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      onTimeout?.();
+      resolve(original);
+    }, RUN_TOKEN_REFRESH_TIMEOUT_MS);
   });
-  inFlightRefreshes.set(connector.id, refresh);
-  return refresh;
+  try {
+    return await Promise.race([timeout, refresh(waitUntil)]);
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
-/**
- * Refresh expired OAuth tokens before an agent run bakes connector credentials
- * into its tool manifests. Without this the runtime only refreshed through the
- * background tool sync scheduled after the run started, so the first call after
- * every access-token expiry 401'd even when the refresh token was still valid —
- * and the model then reported a connection that only needed a refresh as one
- * the owner must reconnect.
- *
- * `connectorModel` must carry the gatekeeper so rotated credentials are
- * persisted encrypted. Never throws; a connector that cannot be refreshed is
- * returned unchanged, and `onTimeout` reports each one that hit the time limit.
- */
 export const refreshExpiredConnectorTokens = (
   connectors: DecryptedConnector[],
-  connectorModel: ConnectorModel,
+  model: ConnectorModel,
   options: { onTimeout?: () => void } = {},
 ): Promise<DecryptedConnector[]> =>
   pMap(
     connectors,
-    async (connector) => {
-      // Disabled connectors never reach the manifests, so refreshing them only
-      // delays the run and rotates credentials nobody uses. A token without a
-      // known expiry (the server omitted `expires_in`) is not known to be
-      // stale; refreshing it here would rotate it on every chat.
-      if (!connector.isEnabled || !hasKnownExpiry(connector) || !isRefreshDue(connector)) {
-        return connector;
-      }
-
-      const refresh = refreshOnce(connector, connectorModel);
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<DecryptedConnector>((resolve) => {
-        timer = setTimeout(() => {
-          log('token refresh timed out for connector=%s', connector.id);
-          // A refresh that never settles would otherwise stay shared forever,
-          // making every later run wait on it instead of retrying.
-          if (inFlightRefreshes.get(connector.id) === refresh) {
-            inFlightRefreshes.delete(connector.id);
-          }
-          options.onTimeout?.();
-          resolve(connector);
-        }, RUN_TOKEN_REFRESH_TIMEOUT_MS);
-      });
-      try {
-        return await Promise.race([refresh, timeout]);
-      } finally {
-        clearTimeout(timer);
-      }
-    },
+    // When a provider omitted expires_in, the agent run has no expiry to act on.
+    (connector) =>
+      connector.isEnabled &&
+      connector.credentials?.type === 'oauth2' &&
+      connector.credentials.expiresAt
+        ? waitForRunRefresh(
+            connector,
+            (waitUntil) => ensureFreshConnectorToken(connector, model, waitUntil),
+            options.onTimeout,
+          )
+        : connector,
     { concurrency: RUN_TOKEN_REFRESH_CONCURRENCY },
   );
 
-/**
- * Account refreshes in flight on this instance. Keyed by connector and account:
- * account ids are unique within their connector only.
- */
-const inFlightLinkRefreshes = new Map<string, Promise<DecryptedConnectorLink>>();
-const linkRefreshKey = (connector: DecryptedConnector, link: DecryptedConnectorLink) =>
-  `${connector.id}:${link.id}`;
-export const ensureFreshLinkToken = (
-  connector: DecryptedConnector,
-  link: DecryptedConnectorLink,
-  linkModel: ConnectorLinkModel,
-  connectorModel: ConnectorModel,
-): Promise<DecryptedConnectorLink> => {
-  const creds = link.credentials;
-  const oidc = connector.oidcConfig;
-  if (
-    !creds.refreshToken ||
-    (creds.expiresAt && creds.expiresAt - EXPIRY_SKEW_MS > Date.now()) ||
-    !oidc?.issuer ||
-    !oidc.clientId
-  )
-    return Promise.resolve(link);
-  const key = linkRefreshKey(connector, link);
-  const pending = inFlightLinkRefreshes.get(key);
-  if (pending) return pending;
-  const refresh = (async () => {
-    try {
-      const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer!);
-      if (!metadata) return link;
-      const { authMethod, tokens } = await refreshConnectorToken({
-        authorizationServerUrl: oidc.issuer!,
-        clientInformation: toClientInformation(oidc),
-        metadata,
-        refreshToken: creds.refreshToken!,
-        resource: connector.mcpServerUrl ?? undefined,
-      });
-      const { credentials, tokenExpiresAt } = tokensToCredentials(tokens, {
-        clientSecret: oidc.clientSecret,
-        fallbackRefreshToken: creds.refreshToken,
-      });
-      if (credentials.type !== 'oauth2') return link;
-      await linkModel.updateCredentials(connector.id, link.id, credentials);
-      if (authMethod && authMethod !== oidc.tokenEndpointAuthMethod)
-        await connectorModel.update(connector.id, {
-          oidcConfig: { ...oidc, tokenEndpointAuthMethod: authMethod },
-        });
-      return { ...link, credentials, tokenExpiresAt, status: 'connected' as const };
-    } catch (error) {
-      // Another process may have rotated this refresh token. Re-read before
-      // marking the account unhealthy, including a short persistence grace.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        if (attempt) await new Promise((resolve) => setTimeout(resolve, ROTATION_PERSIST_GRACE_MS));
-        const latest = await linkModel.findById(connector.id, link.id);
-        if (
-          latest &&
-          latest.credentials.accessToken !== creds.accessToken &&
-          (!latest.credentials.expiresAt ||
-            latest.credentials.expiresAt - EXPIRY_SKEW_MS > Date.now())
-        )
-          return latest;
-      }
-      const code =
-        (error as { error?: string; code?: string }).error ?? (error as { code?: string }).code;
-      if (
-        code === 'invalid_grant' ||
-        (error instanceof Error && /invalid_grant/i.test(error.message))
-      ) {
-        await linkModel.updateStatus(connector.id, link.id, 'error');
-        return { ...link, status: 'error' as const };
-      }
-      log(
-        'token refresh failed for link=%s errorType=%s',
-        link.id,
-        error instanceof Error ? error.name : typeof error,
-      );
-      return link;
-    }
-  })().finally(() => {
-    if (inFlightLinkRefreshes.get(key) === refresh) inFlightLinkRefreshes.delete(key);
-  });
-  inFlightLinkRefreshes.set(key, refresh);
-  return refresh;
-};
-
-export const refreshExpiredLinkTokens = async (
+export const refreshExpiredLinkTokens = (
   connector: DecryptedConnector,
   links: DecryptedConnectorLink[],
-  linkModel: ConnectorLinkModel,
-  connectorModel: ConnectorModel,
+  model: ConnectorModel,
   options: { onTimeout?: () => void } = {},
-) =>
+): Promise<DecryptedConnectorLink[]> =>
   pMap(
     links,
-    async (link) => {
-      if (!connector.isEnabled || !link.credentials.expiresAt) return link;
-      const refresh = ensureFreshLinkToken(connector, link, linkModel, connectorModel);
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<DecryptedConnectorLink>((resolve) => {
-        timer = setTimeout(() => {
-          const key = linkRefreshKey(connector, link);
-          if (inFlightLinkRefreshes.get(key) === refresh) inFlightLinkRefreshes.delete(key);
-          options.onTimeout?.();
-          resolve(link);
-        }, RUN_TOKEN_REFRESH_TIMEOUT_MS);
-      });
-      try {
-        return await Promise.race([refresh, timeout]);
-      } finally {
-        clearTimeout(timer);
-      }
-    },
+    (link) =>
+      connector.isEnabled && link.credentials.expiresAt
+        ? waitForRunRefresh(
+            link,
+            (waitUntil) => ensureFreshLinkToken(connector, link, model, waitUntil),
+            options.onTimeout,
+          )
+        : link,
     { concurrency: RUN_TOKEN_REFRESH_CONCURRENCY },
   );

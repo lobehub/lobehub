@@ -10,7 +10,8 @@ export const ChannelManifest: BuiltinToolManifest = {
   meta: {
     avatar: '#',
     title: 'Channel',
-    description: 'Read the current shared conversation, and message Agents in your other Channels.',
+    description:
+      'Read the current shared conversation, message Agents in your other Channels, and message people for your requester.',
   },
   api: [
     {
@@ -81,24 +82,67 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.sendMessage,
       description:
-        "Post a message into another Channel on your requester's behalf, @mentioning one or more of its Agents so they answer there. The message appears as your requester's, marked as relayed by you; the addressed Agent decides what to do with it and answers in that Channel, and its reply is brought back to you here as a new request. Get channelId and agentIds from listChannels. Not for the current Channel: your final answer is posted there. Returns a link to the Channel; include it in your final answer.",
+        "Ask or tell another Agent something. Address one Agent by agentIds: it is asked in the conversation between you two, never in the person's conversation or a group; its answer wakes you there, and what you then write is posted back where you asked. To address several Agents together, also give channelId, a group they are all in: the message appears as your requester's, marked as relayed by you, they answer in that group, and the reply is brought back to you here as a new request. Find agentIds with listChannels. The person sees a notice of the message where you are answering, so do not paste a link or open a Thread for it: say briefly what you asked and that the answer will follow.",
       parameters: {
         type: 'object',
         additionalProperties: false,
-        required: ['channelId', 'agentIds', 'content'],
+        required: ['agentIds', 'content'],
         properties: {
-          channelId: { type: 'string', description: 'Target Channel id from listChannels.' },
           agentIds: {
             type: 'array',
             items: { type: 'string' },
             minItems: 1,
             maxItems: 5,
-            description: 'Agents to address; each must be a member of the target Channel.',
+            description: 'Agents to address. One Agent is asked directly; several need channelId.',
+          },
+          channelId: {
+            type: 'string',
+            description:
+              'A group Channel from listChannels that every addressed Agent is in. Only for several Agents.',
           },
           content: {
             type: 'string',
             description:
-              'The message, self-contained: the addressed Agent sees only that Channel, not this conversation.',
+              'The message, self-contained: the addressed Agent does not see this conversation.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.listPeople,
+      description:
+        'List the people your requester can message one-on-one (userId, name, username): their contacts, or in a workspace its members and the external contacts paired with them. Use it to find who messagePerson can reach. Filter with query (part of the name or @handle). Default 10, maximum 20.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          query: {
+            type: 'string',
+            description: "Case-insensitive part of the person's name or @handle.",
+          },
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 20,
+            description: 'Number of people; default 10.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.messagePerson,
+      description:
+        "Message one person for your requester, e.g. when asked to let someone know once you are done. It is posted in your requester's one-on-one conversation with that person, as your requester's message marked as sent by you, and the person is notified. No Agent answers there and nothing comes back to you. Get userId from listPeople; if several people match the name, ask your requester instead of guessing. Not for your requester: your final answer reaches them.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['userId', 'content'],
+        properties: {
+          userId: { type: 'string', description: 'The person, from listPeople.' },
+          content: {
+            type: 'string',
+            description:
+              'The message, self-contained and written for that person: they do not see this conversation.',
           },
         },
       },

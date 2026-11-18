@@ -1,5 +1,4 @@
 export type HotkeyId =
-  | 'addUserMessage'
   | 'commandPalette'
   | 'deleteAndRegenerateMessage'
   | 'deleteLastMessage'

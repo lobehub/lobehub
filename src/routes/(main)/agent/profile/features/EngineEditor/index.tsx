@@ -37,9 +37,12 @@ const EngineEditor = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const { isShared } = useAgentShareSupported(agentId);
+  const shareModelExempt = useAgentStore(
+    agentByIdSelectors.isAgentShareModelRestrictionExemptById(agentId),
+  );
   const chatModels = useEnabledChatModels();
   const enabledList =
-    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+    isShared && AGENT_SHARE_ALLOWED_PROVIDERS && !shareModelExempt
       ? chatModels.filter((provider) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(provider.id))
       : undefined;
   const selectedModel = useAiInfraStore(

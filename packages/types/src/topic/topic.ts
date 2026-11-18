@@ -12,8 +12,10 @@ import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
 import type { BotSenderMetadata } from '../message';
 import type { BaseDataModel } from '../meta';
+import type { OwnedWorktree } from '../ownedWorktree';
 import type { OnboardingUnderstandingSession } from '../understanding';
 import type { OnboardingTaskRecommendationSession } from '../user/onboardingTasks';
+import type { TopicPullRequestsMeta } from '../work';
 
 export type ShareVisibility = 'private' | 'link';
 export type TimeGroupId =
@@ -153,8 +155,8 @@ export interface ChatTopicMetadata {
     summarizedAt?: string;
     version: number;
   };
-
   bot?: ChatTopicBotContext;
+
   botCreator?: BotSenderMetadata | null;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -301,8 +303,22 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /**
+   * Worktrees the app created for this topic, and where their automatic
+   * cleanup stands. Server-owned: claimed whenever metadata is written with
+   * `workingDirectoryConfig.git.autoCreated`, and deliberately absent from
+   * the client-writable metadata schema. See `./ownedWorktree`.
+   */
+  ownedWorktrees?: OwnedWorktree[];
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
+  /**
+   * Better Coding Experience: PR links kept on the topic (found on its own
+   * branch, or linked by hand) and the PRs removed from its lists. Server-owned —
+   * written only by the `work.*TopicPullRequest` endpoints, never by a client
+   * metadata patch.
+   */
+  pullRequests?: TopicPullRequestsMeta;
   /**
    * Topic-pinned reasoning effort / mode for the pinned API model
    * (`ChatTopic.model`). Mirrors the model pin: snapshotted from the user's
@@ -577,6 +593,23 @@ const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
   userMessageId: z.string(),
 });
 
+export const firstSendWorktreeSchema = z.object({
+  baseBranch: z.string().min(1).max(1024).optional(),
+  deviceId: z.string().min(1).max(256),
+  path: z.string().min(1).max(4096),
+  repoType: z.enum(['git', 'github']),
+  sourcePath: z.string().min(1).max(4096),
+});
+
+const worktreeStartRunSchema = topicScheduledRunBaseSchema.extend({
+  error: z.string().optional(),
+  kind: z.literal('worktree_start'),
+  operationId: z.string(),
+  retryable: z.boolean().optional(),
+  userMessageId: z.string(),
+  waitingForDevice: z.boolean().optional(),
+});
+
 /**
  * A deferred agent run on a topic: *when* to run (`runAt`), a lease so only one
  * replica dispatches it (`claim`), and *what* to run (the `kind` variant).
@@ -591,11 +624,14 @@ const delayedStartRunSchema = topicScheduledRunBaseSchema.extend({
 export const topicScheduledRunSchema = z.discriminatedUnion('kind', [
   resumeAfterRateLimitRunSchema,
   delayedStartRunSchema,
+  worktreeStartRunSchema,
 ]);
 
 export type TopicScheduledRunClaim = z.infer<typeof topicScheduledRunClaimSchema>;
 export type ResumeAfterRateLimitRun = z.infer<typeof resumeAfterRateLimitRunSchema>;
 export type DelayedStartRun = z.infer<typeof delayedStartRunSchema>;
+export type FirstSendWorktree = z.infer<typeof firstSendWorktreeSchema>;
+export type WorktreeStartRun = z.infer<typeof worktreeStartRunSchema>;
 export type TopicScheduledRun = z.infer<typeof topicScheduledRunSchema>;
 
 /**

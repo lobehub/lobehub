@@ -11,17 +11,20 @@ import {
   agentShareSystemPrompt,
 } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { AuvIdentifier } from '@lobechat/builtin-tool-auv';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
 import {
   LobeAgentApiName,
   LobeAgentIdentifier,
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import {
   MemoryApiName,
   MemoryIdentifier,
   memoryReadOnlySystemPrompt,
 } from '@lobechat/builtin-tool-memory';
+import { RemoteDeviceIdentifier } from '@lobechat/builtin-tool-remote-device';
 import {
   agentShareSystemPrompt as skillsAgentShareSystemPrompt,
   SkillsApiName,
@@ -123,6 +126,36 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.tools!.map((tool) => tool.function.name)).toEqual([
       toolName('mcp-remote', 'run', 'mcp'),
     ]);
+  });
+
+  it('keeps device builtins and a granted device-only MCP only under the share device grant', () => {
+    const build = () => {
+      const toolSet = buildToolSet([
+        { apis: [{ name: 'runCommand' }], identifier: LocalSystemIdentifier },
+        { apis: [{ name: 'activateDevice' }], identifier: RemoteDeviceIdentifier },
+        { apis: [{ name: 'read_file' }], identifier: 'mcp-fs', type: 'mcp' },
+        { apis: [{ name: 'query' }], identifier: 'mcp-lan', type: 'mcp' },
+      ]);
+      (toolSet.manifestMap['mcp-fs'] as any).mcpParams = { name: 'mcp-fs', type: 'stdio' };
+      (toolSet.manifestMap['mcp-lan'] as any).mcpParams = {
+        name: 'mcp-lan',
+        type: 'http',
+        url: 'http://192.168.1.20:8000/mcp',
+      };
+      return toolSet;
+    };
+    // The device builtin needs no tool grant; device-only MCPs still do; the
+    // remote-device picker never reaches a visitor.
+    const config = { toolGrants: [{ identifier: 'mcp-fs' }] };
+
+    const denied = build();
+    applyShareGateToToolSet(denied, buildGate(config));
+    expect(denied.enabledToolIds).toEqual([]);
+
+    const granted = build();
+    applyShareGateToToolSet(granted, { ...buildGate(config), canUseDevice: true });
+    expect(granted.enabledToolIds).toEqual([LocalSystemIdentifier, 'mcp-fs']);
+    expect(Object.keys(granted.manifestMap)).toEqual([LocalSystemIdentifier, 'mcp-fs']);
   });
 
   it('collapses the whole set when no tools are enabled', () => {
@@ -775,6 +808,20 @@ describe('applyShareGateToToolSet — lobe-activator', () => {
 
     expect(toolSet.manifestMap[LobeActivatorIdentifier]).toBeUndefined();
     expect(toolSet.manifestMap[AgentManagementIdentifier]).toBeUndefined();
+  });
+
+  it('keeps the activator for a device-only grant so Computer Use can be turned on', () => {
+    // Computer Use is discoverable, not enabled: the visitor model reaches it
+    // only through the activator, even when the share picks no other tool.
+    const toolSet = buildActivatorToolSet();
+    toolSet.manifestMap[AuvIdentifier] = { api: [], identifier: AuvIdentifier } as any;
+
+    applyShareGateToToolSet(toolSet, { ...buildGate(), canUseDevice: true });
+
+    expect(toolSet.enabledToolIds).toEqual([LobeActivatorIdentifier]);
+    expect(Object.keys(toolSet.manifestMap).sort()).toEqual(
+      [AuvIdentifier, LobeActivatorIdentifier].sort(),
+    );
   });
 
   it('drops the activator on a share that grants no tool', () => {

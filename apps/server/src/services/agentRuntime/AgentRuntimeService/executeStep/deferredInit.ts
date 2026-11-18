@@ -60,8 +60,7 @@ const persistStopBeforeInit = async (
   operationId: string,
   state: AgentState,
 ): Promise<void> => {
-  const alreadyPersisted =
-    (await coordinator.loadAgentState(operationId))?.status === 'interrupted';
+  const alreadyPersisted = (await coordinator.loadAgentStatus(operationId)) === 'interrupted';
   state.status = 'interrupted';
   if (alreadyPersisted) return;
   await coordinator.saveAgentState(operationId, {

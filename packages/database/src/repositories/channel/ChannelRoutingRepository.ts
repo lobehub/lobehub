@@ -17,6 +17,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
 import { findThread, memberNotMuted } from './delivery';
 import { resolveRouting } from './routing';
 import { audit, withChannelLock } from './transaction';
@@ -287,7 +288,7 @@ export class ChannelRoutingRepository {
         channelWake: channel.config?.wake,
         hasAttachments: attachments.has(messageId),
         history: history.reverse().map((line) => {
-          const isAgent = line.routingStatus === 'reply';
+          const isAgent = isAgentAuthored(line);
           return {
             at: line.createdAt.getTime(),
             author: isAgent

@@ -9,6 +9,8 @@ import {
   type GitDeleteBranchResult,
   type GitFileRevertResult,
   type GitLinkedPullRequestResult,
+  type GitOwnedWorktreeCleanupResult,
+  type GitOwnedWorktreeRestoreResult,
   type GitPullRequestAction,
   type GitPullRequestActionResult,
   type GitPullRequestActivity,
@@ -49,6 +51,7 @@ class ElectronGitService {
     branch: string;
     path: string;
     pullRequestNumber?: number;
+    state?: 'all' | 'open';
   }): Promise<GitLinkedPullRequestResult> {
     return this.ipc.git.getLinkedPullRequest(params);
   }
@@ -82,6 +85,7 @@ class ElectronGitService {
     action: GitPullRequestAction;
     number: number;
     path: string;
+    url?: string;
   }): Promise<GitPullRequestActionResult> {
     return this.ipc.git.runPullRequestAction(params);
   }
@@ -166,11 +170,30 @@ class ElectronGitService {
 
   async addGitWorktree(params: {
     branch: string;
+    ownerToken?: string;
     path: string;
     startPoint?: string;
     worktreePath: string;
   }): Promise<GitAddWorktreeResult> {
     return this.ipc.git.addGitWorktree(params);
+  }
+
+  async cleanupOwnedWorktree(params: {
+    discard?: boolean;
+    ownerToken?: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeCleanupResult> {
+    return this.ipc.git.cleanupOwnedWorktree(params);
+  }
+
+  async restoreOwnedWorktree(params: {
+    branch: string;
+    ownerToken?: string;
+    sourcePath: string;
+    worktreePath: string;
+  }): Promise<GitOwnedWorktreeRestoreResult> {
+    return this.ipc.git.restoreOwnedWorktree(params);
   }
 }
 

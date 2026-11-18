@@ -57,6 +57,7 @@ import { userInteractionRuntime } from './userInteraction';
 import { verifyResultRuntime } from './verifyResult';
 import { videoGenerationRuntime } from './videoGeneration';
 import { webBrowsingRuntime } from './webBrowsing';
+import { webhookRuntime } from './webhook';
 import { webOnboardingRuntime } from './webOnboarding';
 
 /**
@@ -76,6 +77,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 // Register all server runtimes
 registerRuntimes([
   mcpEventsRuntime,
+  webhookRuntime,
   channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,

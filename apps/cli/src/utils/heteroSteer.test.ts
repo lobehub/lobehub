@@ -97,6 +97,26 @@ describe('withHeteroSteer', () => {
     ]);
   });
 
+  it('holds follow-ups while the session waits for the user, and gives back one handed out then', async () => {
+    const { client, giveBack, wait } = createClient([{ content: 'go', messageId: 'msg-1' }]);
+    const sendUserMessage = vi.fn(async () => true);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, isWaitingForUser: () => true, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(giveBack).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).not.toHaveBeenCalled();
+    expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
+    expect(wait.mock.calls[0][0]).toMatchObject({ holdSteer: true });
+  });
+
   it('types images pasted into a follow-up in as image blocks', async () => {
     const image = { id: 'file_1', url: 'https://bucket.example.com/1.png?sig=s' };
     const { client } = createClient([
@@ -154,6 +174,37 @@ describe('withHeteroSteer', () => {
 
     expect(sendUserMessage).toHaveBeenLastCalledWith('see this', { uuid: 'msg-1' });
     expect(giveBack).not.toHaveBeenCalled();
+  });
+
+  it('returns an uploaded image follow-up intact when its image cannot be loaded', async () => {
+    const { client, giveBack, wait } = createClient([
+      {
+        content: 'see the screenshot',
+        imageList: [{ id: 'f', url: 'https://x/expired' }],
+        messageId: 'msg-1',
+        requiresImages: true,
+      },
+    ]);
+    const sendUserMessage = vi.fn(async (prompt: unknown) => {
+      if (typeof prompt !== 'string') throw new Error('image fetch failed: 403');
+      return true;
+    });
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage, supportsSteerImageAttachments: true },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
+    await flush();
+    stream.end();
+    await out;
+
+    expect(wait.mock.calls[0][0]).toMatchObject({ acceptsImageAttachments: true });
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
   });
 
   it('gives a refused message back and stops polling', async () => {

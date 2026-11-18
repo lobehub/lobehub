@@ -41,6 +41,22 @@ const mcpParamsOf = (connector: DecryptedConnector) => {
 };
 
 describe('buildConnectorManifests mcpParams headers', () => {
+  it('keeps the tool available for a reconnect error without baking in the old access token', () => {
+    const connector = httpConnector({
+      accessToken: 'expired',
+      refreshState: { status: 'reconnect_required' },
+      type: 'oauth2',
+    });
+
+    const [manifest] = buildConnectorManifests([connector], [tool()]);
+
+    expect(manifest).toMatchObject({
+      api: [expect.objectContaining({ name: 'doThing' })],
+      connectorReauthorizationRequired: true,
+      mcpParams: { auth: undefined },
+    });
+  });
+
   it('merges metadata.customHeaders alongside bearer auth', () => {
     const params = mcpParamsOf(
       httpConnector({ token: 'tok', type: 'bearer' }, { customHeaders: { 'X-Tenant': 't1' } }),

@@ -30,7 +30,7 @@ export const create = async (
   );
 
   await ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, agencyConfig);
-  await ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, agencyConfig);
+  await ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, agencyConfig, config.visibility);
 
   const [result] = await ctx.db
     .insert(agents)
@@ -73,7 +73,11 @@ export const batchCreate = async (
     (config) =>
       Promise.all([
         ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, config.agencyConfig),
-        ctx.assertFixedExecutionTarget(ctx.workspaceId ?? null, config.agencyConfig),
+        ctx.assertFixedExecutionTarget(
+          ctx.workspaceId ?? null,
+          config.agencyConfig,
+          config.visibility,
+        ),
       ]),
     { concurrency: 5 },
   );

@@ -14,6 +14,7 @@ import pMap from 'p-map';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
+import type { ProjectModelOptions } from '@/database/models/project';
 import { ProjectModel } from '@/database/models/project';
 import type {
   ChannelAddAgentInput,
@@ -59,11 +60,13 @@ export class ChannelService {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    /** The caller's project rights, for seating a new Agent in a project Channel's project. */
+    private readonly projectOptions: ProjectModelOptions = {},
   ) {
     this.repository = new ChannelRepository(db, userId, workspaceId);
     this.agentService = new AgentService(db, userId, workspaceId);
     this.deviceModel = new DeviceModel(db, userId, workspaceId);
-    this.projectModel = new ProjectModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId, projectOptions);
   }
 
   private async resolveAgent(
@@ -133,9 +136,38 @@ export class ChannelService {
     return { agentId: input.agentId, config, description: input.description, name: input.name };
   }
 
+  /**
+   * A project Channel seats only the project's own Agents. With `joinProject`, an Agent from
+   * outside joins the project first, which takes the right to manage the project's members;
+   * without it, the caller is told to add the Agent to the project.
+   */
+  private async seatAgentsInProject(projectId: string, agentIds: string[], joinProject?: boolean) {
+    const missing: string[] = [];
+    for (const agentId of new Set(agentIds))
+      if (!(await this.projectModel.hasAgent(projectId, agentId))) missing.push(agentId);
+    if (!missing.length) return;
+    if (!joinProject) throw new ChannelError('CONFLICT', 'Add the Agent to the project first');
+    const forbidden = new ChannelError(
+      'FORBIDDEN',
+      'Only the project creator or a workspace admin can add an Agent to the project',
+    );
+    if (this.projectOptions.readOnly) throw forbidden;
+    for (const agentId of missing) {
+      let binding: Awaited<ReturnType<ProjectModel['addAgent']>>;
+      try {
+        binding = await this.projectModel.addAgent(projectId, { agentId });
+      } catch (error) {
+        throw new ChannelError('BAD_REQUEST', (error as Error).message);
+      }
+      if (!binding) throw forbidden;
+    }
+  }
+
   /** A group starts with Agents, workspace people, both, or only its creator. */
   create = async (input: {
     agents: ChannelAgentSelection[];
+    /** Seats Agents from outside the project in the project first. */
+    joinProject?: boolean;
     projectId?: string;
     title: string;
     userIds?: string[];
@@ -149,6 +181,12 @@ export class ChannelService {
     const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
       concurrency: 5,
     });
+    if (input.projectId)
+      await this.seatAgentsInProject(
+        input.projectId,
+        agents.map(({ agentId }) => agentId),
+        input.joinProject,
+      );
     const access = await this.repository.create({
       agents,
       projectId: input.projectId,
@@ -301,11 +339,26 @@ export class ChannelService {
     return inbox.id;
   }
 
-  addAgent = async (channelId: string, input: ChannelAgentSelection) => {
+  addAgent = async (
+    channelId: string,
+    input: ChannelAgentSelection,
+    options: { joinProject?: boolean } = {},
+  ) => {
     // Check membership before probing a device; the write rechecks the current admin role.
-    if (!(await this.repository.findAccess(channelId)))
-      throw new ChannelError('NOT_FOUND', 'Channel not found');
-    const member = await this.repository.addAgent(channelId, await this.resolveAgent(input));
+    const access = await this.repository.findAccess(channelId);
+    if (!access) throw new ChannelError('NOT_FOUND', 'Channel not found');
+    const agent = await this.resolveAgent(input);
+    if (access.channel.projectId) {
+      // Only an admin may add, so no one else can seat an Agent in the project through here.
+      if (access.member.role === 'member')
+        throw new ChannelError('FORBIDDEN', 'Requires the admin role in this channel');
+      await this.seatAgentsInProject(
+        access.channel.projectId,
+        [agent.agentId],
+        options.joinProject,
+      );
+    }
+    const member = await this.repository.addAgent(channelId, agent);
     await this.changed(channelId);
     return member;
   };
@@ -336,6 +389,13 @@ export class ChannelService {
     return message;
   };
 
+  /** Replies the message asked for stop with it; the coordinator stops those still writing. */
+  deleteMessage = async (channelId: string, messageId: string) => {
+    const writers = await this.repository.deleteMessage(channelId, messageId);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
   addUser = async (channelId: string, userId: string) => {
     const member = await this.repository.addUser(channelId, userId);
     await this.changed(channelId);
@@ -348,7 +408,23 @@ export class ChannelService {
     return channel;
   };
 
-  /** Members already in the Channel see the newcomer without waiting for their next poll. */
+  /** The coordinator physically stops a removed Agent's runs. */
+  removeMember = async (channelId: string, memberId: string) => {
+    const writers = await this.repository.removeMember(channelId, memberId);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  leave = async (channelId: string) => {
+    const result = await this.repository.leave(channelId);
+    await this.changed(channelId);
+    return result;
+  };
+
+  /**
+   * Joins an open project Channel or a public one of the workspace. Members already in it see the
+   * newcomer without waiting for their next poll.
+   */
   join = async (channelId: string) => {
     const access = await this.repository.join(channelId);
     await this.changed(channelId);

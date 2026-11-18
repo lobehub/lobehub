@@ -1,4 +1,5 @@
 import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
+import { channelMessageDeletedAt } from '@lobechat/types';
 import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -279,6 +280,12 @@ export const claimJob = async (
     .select()
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
+  // A request deleted while this job waited must not run: its tombstone carries no text or
+  // mentions, so the run would answer a message that no longer exists.
+  if (channelMessageDeletedAt(request.metadata)) {
+    await cancel(tx, job, 'request_deleted');
+    return null;
+  }
   // An earlier undecided message in this branch may still enqueue this member ahead of it, and
   // so may the Thread's root while it is undecided. Checking only jobs would let a later
   // request overtake it while another worker routes it. Other branches never hold this one.

@@ -55,12 +55,7 @@ describe('resolveLinkedCall', () => {
       linkId: 'lnk_b',
       connector: { credentials: { accessToken: 'bob-token' } },
     });
-    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(
-      connector,
-      links[1],
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(ensureFreshLinkToken).toHaveBeenLastCalledWith(connector, links[1], expect.anything());
   });
   it('requires a selector by total count, lists current choices and hides names for visitors', async () => {
     await expect(resolveLinkedCall({ connector }, context())).rejects.toThrow(

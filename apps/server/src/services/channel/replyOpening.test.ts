@@ -16,8 +16,10 @@ vi.mock('@/database/repositories/channel', () => ({
 vi.mock('@/server/services/bot/wake/opener', () => ({ createReplyOpener: vi.fn() }));
 
 const candidate = {
+  addressed: true,
   agent: { id: 'agt-coder', name: 'Coder', title: 'Engineer' },
   canOpenThread: true,
+  coAddressed: [],
   recent: [
     {
       author: { id: 'user-1', name: 'Mia', type: 'user' },
@@ -57,6 +59,7 @@ describe('openChannelReply', () => {
         agent: { name: 'Coder', title: 'Engineer' },
         botNames: ['Coder'],
         canOpenThread: true,
+        coAddressed: [],
         message: 'Why?',
         recentMessages: ['Mia: The deploy is red again', 'Assistant: Looking'],
       },
@@ -66,6 +69,38 @@ describe('openChannelReply', () => {
       ack: 'Got it, I will check the deploy logs first.',
       threadTitle: 'Red deploy',
     });
+  });
+
+  it('tells the opener which other Agents the request asked, by the names people call them', async () => {
+    executions.openingCandidate.mockResolvedValue({
+      ...candidate,
+      coAddressed: [
+        { name: 'Alien', title: null },
+        { name: null, title: '数据分析师' },
+      ],
+    });
+    const opener = vi.fn().mockResolvedValue({ placement: 'channel' });
+
+    await openChannelReply({} as never, 'channel', 'job', { createOpener: () => opener });
+
+    expect(opener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coAddressed: [{ name: 'Alien' }, { name: '数据分析师', title: '数据分析师' }],
+      }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('tells the opener when the Agent was woken without being addressed', async () => {
+    executions.openingCandidate.mockResolvedValue({ ...candidate, addressed: false });
+    const opener = vi.fn().mockResolvedValue({ placement: 'channel' });
+
+    await openChannelReply({} as never, 'channel', 'job', { createOpener: () => opener });
+
+    expect(opener).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Why?', notAddressed: true }),
+      expect.any(AbortSignal),
+    );
   });
 
   it('calls an Agent without a name by its title', async () => {

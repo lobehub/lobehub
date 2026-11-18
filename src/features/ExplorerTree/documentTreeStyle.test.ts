@@ -85,7 +85,8 @@ describe('code tree call sites', () => {
       // They keep their own pre-existing 12px label and pierre's default 30px row
       // (no `itemHeight` prop) — that is what "文件的那个 tree 渲染保留原样" means.
       // The document tree's 14px / 36px must never reach them.
-      expect(source).toContain('--trees-font-size-override: 12px');
+      // Written as a `stylex.create` custom property key since the StyleX migration.
+      expect(source).toMatch(/['"]?--trees-font-size-override['"]?:\s*['"]?12px/);
       expect(source).not.toContain('itemHeight');
     },
   );

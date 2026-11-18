@@ -347,6 +347,14 @@ export class DeviceGateway {
     return gitWrite.addGitWorktree(this.clientGetter, ...args);
   }
 
+  cleanupOwnedWorktree(...args: DeviceRpcArgs<typeof gitWrite.cleanupOwnedWorktree>) {
+    return gitWrite.cleanupOwnedWorktree(this.clientGetter, ...args);
+  }
+
+  restoreOwnedWorktree(...args: DeviceRpcArgs<typeof gitWrite.restoreOwnedWorktree>) {
+    return gitWrite.restoreOwnedWorktree(this.clientGetter, ...args);
+  }
+
   pullGitBranch(...args: DeviceRpcArgs<typeof gitWrite.pullGitBranch>) {
     return gitWrite.pullGitBranch(this.clientGetter, ...args);
   }

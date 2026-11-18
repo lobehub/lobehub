@@ -688,6 +688,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     managedAuthRetried = false;
     updateStatus('connected');
     void metricsSampler?.flush();
+    // Back online: the server runs the worktree cleanups that waited for this
+    // device (topics archived or trashed while it was offline) over the gateway.
+    const connectedDeviceId = client.currentDeviceId;
+    if (connectedDeviceId)
+      void createLambdaClient(auth, managed ? managedWorkspaceId : workspaceId)
+        .device.drainWorktreeCleanups.mutate({ deviceId: connectedDeviceId })
+        .catch((err) => info(`Worktree cleanup drain failed: ${(err as Error).message}`));
     // A (re)connection reprobes so an upgraded or downgraded Codex is reported, and
     // warms the cache before the gateway's first system_info_request.
     nativeRuntimes.invalidate();
@@ -748,6 +755,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     });
 
     bindGatewayClientHandlers(wsClient, handlerContext, wsId);
+    // The share has its own device id: drain what waited for it, in its workspace.
+    wsClient.on('connected', () => {
+      const shareDeviceId = wsClient.currentDeviceId;
+      if (shareDeviceId)
+        void createLambdaClient(auth, wsId)
+          .device.drainWorktreeCleanups.mutate({ deviceId: shareDeviceId })
+          .catch((err) =>
+            info(`Worktree cleanup drain failed (${wsId}): ${(err as Error).message}`),
+          );
+    });
 
     const entry: WorkspaceShareConnection = { cancelRefresh: null, client: wsClient };
 

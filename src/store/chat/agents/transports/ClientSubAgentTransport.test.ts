@@ -221,7 +221,7 @@ describe('ClientSubAgentTransport', () => {
     });
   });
 
-  it('stands by on a relay channel while the child runs, so its device-only LLM calls reach this tab', async () => {
+  it('keeps the scoped relay channel open while polling and releases it on completion', async () => {
     const { store } = createStore();
     const llmExecutor = {
       capabilities: ['llm_relay@1'],

@@ -6,7 +6,7 @@ import {
   getRewrittenUrl,
   unstable_getResponseFromNextConfig,
 } from 'next/experimental/testing/server';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { defineConfig } from './define-config';
 
@@ -15,11 +15,44 @@ describe('defineConfig', () => {
   const originalLegacyPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalAssetBaseUrl === undefined) delete process.env.ASSET_BASE_URL;
     else process.env.ASSET_BASE_URL = originalAssetBaseUrl;
 
     if (originalLegacyPrefix === undefined) delete process.env.NEXT_PUBLIC_ASSET_PREFIX;
     else process.env.NEXT_PUBLIC_ASSET_PREFIX = originalLegacyPrefix;
+  });
+
+  describe('deployment file tracing', () => {
+    it.each([false, true])(
+      'keeps required worker files when a deployment adds tracing rules (standalone: %s)',
+      (standalone) => {
+        vi.stubEnv('DOCKER', 'false');
+        vi.stubEnv('NEXT_BUILD_STANDALONE', standalone ? '1' : '0');
+        const required = defineConfig({}).outputFileTracingIncludes!['*'];
+        const config = defineConfig({
+          outputFileTracingIncludes: {
+            '*': ['deployment-assets/**/*'],
+            '/api/custom': ['custom-assets/**/*'],
+          },
+        });
+
+        expect(config.outputFileTracingIncludes!['*']).toEqual([
+          ...required,
+          'deployment-assets/**/*',
+        ]);
+        expect(config.outputFileTracingIncludes!['/api/custom']).toEqual(['custom-assets/**/*']);
+      },
+    );
+
+    it('keeps the shared worker rule when a deployment only adds a route-specific rule', () => {
+      const required = defineConfig({}).outputFileTracingIncludes!['*'];
+      const config = defineConfig({
+        outputFileTracingIncludes: { '/api/custom': ['custom-assets/**/*'] },
+      });
+
+      expect(config.outputFileTracingIncludes!['*']).toEqual(required);
+    });
   });
 
   it('keeps an old image URL working after its static file moves, preserving the query', async () => {

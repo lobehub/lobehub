@@ -21,6 +21,7 @@ import {
   type ClaudeCodeControlRequest,
   type ClaudeCodeControlRequestHandle,
   ClaudeCodeLiveInput,
+  resolveClaudeCodeLiveRuntimeEnd,
 } from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
@@ -161,10 +162,11 @@ export interface SpawnAgentHandle {
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
   /**
-   * (Claude Code `liveInput` only) Deliver a user message into the running
-   * session; Claude Code reads it at its next tool boundary, or starts a turn
-   * for it when idle. Resolves false once input has closed — the caller then
-   * runs the message as a new turn instead.
+   * (Claude Code `liveInput`, native Codex) Deliver a user message into the
+   * running session; Claude Code reads it at its next tool boundary, or starts
+   * a turn for it when idle; Codex adds it to the active turn (`turn/steer`).
+   * Resolves false once the session takes no input — the caller then runs the
+   * message as a new turn instead.
    */
   sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
   /**
@@ -179,6 +181,8 @@ export interface SpawnAgentHandle {
    * collect for error reporting. The pipeline does not consume stderr.
    */
   stderr: NodeJS.ReadableStream;
+  /** The live session accepts uploaded images with their follow-up message. */
+  supportsSteerImageAttachments?: true;
 }
 
 /**
@@ -699,19 +703,13 @@ const spawnCliAgent = async (
         if (code === 0 && !killedByUs) events.push(...pipeline.validateCompletion());
         sawErrorEvent ||= events.some((event) => event.type === 'error');
         for (const event of events) queue.push(event);
-        // Only a clean exit after a finished turn ends the run here: a crash
-        // after a result is a failure, not a completion. Print mode exits 1
-        // when its last turn was an error result, which an interrupt is.
-        const lastTurn = live?.lastTurn;
-        const cleanExit =
-          code === 0 || (lastTurn?.aborted === true && code === 1 && signal === null);
-        if (lastTurn && cleanExit && !killedByUs && !sawErrorEvent) {
-          const end = lastTurn.aborted
-            ? { kind: 'aborted', reason: 'interrupted', terminalReason: lastTurn.terminalReason }
-            : { reason: 'complete' };
-          for (const event of pipeline.completeRuntime({ ...end, transport: 'cli-live' }))
-            queue.push(event);
-        }
+        const liveEnd = resolveClaudeCodeLiveRuntimeEnd(live?.lastTurn, {
+          code,
+          killedByHost: killedByUs,
+          sawError: sawErrorEvent,
+          signal,
+        });
+        if (liveEnd) for (const event of pipeline.completeRuntime(liveEnd)) queue.push(event);
         // Kimi Code reports usage only via its on-disk session wire log, so
         // it can only be collected now that the process has exited. The hook
         // is a no-op for every other agent type.
@@ -783,6 +781,8 @@ const spawnCliAgent = async (
         const plan = await buildAgentInput('claude-code', prompt, options.inputOptions);
         return live.send(plan.stdin, sendOptions?.uuid);
       },
+      // Uploaded images go in as image blocks of the same stream-json message.
+      supportsSteerImageAttachments: true as const,
     }),
     kill: (signal: NodeJS.Signals = 'SIGINT') => {
       killedByUs = true;

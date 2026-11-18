@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { ConnectorModel } from '@/database/models/connector';
+import { LEGACY_LINK_ID } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { users } from '@/database/schemas';
 import { startOAuthMcpServer } from '@/libs/mcp/__tests__/fixtures/oauthMcpServer';
@@ -20,7 +21,12 @@ import {
   toClientInformation,
 } from '../oauth';
 import { syncConnectorToolsById } from '../sync';
-import { tokensToCredentials } from '../tokens';
+import {
+  ensureFreshConnectorToken,
+  ensureFreshLinkToken,
+  refreshExpiredConnectorTokens,
+  tokensToCredentials,
+} from '../tokens';
 
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: async () => false }));
 vi.mock('../refresh', () => ({
@@ -54,6 +60,66 @@ afterEach(async () => {
 });
 
 describe('OAuth account routing over real HTTP and database', () => {
+  it('persists one rotation across concurrent connector and account callers after the run timeout', async () => {
+    const refreshResponse = Promise.withResolvers<void>();
+    const fixture = await startOAuthMcpServer('none', 0, {
+      beforeRefreshResponse: () => refreshResponse.promise,
+    });
+    try {
+      await db.insert(users).values({ id: 'account-e2e' });
+      const created = await model.create({
+        credentials: JSON.stringify({
+          accessToken: 'tok-alice-expired',
+          expiresAt: Date.now() - 1000,
+          refreshToken: 'refresh-alice-initial',
+          type: 'oauth2',
+        }),
+        identifier: 'rotating-fixture',
+        isEnabled: true,
+        mcpConnectionType: 'http',
+        mcpServerUrl: `${fixture.base}/mcp`,
+        name: 'Rotating OAuth',
+        oidcConfig: { clientId: 'fixture-client', issuer: fixture.base, scheme: 'dcr' },
+        sourceType: 'custom',
+        status: 'connected',
+      });
+      const original = (await model.findById(created.id))!;
+      const account = (await linkModel.findById(created.id, LEGACY_LINK_ID))!;
+      const onTimeout = vi.fn();
+      const [timedOut] = await refreshExpiredConnectorTokens([original], model, { onTimeout });
+      expect(onTimeout).toHaveBeenCalledOnce();
+      expect(timedOut.credentials).toEqual(original.credentials);
+      expect((await model.findById(created.id))?.credentials).toMatchObject({
+        refreshState: { status: 'pending' },
+      });
+
+      const concurrent = Array.from({ length: 10 }, (_, index) => {
+        const worker = new ConnectorModel(db, 'account-e2e', undefined, vault);
+        return index % 2
+          ? ensureFreshConnectorToken(original, worker)
+          : ensureFreshLinkToken(original, account, worker);
+      });
+      expect(fixture.refreshes).toHaveLength(1);
+      refreshResponse.resolve();
+      const snapshots = await Promise.all(concurrent);
+      expect(
+        snapshots.every(
+          (item) =>
+            item.credentials?.type === 'oauth2' && item.credentials.accessToken === 'tok-alice-1',
+        ),
+      ).toBe(true);
+      expect(fixture.refreshes).toHaveLength(1);
+      expect((await model.findById(created.id))?.credentials).toMatchObject({
+        accessToken: 'tok-alice-1',
+        refreshState: { status: 'complete' },
+        refreshToken: 'refresh-alice-1',
+      });
+    } finally {
+      refreshResponse.resolve();
+      await fixture.close();
+    }
+  }, 20_000);
+
   it.each(['idtoken', 'userinfo', 'none'] as const)(
     'authorizes and routes two accounts (%s)',
     async (variant) => {

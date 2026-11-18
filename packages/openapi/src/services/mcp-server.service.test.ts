@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { DeletedResourceSchema } from '../types/common.type';
+import { McpServerSchema, McpServerSyncResultSchema } from '../types/mcp-server.type';
 import { McpServerService } from './mcp-server.service';
 
 const { claimMock, connectorInstances, hasAnyPermissionMock, syncConnectorToolsByIdMock } =
@@ -102,7 +104,20 @@ describe('McpServerService row-level manage checks', () => {
   it('allows a workspace-wide (:all scope) caller to manage another member row', async () => {
     hasAnyPermissionMock.mockResolvedValue(true);
 
-    await expect(service().deleteServer('mcp-1')).resolves.toEqual({ id: 'mcp-1' });
+    const deleted = await service().deleteServer('mcp-1');
+
+    expect(deleted).toEqual({ deleted: true, id: 'mcp-1' });
+    expect(() => DeletedResourceSchema.parse(deleted)).not.toThrow();
+  });
+
+  it('answers sync with the documented result shape', async () => {
+    hasAnyPermissionMock.mockResolvedValue(true);
+    syncConnectorToolsByIdMock.mockResolvedValue({ toolCount: 3 });
+
+    const result = await service().syncServer('mcp-1');
+
+    expect(result).toEqual({ id: 'mcp-1', status: 'connected', toolCount: 3 });
+    expect(() => McpServerSyncResultSchema.parse(result)).not.toThrow();
   });
 
   it('allows managing a row the caller created', async () => {
@@ -118,7 +133,7 @@ describe('McpServerService row-level manage checks', () => {
       }),
     );
 
-    await expect(svc.deleteServer('mcp-1')).resolves.toEqual({ id: 'mcp-1' });
+    await expect(svc.deleteServer('mcp-1')).resolves.toEqual({ deleted: true, id: 'mcp-1' });
   });
 
   // The list route only surfaces base connectors (`agent_id IS NULL`), and the
@@ -177,5 +192,37 @@ describe('McpServerService.createServer', () => {
       name: 'ConflictError',
     });
     expect(connectorInstances.every((it) => it.create.mock.calls.length === 0)).toBe(true);
+  });
+});
+
+describe('McpServerService response projection', () => {
+  it('projects a server into the documented McpServer shape without credentials', async () => {
+    const svc = new McpServerService({} as LobeChatDatabase, OWNER, WORKSPACE);
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    connectorInstances.forEach((it) =>
+      it.findPublicById.mockResolvedValue({
+        agentId: null,
+        avatar: null,
+        createdAt: now,
+        description: 'Fetch pages',
+        hasCredentials: true,
+        id: '00000000-0000-4000-8000-000000000001',
+        identifier: 'fetch-mcp',
+        isEnabled: true,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://example.com/mcp',
+        mountedByAgentId: null,
+        name: 'Fetch',
+        sourceType: 'custom',
+        status: 'disconnected',
+        updatedAt: now,
+        userId: OWNER,
+      }),
+    );
+
+    const server = await svc.getServer('00000000-0000-4000-8000-000000000001');
+
+    // Dates leave the API as ISO strings, which is what the schema describes.
+    expect(() => McpServerSchema.parse(JSON.parse(JSON.stringify(server)))).not.toThrow();
   });
 });

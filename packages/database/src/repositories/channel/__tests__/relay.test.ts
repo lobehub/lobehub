@@ -3,7 +3,13 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentOperations, agents, channels, workspaceMembers } from '../../../schemas';
+import {
+  agentOperations,
+  agents,
+  channels,
+  channelThreads,
+  workspaceMembers,
+} from '../../../schemas';
 import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
 import { readManifestMessages } from '../manifest';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
@@ -155,5 +161,51 @@ describe('Relaying a request into another Channel', () => {
     const plain = view.messages.find((message) => message.id === request.id);
     expect(plain?.via).toBeNull();
     expect(plain?.receipt).toBeNull();
+  });
+
+  it('follows the shared Thread a running job was gathered into', async () => {
+    const team = await fixture.createTeamChannel();
+    const coder = await fixture.addAgent(team.channel.id, 'Coder');
+    const reviewer = await fixture.addAgent(team.channel.id, 'Reviewer');
+    const request = await team.asMember.send(team.channel.id, {
+      content: '@Coder @Reviewer why did the deploy fail?',
+      mentions: [coder.id, reviewer.id],
+      requestKey: 'gather-then-relay',
+      routing: 'decision',
+    });
+    const jobs = await jobsOf(db, request.id);
+    const jobOf = (memberId: string) => jobs.find((job) => job.memberId === memberId)!;
+
+    // The first Agent answers in place and its run starts before any Thread exists.
+    await execution.open(team.channel.id, jobOf(coder.id).id, { ack: 'Checking the build logs.' });
+    const claim = (await execution.claim(team.channel.id, jobOf(coder.id).id, lease))!;
+    await db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(eq(agentOperations.id, claim.job.operationId!));
+    expect(claim.job.manifest?.threadId).toBeNull();
+
+    const history = new ChannelHistoryRepository(db, fixture.memberId, fixture.workspaceId);
+    expect((await history.currentRun(claim.job.operationId!)).manifest.threadId).toBeNull();
+
+    // A peer opens the shared Thread afterwards: the running job joins it, and everything the run
+    // acts from moves with it even though its frozen input still says "timeline".
+    await execution.open(team.channel.id, jobOf(reviewer.id).id, {
+      ack: 'Reviewing the config diff.',
+      threadTitle: 'Deploy failure',
+    });
+    const [thread] = await db
+      .select()
+      .from(channelThreads)
+      .where(eq(channelThreads.channelId, team.channel.id));
+
+    const run = await history.currentRun(claim.job.operationId!);
+    expect(run.manifest.threadId).toBe(thread.id);
+    expect(run.manifest.threadRootSequence).toBe(thread.rootSequence);
+    expect(run.manifest.requestMessageId).toBe(request.id);
+
+    // A relay or a callback the moved run resolves opens where the run now is.
+    const source = await history.relaySource(claim.job.operationId!);
+    expect(source.origin).toEqual({ channelId: team.channel.id, threadId: thread.id });
   });
 });

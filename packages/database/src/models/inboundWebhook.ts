@@ -179,6 +179,15 @@ export class InboundWebhookModel {
   createWithLimits = async (
     input: CreateInboundWebhook,
     limits = { perMember: 50, topic: 10, user: 50 },
+    /**
+     * Settle the config under the same locks, for a value that depends on the rows already there
+     * (a generic webhook's identifier, unique per agent): creations serialized by the locks cannot
+     * both pick it. The result is validated like `input.config`.
+     */
+    finalizeConfig?: (
+      tx: Transaction,
+      config: CreateInboundWebhook['config'],
+    ) => Promise<CreateInboundWebhook['config']>,
   ): Promise<InboundWebhookView> => {
     const payload = await this.prepare(input);
     return this.db.transaction(async (tx) => {
@@ -226,7 +235,12 @@ export class InboundWebhookModel {
           .where(eq(inboundWebhooks.topicId, input.topicId));
         if (topicCount.count >= limits.topic) throw new InboundWebhookLimitError('topic');
       }
-      return this.insert(tx, payload);
+      if (!finalizeConfig) return this.insert(tx, payload);
+      const config = INBOUND_WEBHOOK_KIND_SCHEMAS[input.kind].config.parse(
+        await finalizeConfig(tx, payload.config),
+      );
+      // Parsed with the schema of the payload's own kind, so the pair still matches.
+      return this.insert(tx, { ...payload, config } as typeof payload);
     });
   };
 

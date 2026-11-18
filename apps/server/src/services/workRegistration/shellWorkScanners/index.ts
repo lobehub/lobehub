@@ -1,5 +1,6 @@
 import { artboardShellWorkScanner } from './artboard';
 import { githubShellWorkScanner } from './github';
+import { githubPushShellWorkScanner } from './githubPush';
 import type { ShellWorkScanner } from './types';
 
 export type { ShellWorkScanner } from './types';
@@ -13,4 +14,5 @@ export type { ShellWorkScanner } from './types';
 export const SHELL_WORK_SCANNERS: ShellWorkScanner[] = [
   githubShellWorkScanner,
   artboardShellWorkScanner,
+  githubPushShellWorkScanner,
 ];

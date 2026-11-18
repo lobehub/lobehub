@@ -1,4 +1,5 @@
 import type {
+  ChannelAgentExchange,
   ChannelContextMessage,
   ChannelHistoryMessage,
   ChannelHistoryMessageDetail,
@@ -8,7 +9,12 @@ import type {
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
 } from '@lobechat/types';
-import { agentDisplayName, channelMessageVia, RequestTrigger } from '@lobechat/types';
+import {
+  agentDisplayName,
+  channelAgentExchange,
+  channelMessageVia,
+  RequestTrigger,
+} from '@lobechat/types';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import {
@@ -140,37 +146,68 @@ export class ChannelHistoryRepository {
         if (!membership)
           throw new ChannelError('FORBIDDEN', 'Workspace membership is no longer active');
       }
+      // The job's branch is the live one: gathering an already dispatched peer into a Thread moves
+      // `job.threadId` while the frozen input keeps the branch it was claimed in, and everything
+      // this read feeds — history scope, relay and callback origins — belongs to where the run is
+      // now. The frozen input still owns the cutoff and the request it answers.
+      const thread = await findThread(tx, channel.id, job.threadId);
       // An archived branch leaves Agent context even for a run that already started in it.
-      if ((await findThread(tx, channel.id, job.manifest.threadId))?.status === 'archived')
+      if (thread?.status === 'archived')
         throw new ChannelError('CONFLICT', 'Channel operation is no longer active');
-      return fn(tx, channel.id, job.manifest);
+      const manifest: ChannelInputManifest =
+        job.threadId === job.manifest.threadId
+          ? job.manifest
+          : {
+              ...job.manifest,
+              threadId: job.threadId,
+              threadRootSequence: thread?.rootSequence ?? null,
+            };
+      return fn(tx, channel.id, manifest);
     });
   }
 
   /**
    * The live run's Channel and request, under the same checks as a history read: what a run may
    * act from (e.g. relay a request into another Channel). `requestVia` is set when the request
-   * it answers was itself relayed by an Agent.
+   * it answers was itself relayed by an Agent, and `requestByAgent` when another Agent wrote it
+   * in their conversation: either way the run answers instead of passing it on. `exchange` is set
+   * when, in that conversation, it answers the other Agent's answer to what it asked.
    */
   currentRun = async (
     operationId: string,
   ): Promise<{
     channelId: string;
+    exchange?: ChannelAgentExchange;
     manifest: ChannelInputManifest;
+    requestByAgent?: boolean;
     requestVia?: ChannelMessageVia;
   }> =>
     this.read(operationId, async (tx, channelId, manifest) => {
-      const [request] = await tx
-        .select({ metadata: channelMessages.metadata })
-        .from(channelMessages)
-        .where(
-          and(
-            eq(channelMessages.channelId, channelId),
-            eq(channelMessages.id, manifest.requestMessageId),
-          ),
-        )
-        .limit(1);
-      return { channelId, manifest, requestVia: channelMessageVia(request?.metadata) };
+      const message = (id: string) =>
+        tx
+          .select({
+            agentId: channelMessages.agentId,
+            metadata: channelMessages.metadata,
+            replyToId: channelMessages.replyToId,
+            routingStatus: channelMessages.routingStatus,
+          })
+          .from(channelMessages)
+          .where(and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, id)))
+          .limit(1)
+          .then(([row]) => row);
+      const request = await message(manifest.requestMessageId);
+      if (request?.routingStatus !== 'reply' || !request.replyToId)
+        return {
+          channelId,
+          manifest,
+          ...(request?.agentId && { requestByAgent: true }),
+          requestVia: channelMessageVia(request?.metadata),
+        };
+
+      // Woken by an answer: the request it answered names where the exchange began.
+      const asked = await message(request.replyToId);
+      const exchange = channelAgentExchange(asked?.metadata);
+      return { channelId, ...(exchange && { exchange }), manifest };
     });
 
   /**
@@ -185,6 +222,8 @@ export class ChannelHistoryRepository {
     operationId: string,
     { allowBotRun = false }: { allowBotRun?: boolean } = {},
   ): Promise<{
+    /** The Channel run, with what {@link currentRun} reads; absent for a bot run. */
+    channelRun?: Awaited<ReturnType<ChannelHistoryRepository['currentRun']>>;
     origin?: { channelId: string; threadId: string | null };
     requestVia?: ChannelMessageVia;
     self: { agentId: string; name: string };
@@ -197,6 +236,7 @@ export class ChannelHistoryRepository {
     if (job || !allowBotRun) {
       const run = await this.currentRun(operationId);
       return {
+        channelRun: run,
         origin: { channelId: run.channelId, threadId: run.manifest.threadId },
         requestVia: run.requestVia,
         self: { agentId: run.manifest.self.agentId, name: run.manifest.self.name },

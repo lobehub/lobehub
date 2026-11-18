@@ -183,7 +183,6 @@ export interface OperationMetadata {
    * scheduling/execution index.
    */
   llmCalls?: number;
-
   // Progress information
   progress?: {
     current: number;
@@ -203,6 +202,13 @@ export interface OperationMetadata {
 
   // Performance information
   startTime: number;
+
+  /**
+   * Follow-up behavior is Steer, but this run cannot take a message mid-run
+   * (an agent with no native steer): its queue waits for the run end, and the
+   * tray says so.
+   */
+  steerUnsupported?: boolean;
 
   /**
    * Upstream stream retry state surfaced by heterogeneous agents while no
@@ -343,6 +349,13 @@ export interface QueuedMessage {
   heldBehindOperationId?: string;
   id: string;
   interruptMode: 'soft' | 'hard';
+  /**
+   * A merged steer being written into a local agent session (Follow-up
+   * behavior: Steer): `delivering` until the agent reads it, `unknown` when
+   * the write failed and it may or may not have arrived. An `unknown` one is
+   * never sent on its own; the user sends it again or deletes it.
+   */
+  localSteer?: 'delivering' | 'unknown';
   metadata?: MessageMetadata;
   /**
    * A run already took this follow-up from the server queue and is handing it
@@ -370,6 +383,14 @@ export interface QueuedMessage {
    */
   serverUnconfirmed?: boolean;
 }
+
+/**
+ * Whether the queued message is one a send can take: a steer that may already
+ * be with the agent (`localSteer: 'unknown'`) is never sent on its own, so it
+ * holds no turn and no queue hand-off back.
+ */
+export const isSendableQueuedMessage = (message: QueuedMessage): boolean =>
+  message.localSteer !== 'unknown';
 
 /** Whether only this client holds the queued message, so only it can send it. */
 export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>

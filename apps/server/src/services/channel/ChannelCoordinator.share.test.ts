@@ -24,6 +24,7 @@ const {
     finishDispatch: vi.fn(),
     heartbeat: vi.fn(),
     input: vi.fn(),
+    coAddressed: vi.fn(),
     openingReply: vi.fn(),
     primaryReply: vi.fn(),
     recentContext: vi.fn(),
@@ -119,6 +120,7 @@ describe('dispatching a contact’s shared Agent', () => {
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
     executions.primaryReply.mockResolvedValue(null);
+    executions.coAddressed.mockResolvedValue([]);
     executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
@@ -155,6 +157,8 @@ describe('dispatching a contact’s shared Agent', () => {
     const [params] = execAgent.mock.calls[0];
     expect(params.shareGate).toEqual({
       agentId: 'agt_shared',
+      // The live share sets no `deviceAccess`, so the Channel visitor gets no device.
+      canUseDevice: false,
       shareConfig: liveShare.shareConfig,
       shareId: 'share-1',
       visitorUserId: 'visitor',

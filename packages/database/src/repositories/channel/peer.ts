@@ -1,19 +1,18 @@
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 
 import type { ChannelItem } from '../../schemas';
-import { channelMembers, channels, userContacts } from '../../schemas';
+import { channelMembers, channels, userContacts, workspaceMembers } from '../../schemas';
 import type { Transaction } from '../../type';
 import { ChannelError } from './error';
-import { requireWorkspaceMember } from './people';
 import type { ChannelAccess } from './types';
 
 /**
- * A personal conversation between two people exists only between contacts. Opening one and
- * sending in it both require the relation to still hold in both directions, so removing a
- * contact silences the conversation without deleting its history.
+ * Whether two people are contacts in a scope, both directions still holding. Removing a contact
+ * silences their conversation without deleting its history.
  */
-export const requireMutualContacts = async (
+const areMutualContacts = async (
   tx: Transaction,
+  workspaceId: string | null,
   userId: string,
   peerUserId: string,
 ) => {
@@ -21,18 +20,39 @@ export const requireMutualContacts = async (
     .select({ userId: userContacts.userId })
     .from(userContacts)
     .where(
-      or(
-        and(eq(userContacts.userId, userId), eq(userContacts.contactUserId, peerUserId)),
-        and(eq(userContacts.userId, peerUserId), eq(userContacts.contactUserId, userId)),
+      and(
+        eq(userContacts.type, 'user'),
+        workspaceId ? eq(userContacts.workspaceId, workspaceId) : isNull(userContacts.workspaceId),
+        or(
+          and(eq(userContacts.userId, userId), eq(userContacts.contactUserId, peerUserId)),
+          and(eq(userContacts.userId, peerUserId), eq(userContacts.contactUserId, userId)),
+        ),
       ),
     );
-  if (rows.length < 2) throw new ChannelError('FORBIDDEN', 'You are not contacts');
+  return rows.length >= 2;
+};
+
+/** Whether `userId` is an active member of the workspace. */
+export const isWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
+  const [member] = await tx
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, userId),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    )
+    .for('share');
+  return !!member;
 };
 
 /**
  * What lets two people talk one-on-one in a scope: in the personal space they must be mutual
- * contacts; in a workspace, both must still be its members. Checked on opening and on every send,
- * so removing a contact or leaving the workspace silences the conversation and keeps its history.
+ * contacts. In a workspace both are its members, or one is a member still paired with the other,
+ * an external contact. Checked on opening and on every send, so removing a contact, closing to an
+ * external contact or leaving the workspace silences the conversation and keeps its history.
  */
 export const requirePeerRelation = async (
   tx: Transaction,
@@ -40,9 +60,23 @@ export const requirePeerRelation = async (
   userId: string,
   peerUserId: string,
 ) => {
-  if (!workspaceId) return requireMutualContacts(tx, userId, peerUserId);
-  await requireWorkspaceMember(tx, workspaceId, userId);
-  await requireWorkspaceMember(tx, workspaceId, peerUserId);
+  if (!workspaceId) {
+    if (!(await areMutualContacts(tx, null, userId, peerUserId)))
+      throw new ChannelError('FORBIDDEN', 'You are not contacts');
+    return;
+  }
+  const [userIsMember, peerIsMember] = [
+    await isWorkspaceMember(tx, workspaceId, userId),
+    await isWorkspaceMember(tx, workspaceId, peerUserId),
+  ];
+  if (userIsMember && peerIsMember) return;
+  // An external contact talks only with the members paired with them, never another outsider.
+  if (
+    (userIsMember || peerIsMember) &&
+    (await areMutualContacts(tx, workspaceId, userId, peerUserId))
+  )
+    return;
+  throw new ChannelError('NOT_FOUND', 'Workspace member not found');
 };
 
 /** The other person of a conversation between two people, relative to `viewerId`. */

@@ -42,6 +42,8 @@ export async function queryUiMessages(
      * rendered works when applying a skipped snapshot (`preserveWorks`).
      */
     skipWorks?: boolean;
+    /** See `QueryMessageParams.skipCompressedMembers`. */
+    skipCompressedMembers?: boolean;
   },
 ): Promise<UIChatMessage[] | undefined> {
   const agentId: string | undefined = agentState?.origin?.agentId;
@@ -80,6 +82,7 @@ export async function queryUiMessages(
         groupId,
         ...(includeArtboardWorks && { includeArtboardWorks: true }),
         ...(includeFileWorks && { includeFileWorks: true }),
+        ...(options?.skipCompressedMembers && { skipCompressedMembers: true }),
         skipWorks: options?.skipWorks,
         threadId,
         topicId,
@@ -141,6 +144,8 @@ export async function queryMessagesFromDB(deps: MessagesDeps, state: AgentState)
       // and returns no group messages — the next LLM step then gets an empty
       // context and the provider rejects it ("at least one message is required").
       groupId: state.origin?.groupId,
+      // The model sees a compression group only as its summary.
+      skipCompressedMembers: true,
       threadId: state.origin?.threadId,
       topicId: state.origin?.topicId,
     },
@@ -246,10 +251,17 @@ export async function queryStepEntryMessages(
   try {
     // Keep full tool payloads and raw attachment paths. Each consumer derives
     // its own view; mid-stream Work summaries are not used by the runtime.
+    //
+    // A protocol-2 run leaves compression-group members out: the model sees a
+    // group only as its summary, and this read never reaches the client whole —
+    // only the message patch diffed against it does, which fills in the members
+    // of a group the step changed (`publishStepMessagePatch`). A protocol-1 run
+    // pushes this read as the `step_start` snapshot, so it keeps them.
     messages = await deps.messageModel.query(
       {
         agentId: state.origin.agentId,
         groupId: state.origin.groupId,
+        skipCompressedMembers: usesGatewayMessagePatch(state),
         skipWorks: true,
         threadId: state.origin.threadId,
         topicId: state.origin.topicId,

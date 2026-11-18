@@ -147,6 +147,8 @@
   "cmdk.search.files": "Tệp",
   "cmdk.search.folder": "Thư mục",
   "cmdk.search.folders": "Các thư mục",
+  "cmdk.search.goal": "Mục tiêu",
+  "cmdk.search.goals": "Mục tiêu",
   "cmdk.search.knowledgeBase": "Thư viện",
   "cmdk.search.knowledgeBases": "Các thư viện",
   "cmdk.search.loading": "Đang tìm kiếm...",

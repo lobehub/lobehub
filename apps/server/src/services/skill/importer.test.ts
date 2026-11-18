@@ -607,11 +607,11 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/skill-path-test',
       });
 
-      // Verify uploadBuffer was called with correct path
       expect(mockUploadBuffer).toHaveBeenCalledWith(
         `skills/zip/${zipHash}.zip`,
         expect.any(Buffer),
         'application/zip',
+        undefined,
       );
     });
 
@@ -668,11 +668,11 @@ describe('SkillImporter', () => {
         gitUrl: 'https://github.com/lobehub/large-repo',
       });
 
-      // Verify uploadBuffer was called with skillZipBuffer, not the large repo ZIP
       expect(mockUploadBuffer).toHaveBeenCalledWith(
         expect.stringContaining('skills/zip/'),
         smallSkillZip, // Should be the small repacked ZIP
         'application/zip',
+        undefined,
       );
     });
 

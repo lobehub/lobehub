@@ -18,6 +18,7 @@ import debug from 'debug';
 
 import { assertPathsWithinWorkspace } from './paths';
 import type { DeviceClientGetter } from './types';
+import { type DeviceWorktree, invokeWorkspaceFileRpc } from './workspaceFileRpc';
 
 const log = debug('lobe-server:device-gateway');
 
@@ -209,6 +210,7 @@ export async function getLocalFilePreview(
     timeout?: number;
     userId: string;
     workingDirectory: string;
+    worktree?: DeviceWorktree;
     workspaceId?: string;
   },
 ): Promise<DeviceLocalFilePreviewResult> {
@@ -225,12 +227,14 @@ export async function getLocalFilePreview(
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
-    const result = await client.invokeRpc<DeviceLocalFilePreviewResult>(
+    const result = await invokeWorkspaceFileRpc<DeviceLocalFilePreviewResult>(
+      client,
       { deviceId, timeout, userId, workspaceId },
       {
         method: 'getLocalFilePreview',
         params: { accept, path, workingDirectory },
       },
+      params.worktree,
     );
 
     if (!result.success || !result.data) {

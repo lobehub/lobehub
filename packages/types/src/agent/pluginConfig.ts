@@ -80,6 +80,31 @@ export const getLibrarySkillMode = (
   return entry ? parsePluginEntry(entry).mode : LIBRARY_SKILL_IMPLICIT_MODE;
 };
 
+/**
+ * Connectors — the user's MCP connectors, Composio and LobeHub connections and
+ * installed plugins — are opt-in per agent and have two states. The agent's
+ * profile is where one is turned on, so a connector the agent has no entry for
+ * is off there, exactly like a library skill.
+ */
+export const CONNECTOR_IMPLICIT_MODE: AgentPluginMode = 'disabled';
+
+/** The mode the two-state connector switch writes for "on". */
+export const CONNECTOR_ON_MODE: AgentPluginMode = 'auto';
+
+/**
+ * A connector's state for this agent: `'auto'` (on — the model finds it on
+ * demand) or `'disabled'` (off). A `'pinned'` entry written before connectors
+ * lost that state reads as on, so no stored row needs rewriting.
+ */
+export const getConnectorMode = (
+  plugins: AgentPluginEntry[] | undefined,
+  identifier: string,
+): 'auto' | 'disabled' => {
+  const entry = plugins?.find((item) => parsePluginEntry(item).identifier === identifier);
+  if (!entry) return 'disabled';
+  return parsePluginEntry(entry).mode === 'disabled' ? 'disabled' : 'auto';
+};
+
 const getPluginIdsByMode = (
   plugins: AgentPluginEntry[] | undefined,
   mode: AgentPluginMode,
@@ -102,6 +127,17 @@ export const getAutoPluginIds = (plugins: AgentPluginEntry[] | undefined): strin
 
 export const getDisabledPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
   getPluginIdsByMode(plugins, 'disabled');
+
+/**
+ * Every identifier the agent turned on, pinned or `auto`. This is the opt-in
+ * list for the kinds that are off without an entry — library skills and
+ * connectors ({@link CONNECTOR_IMPLICIT_MODE}).
+ */
+export const getOptedInPluginIds = (plugins: AgentPluginEntry[] | undefined): string[] =>
+  (plugins ?? [])
+    .map((item) => parsePluginEntry(item))
+    .filter((item) => item.mode !== 'disabled')
+    .map((item) => item.identifier);
 
 /**
  * Pinned identifiers — the drop-in replacement for runtime boundaries that
@@ -149,3 +185,18 @@ export const upsertPluginMode = (
 
   return list;
 };
+
+/**
+ * Writes the two-state connector switch. On is an explicit `auto` entry —
+ * without one the connector is off. Off keeps a `disabled` entry rather than
+ * dropping it, so the connector stays listed on the agent and can be turned
+ * back on; removing it from the agent is `upsertPluginMode(…, 'auto')`.
+ */
+export const upsertConnectorEnabled = (
+  plugins: AgentPluginEntry[] | undefined,
+  identifier: string,
+  enabled: boolean,
+): AgentPluginEntry[] =>
+  enabled
+    ? upsertPluginMode(plugins, identifier, CONNECTOR_ON_MODE, CONNECTOR_IMPLICIT_MODE)
+    : upsertPluginMode(plugins, identifier, 'disabled');

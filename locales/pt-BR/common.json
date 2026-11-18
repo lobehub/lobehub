@@ -147,6 +147,8 @@
   "cmdk.search.files": "Arquivos",
   "cmdk.search.folder": "Pasta",
   "cmdk.search.folders": "Pastas",
+  "cmdk.search.goal": "Objetivo",
+  "cmdk.search.goals": "Objetivos",
   "cmdk.search.knowledgeBase": "Biblioteca",
   "cmdk.search.knowledgeBases": "Bibliotecas",
   "cmdk.search.loading": "Pesquisando...",

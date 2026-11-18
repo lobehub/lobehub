@@ -463,7 +463,7 @@ export default {
   'members.noResponsibility': 'No responsibility set yet',
   'members.remove': 'Remove from project',
   'members.removeConfirmDescription':
-    'Its existing tasks and topics in this project stay as they are.',
+    'Its existing tasks and topics in the project are not affected. It also leaves the project’s channels.',
   'members.removeConfirmTitle': 'Remove {{name}} from this project?',
   'members.removeFailed': 'Could not remove the agent',
   'members.replaceCoordinator': 'Change main agent',

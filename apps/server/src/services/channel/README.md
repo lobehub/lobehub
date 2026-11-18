@@ -81,6 +81,9 @@ An unaddressed message has exactly one primary responder; every other member wok
   cover it, then candidate order. A primary woken by its own rules keeps its own `followup` wake.
 - Explicit @mentions are unchanged: every mentioned Agent owes an answer and runs in parallel.
   So are the paired Agent of a one-person group and the all-candidate fallback.
+  Agents @mentioned together answer in one shared Thread under the request: the first opening
+  that chooses a Thread opens and names it, every later acknowledgement and answer joins it, and
+  each run's opener and prompt (`channel_peers`) name the others so they take their own part.
 
 A deferred job is queued as `awaiting_primary` and the claim keeps it there until the primary's
 job settles (completed, silent, failed or cancelled), or the primary is stuck on a device or a
@@ -230,10 +233,48 @@ chosen Agents (`ChannelMessagingService`).
   wakes cannot relay again: one hop each way. The receipt is best-effort: a relaying Agent,
   Channel or branch that is gone, or a requester who left, gets none. It is keyed by the reply id,
   so a repeated completion posts it once.
+- **One Agent is asked between the two Agents.** The relay above is only for several Agents
+  addressed together in a group. A Channel run addressing one Agent never relays, whichever
+  Channel it named or none: a relayed request lands in a group or the person's conversation as
+  the person, and its receipt occupies the channel they use to talk to their Agent. The Agent is
+  located through the requester's Channels, its own conversation first (`findAgent`). A bot run
+  has no Channel for the conclusion to come back to, so it still relays.
+  `askAgent` instead opens the conversation between the two Agents (`channels.agentPairKey`, one
+  per pair, person and scope), giving each Agent the environment it has where the person already
+  talks to it. The asking Agent writes the request itself (`channel_messages.agent_id` on a
+  request); the person is the owner member, the requester and the execution identity, and only
+  watches. The request is not a relay and carries no `via`: `metadata.exchange` keeps the origin
+  and `hops`. When the other Agent's reply is published,
+  `ChannelExecutionRepository.deliverAnswerToAsker` queues the asking Agent on that reply in the
+  same conversation; that run's `currentRun().exchange` names the origin. Its own reply answers a
+  reply, so it wakes no one, and `reportAgentExchange` posts it where the asking began as the
+  Agent's own message (`postAgentMessage`, with `metadata.receipt` linking back and naming the
+  answering Agent in `receipt.agent`; the timeline shows a "Messages from <Agent>" line above it). Asking again
+  from that run continues the exchange (`hops + 1`) up to three asks; the answering Agent's run (`requestByAgent`) cannot pass the question on. `deliverRelayReceipt` skips Agent-written requests.
 - **External runtimes.** `lh channel list` and `lh channel send` call the same service through
   `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
   the `channel:message` capability that every Channel dispatch is minted alongside
   `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
+
+### Messaging people for the requester
+
+"Let Alice know when you are done" is a message to a person, not a request for an Agent.
+`lobe-channel.listPeople` (`lh channel people`) lists who the requester can talk to one-on-one in
+the run's scope (`ContactModel.listPeople`): personal contacts, or in a workspace its other members
+and the external contacts paired with the requester. `lobe-channel.messagePerson` (`lh channel dm`)
+posts into the requester's conversation with that person (`ChannelService.openPeer`, opened on
+first use) through `ChannelService.send` (`ChannelMessagingService.messagePerson`).
+
+- **Who sends it.** The requester, with the writing Agent in `metadata.via`, like a relay: the
+  timeline shows "Relayed by". The conversation between two people decides who can be reached
+  (`requirePeerRelation`, checked on opening and on every send), so an Agent reaches exactly the
+  people its requester could message by hand. A conversation the requester trashed is refused.
+- **Notification.** It is an ordinary message there, so `notifyChannelDirectMessages` notifies the
+  person as of any message from the requester.
+- **Nothing comes back.** No Agent is in that conversation; the `via` has no `origin`, so no
+  receipt is delivered. Unlike `sendMessage` there is no hop rule: a person does not wake anyone.
+- **Retries.** The request key is `agent-dm:<operationId>:<toolCallId>` (or `cli:<requestKey>`).
+- Shared-Agent runs do not get it: the share gate allows only history reads.
 
 ### Why history reads stay on `lobe-channel`
 

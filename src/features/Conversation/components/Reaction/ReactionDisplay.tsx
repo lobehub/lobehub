@@ -1,48 +1,33 @@
 'use client';
 
 import type { EmojiReaction } from '@lobechat/types';
-import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  active: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  container: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  `,
-  count: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  reactionTag: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    height: 28px;
-    padding-block: 0;
-    padding-inline: 10px;
-    border-radius: 14px;
-
-    font-size: 14px;
-    line-height: 1;
-
-    background: ${cssVar.colorFillSecondary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  active: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  container: { display: 'flex', flexWrap: 'wrap', gap: '4px' },
+  count: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  reactionTag: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    height: '28px',
+    paddingBlock: '0',
+    paddingInline: '10px',
+    borderRadius: '14px',
+    fontSize: '14px',
+    lineHeight: 1,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'all 0.2s',
+  },
+});
 
 interface ReactionDisplayProps {
   /**
@@ -65,16 +50,18 @@ const ReactionDisplay = memo<ReactionDisplayProps>(({ reactions, onReactionClick
   if (reactions.length === 0) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.container}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.container).className}>
       {reactions.map((reaction) => (
         <div
-          className={cx(styles.reactionTag, isActive?.(reaction.emoji) && styles.active)}
           key={reaction.emoji}
           style={{ cursor: canEdit ? undefined : 'default' }}
+          className={
+            stylex.props(styles.reactionTag, isActive?.(reaction.emoji) && styles.active).className
+          }
           onClick={canEdit ? () => onReactionClick?.(reaction.emoji) : undefined}
         >
           <span>{reaction.emoji}</span>
-          {reaction.count > 1 && <span className={styles.count}>{reaction.count}</span>}
+          {reaction.count > 1 && <span {...stylex.props(styles.count)}>{reaction.count}</span>}
         </div>
       ))}
     </Flexbox>

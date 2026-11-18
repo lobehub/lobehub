@@ -174,7 +174,7 @@ describe('ProjectModel', () => {
       .set({ coordinatorAgentId: shared.id })
       .where(eq(projects.userId, userId));
 
-    await model.delete(first.id);
+    await repo.delete(first.id);
 
     expect(await serverDB.select().from(agents).where(eq(agents.id, shared.id))).toHaveLength(1);
     expect((await model.findById(second.id))?.coordinatorAgentId).toBe(shared.id);
@@ -188,7 +188,7 @@ describe('ProjectModel', () => {
       .set({ coordinatorAgentId: inbox.id })
       .where(eq(projects.id, project.id));
 
-    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await serverDB.select().from(agents).where(eq(agents.id, inbox.id))).toHaveLength(1);
   });
 
@@ -209,7 +209,7 @@ describe('ProjectModel', () => {
     expect(await model.resolveCoordinatorAgents([cleared])).toEqual([
       expect.objectContaining({ coordinatorAgentId: inbox?.id, id: project.id }),
     ]);
-    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
   });
 
   it('tells whether replacing a main agent retires it', async () => {
@@ -273,7 +273,7 @@ describe('ProjectModel', () => {
         .where(eq(projectAgents.projectId, project.id)),
     ).toEqual([{ role: 'coordinator' }]);
 
-    await model.delete(project.id);
+    await repo.delete(project.id);
     expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
   });
 
@@ -320,7 +320,7 @@ describe('ProjectModel', () => {
 
     const updated = await model.update(project.id, { name: 'Apollo 2' });
     expect(updated?.name).toBe('Apollo 2');
-    expect(await model.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
+    expect(await repo.delete(project.id)).toEqual(expect.objectContaining({ id: project.id }));
     expect(await model.findById(project.id)).toBeNull();
     // The main agent is an ordinary agent and stays with the user.
     expect(
@@ -435,7 +435,7 @@ describe('ProjectModel', () => {
     const project = await createProject(otherRepo, { name: 'Private effort' });
     expect(await model.findById(project.id)).toBeNull();
     expect(await model.update(project.id, { name: 'Hacked' })).toBeNull();
-    expect(await model.delete(project.id)).toBeNull();
+    expect(await repo.delete(project.id)).toBeNull();
     expect(await model.findManageableById(project.id)).toBeNull();
   });
 
@@ -876,12 +876,12 @@ describe('ProjectModel', () => {
     await model.updateStatus(project.id, 'active');
     await model.requestCompletion(project.id);
 
-    const rejected = await model.reviewCompletion(project.id, 'rejected', 'Needs evidence');
+    const rejected = await repo.reviewCompletion(project.id, 'rejected', 'Needs evidence');
     expect(rejected?.project.status).toBe('active');
     expect(rejected?.review.round).toBe(1);
 
     await model.requestCompletion(project.id);
-    const accepted = await model.reviewCompletion(project.id, 'accepted', 'Approved');
+    const accepted = await repo.reviewCompletion(project.id, 'accepted', 'Approved');
     expect(accepted?.project.status).toBe('completed');
     expect(accepted?.project.completedReviewId).toBe(accepted?.review.id);
     expect(accepted?.review.round).toBe(2);
@@ -910,7 +910,7 @@ describe('ProjectModel', () => {
     const project = await createProject(repo, { name: 'Archived completion' });
     await model.updateStatus(project.id, 'active');
     await model.requestCompletion(project.id);
-    await model.reviewCompletion(project.id, 'accepted');
+    await repo.reviewCompletion(project.id, 'accepted');
     await model.updateStatus(project.id, 'archived');
 
     await expect(model.updateStatus(project.id, 'active')).rejects.toThrow(
@@ -939,11 +939,11 @@ describe('ProjectModel', () => {
     await expect(model.updateStatus(project.id, 'paused')).rejects.toThrow(
       'A project awaiting review must be accepted or rejected',
     );
-    await expect(model.reviewCompletion('missing', 'accepted')).resolves.toBeNull();
-    await expect(model.reviewCompletion(project.id, 'rejected')).resolves.toEqual(
+    await expect(repo.reviewCompletion('missing', 'accepted')).resolves.toBeNull();
+    await expect(repo.reviewCompletion(project.id, 'rejected')).resolves.toEqual(
       expect.objectContaining({ project: expect.objectContaining({ status: 'active' }) }),
     );
-    await expect(model.reviewCompletion(project.id, 'accepted')).rejects.toThrow(
+    await expect(repo.reviewCompletion(project.id, 'accepted')).rejects.toThrow(
       'Project is not awaiting review',
     );
     expect(await model.reopen(project.id)).toBeNull();
@@ -953,7 +953,7 @@ describe('ProjectModel', () => {
     const completed = await createProject(repo, { name: 'Completed' });
     await model.updateStatus(completed.id, 'active');
     await model.requestCompletion(completed.id);
-    await model.reviewCompletion(completed.id, 'accepted');
+    await repo.reviewCompletion(completed.id, 'accepted');
     await expect(model.updateStatus(completed.id, 'active')).rejects.toThrow(
       'A completed project must be reopened',
     );

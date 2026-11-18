@@ -2,12 +2,11 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName, type InboundWebhookItem } from '@lobechat/types';
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { WebhookIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +14,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import ConnectorBrandIcon from '@/features/Connectors/ConnectorBrandIcon';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
+import ChannelTarget, { channelTargetOf } from './ChannelTarget';
 import { summarizeArguments } from './formatArguments';
 
 dayjs.extend(relativeTime);
@@ -60,32 +60,8 @@ export const EmptyValue = () => <span {...stylex.props(styles.muted)}>--</span>;
 export const SubscriptionCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { connector, source } = item;
-  if (source.kind === 'generic') {
-    const name = item.name?.trim() || t('automations.source.webhook');
-    const detail = [
-      t('automations.source.webhook'),
-      t(
-        source.topicMode === 'reuse'
-          ? 'automations.source.topicMode.reuse'
-          : 'automations.source.topicMode.new',
-      ),
-    ].join(' · ');
-    return (
-      <Flexbox horizontal align={'center'} gap={12} style={{ minWidth: 0, overflow: 'hidden' }}>
-        <Center {...stylex.props(styles.iconTile)}>
-          <Icon icon={WebhookIcon} size={18} />
-        </Center>
-        <Flexbox gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis weight={500}>
-            {name}
-          </Text>
-          <span title={detail} {...stylex.props(styles.source)}>
-            {detail}
-          </span>
-        </Flexbox>
-      </Flexbox>
-    );
-  }
+  // Automations are MCP Events subscriptions; custom webhooks are listed on their own pages.
+  if (source.kind !== 'mcp_events') return null;
   const name = item.name?.trim() || source.eventName;
   const args = summarizeArguments(source.arguments);
 
@@ -157,15 +133,9 @@ export const TargetCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
         />
         <Text ellipsis>{agentName}</Text>
       </Flexbox>
-      {item.source.kind === 'generic' ? (
-        // A webhook starts its own topics; its page lists every call and where it ran.
-        <WorkspaceLink
-          to={`/agent/${agent.id}/webhook`}
-          {...stylex.props(styles.topicLink)}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {t('automations.target.webhookCalls')}
-        </WorkspaceLink>
+      {channelTargetOf(item) ? (
+        // Results posted to a Channel are read there, not in its hidden Topic.
+        <ChannelTarget item={item} />
       ) : topic && topicTitle ? (
         <WorkspaceLink
           title={topicTitle}
@@ -188,18 +158,8 @@ TargetCell.displayName = 'AutomationTargetCell';
 export const TopicCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { agent, topic } = item;
-  // A webhook starts its own topics (a new one per run, or by thread); its page lists every call
-  // and where it ran, as on the settings list.
-  if (agent && item.source.kind === 'generic')
-    return (
-      <WorkspaceLink
-        to={`/agent/${agent.id}/webhook`}
-        {...stylex.props(styles.topicLink)}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {t('automations.target.webhookCalls')}
-      </WorkspaceLink>
-    );
+  // Results posted to a Channel are read there, not in the Topic the run works in.
+  if (channelTargetOf(item)) return <ChannelTarget item={item} />;
   if (!agent || !topic) return <EmptyValue />;
 
   const topicTitle = topic.title?.trim() || t('automations.untitledTopic');

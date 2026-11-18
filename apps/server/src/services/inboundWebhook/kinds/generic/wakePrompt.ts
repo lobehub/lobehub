@@ -1,5 +1,6 @@
 import { WEBHOOK_EVENT_TAG } from '@lobechat/const';
 import type { SignalItem } from '@lobechat/types';
+import { genericWebhookIdentifierOf } from '@lobechat/types';
 
 import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 
@@ -8,7 +9,11 @@ import { escapeXmlAttribute as attribute, escapeXmlText as escapeText } from '..
 /** The most calls one wake-up message carries; a thread's further calls wait for its next run. */
 export const MAX_EVENTS_PER_PROMPT = 20;
 
-/** The user message a generic webhook wakes its Agent with. */
+/**
+ * The user message a generic webhook wakes its Agent with. It names the webhook by its fixed
+ * identifier, never its display name: people rename it freely, and the Agent's instructions
+ * must keep matching.
+ */
 export function buildGenericWebhookPrompt(params: {
   row: InboundWebhookViewOf<'generic'>;
   signals: SignalItem[];
@@ -16,7 +21,7 @@ export function buildGenericWebhookPrompt(params: {
 }): string {
   const { row, signals, threadKey } = params;
   const lines = [
-    `<${WEBHOOK_EVENT_TAG} webhookId="${attribute(row.id)}" name="${attribute(row.name ?? '')}"${threadKey ? ` thread="${attribute(threadKey)}"` : ''}>`,
+    `<${WEBHOOK_EVENT_TAG} webhookId="${attribute(row.id)}" identifier="${attribute(genericWebhookIdentifierOf(row))}"${threadKey ? ` thread="${attribute(threadKey)}"` : ''}>`,
   ];
   for (const signal of signals.slice(0, MAX_EVENTS_PER_PROMPT)) {
     const receivedAt = (signal.occurredAt ?? signal.createdAt).toISOString().replace('.000Z', 'Z');

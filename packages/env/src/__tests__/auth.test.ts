@@ -25,4 +25,25 @@ describe('getAuthConfig', () => {
 
     expect(getAuthConfig().AUTH_ADDITIONAL_TRUSTED_ORIGINS).toBe('https://gateway.example.com');
   });
+  it.each(['15s', '1m', '90 seconds', '2h'])(
+    'accepts INTERNAL_JWT_EXPIRATION %s',
+    async (value) => {
+      vi.stubEnv('INTERNAL_JWT_EXPIRATION', value);
+
+      const { getAuthConfig } = await import('../auth');
+
+      expect(getAuthConfig().INTERNAL_JWT_EXPIRATION).toBe(value);
+    },
+  );
+
+  // jose's setExpirationTime throws on these, failing every internal JWT signature
+  it.each(['15', '15 s ago', '-15s', 'soon'])(
+    'rejects INTERNAL_JWT_EXPIRATION %s at load',
+    async (value) => {
+      vi.stubEnv('INTERNAL_JWT_EXPIRATION', value);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(import('../auth')).rejects.toThrow(/Invalid environment variables/);
+    },
+  );
 });
