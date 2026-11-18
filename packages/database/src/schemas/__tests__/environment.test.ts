@@ -133,6 +133,51 @@ describe('Environment registration schema', () => {
     await createEnvironment('Data analysis', workspaceId, colleagueId);
   });
 
+  it('gives a project at most one environment of its own', async () => {
+    const project = await createProject('OWN');
+    await db
+      .insert(environments)
+      .values({ configuration, name: 'Own', projectId: project.id, userId });
+
+    await expect(
+      db
+        .insert(environments)
+        .values({ configuration, name: 'Second', projectId: project.id, userId }),
+    ).rejects.toMatchObject({ cause: { constraint: 'environments_project_id_unique' } });
+  });
+
+  it("keeps a project's environment out of the per-member name uniqueness", async () => {
+    // A project's environment is named after the project and only ever shown
+    // inside it, so it must not collide with a standalone environment or with
+    // another project's of the same name.
+    const first = await createProject('NAMEA');
+    const second = await createProject('NAMEB');
+    await createEnvironment('Shared name');
+
+    await db.insert(environments).values([
+      { configuration, name: 'Shared name', projectId: first.id, userId },
+      { configuration, name: 'Shared name', projectId: second.id, userId },
+    ]);
+
+    // Standalone environments still identify one by name per member.
+    await expect(createEnvironment('Shared name')).rejects.toMatchObject({
+      cause: { constraint: 'environments_user_name_unique' },
+    });
+  });
+
+  it("releases a project's environment as standalone when the project is deleted", async () => {
+    const project = await createProject('GONE');
+    const [own] = await db
+      .insert(environments)
+      .values({ configuration, name: 'Gone', projectId: project.id, userId })
+      .returning();
+
+    await db.delete(projects).where(eq(projects.id, project.id));
+
+    const [row] = await db.select().from(environments).where(eq(environments.id, own.id));
+    expect(row.projectId).toBeNull();
+  });
+
   it('retains environment records until explicit cleanup on owner or workspace deletion', async () => {
     await db
       .insert(workspaces)
