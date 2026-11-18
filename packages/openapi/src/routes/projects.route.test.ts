@@ -18,10 +18,11 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 const { getTestDB } = await import('@/database/core/getTestDB');
-const { agents, apiKeys, knowledgeBases, projects, users, workspaceMembers, workspaces } =
+const { agents, apiKeys, knowledgeBases, projects, users, workspaceMembers, workspaces, works } =
   await import('@/database/schemas');
 const { hashApiKey } = await import('@lobechat/utils/server');
 const { HTTPException } = await import('hono/http-exception');
+const { DeletedResourceSchema } = await import('../types/common.type');
 const { errorInitFromException, renderApiError } = await import('../common/errors');
 const { userAuthMiddleware } = await import('../middleware/auth');
 const { workspaceAuthMiddleware } = await import('../middleware/workspace');
@@ -52,6 +53,7 @@ const OWNER = 'r11-project-owner';
 const STRANGER = 'r11-project-stranger';
 const WORKSPACE = 'ws_r11_projects';
 const OTHER_WORKSPACE = 'ws_r11_projects_other';
+const WORK = 'work_r11_issue';
 
 const KEYS = {
   agentOnly: 'sk-lh-r11pagentonly001',
@@ -87,6 +89,24 @@ const createProject = async (body: Record<string, unknown> = {}, key: string = K
   return (await json(res)).data;
 };
 
+const listWorkIds = async (projectId: string) => {
+  const res = await call(`/projects/${projectId}/works`, { key: KEYS.ownerRead });
+  expect(res.status).toBe(200);
+  return (await json(res)).data.items.map((item: any) => item.workId);
+};
+
+const createProjectWithWork = async () => {
+  const project = await createProject({ visibility: 'private' });
+  const added = await call(`/projects/${project.id}/works`, {
+    body: { workId: WORK },
+    key: KEYS.ownerWrite,
+    method: 'POST',
+  });
+  expect(added.status).toBe(201);
+  expect(await listWorkIds(project.id)).toEqual([WORK]);
+  return project;
+};
+
 beforeEach(async () => {
   await serverDB.delete(projects);
   await serverDB.delete(knowledgeBases);
@@ -113,6 +133,18 @@ beforeEach(async () => {
     { id: 'kb_r11_docs', name: 'Docs', userId: OWNER },
     { id: 'kb_r11_stranger', name: 'Not yours', userId: STRANGER },
   ]);
+  await serverDB.insert(works).values({
+    id: WORK,
+    identifier: 'lobehub/lobehub#1',
+    resourceId: 'lobehub/lobehub#1',
+    resourceType: 'github_issue',
+    title: 'Ship the launch',
+    toolIdentifier: 'github',
+    toolName: 'createIssue',
+    type: 'external',
+    userId: OWNER,
+    visibility: 'private',
+  });
   const key = (value: string, userId: string, scopes: string[], workspaceId?: string) => ({
     key: value,
     keyHash: hashApiKey(value),
@@ -435,6 +467,53 @@ describe('member agents, knowledge bases and works', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('removes a linked work and keeps the work itself', async () => {
+    const project = await createProjectWithWork();
+
+    const res = await call(`/projects/${project.id}/works/${WORK}`, {
+      key: KEYS.ownerWrite,
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+    expect(DeletedResourceSchema.parse((await json(res)).data)).toEqual({
+      deleted: true,
+      id: WORK,
+    });
+
+    expect(await listWorkIds(project.id)).toEqual([]);
+    expect(await serverDB.query.works.findFirst({ where: (t, { eq }) => eq(t.id, WORK) })).toEqual(
+      expect.objectContaining({ id: WORK }),
+    );
+  });
+
+  it('answers 404 for an unknown work and leaves the linked one', async () => {
+    const project = await createProjectWithWork();
+
+    const res = await call(`/projects/${project.id}/works/work_missing`, {
+      key: KEYS.ownerWrite,
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(404);
+    expect(await listWorkIds(project.id)).toEqual([WORK]);
+  });
+
+  it('needs credentials and project:write to remove a work', async () => {
+    const project = await createProjectWithWork();
+
+    const anonymous = await call(`/projects/${project.id}/works/${WORK}`, { method: 'DELETE' });
+    expect(anonymous.status).toBe(401);
+    expect((await json(anonymous)).code).toBe('unauthorized');
+
+    const readOnly = await call(`/projects/${project.id}/works/${WORK}`, {
+      key: KEYS.ownerRead,
+      method: 'DELETE',
+    });
+    expect(readOnly.status).toBe(403);
+    expect((await json(readOnly)).code).toBe('insufficient_scope');
+
+    expect(await listWorkIds(project.id)).toEqual([WORK]);
+  });
 });
 
 describe('ownership and workspace isolation', () => {
@@ -458,6 +537,18 @@ describe('ownership and workspace isolation', () => {
     const list = await json(await call('/projects', { key: KEYS.stranger }));
     expect(list.data.items).toEqual([]);
     expect((await call(`/projects/${project.id}`, { key: KEYS.ownerRead })).status).toBe(200);
+  });
+
+  it("refuses removing a work from another account's or another scope's project", async () => {
+    const project = await createProjectWithWork();
+
+    const attempts = [
+      call(`/projects/${project.id}/works/${WORK}`, { key: KEYS.stranger, method: 'DELETE' }),
+      call(`/projects/${project.id}/works/${WORK}`, { key: KEYS.workspace, method: 'DELETE' }),
+    ];
+    for (const res of await Promise.all(attempts)) expect(res.status).toBe(404);
+
+    expect(await listWorkIds(project.id)).toEqual([WORK]);
   });
 
   it('refuses a personal key on a workspace and a workspace key on another workspace', async () => {
