@@ -21,7 +21,7 @@ export const generateFullExport = ({
   withSystemRole,
 }: FullExportParams): ExportedTopic => {
   const exportedMessages: Record<string, any>[] = messages
-    .filter((m) => m.content !== LOADING_FLAT)
+    .filter((m) => m.role === 'user' || m.content !== LOADING_FLAT)
     .map((m) =>
       cleanObject({
         // Core fields
