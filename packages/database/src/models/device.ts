@@ -5,7 +5,6 @@ import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { DeviceItem } from '../schemas';
 import { agents, devices, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { removeDeviceFromAgents } from '../utils/agencyConfigDevices';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export type DeviceVisibility = 'private' | 'public';
@@ -395,29 +394,22 @@ export class DeviceModel {
   /**
    * Remove a PERSONAL device. Workspace devices the user enrolled keep their
    * rows; they go through `deleteWorkspaceDevice`. Returns the removed rows.
+   *
+   * Device row only: agents that picked the device are another aggregate.
+   * Callers removing a device for the user go through
+   * `DeviceRemovalRepository`, which unbinds them in the same transaction.
    */
   delete = async (deviceId: string): Promise<DeviceItem[]> => {
-    return this.db.transaction(async (tx) => {
-      const removed = await tx
-        .delete(devices)
-        .where(
-          and(
-            eq(devices.userId, this.userId),
-            eq(devices.deviceId, deviceId),
-            isNull(devices.workspaceId),
-          ),
-        )
-        .returning();
-      // Personal devices are bound only by the caller's personal agents.
-      if (removed.length > 0) {
-        await removeDeviceFromAgents(
-          tx,
-          and(eq(agents.userId, this.userId), isNull(agents.workspaceId)),
-          deviceId,
-        );
-      }
-      return removed;
-    });
+    return this.db
+      .delete(devices)
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
+      .returning();
   };
 
   /**
@@ -466,22 +458,16 @@ export class DeviceModel {
    * (workspace owner, or the enroller acting on their own device) is enforced
    * at the router via `canEditWorkspaceDevice`. Returns the removed rows, or
    * `undefined` without a current workspace.
+   *
+   * Device row only; `DeviceRemovalRepository` also unbinds the workspace's
+   * agents from it.
    */
   deleteWorkspaceDevice = async (deviceId: string): Promise<DeviceItem[] | undefined> => {
-    const workspaceId = this.workspaceId;
-    if (!workspaceId) return;
-    return this.db.transaction(async (tx) => {
-      const removed = await tx
-        .delete(devices)
-        .where(and(eq(devices.workspaceId, workspaceId), eq(devices.deviceId, deviceId)))
-        .returning();
-      // Any member's agent in the workspace may have picked this device,
-      // private ones included.
-      if (removed.length > 0) {
-        await removeDeviceFromAgents(tx, eq(agents.workspaceId, workspaceId), deviceId);
-      }
-      return removed;
-    });
+    if (!this.workspaceId) return;
+    return this.db
+      .delete(devices)
+      .where(and(eq(devices.workspaceId, this.workspaceId), eq(devices.deviceId, deviceId)))
+      .returning();
   };
 
   /**

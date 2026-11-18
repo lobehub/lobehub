@@ -38,6 +38,12 @@ vi.mock('@/database/models/device', () => ({
   },
   WorkspaceDevicePrivateConflictError: class extends Error {},
 }));
+vi.mock('@/database/repositories/deviceRemoval', () => ({
+  DeviceRemovalRepository: class {
+    removePersonalDevice = mocks.delete;
+    removeWorkspaceDevice = mocks.deleteWorkspaceDevice;
+  },
+}));
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     queryDeviceList: mocks.queryDeviceList,

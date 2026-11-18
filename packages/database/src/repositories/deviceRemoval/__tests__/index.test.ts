@@ -2,10 +2,10 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../core/getTestDB';
-import { agents, devices, users, workspaces } from '../../schemas';
-import type { LobeChatDatabase } from '../../type';
-import { DeviceModel } from '../device';
+import { getTestDB } from '../../../core/getTestDB';
+import { agents, devices, users, workspaces } from '../../../schemas';
+import type { LobeChatDatabase } from '../../../type';
+import { DeviceRemovalRepository } from '../index';
 
 /**
  * Removing a device must not leave agents pointing at it: a stale
@@ -40,7 +40,7 @@ afterEach(async () => {
   await serverDB.delete(users);
 });
 
-describe('DeviceModel.delete clears personal agent bindings', () => {
+describe('DeviceRemovalRepository.removePersonalDevice clears personal agent bindings', () => {
   beforeEach(async () => {
     await serverDB.insert(devices).values([
       { deviceId: 'gone', identitySource: 'machine-id', userId },
@@ -64,7 +64,7 @@ describe('DeviceModel.delete clears personal agent bindings', () => {
       userId,
     });
 
-    await new DeviceModel(serverDB, userId).delete('gone');
+    await new DeviceRemovalRepository(serverDB, userId).removePersonalDevice('gone');
 
     const row = await agencyConfigOf('agent-bound');
     // The device target goes with its device; the agent is back on its default.
@@ -80,7 +80,7 @@ describe('DeviceModel.delete clears personal agent bindings', () => {
       userId,
     });
 
-    await new DeviceModel(serverDB, userId).delete('gone');
+    await new DeviceRemovalRepository(serverDB, userId).removePersonalDevice('gone');
 
     expect((await agencyConfigOf('agent-dir-only')).agencyConfig).toEqual({
       boundDeviceId: 'kept',
@@ -99,7 +99,7 @@ describe('DeviceModel.delete clears personal agent bindings', () => {
       },
     ]);
 
-    await new DeviceModel(serverDB, userId).delete('gone');
+    await new DeviceRemovalRepository(serverDB, userId).removePersonalDevice('gone');
 
     expect((await agencyConfigOf('agent-other-user')).agencyConfig).toEqual({
       boundDeviceId: 'gone',
@@ -116,7 +116,9 @@ describe('DeviceModel.delete clears personal agent bindings', () => {
       userId,
     });
 
-    await expect(new DeviceModel(serverDB, userId).delete('not-registered')).resolves.toEqual([]);
+    await expect(
+      new DeviceRemovalRepository(serverDB, userId).removePersonalDevice('not-registered'),
+    ).resolves.toEqual([]);
 
     expect((await agencyConfigOf('agent-unregistered')).agencyConfig).toEqual({
       boundDeviceId: 'not-registered',
@@ -124,7 +126,7 @@ describe('DeviceModel.delete clears personal agent bindings', () => {
   });
 });
 
-describe('DeviceModel.deleteWorkspaceDevice clears workspace agent bindings', () => {
+describe('DeviceRemovalRepository.removeWorkspaceDevice clears workspace agent bindings', () => {
   beforeEach(async () => {
     await serverDB.insert(devices).values([
       {
@@ -173,7 +175,7 @@ describe('DeviceModel.deleteWorkspaceDevice clears workspace agent bindings', ()
       },
     ]);
 
-    await new DeviceModel(serverDB, userId, wsId).deleteWorkspaceDevice('ws-gone');
+    await new DeviceRemovalRepository(serverDB, userId, wsId).removeWorkspaceDevice('ws-gone');
 
     expect((await agencyConfigOf('agent-ws-public')).agencyConfig).toEqual({
       executionTargetSelectionPolicy: 'member',
@@ -199,10 +201,27 @@ describe('DeviceModel.deleteWorkspaceDevice clears workspace agent bindings', ()
       workspaceId: wsId,
     });
 
-    await new DeviceModel(serverDB, userId, wsId).deleteWorkspaceDevice('ws-gone');
+    await new DeviceRemovalRepository(serverDB, userId, wsId).removeWorkspaceDevice('ws-gone');
 
     expect((await agencyConfigOf('agent-ws-fixed')).agencyConfig).toEqual({
       executionTargetSelectionPolicy: 'member',
+    });
+  });
+
+  it('does nothing without a current workspace', async () => {
+    await serverDB.insert(agents).values({
+      agencyConfig: { boundDeviceId: 'ws-gone' },
+      id: 'agent-ws-no-context',
+      userId,
+      workspaceId: wsId,
+    });
+
+    await expect(
+      new DeviceRemovalRepository(serverDB, userId).removeWorkspaceDevice('ws-gone'),
+    ).resolves.toBeUndefined();
+
+    expect((await agencyConfigOf('agent-ws-no-context')).agencyConfig).toEqual({
+      boundDeviceId: 'ws-gone',
     });
   });
 
@@ -214,7 +233,7 @@ describe('DeviceModel.deleteWorkspaceDevice clears workspace agent bindings', ()
       workspaceId: wsId,
     });
 
-    await new DeviceModel(serverDB, userId, wsId).deleteWorkspaceDevice('ws-gone');
+    await new DeviceRemovalRepository(serverDB, userId, wsId).removeWorkspaceDevice('ws-gone');
 
     expect((await agencyConfigOf('agent-ws-local')).agencyConfig).toEqual({
       executionTarget: 'local',
