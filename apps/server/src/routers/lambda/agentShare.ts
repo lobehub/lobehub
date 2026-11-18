@@ -5,7 +5,7 @@ import {
   AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
 } from '@lobechat/const';
 import { assembleSkillPool } from '@lobechat/mecha';
-import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
+import { getActivePluginIds, getAutoPluginIds, getDisabledPluginIds } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -451,6 +451,7 @@ export const agentShareRouter = router({
         })),
       },
       {
+        autoSkillIds: getAutoPluginIds(agentConfig?.plugins ?? undefined),
         canExecuteOnDevice: false,
         disabledIds: getDisabledPluginIds(agentConfig?.plugins ?? undefined),
         enabledPluginIds: getActivePluginIds(agentConfig?.plugins ?? undefined),

@@ -245,6 +245,15 @@ const AgentTool = memo<AgentToolProps>(
       if (!isConnectorsInit) fetchConnectors();
     }, [isConnectorsInit, fetchConnectors]);
 
+    // Get all skill identifiers (used to filter the builtin list)
+    const allSkillIdentifiers = useMemo(() => {
+      const ids = new Set<string>();
+      for (const s of installedBuiltinSkills) ids.add(s.identifier);
+      for (const s of marketAgentSkills) ids.add(s.identifier);
+      for (const s of userAgentSkills) ids.add(s.identifier);
+      return ids;
+    }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
+
     // Toggle a plugin - use byId action
     const togglePlugin = useCallback(
       async (pluginId: string, state?: boolean) => {
@@ -264,12 +273,23 @@ const AgentTool = memo<AgentToolProps>(
         // dropped from the array.
         await updateAgentConfigById(effectiveAgentId, {
           plugins:
-            shouldEnable && (connectorIds.has(pluginId) || isOnDemandBuiltinTool(pluginId))
+            shouldEnable &&
+            (allSkillIdentifiers.has(pluginId) ||
+              connectorIds.has(pluginId) ||
+              isOnDemandBuiltinTool(pluginId))
               ? upsertConnectorEnabled(config?.plugins, pluginId, true)
               : upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
       },
-      [canEdit, effectiveAgentId, enabledIds, connectorIds, config?.plugins, updateAgentConfigById],
+      [
+        canEdit,
+        effectiveAgentId,
+        enabledIds,
+        connectorIds,
+        allSkillIdentifiers,
+        config?.plugins,
+        updateAgentConfigById,
+      ],
     );
 
     // Check if a profile-managed tool is on for this agent.
@@ -315,15 +335,6 @@ const AgentTool = memo<AgentToolProps>(
         connectorCatalog.filter((item) => item.type === 'lobehub').map(({ provider }) => provider),
       [connectorCatalog],
     );
-
-    // Get all skill identifiers (used to filter the builtin list)
-    const allSkillIdentifiers = useMemo(() => {
-      const ids = new Set<string>();
-      for (const s of installedBuiltinSkills) ids.add(s.identifier);
-      for (const s of marketAgentSkills) ids.add(s.identifier);
-      for (const s of userAgentSkills) ids.add(s.identifier);
-      return ids;
-    }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
 
     // Filter out Composio tools and skills from profileBuiltinList (they are displayed separately)
     // Optionally filter out tools with availableInWeb: false based on config (e.g., LocalSystem is desktop-only)
@@ -912,7 +923,9 @@ const AgentTool = memo<AgentToolProps>(
       if (!canEdit || !effectiveAgentId) return;
       return updateAgentConfigById(effectiveAgentId, {
         plugins:
-          connectorIds.has(pluginId) || isOnDemandBuiltinTool(pluginId)
+          allSkillIdentifiers.has(pluginId) ||
+          connectorIds.has(pluginId) ||
+          isOnDemandBuiltinTool(pluginId)
             ? upsertConnectorEnabled(config?.plugins, pluginId, enabled)
             : upsertPluginMode(config?.plugins, pluginId, enabled ? 'pinned' : 'disabled'),
       });
