@@ -65,7 +65,7 @@ test('the type check runs from the overlay root against the pinned overlay revis
 });
 
 test('a pull request is judged against its base under the same overlay revision', async () => {
-  const { jobs } = await load('../workflows/overlay-type-check.yml');
+  const { jobs } = await load('../workflows/pr-build-desktop.yml');
   const { steps } = jobs['overlay-type-check'];
   const [head, base] = steps.filter((step) => step.uses === './.github/actions/overlay-type-check');
 
@@ -75,4 +75,14 @@ test('a pull request is judged against its base under the same overlay revision'
     steps.at(-1).run,
     new RegExp(`overlayTypeErrors\\.mjs .*${base.with['log-name']}.*${head.with['log-name']}`),
   );
+});
+
+test('every pull request gets the overlay check, not only desktop builds', async () => {
+  const workflow = await load('../workflows/pr-build-desktop.yml');
+  const job = workflow.jobs['overlay-type-check'];
+
+  // The desktop build jobs are gated behind `trigger:build-desktop`; the overlay
+  // check must not inherit that gate or ordinary pull requests go unchecked.
+  assert.doesNotMatch(String(job.if ?? ''), /trigger:build-desktop|release\//);
+  assert.ok([workflow.on.pull_request.types].flat().includes('opened'));
 });
