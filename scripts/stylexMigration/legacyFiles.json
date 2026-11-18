@@ -294,7 +294,6 @@
   "src/features/EnvironmentManager/EnvironmentVariables.tsx",
   "src/features/EnvironmentManager/GithubRepositoryPicker.tsx",
   "src/features/EnvironmentManager/InlineField.tsx",
-  "src/features/EnvironmentManager/PanelSection.tsx",
   "src/features/EnvironmentManager/index.tsx",
   "src/features/EvalCapture/CaptureContent.tsx",
   "src/features/EvalCapture/CaptureSuccess.tsx",
