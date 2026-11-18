@@ -13,9 +13,100 @@ export interface MentionableMember {
 
 const escapeRegExp = (value: string) => value.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&');
 
-/** Fenced blocks, then inline code: an `@Name` there is quoted, not addressed. */
-const stripCode = (content: string) =>
-  content.replaceAll(/(`{3,}|~{3,})[\S\s]*?(?:\1|$)/g, ' ').replaceAll(/`[^\n`]+`/g, ' ');
+/** A fence opens with three or more backticks or tildes, indented at most three spaces. */
+const FENCE_OPEN = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/;
+/** The closing fence carries the same character, at least as long, and nothing else. */
+const FENCE_CLOSE = /^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$/;
+/** An indented code line starts with four spaces or a tab. */
+const CODE_INDENT = /^(?: {4,}|\t)/;
+
+const stripFencesAndIndentedCode = (content: string) => {
+  const kept: string[] = [];
+  let fence: string | null = null;
+  let inIndented = false;
+  let afterBlank = true;
+
+  for (const line of content.split('\n')) {
+    if (fence) {
+      const close = FENCE_CLOSE.exec(line);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+      kept.push('');
+      continue;
+    }
+
+    const open = FENCE_OPEN.exec(line);
+    if (open) {
+      fence = open[1];
+      inIndented = false;
+      kept.push('');
+      continue;
+    }
+
+    if (CODE_INDENT.test(line) && (inIndented || afterBlank)) {
+      // An indented code block cannot interrupt a paragraph, so only a block that starts after a
+      // blank line counts; later indented or blank lines belong to it.
+      inIndented = true;
+      kept.push('');
+      continue;
+    }
+
+    if (inIndented && line.trim() === '') {
+      kept.push('');
+      continue;
+    }
+
+    inIndented = false;
+    afterBlank = line.trim() === '';
+    kept.push(line);
+  }
+
+  return kept.join('\n');
+};
+
+/** Index of the next run of exactly `length` backticks at or after `from`; -1 when there is none. */
+const findClosingRun = (content: string, from: number, length: number) => {
+  for (let i = from; i < content.length;) {
+    if (content[i] !== '`') {
+      i += 1;
+      continue;
+    }
+    let run = 1;
+    while (content[i + run] === '`') run += 1;
+    if (run === length) return i;
+    i += run;
+  }
+  return -1;
+};
+
+/**
+ * Code spans open with any number of backticks and close on a run of the same length, holding
+ * anything in between — a backtick, a newline. An unmatched run stays literal, as it renders.
+ */
+const stripCodeSpans = (content: string) => {
+  let text = '';
+  let i = 0;
+  while (i < content.length) {
+    if (content[i] !== '`') {
+      text += content[i];
+      i += 1;
+      continue;
+    }
+    let run = 1;
+    while (content[i + run] === '`') run += 1;
+    const close = findClosingRun(content, i + run, run);
+    if (close === -1) {
+      text += '`'.repeat(run);
+      i += run;
+      continue;
+    }
+    text += ' ';
+    i = close + run;
+  }
+  return text;
+};
+
+/** Quoted code, as the timeline renders it: fenced blocks, indented blocks and code spans. */
+const stripCode = (content: string) => stripCodeSpans(stripFencesAndIndentedCode(content));
 
 /**
  * Members an Agent's reply addresses as plain `@Name` text, matched the way the timeline

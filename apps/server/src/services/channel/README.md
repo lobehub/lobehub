@@ -254,7 +254,8 @@ chosen Agents (`ChannelMessagingService`).
 - **@mentions in replies.** An Agent's published reply has its `@Name` text turned into real
   mentions (`ChannelExecutionRepository.deliverReplyMentions`, called from
   `ChannelCoordinator.complete`): matched against active members like the timeline highlight,
-  code ignored, the replying Agent itself skipped. People are notified; each mentioned Agent is
+  code ignored the way the timeline renders it (fenced blocks, indented blocks and code spans of
+  any backtick length, including ones that wrap lines), the replying Agent itself skipped. People are notified; each mentioned Agent is
   queued on the reply for the same requester and follows the Thread. The reply records the
   Agent-to-Agent hops since a person spoke (`metadata.mentionHops`); past
   `MAX_REPLY_MENTION_HOPS` (3) the mentions are still recorded but wake no one. A conversation

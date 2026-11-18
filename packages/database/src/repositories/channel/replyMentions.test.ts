@@ -23,6 +23,29 @@ describe('findTextMentions', () => {
     expect(findTextMentions('`@Pi` and\n```\n@Pilot\n```', members)).toEqual([]);
   });
 
+  it('ignores fenced blocks opened with tildes or a longer run', () => {
+    expect(findTextMentions('~~~\n@Pi\n~~~', members)).toEqual([]);
+    expect(findTextMentions('````md\n```\n@Pi\n```\n````', members)).toEqual([]);
+  });
+
+  it('ignores indented code blocks', () => {
+    expect(findTextMentions('示例：\n\n    @Pi\n    @Pilot', members)).toEqual([]);
+    expect(findTextMentions('\t@Pi', members)).toEqual([]);
+  });
+
+  it('still reads an indented line that continues a paragraph', () => {
+    expect(findTextMentions('@Pi 接着写\n    这一行还是同一段', members)).toEqual(['pi']);
+  });
+
+  it('ignores code spans of any backtick length, including multiline ones', () => {
+    expect(findTextMentions('``a ` @Pi``', members)).toEqual([]);
+    expect(findTextMentions('`@Pi\n@Pilot`', members)).toEqual([]);
+  });
+
+  it('reads a mention after an unmatched backtick run', () => {
+    expect(findTextMentions('`` @Pi', members)).toEqual(['pi']);
+  });
+
   it('lists each member once, in order of appearance', () => {
     expect(findTextMentions('@Pilot @Arvin Xu @Pilot', members)).toEqual(['pilot', 'arvin']);
   });
