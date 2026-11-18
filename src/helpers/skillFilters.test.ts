@@ -14,11 +14,6 @@ describe('skillFilters', () => {
     );
   });
 
-  it('should disable task builtin skill globally', () => {
-    expect(shouldEnableBuiltinSkill('task', { canExecuteOnDevice: false })).toBe(false);
-    expect(shouldEnableBuiltinSkill('task', { canExecuteOnDevice: true })).toBe(false);
-  });
-
   it('should enable agent-browser when the run can execute on a device', () => {
     expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: true })).toBe(true);
   });
@@ -50,13 +45,6 @@ describe('skillFilters', () => {
         description: 'artifacts',
         identifier: 'lobe-artifacts',
         name: 'Artifacts',
-        source: 'builtin' as const,
-      },
-      {
-        content: 'task',
-        description: 'task',
-        identifier: 'task',
-        name: 'Task',
         source: 'builtin' as const,
       },
     ];

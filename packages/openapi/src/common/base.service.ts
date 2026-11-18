@@ -1,6 +1,7 @@
 import { buildWorkspacePayload, buildWorkspaceWhere } from '@lobechat/database';
 import { and, eq, inArray, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { HTTPException } from 'hono/http-exception';
 
 import type { PERMISSION_ACTIONS } from '@/const/rbac';
 import { ALL_SCOPE } from '@/const/rbac';
@@ -133,6 +134,11 @@ export abstract class BaseService implements IBaseService {
    */
   protected handleServiceError(error: unknown, operation: string): never {
     this.log('error', `${operation} failed`, { error });
+
+    // An HTTP error already names its status (and `ApiException` its code,
+    // e.g. an invalid pagination cursor): wrapping it would turn it into a
+    // generic 400 `bad_request`.
+    if (error instanceof HTTPException) throw error;
 
     // If it is a known business error, throw it directly
     if (

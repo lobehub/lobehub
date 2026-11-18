@@ -145,6 +145,7 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableProjects: () => mocks.projectsEnabled },
+  userGeneralSettingsSelectors: { interfaceDensity: () => 'loose' },
 }));
 
 vi.mock('@/features/Projects/ProjectAvatar', () => ({

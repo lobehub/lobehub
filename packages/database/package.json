@@ -24,9 +24,13 @@
     "@lobechat/utils": "workspace:*",
     "p-map": "^7.0.6",
     "random-words": "^2.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
     "remove-markdown": "^0.6.4",
     "ts-md5": "^2.0.1",
     "type-fest": "^5.7.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {

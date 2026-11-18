@@ -116,6 +116,9 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: {
+    interfaceDensity: () => 'loose',
+  },
   userProfileSelectors: {
     userId: () => mocks.currentUserId,
   },

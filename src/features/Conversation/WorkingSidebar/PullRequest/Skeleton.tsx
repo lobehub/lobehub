@@ -4,31 +4,39 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
+
 import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
 import PrHead, { PrStatePill, PrTitle } from './Head';
 
 const styles = stylex.create({
   dock: {
     flexShrink: 0,
-    paddingBlockStart: '8px',
-    paddingBlockEnd: '10px',
-    paddingInline: '8px',
+    paddingBlockStart: '10px',
+    paddingBlockEnd: '12px',
+    paddingInline: '4px',
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
   },
+  content: { paddingBlockStart: '8px', paddingInline: sidebarRow.paneInline },
   root: { flex: '1', minHeight: '0' },
-  row: { minHeight: '32px', paddingBlock: '5px', paddingInline: '8px' },
-  sectionBody: { paddingBlockStart: '2px', paddingBlockEnd: '6px', paddingInline: '8px' },
+  row: { minHeight: sidebarRow.height, paddingInline: '8px' },
+  sectionBody: { paddingBlockStart: '2px', paddingBlockEnd: '6px', paddingInline: '6px' },
 });
 
-const Row = ({ trailing = 48 }: { trailing?: number }) => (
-  <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={8}>
-    <Skeleton height={14} radius={4} width={14} />
-    <Skeleton.Text width={'55%'} />
-    <Skeleton height={12} radius={4} style={{ marginInlineStart: 'auto' }} width={trailing} />
-  </Flexbox>
-);
+const Row = ({ trailing = 48 }: { trailing?: number }) => {
+  const { iconSize } = useDensityTokens();
+
+  return (
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.row).className} gap={12}>
+      <Skeleton height={iconSize} radius={4} width={iconSize} />
+      <Skeleton.Text width={'55%'} />
+      <Skeleton height={12} radius={4} style={{ marginInlineStart: 'auto' }} width={trailing} />
+    </Flexbox>
+  );
+};
 
 const SectionTitle = ({ width = 64 }: { width?: number }) => (
   <div {...stylex.props(sectionStyles.sectionHeader)}>
@@ -37,9 +45,11 @@ const SectionTitle = ({ width = 64 }: { width?: number }) => (
 );
 
 const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRequest }) => {
+  const density = useDensityTokens();
+
   return (
     <Flexbox className={stylex.props(styles.root).className}>
-      <Flexbox className={stylex.props(styles.root).className}>
+      <Flexbox {...stylex.props(styles.root, styles.content)}>
         <PrHead
           meta={
             <>
@@ -56,14 +66,14 @@ const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRe
             summary ? (
               <PrTitle number={summary.number} title={summary.title} />
             ) : (
-              <Skeleton.Text fontSize={15} rows={2} width={['92%', '60%']} />
+              <Skeleton.Text fontSize={14} rows={2} width={['92%', '60%']} />
             )
           }
         />
         <Flexbox {...sectionProps()}>
           <SectionTitle width={72} />
           <div {...stylex.props(styles.sectionBody)}>
-            <Skeleton.Text fontSize={13} rows={3} width={['100%', '88%', '46%']} />
+            <Skeleton.Text fontSize={density.fontSize} rows={3} width={['100%', '88%', '46%']} />
           </div>
         </Flexbox>
         <Flexbox {...sectionProps()}>
@@ -85,7 +95,7 @@ const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRe
           horizontal
           align={'center'}
           gap={8}
-          style={{ paddingBlock: '6px 0', paddingInline: 8 }}
+          style={{ paddingBlock: '10px 0', paddingInline: 8 }}
         >
           <Skeleton height={24} radius={6} width={'100%'} />
         </Flexbox>

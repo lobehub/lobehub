@@ -69,6 +69,11 @@ export const RedisKeyNamespace = {
    */
   LOBEHUB: 'lobechat',
   /**
+   * Public REST API (`packages/openapi`): per-API-key rate-limit windows and
+   * the first response stored for each `Idempotency-Key`.
+   */
+  OPENAPI: 'openapi',
+  /**
    * Short-lived derived answers the send path would otherwise re-fetch per
    * turn (device system info, a skill's live tool list) and the one-shot
    * claims that keep their background refreshes from piling up.
@@ -353,6 +358,23 @@ export const RedisKeys = {
       `workspace_rescan_claim:v1:${userId}:${pool}:${deviceId}:${cwd}`,
   },
   /**
+   * Public REST API scope — see {@link RedisKeyNamespace.OPENAPI}.
+   */
+  openapi: {
+    /**
+     * Requests one caller identity sent to one rate-limit bucket in one fixed window.
+     * Full key: openapi:rate_limit:v1:{identity}:{bucket}:{windowStart}
+     */
+    rateLimit: (identity: string, bucket: string, windowStart: number): string =>
+      `rate_limit:v1:${identity}:${bucket}:${windowStart}`,
+    /**
+     * The claim, then the stored first response, of one user's `Idempotency-Key`.
+     * `{keyHash}` hashes the client key so arbitrary header bytes never reach the key.
+     * Full key: openapi:idempotency:v1:{userId}:{keyHash}
+     */
+    idempotency: (userId: string, keyHash: string): string => `idempotency:v1:${userId}:${keyHash}`,
+  },
+  /**
    * QQ passive-reply scope — see {@link RedisKeyNamespace.QQ_PASSIVE}. `{key}` is
    * `{applicationId}:{threadId}`.
    */
@@ -387,6 +409,7 @@ export const RedisKeyScopeNamespace = {
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
+  openapi: RedisKeyNamespace.OPENAPI,
   qqPassive: RedisKeyNamespace.QQ_PASSIVE,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,
 } as const satisfies Record<

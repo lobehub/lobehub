@@ -10,10 +10,17 @@ import {
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
+import { COMPACT_FOLDER_ICON_CSS } from '../Files/fileTreeStyle';
 import { buildReviewTreeNodes, type ReviewTreeData, type ReviewTreeGroup } from './reviewTreeNodes';
 
-const FILE_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+const FILE_TREE_UNSAFE_CSS = [
+  FOLDER_ICON_CSS,
+  COMPACT_FOLDER_ICON_CSS,
+  HIDE_POINTER_FOCUS_RING_CSS,
+].join('\n');
 
 const styles = stylex.create({
   tree: {
@@ -25,9 +32,12 @@ const styles = stylex.create({
     '--trees-fg-override': cssVar.colorTextSecondary,
     '--trees-fg-muted-override': cssVar.colorTextSecondary,
     '--trees-accent-override': cssVar.colorPrimary,
-    '--trees-padding-inline-override': '0px',
-    '--trees-font-size-override': '12px',
-    '--trees-border-radius-override': '6px',
+    '--trees-padding-inline-override': sidebarRow.paneInline,
+    '--trees-item-margin-x-override': '0px',
+    '--trees-item-padding-x-override': sidebarRow.paddingInline,
+    '--trees-item-row-gap-override': sidebarRow.gap,
+    '--trees-font-size-override': sidebarRow.textFontSize,
+    '--trees-border-radius-override': sidebarRow.radius,
     'flex': '1',
     'minHeight': '0',
   },
@@ -49,6 +59,7 @@ interface FileTreeNavProps {
  */
 const FileTreeNav = memo<FileTreeNavProps>(
   ({ activeFileKey, groups, onSelectFile, showGroupHeaders }) => {
+    const density = useDensityTokens();
     const nodes = useMemo(
       () => buildReviewTreeNodes(groups, showGroupHeaders),
       [groups, showGroupHeaders],
@@ -64,8 +75,12 @@ const FileTreeNav = memo<FileTreeNavProps>(
       [nodes, activeFileKey],
     );
     const treeStyleVars = useMemo(
-      () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
-      [nodes],
+      () =>
+        getExplorerTreeStyleVars({
+          reserveChevronSlot: nodes.some((node) => node.isFolder),
+          rowGap: density.gap,
+        }),
+      [density.gap, nodes],
     );
 
     return (
@@ -74,6 +89,7 @@ const FileTreeNav = memo<FileTreeNavProps>(
           iconsColored
           defaultExpandedIds={defaultExpandedIds}
           iconSet="complete"
+          itemHeight={density.treeItemHeight}
           nodes={nodes}
           selectedIds={selectedIds}
           style={{ height: '100%' }}

@@ -1,4 +1,7 @@
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
+
+import { sidebarRow } from '@/styles/density.stylex';
 
 import GoalWorkflowCardContainer from './GoalWorkflowCard';
 import { useTopicOperationGoals } from './useGoalSection';
@@ -9,6 +12,10 @@ import { useTopicOperationGoals } from './useGoalSection';
  * card open by default, so the panel leads with what just moved. Topics that
  * created no goal render nothing.
  */
+const styles = stylex.create({
+  cards: { display: 'flex', flexDirection: 'column', gap: sidebarRow.sectionGap },
+});
+
 const GoalSection = memo<{ className?: string }>(({ className }) => {
   const goals = useTopicOperationGoals();
 
@@ -16,15 +23,17 @@ const GoalSection = memo<{ className?: string }>(({ className }) => {
 
   return (
     <div className={className}>
-      {goals.map((goal, index) => (
-        <GoalWorkflowCardContainer
-          criteriaCount={goal.criteriaCount}
-          goalId={goal.goalId}
-          initialCollapsed={index < goals.length - 1}
-          key={goal.goalId}
-          name={goal.name}
-        />
-      ))}
+      <div {...stylex.props(styles.cards)}>
+        {goals.map((goal, index) => (
+          <GoalWorkflowCardContainer
+            criteriaCount={goal.criteriaCount}
+            goalId={goal.goalId}
+            initialCollapsed={index < goals.length - 1}
+            key={goal.goalId}
+            name={goal.name}
+          />
+        ))}
+      </div>
     </div>
   );
 });

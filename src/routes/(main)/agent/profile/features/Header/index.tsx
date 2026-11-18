@@ -32,7 +32,6 @@ import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
@@ -50,6 +49,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
+import { useHeaderActionSize } from '@/styles/density';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -118,6 +118,7 @@ interface HeaderProps {
 }
 
 const Header = memo<HeaderProps>(({ active = 'profile' }) => {
+  const headerActionSmallSize = useHeaderActionSize(true);
   const { i18n, t } = useTranslation(['setting', 'chat', 'file', 'common', 'agent']);
   const dateLocale = i18n?.resolvedLanguage || i18n?.language;
   const navigate = useWorkspaceAwareNavigate();
@@ -441,14 +442,14 @@ const Header = memo<HeaderProps>(({ active = 'profile' }) => {
           {canShareAgent && (
             <ActionIcon
               icon={Share2Icon}
-              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+              size={headerActionSmallSize}
               title={t('share.entry', { ns: 'agent' })}
               tooltipProps={{ placement: 'bottom' }}
               onClick={handleOpenShare}
             />
           )}
           <DropdownMenu items={menuItems}>
-            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+            <ActionIcon icon={MoreHorizontal} size={headerActionSmallSize} />
           </DropdownMenu>
           {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
             <ToggleRightPanelButton

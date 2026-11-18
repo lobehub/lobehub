@@ -1,13 +1,13 @@
 'use client';
 
 import type { DeviceListItem, DeviceMetricSeries } from '@lobechat/types';
-import { Button, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import { DeviceRunningSummaryValue } from '@/features/DeviceManager/DeviceActivity/RunningUsers';
 import { useDeviceMetricSeries } from '@/features/DeviceManager/DeviceHealth/shared';
 import UsageMeter, {
@@ -17,13 +17,15 @@ import UsageMeter, {
 import { latestUsageView } from '@/features/DeviceManager/DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceActivityText } from '@/features/DeviceManager/useDeviceActivityText';
+import { useDensityTokens } from '@/styles/density';
+import { sidebarRow } from '@/styles/density.stylex';
 
-import { OverviewRow } from './OverviewRow';
-import { sectionProps, sectionStyles } from './sectionStyles';
+import { SidebarRowSkeleton } from '../DeferredSkeleton';
+import { sectionProps } from './sectionStyles';
 import { useBoundDevice } from './useBoundDevice';
 
 const styles = stylex.create({
-  body: { paddingBlock: '4px', paddingInline: '8px' },
+  body: { paddingBlock: '4px', paddingInline: '6px' },
   code: {
     overflow: 'hidden',
     fontFamily: cssVar.fontFamilyCode,
@@ -34,9 +36,9 @@ const styles = stylex.create({
   infoGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px' },
   name: {
     overflow: 'hidden',
-    fontSize: '13px',
+    fontSize: sidebarRow.textFontSize,
     fontWeight: 600,
-    lineHeight: '18px',
+    lineHeight: sidebarRow.textLineHeight,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -44,7 +46,7 @@ const styles = stylex.create({
   sub: {
     overflow: 'hidden',
     fontSize: '12px',
-    lineHeight: '16px',
+    lineHeight: '18px',
     color: cssVar.colorTextTertiary,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -53,12 +55,12 @@ const styles = stylex.create({
     display: 'grid',
     flexShrink: 0,
     placeItems: 'center',
-    width: '32px',
-    height: '32px',
+    width: '28px',
+    height: '28px',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
-    borderRadius: '9px',
+    borderRadius: '8px',
     color: cssVar.colorTextSecondary,
     backgroundColor: cssVar.colorFillTertiary,
     backgroundImage: 'none',
@@ -78,7 +80,6 @@ interface DeviceStatusSectionProps {
  */
 const DeviceStatusSection = memo<DeviceStatusSectionProps>(({ active, deviceId }) => {
   const { t } = useTranslation('chat');
-  const { t: tCommon } = useTranslation('common');
   const bound = useBoundDevice(deviceId, active);
   const device = bound.status === 'ready' ? bound.device : undefined;
   const { data, error } = useDeviceMetricSeries(deviceId, device?.scope, active && !!device);
@@ -86,9 +87,7 @@ const DeviceStatusSection = memo<DeviceStatusSectionProps>(({ active, deviceId }
   if (bound.status === 'loading')
     return (
       <Flexbox {...sectionProps()}>
-        <div {...stylex.props(sectionStyles.skeleton)}>
-          <Skeleton.Text rows={2} />
-        </div>
+        <SidebarRowSkeleton rows={2} />
       </Flexbox>
     );
 
@@ -96,20 +95,11 @@ const DeviceStatusSection = memo<DeviceStatusSectionProps>(({ active, deviceId }
   if (bound.status === 'error')
     return (
       <Flexbox {...sectionProps()}>
-        <OverviewRow
-          danger
-          icon={TriangleAlertIcon}
-          iconColor={cssVar.colorError}
-          value={t('workingPanel.overview.deviceError')}
-          trailing={
-            <Button
-              icon={<Icon icon={RefreshCwIcon} size={12} />}
-              size={'small'}
-              onClick={bound.retry}
-            >
-              {tCommon('retry')}
-            </Button>
-          }
+        <AsyncError
+          align={'start'}
+          title={t('workingPanel.overview.deviceError')}
+          variant={'inline'}
+          onRetry={bound.retry}
         />
       </Flexbox>
     );
@@ -131,6 +121,7 @@ interface DeviceStatusContentProps {
 const DeviceStatusContent = ({ data, device, error }: DeviceStatusContentProps) => {
   const { t } = useTranslation('setting');
   const activityText = useDeviceActivityText(device);
+  const { gap } = useDensityTokens();
   const online = (device.channels ?? []).length > 0;
   const usage = latestUsageView({ data, error });
   const platformLabel = getPlatformLabel(device.platform, device.architecture);
@@ -138,8 +129,8 @@ const DeviceStatusContent = ({ data, device, error }: DeviceStatusContentProps) 
 
   return (
     <Flexbox {...sectionProps()} data-testid={'overview-device-status'}>
-      <Flexbox className={stylex.props(styles.body).className} gap={14}>
-        <Flexbox horizontal align={'center'} gap={10}>
+      <Flexbox className={stylex.props(styles.body).className} gap={12}>
+        <Flexbox horizontal align={'center'} gap={gap}>
           <span {...stylex.props(styles.tile)}>{getDeviceIcon(device.platform, 16)}</span>
           <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
             <span {...stylex.props(styles.name)} title={displayName}>

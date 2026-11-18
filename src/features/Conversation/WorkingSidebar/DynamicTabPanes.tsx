@@ -164,6 +164,7 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
             return (
               <Flexbox flex={1} key={sessionId} style={activeTab === tab ? PANE : HIDDEN_PANE}>
                 <BrowserPane
+                  compactToolbar
                   agentId={agentId}
                   composerTarget={composerTarget}
                   sessionId={sessionId}

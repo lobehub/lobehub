@@ -9,6 +9,9 @@ import {
   UpdateTaskRequestSchema,
 } from './task.type';
 
+// Services return the page's rows and total; the controller adds `hasMore`/`nextCursor`.
+const SERVICE_PAGE_FIELDS = { hasMore: true, nextCursor: true } as const;
+
 /**
  * A schedule the dispatcher cannot evaluate must be refused at the boundary:
  * `TaskService.createTask` assumes the caller already validated it, so an
@@ -127,7 +130,7 @@ describe('task response schemas', () => {
       total: 1,
     };
 
-    expect(() => TaskListResponseSchema.parse(wire(page))).not.toThrow();
+    expect(() => TaskListResponseSchema.omit(SERVICE_PAGE_FIELDS).parse(wire(page))).not.toThrow();
   });
 
   it('accepts a detail with nested subtasks and a topic activity', () => {

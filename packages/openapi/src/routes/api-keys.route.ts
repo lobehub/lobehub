@@ -1,11 +1,15 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
 import { routeDoc } from '../common/openapi';
 import { zValidator } from '../common/validator';
 import { ApiKeyController } from '../controllers/api-key.controller';
+import {
+  LEGACY_ARRAY_LIST_DESCRIPTION,
+  LegacyArrayListQuerySchema,
+} from '../helpers/legacy-array-list';
+import { paginatedListSchema } from '../helpers/pagination';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import { requireWorkspaceRoleWhenScoped } from '../middleware/workspace';
@@ -28,10 +32,16 @@ const requireWorkspaceAdmin = requireWorkspaceRoleWhenScoped('admin');
 
 app.get(
   '/',
-  routeDoc({ data: z.array(ApiKeySchema), summary: 'List API keys', tags: ['api-keys'] }),
+  routeDoc({
+    data: paginatedListSchema(ApiKeySchema, { total: true }),
+    description: LEGACY_ARRAY_LIST_DESCRIPTION,
+    summary: 'List API keys',
+    tags: ['api-keys'],
+  }),
   requireAuth,
   requireWorkspaceAdmin,
   requireAnyPermission(getAllScopePermissions('API_KEY_READ')),
+  zValidator('query', LegacyArrayListQuerySchema),
   async (c) => new ApiKeyController().getApiKeys(c),
 );
 

@@ -391,9 +391,12 @@ export class AgentDocumentsService {
     return this.projectDocuments(excludeArchivedToolResults(docs));
   }
 
-  async getAgentContextDocuments(agentId: string): Promise<AgentDocumentContextPayload[]> {
+  async getAgentContextDocuments(
+    agentId: string,
+    options?: Parameters<AgentDocumentModel['findContextByAgent']>[1],
+  ): Promise<AgentDocumentContextPayload[]> {
     const docs = excludeArchivedToolResults(
-      await this.agentDocumentModel.findContextByAgent(agentId),
+      await this.agentDocumentModel.findContextByAgent(agentId, options),
     );
 
     const projectedDocs = await Promise.all(

@@ -13,7 +13,7 @@ import { formatCheckDuration, getCheckVisual, TONE_COLOR } from './prVisual';
 
 const styles = stylex.create({
   duration: { fontFamily: cssVar.fontFamilyCode },
-  list: { paddingInlineStart: '18px' },
+  list: { display: 'flex', flexDirection: 'column', gap: '1px' },
 });
 
 interface ChecksListProps {
@@ -34,7 +34,6 @@ const ChecksList = memo<ChecksListProps>(({ checks }) => {
             : formatCheckDuration(check);
         return (
           <OverviewRow
-            weak
             icon={visual.icon}
             iconColor={TONE_COLOR[visual.tone]}
             key={`${check.name}:${index}`}

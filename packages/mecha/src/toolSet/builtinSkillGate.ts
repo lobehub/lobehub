@@ -3,9 +3,6 @@ import { AgentBrowserIdentifier } from '@lobechat/builtin-skills/manifests';
 /** Builtin skills that only work where the run can execute commands on a device. */
 const DEVICE_ONLY_BUILTIN_SKILLS = new Set<string>([AgentBrowserIdentifier]);
 
-/** Builtin skills the product drives itself; never listed to the user or the model. */
-export const USER_HIDDEN_BUILTIN_SKILLS = new Set<string>(['task']);
-
 export interface BuiltinSkillEnvironment {
   /**
    * The run can execute commands on a device: the desktop app is itself that
@@ -26,7 +23,6 @@ export const isBuiltinSkillEnabled = (
   skillId: string,
   environment: BuiltinSkillEnvironment,
 ): boolean => {
-  if (USER_HIDDEN_BUILTIN_SKILLS.has(skillId)) return false;
   if (DEVICE_ONLY_BUILTIN_SKILLS.has(skillId)) return environment.canExecuteOnDevice;
   return true;
 };

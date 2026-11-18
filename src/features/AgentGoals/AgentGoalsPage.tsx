@@ -26,6 +26,7 @@ import { useCacheScope } from '@/libs/swr/useCacheScope';
 import type { GoalListFilter } from '@/store/goal';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import { globalGoalListScopeId, goalListKey, goalListScopeId } from '@/store/goal/projection';
+import { useDensityTokens } from '@/styles/density';
 
 import { createGoalModal } from './CreateGoalModal';
 import GoalAgentFilter from './GoalAgentFilter';
@@ -116,6 +117,7 @@ interface AgentGoalsPageProps {
 
 const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
+  const { pageTitleFontSize } = useDensityTokens();
   const navigate = useWorkspaceAwareNavigate();
   const cacheScope = useCacheScope();
   const isGlobal = !agentId && !projectId;
@@ -373,7 +375,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
               {/* Wraps so the filters drop below the title on a phone instead of crushing it. */}
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
                 <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-                  <Text fontSize={16} weight={600}>
+                  <Text fontSize={pageTitleFontSize} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>
