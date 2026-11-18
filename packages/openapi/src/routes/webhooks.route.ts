@@ -171,7 +171,7 @@ WebhookRoutes.get(
   routeDoc({
     data: WebhookDeliveryListResponseSchema,
     description:
-      'Deliveries to this endpoint, newest first, with the latest attempt of each and the exact body sent.',
+      'Deliveries to this endpoint, newest first, with the latest attempt of each and the exact body sent. A restricted API key sees only `webhook.test` and the events whose data it may read (the same read scopes as subscribing).',
     errors: [404],
     operationId: 'webhooks.listDeliveries',
     summary: 'List deliveries of a webhook endpoint',
@@ -190,7 +190,7 @@ WebhookRoutes.post(
   routeDoc({
     data: WebhookDeliverySchema,
     description:
-      'Queues the same event (same event id and body) again as a new delivery, which follows the normal retry policy. Answers 202 with the new delivery; follow it through `GET /webhooks/{id}/deliveries`.',
+      "Queues the same event (same event id and body) again as a new delivery, which follows the normal retry policy. Answers 202 with the new delivery; follow it through `GET /webhooks/{id}/deliveries`. A restricted API key needs the read scope of the delivery's event (403 `insufficient_scope` otherwise).",
     errors: [404],
     operationId: 'webhooks.redeliver',
     status: 202,

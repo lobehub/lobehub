@@ -45200,7 +45200,9 @@ paths:
       operationId: webhooks.listDeliveries
       description: >-
         Deliveries to this endpoint, newest first, with the latest attempt of
-        each and the exact body sent.
+        each and the exact body sent. A restricted API key sees only
+        `webhook.test` and the events whose data it may read (the same read
+        scopes as subscribing).
 
 
         **API key scopes:** `webhook:read`.
@@ -45379,7 +45381,9 @@ paths:
       description: >-
         Queues the same event (same event id and body) again as a new delivery,
         which follows the normal retry policy. Answers 202 with the new
-        delivery; follow it through `GET /webhooks/{id}/deliveries`.
+        delivery; follow it through `GET /webhooks/{id}/deliveries`. A
+        restricted API key needs the read scope of the delivery's event (403
+        `insufficient_scope` otherwise).
 
 
         **API key scopes:** `webhook:write`.

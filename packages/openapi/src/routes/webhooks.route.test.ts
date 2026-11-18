@@ -71,6 +71,7 @@ const OTHER_SCOPE_KEY = 'sk-lh-whkchatowner0001';
 const STRANGER_KEY = 'sk-lh-whkstranger00001';
 const WORKSPACE_KEY = 'sk-lh-whkworkspace0001';
 const CHAT_EVENTS_KEY = 'sk-lh-whkchatevents001';
+const CHAT_READER_KEY = 'sk-lh-whkchatreader001';
 
 const call = (
   path: string,
@@ -138,6 +139,7 @@ beforeEach(async () => {
     key(STRANGER_KEY, STRANGER, ['webhook:write', 'run:read']),
     key(WORKSPACE_KEY, OWNER, ['webhook:write', 'run:read'], WORKSPACE),
     key(CHAT_EVENTS_KEY, OWNER, ['webhook:write', 'chat:read']),
+    key(CHAT_READER_KEY, OWNER, ['webhook:read', 'chat:read']),
   ]);
 });
 
@@ -212,6 +214,132 @@ describe('webhook routes: event subscriptions need the read scope of their data'
       method: 'POST',
     });
     expect(res.status).toBe(201);
+  });
+});
+
+/** An endpoint carrying `message.created`, registered by a key that may read chat data. */
+const createChatEndpoint = async () => {
+  const res = await call('', {
+    body: { ...VALID, events: ['message.created'] },
+    key: CHAT_EVENTS_KEY,
+    method: 'POST',
+  });
+  expect(res.status).toBe(201);
+  return WebhookWithSecretSchema.parse(await data(res));
+};
+
+const storedEndpoint = async (id: string) =>
+  (await serverDB.select().from(webhookEndpoints)).find((row) => row.id === id)!;
+
+describe('webhook routes: a PATCH without events is judged on the events the endpoint keeps', () => {
+  // WRITE_KEY may manage webhooks and read runs, but not chat data.
+  it('refuses to point a chat endpoint at another URL, and changes nothing', async () => {
+    const { id } = await createChatEndpoint();
+    const res = await call(`/${id}`, {
+      body: { url: 'https://attacker.example.com/hook' },
+      key: WRITE_KEY,
+      method: 'PATCH',
+    });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { message: string }).message).toContain('`chat:read`');
+    expect((await storedEndpoint(id)).url).toBe(VALID.url);
+  });
+
+  it('refuses to turn a chat endpoint back on, and changes nothing', async () => {
+    const { id } = await createChatEndpoint();
+    await call(`/${id}`, { body: { enabled: false }, key: CHAT_EVENTS_KEY, method: 'PATCH' });
+
+    const res = await call(`/${id}`, { body: { enabled: true }, key: WRITE_KEY, method: 'PATCH' });
+    expect(res.status).toBe(403);
+    expect((await storedEndpoint(id)).enabled).toBe(false);
+  });
+
+  it('still allows renaming or turning it off, which moves no data anywhere', async () => {
+    const { id } = await createChatEndpoint();
+    const rename = await call(`/${id}`, {
+      body: { description: 'renamed' },
+      key: WRITE_KEY,
+      method: 'PATCH',
+    });
+    expect(rename.status).toBe(200);
+    const off = await call(`/${id}`, { body: { enabled: false }, key: WRITE_KEY, method: 'PATCH' });
+    expect(off.status).toBe(200);
+    expect(await storedEndpoint(id)).toMatchObject({ description: 'renamed', enabled: false });
+  });
+});
+
+describe('webhook routes: the delivery log reveals only events the key may read', () => {
+  const seedDeliveries = async (endpointId: string) => {
+    const envelope = (id: string, type: string, payloadData: object) => ({
+      createdAt: '2026-11-18T00:00:00.000Z',
+      data: payloadData,
+      id,
+      type,
+      workspaceId: null,
+    });
+    const rows = [
+      {
+        eventId: 'evt_chat',
+        eventType: 'message.created' as const,
+        id: 'whd_chat',
+        payload: envelope('evt_chat', 'message.created', {
+          agentId: null,
+          messageId: 'msg_secret',
+          role: 'user',
+          threadId: null,
+          topicId: 'tpc_secret',
+        }),
+      },
+      {
+        eventId: 'evt_test',
+        eventType: 'webhook.test' as const,
+        id: 'whd_test',
+        payload: envelope('evt_test', 'webhook.test', { message: 'hi', webhookId: endpointId }),
+      },
+    ];
+    await serverDB.insert(webhookDeliveries).values(
+      rows.map((row, index) => ({
+        ...row,
+        createdAt: new Date(Date.UTC(2026, 10, 18, 0, 0, index)),
+        endpointId,
+        payload: row.payload as never,
+        status: 'succeeded' as const,
+        userId: OWNER,
+      })),
+    );
+  };
+
+  it('hides chat deliveries from a webhook:read key without chat:read', async () => {
+    const { id } = await createChatEndpoint();
+    await seedDeliveries(id);
+
+    const restricted = await data(await call(`/${id}/deliveries`, { key: READ_KEY }));
+    expect(restricted.items.map((d: { id: string }) => d.id)).toEqual(['whd_test']);
+    expect(restricted.total).toBe(1);
+    expect(JSON.stringify(restricted)).not.toContain('msg_secret');
+
+    const reader = await data(await call(`/${id}/deliveries`, { key: CHAT_READER_KEY }));
+    expect(reader.items.map((d: { id: string }) => d.id)).toEqual(['whd_test', 'whd_chat']);
+    expect(reader.total).toBe(2);
+  });
+
+  it('refuses to redeliver an event the key may not read', async () => {
+    const { id } = await createChatEndpoint();
+    await seedDeliveries(id);
+
+    const refused = await call(`/${id}/deliveries/whd_chat/redeliver`, {
+      key: WRITE_KEY,
+      method: 'POST',
+    });
+    expect(refused.status).toBe(403);
+    expect(((await refused.json()) as { code: string }).code).toBe('insufficient_scope');
+    expect(holder.triggerDeliver).not.toHaveBeenCalled();
+
+    const allowed = await call(`/${id}/deliveries/whd_test/redeliver`, {
+      key: WRITE_KEY,
+      method: 'POST',
+    });
+    expect(allowed.status).toBe(202);
   });
 });
 

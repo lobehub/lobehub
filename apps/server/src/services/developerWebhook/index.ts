@@ -1,5 +1,6 @@
 import {
   WEBHOOK_TEST_EVENT_TYPE,
+  type WebhookDeliveryEventType,
   type WebhookEventEnvelope,
   type WebhookEventType,
 } from '@lobechat/types';
@@ -23,7 +24,7 @@ export { signWebhookPayload } from './signature';
 /** Endpoints one person may register in one space. */
 export const MAX_WEBHOOK_ENDPOINTS = 20;
 
-export type DeveloperWebhookErrorCode = 'limit_reached' | 'not_found';
+export type DeveloperWebhookErrorCode = 'forbidden_event' | 'limit_reached' | 'not_found';
 
 export class DeveloperWebhookError extends Error {
   constructor(
@@ -43,6 +44,11 @@ export interface CreateWebhookInput {
 }
 
 export type UpdateWebhookInput = Partial<CreateWebhookInput>;
+
+/** Which events' stored payloads a caller may see; omitted = all. */
+export interface DeliveryAccess {
+  eventTypes?: readonly WebhookDeliveryEventType[];
+}
 
 /** An endpoint with its plaintext secret: returned only on create and on rotation. */
 export type WebhookEndpointWithSecret = WebhookEndpointView & { secret: string };
@@ -140,16 +146,34 @@ export class DeveloperWebhookService {
     return (await this.model.findDelivery(endpoint.id, delivery.id)) ?? delivery;
   };
 
-  listDeliveries = async (id: string, params: WebhookListParams) => {
+  /**
+   * The delivery log. A stored delivery holds the event's whole payload, so a caller
+   * that may read only some domains passes `eventTypes` and sees only those events.
+   */
+  listDeliveries = async (
+    id: string,
+    params: WebhookListParams,
+    { eventTypes }: DeliveryAccess = {},
+  ) => {
     await this.get(id);
-    return this.model.listDeliveries(id, params);
+    return this.model.listDeliveries(id, params, eventTypes);
   };
 
   /** Queue the same event (same id and body) again as a new delivery. */
-  redeliver = async (id: string, deliveryId: string): Promise<WebhookDeliveryRow> => {
+  redeliver = async (
+    id: string,
+    deliveryId: string,
+    { eventTypes }: DeliveryAccess = {},
+  ): Promise<WebhookDeliveryRow> => {
     const endpoint = await this.get(id);
     const original = await this.model.findDelivery(id, deliveryId);
     if (!original) throw new DeveloperWebhookError('not_found', 'Delivery not found');
+    // Redelivering returns, and resends, the original payload.
+    if (eventTypes && !eventTypes.includes(original.eventType))
+      throw new DeveloperWebhookError(
+        'forbidden_event',
+        `Reading ${original.eventType} events is not allowed for this caller`,
+      );
 
     const delivery = await this.model.createDelivery(endpoint, original.payload, {
       redeliveryOf: original.id,

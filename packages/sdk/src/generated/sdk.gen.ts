@@ -2845,7 +2845,7 @@ export class Webhooks extends HeyApiClient {
     /**
      * List deliveries of a webhook endpoint
      *
-     * Deliveries to this endpoint, newest first, with the latest attempt of each and the exact body sent.
+     * Deliveries to this endpoint, newest first, with the latest attempt of each and the exact body sent. A restricted API key sees only `webhook.test` and the events whose data it may read (the same read scopes as subscribing).
      *
      * **API key scopes:** `webhook:read`.
      */
@@ -2860,7 +2860,7 @@ export class Webhooks extends HeyApiClient {
     /**
      * Redeliver an event
      *
-     * Queues the same event (same event id and body) again as a new delivery, which follows the normal retry policy. Answers 202 with the new delivery; follow it through `GET /webhooks/{id}/deliveries`.
+     * Queues the same event (same event id and body) again as a new delivery, which follows the normal retry policy. Answers 202 with the new delivery; follow it through `GET /webhooks/{id}/deliveries`. A restricted API key needs the read scope of the delivery's event (403 `insufficient_scope` otherwise).
      *
      * **API key scopes:** `webhook:write`.
      */

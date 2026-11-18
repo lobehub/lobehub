@@ -1,7 +1,12 @@
-import type { WebhookEventType } from '@lobechat/types';
+import {
+  WEBHOOK_EVENT_TYPES,
+  WEBHOOK_TEST_EVENT_TYPE,
+  type WebhookDeliveryEventType,
+  type WebhookEventType,
+} from '@lobechat/types';
 import type { Context } from 'hono';
 
-import { type ApiKeyScope, hasApiKeyScope } from '@/const/apiKeyScope';
+import { type ApiKeyScope, hasApiKeyScope, isFullAccessApiKey } from '@/const/apiKeyScope';
 
 import { BaseController } from '../common/base.controller';
 import { ApiException } from '../common/errors';
@@ -70,6 +75,23 @@ const assertCanRedirect = async (
 
   const { events } = await service.get(id);
   assertCanSubscribe(c, events);
+};
+
+/**
+ * The events whose stored payloads the calling key may see in the delivery log and
+ * redeliver: a delivery carries its event's whole `data`, so `webhook:read` alone must
+ * not reveal domains the key cannot read. `undefined` = everything (full-access keys,
+ * session callers).
+ */
+const readableDeliveryEvents = (c: Context): WebhookDeliveryEventType[] | undefined => {
+  const scopes = c.get('apiKeyScopes') as string[] | null | undefined;
+  if (isFullAccessApiKey(scopes)) return undefined;
+  return [
+    WEBHOOK_TEST_EVENT_TYPE,
+    ...WEBHOOK_EVENT_TYPES.filter((event) =>
+      hasApiKeyScope(scopes, WEBHOOK_EVENT_READ_SCOPES[event]),
+    ),
+  ];
 };
 
 /**
@@ -176,7 +198,8 @@ export class WebhookController extends BaseController {
       const { id } = this.getParams<WebhookIdParam>(c);
       const query = this.getQuery<WebhookListQuery>(c);
       const service = await this.service(c);
-      return this.list(c, 'items', await service.listDeliveries(id, query), {
+      const access = { eventTypes: readableDeliveryEvents(c) };
+      return this.list(c, 'items', await service.listDeliveries(id, query, access), {
         message: 'Webhook deliveries retrieved successfully',
         pagination: query,
       });
@@ -190,7 +213,13 @@ export class WebhookController extends BaseController {
     try {
       const { deliveryId, id } = this.getParams<WebhookDeliveryParam>(c);
       const service = await this.service(c);
-      return this.success(c, await service.redeliver(id, deliveryId), 'Redelivery queued', 202);
+      const access = { eventTypes: readableDeliveryEvents(c) };
+      return this.success(
+        c,
+        await service.redeliver(id, deliveryId, access),
+        'Redelivery queued',
+        202,
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

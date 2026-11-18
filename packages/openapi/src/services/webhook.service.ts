@@ -1,9 +1,14 @@
 import type { WebhookEndpointView } from '@/database/models/developerWebhook';
 import type { WebhookDeliveryRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { DeveloperWebhookError, DeveloperWebhookService } from '@/server/services/developerWebhook';
+import {
+  type DeliveryAccess,
+  DeveloperWebhookError,
+  DeveloperWebhookService,
+} from '@/server/services/developerWebhook';
 
 import { BaseService } from '../common/base.service';
+import { ApiException } from '../common/errors';
 import { resolvePagination } from '../helpers/pagination';
 import type { DeletedResource } from '../types/common.type';
 import type {
@@ -65,12 +70,14 @@ export class WebhookRestService extends BaseService {
     this.webhooks = new DeveloperWebhookService(db, userId ?? '', workspaceId ?? null);
   }
 
-  /** `not_found` → 404, `limit_reached` → 409; anything else is left to `handleError` (500). */
+  /** `not_found` → 404, `forbidden_event` → 403, `limit_reached` → 409; anything else is left to `handleError` (500). */
   private async run<T>(action: () => Promise<T>): Promise<T> {
     try {
       return await action();
     } catch (error) {
       if (error instanceof DeveloperWebhookError) {
+        if (error.code === 'forbidden_event')
+          throw new ApiException(403, 'insufficient_scope', `insufficient_scope: ${error.message}`);
         throw error.code === 'not_found'
           ? this.createNotFoundError(error.message)
           : this.createConflictError(error.message);
@@ -112,15 +119,15 @@ export class WebhookRestService extends BaseService {
     return toDelivery(await this.run(() => this.webhooks.test(id)));
   }
 
-  async listDeliveries(id: string, query: WebhookListQuery) {
+  async listDeliveries(id: string, query: WebhookListQuery, access?: DeliveryAccess) {
     const { limit, offset } = resolvePagination(query);
     const { items, total } = await this.run(() =>
-      this.webhooks.listDeliveries(id, { limit, offset }),
+      this.webhooks.listDeliveries(id, { limit, offset }, access),
     );
     return { items: items.map(toDelivery), total };
   }
 
-  async redeliver(id: string, deliveryId: string) {
-    return toDelivery(await this.run(() => this.webhooks.redeliver(id, deliveryId)));
+  async redeliver(id: string, deliveryId: string, access?: DeliveryAccess) {
+    return toDelivery(await this.run(() => this.webhooks.redeliver(id, deliveryId, access)));
   }
 }

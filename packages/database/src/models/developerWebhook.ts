@@ -1,4 +1,5 @@
 import type {
+  WebhookDeliveryEventType,
   WebhookDeliveryStatus,
   WebhookDisabledReason,
   WebhookEventEnvelope,
@@ -182,10 +183,16 @@ export class WebhookEndpointModel {
     return row;
   };
 
-  listDeliveries = async (endpointId: string, { limit, offset }: WebhookListParams) => {
+  /** `eventTypes` limits the log to those events (a caller that may not read the rest). */
+  listDeliveries = async (
+    endpointId: string,
+    { limit, offset }: WebhookListParams,
+    eventTypes?: readonly WebhookDeliveryEventType[],
+  ) => {
     const where = and(
       eq(webhookDeliveries.endpointId, endpointId),
       eq(webhookDeliveries.userId, this.userId),
+      eventTypes ? inArray(webhookDeliveries.eventType, [...eventTypes]) : undefined,
     );
     const [items, [{ total }]] = await Promise.all([
       this.db
