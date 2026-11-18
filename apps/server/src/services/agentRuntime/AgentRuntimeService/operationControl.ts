@@ -11,7 +11,7 @@ import {
   type DeferredToolResultControlInput,
   loadDurableToolResultHooks,
 } from '../hooks/deferredToolResultControl';
-import { steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
+import { isChannelRun, steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
   type DeferredMessagePatch,
@@ -285,7 +285,8 @@ export async function readQueuedMessagesFlag(
   state?: AgentState,
 ): Promise<boolean> {
   try {
-    const scope = state && steerQueueScopeOf(state, deps.userId);
+    // A Channel reply takes its steers in at the next step and never hands its turn back.
+    const scope = state && !isChannelRun(state) ? steerQueueScopeOf(state, deps.userId) : undefined;
     const pending =
       (await deps.coordinator.hasQueuedMessages(operationId)) ||
       (!!scope && (await redisService.steerQueue.length(scope, operationId)) > 0);
@@ -357,14 +358,21 @@ export async function injectQueuedFollowUp(
   // parent appends meanwhile. Sealed before the read, the run makes that
   // parent take the steer back (`queueSubAgentSteer`) instead of leaving it
   // queued behind a run that will not read again.
-  const sealing = !!options?.lastRead && !topLevelScope;
+  // A Channel reply publishes when it ends, so it seals its last read the same way.
+  const channelRun = isChannelRun(state);
+  const sealing = !!options?.lastRead && (!topLevelScope || channelRun);
   if (sealing) await sealForLastRead(operationId, stepIndex);
 
   try {
     if ((await redisService.steerQueue.length(scope, operationId)) === 0) return;
     // A person's follow-ups wait for the run to end in Queue mode; a parent's
     // steer of its sub-agent always joins.
-    if (topLevelScope && (await readFollowUpMode(deps.serverDB, deps.userId)) === 'queue') return;
+    if (
+      topLevelScope &&
+      !channelRun &&
+      (await readFollowUpMode(deps.serverDB, deps.userId)) === 'queue'
+    )
+      return;
 
     const injected = await deps.delegate.injectQueuedFollowUp({ operationId, scope, state });
     // It answers again with the steer in context, so it reads its queue again.

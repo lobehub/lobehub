@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import debug from 'debug';
 
 import { redisService } from '@/server/services/redis';
+import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { SteerQueueWriteUnknownError } from '@/server/services/redis/steerQueue';
 
 import type { ComposerRunContext } from '../composerRun';
@@ -41,25 +42,43 @@ export const queueSubAgentSteer = async (
   },
 ): Promise<SubAgentSteerOutcome> => {
   const { agentId, groupId, instruction, operationId, threadId, topicId } = params;
-  const scope = { threadId, topicId, userId: ctx.userId };
-  const entry: QueuedFollowUp = {
-    createdAt: Date.now(),
-    id: randomUUID(),
-    request: {
-      agentId,
-      appContext: { groupId: groupId ?? undefined, threadId, topicId },
-      prompt: instruction,
+  const outcome = await queueRunSteer(ctx, {
+    entry: {
+      createdAt: Date.now(),
+      id: randomUUID(),
+      request: {
+        agentId,
+        appContext: { groupId: groupId ?? undefined, threadId, topicId },
+        prompt: instruction,
+      },
+      subAgentSteer: true,
+      userId: ctx.userId,
     },
-    subAgentSteer: true,
-    userId: ctx.userId,
-  };
+    operationId,
+    scope: { threadId, topicId, userId: ctx.userId },
+  });
+  if (outcome.queued) log('[%s] Queued a steer instruction for thread %s', operationId, threadId);
+  return outcome;
+};
+
+/**
+ * Queue an entry written for exactly one running run (`subAgentSteer` / `channelSteer`) and
+ * settle whether that run will read it. A run that already took its last read gets the entry
+ * taken back (`ended`), so the caller delivers it another way instead of leaving it behind a run
+ * that will not read again.
+ */
+export const queueRunSteer = async (
+  ctx: Pick<ComposerRunContext, 'db' | 'userId' | 'workspaceId'>,
+  params: { entry: QueuedFollowUp; operationId: string; scope: SteerQueueScope },
+): Promise<SubAgentSteerOutcome> => {
+  const { entry, operationId, scope } = params;
 
   const appendOnce = async () => {
     try {
       return await redisService.steerQueue.append(scope, entry, operationId);
     } catch (error) {
       if (!(error instanceof SteerQueueWriteUnknownError)) throw error;
-      log('[%s] Steer for thread %s may not be queued: %O', operationId, threadId, error);
+      log('[%s] Steer for topic %s may not be queued: %O', operationId, scope.topicId, error);
       return 'unknown' as const;
     }
   };
@@ -81,7 +100,7 @@ export const queueSubAgentSteer = async (
   // The run may have ended between the caller's check and the append, after
   // its last chance to read the queue: it seals itself before its final read
   // (`steerQueue.seal`), or its row already says it ended. Take the entry back
-  // so the caller can start a new run with it; losing the take-back means the
+  // so the caller can deliver it another way; losing the take-back means the
   // run already took it. The entry is stored by now, so a check that fails
   // leaves it unknown whether the run follows it: a resend could run it twice.
   try {
@@ -93,15 +112,14 @@ export const queueSubAgentSteer = async (
     }
   } catch (error) {
     log(
-      '[%s] Checking the steer for thread %s after queuing failed: %O',
+      '[%s] Checking the steer for topic %s after queuing failed: %O',
       operationId,
-      threadId,
+      scope.topicId,
       error,
     );
     return { queued: false, reason: 'unknown' };
   }
 
-  log('[%s] Queued a steer instruction for thread %s', operationId, threadId);
   return { queued: true };
 };
 

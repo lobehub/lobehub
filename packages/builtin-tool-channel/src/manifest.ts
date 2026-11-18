@@ -17,7 +17,7 @@ export const ChannelManifest: BuiltinToolManifest = {
     {
       name: ChannelApiName.readMessages,
       description:
-        'Read recent public messages in the current Channel or thread, in chronological order. Includes the parent channel prefix up to the thread root. Default 10, maximum 20 messages, with 2000-character excerpts. Use nextBeforeSequence to page backwards; readMessage retrieves full text and attachments. Scope and request cutoff are fixed by the runtime.',
+        'Read recent public messages in the current Channel or thread, in chronological order. Includes the parent channel prefix up to the thread root. Default 10, maximum 20 messages, with 2000-character excerpts. Use nextBeforeSequence to page backwards; readMessage retrieves full text and attachments. Your own conversation is read up to the request cutoff; pass threadId (from listThreads) to read another Thread of this Channel live, up to its latest message.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -32,6 +32,11 @@ export const ChannelManifest: BuiltinToolManifest = {
             minimum: 1,
             maximum: 20,
             description: 'Number of messages; default 10.',
+          },
+          threadId: {
+            type: 'string',
+            description:
+              'Another Thread of this Channel, from listThreads. Omit for your own conversation.',
           },
         },
       },
@@ -144,6 +149,132 @@ export const ChannelManifest: BuiltinToolManifest = {
             description:
               'The message, self-contained and written for that person: they do not see this conversation.',
           },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.listThreads,
+      description:
+        "List the Threads of the current Channel, newest first: each Thread's root (what it is about), its latest message, and your latest reply there with its status (queued, running, completed, failed, cancelled, silent), when it started, steps taken and, for a running reply your requester asked for, its latest steps. Use it to know what you are working on in parallel before reporting progress, stopping or steering. Default 10, maximum 20.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          activeOnly: {
+            type: 'boolean',
+            description: 'Only Threads where you have a queued or running reply.',
+          },
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 20,
+            description: 'Number of Threads; default 10.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.createThread,
+      description:
+        "Open a new Thread in the current Channel for one piece of work and start it: the title is posted on the main timeline as the Thread root, and the request is posted in the Thread as your requester's, @mentioning the Agent (you by default), which then answers there in parallel with you. Use it to split work into parallel Threads. Not available when an Agent posted the request you are answering.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'content'],
+        properties: {
+          title: {
+            type: 'string',
+            description:
+              "Short title of the work, in your requester's language (max 200 characters).",
+          },
+          content: {
+            type: 'string',
+            description:
+              'The request, self-contained: the run in the Thread sees the Thread and the main timeline up to its root, not your conversation.',
+          },
+          agentId: {
+            type: 'string',
+            description: 'An Agent member of this Channel to answer; defaults to you.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.stopThread,
+      description:
+        "Stop the replies running or queued in another Thread of the current Channel (your requester's own requests there; every reply for an admin). The Thread and its history stay. Use it when the person says a piece of work is no longer needed.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['threadId'],
+        properties: {
+          threadId: { type: 'string', description: 'Thread id from listThreads.' },
+          reason: { type: 'string', description: 'Optional. One short sentence on why.' },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.steerThread,
+      description:
+        'Send a correction to your reply in another Thread of the current Channel. If it is running, the reply takes the correction in at its next step and keeps going (delivery `steered`), and the correction is posted in the Thread for the record. If nothing of yours runs there, it is posted in the Thread as a new request for you (delivery `queued`). Prefer this over stopping and starting again when the work only needs to change course.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['threadId', 'content'],
+        properties: {
+          threadId: { type: 'string', description: 'Thread id from listThreads.' },
+          content: {
+            type: 'string',
+            description: 'The correction, self-contained, as an instruction to the running reply.',
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.watchThreads,
+      description:
+        "Report on Threads every intervalMinutes: each report is posted on the main timeline as your requester's request to you, so you answer it with an update (use listThreads / readMessages there). It stops after maxReports, when stopped with unwatchThreads, or once none of your replies in those Threads runs, with a last report asking for a summary. Use it when the person asks for regular progress updates. Not available when an Agent posted the request you are answering.",
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['threadIds', 'intervalMinutes'],
+        properties: {
+          threadIds: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 1,
+            maxItems: 10,
+            description: 'Thread ids from listThreads.',
+          },
+          intervalMinutes: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 120,
+            description: 'Minutes between reports.',
+          },
+          maxReports: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 48,
+            description: 'Most reports to post; default 12.',
+          },
+          prompt: {
+            type: 'string',
+            description:
+              "What each report should cover, in your requester's language, e.g. what the person asked to be told.",
+          },
+        },
+      },
+    },
+    {
+      name: ChannelApiName.unwatchThreads,
+      description: 'Stop the scheduled reports of a watch started with watchThreads.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['watchId'],
+        properties: {
+          watchId: { type: 'string', description: 'The watchId watchThreads returned.' },
         },
       },
     },

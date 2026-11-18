@@ -13,6 +13,7 @@ import { isDeviceCapablePlan, isDeviceLockedPlan } from '@/helpers/executionTarg
 import { runMayUseDevice } from '@/server/modules/AgentRuntime/executors/resolveRunActiveDeviceId';
 import { buildClientLlmWaitResumeContext } from '@/server/modules/AgentRuntime/llmRelay/clientWait';
 
+import { isChannelRun } from '../../steerQueueScope';
 import { type AgentExecutionParams } from '../../types';
 import type { AgentRuntimeServiceContext } from '../types';
 
@@ -38,7 +39,9 @@ const LLM_NEXT_PHASES = new Set([
  * instead and the sub-agent answers again with it in context.
  */
 const isSubAgentAnswer = (context: AgentRuntimeContext, state: AgentState): boolean => {
-  if (!state.origin?.lineage?.isSubAgent || context.phase !== 'llm_result') return false;
+  // A Channel reply's answer is read like a sub-agent's: a steer of it joins before it publishes.
+  if (!(state.origin?.lineage?.isSubAgent || isChannelRun(state)) || context.phase !== 'llm_result')
+    return false;
   // A graph node's output extraction is no answer: the graph needs that reply
   // back as an `llm_result`, and the node's own answer before it was the read.
   if (isGraphAgentOutputExtraction(state)) return false;

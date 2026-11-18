@@ -401,6 +401,11 @@ export interface ChannelReadMessagesParams {
   /** Exclusive sequence cursor returned by the preceding page. */
   beforeSequence?: number;
   limit?: number;
+  /**
+   * Another Thread of the current Channel (from `listThreads`), read live up to its latest
+   * message instead of the run's request cutoff. Omit for the run's own conversation.
+   */
+  threadId?: string;
 }
 
 export interface ChannelReadMessageParams {
@@ -501,6 +506,126 @@ export interface ChannelSentPersonMessage {
   person: ChannelPerson;
   /** Link to the requester's conversation with the person. */
   url: string;
+}
+
+/** Threads of the current Channel, to see what runs in them and act on one. */
+export interface ChannelListThreadsParams {
+  /** Only Threads where you (the calling Agent) have a queued or running reply. */
+  activeOnly?: boolean;
+  limit?: number;
+}
+
+/** One step of a running reply, read from its conversation: what it is doing right now. */
+export interface ChannelThreadRunActivity {
+  at: string;
+  role: string;
+  /** Text excerpt of the step. */
+  text?: string;
+  /** Tool calls of the step, as `identifier.apiName`. */
+  tools?: string[];
+}
+
+/** A reply of the calling Agent in a Thread. */
+export interface ChannelThreadRun {
+  /** Latest steps of a running reply you can see (your requester's own run); newest last. */
+  activity?: ChannelThreadRunActivity[];
+  createdAt: string;
+  /** The request it answers, excerpted. */
+  request: string;
+  /** Who asked for it. */
+  requester: string;
+  /** `queued` / `running` still go on; the rest have ended. */
+  status: ChannelJobStatus;
+  /** Steps taken so far, when known. */
+  stepCount?: number | null;
+}
+
+export interface ChannelThreadSummary {
+  /** The Thread this run answers in. */
+  current: boolean;
+  /** Latest message in the Thread, excerpted. */
+  lastMessage: { author: string; content: string } | null;
+  messageCount: number;
+  /** The root message on the main timeline, excerpted: what the Thread is about. */
+  root: string;
+  /** Your latest reply in this Thread, if any. */
+  run: ChannelThreadRun | null;
+  status: ChannelThreadStatus;
+  threadId: string;
+}
+
+export interface ChannelThreadPage {
+  hasMore: boolean;
+  threads: ChannelThreadSummary[];
+}
+
+/** Opens a new Thread in the current Channel and gives an Agent its first request there. */
+export interface ChannelCreateThreadParams {
+  /** Agent to answer in the Thread; defaults to you. Must be an Agent member of this Channel. */
+  agentId?: string;
+  /** The request, self-contained: the Thread's run sees the Thread, not your conversation. */
+  content: string;
+  /** Short title, posted as the Thread's root on the main timeline. */
+  title: string;
+}
+
+export interface ChannelCreatedThread {
+  agent: { agentId: string; name: string };
+  messageId: string;
+  threadId: string;
+  title: string;
+}
+
+export interface ChannelStopThreadParams {
+  reason?: string;
+  threadId: string;
+}
+
+export interface ChannelStoppedThread {
+  /** Replies that were queued or running and are now stopped. */
+  stopped: number;
+  threadId: string;
+}
+
+/** A correction for your reply in another Thread of the current Channel. */
+export interface ChannelSteerThreadParams {
+  content: string;
+  threadId: string;
+}
+
+export interface ChannelSteeredThread {
+  /**
+   * `steered`: the running reply reads it at its next step. `queued`: nothing was running (or it
+   * could not be reached), so it was posted in the Thread as a new request for you.
+   */
+  delivery: 'queued' | 'steered';
+  messageId?: string;
+  threadId: string;
+}
+
+/** Periodic progress reports on Threads, posted to the main timeline as requests for you. */
+export interface ChannelWatchThreadsParams {
+  /** Minutes between reports, 1–120. */
+  intervalMinutes: number;
+  /** Reports at most this many times (default 12, max 48); stops earlier when all are done. */
+  maxReports?: number;
+  /**
+   * What each report should cover, in your requester's language. It is posted on the main
+   * timeline as their request to you, followed by the watched Threads.
+   */
+  prompt?: string;
+  threadIds: string[];
+}
+
+export interface ChannelWatchedThreads {
+  intervalMinutes: number;
+  maxReports: number;
+  threadIds: string[];
+  watchId: string;
+}
+
+export interface ChannelUnwatchThreadsParams {
+  watchId: string;
 }
 
 export interface ChannelHistoryMessageDetail {

@@ -3,7 +3,7 @@ import { buildInvokeAgentResultAttributes } from '@lobechat/observability-otel/m
 import debug from 'debug';
 
 import { logToolCallPc } from '../../formalObservation';
-import { steerQueueScopeOf } from '../../steerQueueScope';
+import { isChannelRun, steerQueueScopeOf } from '../../steerQueueScope';
 import type { AgentRuntimeServiceContext } from '../types';
 import type { StepRunResult } from './runStep';
 
@@ -118,7 +118,10 @@ export async function finishOperation(
   // release the topic, which the next turn has to claim. A parked run keeps
   // its queue until it really ends; a failed or stopped one leaves it to the
   // user.
-  const steerScope = steerQueueScopeOf(stepResult.newState, deps.userId);
+  // A Channel reply hands nothing back: its steers joined it, and a late one was taken back.
+  const steerScope = isChannelRun(stepResult.newState)
+    ? undefined
+    : steerQueueScopeOf(stepResult.newState, deps.userId);
   if (stepResult.newState.status === 'done' && steerScope && deps.delegate.startQueuedFollowUp) {
     try {
       await deps.delegate.startQueuedFollowUp({ operationId, scope: steerScope });

@@ -19,6 +19,13 @@ export const steerQueueScopeOf = (
 };
 
 /**
+ * A Channel reply: it publishes one answer when it ends, so a steer must join the run itself.
+ * Nothing may queue behind it for a hand-back, which would start a turn outside the Channel.
+ */
+export const isChannelRun = (state: AgentState | undefined): boolean =>
+  state?.origin?.trigger === 'channel';
+
+/**
  * The queue a running `callSubAgent` child reads steer instructions from: its
  * isolation thread on the parent's topic. The parent agent fills it when it
  * sends the child another instruction mid-run (`callSubAgent({ subAgentId })`);
