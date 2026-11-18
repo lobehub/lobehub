@@ -26,7 +26,7 @@ const lockKey = (filePath: string) => {
     : resolved;
 };
 
-export const withFileLock = async <T>(filePath: string, task: () => Promise<T>): Promise<T> => {
+const withPathLock = async <T>(filePath: string, task: () => Promise<T>): Promise<T> => {
   const key = lockKey(filePath);
   const previous = pathQueues.get(key) ?? Promise.resolve();
   const current = previous.then(task, task);
@@ -42,6 +42,21 @@ export const withFileLock = async <T>(filePath: string, task: () => Promise<T>):
     if (pathQueues.get(key) === tail) pathQueues.delete(key);
   }
 };
+
+export const withFileLock = <T>(filePath: string, task: () => Promise<T>): Promise<T> =>
+  withPathLock(filePath, async () => {
+    let resolved: string;
+    try {
+      resolved = await realpath(filePath);
+    } catch {
+      // A new file has no canonical target yet; retain its path queue.
+      return task();
+    }
+
+    // Keep same-path calls in emission order while symlink aliases also share
+    // the target queue used by writeFileAtomic.
+    return lockKey(resolved) === lockKey(filePath) ? task() : withPathLock(resolved, task);
+  });
 
 /** Errors a rename over an existing file can hit on Windows when something else holds it open. */
 const RENAME_BLOCKED_CODES = new Set(['EACCES', 'EBUSY', 'EPERM']);
