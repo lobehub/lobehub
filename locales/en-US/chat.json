@@ -1666,6 +1666,7 @@
   "heteroAgent.permissionMode.plan.title": "Plan",
   "heteroAgent.permissionMode.saveFailed": "Couldn’t save the permission mode. Try again.",
   "heteroAgent.permissionMode.switchFailed": "Couldn’t switch the running session. The new mode applies from the next message.",
+  "heteroAgent.permissionMode.switchPendingNotice": "This run is still in “{{running}}”: the session couldn’t switch. “{{next}}” applies from the next message.",
   "heteroAgent.permissionMode.switchUnsupported": "lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.",
   "heteroAgent.permissionMode.tooltip": "How Claude Code asks before acting. Applies to this topic; a new topic in this directory starts with your last pick.",
   "heteroAgent.quota.compactLeft": "{{percent}}%",

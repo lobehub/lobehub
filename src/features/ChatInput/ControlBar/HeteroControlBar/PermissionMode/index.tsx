@@ -87,15 +87,24 @@ interface PermissionModeSelectorProps {
 const PermissionModeSelector = memo<PermissionModeSelectorProps>(({ agentId, topicId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
-  const { fallback, mode, runningMode, select } = usePermissionMode(agentId, topicId);
+  const { fallback, mode, runningMode, select, switchPending } = usePermissionMode(
+    agentId,
+    topicId,
+  );
 
   const title = useCallback(
     (value: HeteroPermissionMode) => t(`heteroAgent.permissionMode.${value}.title`),
     [t],
   );
-  const notice = fallback
-    ? t(`heteroAgent.permissionMode.fallback.${fallback}`, { mode: title(mode) })
-    : undefined;
+  const notice = switchPending
+    ? t('heteroAgent.permissionMode.switchPendingNotice', {
+        next: title(mode),
+        running: title(runningMode),
+      })
+    : fallback
+      ? t(`heteroAgent.permissionMode.fallback.${fallback}`, { mode: title(mode) })
+      : undefined;
+  const warn = switchPending || !!fallback;
 
   const items: DropdownItem[] = [
     ...(notice
@@ -133,9 +142,9 @@ const PermissionModeSelector = memo<PermissionModeSelectorProps>(({ agentId, top
     >
       <Flexbox horizontal align={'center'} gap={6}>
         <Icon
-          icon={fallback ? TriangleAlert : MODE_ICONS[runningMode]}
+          icon={warn ? TriangleAlert : MODE_ICONS[runningMode]}
           size={14}
-          {...(fallback ? stylex.props(styles.warning) : {})}
+          {...(warn ? stylex.props(styles.warning) : {})}
         />
         <span {...stylex.props(styles.label)}>{title(runningMode)}</span>
       </Flexbox>

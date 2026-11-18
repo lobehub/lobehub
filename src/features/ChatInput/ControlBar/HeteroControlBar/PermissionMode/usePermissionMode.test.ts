@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiAgentService } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import {
+  applyPermissionModeReport,
+  clearSwitchUnapplied,
   pendingHeteroPermissionModeMetadata,
   registerLocalPermissionModeSwitcher,
 } from '@/store/chat/heteroPermissionMode';
@@ -36,7 +38,13 @@ vi.mock('@/services/aiAgent', () => ({
 }));
 
 const setDir = vi.fn(async () => {});
-const updateTopicMetadata = vi.fn(async () => {});
+// Writes the patch into the seeded topic, as the real action does optimistically.
+const updateTopicMetadata = vi.fn(async (_id: string, patch: Record<string, unknown>) => {
+  const item = (useChatStore.getState().topicDataMap as any).k.items[0];
+  useChatStore.setState({
+    topicDataMap: { k: { items: [{ ...item, metadata: { ...item.metadata, ...patch } }] } } as any,
+  });
+});
 
 const seedTopic = (metadata: Record<string, unknown>) =>
   useChatStore.setState({
@@ -47,6 +55,7 @@ const seedTopic = (metadata: Record<string, unknown>) =>
 describe('usePermissionMode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearSwitchUnapplied('topic-1');
     useUserStore.setState({
       preference: {
         heteroPermissionModeDirs: [{ key: 'dev-1::/repo', mode: 'plan' }],
@@ -101,6 +110,24 @@ describe('usePermissionMode', () => {
       operationId: 'op-remote',
     });
     expect(toast.info).toHaveBeenCalledWith('heteroAgent.permissionMode.switchUnsupported');
+    // The running session never left "Ask every time": the chip says so, and the
+    // pick waits for the next message.
+    expect(result.current).toMatchObject({
+      mode: 'plan',
+      runningMode: 'default',
+      switchPending: true,
+    });
+
+    // Claude Code reporting its mode again ends the guess.
+    await act(() =>
+      applyPermissionModeReport(
+        () => useChatStore.getState(),
+        'topic-1',
+        { fallback: null, permissionMode: 'plan' },
+        { persist: false },
+      ),
+    );
+    expect(result.current.switchPending).toBe(false);
   });
 
   it('shows the mode a fallback ran in', () => {

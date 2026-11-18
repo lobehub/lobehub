@@ -689,6 +689,8 @@ export default {
     'The last run allowed every action: lh on this device is too old for permission modes. Update lh to apply “{{mode}}”.',
   'heteroAgent.permissionMode.switchFailed':
     'Couldn’t switch the running session. The new mode applies from the next message.',
+  'heteroAgent.permissionMode.switchPendingNotice':
+    'This run is still in “{{running}}”: the session couldn’t switch. “{{next}}” applies from the next message.',
   'heteroAgent.permissionMode.switchUnsupported':
     'lh on this device can’t switch a running session. The new mode applies from the next message; update lh to switch mid-run.',
   'heteroAgent.permissionMode.saveFailed': 'Couldn’t save the permission mode. Try again.',

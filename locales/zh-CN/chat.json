@@ -1666,6 +1666,7 @@
   "heteroAgent.permissionMode.plan.title": "计划模式",
   "heteroAgent.permissionMode.saveFailed": "权限模式没能保存，请重试。",
   "heteroAgent.permissionMode.switchFailed": "没能切换正在运行的会话，新模式会从下一条消息开始生效。",
+  "heteroAgent.permissionMode.switchPendingNotice": "这次运行仍是「{{running}}」：会话没能切换。「{{next}}」从下一条消息开始生效。",
   "heteroAgent.permissionMode.switchUnsupported": "这台设备上的 lh 不支持运行中切换，新模式会从下一条消息开始生效。升级 lh 后可在运行中切换。",
   "heteroAgent.permissionMode.tooltip": "Claude Code 在执行操作前是否询问你。只对当前话题生效；在这个目录里新建话题时，会沿用你上次的选择。",
   "heteroAgent.quota.compactLeft": "{{percent}}%",

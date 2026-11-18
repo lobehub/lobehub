@@ -5,7 +5,7 @@ import type {
 } from '@lobechat/types';
 import { getWorktreeModeKey, readHeteroPermissionModeDir } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -16,11 +16,15 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { aiAgentService } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import {
+  clearSwitchUnapplied,
   effectivePermissionMode,
   findRunningServerOperationId,
   getLocalPermissionModeSwitcher,
+  getUnappliedLiveMode,
+  markSwitchUnapplied,
   readTopicPermissionMode,
   setPendingHeteroPermissionMode,
+  subscribeUnappliedSwitches,
 } from '@/store/chat/heteroPermissionMode';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -84,9 +88,11 @@ export interface PermissionModeState {
   fallback?: HeteroPermissionModeFallback | null;
   /** The picked mode: what the topic's next run starts in. */
   mode: HeteroPermissionMode;
-  /** The mode the topic's last run actually ran in. */
+  /** The mode the topic's run is actually in. */
   runningMode: HeteroPermissionMode;
   select: (mode: HeteroPermissionMode) => Promise<void>;
+  /** The running session did not take `mode`; it applies from the next message. */
+  switchPending: boolean;
 }
 
 /**
@@ -125,6 +131,12 @@ export const usePermissionMode = (
   const remembered = readHeteroPermissionModeDir(dirs, key);
   const mode = topicId ? readTopicPermissionMode(metadata) : remembered;
   const fallback = topicId ? metadata?.heteroPermissionModeFallback : undefined;
+  const unappliedLiveMode = useSyncExternalStore(
+    subscribeUnappliedSwitches,
+    () => getUnappliedLiveMode(topicId),
+    () => undefined,
+  );
+  const runningMode = unappliedLiveMode ?? effectivePermissionMode(mode, fallback);
 
   // A topic created from this composer is born with what it shows. Not cleared
   // on unmount: the send switches the composer to the new topic before the
@@ -153,11 +165,24 @@ export const usePermissionMode = (
       }
       if (!topicId) return;
 
+      // The mode the live session is in before this pick, should it not take it.
+      const liveBefore = runningMode;
       const failure = await switchRunningSession(topicId, next);
-      if (failure) toast.info(t(`heteroAgent.permissionMode.${failure}`));
+      if (!failure) {
+        clearSwitchUnapplied(topicId);
+        return;
+      }
+      if (liveBefore !== next) markSwitchUnapplied(topicId, liveBefore);
+      toast.info(t(`heteroAgent.permissionMode.${failure}`));
     },
-    [agentId, key, setPermissionModeDir, t, topicId, updateTopicMetadata],
+    [agentId, key, runningMode, setPermissionModeDir, t, topicId, updateTopicMetadata],
   );
 
-  return { fallback, mode, runningMode: effectivePermissionMode(mode, fallback), select };
+  return {
+    fallback,
+    mode,
+    runningMode,
+    select,
+    switchPending: !!unappliedLiveMode && unappliedLiveMode !== mode,
+  };
 };

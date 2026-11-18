@@ -81,6 +81,8 @@ export const applyPermissionModeReport = async (
   { persist }: { persist: boolean },
 ): Promise<void> => {
   if (!topicId) return;
+  // Claude Code said which mode it is in: the chip no longer has to guess.
+  clearSwitchUnapplied(topicId);
   const patch = permissionModeReportPatch(report);
   const topic = topicSelectors.getTopicById(topicId)(get());
   const current = topic?.metadata;
@@ -180,4 +182,36 @@ export const findRunningServerOperationId = (
     return operation.metadata.serverOperationId;
   }
   return metadata?.runningOperation?.operationId;
+};
+
+/**
+ * Topics whose running session did not take the mode the user just picked
+ * (the device's `lh` cannot switch mid-run, or the request failed): the mode
+ * that run is still in. The pick is saved for the next run; until Claude Code
+ * reports a mode again, the chip shows this one and says so.
+ */
+const unappliedSwitches = new Map<string, HeteroPermissionMode>();
+const unappliedListeners = new Set<() => void>();
+
+const notifyUnapplied = () => {
+  for (const listener of unappliedListeners) listener();
+};
+
+export const markSwitchUnapplied = (topicId: string, liveMode: HeteroPermissionMode): void => {
+  unappliedSwitches.set(topicId, liveMode);
+  notifyUnapplied();
+};
+
+export const clearSwitchUnapplied = (topicId: string | null | undefined): void => {
+  if (!topicId || !unappliedSwitches.delete(topicId)) return;
+  notifyUnapplied();
+};
+
+export const getUnappliedLiveMode = (
+  topicId: string | null | undefined,
+): HeteroPermissionMode | undefined => (topicId ? unappliedSwitches.get(topicId) : undefined);
+
+export const subscribeUnappliedSwitches = (listener: () => void): (() => void) => {
+  unappliedListeners.add(listener);
+  return () => unappliedListeners.delete(listener);
 };
