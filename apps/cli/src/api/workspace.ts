@@ -88,8 +88,10 @@ export function resolveWorkspaceScope(explicit?: string): WorkspaceScope {
  * their personal space.
  */
 export function describeScopedNotFound(error: unknown): string | undefined {
-  const data = toRecord(toRecord(error)?.data);
-  if (data?.code !== 'NOT_FOUND') return;
+  const record = toRecord(error);
+  // tRPC carries `data.code`; a REST (`@lobehub/sdk`) error carries `status`.
+  const notFound = toRecord(record?.data)?.code === 'NOT_FOUND' || record?.status === 404;
+  if (!notFound) return;
   const { workspaceId } = resolveWorkspaceScope();
   if (!workspaceId) return;
   return `Looked in workspace ${workspaceId}. If it is in your personal space, rerun with LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE}; for another workspace, set LOBEHUB_WORKSPACE_ID=<id>.`;

@@ -111,6 +111,14 @@ describe('api/workspace scope resolution', () => {
       );
     });
 
+    it('recognises a REST 404 from the SDK', () => {
+      mockLoadActiveWorkspace.mockReturnValue(stored());
+
+      expect(
+        describeScopedNotFound({ code: 'not_found', message: 'Goal not found', status: 404 }),
+      ).toMatch(/^Looked in workspace ws_stored\./);
+    });
+
     it('stays quiet in personal scope and for other errors', () => {
       expect(describeScopedNotFound(notFound)).toBeUndefined();
 
