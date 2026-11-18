@@ -653,6 +653,29 @@ describe('git', () => {
     expect(gateway.listProjectDirectory).not.toHaveBeenCalled();
   });
 
+  it('answers 422 when git exits non-zero, though the device says the shell ran', async () => {
+    gateway.executeToolCall.mockResolvedValue({
+      content: "fatal: bad revision 'nope'",
+      state: {
+        exitCode: 128,
+        isBackground: false,
+        output: '',
+        running: false,
+        stderr: "fatal: bad revision 'nope'",
+        stdout: '',
+        success: true,
+      },
+      success: true,
+    });
+
+    const res = await call(`/devices/${DEVICE.ownerPersonal}/git/log?path=${REPO}&ref=nope`, {
+      key: KEYS.read,
+    });
+
+    expect(res.status).toBe(422);
+    expect((await json(res)).message).toContain('bad revision');
+  });
+
   it('answers 503 when the device is offline', async () => {
     gateway.gitWorkingTreeStatus.mockResolvedValue(undefined);
 
@@ -747,6 +770,22 @@ describe('commands', () => {
       userId: OWNER,
       workspaceId: null,
     });
+  });
+
+  it('reports a non-zero exit as a failed command', async () => {
+    gateway.executeToolCall.mockResolvedValue({
+      ...commandState('', 2),
+      state: { ...commandState('', 2).state, success: true },
+    });
+
+    const res = await call(`/devices/${DEVICE.ownerPersonal}/commands`, {
+      body: { command: 'false' },
+      key: KEYS.operate,
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(200);
+    expect((await json(res)).data).toMatchObject({ exitCode: 2, success: false });
   });
 
   it('accepts a full-access key that also holds device:operate', async () => {

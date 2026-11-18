@@ -400,7 +400,8 @@ export class DeviceRestService extends BaseService {
     ].join(' ');
 
     const result = await this.runOnDevice(id, command, 'Read the git log', 30_000);
-    if (!result.success) {
+    // an unknown ref or a directory that is no repository exits non-zero
+    if (!result.success || result.running || result.exitCode !== 0) {
       throw new ApiException(
         422,
         'unprocessable_entity',
@@ -563,7 +564,10 @@ export class DeviceRestService extends BaseService {
       shellId: parsed.commandId ?? parsed.shell_id ?? null,
       stderr: parsed.stderr ?? null,
       stdout: parsed.stdout ?? null,
-      success: parsed.success ?? result.success,
+      // the device reports `success` for "the shell started"; a command that
+      // exited non-zero did not succeed, whatever that flag says
+      success:
+        (parsed.success ?? result.success) && (parsed.exitCode ?? parsed.exit_code ?? 0) === 0,
     };
   }
 }

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { LobeChatDatabase } from '@/database/type';
 import { redactSandboxParams } from '@/server/services/sandbox/providers/market';
@@ -10,6 +12,43 @@ export type DeviceAuditAction =
   | 'sandbox.command_executed'
   | 'sandbox.created'
   | 'sandbox.file_written';
+
+const REDACTED = '[redacted]';
+
+/** `NAME=value` where the name says it holds a secret (`OPENAI_API_KEY`, `DB_PASSWORD`, …). */
+const SECRET_ASSIGNMENT =
+  /\b([A-Za-z_][\w]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|PASS|AUTH|CREDENTIALS?|SESSION|COOKIE)[\w]*)=("[^"]*"|'[^']*'|\S+)/gi;
+/** `--token value`, `--password=value`, `-H "Authorization: Bearer …"` and friends. */
+const SECRET_FLAG =
+  /(--?(?:[\w-]*(?:token|secret|password|passwd|api-?key|auth)[\w-]*)(?:=|\s+))("[^"]*"|'[^']*'|\S+)/gi;
+const BEARER = /\b(Bearer|Basic|token)\s+[\w.~+/=-]{8,}/gi;
+/** Credentials inside a URL: `https://user:secret@host`. */
+const URL_CREDENTIALS = /(\w+:\/\/[^/\s:@]+:)[^@\s]+@/g;
+/** Token shapes common enough to recognize on their own. */
+const TOKEN_LITERAL =
+  /\b(?:sk-[\w-]{16,}|sk-lh-[a-z0-9]{16}|gh[pousr]_\w{20,}|github_pat_\w{20,}|xox[abpr]-[\w-]{10,}|AKIA[0-9A-Z]{16}|AIza[\w-]{30,}|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]+)\b/g;
+
+/**
+ * What an audit entry keeps of a command line: the command with anything
+ * credential-shaped blanked — the sandbox layer's known variables, any
+ * `*_KEY` / `*_TOKEN` / `*PASSWORD*` assignment, secret-looking flags, bearer
+ * headers, URL userinfo and recognizable token literals — plus a SHA-256 of
+ * the original, so the exact command can still be matched without the audit
+ * log (or the server log, for a personal account) holding a usable secret.
+ */
+export const redactCommandForAudit = (command: string) => {
+  const redacted = (redactSandboxParams({ command }).command as string)
+    .replaceAll(SECRET_ASSIGNMENT, (_, name: string) => `${name}=${REDACTED}`)
+    .replaceAll(SECRET_FLAG, (_, flag: string) => `${flag}${REDACTED}`)
+    .replaceAll(BEARER, (_, scheme: string) => `${scheme} ${REDACTED}`)
+    .replaceAll(URL_CREDENTIALS, (_, prefix: string) => `${prefix}${REDACTED}@`)
+    .replaceAll(TOKEN_LITERAL, REDACTED);
+
+  return {
+    command: redacted,
+    commandSha256: createHash('sha256').update(command).digest('hex'),
+  };
+};
 
 /** Who performed a write, as the request authenticated it. */
 export interface DeviceAuditActor {
@@ -48,10 +87,8 @@ export const recordDeviceAudit = async (
 ) => {
   const metadata = {
     ...entry.metadata,
-    // a command line can carry a token; the sandbox layer's redaction blanks the known ones
-    ...(typeof entry.metadata.command === 'string' && {
-      command: redactSandboxParams({ command: entry.metadata.command }).command,
-    }),
+    ...(typeof entry.metadata.command === 'string' &&
+      redactCommandForAudit(entry.metadata.command)),
     apiKeyId: actor.apiKeyId ?? null,
     authType: actor.authType ?? null,
     via: 'openapi',
