@@ -637,6 +637,22 @@ describe('git', () => {
     expect(gateway.executeToolCall).not.toHaveBeenCalled();
   });
 
+  it('refuses status, diff and listing of a directory outside the approved working directories', async () => {
+    for (const path of [
+      `/devices/${DEVICE.ownerPersonal}/git/diff?path=/etc`,
+      `/devices/${DEVICE.ownerPersonal}/git/diff?path=/etc&against=branch`,
+      `/devices/${DEVICE.ownerPersonal}/git/status?path=/etc`,
+      `/devices/${DEVICE.ownerPersonal}/files?root=/etc`,
+    ]) {
+      const res = await call(path, { key: KEYS.read });
+      expect(res.status, path).toBe(403);
+    }
+    expect(gateway.getGitWorkingTreePatches).not.toHaveBeenCalled();
+    expect(gateway.getGitBranchDiff).not.toHaveBeenCalled();
+    expect(gateway.gitWorkingTreeStatus).not.toHaveBeenCalled();
+    expect(gateway.listProjectDirectory).not.toHaveBeenCalled();
+  });
+
   it('answers 503 when the device is offline', async () => {
     gateway.gitWorkingTreeStatus.mockResolvedValue(undefined);
 

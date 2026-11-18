@@ -201,6 +201,15 @@ export class DeviceRestService extends BaseService {
     return runAudited((done) => this.audit(done), entry, work, outcome);
   }
 
+  /**
+   * Reads that take a directory stay inside the device's approved working
+   * directories — the rule file previews already follow — so a read key
+   * cannot list, diff or log an arbitrary repository on the machine.
+   */
+  private assertApprovedRoot(id: string, path: string) {
+    return assertWorkspaceRootApproved(this.deviceModel, id, path, this.workspaceId);
+  }
+
   /** A device's live result, or a 503 that says the device could not answer. */
   private requireOnline<T>(result: T | null | undefined, id: string): T {
     if (result === null || result === undefined) {
@@ -257,6 +266,7 @@ export class DeviceRestService extends BaseService {
 
   async listFiles(id: string, query: DeviceFileListQuery): Promise<DeviceFileListResponse> {
     await this.requireDeviceRow(id);
+    await this.assertApprovedRoot(id, query.root);
     const result = this.requireOnline(
       await this.caller.listProjectDirectory({
         deviceId: id,
@@ -337,6 +347,7 @@ export class DeviceRestService extends BaseService {
 
   async gitStatus(id: string, { path }: DeviceGitQuery): Promise<DeviceGitStatusResponse> {
     await this.requireDeviceRow(id);
+    await this.assertApprovedRoot(id, path);
     const [status, files, branch, aheadBehind] = await Promise.all([
       this.caller.gitWorkingTreeStatus({ deviceId: id, path }),
       this.caller.getGitWorkingTreeFiles({ deviceId: id, path }),
@@ -375,8 +386,7 @@ export class DeviceRestService extends BaseService {
    */
   async gitLog(id: string, query: DeviceGitLogQuery): Promise<DeviceGitLogResponse> {
     await this.requireDeviceRow(id);
-    // the same root rule the file routes apply: no reading an arbitrary repository
-    await assertWorkspaceRootApproved(this.deviceModel, id, query.path, this.workspaceId);
+    await this.assertApprovedRoot(id, query.path);
     const format = ['%H', '%h', '%an', '%ae', '%aI', '%s'].join('%x1f');
     const command = [
       'git',
@@ -416,6 +426,8 @@ export class DeviceRestService extends BaseService {
 
   async gitDiff(id: string, query: DeviceGitDiffQuery): Promise<DeviceGitDiffResponse> {
     await this.requireDeviceRow(id);
+    // patches carry file contents (untracked files included): approved roots only
+    await this.assertApprovedRoot(id, query.path);
     const refs = { baseRef: null as string | null, headRef: null as string | null };
     let diff;
     if (query.against === 'branch') {

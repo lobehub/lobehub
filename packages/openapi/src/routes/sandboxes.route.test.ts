@@ -228,6 +228,21 @@ describe('sandboxes', () => {
     );
   });
 
+  it('keeps the requested name when the directory is derived', async () => {
+    const res = await call('/sandboxes', {
+      body: { environmentId: ENV_OWNER, name: 'CI run' },
+      key: KEYS.operate,
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(201);
+    const sandbox = SandboxSchema.parse((await json(res)).data);
+    expect(sandbox.name).toBe('CI run');
+    expect(sandbox.workingDirectory).not.toBe('CI run');
+    const one = await call(`/sandboxes/${sandbox.id}`, { key: KEYS.read });
+    expect((await json(one)).data.name).toBe('CI run');
+  });
+
   it('refuses another user’s environment and hides another user’s sandbox', async () => {
     const res = await call('/sandboxes', {
       body: { environmentId: ENV_STRANGER },

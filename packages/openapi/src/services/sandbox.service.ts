@@ -169,7 +169,14 @@ export class SandboxRestService extends BaseService {
             name: request.name ?? request.workingDirectory,
             workingDirectory: request.workingDirectory,
           })
-        : await this.caller.createInstanceForEnvironment({ environmentId: request.environmentId });
+        : await this.caller
+            .createInstanceForEnvironment({ environmentId: request.environmentId })
+            // the derived path names the row after its directory; keep the name asked for
+            .then(async (instance) => {
+              if (!request.name || request.name === instance.name) return instance;
+              await this.caller.renameInstance({ id: instance.id, name: request.name });
+              return { ...instance, name: request.name };
+            });
     } catch (error) {
       // no sandbox exists yet, so the refused attempt is filed under its environment
       await this.audit({
