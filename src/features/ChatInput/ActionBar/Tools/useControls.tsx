@@ -1,19 +1,11 @@
+import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
+import { VideoGenerationIdentifier } from '@lobechat/builtin-tool-video-generation';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { getConnectorCatalog } from '@lobechat/const';
-import { type AgentPluginMode } from '@lobechat/types';
+import { parsePluginEntry, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
-import {
-  Avatar,
-  confirmModal,
-  Icon,
-  Popover,
-  SearchBar,
-  stopPropagation,
-  Switch,
-  Tag,
-  Tooltip,
-} from '@lobehub/ui';
+import { Avatar, confirmModal, Icon, Popover, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -21,11 +13,8 @@ import {
   BadgeCheck,
   Ban,
   Check,
-  ChevronDown,
-  ChevronRight,
   MoreHorizontal,
   Package,
-  Pin,
   Settings,
   Trash2,
   Wrench,
@@ -64,11 +53,7 @@ import { MemoryEffortControl } from '../Memory/Controls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { SearchAdvancedControls } from '../Search/Controls';
 import { useAgentMenuConnectors, useUnpinDeletedConnector } from './agentMenuConnectors';
-import {
-  isCapabilityTool,
-  resolveCapabilityConfigPatch,
-  resolveCapabilityMode,
-} from './capabilityTools';
+import { isCapabilityTool, resolveCapabilityConfigPatch } from './capabilityTools';
 import ComposioServerItem from './ComposioServerItem';
 import ComposioSkillIcon from './ComposioSkillIcon';
 import { SKILL_ICON_SIZE } from './constants';
@@ -77,9 +62,9 @@ import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import PrivateConnectorTag from './PrivateConnectorTag';
 import SkillRow from './SkillRow';
-import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
-import { CONNECTOR_MODES, useActivationSets } from './useActivationSets';
+import { ToolPickerHeader } from './ToolPickerHeader';
+import { useActivationSets } from './useActivationSets';
 import { styles } from './useControls.styles';
 import { usePluginRowUninstall } from './usePluginRowUninstall';
 
@@ -89,13 +74,13 @@ const officialTag = (
   </Tooltip>
 );
 
-type SkillPolicyMode = AgentPluginMode;
+type SkillPolicyMode = 'auto' | 'disabled';
 
 // Capability rows offer the same three states as any other skill row. A model whose
 // built-in search can never be turned off has no Disabled state to offer — the write
 // would be overridden by the runtime — so its search row keeps Pinned/Auto only.
-const CAPABILITY_MODES: SkillPolicyMode[] = ['pinned', 'auto', 'disabled'];
-const CAPABILITY_MODES_WITHOUT_DISABLE: SkillPolicyMode[] = ['pinned', 'auto'];
+const CAPABILITY_MODES: SkillPolicyMode[] = ['auto', 'disabled'];
+const CAPABILITY_MODES_WITHOUT_DISABLE: SkillPolicyMode[] = ['auto'];
 
 interface SkillDeleteConfig {
   displayName: string;
@@ -134,7 +119,7 @@ interface SkillPolicyMenuOptions {
    */
   panelExtra?: ReactNode;
   /**
-   * @default ['pinned', 'auto', 'disabled']
+   * @default ['auto', 'disabled']
    */
   supportedModes?: SkillPolicyMode[];
 }
@@ -143,19 +128,20 @@ type SkillMenuItem = NonNullable<ItemType> & {
   extra?: ReactNode;
   popoverContent?: ReactNode;
   searchText?: string;
+  canDisable?: boolean;
+  optionTitle?: ReactNode;
+  optionIcon?: ReactNode;
+  detailContent?: ReactNode;
 };
 
 export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const navigate = useWorkspaceAwareNavigate();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const [pinnedOpen, setPinnedOpen] = useState(true);
-  const [autoOpen, setAutoOpen] = useState(true);
-  const [disabledOpen, setDisabledOpen] = useState(true);
+  const { updateAgentConfig } = useUpdateAgentConfig();
+  const [filter, setFilter] = useState<SkillPolicyMode>('auto');
   const [policyOpenId, setPolicyOpenId] = useState<string | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [autoModeLoading, setAutoModeLoading] = useState(false);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
   const uninstallPluginRow = usePluginRowUninstall();
@@ -164,39 +150,15 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     s.uninstallBuiltinTool,
     s.deleteConnector,
   ]);
-  const [checked, togglePlugin, setPluginMode] = useAgentStore((s) => [
-    // Pinned identifiers only (getAgentPluginsById already excludes disabled).
-    agentByIdSelectors.getAgentPluginsById(agentId)(s),
-    s.togglePlugin,
-    s.setPluginMode,
-  ]);
+  const checked = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId), isEqual);
   const rawPlugins = useAgentStore(
     (s) => agentByIdSelectors.getAgentConfigById(agentId)(s)?.plugins,
   );
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
   const activationSets = useActivationSets(checked, rawPlugins);
-  const { checkedSet, connectorIds, disabledIdSet, optInIds } = activationSets;
-  // In manual skill-activate mode, surface hidden builtin tools (web-browsing,
-  // cloud-sandbox, knowledge-base, etc.) so users can explicitly enable/disable them.
-  // In auto mode the activator handles those tools transparently, so they remain hidden.
-  // NOTE: must read by `agentId` (not via the activeAgentId-based selector) so that
-  // embedded / group-member chat inputs render the right agent's mode.
-  const isManualSkillMode = useAgentStore(
-    (s) => chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s) === 'manual',
-  );
-  const isAutoSkillMode = !isManualSkillMode;
-  const builtinList = useToolStore(
-    isManualSkillMode
-      ? builtinToolSelectors.metaListIncludingHidden
-      : builtinToolSelectors.metaList,
-    isEqual,
-  );
-  // Default-pinned builtins have their own rows; the activation switch represents the activator.
-  const fixedDisplayList = useToolStore(
-    builtinToolSelectors.fixedDisplayMetaList({ isManualMode: isManualSkillMode }),
-    isEqual,
-  );
+  const { disabledIdSet, optInIds } = activationSets;
+  const builtinList = useToolStore(builtinToolSelectors.metaListIncludingHidden, isEqual);
 
   // Memory and web browsing are runtime-managed builtin tools: `hidden` keeps them
   // out of `metaList`, and the shared engine rules force their enabled state from
@@ -225,24 +187,35 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   const updateSkillPolicy = useCallback(
     async (id: string, mode: SkillPolicyMode) => {
-      if (!canEdit) return;
-
-      const currentMode: SkillPolicyMode = checkedSet.has(id)
-        ? 'pinned'
-        : disabledIdSet.has(id)
-          ? 'disabled'
-          : 'auto';
-      if (currentMode === mode) return;
-
-      // A capability has two homes. chatConfig carries the on/off state the engine
-      // reads (`resolveToolRules`), so the row, the injection and the wiring can never
-      // disagree; `agents.plugins` carries the explicit Pinned/Disabled choice, which
-      // is what puts the row in the Pinned or Disabled group.
+      if (!canEdit || !agentId) return;
+      const state = useAgentStore.getState();
+      const plugins = agentByIdSelectors.getAgentConfigById(agentId)(state)?.plugins;
       const patch = isCapabilityTool(id) ? resolveCapabilityConfigPatch(id, mode) : undefined;
-      if (patch) await updateAgentChatConfig(patch);
-      await setPluginMode(id, mode, resolveImplicitMode(id, optInIds));
+      if (patch) {
+        // Capabilities have their own source of truth. Remove any old plugin
+        // override in the same write, without touching unrelated choices.
+        const hasLegacyEntry = plugins?.some((entry) => parsePluginEntry(entry).identifier === id);
+        await updateAgentConfig({
+          chatConfig: patch,
+          ...(hasLegacyEntry && { plugins: upsertPluginMode(plugins, id, 'auto') }),
+        });
+      } else {
+        // Chat has no activator: media generation reaches the model there only when pinned.
+        // Pin it in every mode — the mode can switch later without rewriting plugins, and
+        // Agent mode still loads a pinned on-demand builtin through the activator.
+        const pinMediaTool =
+          mode === 'auto' && (id === ImageGenerationIdentifier || id === VideoGenerationIdentifier);
+        await updateAgentConfig({
+          plugins: upsertPluginMode(
+            plugins,
+            id,
+            pinMediaTool ? 'pinned' : mode,
+            resolveImplicitMode(id, optInIds),
+          ),
+        });
+      }
     },
-    [canEdit, checkedSet, disabledIdSet, optInIds, setPluginMode, updateAgentChatConfig],
+    [agentId, canEdit, optInIds, updateAgentConfig],
   );
 
   const openSkillPolicyMenu = useCallback((id: string) => {
@@ -259,11 +232,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         deleteOnly = false,
         modeOverride,
         panelExtra,
-        supportedModes = connectorIds.has(id) ? CONNECTOR_MODES : CAPABILITY_MODES,
+        supportedModes = CAPABILITY_MODES,
       } = options;
       const mode: SkillPolicyMode =
-        modeOverride ??
-        (checkedSet.has(id) ? 'pinned' : disabledIdSet.has(id) ? 'disabled' : defaultMode);
+        modeOverride ?? (disabledIdSet.has(id) ? 'disabled' : defaultMode);
       const renderCheck = (value: SkillPolicyMode) =>
         mode === value ? (
           <span {...stylex.props(styles.policyCheck)}>
@@ -277,9 +249,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // status readout — group headers still use the state labels below.
       // `as const` keeps literal keys so `t()` stays typed against setting resources.
       const policyActionKey = {
-        auto: 'tools.activation.action.auto',
-        disabled: 'tools.activation.action.disable',
-        pinned: 'tools.activation.action.pin',
+        auto: 'tools.loading.onDemand',
+        disabled: 'tools.loading.never',
       } as const satisfies Record<SkillPolicyMode, string>;
 
       const renderPolicyItem = (value: SkillPolicyMode, icon: ReactNode) => (
@@ -306,18 +277,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
         >
-          {!deleteOnly &&
-            supportedModes.includes('pinned') &&
-            renderPolicyItem(
-              'pinned',
-              <Icon
-                icon={Pin}
-                size={15}
-                className={
-                  stylex.props(mode === 'pinned' ? styles.iconPinned : styles.iconDefault).className
-                }
-              />,
-            )}
           {!deleteOnly &&
             supportedModes.includes('auto') &&
             renderPolicyItem(
@@ -437,16 +396,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         </Popover>
       );
     },
-    [
-      canEdit,
-      checkedSet,
-      connectorIds,
-      disabledIdSet,
-      openSkillPolicyMenu,
-      policyOpenId,
-      t,
-      updateSkillPolicy,
-    ],
+    [canEdit, disabledIdSet, openSkillPolicyMenu, policyOpenId, t, updateSkillPolicy],
   );
 
   const renderToolLabel = useCallback(
@@ -520,6 +470,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       title: ReactNode;
     }): SkillMenuItem =>
       ({
+        optionTitle: title,
+        optionIcon: icon,
+        detailContent: popoverContent,
+        canDisable: !supportedModes || supportedModes.includes('disabled'),
         closeOnClick: false,
         key: id,
         label: renderToolLabel(
@@ -556,7 +510,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   // MCP connectors the user added that this agent loads (custom and marketplace)
   const customConnectors = useAgentMenuConnectors(agentId);
-  const unpinDeleted = useUnpinDeletedConnector(agentId);
+  // A deleted connector's switch turns off, unless the agent still loads a row of it
+  const unpinDeleted = useUnpinDeletedConnector(agentId, (identifier) =>
+    updateSkillPolicy(identifier, 'disabled'),
+  );
   const getConfigure = useConnectorConfigure();
   const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -657,12 +614,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       // Best-effort cleanup: dropping the optimistic plugin id must never break
       // the delete itself, so swallow any failure here.
       try {
-        await togglePlugin(identifier, false);
+        await updateSkillPolicy(identifier, 'disabled');
       } catch (error) {
         console.error('[Composio] Failed to unpin plugin after delete:', error);
       }
     },
-    [removeComposioConnection, togglePlugin],
+    [removeComposioConnection, updateSkillPolicy],
   );
 
   const composioServerItems = useMemo(
@@ -850,11 +807,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
   );
 
-  // Memory / web browsing rows. Both are builtin tools the engine turns on from
-  // chatConfig, so their on/off state is derived from — and written back to — that
-  // same config, while the optional pin is recorded in `agents.plugins` like every
-  // other skill: they get the full Pinned/Auto/Disable policy. Their own settings
-  // travel with the row (`panelExtra`), because the "+" menu no longer hosts them.
+  // Search and memory expose their own settings alongside the on/off choice.
   const capabilityItems: SkillMenuItem[] = useMemo(
     () =>
       [
@@ -883,7 +836,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
           ),
           id: identifier,
-          modeOverride: resolveCapabilityMode(enabled, checkedSet.has(identifier)),
+          modeOverride: enabled ? 'auto' : 'disabled',
           panelExtra,
           popoverContent: (
             <ToolItemDetailPopover
@@ -908,64 +861,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         });
       }),
     [
-      checkedSet,
       createManagedSkillItem,
       isMemoryCapabilityEnabled,
       isSearchCapabilityEnabled,
       searchCapabilityModes,
       t,
     ],
-  );
-
-  // Builtin runtime tools support an explicit pinned/disabled policy. They intentionally
-  // do not support "auto": when enabled, these foundational capabilities stay pinned.
-  const fixedItems = useMemo(
-    () =>
-      fixedDisplayList.map((item) => {
-        const title = t(`tools.builtins.${item.identifier}.title` as any, {
-          defaultValue: item.meta?.title || item.identifier,
-        });
-        const icon = item.meta?.avatar ? (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-        ) : (
-          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
-        );
-        const popoverContent = (
-          <ToolItemDetailPopover
-            identifier={item.identifier}
-            sourceLabel={t('skillStore.tabs.lobehub')}
-            title={title}
-            description={t(`tools.builtins.${item.identifier}.description` as any, {
-              defaultValue: item.meta?.description || '',
-            })}
-            icon={
-              item.meta?.avatar ? (
-                <Avatar
-                  avatar={item.meta.avatar}
-                  shape={'square'}
-                  size={36}
-                  style={{ flex: 'none', marginInlineEnd: 0 }}
-                />
-              ) : (
-                <Icon icon={SkillsIcon} size={36} />
-              )
-            }
-          />
-        );
-
-        return createManagedSkillItem({
-          badge: <Icon icon={Wrench} size={12} />,
-          defaultMode: 'pinned',
-          extraTag: officialTag,
-          icon,
-          id: item.identifier,
-          popoverContent,
-          searchText: `${title} ${item.identifier}`,
-          supportedModes: ['pinned', 'disabled'],
-          title,
-        });
-      }),
-    [createManagedSkillItem, fixedDisplayList, t],
   );
 
   // Connector MCP rows (custom and marketplace). Toggling adds the identifier to
@@ -1112,122 +1013,53 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         .includes(normalizedSearchKeyword),
     );
   };
-  const allPinnedItems = allSkillItems.filter((item) => checkedSet.has(String(item.key)));
-  // Capability rows split on the same two states as every other row: Pinned (the
-  // explicit pin, stored in `plugins`) and the on/off half that lives in chatConfig.
-  const capabilityPinnedItems = capabilityItems.filter((item) => checkedSet.has(String(item.key)));
   const capabilityAutoItems = capabilityItems.filter(
-    (item) => !checkedSet.has(String(item.key)) && !disabledCapabilityIds.has(String(item.key)),
+    (item) => !disabledCapabilityIds.has(String(item.key)),
   );
-  const capabilityDisabledItems = capabilityItems.filter(
-    (item) => !checkedSet.has(String(item.key)) && disabledCapabilityIds.has(String(item.key)),
+  const capabilityDisabledItems = capabilityItems.filter((item) =>
+    disabledCapabilityIds.has(String(item.key)),
   );
-  const activeSkillItems = allSkillItems.filter(
-    (item) => !checkedSet.has(String(item.key)) && !disabledIdSet.has(String(item.key)),
-  );
+  const activeSkillItems = allSkillItems.filter((item) => !disabledIdSet.has(String(item.key)));
   const allAutoItems = [...capabilityAutoItems, ...activeSkillItems];
   const allDisabledItems = [
     ...capabilityDisabledItems,
     ...allSkillItems.filter((item) => disabledIdSet.has(String(item.key))),
   ];
-  const fixedPinnedItems = fixedItems.filter((item) => !disabledIdSet.has(String(item.key)));
-  const fixedDisabledItems = fixedItems.filter((item) => disabledIdSet.has(String(item.key)));
-  // Fixed tools lead the pinned section, then pinned capabilities, then every pinned
-  // skill. All disabled tools and skills live in their own section so "Auto" remains
-  // semantically accurate.
-  const pinnedItems = filterBySearch([
-    ...fixedPinnedItems,
-    ...capabilityPinnedItems,
-    ...allPinnedItems,
-  ]);
   const autoItems = filterBySearch(allAutoItems);
-  const disabledItems = filterBySearch([...fixedDisabledItems, ...allDisabledItems]);
+  const disabledItems = filterBySearch(allDisabledItems);
 
-  const renderActivationGroupLabel = ({
-    autoSwitch,
-    count,
-    icon,
-    open,
-    title,
-    onToggle,
-  }: {
-    autoSwitch?: boolean;
-    count?: number;
-    icon: ReactNode;
-    open: boolean;
-    title: string;
-    onToggle: () => void;
-  }) => (
-    <div
-      data-skill-activation-group
-      {...stylex.props(styles.activationGroupHeader)}
-      role="button"
-      tabIndex={0}
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle();
-      }}
-    >
-      <div {...stylex.props(styles.activationGroupTitleBlock)}>
-        <span {...stylex.props(styles.activationGroupIcon)}>{icon}</span>
-        <span {...stylex.props(styles.activationGroupTitleBody)}>
-          <span {...stylex.props(styles.activationGroupTitleText)}>{title}</span>
-          {typeof count === 'number' && <span {...stylex.props(styles.count)}>{count}</span>}
-        </span>
-      </div>
-      <div {...stylex.props(styles.activationGroupActions)}>
-        {autoSwitch && (
-          <span
-            {...stylex.props(styles.switchWrap)}
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-          >
-            <Switch
-              checked={isAutoSkillMode}
-              disabled={!canEdit}
-              loading={autoModeLoading}
-              size="small"
-              onClick={(_, event) => event.stopPropagation()}
-              onChange={async (checked, event) => {
-                event?.stopPropagation?.();
-                if (!canEdit) return;
-                setAutoModeLoading(true);
-                try {
-                  await updateAgentChatConfig({
-                    skillActivateMode: checked ? 'auto' : 'manual',
-                  });
-                } finally {
-                  setAutoModeLoading(false);
-                }
-              }}
-            />
-          </span>
-        )}
-        <div {...stylex.props(styles.activationGroupChevron)}>
-          <Icon icon={open ? ChevronDown : ChevronRight} size={13} />
-        </div>
-      </div>
-    </div>
-  );
+  const groups = [
+    {
+      children: autoItems,
+      key: 'auto',
+      label: t('tools.loading.onDemand'),
+      type: 'group' as const,
+    },
+    {
+      children: disabledItems,
+      key: 'disabled',
+      label: t('tools.loading.never'),
+      type: 'group' as const,
+    },
+  ];
+  const marketItems: ItemType[] = normalizedSearchKeyword
+    ? groups.filter((group) => group.children.length > 0)
+    : filter === 'auto'
+      ? autoItems
+      : disabledItems;
 
   const marketHeader = (
-    <SearchBar
-      allowClear
-      className="lobe-skill-submenu-search"
-      placeholder={t('tools.picker.search')}
-      size="small"
-      style={{ width: '100%' }}
-      value={searchKeyword}
-      variant="borderless"
-      onChange={(event) => setSearchKeyword(event.target.value)}
-      onClick={stopPropagation}
-      onKeyDown={stopPropagation}
+    <ToolPickerHeader
+      empty={!marketItems.length}
+      filter={filter}
+      query={searchKeyword}
+      onFilterChange={setFilter}
+      onSearchChange={setSearchKeyword}
     />
   );
 
   const marketFooter =
-    allSkillItems.length > 0 || fixedItems.length > 0 ? (
+    allSkillItems.length > 0 || capabilityItems.length > 0 ? (
       <button
         aria-label={t('tools.picker.management')}
         {...stylex.props(styles.addSkillRow)}
@@ -1245,291 +1077,34 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       </button>
     ) : undefined;
 
-  const marketItems: ItemType[] = [
-    ...(pinnedItems.length > 0
-      ? [
-          {
-            children: pinnedOpen ? pinnedItems : [],
-            key: 'pinned',
-            label: renderActivationGroupLabel({
-              count: fixedPinnedItems.length + capabilityPinnedItems.length + allPinnedItems.length,
-              icon: <Icon icon={Pin} size={14} />,
-              open: pinnedOpen,
-              title: t('tools.activation.pinned'),
-              onToggle: () => setPinnedOpen((open) => !open),
-            }),
-            type: 'group' as const,
-          } as ItemType,
-        ]
-      : []),
-    ...(pinnedItems.length > 0 && autoItems.length > 0
-      ? [
-          {
-            key: 'skill-activation-divider',
-            type: 'divider' as const,
-          } as ItemType,
-        ]
-      : []),
-    ...(autoItems.length > 0
-      ? [
-          {
-            children: autoOpen ? autoItems : [],
-            key: 'auto',
-            label: renderActivationGroupLabel({
-              autoSwitch: true,
-              count: allAutoItems.length,
-              icon: <Icon icon={Zap} size={14} />,
-              open: autoOpen,
-              title: t('tools.activation.auto'),
-              onToggle: () => setAutoOpen((open) => !open),
-            }),
-            type: 'group' as const,
-          } as ItemType,
-        ]
-      : []),
-    ...(disabledItems.length > 0 && (pinnedItems.length > 0 || autoItems.length > 0)
-      ? [
-          {
-            key: 'skill-disabled-divider',
-            type: 'divider' as const,
-          } as ItemType,
-        ]
-      : []),
-    ...(disabledItems.length > 0
-      ? [
-          {
-            children: disabledOpen ? disabledItems : [],
-            key: 'disabled',
-            label: renderActivationGroupLabel({
-              count: fixedDisabledItems.length + allDisabledItems.length,
-              icon: <Icon icon={Ban} size={14} />,
-              open: disabledOpen,
-              title: t('tools.activation.disabled'),
-              onToggle: () => setDisabledOpen((open) => !open),
-            }),
-            type: 'group' as const,
-          } as ItemType,
-        ]
-      : []),
-  ];
-
-  // Items for the installed tab - only show installed plugins
-  const installedPluginItems: ItemType[] = useMemo(() => {
-    const installedItems: ItemType[] = [];
-
-    // Installed builtin tools
-    const enabledBuiltinItems = filteredBuiltinList
-      .filter((item) => checked.includes(item.identifier))
-      .map((item) => ({
-        icon: item.meta?.avatar ? (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-        ) : (
-          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
-        ),
-        key: item.identifier,
-        label: (
-          <ToolItem
-            checked={true}
-            disabled={!canEdit}
-            id={item.identifier}
-            label={item.meta?.title}
-            onUpdate={async () => {
-              if (!canEdit) return;
-              await togglePlugin(item.identifier);
-            }}
-          />
-        ),
-        popoverContent: (
-          <ToolItemDetailPopover
-            identifier={item.identifier}
-            sourceLabel={t('skillStore.tabs.lobehub')}
-            description={t(`tools.builtins.${item.identifier}.description` as any, {
-              defaultValue: item.meta?.description || '',
-            })}
-            icon={
-              item.meta?.avatar ? (
-                <Avatar
-                  avatar={item.meta.avatar}
-                  shape={'square'}
-                  size={36}
-                  style={{ flex: 'none', marginInlineEnd: 0 }}
-                />
-              ) : (
-                <Icon icon={SkillsIcon} size={36} />
-              )
-            }
-            title={t(`tools.builtins.${item.identifier}.title` as any, {
-              defaultValue: item.meta?.title || item.identifier,
-            })}
-          />
-        ),
-      }));
-
-    // Connected Composio servers
-    const connectedComposioItems = composioServerItems.filter((item) =>
-      checked.includes(item.key as string),
-    );
-
-    // Connected LobeHub Skill Providers
-    const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
-      checked.includes(item.key as string),
-    );
-
-    // Merge enabled LobeHub Skill and Composio (as builtin skills)
-    const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedComposioItems];
-
-    // Installed builtin tools and service integrations, without Skill instruction bundles.
-    const allBuiltinItems: ItemType[] = [
-      ...enabledBuiltinItems,
-      ...(enabledBuiltinItems.length > 0 && enabledSkillItems.length > 0
-        ? [{ key: 'installed-divider-builtin-skill', type: 'divider' as const }]
-        : []),
-      ...enabledSkillItems,
-    ];
-
-    if (allBuiltinItems.length > 0) {
-      installedItems.push({
-        children: allBuiltinItems,
-        key: 'installed-lobehub',
-        label: t('skillStore.tabs.lobehub'),
-        type: 'group',
-      });
-    }
-
-    // Enabled community plugins
-    const enabledCommunityPlugins = communityPlugins
-      .filter((item) => checked.includes(item.identifier))
-      .map((item) => {
-        const hasRealAvatar = !!item?.avatar && item.avatar !== 'MCP_AVATAR';
-        return {
-          icon: hasRealAvatar ? (
-            <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-          ) : (
-            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-          ),
-          key: item.identifier,
-          label: (
-            <ToolItem
-              checked={true}
-              disabled={!canEdit}
-              id={item.identifier}
-              label={item.title}
-              onUpdate={async () => {
-                if (!canEdit) return;
-                await togglePlugin(item.identifier);
-              }}
-            />
-          ),
-          popoverContent: (
-            <ToolItemDetailPopover
-              description={item.description}
-              identifier={item.identifier}
-              sourceLabel={t('skillStore.tabs.community')}
-              title={item.title}
-              icon={
-                hasRealAvatar ? (
-                  <Avatar
-                    avatar={item.avatar}
-                    shape={'square'}
-                    size={36}
-                    style={{ flex: 'none', marginInlineEnd: 0 }}
-                  />
-                ) : (
-                  <Icon icon={McpIcon} size={36} />
-                )
-              }
-            />
-          ),
-        };
-      });
-
-    // Enabled custom plugins
-    const enabledCustomPlugins = customPlugins
-      .filter((item) => checked.includes(item.identifier))
-      .map((item) => {
-        const hasRealAvatar = !!item?.avatar && item.avatar !== 'MCP_AVATAR';
-        return {
-          icon: hasRealAvatar ? (
-            <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-          ) : (
-            <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-          ),
-          key: item.identifier,
-          label: (
-            <ToolItem
-              checked={true}
-              disabled={!canEdit}
-              id={item.identifier}
-              label={item.title}
-              onUpdate={async () => {
-                if (!canEdit) return;
-                await togglePlugin(item.identifier);
-              }}
-            />
-          ),
-          popoverContent: (
-            <ToolItemDetailPopover
-              description={item.description}
-              identifier={item.identifier}
-              sourceLabel={t('skillStore.tabs.custom')}
-              title={item.title}
-              icon={
-                hasRealAvatar ? (
-                  <Avatar
-                    avatar={item.avatar}
-                    shape={'square'}
-                    size={36}
-                    style={{ flex: 'none', marginInlineEnd: 0 }}
-                  />
-                ) : (
-                  <Icon icon={McpIcon} size={36} />
-                )
-              }
-            />
-          ),
-        };
-      });
-
-    const allCommunityItems = enabledCommunityPlugins;
-    if (allCommunityItems.length > 0) {
-      installedItems.push({
-        children: allCommunityItems,
-        key: 'installed-community',
-        label: t('skillStore.tabs.community'),
-        type: 'group',
-      });
-    }
-
-    const allCustomItems = enabledCustomPlugins;
-    if (allCustomItems.length > 0) {
-      installedItems.push({
-        children: allCustomItems,
-        key: 'installed-custom',
-        label: t('skillStore.tabs.custom'),
-        type: 'group',
-      });
-    }
-
-    return installedItems;
-  }, [
-    filteredBuiltinList,
-    communityPlugins,
-    customPlugins,
-    composioServerItems,
-    lobehubSkillItems,
-    checked,
-    togglePlugin,
-    canEdit,
-    t,
-  ]);
-
   return {
     autoCount: allAutoItems.length,
-    installedPluginItems,
+    // Stable inventory order: toggling a checkbox must not move its row.
+    toolOptions: [...capabilityItems, ...allSkillItems].map((item) => ({
+      canDisable: !!item.canDisable,
+      enabled: allAutoItems.includes(item),
+      group: communityGroupChildren.includes(item)
+        ? 'community'
+        : customGroupChildren.includes(item)
+          ? 'custom'
+          : 'lobehub',
+      icon: item.optionIcon,
+      id: String(item.key),
+      connectionAction: item.optionTitle === undefined && 'label' in item ? item.label : undefined,
+      detail: item.detailContent ?? item.popoverContent,
+      searchText: item.searchText,
+      title: item.optionTitle,
+    })),
+    activeTools: allAutoItems.map((item) => ({
+      canDisable: !!item.canDisable,
+      id: String(item.key),
+    })),
+    canEdit,
+    setPolicy: updateSkillPolicy,
+    totalCount: allAutoItems.length + allDisabledItems.length,
     isPolicyMenuOpen: policyOpenId !== null,
     marketFooter,
     marketHeader,
     marketItems,
-    pinnedCount: allPinnedItems.length + fixedPinnedItems.length + capabilityPinnedItems.length,
   };
 };

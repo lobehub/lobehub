@@ -28,7 +28,7 @@ import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useTopicId } from '../../hooks/useTopicId';
 import { useStoreApi } from '../../store';
 import type { ContextWindow } from '../../store/initialState';
-import { getToolContextRefreshKey, getToolExcludeDefaultToolIds } from './utils';
+import { getToolContextRefreshKey } from './utils';
 
 const toolNameResolver = new ToolNameResolver();
 
@@ -200,7 +200,6 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     enableAgentMode,
     searchMode,
     useModelBuiltinSearch,
-    skillActivateMode,
     agentMemoryEnabled,
     runtimeMode,
     hasEnabledKnowledgeBases,
@@ -213,7 +212,6 @@ export const useTokenBreakdown = (): TokenBreakdown => {
       chatConfig.enableAgentMode,
       chatConfig.searchMode,
       chatConfig.useModelBuiltinSearch,
-      chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
       chatConfig.memory?.enabled,
       chatConfigByIdSelectors.getRuntimeModeById(agentId)(s),
       agentByIdSelectors
@@ -239,7 +237,6 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     memoryEnabled: effectiveMemoryEnabled,
     runtimeMode,
     searchMode,
-    skillActivateMode,
     useModelBuiltinSearch,
   });
 
@@ -257,7 +254,6 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     const toolsEngine = createAgentToolsEngine({ model, provider });
 
     const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: getToolExcludeDefaultToolIds(skillActivateMode),
       model,
       provider,
       toolIds: pluginIds,
@@ -285,15 +281,7 @@ export const useTokenBreakdown = (): TokenBreakdown => {
     // createAgentToolsEngine inputs read via getState() (tool manifests plus
     // agent/user/aiInfra config), so the engine only re-runs when they change
     // instead of on every render.
-  }, [
-    hasRequest,
-    installedPlugins,
-    model,
-    pluginIds,
-    provider,
-    skillActivateMode,
-    toolContextRefreshKey,
-  ]);
+  }, [hasRequest, installedPlugins, model, pluginIds, provider, toolContextRefreshKey]);
 
   const toolsSchemaToken = useTokenCount(canUseTool ? toolsSchema : '');
   const toolsSystemRoleToken = useTokenCount(canUseTool ? toolsSystemRole : '');

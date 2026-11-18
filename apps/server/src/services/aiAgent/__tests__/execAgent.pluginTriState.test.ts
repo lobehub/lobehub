@@ -1,3 +1,4 @@
+import { onDemandBuiltinToolIds } from '@lobechat/builtin-tools';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -253,7 +254,7 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     expect(toolManifestMapArg()).not.toHaveProperty('plugin-d');
   });
 
-  it('keeps a pinned plugin out of the engine agentConfig.plugins, which only carries pinned builtin tools', async () => {
+  it('keeps pinned plugins and pinned on-demand builtins out of the engine agentConfig.plugins in Agent mode', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-1',
@@ -269,16 +270,35 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
-    // A pinned plugin is on: found through the activator, not invoked up front.
-    expect(agentConfigPluginsArg()).toEqual(['lobe-image-generation']);
+    // A pinned entry is on: found through the activator, not invoked up front.
+    expect(agentConfigPluginsArg()).toEqual([]);
     expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a']);
     expect(toolManifestMapArg()).toHaveProperty('plugin-a');
-    expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
+    expect(disabledPluginIdsArg()).toContain('plugin-b');
+    // The pinned builtin stays discoverable; only builtins the agent never chose are cut.
+    expect(disabledPluginIdsArg()).not.toContain('lobe-image-generation');
+    expect(disabledPluginIdsArg()).toContain('lobe-video-generation');
   });
 
-  it('feeds the plugins that are on into the engine agentConfig.plugins in manual mode, excluding disabled', async () => {
+  it('offers a pinned media tool up front in Chat mode, which has no activator', async () => {
     mockGetAgentConfig.mockResolvedValue({
-      // Manual mode has no activator, so on is the only way to reach the model.
+      chatConfig: { enableAgentMode: false },
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [{ identifier: 'lobe-image-generation', mode: 'pinned' }],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    expect(agentConfigPluginsArg()).toEqual(['lobe-image-generation']);
+    expect(disabledPluginIdsArg()).not.toContain('lobe-image-generation');
+  });
+
+  it('treats a legacy manual preference like Agent mode: plugins that are on stay discoverable, disabled ones stay out', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      // Manual mode no longer strips the activator, so on means found on demand.
       chatConfig: { skillActivateMode: 'manual' },
       id: 'agent-1',
       model: 'gpt-4',
@@ -293,9 +313,11 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
-    expect(agentConfigPluginsArg()).toEqual(['plugin-a', 'plugin-c']);
+    expect(agentConfigPluginsArg()).toEqual([]);
     expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a', 'plugin-c']);
-    expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
+    expect(disabledPluginIdsArg()).toContain('plugin-b');
+    expect(disabledPluginIdsArg()).not.toContain('plugin-a');
+    expect(disabledPluginIdsArg()).not.toContain('plugin-c');
   });
 
   it('reads a pure string array as the plugins that are on, leaving every other installed plugin off', async () => {
@@ -313,7 +335,9 @@ describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)'
     const installed = installedPluginsArg().map((p) => p.identifier);
     expect(installed).toEqual(['plugin-a']);
     expect(agentConfigPluginsArg()).toEqual([]);
-    expect(disabledPluginIdsArg()).toEqual([]);
+    // Only builtins the agent never opted into are cut; the string entry is on.
+    expect(disabledPluginIdsArg()).not.toContain('plugin-a');
+    expect(disabledPluginIdsArg().every((id) => onDemandBuiltinToolIds.includes(id))).toBe(true);
   });
 
   it('brings in a plugin the agent has off on the turn that @-mentions it', async () => {

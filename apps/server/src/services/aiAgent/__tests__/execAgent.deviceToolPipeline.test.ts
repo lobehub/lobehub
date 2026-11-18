@@ -295,14 +295,33 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
         { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
       ]);
       mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools });
+      // Computer Use is opt-in per agent; the device report gates it after that.
       mockGetAgentConfig.mockResolvedValue(
-        createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
+        createBaseAgentConfig({
+          agencyConfig: { executionTarget: 'local' },
+          plugins: [{ identifier: AuvManifest.identifier, mode: 'auto' }],
+        }),
       );
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
       const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;
       expect(Boolean(map[AuvManifest.identifier])).toBe(Boolean(supportedTools));
     },
   );
+
+  it('keeps Computer Use out for an agent that has not turned it on, even on a supporting device', async () => {
+    const { deviceGateway } = await import('@/server/services/deviceGateway');
+    vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
+    mockQueryDeviceList.mockResolvedValue([
+      { deviceId: 'dev-1', hostname: 'Mac', online: true, platform: 'darwin' },
+    ]);
+    mockQueryDeviceSystemInfo.mockResolvedValue({ supportedTools: [AuvManifest.identifier] });
+    mockGetAgentConfig.mockResolvedValue(
+      createBaseAgentConfig({ agencyConfig: { executionTarget: 'local' } }),
+    );
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', deviceId: 'dev-1' });
+    const map = mockCreateOperation.mock.calls[0][0].toolSet.manifestMap;
+    expect(map[AuvManifest.identifier]).toBeUndefined();
+  });
 
   describe('deviceContext forwarded to createServerAgentToolsEngine', () => {
     it('should pass deviceContext when gateway is configured', async () => {

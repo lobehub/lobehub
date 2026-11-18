@@ -1,15 +1,11 @@
+import { getUserDisabledToolIds } from '@lobechat/builtin-tools';
 import {
   applyConnectorActivation,
   type ConnectorActivation,
   hasConnectorActivator,
   resolveConnectorActivation,
 } from '@lobechat/mecha';
-import {
-  type AgentPluginEntry,
-  getActivePluginIds,
-  getDisabledPluginIds,
-  getOptedInPluginIds,
-} from '@lobechat/types';
+import { type AgentPluginEntry, getActivePluginIds, getOptedInPluginIds } from '@lobechat/types';
 
 import { getToolStoreState } from '@/store/tool';
 import type { ToolStoreState } from '@/store/tool/initialState';
@@ -69,7 +65,7 @@ export const resolveAgentConnectorActivation = (
     hasActivator: hasConnectorActivator(
       agent.chatConfig,
       [...(agent.enabledPluginIds ?? getActivePluginIds(agent.plugins)), ...turnIds],
-      getDisabledPluginIds(agent.plugins),
+      getUserDisabledToolIds(agent.plugins, agent.chatConfig),
     ),
     optedInIds: getOptedInPluginIds(agent.plugins),
     turnIds,

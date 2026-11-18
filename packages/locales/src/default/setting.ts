@@ -4316,6 +4316,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-artifacts.readme':
     'Generate and live-preview interactive UI components, data visualizations, charts, SVG graphics, and web applications. Create rich visual content that users can interact with directly.',
   'tools.builtins.lobe-artifacts.title': 'Artifacts',
+  'tools.builtins.lobe-canvas.title': 'Canvas',
   'tools.builtins.lobe-calculator.title': 'Calculator',
   'tools.builtins.lobe-calculator.description':
     'Perform mathematical calculations, solve equations, and work with symbolic expressions',
@@ -4674,6 +4675,8 @@ When I am ___, I need ___
     'This skill is not currently installed, which may affect agent functionality.',
   'tools.picker.disabled': 'This model does not support tool calling.',
   'tools.picker.management': 'Manage tools',
+  'tools.picker.emptyGroup': 'No tools in this group',
+  'tools.picker.noMatches': 'No matching tools',
   'tools.picker.search': 'Search tools…',
   'tools.picker.title': 'Tools',
   'tools.plugins.enabled': 'Enabled: {{num}}',
@@ -4685,12 +4688,12 @@ When I am ___, I need ___
   'tools.privateConnector.tooltip':
     'Your private connector: only you can see it, and only your private agents load it.',
   'tools.search': 'Search skills...',
+  'tools.loading.onDemand': 'Load on demand',
   'tools.activation.action.auto': 'Auto',
-  'tools.activation.action.disable': 'Disable',
+  'tools.loading.never': 'Never load',
   'tools.activation.action.pin': 'Pin',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
-  'tools.activation.disabled': 'Disabled',
   'tools.activation.disabled.desc': 'Turned Off',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
   'tools.activation.pinned': 'Pinned',

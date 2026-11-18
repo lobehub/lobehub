@@ -14,7 +14,6 @@ import {
 } from '@lobechat/agent-runtime';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import {
   getSubAgentChatConfigOverride,
   isDesktop,
@@ -298,11 +297,7 @@ export class StreamingExecutorActionImpl {
         ...(topicId && { topicId }),
       },
     );
-    // Manual mode omits the activator and keeps explicit pins and runtime tools.
-    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-
     const toolsDetailed = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
       skipDefaultTools: disableTools || undefined,

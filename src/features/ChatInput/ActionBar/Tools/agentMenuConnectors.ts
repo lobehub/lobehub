@@ -67,15 +67,17 @@ export const agentStillLoadsIdentifier = (
   ).some((c) => c.identifier === deleted.identifier);
 
 /**
- * Unpin a deleted connector from the agent, as removing a Composio connection
- * does, so no orphaned pin survives it; unless the agent still loads a row of
- * its identifier ({@link agentStillLoadsIdentifier}), which keeps the pin. A
- * failed unpin is logged: the delete has already happened.
+ * Turn a deleted connector off for the agent, as removing a Composio connection
+ * does, so no orphaned switch survives it; unless the agent still loads a row of
+ * its identifier ({@link agentStillLoadsIdentifier}), which keeps it on. A
+ * failed write is logged: the delete has already happened.
  */
-export const useUnpinDeletedConnector = (agentId?: string) => {
-  const togglePlugin = useAgentStore((s) => s.togglePlugin);
-
-  return useCallback(
+export const useUnpinDeletedConnector = (
+  agentId: string | undefined,
+  /** Turns the connector off for the agent (its two-state switch). */
+  turnOff: (identifier: string) => Promise<void>,
+) =>
+  useCallback(
     async (deleted: ConnectorWithTools) => {
       const context = {
         agentId,
@@ -87,11 +89,10 @@ export const useUnpinDeletedConnector = (agentId?: string) => {
       if (agentStillLoadsIdentifier(connectors, deleted, context)) return;
 
       try {
-        await togglePlugin(deleted.identifier, false);
+        await turnOff(deleted.identifier);
       } catch (error) {
         console.error('[Connector] Failed to unpin plugin after delete:', error);
       }
     },
-    [agentId, togglePlugin],
+    [agentId, turnOff],
   );
-};

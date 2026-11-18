@@ -12,7 +12,7 @@ import { useControls } from './useControls';
 
 const Tools = memo(() => {
   const { t } = useTranslation('setting');
-  const { marketItems, pinnedCount, autoCount, isPolicyMenuOpen } = useControls();
+  const { marketItems, marketHeader, autoCount, isPolicyMenuOpen } = useControls();
 
   const agentId = useAgentId();
   const { model, provider } = useEffectiveModel(agentId);
@@ -40,8 +40,8 @@ const Tools = memo(() => {
             <PopoverContent
               autoCount={autoCount}
               detailPopoverDisabled={isPolicyMenuOpen}
+              header={marketHeader}
               items={marketItems}
-              pinnedCount={pinnedCount}
             />
           ),
           maxWidth: 320,

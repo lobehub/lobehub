@@ -10,8 +10,7 @@ export const hasConnectorActivator = (
   pluginIds: readonly string[] = [],
   disabledIds: readonly string[] = [],
 ): boolean => {
-  if (chatConfig?.skillActivateMode === 'manual' || disabledIds.includes(LobeActivatorIdentifier))
-    return false;
+  if (disabledIds.includes(LobeActivatorIdentifier)) return false;
   const mode = resolveToolMode(chatConfig);
   return mode === 'agent' || (mode === 'custom' && pluginIds.includes(LobeActivatorIdentifier));
 };

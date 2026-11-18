@@ -9,7 +9,7 @@ import {
   SELF_FEEDBACK_INTENT_IDENTIFIER,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
-import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { getUnselectedBuiltinToolIds } from '@lobechat/builtin-tools';
 import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
@@ -523,6 +523,13 @@ export const discoverTools = async (
       agentPlugins = filterPluginsByShareGate(agentPlugins, shareGate);
     }
 
+    // The runtime may itself require a tool (e.g. a mention or media fallback).
+    // Share runs have a separate grant-based discovery pool and allowlist.
+    if (!shareGate)
+      disabledPluginIds.push(
+        ...getUnselectedBuiltinToolIds([...optedInIds, ...agentPlugins, ...boundConnectorIds]),
+      );
+
     // Resolve THE device decision for this run; see `resolveDevicePlan`.
     const devicePlan = await resolveDevicePlan(deps, ctx, input, {
       boundDeviceId,
@@ -654,10 +661,7 @@ export const discoverTools = async (
     });
     log('execAgent: agent configured plugins: %O', pluginIds);
 
-    const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
-
     toolsResult = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
       model,
       provider,
       skipDefaultTools: !!exclusivePluginIds,

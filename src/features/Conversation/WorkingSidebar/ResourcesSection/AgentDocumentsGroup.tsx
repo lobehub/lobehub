@@ -24,6 +24,7 @@ import {
   type AgentDocumentListMutator,
   DocumentExplorerTree,
 } from '@/features/AgentDocumentsExplorer';
+import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import { startDocumentDrag } from '@/features/ChatInput/InputEditor/ReferDocument/documentDragData';
 import {
@@ -50,7 +51,6 @@ import DeviceLevelSkills from './DeviceLevelSkills';
 import ProjectLevelSkills from './ProjectLevelSkills';
 import { useCanManageUserSkills } from './useCanManageUserSkills';
 import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
-import { UserSkillsManagement } from './UserSkillsManagement';
 import { useSelectSkill } from './useSelectSkill';
 
 dayjs.extend(relativeTime);
@@ -305,7 +305,6 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       isDocumentMode ? 'documents' : 'skills',
     );
     const [skillSearchQuery, setSkillSearchQuery] = useState('');
-    const [managingSkillsFor, setManagingSkillsFor] = useState<string>();
     const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
     const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
     const resolvedFilter = controlledFilter ?? filter;
@@ -493,19 +492,6 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     );
 
     const renderSkills = () => {
-      if (agentId && managingSkillsFor === agentId) {
-        return (
-          <UserSkillsManagement
-            agentId={agentId}
-            items={userSkillItems}
-            key={agentId}
-            onClose={() =>
-              setManagingSkillsFor((current) => (current === agentId ? undefined : current))
-            }
-          />
-        );
-      }
-
       // This is an invocation picker for agent/project/device/user skills, not a
       // full capability inventory. Builtin bundles intentionally keep their existing
       // slash/profile entry points instead of being copied into this sidebar.
@@ -598,7 +584,11 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
             <UserLevelSkills
               hideHeader={flat}
               searchQuery={skillSearchQuery}
-              onManage={canManageSkills ? () => setManagingSkillsFor(agentId) : undefined}
+              onManage={
+                canManageSkills
+                  ? () => navigate(buildAgentProfileTabPath(agentId, 'skills'))
+                  : undefined
+              }
             />
           )}
         </Flexbox>

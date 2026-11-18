@@ -394,17 +394,15 @@ describe('discoverTools — connectors are opt-in per agent', () => {
     expect(resolveByIdentifiers.mock.calls[0][0]).toEqual(['custom-mcp']);
   });
 
-  it('invokes a connector that is on directly when manual mode strips the activator', async () => {
+  it('keeps opted-in connectors discoverable despite a legacy manual preference', async () => {
     const result = await run({
       ...sources,
       agentConfig: { chatConfig: { skillActivateMode: 'manual' }, plugins: ['lobehub-notion'] },
       autoSkillIds: ['community-mcp'],
     }).promise;
 
-    expect(result.agentPlugins).toEqual(
-      expect.arrayContaining(['lobehub-notion', 'community-mcp']),
-    );
-    expect(result.agentPlugins).not.toContain('composio-gmail');
+    expect(result.agentPlugins).toEqual([]);
+    expect(engineInstalledIds()).toEqual(['community-mcp']);
     expect(engineManifestIds()).toEqual(['lobehub-notion']);
   });
 

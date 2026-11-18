@@ -312,8 +312,9 @@ describe('toolEngineering', () => {
   });
 
   describe('feature-flagged tools', () => {
-    const generate = () =>
+    const generate = (explicit = false) =>
       createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' }).generateToolsDetailed({
+        context: { isExplicitActivation: explicit },
         toolIds: [DashboardManifest.identifier],
         model: 'gpt-4',
         provider: 'openai',
@@ -325,10 +326,11 @@ describe('toolEngineering', () => {
       expect(generate().enabledToolIds).not.toContain(DashboardManifest.identifier);
     });
 
-    it('offers a pinned builtin-dashboard once the flag is on', () => {
+    it('offers the previously pinned dashboard only after activation once the flag is on', () => {
       mockCurrentAgentPlugins = [DashboardManifest.identifier];
       mockFeatureFlags = { enableDashboard: true };
-      expect(generate().enabledToolIds).toContain(DashboardManifest.identifier);
+      expect(generate().enabledToolIds).not.toContain(DashboardManifest.identifier);
+      expect(generate(true).enabledToolIds).toContain(DashboardManifest.identifier);
     });
   });
 
@@ -633,6 +635,10 @@ describe('toolEngineering', () => {
         skipDefaultTools: true,
         toolIds: ['lobe-agent'],
       };
+      expect(
+        createAgentToolsEngine(model).generateToolsDetailed(activation).enabledToolIds,
+      ).toEqual([]);
+      mockCurrentAgentAutoPlugins = ['lobe-agent'];
       const engine = createAgentToolsEngine(model);
 
       expect(engine.generateToolsDetailed({ ...model, toolIds: [] }).enabledToolIds).not.toContain(
@@ -666,7 +672,7 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toEqual([]);
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-agent',
-        reason: 'incompatible',
+        reason: 'not_found',
       });
       expect(result.filteredTools).toContainEqual({
         id: 'lobe-web-browsing',
@@ -689,7 +695,8 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).not.toContain('lobe-image-generation');
     });
 
-    it('should allow image generation explicit activation in agent mode', () => {
+    it('should allow opted-in image generation explicit activation in agent mode', () => {
+      mockCurrentAgentAutoPlugins = ['lobe-image-generation'];
       const toolsEngine = createAgentToolsEngine({
         model: 'gpt-4',
         provider: 'openai',
@@ -1053,11 +1060,12 @@ describe('toolEngineering', () => {
       expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
     });
 
-    it('invokes a connector that is on directly when manual mode strips the activator', () => {
+    it('defers an enabled connector despite a legacy manual preference', () => {
       mockCurrentAgentAutoPlugins = ['gmail-mcp'];
       mockCurrentChatConfig = { skillActivateMode: 'manual' };
 
-      expect(generate().enabledToolIds).toEqual(['gmail-mcp']);
+      expect(generate().enabledToolIds).toEqual([]);
+      expect(generate({ explicit: true }).enabledToolIds).toEqual(['gmail-mcp']);
     });
 
     it('invokes a connector that is on directly in custom mode, which has no activator either', () => {
@@ -1141,6 +1149,7 @@ describe('toolEngineering', () => {
 describe('Computer Use activation', () => {
   it('loads the native API only after activation in standalone Electron', () => {
     desktopEnv.enabled = true;
+    mockCurrentAgentAutoPlugins = [AuvManifest.identifier];
     const engine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
     expect(
       engine.generateToolsDetailed({ model: 'gpt-4', provider: 'openai', toolIds: [] })
@@ -1157,6 +1166,7 @@ describe('Computer Use activation', () => {
   });
   it('does not let explicit activation bypass the Web platform restriction', () => {
     desktopEnv.enabled = false;
+    mockCurrentAgentAutoPlugins = [AuvManifest.identifier];
     const engine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
     expect(
       engine.generateToolsDetailed({
