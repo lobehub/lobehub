@@ -377,6 +377,18 @@ describe('external contacts of a workspace', () => {
     await expect(bobInTeam().list()).rejects.toThrow('Not a member of this workspace');
   });
 
+  it('lists the workspaces I am an external contact of, while a member is paired with me', async () => {
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+    await inviteBob();
+    expect(await bobModel.listExternalWorkspaces()).toEqual([
+      { avatar: null, id: teamId, name: 'Team' },
+    ]);
+    // Members are never external, and the workspace goes once no member is paired with me.
+    expect(await aliceModel.listExternalWorkspaces()).toEqual([]);
+    await aliceInTeam.removeUser(bob);
+    expect(await bobModel.listExternalWorkspaces()).toEqual([]);
+  });
+
   it('lets the invitation lapse once the inviter leaves the workspace', async () => {
     const { requestId } = await carolInTeam.sendRequest(bob);
     await serverDB

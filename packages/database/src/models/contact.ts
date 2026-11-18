@@ -7,6 +7,7 @@ import type {
   ContactSearchResult,
   ContactUserItem,
   ContactUserProfile,
+  ContactWorkspace,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { SQLWrapper } from 'drizzle-orm';
@@ -636,6 +637,43 @@ export class ContactModel {
           ),
         );
     });
+  };
+
+  /**
+   * The workspaces I am an external contact of, for the space switcher: paired there with a
+   * member who still is one, and not a member myself. Independent of the active scope.
+   */
+  listExternalWorkspaces = async (): Promise<ContactWorkspace[]> => {
+    const myMembership = alias(workspaceMembers, 'my_membership');
+    return this.db
+      .selectDistinct({ avatar: workspaces.avatar, id: workspaces.id, name: workspaces.name })
+      .from(userContacts)
+      .innerJoin(workspaces, eq(workspaces.id, userContacts.workspaceId))
+      .innerJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, userContacts.workspaceId),
+          eq(workspaceMembers.userId, userContacts.contactUserId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .leftJoin(
+        myMembership,
+        and(
+          eq(myMembership.workspaceId, userContacts.workspaceId),
+          eq(myMembership.userId, this.userId),
+          isNull(myMembership.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(userContacts.userId, this.userId),
+          eq(userContacts.type, 'user'),
+          isNotNull(userContacts.workspaceId),
+          isNull(myMembership.userId),
+        ),
+      )
+      .orderBy(workspaces.name);
   };
 
   /** Someone paired with a member here who is not a member themselves. */
