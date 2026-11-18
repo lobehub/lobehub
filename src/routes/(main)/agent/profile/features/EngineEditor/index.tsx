@@ -16,7 +16,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
-import AgentExecutionEnvironment from '../ProfileEditor/AgentExecutionEnvironment';
 import { AgentModelConfig } from '../ProfileEditor/AgentModelConfig';
 
 const EngineEditor = memo(() => {
@@ -67,12 +66,9 @@ const EngineEditor = memo(() => {
 
   return (
     <Flexbox gap={32} paddingBlock={'8px 48px'}>
-      <Flexbox gap={4}>
-        <Text fontSize={24} weight={600}>
-          {t('settingAgent.engine.title')}
-        </Text>
-        <Text type={'secondary'}>{t('settingAgent.engine.desc')}</Text>
-      </Flexbox>
+      <Text fontSize={24} weight={600}>
+        {t('settingAgent.engine.title')}
+      </Text>
       {!isWorkspaceAgent ? driverForm : null}
       {isHeterogeneous ? (
         // Where it runs lives on its own page, so say so rather than leave this one bare.
@@ -91,10 +87,7 @@ const EngineEditor = memo(() => {
       ) : (
         <>
           {configHeading}
-          <Flexbox horizontal gap={8} style={{ containerType: 'inline-size' }} wrap={'wrap'}>
-            <AgentModelConfig agentId={agentId} />
-            <AgentExecutionEnvironment agentId={agentId} />
-          </Flexbox>
+          <AgentModelConfig agentId={agentId} />
         </>
       )}
     </Flexbox>

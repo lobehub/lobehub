@@ -37,7 +37,7 @@ export const AgentModelConfig = memo<AgentModelConfigProps>(({ agentId }) => {
   if (!config) return null;
 
   return (
-    <AgentConfigCard icon={Bot} title={t('settingAgent.modelPolicy.title')}>
+    <AgentConfigCard fullWidth icon={Bot} title={t('settingAgent.modelPolicy.title')}>
       <Flexbox horizontal align={'center'} gap={8}>
         <ModelSelect
           disabled={!canEdit}

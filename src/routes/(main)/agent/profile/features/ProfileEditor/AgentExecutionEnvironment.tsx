@@ -324,7 +324,11 @@ const AgentExecutionEnvironment = memo<AgentExecutionEnvironmentProps>(
     if (!config) return null;
 
     return (
-      <AgentConfigCard icon={MonitorSmartphone} title={t('settingAgent.devicePolicy.title')}>
+      <AgentConfigCard
+        fullWidth={showDevicePicker}
+        icon={MonitorSmartphone}
+        title={t('settingAgent.devicePolicy.title')}
+      >
         {showDevicePicker ? (
           <Select
             classNames={executionTargetSelectClassNames}
