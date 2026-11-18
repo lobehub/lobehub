@@ -41,6 +41,29 @@ export const isSharedAgentChannel = (
     agent.agentVisibility !== 'private'
   );
 
+/**
+ * The owner of the Agent a direct conversation is with, when it is another person's shared Agent
+ * (`isSharedAgentChannel`); `null` otherwise.
+ */
+export const sharedAgentOwner = async (
+  tx: Transaction,
+  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
+  viewerId: string,
+): Promise<string | null> => {
+  if (!channel.agentId) return null;
+  const [agent] = await tx
+    .select({
+      agentOwnerId: agents.userId,
+      agentVisibility: agents.visibility,
+      agentWorkspaceId: agents.workspaceId,
+    })
+    .from(agents)
+    .where(eq(agents.id, channel.agentId));
+  return agent?.agentOwnerId && isSharedAgentChannel(channel, agent, viewerId)
+    ? agent.agentOwnerId
+    : null;
+};
+
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
 export const memberEnvironment = (config?: ChannelMemberConfig | null): ChannelMemberConfig =>
   cleanObject({

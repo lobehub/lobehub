@@ -87,6 +87,8 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       sharedAgentHandle: 'shared-helper',
     });
     expect(listed.memberAvatars).toMatchObject([{ actorType: 'agent', id: agentId }]);
+    // The conversation view marks it too: its composer reads `detail`, not the list.
+    expect((await visitor.detail(channel.id)).channel).toMatchObject({ sharedAgent: true });
   });
 
   it('lists the share id as its handle when the owner set no custom slug', async () => {
@@ -540,5 +542,6 @@ describe('a shared Agent in the visitor’s workspace', () => {
 
     const [listed] = await inWorkspace.list();
     expect(listed).toMatchObject({ id: channel.id, sharedAgent: false, sharedAgentHandle: null });
+    expect((await inWorkspace.detail(channel.id)).channel).toMatchObject({ sharedAgent: false });
   });
 });

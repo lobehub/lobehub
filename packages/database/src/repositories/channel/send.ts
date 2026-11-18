@@ -3,11 +3,11 @@ import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
-import { agents, channelMembers, channelMessages, channelThreads, files } from '../../schemas';
+import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
 import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
-import { isSharedAgentChannel } from './agent';
+import { sharedAgentOwner } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
 import {
   activeMembers,
@@ -175,18 +175,11 @@ export const sendMessage = async (
     );
 
   if (channel.agentId) {
-    const [bound] = await tx
-      .select({
-        agentOwnerId: agents.userId,
-        agentVisibility: agents.visibility,
-        agentWorkspaceId: agents.workspaceId,
-      })
-      .from(agents)
-      .where(eq(agents.id, channel.agentId));
     // The same test the Channel list uses, so a workspace conversation with a shared Agent is
     // treated like a personal one, while a colleague's public workspace Agent (the workspace's
     // own) is not.
-    if (bound?.agentOwnerId && isSharedAgentChannel(channel, bound, member.userId!)) {
+    const agentOwnerId = await sharedAgentOwner(tx, channel, member.userId!);
+    if (agentOwnerId) {
       // Another person's shared Agent runs as its owner, who cannot read the sender's files.
       if (fileIds.length)
         throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
@@ -194,7 +187,7 @@ export const sendMessage = async (
         agentId: channel.agentId,
         channelId: channel.id,
         content: input.content,
-        ownerId: bound.agentOwnerId,
+        ownerId: agentOwnerId,
         requesterMemberId: member.id,
         threadId,
         visitorId: member.userId!,
