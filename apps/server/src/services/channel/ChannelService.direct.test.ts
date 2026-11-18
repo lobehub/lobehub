@@ -13,6 +13,7 @@ const {
   findAccess,
   findDevice,
   findDirectAccess,
+  findProjectMainChannelId,
   findShare,
   findSharedAgent,
   getAgent,
@@ -26,6 +27,7 @@ const {
   findAccess: vi.fn(),
   findDevice: vi.fn(),
   findDirectAccess: vi.fn(),
+  findProjectMainChannelId: vi.fn(),
   findShare: vi.fn(),
   findSharedAgent: vi.fn(),
   getAgent: vi.fn(),
@@ -41,6 +43,9 @@ vi.mock('@/database/repositories/channel', async (original) => ({
     findAccess = findAccess;
     findDirectAccess = findDirectAccess;
   },
+}));
+vi.mock('@/database/repositories/channel/projectMainChannel', () => ({
+  findProjectMainChannelId,
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
 vi.mock('@/database/models/contact', async (original) => ({
@@ -198,6 +203,44 @@ describe('opening the direct Channel of an existing Agent', () => {
     findDirectAccess.mockResolvedValue(undefined);
     await expect(openDirect()).resolves.toEqual({ channel: { id: 'chn_new' } });
     expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_old', title: 'Nasa' });
+  });
+});
+
+describe('opening an Agent from the contacts or Agent list', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    create.mockResolvedValue({ channel: { id: 'chn_new' } });
+    getAgent.mockResolvedValue({ model: 'gpt-5', name: 'Apollo' });
+  });
+  const openAgent = () => new ChannelService({} as never, 'owner', 'ws').openAgent('agt_main');
+
+  // Creating a project used to leave two conversations with its main Agent in the list: the
+  // project's General Channel and a direct conversation opened on the first click.
+  it("opens a project's main Agent in the project's Channel without a direct conversation", async () => {
+    findDirectAccess.mockResolvedValue(undefined);
+    findProjectMainChannelId.mockResolvedValue('chn_general');
+
+    await expect(openAgent()).resolves.toBe('chn_general');
+
+    expect(findProjectMainChannelId).toHaveBeenCalledWith({}, 'owner', 'ws', 'agt_main');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a direct conversation the person already has with that Agent', async () => {
+    findDirectAccess.mockResolvedValue({ channel: { id: 'chn_dm', isDeleted: null } });
+
+    await expect(openAgent()).resolves.toBe('chn_dm');
+
+    expect(findProjectMainChannelId).not.toHaveBeenCalled();
+  });
+
+  it('opens a direct conversation for an Agent that leads no project', async () => {
+    findDirectAccess.mockResolvedValue(undefined);
+    findProjectMainChannelId.mockResolvedValue(undefined);
+
+    await expect(openAgent()).resolves.toBe('chn_new');
+
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_main', title: 'Apollo' });
   });
 });
 
