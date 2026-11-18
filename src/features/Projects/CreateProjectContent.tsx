@@ -1,3 +1,4 @@
+import { PROJECT_DUPLICATE_ID, type ProjectDuplicateField } from '@lobechat/types';
 import {
   Button,
   cssVar,
@@ -10,15 +11,17 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { FolderIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { type ProjectListItem, useProjectStore } from '@/store/project';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import {
   getCreatedProjectPath,
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
   isProjectSlugValid,
@@ -34,6 +37,7 @@ export interface CreateProjectOptions {
 }
 
 interface CreateProjectFormState {
+  conflict?: { field: ProjectDuplicateField; value: string };
   identifier: string;
   identifierEdited: boolean;
   loading: boolean;
@@ -53,6 +57,8 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const createProject = useProjectStore((s) => s.createProject);
+  const identifierDescriptionId = useId();
+  const slugDescriptionId = useId();
   const [form, setForm] = useState<CreateProjectFormState>({
     identifier: '',
     identifierEdited: false,
@@ -66,6 +72,14 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const identifierInvalid =
     (form.identifierEdited || Boolean(form.name.trim())) && !identifierValid;
   const slugValid = isProjectSlugValid(form.slug);
+  const conflictField =
+    form.conflict && form[form.conflict.field].trim() === form.conflict.value
+      ? form.conflict.field
+      : undefined;
+  const identifierTaken = conflictField === 'identifier';
+  const slugTaken = conflictField === 'slug';
+  const identifierError = identifierInvalid || identifierTaken;
+  const slugError = !slugValid || slugTaken;
 
   const updateForm = (patch: Partial<CreateProjectFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -82,8 +96,8 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   };
 
   const handleCreate = async () => {
-    if (!createInput || form.loading) return;
-    updateForm({ loading: true });
+    if (!createInput || form.loading || conflictField) return;
+    updateForm({ conflict: undefined, loading: true });
     try {
       const project = await createProject(createInput);
       close();
@@ -96,6 +110,21 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
         else toast.success(t('create.success', { name: project.name }));
       }
     } catch (error) {
+      const field = getProjectConflictField(error);
+      if (field) {
+        const value = createInput[field];
+        if (value) updateForm({ conflict: { field, value } });
+        else toast.error(t('create.slugTaken'));
+        return;
+      }
+      if (
+        isTrpcErrorCode(error, 'CONFLICT') &&
+        error instanceof Error &&
+        error.message === PROJECT_DUPLICATE_ID
+      ) {
+        toast.error(t('create.idConflict'));
+        return;
+      }
       console.error('Failed to create project', error);
       toast.error(t('operationFailed', { ns: 'common' }));
     } finally {
@@ -125,18 +154,31 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             {t('create.identifierLabel')}
           </Text>
           <Input
-            aria-invalid={identifierInvalid}
+            aria-describedby={identifierDescriptionId}
+            aria-invalid={identifierError}
+            aria-label={t('create.identifierLabel')}
             maxLength={6}
             placeholder={t('create.identifierPlaceholder')}
-            style={identifierInvalid ? { borderColor: cssVar.colorError } : undefined}
+            style={identifierError ? { borderColor: cssVar.colorError } : undefined}
             value={form.identifier}
             onPressEnter={handleCreate}
             onChange={(event) =>
               updateForm({ identifier: event.target.value.toUpperCase(), identifierEdited: true })
             }
           />
-          <Text fontSize={12} type={identifierInvalid ? 'danger' : 'secondary'}>
-            {t(identifierInvalid ? 'create.identifierInvalid' : 'create.identifierDescription')}
+          <Text
+            aria-live="polite"
+            fontSize={12}
+            id={identifierDescriptionId}
+            type={identifierError ? 'danger' : 'secondary'}
+          >
+            {t(
+              identifierTaken
+                ? 'create.identifierTaken'
+                : identifierInvalid
+                  ? 'create.identifierInvalid'
+                  : 'create.identifierDescription',
+            )}
           </Text>
         </Flexbox>
         <Flexbox gap={6}>
@@ -144,25 +186,38 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             {t('create.slugLabel')}
           </Text>
           <Input
-            aria-invalid={!slugValid}
+            aria-describedby={slugDescriptionId}
+            aria-invalid={slugError}
+            aria-label={t('create.slugLabel')}
             maxLength={100}
             placeholder={t('create.slugPlaceholder')}
-            style={slugValid ? undefined : { borderColor: cssVar.colorError }}
+            style={slugError ? { borderColor: cssVar.colorError } : undefined}
             value={form.slug}
             onPressEnter={handleCreate}
             onChange={(event) =>
               updateForm({ slug: event.target.value.toLowerCase(), slugEdited: true })
             }
           />
-          <Text fontSize={12} type={slugValid ? 'secondary' : 'danger'}>
-            {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}
+          <Text
+            aria-live="polite"
+            fontSize={12}
+            id={slugDescriptionId}
+            type={slugError ? 'danger' : 'secondary'}
+          >
+            {t(
+              slugTaken
+                ? 'create.slugTaken'
+                : slugValid
+                  ? 'create.slugDescription'
+                  : 'create.slugInvalid',
+            )}
           </Text>
         </Flexbox>
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button
-          disabled={!createInput}
+          disabled={!createInput || !!conflictField}
           loading={form.loading}
           type="primary"
           onClick={handleCreate}

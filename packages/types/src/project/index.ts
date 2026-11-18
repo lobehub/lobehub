@@ -1,5 +1,11 @@
 export const PROJECT_IDENTIFIER_REGEX = /^[A-Z][A-Z0-9]{2,5}$/;
 
+export const PROJECT_DUPLICATE_ID = 'DUPLICATE_PROJECT_ID';
+export const PROJECT_DUPLICATE_IDENTIFIER = 'DUPLICATE_PROJECT_IDENTIFIER';
+export const PROJECT_DUPLICATE_SLUG = 'DUPLICATE_PROJECT_SLUG';
+
+export type ProjectDuplicateField = 'identifier' | 'slug';
+
 export const PROJECT_STATUSES = [
   'backlog',
   'active',

@@ -1,5 +1,5 @@
-import { Button, Flexbox, Form, Input, TextArea, toast } from '@lobehub/ui';
-import { useState } from 'react';
+import { Button, Flexbox, Form, Input, Text, TextArea, toast } from '@lobehub/ui';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -10,14 +10,16 @@ import { useFileStore } from '@/store/file';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
 
-import { isProjectSlugValid } from '../createProjectForm';
+import { getProjectConflictField, isProjectSlugValid } from '../createProjectForm';
 
 const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 
 export function GeneralSettings({ project }: { project: ProjectDetail['project'] }) {
   const { t } = useTranslation('project');
+  const slugDescriptionId = useId();
   const [name, setName] = useState(project.name);
   const [slug, setSlug] = useState(project.slug ?? '');
+  const [slugTaken, setSlugTaken] = useState(false);
   const [description, setDescription] = useState(project.description ?? '');
   const [avatar, setAvatar] = useState<string | null>(project.avatar ?? null);
   const [uploading, setUploading] = useState(false);
@@ -62,17 +64,23 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
       navigate(`/project/${saved.slug ?? saved.id}/settings/general`, { replace: true });
       toast.success(t('rename.success'));
     } catch (error) {
+      if (getProjectConflictField(error) === 'slug') {
+        setSlugTaken(true);
+        return;
+      }
       console.error('Failed to update project', error);
       setError(error);
     } finally {
       setPending(false);
     }
   };
+  const slugValid = isProjectSlugValid(slug);
+  const slugError = !slugValid || slugTaken;
   const saveDisabled =
     pending ||
     uploading ||
     !name.trim() ||
-    !isProjectSlugValid(slug) ||
+    slugError ||
     (name.trim() === project.name &&
       slug.trim() === (project.slug ?? '') &&
       description.trim() === (project.description ?? '') &&
@@ -145,17 +153,33 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
               },
               {
                 label: t('create.slugLabel'),
-                desc: t(
-                  isProjectSlugValid(slug) ? 'settings.slugDescription' : 'create.slugInvalid',
+                desc: (
+                  <Text
+                    aria-live="polite"
+                    id={slugDescriptionId}
+                    type={slugError ? 'danger' : 'secondary'}
+                  >
+                    {t(
+                      slugTaken
+                        ? 'create.slugTaken'
+                        : slugValid
+                          ? 'settings.slugDescription'
+                          : 'create.slugInvalid',
+                    )}
+                  </Text>
                 ),
                 children: (
                   <Input
-                    aria-invalid={!isProjectSlugValid(slug) || undefined}
+                    aria-describedby={slugDescriptionId}
+                    aria-invalid={slugError || undefined}
                     aria-label={t('create.slugLabel')}
                     disabled={pending}
                     maxLength={100}
                     value={slug}
-                    onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                    onChange={(e) => {
+                      setSlugTaken(false);
+                      setSlug(e.target.value.toLowerCase());
+                    }}
                   />
                 ),
               },

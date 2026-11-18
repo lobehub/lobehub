@@ -1,7 +1,14 @@
 import { PROJECT_FIRST_NAVIGATION } from '@lobechat/business-const';
-import { PROJECT_IDENTIFIER_REGEX } from '@lobechat/types';
+import {
+  PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_DUPLICATE_SLUG,
+  PROJECT_IDENTIFIER_REGEX,
+  type ProjectDuplicateField,
+} from '@lobechat/types';
 import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
+
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PROJECT_IDENTIFIER_LENGTH = 4;
@@ -41,6 +48,13 @@ export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestion
 
 export const isProjectIdentifierValid = (identifier: string) =>
   PROJECT_IDENTIFIER_REGEX.test(identifier.trim().toUpperCase());
+
+export const getProjectConflictField = (error: unknown): ProjectDuplicateField | undefined => {
+  if (!isTrpcErrorCode(error, 'CONFLICT') || !error || typeof error !== 'object') return;
+  if (!('message' in error)) return;
+  if (error.message === PROJECT_DUPLICATE_IDENTIFIER) return 'identifier';
+  if (error.message === PROJECT_DUPLICATE_SLUG) return 'slug';
+};
 
 export const isProjectSlugValid = (slug: string) => {
   const normalizedSlug = slug.trim().toLowerCase();

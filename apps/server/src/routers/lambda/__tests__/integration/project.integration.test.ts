@@ -1,7 +1,8 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agents, knowledgeBases, workspaces } from '@lobechat/database/schemas';
+import { agents, knowledgeBases, projects, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { projectRouter } from '../../project';
@@ -119,6 +120,67 @@ describe('Project Router Integration', () => {
     await expect(caller.create({ identifier: 'not-valid!', name: 'Invalid' })).rejects.toThrow(
       'Invalid project identifier',
     );
+  });
+
+  it.each(['personal', 'workspace'])(
+    'reports project field conflicts in %s scope',
+    async (scope) => {
+      const workspaceId = 'project-conflict-workspace';
+      if (scope === 'workspace') {
+        await serverDB
+          .insert(workspaces)
+          .values({ id: workspaceId, name: 'Projects', primaryOwnerId: userId, slug: workspaceId });
+        caller = projectRouter.createCaller({
+          ...createTestContext(userId),
+          virtual: true,
+          workspaceId,
+          workspaceRole: 'owner',
+        });
+      }
+
+      const first = await caller.create({ identifier: 'FIRST', name: 'First', slug: 'first' });
+      await serverDB
+        .update(projects)
+        .set({ isDeleted: true })
+        .where(eq(projects.id, first.data.id));
+
+      await expect(
+        caller.create({ identifier: 'first', name: 'Second', slug: 'second' }),
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_PROJECT_IDENTIFIER' });
+      await expect(
+        caller.create({ identifier: 'SECOND', name: 'Second', slug: 'first' }),
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_PROJECT_SLUG' });
+
+      const second = await caller.create({ identifier: 'SECOND', name: 'Second', slug: 'second' });
+      await expect(caller.update({ id: second.data.id, slug: 'first' })).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: 'DUPLICATE_PROJECT_SLUG',
+      });
+      expect((await caller.find({ id: second.data.id })).data.slug).toBe('second');
+    },
+  );
+
+  it('reports a generated project ID collision separately from an editable field conflict', async () => {
+    const first = await caller.create({ identifier: 'FIRST', name: 'First', slug: 'first' });
+    const generateId = vi.spyOn(projects.id, 'defaultFn').mockReturnValue(first.data.id);
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(
+        caller.create({ identifier: 'SECOND', name: 'Second', slug: 'second' }),
+      ).rejects.toMatchObject({
+        cause: undefined,
+        code: 'CONFLICT',
+        message: 'DUPLICATE_PROJECT_ID',
+      });
+      expect(logError).toHaveBeenCalledWith('[project:create]', {
+        code: '23505',
+        constraint: 'projects_pkey',
+      });
+      expect(JSON.stringify(logError.mock.calls)).not.toContain(first.data.id);
+    } finally {
+      generateId.mockRestore();
+      logError.mockRestore();
+    }
   });
 
   it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(

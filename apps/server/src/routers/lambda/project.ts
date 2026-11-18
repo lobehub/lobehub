@@ -1,4 +1,11 @@
-import { PROJECT_IDENTIFIER_REGEX, PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
+import {
+  PROJECT_DUPLICATE_ID,
+  PROJECT_DUPLICATE_IDENTIFIER,
+  PROJECT_DUPLICATE_SLUG,
+  PROJECT_IDENTIFIER_REGEX,
+  PROJECT_STATUSES,
+  PROJECT_VISIBILITIES,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -11,6 +18,7 @@ import { ProjectModel } from '@/database/models/project';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 /**
@@ -93,8 +101,32 @@ const knowledgeBaseBindingPatch = z.object({
   sortOrder: z.number().int().optional(),
 });
 
+const projectConstraintMessages = new Map([
+  ['projects_identifier_user_id_unique', PROJECT_DUPLICATE_IDENTIFIER],
+  ['projects_identifier_workspace_id_unique', PROJECT_DUPLICATE_IDENTIFIER],
+  ['projects_slug_user_id_unique', PROJECT_DUPLICATE_SLUG],
+  ['projects_slug_workspace_id_unique', PROJECT_DUPLICATE_SLUG],
+]);
+
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
+
+  const pg = unwrapPgError(error);
+  if (pg) {
+    const message = pg.code === '23505' && projectConstraintMessages.get(pg.constraint ?? '');
+    if (message) throw new TRPCError({ code: 'CONFLICT', message });
+
+    // The driver error and the Drizzle wrapper may contain SQL and submitted values.
+    console.error(`[project:${operation}]`, { code: pg.code, constraint: pg.constraint });
+    if (pg.code === '23505' && pg.constraint === 'projects_pkey') {
+      throw new TRPCError({ code: 'CONFLICT', message: PROJECT_DUPLICATE_ID });
+    }
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: `Failed to ${operation} project`,
+    });
+  }
+
   const message = error instanceof Error ? error.message : `Failed to ${operation} project`;
   console.error(`[project:${operation}]`, error);
   throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message });
