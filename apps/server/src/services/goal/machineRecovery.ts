@@ -1,3 +1,4 @@
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import { QUOTA_LIMITED_RUN_STATUS, TRANSIENT_FAILED_RUN_STATUS } from '@lobechat/const/goal';
 import type { GoalGraphSnapshot } from '@lobechat/types';
 
@@ -68,7 +69,7 @@ const environmentFix = (problem: GoalEnvironmentProblem): string => {
       return "Update the provider credentials, plan or model in the agent's settings";
     }
     case 'device': {
-      return 'Reconnect the device (desktop app or `lh connect`), or bind the agent to another online device';
+      return `Reconnect the device (desktop app or \`${CLI_PRIMARY_BIN} connect\`), or bind the agent to another online device`;
     }
     case 'gateway': {
       return 'Configure the device gateway on the server, or switch the agent to a connected local device';

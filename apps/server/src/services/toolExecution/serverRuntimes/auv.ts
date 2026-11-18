@@ -1,5 +1,5 @@
 import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME, CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import type { DeviceClient } from '@lobechat/types';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -15,8 +15,7 @@ import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 export const COMPUTER_USE_DEVICE_UNAVAILABLE_ERROR_CODE = 'COMPUTER_USE_DEVICE_UNAVAILABLE';
 
-const CLI_WITHOUT_COMPUTER_USE =
-  'the `lh connect` CLI, which offers Computer Use only when started with `--auv <binary>`';
+const CLI_WITHOUT_COMPUTER_USE = `the \`${CLI_PRIMARY_BIN} connect\` CLI, which offers Computer Use only when started with \`--auv <binary>\``;
 
 /**
  * The capability check could not run (the desktop app did not answer it), no
@@ -32,7 +31,7 @@ const buildUnverifiedDeviceResult = (
     clientKind === 'cli-only'
       ? `The active device (${deviceId}) is connected only through ${CLI_WITHOUT_COMPUTER_USE}. ` +
         `Nothing was run. Ask the user to open the ${BRANDING_NAME} desktop app on that machine, ` +
-        `or to restart \`lh connect\` with \`--auv\`, then retry.`
+        `or to restart \`${CLI_PRIMARY_BIN} connect\` with \`--auv\`, then retry.`
       : clientKind === 'mixed'
         ? `Could not confirm that the active device (${deviceId}) can run Computer Use: the ` +
           `desktop app did not answer the capability check (${reason}), and the device also runs ` +

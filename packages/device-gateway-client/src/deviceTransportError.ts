@@ -1,3 +1,4 @@
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import type { DeviceUnavailableErrorData } from '@lobechat/types';
 
 export type { DeviceUnavailableErrorData } from '@lobechat/types';
@@ -47,7 +48,7 @@ export const DeviceTransportErrorCode = {
   DeviceNotFound: 'DEVICE_NOT_FOUND',
   /**
    * The device is online, but none of its connections belongs to a client that
-   * can serve the request (e.g. only `lh connect` while the desktop app is needed).
+   * can serve the request (e.g. only the CLI while the desktop app is needed).
    */
   NoCapableClient: 'DEVICE_NO_CAPABLE_CLIENT',
   /** Delivered to the device, but no answer before the deadline. */
@@ -87,7 +88,7 @@ interface DeviceTransportTarget {
   workspaceId?: string;
 }
 
-const RECONNECT_HINT = `Tell the user to check that the desktop app (or the \`lh\` CLI) is running and shows as connected.`;
+const RECONNECT_HINT = `Tell the user to check that the desktop app (or the \`${CLI_PRIMARY_BIN}\` CLI) is running and shows as connected.`;
 
 const describeStatus = (
   status: number,
@@ -150,7 +151,7 @@ const describeStatus = (
 };
 
 const CLIENT_LABEL: Record<string, string> = {
-  cli: 'the `lh connect` CLI',
+  cli: `the \`${CLI_PRIMARY_BIN} connect\` CLI`,
   desktop: 'the desktop app',
 };
 

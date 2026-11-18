@@ -1,6 +1,6 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME, CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import debug from 'debug';
 
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
@@ -118,7 +118,7 @@ const buildCliOnlyDeviceBrowserResult = (
     ? `For public pages use ${WebBrowsingManifest.identifier} (search / crawl) instead. `
     : '';
   const message =
-    `The active device (${deviceId}) is connected only through the \`lh connect\` CLI, ` +
+    `The active device (${deviceId}) is connected only through the \`${CLI_PRIMARY_BIN} connect\` CLI, ` +
     `which has no built-in browser, so lobe-browser cannot run there. ` +
     publicPageHint +
     `If a signed-in browser session is required, ask the user to open the ${BRANDING_NAME} desktop app ` +

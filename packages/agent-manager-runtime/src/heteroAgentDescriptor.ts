@@ -13,6 +13,7 @@
  * This module maps a `LobeAgentAgencyConfig` into a compact, LLM-facing runtime
  * descriptor plus a few human-readable lines for the tool `content`.
  */
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import type {
   DeviceExecutionTarget,
   HeterogeneousProviderConfig,
@@ -157,7 +158,7 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
 
 const EXECUTION_TARGET_DESCRIPTIONS: Record<DeviceExecutionTarget, string> = {
   auto: 'auto-selected online device (one is activated automatically; with several the agent picks one)',
-  device: 'a specific device connected via `lh connect`',
+  device: `a specific device connected via \`${CLI_PRIMARY_BIN} connect\``,
   local: "in-process on the user's desktop",
   none: 'no execution environment (plain chat)',
   sandbox: 'a server-spawned cloud sandbox',

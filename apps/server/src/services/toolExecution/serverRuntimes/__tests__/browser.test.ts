@@ -1,4 +1,5 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
@@ -69,7 +70,7 @@ describe('browserRuntime', () => {
       expect(mockExecuteToolCall).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect(result.error.code).toBe('BROWSER_DEVICE_UNSUPPORTED');
-      expect(result.content).toContain('lh connect');
+      expect(result.content).toContain(`\`${CLI_PRIMARY_BIN} connect\` CLI`);
       // lobe-web-browsing is not in this run's tool set, so it must not be offered.
       expect(result.content).not.toContain('lobe-web-browsing');
     });

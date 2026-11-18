@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { executeToolWithRetry } from '@lobechat/agent-runtime';
 import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
+import { BRANDING_NAME, CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import { DATABASE_ERROR_PUBLIC_MESSAGE } from '@lobechat/utils/queryError';
 import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { TRPCError } from '@trpc/server';
@@ -745,7 +746,7 @@ describe('ToolExecutionService', () => {
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
-      expect(result.content).toContain('lh connect');
+      expect(result.content).toContain(`\`${CLI_PRIMARY_BIN} connect\` CLI`);
     });
 
     it('fails closed for a workspace run whose active device is CLI-only', async () => {
@@ -864,7 +865,8 @@ describe('ToolExecutionService', () => {
       expect(callTool).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
-      expect(result.content).toContain('open the LobeHub desktop app');
+      expect(result.content).toContain(`open the ${BRANDING_NAME} desktop app`);
+      expect(result.content).toContain(`\`${CLI_PRIMARY_BIN} connect\` CLI`);
     });
 
     it('fails closed when no serverDB is available to apply device visibility', async () => {

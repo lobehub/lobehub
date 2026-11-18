@@ -1,3 +1,4 @@
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import { QUOTA_LIMITED_RUN_STATUS, TRANSIENT_FAILED_RUN_STATUS } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
@@ -142,6 +143,19 @@ describe('planMachineRecovery', () => {
       action: 'gate',
       reason:
         'Setup problem: Working directory does not exist: /Users/user/CodeProjects/LobeHub/lobehub. Create /Users/user/CodeProjects/LobeHub/lobehub on the device the agent runs on, or point the agent at a working directory that exists there',
+    });
+  });
+
+  it('names the reconnect command when a device cannot be found', () => {
+    const plan = planMachineRecovery({
+      error: 'DEVICE_NOT_FOUND',
+      now: FAILED_AT,
+      runs: [run('failed', FAILED_AT)],
+      taskUpdatedAt: FAILED_AT,
+    });
+    expect(plan).toEqual({
+      action: 'gate',
+      reason: expect.stringContaining(`\`${CLI_PRIMARY_BIN} connect\``),
     });
   });
 

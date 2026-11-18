@@ -15,6 +15,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
     "@lobehub/market-sdk": "file:../../vendor/lobehub-market-sdk-0.41.0-cpc.2.tgz",
     "@lobehub/market-types": "file:../../vendor/lobehub-market-types-1.17.1-cpc.2.tgz",
     "ajv": "^8.20.0",

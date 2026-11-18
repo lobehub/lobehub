@@ -1,3 +1,5 @@
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
+
 import type { DeviceExecutionTarget, ExecutionPlan } from './agencyConfig';
 import type { RuntimeEnvMode } from './agentConfig';
 import type { LobeAgentChatConfig } from './chatConfig';
@@ -59,5 +61,5 @@ export const describeLockedDevicePicker = (plan: ExecutionPlan): string | undefi
 
   return plan.kind === 'device'
     ? `Device switching is off for this run: it is locked to device "${plan.deviceId}", where the Local System tools already run. ${switchHint}`
-    : `Device switching is off for this run: it is locked to the user's bound device, which is offline. Tell the user to reconnect it (the desktop app or \`lh connect\`). ${switchHint}`;
+    : `Device switching is off for this run: it is locked to the user's bound device, which is offline. Tell the user to reconnect it (the desktop app or \`${CLI_PRIMARY_BIN} connect\`). ${switchHint}`;
 };

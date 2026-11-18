@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,
   DeviceTransportErrorCode,
 } from './deviceTransportError';
+
+vi.mock('@lobechat/business-const', () => ({ CLI_PRIMARY_BIN: 'custom-cli' }));
 
 describe('describeGatewayResponseFailure', () => {
   it('separates "never delivered" (503) from "may still be running" (504)', () => {
@@ -16,6 +18,7 @@ describe('describeGatewayResponseFailure', () => {
     expect(undelivered.code).toBe(DeviceTransportErrorCode.DeviceChannelUnavailable);
     expect(undelivered.content).toContain('never ran on it');
     expect(undelivered.content).toContain('retrying the same call is safe');
+    expect(undelivered.content).toContain('the `custom-cli` CLI');
 
     expect(unanswered.code).toBe(DeviceTransportErrorCode.DeviceResponseTimeout);
     expect(unanswered.content).toContain('may still be running');
@@ -117,6 +120,20 @@ describe('describeGatewayResponseFailure', () => {
 });
 
 describe('describeGatewayResponseFailure NO_CAPABLE_CONNECTION', () => {
+  it('names the CLI command when the gateway requires a CLI connection', () => {
+    const body = JSON.stringify({
+      channels: ['desktop'],
+      clientKinds: ['cli'],
+      error: 'NO_CAPABLE_CONNECTION',
+      success: false,
+    });
+
+    const failure = describeGatewayResponseFailure(503, body, 'tool call');
+
+    expect(failure.content).toContain('the `custom-cli connect` CLI');
+    expect(failure.error).toBe(body);
+  });
+
   it('says which client is needed instead of advising retries', () => {
     const body = JSON.stringify({
       channels: ['cli'],

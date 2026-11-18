@@ -1,4 +1,5 @@
 import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
+import { CLI_PRIMARY_BIN } from '@lobechat/business-const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
@@ -142,8 +143,9 @@ describe('auvRuntime', () => {
         error: { code: 'COMPUTER_USE_DEVICE_UNAVAILABLE' },
         success: false,
       });
-      expect(result.content).toContain('`lh connect` CLI');
-      expect(result.content).toContain('--auv');
+      expect(result.content).toContain(`\`${CLI_PRIMARY_BIN} connect\` CLI`);
+      expect(result.content).toContain('`--auv <binary>`');
+      expect(result.content).toContain(`restart \`${CLI_PRIMARY_BIN} connect\` with \`--auv\``);
     });
 
     it('does not dispatch when the desktop is silent and the CLI lacks --auv', async () => {
@@ -161,6 +163,7 @@ describe('auvRuntime', () => {
         success: false,
       });
       expect(result.content).toContain('TIMEOUT');
+      expect(result.content).toContain(`\`${CLI_PRIMARY_BIN} connect\` CLI`);
       expect(result.content).toContain('--auv');
     });
 

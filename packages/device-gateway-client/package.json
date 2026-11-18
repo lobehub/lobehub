@@ -13,6 +13,7 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "ws": "^8.21.0"
