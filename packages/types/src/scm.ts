@@ -95,6 +95,7 @@ export interface ScmIdentityMetadata {
   [key: string]: unknown;
   avatarUrl?: string;
   email?: string;
+  name?: string;
   scope?: string;
 }
 
@@ -316,6 +317,41 @@ export interface ScmBindInstallationParams extends ScmInstallationSnapshot {
   installedByExternalUserId?: string | null;
   userId: string;
   workspaceId?: string | null;
+}
+
+export const SCM_CREDENTIAL_GRANT_PATHS = ['hetero', 'tool-call'] as const;
+export type ScmCredentialGrantPath = (typeof SCM_CREDENTIAL_GRANT_PATHS)[number];
+
+export const SCM_CREDENTIAL_GRANT_FAILURES = [
+  'not_authorized',
+  'reauthorize',
+  'policy_disabled',
+  'no_requester',
+  'operation_ended',
+  'requester_not_member',
+  'unavailable',
+] as const;
+export type ScmCredentialGrantFailure = (typeof SCM_CREDENTIAL_GRANT_FAILURES)[number];
+export type ScmCredentialGrantResult = 'issued' | ScmCredentialGrantFailure;
+
+export interface ScmCreateCredentialGrantParams {
+  createdAt?: Date;
+  deviceId?: string | null;
+  operationId: string;
+  path: ScmCredentialGrantPath;
+  repo?: string | null;
+  requesterUserId: string;
+  result: ScmCredentialGrantResult;
+  tokenExpiresAt?: Date | null;
+  workspaceId: string;
+}
+
+export interface ScmListCredentialGrantsParams {
+  before?: Date;
+  limit?: number;
+  repo?: string;
+  requesterUserId?: string;
+  workspaceId: string;
 }
 
 /** Plaintext user-to-server credentials; stored encrypted, never returned to a client. */

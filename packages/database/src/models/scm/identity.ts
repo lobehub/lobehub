@@ -53,6 +53,51 @@ export class ScmIdentityModel {
     return decryptRow(row, gateKeeper);
   };
 
+  static lockByUser = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    userId: string,
+    gateKeeper?: GateKeeper,
+  ): Promise<ScmDecryptedIdentity<ScmIdentityItem> | null> => {
+    const [row] = await db
+      .select()
+      .from(scmIdentities)
+      .where(and(eq(scmIdentities.provider, provider), eq(scmIdentities.userId, userId)))
+      .limit(1)
+      .for('update');
+
+    if (!row) return null;
+    return decryptRow(row, gateKeeper);
+  };
+
+  static deleteByUser = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    userId: string,
+  ): Promise<void> => {
+    await db
+      .delete(scmIdentities)
+      .where(and(eq(scmIdentities.provider, provider), eq(scmIdentities.userId, userId)));
+  };
+
+  static updateCredentials = async (
+    db: LobeChatDatabase,
+    provider: ScmProvider,
+    userId: string,
+    credentials: ScmIdentityCredentials | null,
+    tokenExpiresAt: Date | null,
+    gateKeeper?: GateKeeper,
+  ): Promise<void> => {
+    await db
+      .update(scmIdentities)
+      .set({
+        credentials: credentials ? await encryptCredentials(credentials, gateKeeper) : null,
+        tokenExpiresAt,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(scmIdentities.provider, provider), eq(scmIdentities.userId, userId)));
+  };
+
   /**
    * Bind a provider account to a LobeHub user. The provider account is the
    * identity: re-authorizing from the same account updates the row in place

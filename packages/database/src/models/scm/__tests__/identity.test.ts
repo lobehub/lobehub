@@ -32,6 +32,38 @@ afterEach(async () => {
   await db.delete(users);
 });
 
+describe('ScmIdentityModel.updateCredentials', () => {
+  it('replaces the stored token and its expiry for the user', async () => {
+    await ScmIdentityModel.upsert(db, { ...baseParams, credentials });
+    const expiresAt = new Date('2026-11-17T08:00:00Z');
+
+    await ScmIdentityModel.updateCredentials(
+      db,
+      'github',
+      userId,
+      { accessToken: 'ghu_new', refreshToken: 'ghr_new' },
+      expiresAt,
+    );
+
+    const identity = await ScmIdentityModel.findByUser(db, 'github', userId);
+    expect(identity?.credentials).toEqual({ accessToken: 'ghu_new', refreshToken: 'ghr_new' });
+    expect(identity?.tokenExpiresAt).toEqual(expiresAt);
+  });
+
+  it('clears the token but keeps the identity when credentials are dropped', async () => {
+    await ScmIdentityModel.upsert(db, { ...baseParams, credentials });
+
+    await ScmIdentityModel.updateCredentials(db, 'github', userId, null, null);
+
+    const identity = await ScmIdentityModel.findByUser(db, 'github', userId);
+    expect(identity).toMatchObject({
+      credentials: null,
+      externalLogin: 'octocat',
+      tokenExpiresAt: null,
+    });
+  });
+});
+
 describe('ScmIdentityModel', () => {
   it('creates an identity with defaults and reads it back by provider account', async () => {
     const row = await ScmIdentityModel.upsert(db, baseParams);

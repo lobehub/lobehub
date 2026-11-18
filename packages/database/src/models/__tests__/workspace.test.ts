@@ -356,6 +356,25 @@ describe('WorkspaceModel', () => {
     await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('all_members');
   });
 
+  it('keeps requester GitHub credentials off by default and toggles them without replacing settings', async () => {
+    const workspaceId = await createWorkspace();
+    const model = new WorkspaceModel(serverDB, ownerId);
+
+    await expect(model.getScmRequesterCredential(workspaceId)).resolves.toBe(false);
+    await model.updateConnectorMemberManage(workspaceId, 'admins_only');
+    await model.updateScmRequesterCredential(workspaceId, true);
+
+    await expect(model.getScmRequesterCredential(workspaceId)).resolves.toBe(true);
+    await expect(model.getSettings(workspaceId)).resolves.toMatchObject({
+      connector: { memberManage: 'admins_only' },
+      keep: true,
+      scm: { requesterCredential: true },
+    });
+
+    await model.updateScmRequesterCredential(workspaceId, false);
+    await expect(model.getScmRequesterCredential(workspaceId)).resolves.toBe(false);
+  });
+
   it('finds a workspace by id and by slug, and returns undefined when missing', async () => {
     const workspaceId = await createWorkspace();
     const model = new WorkspaceModel(serverDB, ownerId);
