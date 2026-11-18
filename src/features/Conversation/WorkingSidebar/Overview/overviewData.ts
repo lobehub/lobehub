@@ -3,6 +3,7 @@ import type {
   DeviceExecutionTarget,
   DeviceGitPullRequestCiStatus,
   DeviceGitWorktreeListItem,
+  OwnedWorktree,
 } from '@lobechat/types';
 
 import { normalizeDisplayPath } from '@/features/ChatInput/ControlBar/worktreeHelpers';
@@ -86,3 +87,60 @@ export const shouldShowGitSkeleton = ({
   hasData: boolean;
   loading: boolean;
 }): boolean => loading && !hasData;
+
+/**
+ * The app-created worktree the cleanup already removed, when it is the folder
+ * the topic points at: the Overview then says so instead of reading git from a
+ * folder that no longer exists (which would show its last, stale changes).
+ */
+export const findRemovedWorktree = (
+  entries: OwnedWorktree[],
+  workingDirectory: string | undefined,
+): OwnedWorktree | undefined => {
+  if (!workingDirectory) return;
+  const target = normalizeDisplayPath(workingDirectory);
+  return entries.find(
+    (entry) => entry.cleanup?.state === 'removed' && normalizeDisplayPath(entry.path) === target,
+  );
+};
+
+/**
+ * The app-created worktrees the Overview offers a choice for: kept for their
+ * uncommitted work, or left in place because the cleanup failed (the device
+ * refused or git errored). Either way the folder is still there.
+ */
+export const findWorktreesAwaitingChoice = (entries: OwnedWorktree[]): OwnedWorktree[] =>
+  entries.filter(
+    (entry) => entry.cleanup?.state === 'keptDirty' || entry.cleanup?.state === 'failed',
+  );
+
+const WORKTREE_POLL_MS = 3000;
+/** How long an archived topic's Overview waits for its cleanup to start. */
+export const WORKTREE_DISCOVERY_MS = 60_000;
+
+/**
+ * How often the Overview re-reads the topic's worktrees: while a cleanup is in
+ * flight, and — right after an archive — until the cleanup has started (it
+ * runs after the archive response, so the first read can predate it). A
+ * worktree that stays untouched past the window is held on purpose (in use, a
+ * live run, a lock), and stops the polling.
+ */
+export const worktreeRefreshInterval = (
+  entries: OwnedWorktree[] | undefined,
+  { retired, sinceFirstReadMs }: { retired: boolean; sinceFirstReadMs: number },
+): number => {
+  if (!entries?.length) return 0;
+  if (
+    entries.some(
+      (entry) => entry.cleanup?.state === 'pending' || entry.cleanup?.state === 'running',
+    )
+  )
+    return WORKTREE_POLL_MS;
+  if (
+    retired &&
+    sinceFirstReadMs < WORKTREE_DISCOVERY_MS &&
+    entries.some((entry) => !entry.cleanup)
+  )
+    return WORKTREE_POLL_MS;
+  return 0;
+};

@@ -16,6 +16,7 @@ export const toContextSnapshot = ({
   additionalVariables,
   agentAccountContext,
   agentBuilderContext,
+  agentDocumentChanges,
   agentDocuments,
   agentGroup,
   agentIdentity,
@@ -28,6 +29,7 @@ export const toContextSnapshot = ({
   documentReferences,
   enableAgentMode,
   enableExpertise,
+  enableMcpAppContext,
   enableHistoryCount,
   enableStaleToolResultTrim,
   evalContext,
@@ -48,6 +50,7 @@ export const toContextSnapshot = ({
   planTodo,
   projectInstructions,
   provider,
+  revokedDocumentReads,
   skillsConfig,
   systemRole,
   toolDiscoveryConfig,
@@ -58,6 +61,7 @@ export const toContextSnapshot = ({
   workspaceContext,
 }: ServerMessagesEngineParams): ContextSnapshot => ({
   agent: {
+    documentChanges: agentDocumentChanges,
     documents: agentDocuments,
     enableHistoryCount,
     enableStaleToolResultTrim,
@@ -65,6 +69,7 @@ export const toContextSnapshot = ({
     identity: agentIdentity,
     inputTemplate,
     knowledge: { fileContents: knowledge?.fileContents, knowledgeBases: knowledge?.knowledgeBases },
+    revokedDocumentReads,
     systemRole,
   },
   // Server-side file access URLs resolve to stable file-proxy URLs in production.
@@ -85,6 +90,7 @@ export const toContextSnapshot = ({
     additionalContexts,
     enableAgentMode,
     enableExpertise,
+    enableMcpAppContext,
     expertise,
     forceFinish,
     formatHistorySummary,

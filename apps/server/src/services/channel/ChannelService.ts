@@ -1,16 +1,20 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
-  defaultChannelAgentDevice,
   defaultChannelAgentDirectory,
   isChannelRuntime,
 } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { AgentShareModel } from '@/database/models/agentShare';
+import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
+import type { ProjectModelOptions } from '@/database/models/project';
 import { ProjectModel } from '@/database/models/project';
 import type {
   ChannelAddAgentInput,
@@ -18,11 +22,13 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
@@ -54,11 +60,13 @@ export class ChannelService {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    /** The caller's project rights, for seating a new Agent in a project Channel's project. */
+    private readonly projectOptions: ProjectModelOptions = {},
   ) {
     this.repository = new ChannelRepository(db, userId, workspaceId);
     this.agentService = new AgentService(db, userId, workspaceId);
     this.deviceModel = new DeviceModel(db, userId, workspaceId);
-    this.projectModel = new ProjectModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId, projectOptions);
   }
 
   private async resolveAgent(
@@ -120,15 +128,46 @@ export class ChannelService {
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
       config.workingDirectory = path.canonicalPath;
-    } else if (runtime !== 'native' || input.workingDirectory) {
+    } else if (input.workingDirectory) {
+      // A directory only means something on a device. Without one the Agent runs where its own
+      // settings say, as in an ordinary conversation.
       throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
     }
     return { agentId: input.agentId, config, description: input.description, name: input.name };
   }
 
+  /**
+   * A project Channel seats only the project's own Agents. With `joinProject`, an Agent from
+   * outside joins the project first, which takes the right to manage the project's members;
+   * without it, the caller is told to add the Agent to the project.
+   */
+  private async seatAgentsInProject(projectId: string, agentIds: string[], joinProject?: boolean) {
+    const missing: string[] = [];
+    for (const agentId of new Set(agentIds))
+      if (!(await this.projectModel.hasAgent(projectId, agentId))) missing.push(agentId);
+    if (!missing.length) return;
+    if (!joinProject) throw new ChannelError('CONFLICT', 'Add the Agent to the project first');
+    const forbidden = new ChannelError(
+      'FORBIDDEN',
+      'Only the project creator or a workspace admin can add an Agent to the project',
+    );
+    if (this.projectOptions.readOnly) throw forbidden;
+    for (const agentId of missing) {
+      let binding: Awaited<ReturnType<ProjectModel['addAgent']>>;
+      try {
+        binding = await this.projectModel.addAgent(projectId, { agentId });
+      } catch (error) {
+        throw new ChannelError('BAD_REQUEST', (error as Error).message);
+      }
+      if (!binding) throw forbidden;
+    }
+  }
+
   /** A group starts with Agents, workspace people, both, or only its creator. */
   create = async (input: {
     agents: ChannelAgentSelection[];
+    /** Seats Agents from outside the project in the project first. */
+    joinProject?: boolean;
     projectId?: string;
     title: string;
     userIds?: string[];
@@ -142,6 +181,12 @@ export class ChannelService {
     const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
       concurrency: 5,
     });
+    if (input.projectId)
+      await this.seatAgentsInProject(
+        input.projectId,
+        agents.map(({ agentId }) => agentId),
+        input.joinProject,
+      );
     const access = await this.repository.create({
       agents,
       projectId: input.projectId,
@@ -191,29 +236,61 @@ export class ChannelService {
   };
 
   /**
-   * The direct conversation between a person and an Agent, titled with the Agent's name. The Agent
-   * keeps the device and directory a new Channel would give it, checked the same way. An external
-   * Agent with no device yet still gets its conversation; it asks for a device in the Channel
-   * before it can reply.
+   * The direct conversation between a person and an Agent, titled with the Agent's name. A Channel
+   * binds no device by default: the Agent runs where its own settings say, as in an ordinary
+   * conversation, until a member picks a device for it in the Channel.
    */
-  createDirect = async (agentId: string, { localDeviceId }: { localDeviceId?: string } = {}) => {
+  createDirect = async (agentId: string) => {
     const agent = await this.agentService.getAgentConfigById(agentId);
-    if (!agent) return;
-    const runtime = agentRuntime(agent);
-    if (!isChannelRuntime(runtime)) return;
-    const deviceId = defaultChannelAgentDevice({
-      agencyConfig: agent.agencyConfig,
-      localDeviceId,
-      runtime,
-    });
-    const { config } =
-      deviceId || runtime === 'native'
-        ? await this.resolveAgent({ agentId, deviceId }, agent)
-        : { config: {} };
+    if (!agent) return this.createSharedDirect(agentId);
+    if (!isChannelRuntime(agentRuntime(agent))) return;
     return this.repository.create({
-      agentConfig: config,
+      agentConfig: {},
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * Another person's Agent the caller added to their contacts through its link share; the entry
+   * shows they reached the share. The repository rechecks the live share. A direct conversation
+   * in the scope the Agent was added in, run in the cloud as the owner.
+   */
+  private createSharedDirect = async (agentId: string) => {
+    const shared = await new ContactModel(this.db, this.userId, this.workspaceId).findAgentAccess(
+      agentId,
+    );
+    if (!shared) return;
+    return this.repository.create({
+      agentConfig: {},
+      agentId,
+      sharedAgent: true,
+      title: agentDisplayName(shared, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * The direct conversation with another person's Agent, opened from its share (id, handle or
+   * pasted link) — no contact entry or friendship needed, since a link share is open to anyone
+   * signed in. Adding it to contacts stays optional. One's own Agent opens as usual.
+   */
+  openShared = async (share: string) => {
+    const key = parseContactHandle(share);
+    const found = key ? await AgentShareModel.findBySlugOrId(this.db, key) : null;
+    if (!found || found.visibility !== 'link')
+      throw new ChannelError('NOT_FOUND', 'Agent not found');
+    if (found.ownerId === this.userId) return this.openDirect(found.agentId);
+
+    const existing = await this.repository.findDirectAccess(found.agentId);
+    if (existing) return existing.channel.isDeleted ? undefined : existing;
+    return this.repository.create({
+      agentConfig: {},
+      agentId: found.agentId,
+      sharedAgent: true,
+      title: agentDisplayName({ name: found.agentName, title: found.agentTitle }, 'Agent').slice(
+        0,
+        CHANNEL_LIMITS.titleLength,
+      ),
     });
   };
 
@@ -222,10 +299,31 @@ export class ChannelService {
    * Channels. An existing conversation opens as it is, without probing its device again; one the
    * person moved to the trash stays there, and the Agent opens as before.
    */
-  openDirect = async (agentId: string, options: { localDeviceId?: string } = {}) => {
+  openDirect = async (agentId: string) => {
     const existing = await this.repository.findDirectAccess(agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
-    return this.createDirect(agentId, options);
+    return this.createDirect(agentId);
+  };
+
+  /**
+   * The one-on-one conversation with a contact (personal space) or a fellow member (workspace).
+   * The stored title is the other person's name for
+   * whoever opened it; clients title it with whoever the viewer is talking to.
+   */
+  openPeer = async (peerUserId: string) => {
+    const [peer] = await this.db
+      .select({ fullName: users.fullName, username: users.username })
+      .from(users)
+      .where(eq(users.id, peerUserId))
+      .limit(1);
+    if (!peer) throw new ChannelError('NOT_FOUND', 'User not found');
+    const title = (peer.fullName?.trim() || peer.username || 'Conversation').slice(
+      0,
+      CHANNEL_LIMITS.titleLength,
+    );
+    const access = await this.repository.openPeer(peerUserId, title);
+    await this.changed(access.channel.id);
+    return access;
   };
 
   /**
@@ -241,11 +339,26 @@ export class ChannelService {
     return inbox.id;
   }
 
-  addAgent = async (channelId: string, input: ChannelAgentSelection) => {
+  addAgent = async (
+    channelId: string,
+    input: ChannelAgentSelection,
+    options: { joinProject?: boolean } = {},
+  ) => {
     // Check membership before probing a device; the write rechecks the current admin role.
-    if (!(await this.repository.findAccess(channelId)))
-      throw new ChannelError('NOT_FOUND', 'Channel not found');
-    const member = await this.repository.addAgent(channelId, await this.resolveAgent(input));
+    const access = await this.repository.findAccess(channelId);
+    if (!access) throw new ChannelError('NOT_FOUND', 'Channel not found');
+    const agent = await this.resolveAgent(input);
+    if (access.channel.projectId) {
+      // Only an admin may add, so no one else can seat an Agent in the project through here.
+      if (access.member.role === 'member')
+        throw new ChannelError('FORBIDDEN', 'Requires the admin role in this channel');
+      await this.seatAgentsInProject(
+        access.channel.projectId,
+        [agent.agentId],
+        options.joinProject,
+      );
+    }
+    const member = await this.repository.addAgent(channelId, agent);
     await this.changed(channelId);
     return member;
   };
@@ -270,10 +383,45 @@ export class ChannelService {
     return channel;
   };
 
+  editMessage = async (channelId: string, messageId: string, content: string) => {
+    const message = await this.repository.editMessage(channelId, messageId, content);
+    await this.changed(channelId);
+    return message;
+  };
+
   addUser = async (channelId: string, userId: string) => {
     const member = await this.repository.addUser(channelId, userId);
     await this.changed(channelId);
     return member;
+  };
+
+  updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
+    const channel = await this.repository.updateVisibility(channelId, visibility);
+    await this.changed(channelId);
+    return channel;
+  };
+
+  /** The coordinator physically stops a removed Agent's runs. */
+  removeMember = async (channelId: string, memberId: string) => {
+    const writers = await this.repository.removeMember(channelId, memberId);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  leave = async (channelId: string) => {
+    const result = await this.repository.leave(channelId);
+    await this.changed(channelId);
+    return result;
+  };
+
+  /**
+   * Joins an open project Channel or a public one of the workspace. Members already in it see the
+   * newcomer without waiting for their next poll.
+   */
+  join = async (channelId: string) => {
+    const access = await this.repository.join(channelId);
+    await this.changed(channelId);
+    return access;
   };
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);
@@ -337,8 +485,10 @@ export class ChannelService {
       ...input,
       routing: config ? 'decision' : 'fallback',
     });
-    notifyChannelMentions(this.db, { userId: this.userId, workspaceId: this.workspaceId }, message);
-    // Human quotes only update the public feed; they never schedule Agent work.
+    const notifyContext = { userId: this.userId, workspaceId: this.workspaceId };
+    notifyChannelMentions(this.db, notifyContext, message);
+    notifyChannelDirectMessages(this.db, notifyContext, message);
+    // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
@@ -348,6 +498,19 @@ export class ChannelService {
     const message = await this.repository.retryRouting(channelId, messageId);
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
+  };
+
+  retryJob = async (channelId: string, jobId: string) => {
+    const job = await this.repository.retryJob(channelId, jobId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return job;
+  };
+
+  /** A muted Agent answers only @mentions; muting also stops what it is answering now. */
+  setMemberMuted = async (channelId: string, memberId: string, muted: boolean) => {
+    const writers = await this.repository.setMemberMuted(channelId, memberId, muted);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
   };
 
   stop = async (channelId: string, scope: ChannelStopScope) => {

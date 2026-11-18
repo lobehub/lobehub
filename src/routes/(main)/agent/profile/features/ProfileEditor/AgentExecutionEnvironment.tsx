@@ -72,14 +72,13 @@ const AgentExecutionEnvironment = memo<AgentExecutionEnvironmentProps>(
     const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
     // This card writes the shared config, so a private device (resolvable only
     // by the member who enrolled it) may be bound only when that member is the
-    // sole runner: a private Agent. A fixed target must stay public — the
-    // server rejects anything else (`assertFixedExecutionTarget`).
+    // sole runner: a private Agent — fixed or not, as the policy is dormant
+    // until publication, and publishing re-checks a fixed target
+    // (`assertFixedExecutionTarget`).
     const privateDeviceBlockedReason =
       config?.visibility !== 'private'
         ? t('settingAgent.devicePolicy.privateDevicePublicAgent')
-        : agencyConfig?.executionTargetSelectionPolicy === 'fixed'
-          ? t('settingAgent.devicePolicy.privateDeviceFixed')
-          : undefined;
+        : undefined;
     const heterogeneousType = agencyConfig?.heterogeneousProvider?.type;
     const isHeterogeneous = !!heterogeneousType;
     const supportsSandbox = isHeterogeneousSandboxExecutionAvailable(heterogeneousType);
@@ -299,8 +298,7 @@ const AgentExecutionEnvironment = memo<AgentExecutionEnvironmentProps>(
       : undefined;
     // A personal agent shows what its next run will actually use here — the
     // chat-input switcher resolves it the same way, so the two never disagree
-    // (desktop defaults to this machine; web shows a bound desktop as a device
-    // when the gateway can reach it).
+    // about the default target or the device a saved target points to.
     const personalTarget = isWorkspaceAgent
       ? undefined
       : resolveExecutionTarget(agencyConfig, {

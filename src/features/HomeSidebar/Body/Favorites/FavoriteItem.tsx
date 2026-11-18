@@ -6,10 +6,11 @@ import { MoreHorizontalIcon, StarOffIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FavoriteIcon } from '@/features/Favorites';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useHomeStore } from '@/store/home';
+
+import FavoriteItemIcon from './FavoriteItemIcon';
 
 interface FavoriteItemProps {
   active?: boolean;
@@ -37,9 +38,10 @@ const FavoriteItem = memo<FavoriteItemProps>(({ active, item }) => {
   return (
     <WorkspaceLink to={item.path}>
       <NavItem
+        compact
         active={active}
         contextMenuItems={menuItems}
-        icon={<FavoriteIcon icon={item.icon} title={item.title} type={item.type} />}
+        icon={<FavoriteItemIcon item={item} />}
         title={item.title}
         actions={() => (
           <DropdownMenu items={menuItems()}>

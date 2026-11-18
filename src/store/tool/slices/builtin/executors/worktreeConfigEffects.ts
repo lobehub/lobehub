@@ -3,6 +3,7 @@ import type {
   DeviceGitUpstreamRef,
   WorkingDirConfig,
 } from '@lobechat/types';
+import { dropStaleAutoCreated } from '@lobechat/types';
 
 /**
  * How each detected git / gh side effect rewrites a topic's working-directory
@@ -140,6 +141,7 @@ export const applyWorktreeAddToConfig = (
     delete git.github;
     delete git.upstream;
   }
+  dropStaleAutoCreated(git, currentConfig?.git?.activeWorktree);
 
   return {
     ...currentConfig,
@@ -159,6 +161,7 @@ export const applyWorktreeAddToConfig = (
 export const applyWorktreeExitToConfig = (
   currentConfig: WorkingDirConfig | undefined,
   source: string,
+  { removed = false }: { removed?: boolean } = {},
 ): WorkingDirConfig => {
   const git: NonNullable<WorkingDirConfig['git']> = {
     ...currentConfig?.git,
@@ -171,16 +174,28 @@ export const applyWorktreeExitToConfig = (
   const leftWorktree =
     !!currentConfig?.git?.isWorktree || (!!activeWorktree && activeWorktree !== source);
   delete git.activeWorktree;
+  dropStaleAutoCreated(git, activeWorktree);
   if (leftWorktree) {
     delete git.branch;
     delete git.github;
     delete git.upstream;
   }
 
+  // A topic born in the app's worktree runs its CLI there (`sessionPath`), not
+  // in the source. Leaving ANOTHER worktree returns it there; removing that very
+  // worktree leaves nothing to start in, so the session falls back to the source.
+  const { sessionPath, ...rest } = currentConfig ?? ({} as Partial<WorkingDirConfig>);
+  const sessionGone = !!sessionPath && removed && sessionPath === activeWorktree;
+  if (sessionPath && !sessionGone && sessionPath !== activeWorktree) {
+    git.activeWorktree = sessionPath;
+    git.isWorktree = true;
+  }
+
   return {
-    ...currentConfig,
+    ...rest,
     git,
     path: source,
     ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+    ...(sessionPath && !sessionGone ? { sessionPath } : {}),
   };
 };

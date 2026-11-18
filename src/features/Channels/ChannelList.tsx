@@ -16,10 +16,11 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Archive, ArrowDownUp, Hash, MoreHorizontal, Plus } from 'lucide-react';
+import { Archive, ArrowDownUp, Compass, Hash, MoreHorizontal, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
@@ -33,9 +34,10 @@ import { useGlobalStore } from '@/store/global';
 import type { ChannelListSort } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { openBrowseChannels } from './BrowseChannels';
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
-import { matchChannel } from './paths';
+import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
@@ -85,8 +87,8 @@ const styles = stylex.create({
   // The first thread reaches up under the Channel's icon.
   firstElbow: { insetBlockStart: -8 },
   channel: { position: 'relative' },
-  // An unread Channel gets a pill on the row's leading edge and a bright, bold title, the way
-  // Discord marks it; an @mention adds a count badge. The accordion panel clips anything
+  // An unread Channel gets a pill on the row's leading edge and a title one step brighter, the
+  // way Discord marks it; an @mention adds a count badge. The accordion panel clips anything
   // outside the row, so the pill sits in the row's own inline padding.
   unreadPill: {
     pointerEvents: 'none',
@@ -99,7 +101,6 @@ const styles = stylex.create({
     borderEndEndRadius: 4,
     backgroundColor: cssVar.colorText,
   },
-  unreadTitle: { fontWeight: 600 },
   mentionBadge: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -173,6 +174,7 @@ const ChannelThreads = ({
               title={
                 threadTitle(
                   detail.messages.find((message) => message.id === thread.rootMessageId),
+                  thread,
                 ) || `${t('thread')} ${index + 1}`
               }
               onClick={() => navigate(path)}
@@ -200,7 +202,7 @@ interface ChannelSectionProps {
  */
 const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSectionProps) => {
   const { t } = useTranslation('channel');
-  const { pathname, search } = useActiveLocation();
+  const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
@@ -217,9 +219,12 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const activeChannelId = matchChannel(pathname);
   const create = () =>
     openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
+  // Public Channels exist only in a workspace; a personal space has nobody else's to join.
+  const workspaceId = useActiveWorkspaceId();
+  const browse = () =>
+    openBrowseChannels((channel) => navigate(CHANNEL_URL(channel.id, null, channel.projectId)));
   // Only a thread opened as the page is the current entry; one beside the Channel is not.
-  const query = new URLSearchParams(search);
-  const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
+  const activeThreadId = matchChannelThread(pathname) ?? null;
   const menuItems = useChannelMenu();
   const setSort = (channelListSort: ChannelListSort) => updateSystemStatus({ channelListSort });
   // Name sorts read as A–Z / Z–A; time sorts as newest / oldest first.
@@ -258,21 +263,32 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
     // The open Channel is being read; its count clears once the read receipt lands.
     const unread = !open && (channel.unreadCount ?? 0) > 0;
     const mentions = open ? 0 : (channel.mentionCount ?? 0);
+    // A project Channel the caller can read but has not joined: dimmed, with no member actions.
+    const joined = channel.joined !== false;
     return (
       <Flexbox key={channel.id} {...stylex.props(styles.channel)}>
         {unread && <span aria-hidden {...stylex.props(styles.unreadPill)} />}
         <NavItem
           active={open && !activeThreadId}
           aria-current={open && !activeThreadId ? 'page' : undefined}
-          contextMenuItems={() => menuItems(channel)}
+          contextMenuItems={joined ? () => menuItems(channel) : undefined}
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
-          titleColor={unread ? cssVar.colorText : undefined}
-          actions={() => (
-            <DropdownMenu items={menuItems(channel)}>
-              <ActionIcon icon={MoreHorizontal} size="small" title={t('more', { ns: 'common' })} />
-            </DropdownMenu>
-          )}
+          title={channel.title}
+          titleColor={unread ? cssVar.colorText : joined ? undefined : cssVar.colorTextTertiary}
+          actions={
+            joined
+              ? () => (
+                  <DropdownMenu items={menuItems(channel)}>
+                    <ActionIcon
+                      icon={MoreHorizontal}
+                      size="small"
+                      title={t('more', { ns: 'common' })}
+                    />
+                  </DropdownMenu>
+                )
+              : undefined
+          }
           extra={
             mentions > 0 ? (
               <span
@@ -284,13 +300,6 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
                 {mentions > 99 ? '99+' : mentions}
               </span>
             ) : undefined
-          }
-          title={
-            unread ? (
-              <span {...stylex.props(styles.unreadTitle)}>{channel.title}</span>
-            ) : (
-              channel.title
-            )
           }
           onClick={() => navigate(path)}
           icon={Hash}
@@ -341,6 +350,18 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
               onClick={(event) => event.stopPropagation()}
             />
           </DropdownMenu>
+          {workspaceId && (
+            <ActionIcon
+              aria-label={t('browse.title')}
+              icon={Compass}
+              size="small"
+              title={t('browse.title')}
+              onClick={(event) => {
+                event.stopPropagation();
+                browse();
+              }}
+            />
+          )}
           <ActionIcon
             aria-label={t('create')}
             icon={Plus}

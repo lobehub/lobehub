@@ -32,6 +32,8 @@ const invokeIpc = async <T = any>(
 
   const fakeEvent = {
     sender: context?.sender ?? ({ id: 'test' } as any),
+    // IpcHandler only serves the renderer's top-level frame.
+    senderFrame: { parent: null, url: 'app://renderer/' },
   };
 
   if (payload === undefined) {

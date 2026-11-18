@@ -19,6 +19,13 @@ describe('deviceRouter procedures', () => {
     expect(procedures[name]._def.type).toBe(type);
     expect(procedures[name]._def.middlewares).toHaveLength(middlewares);
   });
+
+  it('accepts Antigravity model discovery requests from connected devices', () => {
+    const input = { deviceId: 'device-agy', type: 'antigravity' };
+    const schema = procedures.listHeterogeneousAgentModels._def.inputs.at(-1);
+    expect(schema.parse(input)).toEqual(input);
+    expect(schema.safeParse({ ...input, type: 'unknown-agent' }).success).toBe(false);
+  });
 });
 
 function expected(): Array<
@@ -35,14 +42,17 @@ function expected(): Array<
     ['closeTerminal', 'mutation', 12],
     ['copyAssetForPublish', 'mutation', 15],
     ['copyProjectFiles', 'mutation', 15],
+    ['countRunningTopicsInDirectory', 'query', 12],
     ['createDirectory', 'mutation', 12],
     ['createProjectDirectory', 'mutation', 15],
     ['createProjectFile', 'mutation', 15],
     ['createTerminalSession', 'mutation', 12],
     ['createTunnel', 'mutation', 12],
     ['deleteGitBranch', 'mutation', 12],
+    ['drainWorktreeCleanups', 'mutation', 12],
     ['getAgentDeviceBindings', 'query', 12],
     ['getAgentProfile', 'query', 12],
+    ['getAntigravityQuota', 'query', 12],
     ['getAppUpdateState', 'query', 12],
     ['getClaudeCodeQuota', 'query', 12],
     ['getCliUpdateState', 'query', 12],

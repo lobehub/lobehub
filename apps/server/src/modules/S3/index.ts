@@ -363,10 +363,15 @@ export class S3 {
      * having that ETag, so a caller holding a cached copy cannot overwrite a
      * newer one; the store answers 412 instead.
      */
-    options?: { abortSignal?: AbortSignal; ifMatch?: string },
+    options?: {
+      abortSignal?: AbortSignal;
+      ifMatch?: string;
+      /** Never grant public read, even when S3_SET_ACL makes uploads public (e.g. data exports). */
+      private?: boolean;
+    },
   ) {
     const command = new PutObjectCommand({
-      ACL: this.setAcl ? 'public-read' : undefined,
+      ACL: this.setAcl && !options?.private ? 'public-read' : undefined,
       Body: buffer,
       Bucket: this.bucket,
       CacheControl: cacheControl,

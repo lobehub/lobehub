@@ -18,6 +18,25 @@ export interface DesktopLocalDatabaseCollectionInfo {
   name: string;
 }
 
+export interface DesktopLocalDatabaseKeyQuery extends DesktopLocalDatabasePrefix {
+  limit?: number;
+  search?: string;
+}
+
+export interface DesktopLocalDatabaseKeyPage {
+  keys: string[];
+  total: number;
+}
+
+export interface DesktopLocalDatabaseKeyGroupQuery extends DesktopLocalDatabasePrefix {
+  delimiter: string;
+}
+
+export interface DesktopLocalDatabaseKeyGroup {
+  entryCount: number;
+  name: string;
+}
+
 export interface DesktopLocalDatabaseSet extends DesktopLocalDatabaseKey {
   value: string;
 }

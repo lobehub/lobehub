@@ -77,6 +77,29 @@ const mergeAutoSummaryMetadata = (marker: NonNullable<ChatTopicMetadata['autoSum
 export class TopicSummaryModel {
   constructor(private readonly db: LobeChatDatabase) {}
 
+  /** An eligible message that arrived after the given snapshot. */
+  private newerEligibleMessage = (input: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: Date;
+    topicId: string;
+  }) =>
+    this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, input.topicId),
+          topicSummaryEligibleMessage,
+          or(
+            gt(messages.updatedAt, input.lastMessageUpdatedAt),
+            and(
+              eq(messages.updatedAt, input.lastMessageUpdatedAt),
+              gt(messages.id, input.lastMessageId),
+            ),
+          ),
+        ),
+      );
+
   listCandidates = async ({
     cursor,
     force = false,
@@ -156,22 +179,7 @@ export class TopicSummaryModel {
           eq(messages.updatedAt, input.lastMessageUpdatedAt),
         ),
       );
-    const newerMessage = this.db
-      .select({ id: messages.id })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.topicId, input.topicId),
-          topicSummaryEligibleMessage,
-          or(
-            gt(messages.updatedAt, input.lastMessageUpdatedAt),
-            and(
-              eq(messages.updatedAt, input.lastMessageUpdatedAt),
-              gt(messages.id, input.lastMessageId),
-            ),
-          ),
-        ),
-      );
+    const newerMessage = this.newerEligibleMessage(input);
 
     const rows = await this.db
       .update(topics)
@@ -193,6 +201,45 @@ export class TopicSummaryModel {
           notTrashed(topics.isDeleted),
           exists(snapshotMessage),
           notExists(newerMessage),
+        ),
+      )
+      .returning({ id: topics.id });
+
+    return rows.length > 0;
+  };
+
+  /**
+   * Advance the watermark without a summary when the model failed for a reason
+   * only the user can fix, so the dispatch stops re-queueing the topic every run
+   * until a new message arrives. A summary written earlier is kept.
+   */
+  markSummaryFailed = async (input: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: Date;
+    reason: string;
+    topicId: string;
+  }): Promise<boolean> => {
+    const failure = {
+      failedAt: new Date().toISOString(),
+      failureReason: input.reason,
+      lastMessageId: input.lastMessageId,
+      lastMessageUpdatedAt: input.lastMessageUpdatedAt.toISOString(),
+      version: 1,
+    };
+
+    const rows = await this.db
+      .update(topics)
+      .set({
+        // Merge into the existing marker: `summarizedAt` from an earlier summary survives.
+        metadata: sql`jsonb_set(COALESCE(${topics.metadata}, '{}'::jsonb), '{autoSummary}', COALESCE(${topics.metadata}->'autoSummary', '{}'::jsonb) || ${JSON.stringify(failure)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(topics.id, input.topicId),
+          notShareVisitorTopic(),
+          notTrashed(topics.isDeleted),
+          // A newer message means a later run owns the watermark; never rewind it.
+          notExists(this.newerEligibleMessage(input)),
         ),
       )
       .returning({ id: topics.id });

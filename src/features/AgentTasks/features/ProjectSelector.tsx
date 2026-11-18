@@ -1,4 +1,4 @@
-import { Button, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { Button, confirmModal, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, FolderXIcon } from 'lucide-react';
@@ -58,6 +58,12 @@ interface ProjectSelectorProps {
   fullWidth?: boolean;
   /** Reports the pick instead of saving it, for a composer holding it in a draft. */
   onChange?: (projectId: string | null) => void;
+  /**
+   * Visible subtasks the saved task has, at every depth. A task without a
+   * project enters one together with its subtasks, after a confirmation when
+   * this is above 0.
+   */
+  subtaskCount?: number;
   /** The task a pick is saved to when there is no `onChange`. */
   taskIdentifier?: string;
   value?: string | null;
@@ -69,11 +75,12 @@ interface ProjectSelectorProps {
  * Projects lab is off, so no host can offer a feature the user has not enabled.
  */
 const ProjectSelector = memo<ProjectSelectorProps>(
-  ({ children, disabledReason, fullWidth, onChange, taskIdentifier, value }) => {
+  ({ children, disabledReason, fullWidth, onChange, subtaskCount = 0, taskIdentifier, value }) => {
     const { t } = useTranslation('chat');
     const enabled = useUserStore(labPreferSelectors.enableProjects);
     const { allowed: canEdit, reason } = usePermission('create_content');
     const updateTask = useTaskStore((s) => s.updateTask);
+    const moveTaskTreeToProject = useTaskStore((s) => s.moveTaskTreeToProject);
 
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -135,8 +142,32 @@ const ProjectSelector = memo<ProjectSelectorProps>(
         onChange(projectId);
         return;
       }
+      if (!taskIdentifier) return;
+      // A subtask must share its parent's project, so a task without a project
+      // enters one together with its subtasks. That includes subtasks the
+      // caller cannot see (other members' private ones), so the tree move runs
+      // even when `subtaskCount` is 0; only the confirmation needs a count.
+      if (option.kind === 'project' && !value) {
+        const move = async () => {
+          await moveTaskTreeToProject(taskIdentifier, option.project.id);
+        };
+        if (subtaskCount === 0) {
+          void move();
+          return;
+        }
+        confirmModal({
+          content: t('taskProject.moveTree.content', {
+            count: subtaskCount,
+            project: option.project.name,
+          }),
+          okText: t('taskProject.moveTree.ok'),
+          onOk: move,
+          title: t('taskProject.moveTree.title'),
+        });
+        return;
+      }
       // A failed save is rolled back and toasted by the store.
-      if (taskIdentifier) void updateTask(taskIdentifier, { projectId }).catch(() => {});
+      void updateTask(taskIdentifier, { projectId }).catch(() => {});
     };
 
     const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -170,7 +201,12 @@ const ProjectSelector = memo<ProjectSelectorProps>(
           }
           icon={
             option.kind === 'project' ? (
-              <ProjectAvatar avatar={option.project.avatar} name={option.project.name} size={18} />
+              <ProjectAvatar
+                avatar={option.project.avatar}
+                id={option.project.id}
+                name={option.project.name}
+                size={18}
+              />
             ) : (
               <Icon color={cssVar.colorTextDescription} icon={FolderXIcon} size={16} />
             )

@@ -10,7 +10,10 @@ import { useMarketSkillList } from './useMarketSkillList';
 
 vi.mock('@/libs/swr', async () => ({ useClientDataSWR: (await import('swr')).default }));
 vi.mock('@/services/discover', () => ({ discoverService: { getSkillList: vi.fn() } }));
-vi.mock('@/store/global/helpers', () => ({ globalHelpers: { getCurrentLanguage: () => 'en-US' } }));
+const ui = vi.hoisted(() => ({ locale: 'en-US' }));
+vi.mock('@/store/global/helpers', () => ({
+  globalHelpers: { getCurrentLanguage: () => ui.locale },
+}));
 
 const response = (identifier: string, page = 1, totalPages = 1) => ({
   currentPage: page,
@@ -33,6 +36,7 @@ const wrapper = () => {
 
 describe('useMarketSkillList', () => {
   beforeEach(() => {
+    ui.locale = 'en-US';
     vi.mocked(discoverService.getSkillList).mockReset();
   });
 
@@ -66,6 +70,25 @@ describe('useMarketSkillList', () => {
     rerender({ q: 'weekly' });
     await waitFor(() =>
       expect(result.current.items.map((item) => item.identifier)).toEqual(['weekly-1']),
+    );
+    expect(result.current.page).toBe(1);
+  });
+
+  it('starts again from the first page when the UI language changes', async () => {
+    vi.mocked(discoverService.getSkillList).mockImplementation(
+      async (params) => response(`${ui.locale}-${params?.page}`, params?.page, 2) as any,
+    );
+    const { result, rerender } = renderHook(() => useMarketSkillList('meeting'), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    ui.locale = 'zh-CN';
+    rerender();
+    await waitFor(() =>
+      expect(result.current.items.map((item) => item.identifier)).toEqual(['zh-CN-1']),
     );
     expect(result.current.page).toBe(1);
   });

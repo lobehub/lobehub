@@ -2,12 +2,14 @@ import { type ItemType } from '@lobehub/ui';
 import { Flexbox, Icon, SearchBar, stopPropagation, usePopoverContext } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Pin, Settings, Store, Zap } from 'lucide-react';
+import { Pin, Settings, Zap } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { buildAgentProfileTabPath } from '@/features/AgentProfileTabs/tabOptions';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
+import { useAgentId } from '../../hooks/useAgentId';
 import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
 import ToolsList from './ToolsList';
@@ -53,22 +55,6 @@ const styles = stylex.create({
     lineHeight: '18px',
     color: cssVar.colorTextTertiary,
   },
-  storeButton: {
-    cursor: 'pointer',
-    display: 'inline-flex',
-    flex: 'none',
-    gap: '4px',
-    alignItems: 'center',
-    height: '28px',
-    paddingInline: '8px',
-    borderStyle: 'none',
-    borderRadius: '6px',
-    fontSize: '13px',
-    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
-    backgroundImage: { 'default': 'none', ':hover': 'none' },
-    transition: 'color 0.2s, background 0.2s',
-  },
 });
 
 const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
@@ -100,13 +86,13 @@ interface PopoverContentProps {
   autoCount: number;
   detailPopoverDisabled?: boolean;
   items: ItemType[];
-  onOpenStore: () => void;
   pinnedCount: number;
 }
 
 const PopoverContent = memo<PopoverContentProps>(
-  ({ autoCount, detailPopoverDisabled, items, onOpenStore, pinnedCount }) => {
+  ({ autoCount, detailPopoverDisabled, items, pinnedCount }) => {
     const { t } = useTranslation('setting');
+    const agentId = useAgentId();
     const navigate = useWorkspaceAwareNavigate();
     const [searchKeyword, setSearchKeyword] = useState('');
 
@@ -127,7 +113,7 @@ const PopoverContent = memo<PopoverContentProps>(
         >
           <SearchBar
             allowClear
-            placeholder={t('tools.search')}
+            placeholder={t('tools.picker.search')}
             size="small"
             style={{ flex: 1 }}
             value={searchKeyword}
@@ -156,23 +142,14 @@ const PopoverContent = memo<PopoverContentProps>(
           </span>
           <Flexbox horizontal align="center" gap={2} style={{ marginInlineStart: 'auto' }}>
             <button
-              {...stylex.props(styles.storeButton)}
-              type="button"
-              onClick={() => {
-                closePopover();
-                onOpenStore();
-              }}
-            >
-              <Icon icon={Store} size={14} />
-              {t('tools.addSkillOrConnector')}
-            </button>
-            <button
-              aria-label={t('tools.plugins.management')}
+              aria-label={t('tools.picker.management')}
               {...stylex.props(styles.iconButton)}
+              disabled={!agentId}
               type="button"
               onClick={() => {
+                if (!agentId) return;
                 closePopover();
-                navigate('/settings/connector');
+                navigate(buildAgentProfileTabPath(agentId, 'tools'));
               }}
             >
               <Icon icon={Settings} size={14} />

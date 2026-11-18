@@ -25,6 +25,7 @@ function expected(): Array<
   [name: string, type: 'mutation' | 'query' | 'subscription', middlewares: number]
 > {
   return [
+    ['addIslandDismissals', 'mutation', 11],
     ['confirmOnboardingUnderstanding', 'mutation', 14],
     ['createOnboardingTasks', 'mutation', 13],
     ['finishOnboarding', 'mutation', 11],
@@ -48,6 +49,7 @@ function expected(): Array<
     ['reviseOnboardingUnderstanding', 'mutation', 14],
     ['saveUserQuestion', 'mutation', 11],
     ['sendOnboardingFirstMessage', 'mutation', 11],
+    ['setWorktreeModeDir', 'mutation', 11],
     ['startOnboardingUnderstanding', 'mutation', 14],
     ['updateAgentOnboarding', 'mutation', 11],
     ['updateAvatar', 'mutation', 11],

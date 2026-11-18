@@ -41,6 +41,7 @@ import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/Control
 import ThinkingLevel2Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel2Slider';
 import ThinkingLevel3Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel3Slider';
 import ThinkingLevel4Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel4Slider';
+import ThinkingLevel5Slider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevel5Slider';
 import ThinkingLevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingLevelSlider';
 import ThinkingSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingSlider';
 
@@ -208,6 +209,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'thinkingLevel4',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint',
+    key: 'thinkingLevel5',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.urlContext.hint',
     key: 'urlContext',
   },
@@ -261,6 +266,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   thinkingLevel2: 'thinkingLevel',
   thinkingLevel3: 'thinkingLevel',
   thinkingLevel4: 'thinkingLevel',
+  thinkingLevel5: 'thinkingLevel',
 };
 
 type PreviewMeta = {
@@ -386,6 +392,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   thinkingLevel2: { labelSuffix: ' (3 Pro)', previewWidth: 200, tag: 'thinkingLevel' },
   thinkingLevel3: { labelSuffix: ' (Gemini 3.1)', previewWidth: 200, tag: 'thinkingLevel' },
   thinkingLevel4: { labelSuffix: ' (Nano Banana 2)', previewWidth: 200, tag: 'thinkingLevel' },
+  thinkingLevel5: {
+    labelSuffix: ' (Gemini 4 Hydrogen)',
+    previewWidth: 300,
+    tag: 'thinkingLevel',
+  },
   urlContext: { labelSuffix: ' (Gemini)', previewWidth: 400, tag: 'urlContext' },
 };
 
@@ -540,6 +551,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       thinkingLevel2: <ThinkingLevel2Slider value="high" />,
       thinkingLevel3: <ThinkingLevel3Slider value="high" />,
       thinkingLevel4: <ThinkingLevel4Slider value="minimal" />,
+      thinkingLevel5: <ThinkingLevel5Slider value="high" />,
       urlContext: <Switch checked disabled />,
     }),
     [],

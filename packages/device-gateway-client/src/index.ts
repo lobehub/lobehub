@@ -1,5 +1,12 @@
 export type { GatewayClientLogger, GatewayClientOptions } from './client';
 export { GatewayClient } from './client';
+export type { CompletionReporter, WatchToolCallCompletionOptions } from './completionWatch';
+export {
+  DEFAULT_COMPLETION_MAX_AGE_MS,
+  resolveWatchableShell,
+  watchToolCallCompletion,
+  withCompletionWatch,
+} from './completionWatch';
 export type {
   DeviceTransportFailure,
   DeviceTransportOperation,

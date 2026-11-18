@@ -346,3 +346,54 @@ export const A = () => <span {...stylex.props(styles.activated)} />;
     });
   });
 });
+
+describe('extractFile standalone css constants', () => {
+  const code = `import { css, cssVar, cx } from '@lobehub/ui';
+
+const hotArea = css\`
+  width: 32px;
+
+  &:hover {
+    color: \${cssVar.colorText};
+  }
+\`;
+const ghost = cx(css\`opacity: 0.5;\`);
+
+export const Upload = () => (
+  <div className={cx(hotArea)}>
+    <span className={ghost} />
+  </div>
+);
+`;
+
+  it('treats a module-level css template as a style slot of its own name', () => {
+    const extraction = extractFile(code, 'a.tsx', options);
+
+    expect(extraction.elements.map(({ id, slots }) => ({ id, slots }))).toEqual([
+      { id: 'Upload#0', slots: ['hotArea.hotArea'] },
+      { id: 'Upload#1', slots: ['ghost.ghost'] },
+    ]);
+    expect(
+      extraction.rules
+        .filter((rule) => rule.slot === 'hotArea.hotArea')
+        .map(({ declarations, selector }) => ({ declarations, selector })),
+    ).toEqual([{ declarations: ['color: __I0__'], selector: '.__self__:hover' }]);
+    expect(extraction.slotProperties?.['hotArea.hotArea']).toEqual(['color', 'width']);
+  });
+
+  it('keeps the constant and its imports in the prelude so the binding renders', () => {
+    const { prelude } = extractFile(code, 'a.tsx', options);
+
+    expect(prelude).toContain("import { css, cssVar, cx } from '@lobehub/ui';");
+    expect(prelude).toContain('const hotArea = css`');
+    expect(prelude).toContain('const ghost = cx(css`opacity: 0.5;`);');
+  });
+
+  it('ignores a css template whose tag is not imported from a style library', () => {
+    const local = `const css = (parts) => parts.join('');
+const hotArea = css\`width: 32px;\`;
+export const Upload = () => <div className={hotArea} />;
+`;
+    expect(extractFile(local, 'a.tsx', options).elements).toEqual([]);
+  });
+});

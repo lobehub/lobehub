@@ -17,7 +17,18 @@ describe('getPrivateDeviceBlock', () => {
     ).toBe('publicAgent');
   });
 
-  it('blocks a private device once a private agent is fixed', () => {
+  it('blocks a private device on a public fixed agent, which the server rejects', () => {
+    expect(
+      getPrivateDeviceBlock({
+        canManageAgent: true,
+        isWorkspaceAgent: true,
+        selectionPolicy: 'fixed',
+        visibility: 'public',
+      }),
+    ).toBe('fixed');
+  });
+
+  it("allows the owner's private device on a private fixed agent until it is published", () => {
     expect(
       getPrivateDeviceBlock({
         canManageAgent: true,
@@ -25,7 +36,7 @@ describe('getPrivateDeviceBlock', () => {
         selectionPolicy: 'fixed',
         visibility: 'private',
       }),
-    ).toBe('fixed');
+    ).toBeUndefined();
   });
 
   it("allows the owner's private device on a private agent", () => {

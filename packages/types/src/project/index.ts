@@ -1,6 +1,16 @@
 export const PROJECT_IDENTIFIER_REGEX = /^[A-Z][A-Z0-9]{2,5}$/;
 
 /**
+ * Ids the create form reserves for a new project and its dedicated main agent,
+ * in the shape the server would generate them (`idGenerator`). Their generated
+ * avatars are seeded by id, so reserving the ids up front lets the form show
+ * the exact avatars the project and its agent keep after creation.
+ */
+export const PROJECT_ID_REGEX = /^prj_[\dA-Za-z]{12}$/;
+
+export const PROJECT_AGENT_ID_REGEX = /^agt_[\dA-Za-z]{12}$/;
+
+/**
  * `CONFLICT` messages for a taken project slug or identifier.
  *
  * The create router sends one of these as the tRPC error message, so a form can

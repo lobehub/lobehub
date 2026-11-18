@@ -40,6 +40,7 @@ import { imageGenerationRuntime } from './imageGeneration';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
+import { mcpEventsRuntime } from './mcpEvents';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
@@ -55,6 +56,7 @@ import { userInteractionRuntime } from './userInteraction';
 import { verifyResultRuntime } from './verifyResult';
 import { videoGenerationRuntime } from './videoGeneration';
 import { webBrowsingRuntime } from './webBrowsing';
+import { webhookRuntime } from './webhook';
 import { webOnboardingRuntime } from './webOnboarding';
 
 /**
@@ -73,6 +75,8 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  mcpEventsRuntime,
+  webhookRuntime,
   channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,

@@ -33,7 +33,7 @@ const testState = vi.hoisted(() => ({
 
 const selectPropsSpy = vi.hoisted(() => vi.fn());
 const selectExecutionTargetSpy = vi.hoisted(() => vi.fn());
-const constState = vi.hoisted(() => ({ isDesktop: false }));
+const constState = vi.hoisted(() => ({ gatewayEnabled: true, isDesktop: false }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -47,7 +47,7 @@ vi.mock('@/features/ChatInput/hooks/useSelectExecutionTarget', () => ({
 }));
 
 vi.mock('@/helpers/gatewayMode', () => ({
-  useIsGatewayModeEnabled: () => true,
+  useIsGatewayModeEnabled: () => constState.gatewayEnabled,
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
@@ -234,8 +234,33 @@ describe('AgentExecutionEnvironment with a private workspace device', () => {
     );
   });
 
-  it('keeps private devices unselectable once the environment is fixed', () => {
+  // T-14315: the selection policy is dormant until the Agent is published
+  // (publishing re-checks a fixed target), so the owner may bind any of their
+  // private devices to a private fixed Agent.
+  it('lets the owner bind a private device to a private fixed agent', () => {
     testState.agent.agentMap['agent-1'].visibility = 'private';
+    testState.agent.agentMap['agent-1'].agencyConfig = {
+      executionTarget: 'auto',
+      executionTargetSelectionPolicy: 'fixed',
+    };
+
+    render(<AgentExecutionEnvironment agentId="agent-1" />);
+
+    const option = deviceOption();
+    expect(option?.disabled).toBeFalsy();
+    expect(privateGroupOptions().map((option) => option.value)).not.toContain(
+      'status:privateUnavailable',
+    );
+
+    const { onChange } = selectPropsSpy.mock.lastCall?.[0] as { onChange: (v: string) => void };
+    onChange(option!.value);
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
+      agencyConfig: { boundDeviceId: 'private-device', executionTarget: 'device' },
+    });
+  });
+
+  it('keeps private devices unselectable on a public fixed agent', () => {
+    testState.agent.agentMap['agent-1'].visibility = 'public';
     testState.agent.agentMap['agent-1'].agencyConfig = {
       executionTarget: 'auto',
       executionTargetSelectionPolicy: 'fixed',
@@ -295,6 +320,7 @@ describe('AgentExecutionEnvironment for a personal agent', () => {
     selectExecutionTargetSpy.mockReset();
     testState.agent.updateAgentConfigById.mockReset();
     constState.isDesktop = false;
+    constState.gatewayEnabled = true;
     testState.agent.agentMap['agent-1'].workspaceId = undefined;
     testState.agent.agentMap['agent-1'].visibility = 'private';
     testState.agent.agentMap['agent-1'].agencyConfig = {
@@ -331,17 +357,24 @@ describe('AgentExecutionEnvironment for a personal agent', () => {
     expect(lastSelectProps().options.some((option) => option.options)).toBe(false);
   });
 
-  it('offers this machine on desktop and shows it as the default', () => {
-    constState.isDesktop = true;
-    testState.agent.agentMap['agent-1'].agencyConfig = {
-      executionTargetSelectionPolicy: 'member',
-    };
+  it.each([
+    [true, 'target:auto'],
+    [false, 'target:local'],
+  ] as const)(
+    'offers this machine on desktop and resolves the default (gateway: %s)',
+    (gatewayEnabled, expected) => {
+      constState.gatewayEnabled = gatewayEnabled;
+      constState.isDesktop = true;
+      testState.agent.agentMap['agent-1'].agencyConfig = {
+        executionTargetSelectionPolicy: 'member',
+      };
 
-    render(<AgentExecutionEnvironment agentId="agent-1" />);
+      render(<AgentExecutionEnvironment agentId="agent-1" />);
 
-    expect(optionValues()).toContain('target:local');
-    expect(lastSelectProps().value).toBe('target:local');
-  });
+      expect(optionValues()).toContain('target:local');
+      expect(lastSelectProps().value).toBe(expected);
+    },
+  );
 
   it('saves a pick through the chat-input writer, not the shared-default write', () => {
     render(<AgentExecutionEnvironment agentId="agent-1" />);

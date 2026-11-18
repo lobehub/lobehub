@@ -272,7 +272,6 @@ export const spawnDevinAcpAgent = async (
     env: { ...process.env, ...options.env },
     initialModel: options.initialModel,
     onEvents: bridge.onEvents,
-    permissionMode: options.permissionMode,
     onRawMessage: teeAcpRawStdout(options.onRawStdout),
     onRuntimeStatus: () => {},
     onSessionId: () => {},

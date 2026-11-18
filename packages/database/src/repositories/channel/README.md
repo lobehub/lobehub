@@ -11,7 +11,7 @@ public messages, deliveries, topics and operations.
 | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Membership, roles, routing, branches, ordering | Channel tables                                                                        |
 | Conversation kind                              | `channels.agentId`: bound Agent for a direct conversation; NULL for a group           |
-| Message sender                                 | `channel_messages.userId` or `agentId`; never the requesting user on an Agent reply   |
+| Message sender                                 | `channel_messages.userId` or `agentId`; never the requesting user on an Agent message |
 | Public content and replies                     | `channel_messages.content`; independent IDs                                           |
 | Public attachments                             | `channel_message_files`, with sender-checked file references and order                |
 | Internal conversation                          | Ordinary `topics` and `messages`, with the actual Agent and requester                 |
@@ -72,6 +72,57 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
+## Shared Agents
+
+A personal direct conversation can also bind another person's Agent through its live link share.
+A link share is open to anyone signed in, so neither friendship nor a contact entry is needed:
+`ChannelService.openShared` opens the conversation from the share id, handle or pasted link, and
+`createSharedDirect` from an Agent the person added to their contacts (which shows they reached the
+share). Only those paths pass `sharedAgent` to `create`; a bare Agent id never binds someone else's
+Agent. `requireChannelAgent` and `resolveExecutionConfig` then accept it for that conversation
+shape only, while the share is `link` and the Agent is not trashed; groups and workspace channels
+never take one. The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
+
+- The run executes as the owner, like a visit to the share page. Its topic and operation belong
+  to the owner and the Agent's scope, with the requester as `topics.senderId`, so the owner's own
+  lists never show it. Owner defaults apply; the requester's never do.
+- It is always a Native cloud run: no device, no Channel project, no attachments (sending refuses
+  them because the owner's run cannot read the requester's files).
+- The coordinator rechecks the live share and its monthly spend limit before submission and runs
+  under the share's `shareGate`. Of the Channel tools it keeps only `readMessages` /
+  `readMessage`, and `ChannelHistoryRepository` authorizes those reads against the frozen share
+  (owner operation, the person's Channel) while every other use of the run (`currentRun`, so
+  `listChannels` / `sendMessage`) is refused: they would act in the owner's Channels.
+- A topic ends at the share's `maxTurnsPerTopic`; the next request starts a new one.
+
+## Conversations between contacts
+
+`channels.peerUserId` marks a one-on-one conversation between two people (`openPeer`). One
+exists per pair and scope, whoever opened it: no unique index backs this, so `openPeer` takes an
+advisory lock on the pair and scope before looking for it. Both people are owner members. It takes
+no Agents and no third person, so messages never route. The list reports `peerUserId` relative to
+the viewer. Either account's deletion removes it.
+
+Who may talk (`requirePeerRelation`, rechecked on every send so a lapsed relation silences the
+conversation and keeps its history): in the personal space, mutual contacts; in a workspace, two
+members, or a member and an external contact of the workspace paired with them in
+`user_contacts`. Two external contacts never talk to each other there.
+
+## Conversations between Agents
+
+`channels.agentPairKey` (`agentA:agentB`, sorted) marks the conversation in which one of a
+person's Agents asks another (`openAgentPair`). A unique index keeps one per pair, person and
+scope, whichever Agent opens it. It is group-shaped (`agentId` NULL): the person is its owner
+member, and its two Agents are members with the environments the caller passes. It is the only
+Channel that takes a request written by an Agent (`authorAgentMemberId` on send): such a row has
+`agentId` and no `userId` while its job's requester stays the person, so execution identity,
+access and continuation are unchanged. Authorship is `isAgentAuthored` (a reply, or a row with
+`agentId`), not `routingStatus` alone.
+
+When a reply to an Agent's request is published there, `deliverAnswerToAsker` queues the asking
+Agent on that reply, for the same requester. A reply to a reply wakes no one, so an exchange ends
+with the asking Agent's answer unless it asks again.
+
 ## Delivery-key retirement rollout
 
 Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
@@ -124,9 +175,30 @@ individual messages are read in 12000-character chunks. Names and attachments re
 External operation tokens receive `channel:read` only for a reserved Channel dispatch; ordinary
 runs and sub-agents do not inherit it.
 
-Pending routing is part of member FIFO even before a job exists. An earlier main-channel
-decision blocks later claims until its recipients are known; an earlier Thread decision blocks
-only that Thread's following members. Skipped, failed or stopped routing releases this barrier.
+## Branch concurrency
+
+A member runs one reply per conversation branch (a Thread, or the main timeline) and answers each
+branch in message order; its branches run alongside each other. `candidates` returns one queue
+head per member and branch, and the coordinator settles and claims each branch without waiting on
+the member's others. A Thread starts only after the member's main-timeline answer to its root, so
+a follow-up never overtakes the reply it follows. A reply that opens a Thread before its claim
+runs in that Thread, which leaves the main timeline free for the next request.
+
+These locks are application rules in `claimJob`, not database constraints, so they can change
+without a migration. The branch lock is checked under the channel lock, which already serializes
+every claim of a member. The directory lock spans channels, so `claimJob` first takes a
+transaction-scoped advisory lock on the device directory, then looks for a live writer there; the
+plain index `channel_jobs_active_directory_idx` keeps that lookup cheap. Nothing else may set
+`writer_held`.
+
+Branches still share what a run touches. The directory lock stays per device directory: a second
+branch of the same member in a Channel-picked directory moves into its own worktree, as for
+another member. A member without a Channel device runs where the Agent's own settings say, like
+two ordinary conversations with that Agent.
+
+Pending routing is part of branch FIFO even before a job exists. An earlier undecided message in
+the same branch, or the Thread's undecided root, blocks later claims there until its recipients
+are known; other branches are not held. Skipped, failed or stopped routing releases this barrier.
 A routed message's deferred follow-ups (`wake.afterMemberId`) are queued as `awaiting_primary`
 and claimed only after the same message's primary responder job settles; a deferred claim freezes
 the primary's published reply id in `manifest.primaryReplyMessageId`, read by
@@ -169,7 +241,10 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
 - Job status describes the Channel delivery; execution status/errors/usage live on its operation.
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
-  Isolation frees the member but keeps the device/directory lock. Never retry an unknown delivery.
+  Isolation frees the member's branch but keeps the device/directory lock. Never retry an unknown delivery.
+  `retryJob` re-queues only a failed job whose device could not be reached
+  (`DeviceGatewayNotConfigured`), with its writer released and nothing accepted or published;
+  the next claim opens a fresh operation.
 - A job blocked only by another writer in its member's directory moves its conversation branch
   (a Thread, or the main timeline) into a git worktree instead of waiting: the coordinator asks
   the device to cut `lobe-channel/<member>-<branch>` from that directory's HEAD under

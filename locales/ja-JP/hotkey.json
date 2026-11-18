@@ -1,6 +1,4 @@
 {
-  "addUserMessage.desc": "現在の入力内容をユーザーメッセージとして追加しますが、生成はトリガーしません",
-  "addUserMessage.title": "ユーザーメッセージを追加",
   "commandPalette.desc": "グローバルコマンドパレットを開いて機能に素早くアクセス",
   "commandPalette.title": "コマンドパレット",
   "deleteAndRegenerateMessage.desc": "最後のメッセージを削除して再生成する",

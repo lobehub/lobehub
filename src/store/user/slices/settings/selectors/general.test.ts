@@ -58,6 +58,33 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('followUpBehavior', () => {
+    it('should stay on the legacy behavior while the lab is off, whatever is stored', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { followUpBehavior: 'queue' } },
+      });
+
+      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('legacy');
+    });
+
+    it('should default to steer with the lab on', () => {
+      const s: UserState = merge(initialState, {
+        preference: { lab: { enableBetterCodingExperience: true } },
+      });
+
+      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('steer');
+    });
+
+    it('should read the stored setting with the lab on', () => {
+      const s: UserState = merge(initialState, {
+        preference: { lab: { enableBetterCodingExperience: true } },
+        settings: { general: { followUpBehavior: 'queue' } },
+      });
+
+      expect(userGeneralSettingsSelectors.followUpBehavior(s as UserStore)).toBe('queue');
+    });
+  });
+
   describe('enablePasteAutoConvert', () => {
     it('should default to true when unset', () => {
       expect(userGeneralSettingsSelectors.enablePasteAutoConvert(initialState as UserStore)).toBe(

@@ -9,7 +9,15 @@ import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspace
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
-import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import {
+  getSandboxProviderKind,
+  MarketSandboxProvider,
+  resolveSandboxSessionConfig,
+} from '@/server/services/sandbox';
+import {
+  mergeCredsEnvListing,
+  resolveInjectedEnvVarsByKey,
+} from '@/server/services/sandbox/credsEnv';
 
 const log = debug('lambda-router:market:creds');
 
@@ -422,7 +430,36 @@ export const credsRouter = router({
           notFound: result.notFound?.length,
           success: result.success,
         });
-        return result;
+
+        const envVarsByKey = await resolveInjectedEnvVarsByKey(input.keys, result, (key) =>
+          marketService.market.creds.inject({
+            keys: [key],
+            sandbox: false,
+            topicId: input.topicId,
+            userId,
+          }),
+        );
+
+        // Market rewrites ~/.creds/env per call; merge it so earlier
+        // injections stay listed. Addressed like the inject call above, so
+        // the merge runs in the sandbox the credentials were written into.
+        if (input.sandbox && getSandboxProviderKind() === 'market') {
+          await mergeCredsEnvListing(
+            new MarketSandboxProvider({
+              marketService,
+              sandboxCwd: sandbox?.cwd,
+              sandboxInstanceId: sandbox?.environment,
+              sandboxMode: sandbox?.mode,
+              sandboxSpecification: sandbox?.specification,
+              sandboxWorkingDir: sandbox?.workingDir,
+              serverDB: ctx.serverDB,
+              topicId: input.topicId,
+              userId,
+            }),
+          );
+        }
+
+        return { ...result, envVarsByKey };
       } catch (error) {
         log('inject error: %O', error);
         throw new TRPCError({

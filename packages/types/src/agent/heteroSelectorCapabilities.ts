@@ -8,7 +8,11 @@ import {
   stripCliConfigKey,
   stripCliFlags,
 } from './heteroCliArgs';
-import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
+import type {
+  HeterogeneousAgentType,
+  LocalHeterogeneousAgentType,
+  LocalRuntimeHeterogeneousAgentType,
+} from './heterogeneousAgent';
 
 /**
  * Selector value that means "do not override the underlying CLI".
@@ -299,6 +303,34 @@ const resolvePersistedModel = (source: HeteroSelectionSource | null | undefined)
     : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
+export interface ParsedModelTuple {
+  modelId: string;
+  providerId: string;
+}
+
+/**
+ * Decode a persisted `[provider, model]` selection value. Catalog providers use
+ * this encoding when two providers can offer the same model name; opaque values
+ * return undefined so callers can keep the raw value.
+ */
+export const parseModelTuple = (value: string): ParsedModelTuple | undefined => {
+  if (!value.startsWith('[')) return;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      Array.isArray(parsed) &&
+      parsed.length === 2 &&
+      typeof parsed[0] === 'string' &&
+      typeof parsed[1] === 'string'
+    ) {
+      return { modelId: parsed[1], providerId: parsed[0] };
+    }
+  } catch {
+    // Not the encoded pair; callers fall back to the raw value.
+  }
+};
+
 export type HeteroCliEncoding =
   { flags: readonly string[]; kind: 'flag' } | { key: string; kind: 'config' };
 
@@ -360,6 +392,13 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  * user-authored args already cover a dimension.
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
+  'antigravity': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
   'amp': {
     mode: {
       encodings: [{ flags: ['--mode'], kind: 'flag' }],
@@ -426,6 +465,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
+  'deepseek-harness': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'droid': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
@@ -473,12 +515,17 @@ export const HETERO_SELECTOR_CAPABILITIES = {
   'trae': {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
-} satisfies Record<LocalHeterogeneousAgentType, HeteroSelectorCapability>;
+} satisfies Record<
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType,
+  HeteroSelectorCapability
+>;
 
 export const getHeteroSelectorCapability = (
   type: string | undefined,
 ): HeteroSelectorCapability | undefined =>
-  HETERO_SELECTOR_CAPABILITIES[type as LocalHeterogeneousAgentType];
+  HETERO_SELECTOR_CAPABILITIES[
+    type as LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType
+  ];
 
 export const isHeteroSelectorAvailable = (type: string | undefined): boolean =>
   Object.keys(getHeteroSelectorCapability(type) ?? {}).length > 0;
@@ -662,24 +709,7 @@ export const buildHeteroSpawnArgs = (
   provider: HeteroSpawnSelectionProvider | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'copilot' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
@@ -758,7 +788,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -817,24 +847,7 @@ export const buildHeteroExecArgs = (
   provider: HeteroSpawnSelectionProvider | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'copilot' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
@@ -933,7 +946,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -981,7 +994,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'droid' || provider.type === 'trae') {
+  if (
+    provider.type === 'droid' ||
+    provider.type === 'trae' ||
+    provider.type === 'deepseek-harness'
+  ) {
     const model = provider.model?.trim();
     if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
       selectorArgs.push('--model', model);

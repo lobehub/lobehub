@@ -11,7 +11,7 @@ import {
 import { Plus } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
@@ -33,13 +33,16 @@ import { createTaskModal } from '../CreateTaskModal';
 import { useTaskProjectList } from '../features/useTaskProjectList';
 import Breadcrumb from '../shared/Breadcrumb';
 import { taskDetailPath } from '../shared/taskDetailPath';
+import { TaskListOriginContext } from '../shared/taskListOrigin';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import {
   pickOfferedTaskFilter,
+  setTaskFilterContent,
   TaskFilterBar,
   TaskFilterButton,
   taskListFilterScopeKey,
+  TaskListFind,
   useTaskFilterFields,
   useTaskListFilter,
 } from './filter';
@@ -237,6 +240,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   const { allowed: canCreateTask, reason } = usePermission('create_content');
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
   const [searchParams, setSearchParams] = useSearchParams();
+  // This list's own URL, filters included: task details opened from here carry
+  // it so their breadcrumb returns to this exact view.
+  const { pathname, search } = useLocation();
+  const taskListOrigin = `${pathname}${search}`;
   const [collectionPage, setCollectionPage] = useState(1);
   const activeWorkspaceId = useActiveWorkspaceId();
   // Member assignment is a workspace concept (a task now carries a member
@@ -449,10 +456,20 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       lockAssignee: !!agentId,
       projectId,
       onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name));
+        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name), {
+          state: { taskListOrigin },
+        });
       },
     });
-  }, [agentId, canCreateTask, createActionBehavior.mode, navigate, projectId, updateSystemStatus]);
+  }, [
+    agentId,
+    canCreateTask,
+    createActionBehavior.mode,
+    navigate,
+    projectId,
+    taskListOrigin,
+    updateSystemStatus,
+  ]);
 
   const handleCreateScheduledTask = useCallback(() => {
     if (!canCreateTask) return;
@@ -464,12 +481,18 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
       // The scheduled tab has no inline entry to dock into.
       showInlineToggle: false,
       onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name));
+        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name), {
+          state: { taskListOrigin },
+        });
       },
     });
-  }, [agentId, canCreateTask, navigate, projectId]);
+  }, [agentId, canCreateTask, navigate, projectId, taskListOrigin]);
 
   const handleClearFilter = useCallback(() => setFilter(() => undefined), [setFilter]);
+  const handleFindChange = useCallback(
+    (content: string) => setFilter((prev) => setTaskFilterContent(prev, content)),
+    [setFilter],
+  );
   const filterEmptyAction = hasFilter ? (
     <Button onClick={handleClearFilter}>{t('taskList.filter.clearAll')}</Button>
   ) : undefined;
@@ -520,6 +543,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
     mobileSurface: isMobileSurface(),
     projectId,
   });
+  // Find is a keyboard-first desktop entry; the narrow header keeps the filter menu's
+  // "Content contains" for the same condition.
+  const showFind = !isMobile && (headerVisibility.showViewOptions || hasFilter);
 
   const headerLeft = (
     <Flexbox horizontal align={'center'} gap={8}>
@@ -545,182 +571,190 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   );
 
   return (
-    <Flexbox flex={1} height={'100%'}>
-      <NavHeader
-        left={headerLeft}
-        right={
-          <Flexbox horizontal align={'center'} gap={4}>
-            {(headerVisibility.showViewOptions || hasFilter) && (
-              <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
-            )}
-            {isOrdinaryCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
-            {isOrdinaryCollection && headerActions}
-            {isOrdinaryCollection && (inlineCollapsed || viewMode === 'kanban') && (
-              <ActionIcon
-                disabled={createActionBehavior.disabled}
-                icon={Plus}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-                title={createActionBehavior.disabled ? reason : undefined}
-                onClick={handleCreateTask}
-              />
-            )}
-            {isScheduledCollection && !showScheduledEmptyCreate && (
-              <ActionIcon
-                disabled={!canCreateTask}
-                icon={Plus}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-                title={canCreateTask ? t('createTask.submitScheduled') : reason}
-                onClick={handleCreateScheduledTask}
-              />
-            )}
-            {!isScheduledCollection && headerVisibility.showViewOptions && (
-              <TasksGroupConfig
-                canGroupByProject={canGroupByProject}
-                options={viewOptions}
-                pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
-                setOptions={setViewOptions}
-              />
-            )}
-            {headerVisibility.showTaskAgentPanelToggle && (
-              <ToggleRightPanelButton
-                hideWhenExpanded
-                expand={showTaskAgentPanel}
-                onToggle={() => toggleTaskAgentPanel()}
-              />
-            )}
-          </Flexbox>
-        }
-        styles={{
-          left: {
-            paddingLeft: 4,
-            gap: 8,
-          },
-        }}
-      />
-      <TaskFilterBar fields={filterFields} filter={filter} setFilter={setFilter} />
-      {isMineBoard ? (
-        <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard
-            filter={filter}
-            myTaskScope={myTaskScope}
-            options={viewOptions}
-            routeScope={routeScope}
-            emptyDescription={
-              filterEmptyDescription ??
-              t(
-                myTaskScope === 'created'
-                  ? 'taskList.mine.emptyCreated'
-                  : 'taskList.mine.emptyAssigned',
-              )
-            }
-          />
-        </Flexbox>
-      ) : !isOrdinaryCollection ? (
-        <WideScreenContainer
-          fullWidth
-          gap={16}
-          paddingBlock={16}
-          paddingInline={16}
-          wrapperStyle={{ flex: 1, overflowY: 'auto' }}
-        >
-          <TaskList
-            data={isCollectionListInit || undefined}
-            error={collectionSWR.error ?? projectListError}
-            filter={filter}
-            hideProject={!!projectId}
-            items={collectionTasks}
-            options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
-            routeScope={routeScope}
-            emptyAction={
-              filterEmptyAction ??
-              (showScheduledEmptyCreate ? (
-                <Button icon={Plus} onClick={handleCreateScheduledTask}>
-                  {t('createTask.submitScheduled')}
-                </Button>
-              ) : undefined)
-            }
-            emptyDescription={
-              filterEmptyDescription ??
-              (isMineCollection
-                ? t(
-                    myTaskScope === 'created'
-                      ? 'taskList.mine.emptyCreated'
-                      : 'taskList.mine.emptyAssigned',
-                  )
-                : t('taskList.scheduled.empty'))
-            }
-            isLoading={
-              collectionSWR.isLoading ||
-              isProjectListPending ||
-              (!isCollectionListInit && !collectionSWR.error)
-            }
-            selectionScope={[
-              collection,
-              isMineCollection ? myTaskScope : '',
-              collectionPage,
-              agentId ?? '',
-              projectId ?? '',
-            ].join(':')}
-            onRetry={() => (projectListError ? retryProjects() : collectionSWR.mutate())}
-          />
-          {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
-            <Flexbox horizontal justify={'center'} paddingBlock={8}>
-              <Pagination
-                current={collectionPage}
-                pageSize={COLLECTION_PAGE_SIZE}
-                showSizeChanger={false}
-                total={collectionTasksTotal}
-                onChange={setCollectionPage}
-              />
+    <TaskListOriginContext value={taskListOrigin}>
+      <Flexbox flex={1} height={'100%'}>
+        <NavHeader
+          left={headerLeft}
+          right={
+            <Flexbox horizontal align={'center'} gap={4}>
+              {showFind && <TaskListFind content={filter?.content} onChange={handleFindChange} />}
+              {(headerVisibility.showViewOptions || hasFilter) && (
+                <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
+              )}
+              {isOrdinaryCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
+              {isOrdinaryCollection && headerActions}
+              {isOrdinaryCollection && (inlineCollapsed || viewMode === 'kanban') && (
+                <ActionIcon
+                  disabled={createActionBehavior.disabled}
+                  icon={Plus}
+                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  title={createActionBehavior.disabled ? reason : undefined}
+                  onClick={handleCreateTask}
+                />
+              )}
+              {isScheduledCollection && !showScheduledEmptyCreate && (
+                <ActionIcon
+                  disabled={!canCreateTask}
+                  icon={Plus}
+                  size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+                  title={canCreateTask ? t('createTask.submitScheduled') : reason}
+                  onClick={handleCreateScheduledTask}
+                />
+              )}
+              {!isScheduledCollection && headerVisibility.showViewOptions && (
+                <TasksGroupConfig
+                  canGroupByProject={canGroupByProject}
+                  options={viewOptions}
+                  pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
+                  setOptions={setViewOptions}
+                />
+              )}
+              {headerVisibility.showTaskAgentPanelToggle && (
+                <ToggleRightPanelButton
+                  hideWhenExpanded
+                  expand={showTaskAgentPanel}
+                  onToggle={() => toggleTaskAgentPanel()}
+                />
+              )}
             </Flexbox>
-          )}
-        </WideScreenContainer>
-      ) : isEmptyHero ? (
-        <EmptyState agentId={agentId} projectId={projectId} />
-      ) : isBoardView ? (
-        <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-          <KanbanBoard
-            agentId={agentId}
-            emptyDescription={filterEmptyDescription}
-            filter={filter}
-            options={viewOptions}
-            projectId={projectId}
-            routeScope={routeScope}
-          />
-        </Flexbox>
-      ) : (
-        <WideScreenContainer
-          fullWidth
-          gap={16}
-          paddingBlock={16}
-          paddingInline={16}
-          wrapperStyle={{ flex: 1, overflowY: 'auto' }}
-        >
-          {!inlineCollapsed && (
-            <CreateTaskInlineEntry
-              agentId={agentId}
-              lockAssignee={!!agentId}
-              projectId={projectId}
+          }
+          styles={{
+            left: {
+              paddingLeft: 4,
+              gap: 8,
+            },
+          }}
+        />
+        <TaskFilterBar
+          fields={filterFields}
+          filter={filter}
+          hideContent={showFind}
+          setFilter={setFilter}
+        />
+        {isMineBoard ? (
+          <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+            <KanbanBoard
+              filter={filter}
+              myTaskScope={myTaskScope}
+              options={viewOptions}
+              routeScope={routeScope}
+              emptyDescription={
+                filterEmptyDescription ??
+                t(
+                  myTaskScope === 'created'
+                    ? 'taskList.mine.emptyCreated'
+                    : 'taskList.mine.emptyAssigned',
+                )
+              }
             />
-          )}
-          <TaskList
-            createScope={groupCreateScope}
-            data={isTaskListInit || undefined}
-            emptyAction={filterEmptyAction}
-            emptyDescription={filterEmptyDescription}
-            error={error ?? projectListError}
-            filter={filter}
-            hideProject={!!projectId}
-            isLoading={isLoading || isProjectListPending || (!isTaskListInit && !error)}
-            options={viewOptions}
-            queryKey={queryKey}
-            routeScope={routeScope}
-            onRetry={() => (projectListError ? retryProjects() : mutate())}
-            onShowHiddenCompleted={handleShowHiddenCompleted}
-          />
-        </WideScreenContainer>
-      )}
-    </Flexbox>
+          </Flexbox>
+        ) : !isOrdinaryCollection ? (
+          <WideScreenContainer
+            fullWidth
+            gap={16}
+            paddingBlock={16}
+            paddingInline={16}
+            wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+          >
+            <TaskList
+              data={isCollectionListInit || undefined}
+              error={collectionSWR.error ?? projectListError}
+              filter={filter}
+              hideProject={!!projectId}
+              items={collectionTasks}
+              options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
+              routeScope={routeScope}
+              emptyAction={
+                filterEmptyAction ??
+                (showScheduledEmptyCreate ? (
+                  <Button icon={Plus} onClick={handleCreateScheduledTask}>
+                    {t('createTask.submitScheduled')}
+                  </Button>
+                ) : undefined)
+              }
+              emptyDescription={
+                filterEmptyDescription ??
+                (isMineCollection
+                  ? t(
+                      myTaskScope === 'created'
+                        ? 'taskList.mine.emptyCreated'
+                        : 'taskList.mine.emptyAssigned',
+                    )
+                  : t('taskList.scheduled.empty'))
+              }
+              isLoading={
+                collectionSWR.isLoading ||
+                isProjectListPending ||
+                (!isCollectionListInit && !collectionSWR.error)
+              }
+              selectionScope={[
+                collection,
+                isMineCollection ? myTaskScope : '',
+                collectionPage,
+                agentId ?? '',
+                projectId ?? '',
+              ].join(':')}
+              onRetry={() => (projectListError ? retryProjects() : collectionSWR.mutate())}
+            />
+            {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
+              <Flexbox horizontal justify={'center'} paddingBlock={8}>
+                <Pagination
+                  current={collectionPage}
+                  pageSize={COLLECTION_PAGE_SIZE}
+                  showSizeChanger={false}
+                  total={collectionTasksTotal}
+                  onChange={setCollectionPage}
+                />
+              </Flexbox>
+            )}
+          </WideScreenContainer>
+        ) : isEmptyHero ? (
+          <EmptyState agentId={agentId} projectId={projectId} />
+        ) : isBoardView ? (
+          <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+            <KanbanBoard
+              agentId={agentId}
+              emptyDescription={filterEmptyDescription}
+              filter={filter}
+              options={viewOptions}
+              projectId={projectId}
+              routeScope={routeScope}
+            />
+          </Flexbox>
+        ) : (
+          <WideScreenContainer
+            fullWidth
+            gap={16}
+            paddingBlock={16}
+            paddingInline={16}
+            wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+          >
+            {!inlineCollapsed && (
+              <CreateTaskInlineEntry
+                agentId={agentId}
+                lockAssignee={!!agentId}
+                projectId={projectId}
+              />
+            )}
+            <TaskList
+              createScope={groupCreateScope}
+              data={isTaskListInit || undefined}
+              emptyAction={filterEmptyAction}
+              emptyDescription={filterEmptyDescription}
+              error={error ?? projectListError}
+              filter={filter}
+              hideProject={!!projectId}
+              isLoading={isLoading || isProjectListPending || (!isTaskListInit && !error)}
+              options={viewOptions}
+              queryKey={queryKey}
+              routeScope={routeScope}
+              onRetry={() => (projectListError ? retryProjects() : mutate())}
+              onShowHiddenCompleted={handleShowHiddenCompleted}
+            />
+          </WideScreenContainer>
+        )}
+      </Flexbox>
+    </TaskListOriginContext>
   );
 });
 

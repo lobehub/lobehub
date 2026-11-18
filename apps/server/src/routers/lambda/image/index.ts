@@ -5,6 +5,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
@@ -22,6 +23,10 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { createAsyncCaller } from '@/server/routers/async/caller';
+import {
+  isAsyncCallRejectedBeforeRun,
+  keepAliveForAsyncRejection,
+} from '@/server/routers/async/rejection';
 import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { FileService } from '@/server/services/file';
 import {
@@ -42,6 +47,9 @@ import {
 } from './utils';
 
 const log = debug('lobe-image:lambda');
+
+/** Bounds the task updates and refunds when failing a large batch at once. */
+const FAIL_UNSTARTED_CONCURRENCY = 5;
 
 const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -396,6 +404,62 @@ export const imageRouter = router({
       // Step 2: Trigger background image generation tasks.
       log('Starting async image generation tasks');
 
+      /**
+       * Marks tasks the async router never ran as failed and reconciles their
+       * billing: with no async run, its failure handling cannot fire for them.
+       */
+      const failUnstartedTasks = async (
+        tasks: { asyncTaskId: string; index: number }[],
+        error: unknown,
+      ) => {
+        const message =
+          'start async task error: ' + (error instanceof Error ? error.message : 'Unknown error');
+
+        await pMap(
+          tasks,
+          async ({ asyncTaskId }) => {
+            try {
+              await asyncTaskModel.update(asyncTaskId, {
+                error: new AsyncTaskError(AsyncTaskErrorType.ServerError, message),
+                status: AsyncTaskStatus.Error,
+              });
+            } catch (updateError) {
+              console.error('Failed to update task status:', updateError);
+            }
+          },
+          { concurrency: FAIL_UNSTARTED_CONCURRENCY },
+        );
+
+        if (!ENABLE_BUSINESS_FEATURES || !prechargeItems?.length) return;
+
+        await pMap(
+          tasks,
+          async ({ asyncTaskId, index }) => {
+            const prechargeItem = prechargeItems[index];
+            if (prechargeItem === undefined) return;
+            try {
+              await chargeAfterGenerate({
+                isError: true,
+                metadata: {
+                  ...ctx.spendOrigin,
+                  asyncTaskId,
+                  generationBatchId: createdBatch.id,
+                  modelId: model,
+                  topicId: generationTopicId,
+                },
+                prechargeResult: prechargeItem,
+                provider,
+                userId,
+                workspaceId: wsId,
+              });
+            } catch (chargeError) {
+              console.error('Failed to reconcile billing for failed task:', chargeError);
+            }
+          },
+          { concurrency: FAIL_UNSTARTED_CONCURRENCY },
+        );
+      };
+
       try {
         log('Creating unified async caller for userId: %s', userId);
 
@@ -407,82 +471,43 @@ export const imageRouter = router({
         log('Unified async caller created successfully for userId: %s', ctx.userId);
         log('Processing %d async image generation tasks', generationsWithTasks.length);
 
-        // Fire-and-forget: trigger async tasks without awaiting
-        // These calls go to the async router which handles them independently
-        // Do not schedule here; the async router handles these tasks independently.
-        generationsWithTasks.forEach(({ generation, asyncTaskId }) => {
+        // Fire-and-forget: trigger async tasks without awaiting. The async router
+        // handles them independently; the response only waits briefly for a refusal.
+        generationsWithTasks.forEach(({ generation, asyncTaskId }, index) => {
           log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
-          asyncCaller.image
-            .createImage({
-              generationBatchId: createdBatch.id,
-              generationId: generation.id,
-              generationTopicId,
-              model,
-              params: generationParams,
-              provider,
-              taskId: asyncTaskId,
-              workspaceId: wsId,
-            })
+          const call = asyncCaller.image.createImage({
+            generationBatchId: createdBatch.id,
+            generationId: generation.id,
+            generationTopicId,
+            model,
+            params: generationParams,
+            provider,
+            taskId: asyncTaskId,
+            workspaceId: wsId,
+          });
+          const handled = call
             // The async router owns the task's status and billing once the request
             // reaches it; a failed HTTP response here (e.g. a proxy timing out a
             // long generation) does not mean the task failed, so only log it.
-            .catch((error: unknown) => {
+            // A call its auth middleware refused never ran, so fail that task now
+            // instead of leaving it pending until the status poll times it out.
+            .catch(async (error: unknown) => {
               console.error('Async image task %s request failed: %O', asyncTaskId, error);
+              if (isAsyncCallRejectedBeforeRun(error))
+                await failUnstartedTasks([{ asyncTaskId, index }], error);
             });
+          keepAliveForAsyncRejection(call, handled);
         });
 
         log('All %d background async image generation tasks started', generationsWithTasks.length);
       } catch (e) {
-        console.error('Failed to process async tasks:', e);
         console.error('Failed to process async tasks: %O', e);
 
-        // If overall failure occurs, update all task statuses to failed
-        try {
-          await Promise.allSettled(
-            generationsWithTasks.map(({ asyncTaskId }) =>
-              asyncTaskModel.update(asyncTaskId, {
-                error: new AsyncTaskError(
-                  AsyncTaskErrorType.ServerError,
-                  'start async task error: ' + (e instanceof Error ? e.message : 'Unknown error'),
-                ),
-                status: AsyncTaskStatus.Error,
-              }),
-            ),
-          );
-        } catch (batchUpdateError) {
-          console.error('Failed to update batch task statuses:', batchUpdateError);
-        }
-
-        // The async router never ran for these tasks, so its failure billing
-        // reconciliation cannot fire — reconcile each generation's billing
-        // handle here instead of leaving it dangling.
-        if (ENABLE_BUSINESS_FEATURES && prechargeItems?.length) {
-          await Promise.allSettled(
-            generationsWithTasks.map(async ({ asyncTaskId }, index) => {
-              const prechargeItem = prechargeItems[index];
-              if (prechargeItem === undefined) return;
-              try {
-                await chargeAfterGenerate({
-                  isError: true,
-                  metadata: {
-                    ...ctx.spendOrigin,
-                    asyncTaskId,
-                    generationBatchId: createdBatch.id,
-                    modelId: model,
-                    topicId: generationTopicId,
-                  },
-                  prechargeResult: prechargeItem,
-                  provider,
-                  userId,
-                  workspaceId: wsId,
-                });
-              } catch (chargeError) {
-                console.error('Failed to reconcile billing for failed task:', chargeError);
-              }
-            }),
-          );
-        }
+        await failUnstartedTasks(
+          generationsWithTasks.map(({ asyncTaskId }, index) => ({ asyncTaskId, index })),
+          e,
+        );
       }
 
       const createdGenerations = generationsWithTasks.map((item) => ({

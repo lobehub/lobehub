@@ -71,6 +71,7 @@ export enum SettingsTabs {
   Agent = 'agent',
   APIKey = 'apikey',
   Appearance = 'appearance',
+  Automations = 'automations',
   Billing = 'billing',
   /** @deprecated Use Appearance instead */
   ChatAppearance = 'chat-appearance',
@@ -101,15 +102,17 @@ export enum SettingsTabs {
   Security = 'security',
   ServiceModel = 'service-model',
   Skill = 'skill',
-
   Stats = 'stats',
+
   Storage = 'storage',
+  SubscriptionAccounts = 'subscription-accounts',
   SystemTools = 'system-tools',
   Tools = 'tools',
   Trash = 'trash',
   /** @deprecated Use ServiceModel instead */
   TTS = 'tts',
   Usage = 'usage',
+  Webhooks = 'webhooks',
 }
 
 /**
@@ -154,7 +157,7 @@ export type TaskViewMode = 'kanban' | 'list';
 /** How topics inside one byProject sidebar group are sectioned. */
 export type ProjectTopicSubGroupMode = 'none' | 'byDevice' | 'byTime' | 'byStatus';
 
-export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent', 'private'];
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent'];
 
 /** How the agent document tree orders sibling rows. */
 export interface AgentDocumentSort {
@@ -184,9 +187,6 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
   type: 'all',
 };
 
-/** How the Contacts list is ordered: by name, or most recently updated first. */
-export type ContactListSortBy = 'title' | 'updatedAt';
-
 /** How a sidebar Channel section orders its Channels. */
 export interface ChannelListSort {
   /** `updatedAt` follows the latest message, so it orders by activity. */
@@ -196,6 +196,9 @@ export interface ChannelListSort {
 
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
+
+/** How the projects page lays out projects: folder cards or compact rows. */
+export type ProjectListViewMode = 'folder' | 'list';
 
 export interface SystemStatus {
   /**
@@ -225,7 +228,8 @@ export interface SystemStatus {
    * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
    */
   agentListViewOptions?: {
-    groupBy: 'author' | 'label' | 'none';
+    /** Unset until the member picks one; the page then defaults per mode. */
+    groupBy?: 'author' | 'folder' | 'label' | 'none';
     orderBy: 'author' | 'title' | 'updatedAt';
     orderDirection: 'asc' | 'desc';
     showSidebarHidden: boolean;
@@ -253,8 +257,6 @@ export interface SystemStatus {
    * match and every group would render collapsed.
    */
   collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
-  /** Order of the Contacts list; absent means by name. Device-local view setting. */
-  contactListSortBy?: ContactListSortBy;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**
@@ -263,9 +265,9 @@ export interface SystemStatus {
    */
   dismissedBannerIds?: string[];
   /**
-   * Keys of goal asks (clarification rounds, gates, sign-offs) the user waved
-   * off the approval island. Only the island honours them — the same ask stays
-   * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
+   * @deprecated Island dismissals live on the server now (`addIslandDismissals`),
+   * shared by every client. Read once to upload what this client dismissed
+   * before, then ignored; see `islandDismissalsUploaded`.
    */
   dismissedIslandItemKeys?: string[];
   dismissedProjectOnboarding?: Record<string, boolean>;
@@ -312,14 +314,25 @@ export interface SystemStatus {
   homeGoalsCollapsed?: boolean;
   homeRecentsCount?: number;
   /**
-   * Agent picked from the home AgentSelect dropdown. When unset the home page
-   * falls back to the inbox agent. Persisted so the choice survives reloads.
+   * Agent picked from the home AgentSelect dropdown, keyed by cache scope
+   * (`${userId}:${workspaceId}`, see `buildCacheScope`). A scope without an
+   * entry falls back to its own inbox agent. Persisted so the choice survives
+   * reloads.
+   *
+   * Keyed by scope rather than stored once (or in the `workspace` overlay,
+   * which is shared by every workspace and falls back to the personal value):
+   * an agent only exists in the scope it was picked in, and a single value let
+   * the personal inbox reach a workspace home after a switch, where every
+   * config save and send against it returned NOT_FOUND until the workspace
+   * agent list loaded.
    */
-  homeSelectedAgentId?: string;
+  homeSelectedAgentIdByScope?: Record<string, string>;
   homeTaskCount?: number;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
+  /** This client's legacy `dismissedIslandItemKeys` have been uploaded to the server. */
+  islandDismissalsUploaded?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
@@ -331,6 +344,8 @@ export interface SystemStatus {
    * Remember user's last selected image generation provider
    */
   lastSelectedImageProvider?: string;
+  lastSelectedMusicModel?: string;
+  lastSelectedMusicProvider?: string;
   lastSelectedVideoModel?: string;
   lastSelectedVideoProvider?: string;
   latestChangelogId?: string;
@@ -360,6 +375,7 @@ export interface SystemStatus {
    * ModelSwitchPanel width
    */
   modelSwitchPanelWidth?: number;
+  musicTopicViewMode?: 'grid' | 'list';
   noWideScreen?: boolean;
   pageAgentPanelWidth?: number;
   /**
@@ -384,6 +400,8 @@ export interface SystemStatus {
    * order itself is shared and lives on `projects.sort_order`.
    */
   projectListSortBy?: ProjectListSortBy;
+  /** Layout of the projects page. Device-local view setting. */
+  projectListViewMode?: ProjectListViewMode;
   /**
    * Per byProject group (keyed by the group id, e.g. `project-id:<id>`): how its
    * topics are sectioned. Absent means `none`.
@@ -635,7 +653,6 @@ export const INITIAL_STATUS = {
   agentListSidebarSectionCollapsed: false,
   agentListViewMode: 'card' as const,
   agentListViewOptions: {
-    groupBy: 'none' as const,
     orderBy: 'updatedAt' as const,
     orderDirection: 'desc' as const,
     showSidebarHidden: true,
@@ -713,6 +730,8 @@ export const INITIAL_STATUS = {
   terminalPanelHeight: 320,
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
+  // Songs rarely carry cover art, so music topics read better as a titled list
+  musicTopicViewMode: 'list' as const,
   verifyReportPanelWidth: 300,
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,

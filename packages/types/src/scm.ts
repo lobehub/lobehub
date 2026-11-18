@@ -159,6 +159,12 @@ export interface ScmChangeRequestMetadata {
   /** Acceptance links parsed out of the change request body. */
   acceptanceIdsFromBody?: string[];
   /**
+   * Per pull request Auto-fix: whether failing CI and review feedback wake
+   * the agent of the linked conversation. Absent means on — the account's
+   * `wakeOnCiFailure` / `wakeOnReview` switches still apply on top of it.
+   */
+  autoFix?: boolean;
+  /**
    * Who is currently posting the tracking comment, as an ISO timestamp.
    * Taken atomically so concurrent deliveries cannot each post one; goes
    * stale on its own if the post never finishes.

@@ -2,6 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import { redisService } from '@/server/services/redis';
 
 import { hookDispatcher } from '../hooks';
@@ -10,9 +11,10 @@ import {
   type DeferredToolResultControlInput,
   loadDurableToolResultHooks,
 } from '../hooks/deferredToolResultControl';
-import { steerQueueScopeOf } from '../steerQueueScope';
+import { steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
+  type DeferredMessagePatch,
   type OperationStatusResult,
   type StartExecutionParams,
   type StartExecutionResult,
@@ -23,6 +25,7 @@ import {
   STEP_LOCK_HEARTBEAT_MS,
   STEP_LOCK_TTL_SECONDS,
 } from './constants';
+import { publishDeferredMessagePatch } from './executeStep/messagePatch';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -37,7 +40,9 @@ export type OperationControlDeps = Pick<
   | 'delegate'
   | 'endExpiredClientLlmWait'
   | 'messageModel'
+  | 'queryUiMessages'
   | 'queueService'
+  | 'serverDB'
   | 'streamManager'
   | 'traceRecorder'
   | 'userId'
@@ -280,15 +285,48 @@ export async function readQueuedMessagesFlag(
   state?: AgentState,
 ): Promise<boolean> {
   try {
-    if (await deps.coordinator.hasQueuedMessages(operationId)) return true;
-
     const scope = state && steerQueueScopeOf(state, deps.userId);
-    return scope ? (await redisService.steerQueue.length(scope, operationId)) > 0 : false;
+    const pending =
+      (await deps.coordinator.hasQueuedMessages(operationId)) ||
+      (!!scope && (await redisService.steerQueue.length(scope, operationId)) > 0);
+    if (!pending) return false;
+
+    // Queue mode lets the run finish: its follow-ups start once it ends.
+    return (await readFollowUpMode(deps.serverDB, deps.userId)) !== 'queue';
   } catch (error) {
     log('[%s][%d] Queued messages flag read failed: %O', operationId, stepIndex, error);
     return false;
   }
 }
+
+const SEAL_ATTEMPTS = 3;
+const SEAL_RETRY_DELAY_MS = 200;
+
+/**
+ * Seal the run before its last queue read, retrying a transient Redis error:
+ * an unsealed last read lets a steer appended after it wait behind a run that
+ * will not read again. Redis down for every attempt also fails the parent's
+ * append, so the run then ends without the seal rather than hanging on it.
+ */
+const sealForLastRead = async (operationId: string, stepIndex: number) => {
+  for (let attempt = 1; attempt <= SEAL_ATTEMPTS; attempt++) {
+    try {
+      await redisService.steerQueue.seal(operationId);
+      return;
+    } catch (error) {
+      log(
+        '[%s][%d] Sealing the steer queue failed (%d): %O',
+        operationId,
+        stepIndex,
+        attempt,
+        error,
+      );
+      if (attempt < SEAL_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, SEAL_RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+};
 
 /**
  * Join the follow-ups queued behind this run into it, right before its next
@@ -307,14 +345,37 @@ export async function injectQueuedFollowUp(
   operationId: string,
   stepIndex: number,
   state: AgentState,
+  options?: { lastRead?: boolean },
 ): Promise<{ messageId: string } | undefined> {
-  const scope = steerQueueScopeOf(state, deps.userId);
+  // A sub-agent has no composer of its own; its queue holds the steer
+  // instructions its parent sent while it was running.
+  const topLevelScope = steerQueueScopeOf(state, deps.userId);
+  const scope = topLevelScope ?? subAgentSteerQueueScopeOf(state, deps.userId);
   if (!scope || !deps.delegate.injectQueuedFollowUp) return;
+
+  // A sub-agent ending after this read has no hand-back to catch a steer its
+  // parent appends meanwhile. Sealed before the read, the run makes that
+  // parent take the steer back (`queueSubAgentSteer`) instead of leaving it
+  // queued behind a run that will not read again.
+  const sealing = !!options?.lastRead && !topLevelScope;
+  if (sealing) await sealForLastRead(operationId, stepIndex);
 
   try {
     if ((await redisService.steerQueue.length(scope, operationId)) === 0) return;
+    // A person's follow-ups wait for the run to end in Queue mode; a parent's
+    // steer of its sub-agent always joins.
+    if (topLevelScope && (await readFollowUpMode(deps.serverDB, deps.userId)) === 'queue') return;
 
     const injected = await deps.delegate.injectQueuedFollowUp({ operationId, scope, state });
+    // It answers again with the steer in context, so it reads its queue again.
+    // A seal left in place only makes the parent wait for the result instead.
+    if (injected && sealing) {
+      await redisService.steerQueue
+        .unseal(operationId)
+        .catch((error) =>
+          log('[%s][%d] Unsealing the steer queue failed: %O', operationId, stepIndex, error),
+        );
+    }
     if (injected) {
       log(
         '[%s][%d] Joined queued follow-ups into the run as %s',
@@ -358,11 +419,17 @@ export async function controlCompletedToolResult(
 export async function scheduleContinuation(
   deps: OperationControlDeps,
   continuation: AgentStepContinuation,
+  /** The handing-back step's patch; published first, since no entry read here will. */
+  deferredMessagePatch?: DeferredMessagePatch,
 ): Promise<void> {
   if (!deps.queueService) {
     throw new Error(
       `Cannot schedule continuation for ${continuation.operationId}: no queue service`,
     );
+  }
+
+  if (deferredMessagePatch) {
+    await publishDeferredMessagePatch(deps, continuation.operationId, deferredMessagePatch);
   }
 
   // The steps this invocation inlined are still only in memory — the

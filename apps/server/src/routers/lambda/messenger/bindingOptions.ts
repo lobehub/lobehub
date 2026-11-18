@@ -13,10 +13,7 @@ import { WorkspaceModel } from '@/database/models/workspace';
 import { router } from '@/libs/trpc/lambda';
 import { messengerPlatformRegistry } from '@/server/services/messenger';
 
-import {
-  assertWorkspaceFeatureEnabledForUser,
-  isWorkspaceFeatureEnabledForUser,
-} from './agentScope';
+import { assertWorkspaceFeatureEnabled, isWorkspaceFeatureEnabled } from './agentScope';
 import { messengerProcedure } from './procedures';
 
 /** `withBotPlatformAccessMeta` may read access state per platform; keep the fan-out bounded. */
@@ -102,7 +99,7 @@ export const bindingOptionsRouter = router({
       // workspace scope requires membership, otherwise the caller could
       // enumerate another workspace's agents.
       if (workspaceId) {
-        await assertWorkspaceFeatureEnabledForUser(userId);
+        assertWorkspaceFeatureEnabled();
 
         const userWorkspaces = await new WorkspaceModel(serverDB, userId).listUserWorkspaces();
         if (!userWorkspaces.some((w) => w.id === workspaceId)) {
@@ -124,7 +121,7 @@ export const bindingOptionsRouter = router({
    * OSS / personal-only deployments it's simply an empty array.
    */
   listBindingScopes: messengerProcedure.query(async ({ ctx }) => {
-    if (!(await isWorkspaceFeatureEnabledForUser(ctx.userId))) return [];
+    if (!isWorkspaceFeatureEnabled()) return [];
 
     const workspaces = await new WorkspaceModel(ctx.serverDB, ctx.userId).listUserWorkspaces();
     return workspaces.map((w) => ({ avatar: w.avatar, id: w.id, name: w.name }));

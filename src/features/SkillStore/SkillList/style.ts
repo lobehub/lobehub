@@ -13,6 +13,13 @@ export const gridStyles = createStaticStyles(({ css }) => ({
       grid-template-columns: 1fr;
     }
   `,
+  // Borderless page rows (SkillListRow) carry their own padding and hover, so
+  // they sit closer together, spaced like the Connectors page catalog.
+  rows: css`
+    row-gap: 4px;
+    column-gap: 32px;
+    padding-inline: 4px;
+  `,
 }));
 
 export const virtuosoGridStyles = createStaticStyles(({ css }) => ({

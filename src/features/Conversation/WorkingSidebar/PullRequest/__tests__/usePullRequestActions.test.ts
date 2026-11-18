@@ -34,6 +34,7 @@ describe('usePullRequestActions', () => {
     runPullRequestAction.mockReset();
     pushGitBranch.mockReset();
     mutate.mockClear();
+    revalidateGitStatus.mockReset().mockResolvedValue(undefined);
     toastError.mockReset();
   });
 
@@ -130,6 +131,37 @@ describe('usePullRequestActions', () => {
     const matcher = mutate.mock.calls.find(([key]) => typeof key === 'function')?.[0];
     expect(matcher(deviceKeys.gitLinkedPR('dev-1', '/repo', 'feat/x', 7))).toBe(true);
     expect(matcher(deviceKeys.gitLinkedPR('dev-1', '/other', 'feat/x'))).toBe(false);
+  });
+
+  it('targets the confirmed PR and reports success even if the worktree disappeared', async () => {
+    runPullRequestAction.mockResolvedValue({ success: true });
+    revalidateGitStatus.mockRejectedValueOnce(new Error('Worktree no longer exists'));
+    const url = 'https://github.com/owner/repo/pull/7';
+    const { result } = renderHook(() =>
+      usePullRequestActions({
+        ...params,
+        mutateDetail: vi.fn().mockResolvedValue(undefined),
+        repositoryPath: '/registered-source',
+        url,
+        workingDirectory: '/removed-worktree',
+      }),
+    );
+
+    await act(async () => {
+      expect(await result.current.run({ type: 'ready' })).toBe(true);
+    });
+
+    expect(result.current.error).toBeUndefined();
+    expect(runPullRequestAction).toHaveBeenCalledWith({
+      action: { type: 'ready' },
+      deviceId: 'dev-1',
+      number: 7,
+      path: '/removed-worktree',
+      repository: { path: '/registered-source', url },
+    });
+    expect(mutate).toHaveBeenCalledWith(
+      deviceKeys.gitPullRequestActivity('dev-1', '/registered-source', 7),
+    );
   });
 
   it('keeps dock-action failures as error and retries the same action', async () => {

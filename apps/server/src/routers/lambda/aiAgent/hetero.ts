@@ -20,11 +20,18 @@ import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import {
   renewHeteroSteers,
   returnHeteroSteer,
   takeHeteroSteer,
 } from '@/server/services/aiAgent/steerQueue/hetero';
+import {
+  type HeteroControlMessage,
+  reportHeteroControlResult,
+  takeHeteroControl,
+} from '@/server/services/aiAgent/steerQueue/heteroControl';
+import { stopHeteroBackgroundTask } from '@/server/services/aiAgent/steerQueue/heteroStopTask';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
   HeteroOperationPrincipalError,
@@ -66,6 +73,7 @@ const AgentStreamEventSchema = z.object({
     'agent_intervention_response',
     'step_start',
     'step_complete',
+    'background_task',
     'notify_update',
     'error',
   ]),
@@ -139,8 +147,30 @@ const WaitInterventionResponseSchema = z.object({
  * its session instead of waiting for the run to end.
  */
 const WaitHeteroSteerSchema = z.object({
+  /**
+   * The producer handles control messages (`control` on the answer) and
+   * reports each one through `reportHeteroControlResult`. Older producers omit
+   * it: they never get one, so a control message for their run expires.
+   */
+  acceptsControl: z.boolean().optional(),
+  /**
+   * The producer types image blocks into the session (`imageList` on the
+   * message). Older producers omit it and only ever get text-only follow-ups.
+   */
+  acceptsImages: z.boolean().optional(),
   blockMs: z.number().int().positive().max(25_000).default(20_000),
+  /**
+   * The session waits for the user (a question or an approval): hand it no
+   * follow-up now, only control messages. Older producers omit it.
+   */
+  holdSteer: z.boolean().optional(),
   operationId: z.string().min(1),
+});
+
+/** Schema for `aiAgent.stopHeteroBackgroundTask` — stop one Claude Code background task. */
+const StopHeteroBackgroundTaskSchema = z.object({
+  operationId: z.string().min(1),
+  taskId: z.string().min(1).max(256),
 });
 
 /** Schema for `aiAgent.returnHeteroSteer` — the session could not take the message. */
@@ -149,8 +179,58 @@ const ReturnHeteroSteerSchema = z.object({
   operationId: z.string().min(1),
 });
 
+/**
+ * Schema for `aiAgent.reportHeteroControlResult` — how the run handled a
+ * control message `waitHeteroSteer` handed out: done, no handler for the
+ * command, or the handler failed.
+ */
+const ReportHeteroControlResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    controlId: z.string().min(1),
+    data: z.unknown().optional(),
+    operationId: z.string().min(1),
+    status: z.literal('ok'),
+  }),
+  z.object({
+    controlId: z.string().min(1),
+    operationId: z.string().min(1),
+    status: z.literal('unsupported'),
+  }),
+  z.object({
+    controlId: z.string().min(1),
+    error: z.string().max(4000),
+    operationId: z.string().min(1),
+    status: z.literal('error'),
+  }),
+]);
+
+/**
+ * A `waitHeteroSteer` answer. `control` is present exactly when the poller
+ * declared `acceptsControl` — that is how it tells this server apart from one
+ * that predates control messages — so an older poller reads the same
+ * `{ message, steerable? }` it always did.
+ */
+type WaitHeteroSteerAnswer = {
+  control?: HeteroControlMessage | null;
+  message: Awaited<ReturnType<typeof takeHeteroSteer>> | null;
+  steerable?: false;
+};
+
 /** How often a `waitHeteroSteer` poll re-checks the queue while it holds the request. */
 const HETERO_STEER_CHECK_MS = 1500;
+
+/** Sleep `ms`, or less when `signal` aborts first. */
+const waitOrAbort = (ms: number, signal: AbortSignal | undefined) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
 
 /**
  * Schema for `aiAgent.submitHeteroIntervention` — the browser leg of remote
@@ -512,11 +592,16 @@ export const heteroRouter = router({
    * up to `blockMs` and returns the next follow-up to type into the session,
    * or `null`. Every call also renews the leases of messages the session holds
    * but has not picked up, so they return to the queue only if the run dies.
+   *
+   * A poller that declares `acceptsControl` also gets the run's control
+   * messages (`control`), ahead of follow-ups, each one at most once. A child
+   * run takes no follow-ups but still takes control messages: it answers
+   * `steerable: false` with `control`, and the poller keeps polling for those.
    */
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
-    .mutation(async ({ input, ctx }) => {
-      const { operationId, blockMs } = input;
+    .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
+      const { acceptsControl, acceptsImages, holdSteer, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -540,34 +625,58 @@ export const heteroRouter = router({
         });
       }
       // A child run (group member, sub-agent) is not where the user types. Say
-      // so, rather than answer an empty poll at once: the producer stops asking.
-      if (operation.parentOperationId || !operation.topicId) {
-        return { message: null, steerable: false as const };
-      }
+      // so, rather than answer an empty poll at once: a producer that takes no
+      // control messages stops asking.
+      const steerable = !operation.parentOperationId && !!operation.topicId;
+      if (!steerable && !acceptsControl) return { message: null, steerable: false };
+
+      const answer = (
+        message: WaitHeteroSteerAnswer['message'],
+        control: HeteroControlMessage | null = null,
+      ): WaitHeteroSteerAnswer => ({
+        ...(acceptsControl && { control }),
+        message,
+        ...(!steerable && { steerable: false as const }),
+      });
 
       const storeCtx = {
         db: ctx.serverDB,
         userId: ctx.userId,
         workspaceId: operation.workspaceId,
       };
-      const scope = {
-        threadId: operation.threadId ?? null,
-        topicId: operation.topicId,
-        userId: ctx.userId,
-      };
+      const scope = steerable
+        ? { threadId: operation.threadId ?? null, topicId: operation.topicId!, userId: ctx.userId }
+        : undefined;
 
-      await renewHeteroSteers(operationId);
+      if (scope) await renewHeteroSteers(operationId);
+      // Queue mode leaves the follow-ups to the run end; read once per poll.
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
 
       const deadline = Date.now() + blockMs;
       for (;;) {
-        const message = await takeHeteroSteer(storeCtx, {
-          agentId: operation.agentId,
-          operationId,
-          scope,
-        });
-        if (message) return { message };
-        if (Date.now() + HETERO_STEER_CHECK_MS > deadline) return { message: null };
-        await new Promise((resolve) => setTimeout(resolve, HETERO_STEER_CHECK_MS));
+        // The poller went away (its run ended, or the request timed out):
+        // take nothing more for it. A follow-up would come back once its
+        // lease lapses, but a control message is claimed at most once and
+        // would be lost. A poller that leaves between a claim and the answer
+        // still loses it; its sender sees `claimed` and times out.
+        if (signal?.aborted) return answer(null);
+        // Control first: a command (stop a task) should not wait behind follow-ups.
+        if (acceptsControl) {
+          const control = await takeHeteroControl(operationId);
+          if (control) return answer(null, control);
+        }
+        if (scope && followUpMode !== 'queue' && !holdSteer) {
+          const message = await takeHeteroSteer(storeCtx, {
+            acceptsImages,
+            agentId: operation.agentId,
+            mode: followUpMode,
+            operationId,
+            scope,
+          });
+          if (message) return answer(message);
+        }
+        if (Date.now() + HETERO_STEER_CHECK_MS > deadline) return answer(null);
+        await waitOrAbort(HETERO_STEER_CHECK_MS, signal);
       }
     }),
   /**
@@ -597,6 +706,34 @@ export const heteroRouter = router({
       return { success: true as const };
     }),
   /**
+   * The run handled a control message `waitHeteroSteer` handed out: store the
+   * result for the server code that queued it. Only the first report for a
+   * claimed message counts; `outcome` says whether this one was stored.
+   */
+  reportHeteroControlResult: heteroAgentProcedure
+    .input(ReportHeteroControlResultSchema)
+    .mutation(async ({ input, ctx }) => {
+      // The run may report just as it ends.
+      await authorizeOperationCallback(ctx, input.operationId, 'hetero:ingest', {
+        allowTerminalOperation: true,
+      });
+      const [operation] = await ctx.serverDB
+        .select({ userId: agentOperations.userId })
+        .from(agentOperations)
+        .where(eq(agentOperations.id, input.operationId))
+        .limit(1);
+      if (operation?.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Operation not found or not owned by the caller',
+        });
+      }
+
+      const { controlId, operationId, ...report } = input;
+      const outcome = await reportHeteroControlResult(operationId, controlId, report);
+      return { outcome };
+    }),
+  /**
    * Authenticated cold-start review lookup. The opaque token is the only
    * client-supplied locator; Cloud resolves operation/tool ownership inside
    * the business slot. Keep this read-only operation on the mutation transport
@@ -613,6 +750,35 @@ export const heteroRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       }),
     ),
+  /**
+   * Stop one Claude Code background task of a run hosted by `lh hetero exec`
+   * (a connected device, the desktop gateway, the cloud sandbox). The request
+   * rides the run's control channel; `accepted` means Claude Code took it, and
+   * the task's `stopped` snapshot then arrives through the run's own stream.
+   */
+  stopHeteroBackgroundTask: aiAgentWriteProcedure
+    .input(StopHeteroBackgroundTaskSchema)
+    .mutation(async ({ input, ctx }) => {
+      // Only the user who started the run controls its live process.
+      const [operation] = await ctx.serverDB
+        .select({ userId: agentOperations.userId })
+        .from(agentOperations)
+        .where(eq(agentOperations.id, input.operationId))
+        .limit(1);
+      if (operation?.userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Operation not found or not owned by the caller',
+        });
+      }
+      await assertCanUseOperationAgent({
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return stopHeteroBackgroundTask(input.operationId, input.taskId);
+    }),
   /** Token-only atomic resolution path used by Mobile review/deep links. */
   resolveHeteroIntervention: aiAgentWriteProcedure
     .input(ResolveHeteroInterventionReviewSchema)

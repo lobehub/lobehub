@@ -24,8 +24,8 @@ describe('useWorktreeBranchSeed', () => {
   // Regression: the default name is drawn against the repo's branch list, and
   // that list arrives asynchronously. Drawing while the read is still in flight
   // makes it look like "no branches", so a repo whose refs include a branch
-  // literally called `wt` was handed `wt/...` and git refused creation with
-  // `cannot lock ref 'refs/heads/wt/...': 'refs/heads/wt' exists`.
+  // literally called `lobehub` was handed `lobehub/...` and git refused creation with
+  // `cannot lock ref 'refs/heads/lobehub/...': 'refs/heads/lobehub' exists`.
   it('hands out no name while the branch list is still being read', () => {
     listGitBranches.mockImplementation(() => new Promise(() => {}));
 
@@ -35,23 +35,23 @@ describe('useWorktreeBranchSeed', () => {
     expect(result.current.name).toBeUndefined();
   });
 
-  it('avoids the wt/ namespace once a ref on it has been seen', async () => {
-    listGitBranches.mockResolvedValue([branch('main'), branch('wt')]);
+  it('avoids the lobehub/ namespace once a ref on it has been seen', async () => {
+    listGitBranches.mockResolvedValue([branch('main'), branch('lobehub')]);
 
     const result = seed('/repo/taken-namespace');
 
     await waitFor(() => expect(result.current.isReady).toBe(true));
-    // Only a list that actually contains `wt` produces the flat form, so this
+    // Only a list that actually contains `lobehub` produces the flat form, so this
     // value proves the occupying ref reached the draw.
-    expect(result.current.name).toMatch(/^wt-\d{12}-[a-z]+-[a-z]+$/);
+    expect(result.current.name).toMatch(/^lobehub-\d{12}-[a-z]+-[a-z]+$/);
   });
 
-  it('keeps the wt/ namespace when nothing occupies it', async () => {
+  it('keeps the lobehub/ namespace when nothing occupies it', async () => {
     listGitBranches.mockResolvedValue([branch('main'), branch('canary')]);
 
     const result = seed('/repo/free-namespace');
 
     await waitFor(() => expect(result.current.isReady).toBe(true));
-    expect(result.current.name).toMatch(/^wt\/\d{12}-[a-z]+-[a-z]+$/);
+    expect(result.current.name).toMatch(/^lobehub\/\d{12}-[a-z]+-[a-z]+$/);
   });
 });

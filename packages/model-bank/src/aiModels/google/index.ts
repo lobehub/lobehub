@@ -7,6 +7,7 @@ import {
 import type { ModelParamsSchema } from '../../standard-parameters';
 import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../../types';
 import { gemini25ChatModels } from './gemini25';
+import { googleTTSModels } from './tts';
 
 /**
  * gemini implicit caching not extra cost
@@ -1168,6 +1169,11 @@ const googleVideoModels: AIVideoModelCard[] = [
   },
 ];
 
-export const allModels = [...googleChatModels, ...googleImageModels, ...googleVideoModels];
+export const allModels = [
+  ...googleChatModels,
+  ...googleImageModels,
+  ...googleVideoModels,
+  ...googleTTSModels,
+];
 
 export default allModels;

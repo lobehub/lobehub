@@ -60,7 +60,7 @@ const FoldedText = memo<FoldedTextProps>(({ label, secondary, text }) => {
         type={secondary ? 'secondary' : undefined}
       >
         {label && (
-          <Text as={'span'} fontSize={11} style={{ marginInlineEnd: 6 }} type={'secondary'}>
+          <Text as={'span'} fontSize={12} style={{ marginInlineEnd: 6 }} type={'secondary'}>
             {label}
           </Text>
         )}

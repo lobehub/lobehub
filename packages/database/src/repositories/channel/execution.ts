@@ -12,13 +12,16 @@ import {
   channelJobs,
   channelMembers,
   channelMessages,
+  channels,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import type { ChannelClaim, ChannelClaimOptions } from './claim';
 import { claimJob } from './claim';
-import { appendMessage } from './delivery';
+import { appendMessage, deliver } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
+import type { ChannelOpeningDecision } from './opening';
+import { applyOpening, findCoAddressed, findOpeningCandidate, findOpeningReply } from './opening';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
@@ -189,8 +192,9 @@ export class ChannelExecutionRepository {
 
   /**
    * What one advance pass works on: in-flight jobs to settle, oldest first and bounded, and
-   * the queue head of each member. Only a head can be claimed, so a member whose backlog is
-   * blocked (offline device, pending approval) cannot crowd out the other members.
+   * the queue head of each member in each branch (a Thread, or the main timeline). Only a head
+   * can be claimed, so a member whose backlog is blocked (offline device, pending approval)
+   * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
     const [inFlight, heads] = await Promise.all([
@@ -209,12 +213,17 @@ export class ChannelExecutionRepository {
         .orderBy(asc(channelJobs.createdAt))
         .limit(limit),
       this.db
-        .selectDistinctOn([channelJobs.memberId], { job: channelJobs })
+        .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
         .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
         // Same order as the head check in claimJob.
-        .orderBy(channelJobs.memberId, asc(channelMessages.sequence), asc(channelJobs.createdAt)),
+        .orderBy(
+          channelJobs.memberId,
+          channelJobs.threadId,
+          asc(channelMessages.sequence),
+          asc(channelJobs.createdAt),
+        ),
     ]);
     return {
       heads: heads
@@ -339,6 +348,7 @@ export class ChannelExecutionRepository {
     const [seen] = job.topicId
       ? await this.db
           .select({
+            id: channelJobs.id,
             manifest: channelJobs.manifest,
             publishedMessageId: channelJobs.publishedMessageId,
           })
@@ -359,22 +369,43 @@ export class ChannelExecutionRepository {
           .limit(1)
       : [];
     const seenThrough = seen?.manifest?.cutoffSequence ?? 0;
-    // One extra row absorbs the topic's own published reply.
+    // The topic wrote its reply, and the acknowledgement it opened with, itself.
+    const opening = seen ? await findOpeningReply(this.db, channelId, seen.id) : undefined;
+    const ownIds = [seen?.publishedMessageId, opening?.id].filter((id): id is string => !!id);
+    // Extra rows absorb the topic's own messages.
     const recent = await readManifestMessages(this.db, channelId, job.manifest, {
       beforeSequence: job.manifest.cutoffSequence,
-      limit: RECENT_CONTEXT_LIMIT + 1,
+      limit: RECENT_CONTEXT_LIMIT + ownIds.length,
     });
     const messages = recent
-      .filter(({ id, sequence }) => sequence > seenThrough && id !== seen?.publishedMessageId)
+      .filter(({ id, sequence }) => sequence > seenThrough && !ownIds.includes(id))
       .slice(-RECENT_CONTEXT_LIMIT);
     const unseen = await countManifestMessages(this.db, channelId, job.manifest, {
       afterSequence: seenThrough,
       beforeSequence: job.manifest.cutoffSequence,
-      excludeId: seen?.publishedMessageId,
+      excludeIds: ownIds,
     });
 
     return { messages, omitted: Math.max(0, unseen - messages.length) };
   };
+
+  /**
+   * What a queued job's opener decides from; undefined once it opened or when it never does.
+   * See {@link findOpeningCandidate}.
+   */
+  openingCandidate = (channelId: string, jobId: string) =>
+    findOpeningCandidate(this.db, channelId, jobId);
+
+  /** Opens a queued job's reply once. See {@link applyOpening}. */
+  open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>
+    applyOpening(this.db, channelId, jobId, decision);
+
+  /** The other Agents the job's request asked to answer alongside it. */
+  coAddressed = (channelId: string, jobId: string) => findCoAddressed(this.db, channelId, jobId);
+
+  /** The acknowledgement the job posted before its run, if any. */
+  openingReply = async (channelId: string, jobId: string) =>
+    (await findOpeningReply(this.db, channelId, jobId))?.content;
 
   /** The runtime took the input; only now may the job publish. */
   accepted = async (channelId: string, jobId: string) =>
@@ -446,6 +477,70 @@ export class ChannelExecutionRepository {
       await audit(tx, channelId, 'draft_published', job.id, { messageId: reply.id });
 
       return reply.id;
+    });
+
+  /**
+   * In a conversation between Agents, an answer goes back to the Agent that asked: its published
+   * reply becomes that Agent's next input, queued for the same requester. Only an answer to an
+   * Agent's request wakes anyone, and the asking Agent's own answer is a reply to a reply, so an
+   * exchange ends there unless that Agent asks again. Idempotent; returns whether a job was queued.
+   */
+  deliverAnswerToAsker = async (channelId: string, replyMessageId: string): Promise<boolean> =>
+    withChannelLock(this.db, channelId, async (tx) => {
+      const [row] = await tx
+        .select({ channel: channels, reply: channelMessages })
+        .from(channelMessages)
+        .innerJoin(channels, eq(channels.id, channelMessages.channelId))
+        .where(
+          and(eq(channelMessages.channelId, channelId), eq(channelMessages.id, replyMessageId)),
+        )
+        .limit(1);
+      if (!row?.channel.agentPairKey || row.reply.routingStatus !== 'reply' || !row.reply.replyToId)
+        return false;
+      const [job] = await tx
+        .select({ requesterMemberId: channelJobs.requesterMemberId })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.channelId, channelId),
+            eq(channelJobs.publishedMessageId, replyMessageId),
+          ),
+        )
+        .limit(1);
+      const [request] = await tx
+        .select({ agentId: channelMessages.agentId, routingStatus: channelMessages.routingStatus })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, row.reply.replyToId),
+          ),
+        )
+        .limit(1);
+      if (!job || !request?.agentId || request.routingStatus === 'reply') return false;
+      if (request.agentId === row.reply.agentId) return false;
+      const [asker] = await tx
+        .select()
+        .from(channelMembers)
+        .where(
+          and(
+            eq(channelMembers.channelId, channelId),
+            eq(channelMembers.agentId, request.agentId),
+            eq(channelMembers.actorType, 'agent'),
+            eq(channelMembers.status, 'active'),
+          ),
+        )
+        .limit(1);
+      if (!asker) return false;
+      const [queued] = await tx
+        .select({ id: channelJobs.id })
+        .from(channelJobs)
+        .where(and(eq(channelJobs.messageId, replyMessageId), eq(channelJobs.memberId, asker.id)))
+        .limit(1);
+      if (queued) return false;
+      await deliver(tx, row.reply, [asker], job.requesterMemberId);
+      await audit(tx, channelId, 'answer_delivered', replyMessageId, { memberId: asker.id });
+      return true;
     });
 
   /**

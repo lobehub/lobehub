@@ -42,6 +42,7 @@ import {
   MemoryExtractionAggregateError,
   serializeError,
 } from './errors';
+import { withoutRetiredLobeHubMemoryModels } from './runtime';
 import type { TopicExtractionJob } from './types';
 
 const isTopicExtracted = (metadata?: ChatTopicMetadata | null): boolean => {
@@ -54,6 +55,19 @@ const isTopicExtracted = (metadata?: ChatTopicMetadata | null): boolean => {
   );
 };
 
+/**
+ * Shares the extractor context limit between the parts of one request. Each part used to be
+ * trimmed to the whole limit, so topic + recalled memories + identities could reach three times
+ * it and overflow the model window.
+ */
+export const splitExtractorContextBudget = (limit?: number) => {
+  if (!limit || limit <= 0) return { identities: undefined, memories: undefined, topic: undefined };
+  return {
+    identities: Math.floor(limit * 0.1),
+    memories: Math.floor(limit * 0.2),
+    topic: Math.floor(limit * 0.7),
+  };
+};
 export async function reportUserInitiatedProgress(
   ctx: MemoryExtractionExecutorContext,
   job: TopicExtractionJob,
@@ -167,7 +181,10 @@ export async function extractTopic(ctx: MemoryExtractionExecutorContext, job: To
           ctx.getAiProviderRuntimeState(job.userId, job.workspaceId),
         ]);
         const memoryServiceConfig = ctx.resolveUserMemoryServiceConfig(
-          userState.settings?.systemAgent as Partial<UserServiceModelConfig> | undefined,
+          await withoutRetiredLobeHubMemoryModels(
+            userState.settings?.systemAgent as Partial<UserServiceModelConfig> | undefined,
+            userState.email,
+          ),
         );
         const keyVaults = await ctx.resolveRuntimeKeyVaults(
           aiProviderRuntimeState,
@@ -197,6 +214,8 @@ export async function extractTopic(ctx: MemoryExtractionExecutorContext, job: To
         }
 
         const extractorContextLimit = memoryServiceConfig.extractorContextLimit;
+        // The limit is the whole dynamic slice of one request; the parts share it.
+        const budget = splitExtractorContextBudget(extractorContextLimit);
         const embeddingContextLimit =
           memoryServiceConfig.embeddingContextLimit ?? extractorContextLimit;
         const extractorConversations = await ctx.trimConversationsToTokenLimit(
@@ -292,14 +311,13 @@ export async function extractTopic(ctx: MemoryExtractionExecutorContext, job: To
             extractionJob.userId,
             extractionJob.sourceId,
           );
-        const trimmedRetrievedContexts = await Promise.all(
-          [topicContext.context, retrievalMemoryContext.context].map((context) =>
-            ctx.trimTextToTokenLimit(context, extractorContextLimit),
-          ),
-        );
+        const trimmedRetrievedContexts = await Promise.all([
+          ctx.trimTextToTokenLimit(topicContext.context, budget.topic),
+          ctx.trimTextToTokenLimit(retrievalMemoryContext.context, budget.memories),
+        ]);
         const trimmedRetrievedIdentitiesContext = await ctx.trimTextToTokenLimit(
           retrievedIdentityContext.context,
-          extractorContextLimit,
+          budget.identities,
         );
         const taxonomyOptions = await new UserMemoryModel(db, job.userId).queryTaxonomyOptions({
           include: ['categories', 'labels', 'tags'],

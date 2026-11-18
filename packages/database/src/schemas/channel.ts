@@ -82,6 +82,18 @@ export const channels = pgTable(
 
     /** Bound Agent for a direct conversation; NULL for a group. Deleted with the Agent. */
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
+    /**
+     * The other person of a personal conversation between two contacts; `userId` is the one who
+     * opened it. Both are owner members. Deleted with either account. One conversation per pair
+     * is kept by the application, which serializes opening it.
+     */
+    peerUserId: text('peer_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * The two Agents of a conversation between Agents (`agentA:agentB`, sorted), opened when one
+     * of `userId`'s Agents asks another. `userId` is its owner member and the execution identity
+     * of both Agents; it watches the exchange without being part of it.
+     */
+    agentPairKey: text('agent_pair_key'),
 
     title: text('title').notNull(),
     /** Last allocated message sequence; incremented under the row lock when a message lands. */
@@ -109,6 +121,10 @@ export const channels = pgTable(
     uniqueIndex('channels_direct_unique')
       .on(t.agentId, t.userId, sql`coalesce(${t.workspaceId}, '')`)
       .where(sql`${t.agentId} IS NOT NULL`),
+    // One conversation per Agent pair, person and scope, like the direct conversation.
+    uniqueIndex('channels_agent_pair_unique')
+      .on(t.agentPairKey, t.userId, sql`coalesce(${t.workspaceId}, '')`)
+      .where(sql`${t.agentPairKey} IS NOT NULL`),
     check(
       'channels_direct_visibility_check',
       sql`${t.agentId} IS NULL OR ${t.visibility} = 'private'`,
@@ -141,6 +157,8 @@ export const channelMembers = pgTable(
     role: text('role').$type<ChannelMemberRole>(),
     /** Highest sequence this person has read in the main channel. */
     lastReadSequence: integer('last_read_sequence'),
+    /** When this person pinned the conversation atop their own list; NULL when not pinned. */
+    pinnedAt: timestamptz('pinned_at'),
 
     // Agent members
     /** NULL after Agent deletion; keep membership and authored history. */
@@ -309,7 +327,10 @@ export const channelMessages = pgTable(
     content: text('content').notNull(),
     /** Actual human sender, not the owner/requester of an Agent reply. */
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    /** Actual Agent sender. Author deletion retains group history and clears its reference. */
+    /**
+     * Actual Agent sender: of a reply, or of a request one Agent sent another in their
+     * conversation. Author deletion retains group history and clears its reference.
+     */
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     /** Mentioned member ids. Mentioned Agents run; mentioned people are only notified. */
     mentions: jsonb('mentions').$type<string[]>().notNull().default([]),
@@ -356,10 +377,6 @@ export const channelMessages = pgTable(
     check(
       'channel_messages_user_sender_check',
       sql`${t.routingStatus} <> 'reply' OR ${t.userId} IS NULL`,
-    ),
-    check(
-      'channel_messages_agent_sender_check',
-      sql`${t.routingStatus} = 'reply' OR ${t.agentId} IS NULL`,
     ),
   ],
 );
@@ -448,7 +465,7 @@ export const channelJobs = pgTable(
     /**
      * Set when termination could not be confirmed in time (INC-049). Publication is revoked so
      * the member may run again, though not in the same device directory until the stop is
-     * confirmed: isolation frees the member lock but never `writerHeld`.
+     * confirmed: isolation frees the member's branch but never `writerHeld`.
      */
     isolatedAt: timestamptz('isolated_at'),
     /** Final answer saved by the run; immutable once set. */
@@ -475,20 +492,14 @@ export const channelJobs = pgTable(
     index('channel_jobs_lease_expires_idx')
       .on(t.leaseExpiresAt)
       .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
-    /** At most one writer per member. */
-    uniqueIndex('channel_jobs_active_member_unique')
-      .on(t.memberId)
-      .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
     /**
-     * At most one writer per device directory, across all channels. Unlike the member lock,
-     * isolation does not release it: only physical stop confirmation proves the old process
-     * has left the directory.
+     * Live writers by device directory. The locks themselves are application rules checked in
+     * `claimJob` (one writer per member and branch under the channel lock, one per device
+     * directory under an advisory lock), not database constraints, so they can change freely.
      */
-    uniqueIndex('channel_jobs_active_directory_unique')
+    index('channel_jobs_active_directory_idx')
       .on(t.deviceId, t.workingDirectory)
-      .where(
-        sql`${t.deviceId} IS NOT NULL AND ${t.workingDirectory} IS NOT NULL AND ${t.writerHeld}`,
-      ),
+      .where(sql`${t.writerHeld}`),
     foreignKey({
       columns: [t.channelId, t.memberId],
       foreignColumns: [channelMembers.channelId, channelMembers.id],

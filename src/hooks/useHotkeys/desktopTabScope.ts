@@ -6,7 +6,7 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { useElectronStore } from '@/store/electron';
 
 /**
- * Ctrl+1–9: jump to the Nth tab.
+ * Cmd/Ctrl+1–8: jump to the Nth tab; Cmd/Ctrl+9: jump to the last tab, as in browsers.
  * Ctrl+Tab: cycle to the next tab, wrapping around.
  * Ctrl+Shift+Tab: cycle to the previous tab, wrapping around.
  *
@@ -23,7 +23,7 @@ export const useRegisterDesktopTabHotkeys = () => {
       // Use the physical number key, including keyboard layouts such as AZERTY.
       const digit = Number(e.code.replace(/^(Digit|Numpad)/, ''));
       const { tabs, switchTab } = useElectronStore.getState();
-      const target = tabs[digit - 1];
+      const target = digit === 9 ? tabs.at(-1) : tabs[digit - 1];
       if (target) switchTab(target.id);
     },
     {

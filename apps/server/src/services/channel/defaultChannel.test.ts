@@ -94,9 +94,10 @@ describe('createAgentDirectChannel', () => {
   it.each([undefined, 'ws_1'])(
     "opens the creator's direct Channel to the new Agent in scope %s",
     async (workspaceId) => {
-      await createAgentDirectChannel({ ...params, localDeviceId: 'desktop', workspaceId });
+      await createAgentDirectChannel({ ...params, workspaceId });
       expect(ChannelServiceCtor).toHaveBeenCalledWith(db, 'owner', workspaceId);
-      expect(createDirect).toHaveBeenCalledWith('agt_main', { localDeviceId: 'desktop' });
+      // Bound to no device; the Agent runs where its own settings say.
+      expect(createDirect).toHaveBeenCalledWith('agt_main');
       expect(createDefault).not.toHaveBeenCalled();
     },
   );

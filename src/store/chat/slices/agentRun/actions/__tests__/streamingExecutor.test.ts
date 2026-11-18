@@ -128,9 +128,9 @@ vi.mock('@/store/serverConfig', () => ({
     serverConfig: { enableMultimodalUnderstanding: serverConfigMock.enableMultimodalUnderstanding },
   }),
   serverConfigSelectors: {
-    enableMultimodalUnderstanding: (state: {
-      serverConfig: { enableMultimodalUnderstanding?: boolean };
-    }) => !!state.serverConfig.enableMultimodalUnderstanding,
+    // Tool name resolution reads it once a run snapshot is passed; these runs keep MCP Apps off
+    enableMcpApps: () => false,
+    enableMultimodalUnderstanding: () => !!serverConfigMock.enableMultimodalUnderstanding,
   },
 }));
 

@@ -162,8 +162,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     const { t } = useTranslation('messenger');
 
     const enableWorkspaceScopes = useServerConfigStore(
-      (s) =>
-        serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
+      serverConfigSelectors.enableBusinessFeatures,
     );
 
     // First-level scope selector — personal plus every workspace the user

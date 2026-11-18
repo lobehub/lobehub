@@ -51,6 +51,9 @@ export const skillListResource = defineReplica<SkillListParams, SkillListRespons
   fetcher: (params) => discoverService.getSkillList(params),
   key: skillListQueryKey,
   name: 'skillList',
+  // Every search term and page of the community list and the Skill Store is
+  // its own entry; keep the most recently used ones.
+  persist: { maxEntries: 100 },
   storage: 'indexedDB',
   version: 1,
 });

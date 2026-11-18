@@ -5,6 +5,7 @@ export const MessageToolIdentifier = 'lobe-message';
 // ==================== Supported Platforms ====================
 
 export const MessagePlatform = {
+  dingtalk: 'dingtalk',
   discord: 'discord',
   feishu: 'feishu',
   imessage: 'imessage',

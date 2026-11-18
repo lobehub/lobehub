@@ -42,6 +42,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   // the workspace.
   'appearance',
   'audit-log',
+  // Automations (event subscriptions) are listed per workspace.
+  'automations',
   'billing',
   'budget',
   // Personal chat-assist preferences, reachable by every member.
@@ -80,6 +82,8 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   // Trashed rows are recorded per workspace; the bin follows the active one.
   'trash',
   'usage',
+  // Agents' webhooks are listed per workspace, like automations.
+  'webhooks',
 ]);
 
 const SETTINGS_PREFIX_REGEX = /^\/settings\/([^/?#]+)/;
