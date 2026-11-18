@@ -10,20 +10,6 @@ const work = vi.hoisted(() => ({
   registerArtboard: vi.fn(),
 }));
 
-const files = vi.hoisted(() => ({ findById: vi.fn(), getFileByteArray: vi.fn() }));
-
-vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(function FileModel() {
-    return { findById: files.findById };
-  }),
-}));
-
-vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(function FileService() {
-    return { getFileByteArray: files.getFileByteArray };
-  }),
-}));
-
 vi.mock('@/database/models/work', () => ({
   WorkModel: vi.fn(function WorkModel() {
     return work;
@@ -71,11 +57,20 @@ const artboard = (boards: ArtboardBoardView[]): ArtboardItem => ({
   updatedAt: new Date(),
 });
 
+const fileRow = (path: string, hash = `h_${path}`) => ({
+  contentType: path.endsWith('.png') ? 'image/png' : 'text/html',
+  hash,
+  path,
+});
+
+const htmlBoard = (id: string, path: string, title = 'Board') =>
+  board({ id, source: { hash: `h_${path}`, kind: 'file', path }, title, type: 'html' });
+
 const service = (boards: ArtboardBoardView[], deps = {}) =>
   new ArtboardPublishService({} as any, 'user_1', undefined, {
+    listFiles: async () => [],
     loadArtboard: async () => artboard(boards),
-    loadCanvas: async () => undefined,
-    loadImage: async () => undefined,
+    readFile: async () => new Uint8Array([1]),
     ...deps,
   });
 
@@ -112,47 +107,41 @@ describe('ArtboardPublishService', () => {
     expect(site.publishArtboardSite).not.toHaveBeenCalled();
   });
 
-  it('names the board whose Canvas version cannot be read', async () => {
-    const boards = [
-      board({
-        source: { canvasId: 'cvs_1', kind: 'canvas', version: 2 },
-        title: 'Pricing',
-        type: 'html',
-      }),
-    ];
+  it('names the board whose file is no longer in the artboard', async () => {
+    const boards = [htmlBoard('a', 'pages/gone.html', 'Pricing')];
 
     await expect(service(boards).publish('art_1')).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
       message: expect.stringContaining('Pricing'),
     });
+    expect(site.publishArtboardSite).not.toHaveBeenCalled();
   });
 
-  it('ships each Canvas version once and every image, then records the share', async () => {
-    const loadCanvas = vi.fn(async (canvasId: string, version: number) => ({
-      bundle: { files: [], html: `<p>${canvasId}</p>` },
-      canvasId,
-      entry: 'index.html',
-      version,
-    }));
-    const loadImage = vi.fn(async (fileId: string) => ({
-      bytes: new Uint8Array([1]),
-      contentType: 'image/png',
-      fileId,
-    }));
-    const canvas = { canvasId: 'cvs_1', kind: 'canvas' as const, version: 2 };
+  it('ships every artboard file once, then records the share', async () => {
+    const listFiles = async () => [
+      fileRow('pages/a.html'),
+      fileRow('pages/app.css'),
+      fileRow('shots/home.png'),
+    ];
+    const readFile = vi.fn(async () => new Uint8Array([1]));
     const boards = [
-      board({ id: 'a', source: canvas, type: 'html' }),
-      board({ id: 'b', source: canvas, type: 'html' }),
-      board({ id: 'c', source: { fileId: 'file_1', kind: 'image' }, type: 'image' }),
+      htmlBoard('a', 'pages/a.html'),
+      htmlBoard('b', 'pages/a.html'),
+      board({
+        id: 'c',
+        source: { hash: 'h_shots/home.png', kind: 'file', path: 'shots/home.png' },
+        type: 'image',
+      }),
     ];
 
-    await service(boards, { loadCanvas, loadImage }).publish('art_1');
+    await service(boards, { listFiles, readFile }).publish('art_1');
 
-    expect(loadCanvas).toHaveBeenCalledTimes(1);
+    expect(readFile).toHaveBeenCalledTimes(3);
     const { bundle } = site.publishArtboardSite.mock.calls[0][0];
     expect(bundle.files.map((file: { path: string }) => file.path).toSorted()).toEqual([
-      '/canvases/cvs_1/v2/index.html',
-      '/images/file_1',
+      '/files/pages/a.html',
+      '/files/pages/app.css',
+      '/files/shots/home.png',
     ]);
     expect(work.registerArtboard).toHaveBeenCalledWith(
       expect.objectContaining({ artboardId: 'art_1', toolName: 'publishArtboard' }),
@@ -161,6 +150,30 @@ describe('ArtboardPublishService', () => {
       'art_1',
       expect.objectContaining({ deploymentId: 'dep_1', publishedRevision: 2, url: 'https://x' }),
     );
+  });
+
+  it('reports updates once a file the shared pages load has changed', async () => {
+    const boards = [htmlBoard('a', 'pages/a.html')];
+    const published = [fileRow('pages/a.html'), fileRow('pages/app.css')];
+    await service(boards, { listFiles: async () => published }).publish('art_1');
+    const { snapshotHash } = work.recordArtboardPublish.mock.calls[0][1];
+    work.findArtboardWork.mockResolvedValue({
+      metadata: {
+        artboardPublish: { deploymentId: 'dep_1', publisherUserId: 'user_1', snapshotHash },
+      },
+      url: 'https://x',
+      userId: 'user_1',
+    });
+
+    const unchanged = await service(boards, { listFiles: async () => published }).getPublish(
+      'art_1',
+    );
+    const restyled = await service(boards, {
+      listFiles: async () => [published[0], fileRow('pages/app.css', 'h_css_2')],
+    }).getPublish('art_1');
+
+    expect(unchanged).toMatchObject({ hasUpdates: false });
+    expect(restyled).toMatchObject({ hasUpdates: true });
   });
 
   it('lets the person who shared the board update it after someone else edited the board', async () => {
@@ -195,20 +208,18 @@ describe('ArtboardPublishService', () => {
     await expect(service([board({})]).publish('art_1')).rejects.toThrow();
   });
 
-  it('names the board whose image file can no longer be read', async () => {
-    files.findById.mockResolvedValue({ fileType: 'image/png', url: 'files/a.png' });
-    files.getFileByteArray.mockRejectedValue(new Error('NoSuchKey'));
-    const boards = [
-      board({ source: { fileId: 'file_1', kind: 'image' }, title: 'Moodboard', type: 'image' }),
-    ];
+  it('names the file that can no longer be read', async () => {
+    const boards = [htmlBoard('a', 'pages/a.html', 'Moodboard')];
 
     await expect(
-      new ArtboardPublishService({} as any, 'user_1', undefined, {
-        loadArtboard: async () => artboard(boards),
+      service(boards, {
+        listFiles: async () => [fileRow('pages/a.html')],
+        readFile: async () => undefined,
       }).publish('art_1'),
     ).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
-      message: expect.stringContaining('Moodboard'),
+      message: expect.stringContaining('pages/a.html'),
     });
+    expect(site.publishArtboardSite).not.toHaveBeenCalled();
   });
 });

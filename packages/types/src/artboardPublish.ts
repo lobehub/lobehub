@@ -10,17 +10,10 @@ export const ARTBOARD_VIEWER_MAJOR = 1;
 
 export const ARTBOARD_SNAPSHOT_ELEMENT_ID = 'artboard-snapshot';
 
-export interface ArtboardPublishSource {
-  kind: 'canvas' | 'image';
-  src: string;
-}
+/** Directory of the published site that holds the artboard's own files, keyed by their path. */
+export const ARTBOARD_SITE_FILES_DIR = 'files/';
 
-export interface ArtboardPublishBoard extends Omit<
-  ArtboardBoardView,
-  'expected' | 'flowNodeId' | 'source'
-> {
-  source: ArtboardPublishSource | null;
-}
+export type ArtboardPublishBoard = Omit<ArtboardBoardView, 'expected' | 'flowNodeId'>;
 
 export type ArtboardPublishEdge = Omit<ArtboardEdgeView, 'flowEdgeId'>;
 

@@ -1,28 +1,19 @@
 import {
+  ARTBOARD_SITE_FILES_DIR,
   ARTBOARD_SNAPSHOT_ELEMENT_ID,
   type ArtboardPublishSnapshot,
   type CanvasPublishBundle,
   type CanvasPublishFile,
 } from '@lobechat/types';
 
-import { canvasSitePrefix, imageSitePath } from './snapshot';
-
-export interface ArtboardPublishCanvasBundle {
-  bundle: CanvasPublishBundle;
-  canvasId: string;
-  entry: string;
-  version: number;
-}
-
-export interface ArtboardPublishImage {
+export interface ArtboardPublishFile {
   bytes: Uint8Array;
   contentType: string;
-  fileId: string;
+  path: string;
 }
 
 export interface ArtboardPublishBundleInput {
-  canvases: ArtboardPublishCanvasBundle[];
-  images: ArtboardPublishImage[];
+  files: ArtboardPublishFile[];
   snapshot: ArtboardPublishSnapshot;
   viewerUrl: string;
 }
@@ -57,35 +48,16 @@ const indexHtml = (snapshot: ArtboardPublishSnapshot, viewerUrl: string) =>
     '</html>',
   ].join('');
 
-const canvasFiles = ({ bundle, canvasId, entry, version }: ArtboardPublishCanvasBundle) => {
-  const prefix = `/${canvasSitePrefix(canvasId, version)}`;
-  const page = (path: string): CanvasPublishFile => ({
-    content: bundle.html,
-    contentType: 'text/html; charset=utf-8',
-    encoding: 'utf8',
-    path: `${prefix}/${path}`,
-  });
-  return [
-    page('index.html'),
-    ...(entry === 'index.html' ? [] : [page(entry)]),
-    ...bundle.files.map((file) => ({ ...file, path: `${prefix}${file.path}` })),
-  ];
-};
-
 export const buildArtboardPublishBundle = ({
-  canvases,
-  images,
+  files,
   snapshot,
   viewerUrl,
 }: ArtboardPublishBundleInput): CanvasPublishBundle => ({
-  files: [
-    ...canvases.flatMap(canvasFiles),
-    ...images.map((image): CanvasPublishFile => ({
-      content: Buffer.from(image.bytes).toString('base64'),
-      contentType: image.contentType,
-      encoding: 'base64',
-      path: `/${imageSitePath(image.fileId)}`,
-    })),
-  ],
+  files: files.map((file): CanvasPublishFile => ({
+    content: Buffer.from(file.bytes).toString('base64'),
+    contentType: file.contentType,
+    encoding: 'base64',
+    path: `/${ARTBOARD_SITE_FILES_DIR}${file.path}`,
+  })),
   html: indexHtml(snapshot, viewerUrl),
 });

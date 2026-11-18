@@ -1,41 +1,39 @@
-import { CANVAS_ENTRY } from '@lobechat/canvas';
 import { ARTBOARD_VIEWER_MAJOR, type ArtboardItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 
 import {
   getArtboardViewerUrl,
-  getCanvasPublishRuntimeUrl,
   isCanvasPublishEnabled,
   publishArtboardSite,
 } from '@/business/server/canvasPublish';
-import { FileModel } from '@/database/models/file';
 import { WorkModel } from '@/database/models/work';
 import type { ArtboardWork } from '@/database/models/work/artboard';
 import type { LobeChatDatabase } from '@/database/type';
-import { createCanvasStorageService } from '@/server/services/canvas';
-import { buildCanvasPublishBundle } from '@/server/services/canvas/publish';
 import { FileService } from '@/server/services/file';
 
 import { ARTBOARD_TOOL_IDENTIFIER, ArtboardService, describeArtboard } from '..';
+import { artboardBlobKey, createFileServiceArtboardBlobStore } from '../files';
 import { ARTBOARD_SOURCE_CONCURRENCY } from '../sources';
-import {
-  type ArtboardPublishCanvasBundle,
-  type ArtboardPublishImage,
-  buildArtboardPublishBundle,
-} from './bundle';
+import { buildArtboardPublishBundle } from './bundle';
 import { type ArtboardShareOwner, unpublishArtboardWork } from './offline';
-import { buildArtboardPublishSnapshot, hashArtboardSnapshot } from './snapshot';
+import {
+  type ArtboardPublishFileRef,
+  buildArtboardPublishSnapshot,
+  hashArtboardSnapshot,
+} from './snapshot';
 
 export { unpublishArtboardWork } from './offline';
 
+export interface ArtboardPublishFileRow extends ArtboardPublishFileRef {
+  contentType: string;
+}
+
 export interface ArtboardPublishDeps {
+  listFiles: (id: string) => Promise<ArtboardPublishFileRow[]>;
   loadArtboard: (id: string) => Promise<ArtboardItem>;
-  loadCanvas: (
-    canvasId: string,
-    version: number,
-  ) => Promise<ArtboardPublishCanvasBundle | undefined>;
-  loadImage: (fileId: string) => Promise<ArtboardPublishImage | undefined>;
+  /** Bytes of one artboard blob, or undefined when the object store can no longer read it. */
+  readFile: (id: string, hash: string) => Promise<Uint8Array | undefined>;
 }
 
 export interface ArtboardPublishState {
@@ -51,44 +49,18 @@ const createDefaultDeps = ({
   userId,
   workspaceId,
 }: ArtboardShareOwner): ArtboardPublishDeps => {
-  const workModel = new WorkModel(db, userId, workspaceId);
-  const runtimeUrls = new Map<number, Promise<string | undefined>>();
-  const runtimeUrl = (major: number) => {
-    if (!runtimeUrls.has(major)) runtimeUrls.set(major, getCanvasPublishRuntimeUrl(major));
-    return runtimeUrls.get(major)!;
-  };
+  const artboards = new ArtboardService(db, userId, workspaceId);
+  const store = createFileServiceArtboardBlobStore(() => new FileService(db, userId, workspaceId));
 
   return {
-    loadArtboard: async (id) =>
-      (await new ArtboardService(db, userId, workspaceId).get(id)).artboard,
-    loadCanvas: async (canvasId, version) => {
-      const current = await workModel.findCanvas(canvasId);
-      if (!current) return;
-      const versionRow =
-        version === current.version.version
-          ? current.version
-          : await workModel.findCanvasVersion(current.work.id, version);
-      const canvas = versionRow?.metadata?.canvas;
-      if (!canvas) return;
-      const url = await runtimeUrl(canvas.runtimeMajor);
-      if (!url) throw precondition('The publication host has no compatible Canvas runtime');
-      const storage = createCanvasStorageService(db, current.work.userId, workspaceId);
-      const manifest = await storage.readManifest(canvas.manifestKey);
-      return {
-        bundle: await buildCanvasPublishBundle(storage, manifest, url),
-        canvasId,
-        entry: manifest.entry || CANVAS_ENTRY,
-        version,
-      };
-    },
-    loadImage: async (fileId) => {
-      const file = await new FileModel(db, userId, workspaceId).findById(fileId);
-      if (!file) return;
+    listFiles: (id) => artboards.listFiles(id),
+    loadArtboard: async (id) => (await artboards.get(id)).artboard,
+    // Only reached after listFiles(id) checked the artboard is visible to this user.
+    readFile: async (id, hash) => {
       try {
-        const bytes = await new FileService(db, userId, workspaceId).getFileByteArray(file.url);
-        return { bytes, contentType: file.fileType, fileId };
+        return await store.read(artboardBlobKey(id, hash));
       } catch (error) {
-        console.error('[artboard:publish] image unreadable', fileId, error);
+        console.error('[artboard:publish] file unreadable', id, hash, error);
         return;
       }
     },
@@ -122,7 +94,10 @@ export class ArtboardPublishService {
     const publish = work?.metadata?.artboardPublish;
     if (!publish || !work?.url) return { canPublish, hasUpdates: false, publishedUrl: null };
 
-    const hash = hashArtboardSnapshot(buildArtboardPublishSnapshot(artboard, { publishedAt: '' }));
+    const hash = hashArtboardSnapshot(
+      buildArtboardPublishSnapshot(artboard, { publishedAt: '' }),
+      await this.deps.listFiles(id),
+    );
     return { canPublish, hasUpdates: hash !== publish.snapshotHash, publishedUrl: work.url };
   }
 
@@ -144,19 +119,30 @@ export class ArtboardPublishService {
     const missing = artboard.content.boards.find(
       (board) => !board.source && board.type !== 'decision',
     );
-    if (missing) throw precondition(`Board "${missing.title}" has no Canvas or image to publish`);
+    if (missing) throw precondition(`Board "${missing.title}" has no file to publish`);
+
+    const rows = await this.deps.listFiles(id);
+    const paths = new Set(rows.map((row) => row.path));
+    for (const { source, title } of artboard.content.boards)
+      if (source && !paths.has(source.path))
+        throw precondition(`Board "${title}" points at "${source.path}", which is gone`);
 
     const viewerUrl = await getArtboardViewerUrl(ARTBOARD_VIEWER_MAJOR);
     if (!viewerUrl) throw precondition('The publication host has no compatible artboard viewer');
 
+    const files = await pMap(
+      rows,
+      async ({ contentType, hash, path }) => {
+        const bytes = await this.deps.readFile(id, hash);
+        if (!bytes) throw precondition(`Artboard file "${path}" can no longer be read`);
+        return { bytes, contentType, path };
+      },
+      { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
+    );
     const snapshot = buildArtboardPublishSnapshot(artboard, {
       publishedAt: new Date().toISOString(),
     });
-    const [canvases, images] = await Promise.all([
-      this.loadCanvases(artboard),
-      this.loadImages(artboard),
-    ]);
-    const bundle = buildArtboardPublishBundle({ canvases, images, snapshot, viewerUrl });
+    const bundle = buildArtboardPublishBundle({ files, snapshot, viewerUrl });
 
     if (!work)
       await this.workModel.registerArtboard({
@@ -182,7 +168,7 @@ export class ArtboardPublishService {
       deploymentId: site.deploymentId,
       publishedRevision: artboard.revision,
       publisherUserId: this.userId,
-      snapshotHash: hashArtboardSnapshot(snapshot),
+      snapshotHash: hashArtboardSnapshot(snapshot, rows),
       url: site.url,
     });
     if (!recorded)
@@ -208,42 +194,5 @@ export class ArtboardPublishService {
       work,
     );
     await this.workModel.clearArtboardPublish(id);
-  }
-
-  private loadCanvases(artboard: ArtboardItem) {
-    const refs = new Map<string, { canvasId: string; title: string; version: number }>();
-    for (const board of artboard.content.boards)
-      if (board.source?.kind === 'canvas') {
-        const { canvasId, version } = board.source;
-        const key = `${canvasId}@${version}`;
-        if (!refs.has(key)) refs.set(key, { canvasId, title: board.title, version });
-      }
-
-    return pMap(
-      [...refs.values()],
-      async ({ canvasId, title, version }) => {
-        const canvas = await this.deps.loadCanvas(canvasId, version);
-        if (!canvas) throw precondition(`Board "${title}" points at a Canvas version that is gone`);
-        return canvas;
-      },
-      { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
-    );
-  }
-
-  private loadImages(artboard: ArtboardItem) {
-    const refs = new Map<string, string>();
-    for (const board of artboard.content.boards)
-      if (board.source?.kind === 'image' && !refs.has(board.source.fileId))
-        refs.set(board.source.fileId, board.title);
-
-    return pMap(
-      [...refs.entries()],
-      async ([fileId, title]) => {
-        const image = await this.deps.loadImage(fileId);
-        if (!image) throw precondition(`Board "${title}" points at an image that is gone`);
-        return image;
-      },
-      { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
-    );
   }
 }

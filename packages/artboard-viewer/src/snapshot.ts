@@ -1,54 +1,22 @@
-import type {
-  ArtboardBoardSource,
-  ArtboardItem,
-  ArtboardPublishSnapshot,
-  ArtboardPublishSource,
+import {
+  ARTBOARD_SITE_FILES_DIR,
+  type ArtboardItem,
+  type ArtboardPublishSnapshot,
 } from '@lobechat/types';
 
 export interface ViewerBoard {
   artboard: ArtboardItem;
-  canvasSrc: Record<string, string>;
-  imageUrls: Record<string, string>;
+  fileBaseUrl: string;
 }
 
-const viewSource = (
-  boardId: string,
-  source: ArtboardPublishSource | null,
-): ArtboardBoardSource | null => {
-  switch (source?.kind) {
-    case 'canvas': {
-      return { canvasId: boardId, kind: 'canvas', version: 1 };
-    }
-    case 'image': {
-      return { fileId: boardId, kind: 'image' };
-    }
-    default: {
-      return null;
-    }
-  }
-};
-
 export const snapshotToBoard = (snapshot: ArtboardPublishSnapshot): ViewerBoard => {
-  const canvasSrc: Record<string, string> = {};
-  const imageUrls: Record<string, string> = {};
   const publishedAt = new Date(snapshot.publishedAt);
-
-  const boards = snapshot.boards.map(({ source, ...board }) => {
-    if (source?.kind === 'canvas') canvasSrc[board.id] = source.src;
-    if (source?.kind === 'image') imageUrls[board.id] = source.src;
-    return {
-      ...board,
-      expected: null,
-      flowNodeId: null,
-      source: viewSource(board.id, source),
-    };
-  });
 
   return {
     artboard: {
       acceptanceId: null,
       content: {
-        boards,
+        boards: snapshot.boards.map((board) => ({ ...board, expected: null, flowNodeId: null })),
         edges: snapshot.edges.map((edge) => ({ ...edge, flowEdgeId: null })),
         groups: snapshot.groups,
         pages: snapshot.pages,
@@ -66,7 +34,6 @@ export const snapshotToBoard = (snapshot: ArtboardPublishSnapshot): ViewerBoard 
       topicId: null,
       updatedAt: publishedAt,
     },
-    canvasSrc,
-    imageUrls,
+    fileBaseUrl: ARTBOARD_SITE_FILES_DIR,
   };
 };

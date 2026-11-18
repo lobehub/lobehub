@@ -18,7 +18,7 @@ const item = (overrides: Partial<ArtboardItem['content']> = {}): ArtboardItem =>
         pageId: 'pg_1',
         rect,
         roundId: 'rnd_open',
-        source: { canvasId: 'cvs_a', kind: 'canvas', path: 'detail.html', version: 3 },
+        source: { hash: 'h_a', kind: 'file', path: 'pages/a.html' },
         title: 'Option A',
         type: 'html',
       },
@@ -30,7 +30,7 @@ const item = (overrides: Partial<ArtboardItem['content']> = {}): ArtboardItem =>
         pageId: 'pg_1',
         rect,
         roundId: 'rnd_done',
-        source: { canvasId: 'cvs_b', kind: 'canvas', version: 1 },
+        source: { hash: 'h_b', kind: 'file', path: 'pages/b.html' },
         title: 'Option B',
         type: 'html',
       },
@@ -42,7 +42,7 @@ const item = (overrides: Partial<ArtboardItem['content']> = {}): ArtboardItem =>
         pageId: 'pg_1',
         rect,
         roundId: null,
-        source: { fileId: 'file_1', kind: 'image' },
+        source: { hash: 'h_img', kind: 'file', path: 'images/ref.png' },
         title: 'Reference',
         type: 'image',
       },
@@ -145,15 +145,15 @@ describe('buildArtboardPublishSnapshot', () => {
     expect(rounds.find((round) => round.id === 'rnd_done')?.chosenBoardId).toBe('brd_b');
   });
 
-  it('points board sources at files inside the published site', () => {
+  it('keeps each board pointing at its artboard file and content hash', () => {
     const { boards } = buildArtboardPublishSnapshot(item(), { publishedAt });
     const sources = Object.fromEntries(boards.map((board) => [board.id, board.source]));
 
     expect(sources).toEqual({
-      brd_a: { kind: 'canvas', src: 'canvases/cvs_a/v3/detail.html' },
-      brd_b: { kind: 'canvas', src: 'canvases/cvs_b/v1/index.html' },
+      brd_a: { hash: 'h_a', kind: 'file', path: 'pages/a.html' },
+      brd_b: { hash: 'h_b', kind: 'file', path: 'pages/b.html' },
       brd_decision: null,
-      brd_img: { kind: 'image', src: 'images/file_1' },
+      brd_img: { hash: 'h_img', kind: 'file', path: 'images/ref.png' },
     });
   });
 
@@ -171,11 +171,18 @@ describe('buildArtboardPublishSnapshot', () => {
 });
 
 describe('hashArtboardSnapshot', () => {
+  const files = [
+    { hash: 'h_a', path: 'pages/a.html' },
+    { hash: 'h_css', path: 'pages/app.css' },
+  ];
+  const hashOf = (artboard: ArtboardItem, fileList = files) =>
+    hashArtboardSnapshot(buildArtboardPublishSnapshot(artboard, { publishedAt }), fileList);
+
   it('is the same for the same board published at different times', () => {
     const first = buildArtboardPublishSnapshot(item(), { publishedAt });
     const later = buildArtboardPublishSnapshot(item(), { publishedAt: '2026-12-01T00:00:00.000Z' });
 
-    expect(hashArtboardSnapshot(later)).toBe(hashArtboardSnapshot(first));
+    expect(hashArtboardSnapshot(later, files)).toBe(hashArtboardSnapshot(first, files));
   });
 
   it('changes when a submitted choice changes', () => {
@@ -186,9 +193,7 @@ describe('hashArtboardSnapshot', () => {
       ),
     });
 
-    expect(hashArtboardSnapshot(buildArtboardPublishSnapshot(rechosen, { publishedAt }))).not.toBe(
-      hashArtboardSnapshot(buildArtboardPublishSnapshot(base, { publishedAt })),
-    );
+    expect(hashOf(rechosen)).not.toBe(hashOf(base));
   });
 
   it('ignores a draft pick in an open round', () => {
@@ -199,8 +204,16 @@ describe('hashArtboardSnapshot', () => {
       ),
     });
 
-    expect(hashArtboardSnapshot(buildArtboardPublishSnapshot(drafted, { publishedAt }))).toBe(
-      hashArtboardSnapshot(buildArtboardPublishSnapshot(base, { publishedAt })),
-    );
+    expect(hashOf(drafted)).toBe(hashOf(base));
+  });
+
+  it('changes when a file the pages load changes, though no board moved', () => {
+    const restyled = [files[0], { hash: 'h_css_2', path: 'pages/app.css' }];
+
+    expect(hashOf(item(), restyled)).not.toBe(hashOf(item()));
+  });
+
+  it('does not depend on the order files are listed in', () => {
+    expect(hashOf(item(), files.toReversed())).toBe(hashOf(item()));
   });
 });

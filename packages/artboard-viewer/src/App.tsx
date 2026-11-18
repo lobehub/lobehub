@@ -7,6 +7,8 @@ import { useMemo } from 'react';
 
 import Outline from '@/features/Artboard/Board/Outline';
 import { BoardProvider } from '@/features/Artboard/BoardContext';
+import BoardFrame from '@/features/Artboard/Canvas/BoardFrame';
+import { boardFileUrl } from '@/features/Artboard/model';
 import Viewport from '@/features/Artboard/Viewport';
 import {
   type BoardCapabilities,
@@ -16,12 +18,6 @@ import {
 import { snapshotToBoard } from './snapshot';
 
 const styles = stylex.create({
-  frame: {
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    height: '100%',
-    width: '100%',
-  },
   header: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
@@ -44,22 +40,15 @@ const styles = stylex.create({
 });
 
 const App = ({ snapshot }: { snapshot: ArtboardPublishSnapshot }) => {
-  const { artboard, canvasSrc, imageUrls } = useMemo(() => snapshotToBoard(snapshot), [snapshot]);
+  const { artboard, fileBaseUrl } = useMemo(() => snapshotToBoard(snapshot), [snapshot]);
   const capabilities = useMemo<BoardCapabilities>(
     () => ({
-      renderCanvas: (board) =>
-        canvasSrc[board.id] ? (
-          <iframe
-            loading={'lazy'}
-            referrerPolicy={'no-referrer'}
-            sandbox={'allow-scripts'}
-            src={canvasSrc[board.id]}
-            title={board.title}
-            {...stylex.props(styles.frame)}
-          />
-        ) : null,
+      renderCanvas: (board) => {
+        const src = boardFileUrl({ fileBaseUrl }, board);
+        return src ? <BoardFrame src={src} title={board.title} /> : null;
+      },
     }),
-    [canvasSrc],
+    [fileBaseUrl],
   );
   const showOutline = snapshot.pages.length > 1 || snapshot.groups.length > 0;
 
@@ -75,7 +64,7 @@ const App = ({ snapshot }: { snapshot: ArtboardPublishSnapshot }) => {
           )}
         </Flexbox>
         <div {...stylex.props(styles.stage)}>
-          <BoardProvider artboard={artboard} imageUrls={imageUrls}>
+          <BoardProvider artboard={artboard} fileBaseUrl={fileBaseUrl}>
             <BoardCapabilitiesProvider value={capabilities}>
               <Viewport />
               {showOutline && <Outline />}

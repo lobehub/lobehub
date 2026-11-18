@@ -1,27 +1,13 @@
 import { createHash } from 'node:crypto';
 
-import type {
-  ArtboardBoardSource,
-  ArtboardItem,
-  ArtboardPublishSnapshot,
-  ArtboardPublishSource,
-} from '@lobechat/types';
+import type { ArtboardItem, ArtboardPublishSnapshot } from '@lobechat/types';
 
 import { withoutDraftPicks } from '../view';
 
-export const canvasSitePrefix = (canvasId: string, version: number) =>
-  `canvases/${canvasId}/v${version}`;
-
-export const imageSitePath = (fileId: string) => `images/${fileId}`;
-
-const toSiteSource = (source: ArtboardBoardSource | null): ArtboardPublishSource | null => {
-  if (!source) return null;
-  if (source.kind === 'image') return { kind: 'image', src: imageSitePath(source.fileId) };
-  return {
-    kind: 'canvas',
-    src: `${canvasSitePrefix(source.canvasId, source.version)}/${source.path ?? 'index.html'}`,
-  };
-};
+export interface ArtboardPublishFileRef {
+  hash: string;
+  path: string;
+}
 
 export const buildArtboardPublishSnapshot = (
   artboard: ArtboardItem,
@@ -35,7 +21,7 @@ export const buildArtboardPublishSnapshot = (
       pageId: board.pageId,
       rect: board.rect,
       roundId: board.roundId,
-      source: toSiteSource(board.source),
+      source: board.source,
       title: board.title,
       type: board.type,
     })),
@@ -64,5 +50,18 @@ export const buildArtboardPublishSnapshot = (
   };
 };
 
-export const hashArtboardSnapshot = ({ publishedAt: _, ...rest }: ArtboardPublishSnapshot) =>
-  createHash('sha256').update(JSON.stringify(rest)).digest('hex');
+// Files are part of what was shared: a page's stylesheet or image can change without any board moving.
+export const hashArtboardSnapshot = (
+  { publishedAt: _, ...rest }: ArtboardPublishSnapshot,
+  files: ArtboardPublishFileRef[],
+) =>
+  createHash('sha256')
+    .update(
+      JSON.stringify({
+        ...rest,
+        files: files
+          .map(({ hash, path }) => [path, hash])
+          .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+      }),
+    )
+    .digest('hex');

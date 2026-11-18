@@ -9,11 +9,11 @@ const snapshot: ArtboardPublishSnapshot = {
   boards: [
     {
       groupId: null,
-      id: 'brd_canvas',
+      id: 'brd_html',
       pageId: 'pg_1',
       rect,
       roundId: 'rnd_1',
-      source: { kind: 'canvas', src: 'canvases/cvs_a/v3/index.html' },
+      source: { hash: 'abcdef0123456789', kind: 'file', path: 'pages/home page.html' },
       title: 'Option A',
       type: 'html',
     },
@@ -23,7 +23,7 @@ const snapshot: ArtboardPublishSnapshot = {
       pageId: 'pg_1',
       rect,
       roundId: null,
-      source: { kind: 'image', src: 'images/file_1' },
+      source: { hash: 'fedcba9876543210', kind: 'file', path: 'shots/home.png' },
       title: 'Reference',
       type: 'image',
     },
@@ -40,17 +40,17 @@ const snapshot: ArtboardPublishSnapshot = {
   ],
   description: 'Directions',
   edges: [
-    { condition: null, from: 'brd_canvas', id: 'e1', isDefault: false, label: '', to: 'brd_image' },
+    { condition: null, from: 'brd_html', id: 'e1', isDefault: false, label: '', to: 'brd_image' },
   ],
   groups: [],
   pages: [{ id: 'pg_1', name: 'Page 1', sortOrder: 0 }],
   publishedAt: '2026-11-17T00:00:00.000Z',
   rounds: [
     {
-      chosenBoardId: 'brd_canvas',
+      chosenBoardId: 'brd_html',
       id: 'rnd_1',
       pageId: 'pg_1',
-      recommendedBoardId: 'brd_canvas',
+      recommendedBoardId: 'brd_html',
       status: 'submitted',
       title: 'Direction',
     },
@@ -72,24 +72,23 @@ describe('snapshotToBoard', () => {
     expect(artboard.content.questions).toEqual([]);
     expect(artboard.content.rounds[0]).toMatchObject({
       batchId: null,
-      chosenBoardId: 'brd_canvas',
+      chosenBoardId: 'brd_html',
     });
-    expect(artboard.content.edges[0]).toMatchObject({ flowEdgeId: null, from: 'brd_canvas' });
+    expect(artboard.content.edges[0]).toMatchObject({ flowEdgeId: null, from: 'brd_html' });
     expect(artboard.content.boards.map((board) => board.expected)).toEqual([null, null, null]);
   });
 
-  it('keys image and canvas sources by board so the view can find the site file', () => {
-    const { artboard, canvasSrc, imageUrls } = snapshotToBoard(snapshot);
+  it('keeps each board on its artboard file, served from the site files directory', () => {
+    const { artboard, fileBaseUrl } = snapshotToBoard(snapshot);
     const sources = Object.fromEntries(
       artboard.content.boards.map((board) => [board.id, board.source]),
     );
 
+    expect(fileBaseUrl).toBe('files/');
     expect(sources).toEqual({
-      brd_canvas: { canvasId: 'brd_canvas', kind: 'canvas', version: 1 },
       brd_decision: null,
-      brd_image: { fileId: 'brd_image', kind: 'image' },
+      brd_html: { hash: 'abcdef0123456789', kind: 'file', path: 'pages/home page.html' },
+      brd_image: { hash: 'fedcba9876543210', kind: 'file', path: 'shots/home.png' },
     });
-    expect(imageUrls).toEqual({ brd_image: 'images/file_1' });
-    expect(canvasSrc).toEqual({ brd_canvas: 'canvases/cvs_a/v3/index.html' });
   });
 });
