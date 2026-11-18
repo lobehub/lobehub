@@ -69,6 +69,7 @@ run commands.
 | \`lh automation\` | Automations: MCP Events subscriptions an agent made in a conversation (list, view, rename, check, delete) | \`references/automation\` |
 | \`lh legacy-plugin\` | Legacy 1.0 plugin management | \`references/plugin\` |
 | \`lh bot\` | Bot integration management (Discord, Slack, Telegram, etc.) | \`references/bot\` |
+| \`lh quota\` | Subscription quota (5h / weekly windows) of the Claude Code / Codex / Kimi Code accounts agents run on | \`references/quota\` |
 | \`lh widget\` / \`lh dashboard\` | Monitoring widgets (sandboxed scripts) and the dashboards they sit on | \`references/dashboard\` |
 | \`lh eval\` | Evaluation workflow management | \`references/eval\` |
 | \`lh whoami\` / \`lh usage\` / \`lh user\` / \`lh notification\` / \`lh migrate\` | Account, usage, settings, notification settings and imports (top-level commands, not a \`config\` module) | \`references/config\` |
