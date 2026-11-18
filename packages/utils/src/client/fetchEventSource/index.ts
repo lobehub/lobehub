@@ -63,7 +63,7 @@ export function fetchEventSource(
     ...rest
   }: FetchEventSourceInit,
 ) {
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve, reject) => {
     // make a copy of the input headers since we may modify it below:
     const headers = { ...inputHeaders };
     if (!headers.accept) {
@@ -104,6 +104,6 @@ export function fetchEventSource(
       }
     }
 
-    create();
+    create().catch(reject);
   });
 }
