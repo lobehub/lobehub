@@ -1,6 +1,6 @@
 'use client';
 
-import { getActivePluginIds } from '@lobechat/types';
+import { getOptedInPluginIds } from '@lobechat/types';
 import { Button, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
@@ -69,7 +69,7 @@ const UserToolsSection = memo<Props>(
       () => new Set(nonProfileConfigurableBuiltinToolIds),
       [nonProfileConfigurableBuiltinToolIds],
     );
-    const userToolCount = getVisibleProfileToolIds(getActivePluginIds(config?.plugins), {
+    const userToolCount = getVisibleProfileToolIds(getOptedInPluginIds(config?.plugins), {
       agentConnectorIdentifiers,
       nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
     }).length;

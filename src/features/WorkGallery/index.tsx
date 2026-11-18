@@ -15,6 +15,7 @@ import {
 } from '@/features/CanvasStorage/useCanvasStorage';
 import NavHeader from '@/features/NavHeader';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { isMobileSurface } from '@/utils/mobileSurface';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import type { WorkGalleryKey } from './const';
@@ -339,22 +340,31 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     );
   };
 
-  const typeTabs = (
-    <Flexbox className={styles.typeBar} gap={12}>
-      <WorksTypeTabs activeKey={galleryKey} />
-      {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
-    </Flexbox>
-  );
+  // The type switch lives in the page header, right next to the panel toggle. A
+  // header that only hosted the toggle left a blank band above a floating row.
+  // Mobile keeps the switch on its own row: there the header is the back +
+  // drawer pair, which a five-item switch would crowd.
+  const mobile = isMobileSurface();
+
+  const typeTabs = <WorksTypeTabs activeKey={galleryKey} />;
+
+  const typeBar =
+    mobile || galleryKey === 'canvas' ? (
+      <Flexbox className={styles.typeBar} gap={12}>
+        {mobile ? typeTabs : null}
+        {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
+      </Flexbox>
+    ) : null;
 
   const body =
     isLoadingInitial && items.length === 0 ? (
       <>
-        {typeTabs}
+        {typeBar}
         <WorkGallerySkeleton />
       </>
     ) : (
       <>
-        {typeTabs}
+        {typeBar}
         {agentIds.length > 0 && (
           <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
             <Button
@@ -381,10 +391,10 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
   return (
     <Flexbox className={styles.container}>
-      {/* This page keeps its shortcuts in the sidebar header, which disappears
-          with the panel: a content-side header owns the toggle that brings the
-          panel back once it is collapsed. */}
-      <NavHeader />
+      <NavHeader
+        left={mobile ? undefined : typeTabs}
+        styles={mobile ? undefined : { left: { paddingInlineStart: 16 } }}
+      />
       {body}
     </Flexbox>
   );

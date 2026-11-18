@@ -248,6 +248,14 @@ export const channelMessageReceipt = (
     : undefined;
 };
 
+/** When the message was deleted (`metadata.deletedAt`); null while it stands. */
+export const channelMessageDeletedAt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): Date | null => {
+  const deletedAt = metadata?.deletedAt;
+  return typeof deletedAt === 'string' ? new Date(deletedAt) : null;
+};
+
 /** When a person last edited their message (`metadata.editedAt`); null if never. */
 export const channelMessageEditedAt = (
   metadata: ChannelMessageMetadata | null | undefined,
@@ -556,6 +564,12 @@ export interface ChannelLastMessage {
   thread: { id: string; title: string | null } | null;
 }
 
+/** The newest message in a Thread that @mentions the caller. */
+export interface ChannelThreadMention {
+  createdAt: Date;
+  threadId: string;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -617,6 +631,12 @@ export interface ChannelListItem {
    */
   sharedAgentHandle?: string | null;
   status: ChannelStatus;
+  /**
+   * The newest @mention of the caller in each Thread from the last 30 days, read or not; set by
+   * the Channel list. The read position cannot tell whether one was seen, so the client's
+   * per-Thread reads decide.
+   */
+  threadMentions?: ChannelThreadMention[];
   title: string;
   /** Main-channel messages the caller has not read; set by the Channel list. */
   unreadCount?: number;
@@ -665,6 +685,11 @@ export interface ChannelPublicMessage {
   };
   content: string;
   createdAt: Date;
+  /**
+   * Set once the message was deleted. Its row stays as a tombstone, without text, mentions or
+   * attachments, so Threads, replies and jobs that point at it still resolve.
+   */
+  deletedAt?: Date | null;
   /** Set once the author has edited the text; shown as "(edited)". */
   editedAt?: Date | null;
   fileIds: string[];
@@ -676,7 +701,7 @@ export interface ChannelPublicMessage {
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
     ChannelPublicMessage,
-    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+    'id' | 'author' | 'content' | 'deletedAt' | 'sequence' | 'threadId'
   > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;

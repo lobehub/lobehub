@@ -1,74 +1,29 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
-import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import {
-  ContextMenuTrigger,
-  createStaticStyles,
-  cx,
-  type DropdownItem,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { ChevronRightIcon, FileIcon, FolderIcon, type LucideIcon } from 'lucide-react';
+import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 export interface SkillListItem {
   description?: string;
-  /** Manual invocation only, as declared by the skill; not a disabled state. */
-  disableModelInvocation?: boolean;
-  /**
-   * File count shown next to the name. Omit (or pass 0) for atomic skills with
-   * no embedded files — e.g. user-level skills sourced from MCP servers.
-   */
-  fileCount?: number;
   /**
    * Optional file tree for skills that bundle markdown/script assets. When
    * empty or omitted the row stays atomic (no chevron, no expansion).
    */
   files?: string[];
-  /** Custom icon; omitted for skills that use the generic skill glyph. */
-  icon?: React.ReactNode;
   id: string;
   name: string;
   /** Filesystem skill scope when the row comes from a device scan. */
   scope?: 'device' | 'project';
 }
 
-/**
- * A per-row action (view / rename / delete …). The same descriptor drives both
- * the hover-revealed icon button on the right of the row and the right-click
- * context menu, so callers wire each capability once. Disabled actions render
- * greyed (used for not-yet-supported operations, e.g. mutating filesystem
- * project skills).
- */
-export interface SkillRowAction {
-  danger?: boolean;
-  disabled?: boolean;
-  icon: LucideIcon;
-  key: string;
-  label: string;
-  onClick: (item: SkillListItem) => void;
-  sfSymbol?: SFSymbol;
-  /** Hover-icon tooltip; falls back to `label`. Use for "coming soon" hints. */
-  tooltip?: string;
-}
-
 interface SkillsListProps {
-  /**
-   * Per-row actions. When this returns a non-empty array the row gains a
-   * hover-revealed action cluster (right side, swaps with the file count) and a
-   * right-click context menu sharing the same actions. Return `[]`/omit for
-   * read-only rows (no menu, native right-click preserved).
-   */
-  getRowActions?: (item: SkillListItem) => SkillRowAction[];
   items: SkillListItem[];
   onOpenFile?: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill?: (item: SkillListItem) => void;
+  /** Select into the conversation instead of browsing the skill's files. */
+  onSelectSkill?: (item: SkillListItem) => void;
   /**
    * When provided, each skill row becomes draggable and this fires on dragstart.
    * The handler is expected to write the drag payload onto `event.dataTransfer`
@@ -125,62 +80,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
-
-    /* Swap the file count for the row actions while hovering the row. */
-    &:hover .skill-row-actions {
-      display: flex;
-    }
-
-    &:hover .skill-row-count {
-      display: none;
-    }
-  `,
-  itemCount: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowAction: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  rowActionDanger: css`
-    &:hover {
-      color: ${cssVar.colorError};
-      background: ${cssVar.colorErrorBg};
-    }
-  `,
-  rowActionDisabled: css`
-    cursor: not-allowed;
-    color: ${cssVar.colorTextQuaternary};
-
-    &:hover {
-      color: ${cssVar.colorTextQuaternary};
-      background: transparent;
-    }
-  `,
-  rowActions: css`
-    display: none;
-    flex: none;
-    gap: 2px;
-    align-items: center;
   `,
   itemIcon: css`
     flex-shrink: 0;
@@ -314,10 +213,10 @@ TreeRow.displayName = 'SkillsListTreeRow';
 
 interface SkillRowProps {
   expanded: boolean;
-  getRowActions?: (item: SkillListItem) => SkillRowAction[];
   item: SkillListItem;
   onOpenFile?: (item: SkillListItem, relativePath: string) => void;
   onOpenSkill?: (item: SkillListItem) => void;
+  onSelectSkill?: (item: SkillListItem) => void;
   onSkillDragStart?: (item: SkillListItem, event: React.DragEvent) => void;
   onToggle: (id: string) => void;
   reserveChevronSlot: boolean;
@@ -329,19 +228,17 @@ interface SkillRowProps {
 const SkillRow = memo<SkillRowProps>(
   ({
     expanded,
-    getRowActions,
     item,
     onOpenFile,
     onOpenSkill,
+    onSelectSkill,
     onSkillDragStart,
     onToggle,
     reserveChevronSlot,
   }) => {
-    const { t } = useTranslation('chat');
-    const files = item.files ?? EMPTY_ARRAY;
+    const activateSkill = onSelectSkill ?? onOpenSkill;
+    const files = onSelectSkill ? EMPTY_ARRAY : (item.files ?? EMPTY_ARRAY);
     const hasFiles = files.length > 0;
-    const actions = useMemo(() => getRowActions?.(item) ?? EMPTY_ARRAY, [getRowActions, item]);
-    const hasActions = actions.length > 0;
     const tree = useMemo(() => buildSkillTree(files), [files]);
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set());
 
@@ -359,30 +256,8 @@ const SkillRow = memo<SkillRowProps>(
       [item, onOpenFile],
     );
 
-    const contextMenuItems = useCallback(
-      (): (DropdownItem & { sfSymbol?: SFSymbol })[] =>
-        actions.map((action) => ({
-          danger: action.danger,
-          disabled: action.disabled,
-          icon: <Icon icon={action.icon} />,
-          key: action.key,
-          label: action.label,
-          onClick: () => action.onClick(item),
-          sfSymbol: action.sfSymbol,
-        })),
-      [actions, item],
-    );
-
-    // The description Tooltip wraps just the name (a ref-forwarding leaf) and the
-    // ContextMenuTrigger wraps just the row Flexbox — both cloning wrappers get
-    // a clean DOM-forwarding child. Nesting them (Tooltip around the trigger, or
-    // vice versa) would drop `onContextMenu` / the ref on the way through.
     const nameNode = (
-      <Text
-        ellipsis
-        style={{ color: 'inherit', flex: 1, minWidth: 0 }}
-        onClick={onOpenSkill ? () => onOpenSkill(item) : undefined}
-      >
+      <Text ellipsis style={{ color: 'inherit', flex: 1, minWidth: 0 }}>
         {item.name}
       </Text>
     );
@@ -394,7 +269,17 @@ const SkillRow = memo<SkillRowProps>(
         className={styles.item}
         draggable={!!onSkillDragStart}
         gap={6}
+        role={activateSkill ? 'button' : undefined}
+        tabIndex={activateSkill ? 0 : undefined}
+        onClick={activateSkill ? () => activateSkill(item) : undefined}
         onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
+        onKeyDown={(event) => {
+          if (!activateSkill || event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            activateSkill(item);
+          }
+        }}
       >
         {hasFiles ? (
           <Flexbox
@@ -412,10 +297,10 @@ const SkillRow = memo<SkillRowProps>(
               size={14}
             />
           </Flexbox>
-        ) : reserveChevronSlot ? (
+        ) : !onSelectSkill && reserveChevronSlot ? (
           <span style={{ flexShrink: 0, height: 20, width: 20 }} />
         ) : null}
-        {item.icon ?? <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />}
+        <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
         {item.description ? (
           <Tooltip
             placement={'left'}
@@ -426,43 +311,12 @@ const SkillRow = memo<SkillRowProps>(
         ) : (
           nameNode
         )}
-        {item.disableModelInvocation && (
-          <Tag size={'small'} style={{ flexShrink: 0 }}>
-            {t('workingPanel.skills.manualOnly')}
-          </Tag>
-        )}
-        {typeof item.fileCount === 'number' && item.fileCount > 0 && (
-          <span className={cx('skill-row-count', styles.itemCount)}>{item.fileCount}</span>
-        )}
-        {hasActions && (
-          <div className={cx('skill-row-actions', styles.rowActions)} draggable={false}>
-            {actions.map((action) => (
-              <Tooltip key={action.key} title={action.tooltip ?? action.label}>
-                <div
-                  role={'button'}
-                  className={cx(
-                    styles.rowAction,
-                    action.danger && !action.disabled && styles.rowActionDanger,
-                    action.disabled && styles.rowActionDisabled,
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (action.disabled) return;
-                    action.onClick(item);
-                  }}
-                >
-                  <Icon icon={action.icon} size={13} />
-                </div>
-              </Tooltip>
-            ))}
-          </div>
-        )}
       </Flexbox>
     );
 
     return (
       <>
-        {hasActions ? <ContextMenuTrigger items={contextMenuItems}>{row}</ContextMenuTrigger> : row}
+        {row}
         {expanded &&
           hasFiles &&
           onOpenFile &&
@@ -484,7 +338,7 @@ const SkillRow = memo<SkillRowProps>(
 SkillRow.displayName = 'SkillsListSkillRow';
 
 const SkillsList = memo<SkillsListProps>(
-  ({ getRowActions, items, onOpenFile, onOpenSkill, onSkillDragStart }) => {
+  ({ items, onOpenFile, onOpenSkill, onSelectSkill, onSkillDragStart }) => {
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
     const toggle = useCallback((id: string) => {
@@ -506,12 +360,12 @@ const SkillsList = memo<SkillsListProps>(
         {items.map((item) => (
           <SkillRow
             expanded={expanded.has(item.id)}
-            getRowActions={getRowActions}
             item={item}
             key={item.id}
             reserveChevronSlot={reserveChevronSlot}
             onOpenFile={onOpenFile}
             onOpenSkill={onOpenSkill}
+            onSelectSkill={onSelectSkill}
             onSkillDragStart={onSkillDragStart}
             onToggle={toggle}
           />

@@ -1516,8 +1516,6 @@
   "heteroAgent.codexQuota.totalEarned_other": "{{count}} guadagnati in totale",
   "heteroAgent.executionTarget.auto": "Automatico",
   "heteroAgent.executionTarget.autoDesc": "Usa automaticamente un dispositivo online, scegliendone uno quando ce ne sono diversi disponibili",
-  "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} online · {{total}} in totale",
-  "heteroAgent.executionTarget.devicesGroup": "Dispositivi",
   "heteroAgent.executionTarget.downloadDesktop": "Scarica l'App Desktop",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Esegui agenti con accesso al tuo computer",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Scarica l'app desktop",

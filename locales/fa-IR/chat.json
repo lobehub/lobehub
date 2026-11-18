@@ -1516,8 +1516,6 @@
   "heteroAgent.codexQuota.totalEarned_other": "{{count}} در مجموع کسب شده",
   "heteroAgent.executionTarget.auto": "خودکار",
   "heteroAgent.executionTarget.autoDesc": "به طور خودکار از یک دستگاه آنلاین استفاده کنید و یکی را در صورت موجود بودن چندین دستگاه انتخاب کنید",
-  "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} آنلاین · {{total}} در مجموع",
-  "heteroAgent.executionTarget.devicesGroup": "دستگاه‌ها",
   "heteroAgent.executionTarget.downloadDesktop": "دریافت اپلیکیشن دسکتاپ",
   "heteroAgent.executionTarget.downloadDesktopDesc": "اجرای عوامل با دسترسی به کامپیوتر شما",
   "heteroAgent.executionTarget.downloadDesktopTitle": "دریافت اپلیکیشن دسکتاپ",

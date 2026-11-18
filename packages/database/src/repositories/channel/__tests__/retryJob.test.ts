@@ -35,7 +35,7 @@ const failedReply = async (
     .where(eq(agentOperations.id, claimed.operationId!));
   await execution.fail(team.channel.id, job.id, { message: 'Agent could not start' });
   if (released) await execution.releaseWriter(team.channel.id, job.id);
-  return { ...team, failed: claimed };
+  return { ...team, failed: claimed, message };
 };
 
 const deviceUnreachable = {
@@ -95,5 +95,16 @@ describe('Retrying a reply that could not reach its device', () => {
     await expect(asOwner.retryJob(channel.id, failed.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
+  });
+
+  it('refuses to retry a reply whose request was deleted', async () => {
+    const { asOwner, channel, failed, message } = await failedReply(deviceUnreachable);
+
+    await asOwner.deleteMessage(channel.id, message.id);
+
+    await expect(asOwner.retryJob(channel.id, failed.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect((await asOwner.detail(channel.id)).jobs[0]).toMatchObject({ status: 'failed' });
   });
 });

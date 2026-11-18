@@ -93,7 +93,7 @@ export class ChannelCoordinator {
     if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
     return {
       agentId,
-      canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share.shareConfig, requesterId),
+      canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share, requesterId),
       shareConfig: share.shareConfig,
       shareId: share.shareId,
       visitorUserId: requesterId,

@@ -302,8 +302,11 @@ describe('userRouter', () => {
       await expect(iterator.next()).resolves.toMatchObject({ done: true });
     });
 
-    /** @example An initialized session without a connected provider is still collecting sources. */
-    it('keeps an empty pending session in the collecting-sources phase', async () => {
+    /**
+     * @example An initialized session without a connected provider reports collecting-sources once
+     * and ends, because no workflow can publish progress until the client revises its sources.
+     */
+    it('ends the stream for an empty pending session after its collecting-sources event', async () => {
       mockUnderstandingService.get.mockResolvedValueOnce({
         id: 'session-1',
         sources: {},
@@ -331,7 +334,7 @@ describe('userRouter', () => {
           understanding: 'pending',
         },
       });
-      await iterator.return?.();
+      await expect(iterator.next()).resolves.toMatchObject({ done: true });
     });
 
     /** @example A completed source waits for the downstream writer instead of ending the stream. */

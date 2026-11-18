@@ -1516,8 +1516,6 @@
   "heteroAgent.codexQuota.totalEarned_other": "{{count}} مكتسب إجمالاً",
   "heteroAgent.executionTarget.auto": "تلقائي",
   "heteroAgent.executionTarget.autoDesc": "استخدام جهاز متصل تلقائيًا، واختيار واحد عند توفر عدة أجهزة",
-  "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} متصل · {{total}} إجمالًا",
-  "heteroAgent.executionTarget.devicesGroup": "الأجهزة",
   "heteroAgent.executionTarget.downloadDesktop": "احصل على تطبيق سطح المكتب",
   "heteroAgent.executionTarget.downloadDesktopDesc": "قم بتشغيل الوكلاء مع الوصول إلى جهاز الكمبيوتر الخاص بك",
   "heteroAgent.executionTarget.downloadDesktopTitle": "احصل على تطبيق سطح المكتب",

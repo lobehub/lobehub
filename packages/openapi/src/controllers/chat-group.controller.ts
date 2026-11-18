@@ -8,6 +8,7 @@ import type {
   GetChatGroupsRequest,
   UpdateChatGroupRequest,
 } from '../types/chat-group.type';
+import type { DeletedResource } from '../types/common.type';
 
 export class ChatGroupController extends BaseController {
   private async getService(c: Context) {
@@ -65,7 +66,7 @@ export class ChatGroupController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
       const service = await this.getService(c);
       await service.deleteChatGroup(id);
-      return this.success(c, null, 'Chat group deleted');
+      return this.success(c, { deleted: true, id } satisfies DeletedResource, 'Chat group deleted');
     } catch (error) {
       return this.handleError(c, error);
     }

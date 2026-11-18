@@ -36,6 +36,10 @@ runs:
         overlay-ref: ${{ inputs.overlay-ref }}
         overlay-token: ${{ inputs.overlay-token }}
 
+    # The pnpm store is cached by setup-env, which caches the default store this
+    # install uses. The overlay root ships no lockfile, so pnpm resolves from the
+    # package.json ranges on every run; the content-addressed store is what saves
+    # the tarball downloads.
     - name: Install dependencies
       shell: bash
       run: cd .. && pnpm install --node-linker=hoisted

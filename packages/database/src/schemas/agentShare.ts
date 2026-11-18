@@ -4,7 +4,7 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 
-export type AgentShareDeviceAccess = 'all' | 'allowlist' | 'none';
+export type AgentShareDeviceAccess = 'allowlist' | 'none';
 
 export interface AgentShareConfig {
   /**
@@ -22,27 +22,29 @@ export interface AgentShareConfig {
   demoCases?: AgentShareDemoCase[];
   /**
    * Which visitors may run on the Agent's configured execution environment
-   * (its bound or auto-selected device), mirroring an IM bot's `devicePolicy`:
+   * (its bound or auto-selected device):
    *
-   * - `none` (default): no visitor reaches a device; device tools are dropped.
-   * - `all`: every signed-in visitor runs on the Agent's device.
-   * - `allowlist`: only visitors whose VERIFIED account email is listed in
-   *   {@link deviceAllowEmails}.
+   * - `none` (default): no visitor reaches a device; device tools are dropped
+   *   and a heterogeneous (Claude Code / Codex) Agent refuses the run.
+   * - `allowlist`: only the people in {@link deviceAllowUserIds} who are
+   *   still in the Agent's address book. They get the device tools and, for a
+   *   heterogeneous Agent, run it on the device.
    *
-   * The visitor never picks the device — it always follows the Agent's own
-   * execution-environment setting. Resolved per run by
-   * `resolveShareVisitorDeviceAccess`. Heterogeneous (Claude Code / Codex)
-   * agents stay unavailable to visitors under every value.
+   * There is no "every visitor" value: a stranger never reaches the creator's
+   * machine. The visitor never picks the device — it always follows the
+   * Agent's own execution-environment setting. Resolved per run by
+   * `resolveShareVisitorDeviceAccess`.
    */
   deviceAccess?: AgentShareDeviceAccess;
   /**
-   * Lower-cased account emails allowed to use the device when
-   * {@link deviceAccess} is `allowlist`; ignored otherwise. Stored as emails
-   * rather than user ids so the creator can authorize someone before they sign
-   * up, and so the settings page never needs a user lookup that would reveal
-   * whether an email has a LobeHub account.
+   * User ids allowed to use the device when {@link deviceAccess} is
+   * `allowlist`; ignored otherwise. Each must be in the address book of the
+   * Agent's scope when written (personal contacts for a personal Agent; the
+   * workspace's members and external contacts for a workspace Agent), and is
+   * checked against it again on every run, so removing a contact revokes the
+   * grant without editing the share.
    */
-  deviceAllowEmails?: string[];
+  deviceAllowUserIds?: string[];
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
   /**

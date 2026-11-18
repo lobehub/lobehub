@@ -7,6 +7,7 @@ import {
   type WorkVersionCumulativeUsage,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -30,7 +31,11 @@ import {
   setTopicPullRequestDismissed,
 } from '@/server/services/workRegistration';
 
-import { assertCanUseTopicTargets } from './_helpers/conversationResourceGuard';
+import {
+  assertCanUseTopicTargets,
+  assertCanViewTopicTargets,
+} from './_helpers/conversationResourceGuard';
+import { batchResolveAgentIdFromSessions } from './_helpers/resolveContext';
 
 const topicGuardCtx = (ctx: {
   serverDB: LobeChatDatabase;
@@ -50,6 +55,8 @@ const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
     },
   });
 });
+
+const lookupPullRequestInput = z.object({ url: z.string().trim().min(1).max(2048) });
 
 // Task-domain write gate. Task mutations elsewhere (see the task router's
 // `taskProcedureWrite`) gate on `agent:update`, so a Work registration that
@@ -318,6 +325,58 @@ export const workRouter = router({
         workspaceId: ctx.workspaceId,
       }),
     ),
+
+  lookupPullRequest: workProcedure.input(lookupPullRequestInput).query(async ({ ctx, input }) => {
+    const pr = parsePullRequestUrl(input.url);
+    if (!pr) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Expected a GitHub pull request URL, e.g. https://github.com/owner/repo/pull/123',
+      });
+    }
+
+    const topics = await ctx.workModel.listTopicsByPullRequest(pr.identifier);
+    const guardCtx = topicGuardCtx(ctx);
+    const accessByTarget = new Map<string, Promise<boolean>>();
+    const canView = (topic: (typeof topics)[number]) => {
+      const key = JSON.stringify([topic.agentId, topic.groupId, topic.sessionId]);
+      const cached = accessByTarget.get(key);
+      if (cached) return cached;
+      const access = assertCanViewTopicTargets(guardCtx, [topic.topicId]).then(
+        () => true,
+        (error: unknown) => {
+          if (error instanceof TRPCError && error.code === 'FORBIDDEN') return false;
+          throw error;
+        },
+      );
+      accessByTarget.set(key, access);
+      return access;
+    };
+    const visible = ctx.workspaceId
+      ? (
+          await pMap(topics, async (topic) => ((await canView(topic)) ? [topic] : []), {
+            concurrency: 10,
+          })
+        ).flat()
+      : topics;
+
+    const legacySessionIds = visible.flatMap(({ agentId, groupId, sessionId }) =>
+      !agentId && !groupId && sessionId ? [sessionId] : [],
+    );
+    const sessionAgentIds = await batchResolveAgentIdFromSessions(
+      [...new Set(legacySessionIds)],
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    );
+    return {
+      data: visible.map(({ sessionId, ...topic }) => ({
+        ...topic,
+        agentId: topic.agentId ?? (sessionId && sessionAgentIds.get(sessionId)) ?? null,
+      })),
+      success: true,
+    };
+  }),
 
   // Better Coding Experience: link the pull requests a `git push` tool call
   // updated, right after it ran. The push itself is re-read from the persisted

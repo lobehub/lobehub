@@ -208,7 +208,12 @@ export class AgentOperationModel {
     if (params.requireReservation) {
       const [started] = await this.db
         .update(agentOperations)
-        .set(values)
+        .set({
+          ...values,
+          ...(params.metadata && {
+            metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb`,
+          }),
+        })
         .where(reservationIdentity)
         .returning({ id: agentOperations.id });
       if (!started) throw new Error('Operation reservation is no longer available');

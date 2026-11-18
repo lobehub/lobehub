@@ -1,6 +1,7 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
 import { useCallback, useMemo, useState } from 'react';
 
+import { linkManualPullRequest } from '@/features/TopicPullRequests/linkManualPullRequest';
 import type { TopicPullRequestView } from '@/features/TopicPullRequests/pullRequestView';
 import { useTopicPullRequests } from '@/features/TopicPullRequests/useTopicPullRequests';
 import { workService } from '@/services/work';
@@ -76,19 +77,8 @@ export const useSidebarPullRequests = (params: {
   );
   /** Link a PR by URL; resolves to its `owner/repo#n`, or throws on a bad URL. */
   const linkPullRequest = useCallback(
-    async (url: string) => {
-      if (!topicId) return undefined;
-      const { identifier, linked } = await workService.linkTopicPullRequest({
-        source: 'manual',
-        topicId,
-        url,
-      });
-      // Not saved: reject so the dialog stays open with its error.
-      if (!linked) throw new Error(`Could not link ${identifier}`);
-      await refresh();
-      return identifier;
-    },
-    [refresh, topicId],
+    async (url: string) => (topicId ? linkManualPullRequest(topicId, url) : undefined),
+    [topicId],
   );
 
   if (!linked.enabled) {

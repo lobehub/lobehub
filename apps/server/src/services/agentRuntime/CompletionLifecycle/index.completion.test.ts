@@ -401,3 +401,21 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     expect(hookDispatcher.unregister).toHaveBeenCalledWith('op-1');
   });
 });
+
+describe('CompletionLifecycle.buildStateFromInput share visitor', () => {
+  const build = (input: Record<string, unknown>) =>
+    (new CompletionLifecycle({} as any, 'user-1') as any).buildStateFromInput({
+      operationId: 'op-share',
+      ...input,
+    });
+
+  it('marks the synthesized state as a share visitor run', () => {
+    const shareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+    expect(build({ shareVisitor }).principal).toEqual({ actor: { shareVisitor } });
+  });
+
+  it('adds no principal for an ordinary run', () => {
+    expect(build({}).principal).toBeUndefined();
+  });
+});

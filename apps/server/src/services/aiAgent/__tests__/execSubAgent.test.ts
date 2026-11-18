@@ -453,22 +453,13 @@ describe('AiAgentService.execSubAgent', () => {
     });
   });
 
-  describe('source message summary update', () => {
-    it('should pass sourceMessageId (parentMessageId) to callbacks for summary update', async () => {
+  describe('thread completion hook registration', () => {
+    it('registers a callable onComplete hook for the child thread', async () => {
       const execAgentSpy = vi
         .spyOn(service, 'execAgent')
         .mockResolvedValue(createSuccessfulExecAgentResult());
 
       await service.execSubAgent(createSubAgentParams());
-
-      // Verify that hooks were passed with onComplete
-      expect(execAgentSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          hooks: expect.arrayContaining([
-            expect.objectContaining({ id: 'thread-completion', type: 'onComplete' }),
-          ]),
-        }),
-      );
 
       // Get the onComplete hook handler
       const callArgs = execAgentSpy.mock.calls[0][0];
@@ -981,7 +972,7 @@ describe('AiAgentService.execSubAgent', () => {
       expect(execAgentSpy.mock.calls[0][0].trigger).toBe('chat');
     });
 
-    it('hands the tab the child run gateway ticket so it can stream the reply', async () => {
+    it('returns the child operation id and gateway ticket to the tab', async () => {
       vi.spyOn(service, 'execAgent').mockResolvedValue({
         assistantMessageId: 'msg-child',
         operationId: 'op-child',

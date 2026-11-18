@@ -16,6 +16,7 @@ vi.mock('@/database/repositories/channel', () => ({
 vi.mock('@/server/services/bot/wake/opener', () => ({ createReplyOpener: vi.fn() }));
 
 const candidate = {
+  addressed: true,
   agent: { id: 'agt-coder', name: 'Coder', title: 'Engineer' },
   canOpenThread: true,
   coAddressed: [],
@@ -86,6 +87,18 @@ describe('openChannelReply', () => {
       expect.objectContaining({
         coAddressed: [{ name: 'Alien' }, { name: '数据分析师', title: '数据分析师' }],
       }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('tells the opener when the Agent was woken without being addressed', async () => {
+    executions.openingCandidate.mockResolvedValue({ ...candidate, addressed: false });
+    const opener = vi.fn().mockResolvedValue({ placement: 'channel' });
+
+    await openChannelReply({} as never, 'channel', 'job', { createOpener: () => opener });
+
+    expect(opener).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Why?', notAddressed: true }),
       expect.any(AbortSignal),
     );
   });

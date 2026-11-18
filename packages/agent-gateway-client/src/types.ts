@@ -211,6 +211,7 @@ export interface StreamStartParentMessage {
   /** Server creation time (epoch ms). Absent from older servers. */
   createdAt?: number;
   id: string;
+  imageList?: UIChatMessage['imageList'];
   metadata?: Record<string, unknown> | null;
   parentId?: string | null;
   role: 'user';

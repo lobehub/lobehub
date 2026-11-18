@@ -266,11 +266,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     activeAgentId ? chatConfigByIdSelectors.isChatModeById(activeAgentId)(s) : false,
   );
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  // Unified precedence (topic > per-device choice > legacy > device default), so
-  // the sidebar resolves the same directory the runtime bar / git status do.
-  // The old `topicCwd || legacy agentCwd` pattern missed `workingDirByDevice`,
-  // landing on the home fallback for device-bound agents and hiding Review.
-  const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
+  // Match the folder picker: the runtime's implicit desktop/home cwd isn't a selected workspace.
+  const workingDirectory = useEffectiveWorkingDirectory(activeAgentId, { homeFallback: false });
   // Effective target device for git ops — bound device for remote agents, this
   // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
   const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(activeAgentId);

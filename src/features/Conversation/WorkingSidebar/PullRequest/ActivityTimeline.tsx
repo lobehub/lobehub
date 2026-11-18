@@ -12,8 +12,8 @@ import { CheckIcon, CircleSlashIcon, EyeIcon, GitCommitHorizontalIcon, XIcon } f
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { electronSystemService } from '@/services/electron/system';
 import { sx } from '@/styles/sx';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { Tone } from './mergeDockData';
 import { timeAgo, TONE_COLOR, type TranslateKey } from './prVisual';
@@ -195,7 +195,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
                   <code
                     {...stylex.props(styles.eventCode, styles.sha)}
                     onClick={() =>
-                      void electronSystemService.openExternalLink(
+                      openTrustedExternalUrl(
                         `https://github.com/${detail.repo.owner}/${detail.repo.name}/pull/${detail.number}/commits/${entry.sha}`,
                       )
                     }

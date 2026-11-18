@@ -121,6 +121,9 @@ runs:
         echo "CLOUD_DESKTOP=1" >> "$GITHUB_ENV"
         echo "✅ Cloud repository $resolved_cloud_ref overlaid at $cloud_root"
 
+    # The pnpm store is cached by setup-env. The root `pnpm-lock.yaml` is gitignored
+    # and the overlay root has none, so the merged workspace is re-resolved on every
+    # run; the store is what saves the tarball downloads.
     - name: Install dependencies
       shell: bash
       run: |

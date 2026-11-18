@@ -1,11 +1,9 @@
+import { parsePullRequestUrl } from '@lobechat/utils/githubPullRequest';
 import { toast } from '@lobehub/ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-/** `https://github.com/<owner>/<repo>/pull/<n>`, also with a tab or query after it. */
-const PULL_URL_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+(?:[/?#]\S*)?$/i;
-
-export const isPullRequestUrl = (value: string) => PULL_URL_RE.test(value.trim());
+export const isPullRequestUrl = (value: string) => !!parsePullRequestUrl(value);
 
 /**
  * State of the "Link a pull request" dialog's field: links on submit, explains

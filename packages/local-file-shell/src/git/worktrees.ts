@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 
 import { isInvalidBranchRef, qualifyStartPoint } from './branches';
 import { getGitWorkingTreeStatus } from './info';
-import { isValidOwnerToken, writeOwnerMarker } from './ownerMarker';
+import { isValidOwnerToken, readOwnerMarker, writeOwnerMarker } from './ownerMarker';
 import type {
   GitAddWorktreeResult,
   GitRemoveWorktreeResult,
@@ -205,8 +205,19 @@ export const addGitWorktree = async (payload: {
 
   if (!path.isAbsolute(worktreePath))
     return { error: `Worktree path must be absolute: ${worktreePath}`, success: false };
-  if (existsSync(worktreePath))
+  if (existsSync(worktreePath)) {
+    if (ownerToken) {
+      const existing = await findListedWorktree(dirPath, worktreePath);
+      if (
+        existing?.branch === normalizeBranchRef(branch) &&
+        !existing.prunable &&
+        (await readOwnerMarker(existing.path).catch(() => undefined)) === ownerToken
+      ) {
+        return { ownerToken, startPoint, success: true, worktreePath: existing.path };
+      }
+    }
     return { error: `Worktree folder already exists: ${worktreePath}`, success: false };
+  }
 
   const parent = path.dirname(worktreePath);
   try {

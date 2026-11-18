@@ -30,6 +30,7 @@ import model from './references/model';
 import plugin from './references/plugin';
 import project from './references/project';
 import provider from './references/provider';
+import quota from './references/quota';
 import search from './references/search';
 import skill from './references/skill';
 import topic from './references/topic';
@@ -70,6 +71,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/plugin': plugin,
     'references/project': project,
     'references/provider': provider,
+    'references/quota': quota,
     'references/search': search,
     'references/skill': skill,
     'references/topic': topic,

@@ -1516,8 +1516,6 @@
   "heteroAgent.codexQuota.totalEarned_other": "Всего заработано: {{count}}",
   "heteroAgent.executionTarget.auto": "Авто",
   "heteroAgent.executionTarget.autoDesc": "Автоматически использовать онлайн-устройство, выбирая одно из нескольких доступных",
-  "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} в сети · всего {{total}}",
-  "heteroAgent.executionTarget.devicesGroup": "Устройства",
   "heteroAgent.executionTarget.downloadDesktop": "Скачать приложение для компьютера",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Запускайте агентов с доступом к вашему компьютеру",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Скачать приложение для компьютера",

@@ -277,6 +277,12 @@ const ChatInput = memo<ChatInputProps>(
     const isSendDispatchPending = useChatStore((s) =>
       operationSelectors.isSendDispatchPendingByContext(context)(s),
     );
+    const isWorktreePending = useChatStore((s) => {
+      const topic = topicId ? topicSelectors.getTopicById(topicId)(s) : undefined;
+      return (
+        topic?.status === 'scheduled' && topic.metadata?.scheduledRun?.kind === 'worktree_start'
+      );
+    });
 
     const pendingInterventions = usePendingInterventions();
     const hasPendingInterventions = pendingInterventions.length > 0;
@@ -314,7 +320,8 @@ const ChatInput = memo<ChatInputProps>(
     // disableSend hard-blocks regardless of content (host surface is read-only).
     // Uploads in flight do not block: the send is queued until they settle (see
     // `queueSendWhileUploading`).
-    const disabled = isInputEmpty || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+    const disabled =
+      isInputEmpty || isWorktreePending || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
 
     // `disabled` above lags the editor: `inputMessage` mirrors content through
     // the editor's debounced onChange, so a fast type→Enter arrives while the
@@ -323,7 +330,7 @@ const ChatInput = memo<ChatInputProps>(
     // at trigger time, so this only mirrors the visual disabled semantics.
     const customDisabled = customSendButtonProps?.disabled;
     const resolveSendBlocked = useCallback(() => {
-      if (disableSend) return true;
+      if (disableSend || isWorktreePending) return true;
 
       const { context: liveContext, editor } = storeApi.getState();
       const liveContextKey = messageMapKey(liveContext);
@@ -341,7 +348,7 @@ const ChatInput = memo<ChatInputProps>(
       const hasContextSelections =
         fileChatSelectors.chatContextSelections(liveContextKey)(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
-    }, [customDisabled, disableQueue, disableSend, storeApi]);
+    }, [customDisabled, disableQueue, disableSend, isWorktreePending, storeApi]);
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
@@ -350,7 +357,7 @@ const ChatInput = memo<ChatInputProps>(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
         // Host surface is read-only (e.g. page locked) — block Enter too, not
         // just the grayed-out button.
-        if (disableSend) return;
+        if (disableSend || isWorktreePending) return;
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
@@ -435,16 +442,15 @@ const ChatInput = memo<ChatInputProps>(
           return;
         }
 
-        // A new topic's first send acts on the branch picked in the composer
-        // (switch, or fork a worktree) before any message exists. Cancelled or
-        // failed, nothing is sent and the draft stays.
+        // A branch switch may need confirmation before sending. A worktree
+        // send carries its captured device and branch into persistence.
         const gitPrep = await prepareComposerGitSend(sendContext, { editorData });
         if (!gitPrep.ok) return;
 
         // Clear content immediately for responsive UX — unless a git step ran
         // and the composer changed hands meanwhile (see `resolveComposerHandoff`).
         const handoff = resolveComposerHandoff({
-          acted: !!gitPrep.acted,
+          acted: !!gitPrep.acted || !!gitPrep.firstSendWorktree,
           editorUnchanged: getMarkdownContent() === message,
           stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
         });
@@ -461,10 +467,10 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
-          ...(gitPrep.newTopicWorkingDirectory
-            ? { newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory }
-            : {}),
+          ...(gitPrep.firstSendWorktree ? { firstSendWorktree: gitPrep.firstSendWorktree } : {}),
+          newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory,
           ...(handoff.sendToOrigin ? { conversationContext: sendContext } : {}),
+          onMessagePersisted: gitPrep.onMessagePersisted,
           onPreflightFailure: () => {
             const store = useFileStore.getState();
             // The composer was cleared up front; a send rejected before any
@@ -477,7 +483,16 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked, t],
+      [
+        contextKey,
+        sendMessage,
+        storeApi,
+        disableQueue,
+        disableSend,
+        isInputQueueBlocked,
+        isWorktreePending,
+        t,
+      ],
     );
 
     const sendButtonProps: SendButtonProps = getConversationSendButtonProps(
@@ -495,6 +510,7 @@ const ChatInput = memo<ChatInputProps>(
 
     const handleVoiceMessageSend = useCallback(
       (recording: VoiceMessageRecording) => {
+        if (isWorktreePending) return false;
         if (operationSelectors.isInputVisiblyLoadingByContext(context)(useChatStore.getState())) {
           return false;
         }
@@ -527,7 +543,7 @@ const ChatInput = memo<ChatInputProps>(
           }),
         );
       },
-      [context, sendMessage],
+      [context, isWorktreePending, sendMessage],
     );
 
     const defaultContent = (

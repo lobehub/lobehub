@@ -88,6 +88,8 @@ export interface ServerCreateAgentToolsEngineParams {
     /** Plugin IDs enabled for this agent */
     plugins?: string[];
   };
+  /** Configured connectors a custom toolset can load after explicit activation. */
+  allowedConnectorIds?: ReadonlySet<string>;
   /**
    * Whether device tools (local-system / remote-device) are allowed this turn.
    * Computed by `resolveDeviceAccessPolicy` from the caller identity:
