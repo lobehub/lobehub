@@ -8,7 +8,7 @@ import type {
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
@@ -44,6 +44,7 @@ import { ChannelError } from './error';
 import { channelLastMessages } from './lastMessage';
 import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
+import { OPENING_REQUEST_KEY_PREFIX } from './openingKey';
 import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
@@ -643,6 +644,27 @@ export class ChannelRepository {
       : [];
     const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
 
+    // An Agent's acknowledgement before its run is not news: it counts as read, so the badge
+    // waits for the answer instead of reading as the work being done.
+    const acknowledged = unreadMemberIds.length
+      ? await this.db
+          .select({
+            channelId: channelMessages.channelId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(channelMessages)
+          .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
+          .where(
+            and(
+              inArray(channelMembers.id, unreadMemberIds),
+              sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
+              like(channelMessages.requestKey, `${OPENING_REQUEST_KEY_PREFIX}%`),
+            ),
+          )
+          .groupBy(channelMessages.channelId)
+      : [];
+    const ackCountOf = new Map(acknowledged.map(({ channelId, count }) => [channelId, count]));
+
     // Thread mentions outlive the read position, which opening the main conversation moves.
     const threadMentionsOf = await channelThreadMentions(
       this.db,
@@ -707,7 +729,10 @@ export class ChannelRepository {
           replyJobs: replyJobsOf.get(channel.id) ?? [],
           sectionId,
           threadMentions: threadMentionsOf.get(channel.id) ?? [],
-          unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+          unreadCount: Math.max(
+            0,
+            channel.sequence - (lastReadSequence ?? 0) - (ackCountOf.get(channel.id) ?? 0),
+          ),
         };
       },
     );

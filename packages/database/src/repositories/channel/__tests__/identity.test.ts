@@ -162,9 +162,14 @@ describe('direct Channel identity', () => {
       content: 'On it, checking the logs first.',
       opening: true,
     });
+    // Nor is it unread: the badge waits for the answer.
+    const unread = async () =>
+      (await repository.list()).find((item) => item.id === channel.id)?.unreadCount;
+    expect(await unread()).toBe(0);
 
     await publish(channel.id, message.id);
     expect(await listed()).toMatchObject({ content: 'Answer', opening: false });
+    expect(await unread()).toBe(1);
   });
 
   // A list row only knew a reply was in progress once its conversation was opened.

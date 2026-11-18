@@ -49,6 +49,7 @@ import { fileIdsByMessage } from './attachments';
 import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
+import { OPENING_REQUEST_KEY_PREFIX } from './openingKey';
 import { externalWorksByMessage } from './works';
 
 export const publicMessageColumns = {
@@ -188,16 +189,10 @@ const sourceTopicsByMessage = async (
 
 const THREAD_PREVIEW_LENGTH = 240;
 
-/**
- * Request keys of the acknowledgements an Agent posts before its run (`openingRequestKey` in
- * `./opening`, which imports this module, so the prefix is repeated here).
- */
-const OPENING_REQUEST_KEY_PATTERN = 'opening:%';
-
 /** An Agent's acknowledgement before its run: it says the work started, not what came of it. */
 const isOpeningAck = and(
   eq(channelMessages.routingStatus, 'reply'),
-  like(channelMessages.requestKey, OPENING_REQUEST_KEY_PATTERN),
+  like(channelMessages.requestKey, `${OPENING_REQUEST_KEY_PREFIX}%`),
 );
 
 type ThreadSummary = {

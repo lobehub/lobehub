@@ -14,7 +14,7 @@ import type { LobeChatDatabase } from '../../type';
 import { agentTitleSql } from '../../utils/inboxAgent';
 import { notTrashed } from '../../utils/softDelete';
 import { isAgentAuthored } from './author';
-import { OPENING_REQUEST_KEY_PREFIX } from './opening';
+import { OPENING_REQUEST_KEY_PREFIX } from './openingKey';
 import { messageStands } from './tombstone';
 
 /** Characters of the latest message a Channel list item carries as its preview. */
