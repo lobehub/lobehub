@@ -98,6 +98,7 @@ export * from './acceptanceReview';
 export * from './acceptanceReviewRound';
 export * from './agentRuntime';
 export * from './artboard';
+export * from './artboardFiles';
 export * from './artboardPublish';
 export * from './artboardReadiness';
 export * from './connector';
