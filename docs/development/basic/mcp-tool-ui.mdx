@@ -160,7 +160,7 @@ Your UI runs in two nested iframes: a LobeHub wrapper, and your document inside 
 - **`text/uri-list`** pages run under their own server's headers, inside the same opaque-origin sandbox, with no referrer. The wrapper's `frame-src` holds the frame to the page's origin, so links may move between pages of that origin only. URLs must be `https` (or `http` on `localhost` / `127.0.0.1`), may not carry credentials and may not point at LobeHub's own origin.
 - Embedded documents larger than 2 MB are not rendered.
 
-Because the frame has an opaque origin, LobeHub addresses it as `postMessage(message, '*')` on the frame's own window and accepts only messages whose `event.source` is that window. Your UI should likewise only trust messages from `window.parent`.
+Because the frame has an opaque origin, LobeHub addresses it as `postMessage(message, '*')` on the frame's own window and accepts only messages whose `event.source` is that window and whose `event.origin` is `"null"` (the opaque origin). Your UI should likewise only trust messages from `window.parent`.
 
 ## Try it locally
 

@@ -157,7 +157,7 @@ UI 发起的工具调用只会到达渲染它的那个服务器，且只能调�
 - **`text/uri-list`** 页面使用其服务器自己的响应头，同样运行在不透明源沙箱中，且不发送 referrer。包装文档的 `frame-src` 把 iframe 限制在该页面的源内，链接只能在同源页面之间跳转。URL 必须是 `https`（或 `localhost` / `127.0.0.1` 上的 `http`），不能带凭据，也不能指向 LobeHub 自身的源。
 - 超过 2 MB 的内嵌文档不渲染。
 
-由于 iframe 是不透明源，LobeHub 只能对该 iframe 自己的 window 调用 `postMessage(message, '*')`，并且只接受 `event.source` 是该 window 的消息。你的 UI 同样只应信任来自 `window.parent` 的消息。
+由于 iframe 是不透明源，LobeHub 只能对该 iframe 自己的 window 调用 `postMessage(message, '*')`，并且只接受 `event.source` 是该 window、且 `event.origin` 为 `"null"`（不透明源）的消息。你的 UI 同样只应信任来自 `window.parent` 的消息。
 
 ## 本地试用
 

@@ -227,7 +227,8 @@ export const connectMcpUiView = ({
   };
 
   const handleMessage = (event: MessageEvent) => {
-    if (event.source !== target) return;
+    // Views run sandboxed without allow-same-origin, so their origin is always "null"
+    if (event.source !== target || event.origin !== 'null') return;
     const message = parseMcpUiMessage(event.data);
     if (!message) return;
 

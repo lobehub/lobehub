@@ -68,8 +68,8 @@ const setup = ({ canSendMessage = true, isDark = false } = {}) => {
   });
   disposers.push(session.dispose);
 
-  const fromView = async (data: unknown, source: unknown = target) => {
-    window.dispatchEvent(new MessageEvent('message', { data, source: source as Window }));
+  const fromView = async (data: unknown, source: unknown = target, origin = 'null') => {
+    window.dispatchEvent(new MessageEvent('message', { data, origin, source: source as Window }));
     await flush();
     await flush();
   };
@@ -154,6 +154,18 @@ describe('connectMcpUiView', () => {
 
     expect(view.onHeight).not.toHaveBeenCalled();
     expect(invokeMcpToolCall).not.toHaveBeenCalled();
+    expect(view.sent()).toEqual([]);
+  });
+
+  it('ignores messages from the view frame that carry a real origin', async () => {
+    const view = setup();
+    await view.fromView(
+      { payload: { height: 500 }, type: 'ui-size-change' },
+      view.target,
+      'https://evil.example',
+    );
+
+    expect(view.onHeight).not.toHaveBeenCalled();
     expect(view.sent()).toEqual([]);
   });
 
