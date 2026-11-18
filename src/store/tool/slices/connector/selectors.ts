@@ -222,10 +222,14 @@ const isMarketplaceConnectorInstalled =
 /**
  * Finished marketplace installs that have no legacy plugin row. Lists show
  * them beside installed plugins; one with a legacy row is listed as that plugin.
+ * A legacy row stands in for the shared install only: a private install is a
+ * tool set of its own (under its own prefix) and is always listed.
  */
 const marketplaceMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => {
   const legacy = new Set((s.installedPlugins ?? []).map((plugin) => plugin.identifier));
-  return installedMarketplaceConnectors(s).filter((c) => !legacy.has(c.identifier));
+  return installedMarketplaceConnectors(s).filter(
+    (c) => c.visibility === 'private' || !legacy.has(c.identifier),
+  );
 };
 
 /**

@@ -142,6 +142,18 @@ describe('marketplace MCPs installed as connectors', () => {
     ).toBe(marked);
   });
 
+  it('keeps a private reinstall over a legacy row listed, a tool set of its own', () => {
+    // Regression: made private, the reinstall vanished from the Private tab:
+    // the list hid it behind its legacy plugin, which only the Workspace tab shows
+    const privateRow = { ...marked, visibility: 'private' as const };
+    const withLegacyRow = state({
+      connectors: [privateRow],
+      installedPlugins: [{ identifier: 'oauth-market' }] as never,
+    });
+
+    expect(connectorSelectors.marketplaceMcpConnectors(withLegacyRow)).toEqual([privateRow]);
+  });
+
   it('resolves no connector for a row that only projects a plugin or comes from another source', () => {
     const projection = connector({ mcpConnectionType: null, mcpServerUrl: null });
     const custom = connector({ sourceType: 'custom' });
