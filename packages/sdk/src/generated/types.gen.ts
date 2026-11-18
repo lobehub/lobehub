@@ -8208,6 +8208,14 @@ export type PostApiV1FilesByIdParsesErrors = {
      */
     403: ApiError;
     /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Unprocessable content
+     */
+    422: ApiError;
+    /**
      * Rate limit exceeded
      */
     429: ApiError;

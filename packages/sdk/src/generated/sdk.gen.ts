@@ -1023,6 +1023,8 @@ export class Files extends HeyApiClient {
     /**
      * Parse file content
      *
+     * Extracts the text content of a document file. Answers 400 when the file type does not support parsing and 422 when parsing the file fails.
+     *
      * **API key scopes:** `file:write`.
      */
     public parse<ThrowOnError extends boolean = false>(options: Options<PostApiV1FilesByIdParsesData, ThrowOnError>): RequestResult<PostApiV1FilesByIdParsesResponses, PostApiV1FilesByIdParsesErrors, ThrowOnError> {

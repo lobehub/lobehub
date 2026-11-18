@@ -23772,6 +23772,12 @@ paths:
   /api/v1/files/{id}/parses:
     post:
       operationId: files.parse
+      description: >-
+        Extracts the text content of a document file. Answers 400 when the file
+        type does not support parsing and 422 when parsing the file fails.
+
+
+        **API key scopes:** `file:write`.
       summary: Parse file content
       tags:
         - files
@@ -23854,6 +23860,36 @@ paths:
               $ref: "#/components/headers/RateLimitRemaining"
             X-RateLimit-Reset:
               $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Unprocessable content
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
         "429":
           content:
             application/json:
@@ -23903,7 +23939,6 @@ paths:
               - "null"
         - $ref: "#/components/parameters/WorkspaceId"
         - $ref: "#/components/parameters/IdempotencyKey"
-      description: "**API key scopes:** `file:write`."
   /api/v1/files/{id}/chunks:
     post:
       operationId: files.createChunks

@@ -29,6 +29,7 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { nanoid } from '@/utils/uuid';
 
 import { BaseService } from '../common/base.service';
+import { ApiException } from '../common/errors';
 import { processPaginationConditions } from '../helpers/pagination';
 import { projectPublicFile, projectPublicUser } from '../helpers/public-fields';
 import type { DeletedResource } from '../types/common.type';
@@ -947,16 +948,12 @@ export class FileUploadService extends BaseService {
           name: file.name,
         });
 
-        // Return failure result
-        return {
-          content: '',
-          error: errorMessage,
-          fileId,
-          fileType: file.fileType,
-          name: file.name,
-          parseStatus: 'failed',
-          parsedAt: new Date().toISOString(),
-        };
+        // A failed parse is an error response, not a 200 with `parseStatus: 'failed'`.
+        throw new ApiException(
+          422,
+          'unprocessable_entity',
+          `File could not be parsed: ${errorMessage}`,
+        );
       }
     } catch (error) {
       this.handleServiceError(error, '解析文件');

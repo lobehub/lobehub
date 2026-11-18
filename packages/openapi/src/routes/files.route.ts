@@ -260,6 +260,9 @@ app.post(
   routeDoc({
     operationId: 'files.parse',
     data: FileParseResultSchema,
+    description:
+      'Extracts the text content of a document file. Answers 400 when the file type does not support parsing and 422 when parsing the file fails.',
+    errors: [400, 404, 422],
     summary: 'Parse file content',
     tags: ['files'],
   }),
