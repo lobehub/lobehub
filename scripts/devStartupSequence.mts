@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
-import { buildEmbedLoader } from '../packages/embed/scripts/build.mjs';
+import { buildEmbedLoader } from '../packages/embed/scripts/build.mts';
 import { buildFileParseWorker } from './buildFileParseWorker.mts';
 
 interface DevProcessHandle {
