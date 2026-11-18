@@ -98,13 +98,8 @@ const getPluginInstallError = (id: string) => (s: ToolStoreState) => s.pluginIns
 const isToolHasUI = (id: string) => (s: ToolStoreState) => {
   const manifest = getManifestById(id)(s);
   if (!manifest) return false;
-  const builtinTool = s.builtinTools.find((tool) => tool.identifier === id);
-
-  if (builtinTool && builtinTool.type === 'builtin') {
-    return true;
-  }
-
-  return !!manifest.ui;
+  // Only builtin tools render a portal UI; MCP tools bring theirs inline (ui:// views)
+  return s.builtinTools.some((tool) => tool.identifier === id && tool.type === 'builtin');
 };
 
 /**
