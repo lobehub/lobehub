@@ -30,16 +30,21 @@ export const readBlobWithLimit = async (response: Response, maxBytes: number): P
   const chunks: Uint8Array[] = [];
   let receivedBytes = 0;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    receivedBytes += value.byteLength;
-    if (receivedBytes > maxBytes) {
-      await reader.cancel();
-      throw sizeLimitError(maxBytes);
+      receivedBytes += value.byteLength;
+      if (receivedBytes > maxBytes) {
+        // A transport cleanup failure must not hide the download limit error.
+        await reader.cancel().catch(() => {});
+        throw sizeLimitError(maxBytes);
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } finally {
+    reader.releaseLock();
   }
 
   const bytes = new Uint8Array(receivedBytes);
