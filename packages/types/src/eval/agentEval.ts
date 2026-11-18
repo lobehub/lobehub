@@ -109,6 +109,7 @@ export type EvalRunChatConfig = Pick<
   | 'thinkingLevel2'
   | 'thinkingLevel3'
   | 'thinkingLevel4'
+  | 'thinkingLevel5'
 >;
 
 /** Logical mock services required by a case, independent of deployment and credentials. */

@@ -150,6 +150,17 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it('enforces chat and model permissions on worktree turns that start a run', () => {
+    for (const path of ['aiAgent.submitWorktreeTurn', 'aiAgent.retryWorktreeTurn']) {
+      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
+        scopes: ['agent:write', 'chat:write', 'model:invoke'],
+      });
+    }
+    expect(requiredApiKeyScopeForTrpc('aiAgent.cancelWorktreeTurn', 'mutation')).toEqual({
+      scopes: ['agent:write', 'chat:write'],
+    });
+  });
+
   it('separates installing an account credential from managing the account', () => {
     // Reading and managing an agent's identity assets rides the agent domain…
     expect(requiredApiKeyScopeForTrpc('agentAccount.list', 'query')).toEqual({
@@ -250,6 +261,18 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('brandNewRouter.doThing', 'mutation')).toEqual({
       blocked: true,
     });
+  });
+
+  it('categorizes credential-backed webhook management as blocked for restricted keys', () => {
+    for (const [procedure, type] of [
+      ['list', 'query'],
+      ['check', 'mutation'],
+      ['delete', 'mutation'],
+    ] as const) {
+      expect(requiredApiKeyScopeForTrpc(`inboundWebhook.${procedure}`, type)).toEqual({
+        blocked: true,
+      });
+    }
   });
 
   it('keeps bootstrap namespaces open', () => {

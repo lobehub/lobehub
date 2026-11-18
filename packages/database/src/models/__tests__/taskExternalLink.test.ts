@@ -38,6 +38,22 @@ afterEach(async () => {
 });
 
 describe('TaskExternalLinkModel', () => {
+  it('keeps recorded labels through a display refresh, which replaces the rest', async () => {
+    const model = new TaskExternalLinkModel(db, userId);
+    const task = await new TaskModel(db, userId).create({ instruction: 'one' });
+    const { id } = await model.create({ ...link(task.id), metadata: { stateName: 'Todo' } });
+
+    await model.recordSyncedLabels(id, ['bug']);
+    await model.update(id, { metadata: { stateName: 'Done' } });
+
+    const [row] = await model.findByExternalIds('linear', ['issue-1']);
+    expect(row.metadata).toEqual({ stateName: 'Done', syncedLabels: ['bug'] });
+
+    await model.recordSyncedLabels(id, []);
+    const [cleared] = await model.findByExternalIds('linear', ['issue-1']);
+    expect(cleared.metadata.syncedLabels).toEqual([]);
+  });
+
   it('maps an external item to at most one task per scope', async () => {
     const model = new TaskExternalLinkModel(db, userId);
     const tasks = new TaskModel(db, userId);

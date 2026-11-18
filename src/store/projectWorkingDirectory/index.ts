@@ -103,8 +103,16 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   createProjectTopic: (
     ...args: ServiceParams<'createProjectTopic'>
   ) => Promise<ServiceData<'createProjectTopic'>>;
+  /** Unlink an environment from a project; the environment itself is kept. */
+  detachEnvironment: (...args: ServiceParams<'detachEnvironment'>) => Promise<void>;
   /** Move a directory conversation to its project's directory on another device. */
   moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
+  /**
+   * Refetch every environment and directory projection after an environment
+   * was edited elsewhere (the shared settings panel): directory rows carry its
+   * name denormalized.
+   */
+  refreshEnvironments: () => Promise<void>;
   /** Refetch a project's conversations after a change made elsewhere, e.g. a new main agent. */
   refreshProjectTopics: (projectId: string) => Promise<void>;
   /** Repoint a directory at another device location; its conversations follow it. */
@@ -231,6 +239,9 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       ]);
       return result.data;
     },
+    refreshEnvironments: async () => {
+      await Promise.all([environments.revalidate(), directories.revalidate()]);
+    },
     refreshProjectTopics: async (projectId) => {
       // Directory and environment rows carry the same topics with their agent
       // denormalized, so every projection that lists them is stale too.
@@ -277,8 +288,20 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       await projectWorkingDirectoryService.attachEnvironment(projectId, environmentId);
       await Promise.all([
         environments.revalidate(projectId),
+        // Relinking makes the project's folders made from it runnable again.
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
         // The scope-wide list gained the environment instanced by the attach.
         environments.revalidate(ALL_PROJECTS_KEY),
+      ]);
+    },
+    detachEnvironment: async (projectId, environmentId) => {
+      await projectWorkingDirectoryService.detachEnvironment(projectId, environmentId);
+      await Promise.all([
+        environments.revalidate(projectId),
+        // The project's folders made from it lose their runnable environment.
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
       ]);
     },
     attachRepository: async (input) => {

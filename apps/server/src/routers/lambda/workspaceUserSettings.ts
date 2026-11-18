@@ -68,6 +68,16 @@ export const workspaceUserSettingsRouter = router({
   ),
 
   /**
+   * This member's "New worktree" switch for one directory in this workspace.
+   * The list's cap is applied server-side, against the stored copy.
+   */
+  setWorktreeModeDir: workspaceUserSettingsProcedure
+    .input(z.object({ enabled: z.boolean(), key: z.string().min(1).max(4096) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.workspaceUserSettingsModel.setWorktreeModeDir(input.key, input.enabled),
+    ),
+
+  /**
    * Merge `input` on top of the caller's current preference and persist via
    * UPSERT. First call for a `(workspace, user)` pair creates the row.
    */

@@ -37,6 +37,7 @@ const channel: ChannelListItem = {
   sequence: 0,
   status: 'active',
   title: 'Important channel',
+  visibility: 'private',
   workspaceId: null,
 };
 describe('Channel deletion confirmation', () => {

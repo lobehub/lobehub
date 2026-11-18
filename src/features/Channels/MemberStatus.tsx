@@ -186,6 +186,7 @@ export function MemberStatus({
                 ),
                 directAgentName: channel.agentId ? (directAgent?.name ?? '') : undefined,
                 id: channel.id,
+                projectId: channel.projectId,
                 workspaceId: channel.workspaceId,
               },
               // Inviting from a direct conversation opens the group it starts.

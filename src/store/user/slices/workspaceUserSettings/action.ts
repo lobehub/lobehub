@@ -1,4 +1,5 @@
 import type { WorkspaceUserPreference } from '@lobechat/types';
+import { applyWorktreeModeDir } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import isEqual from 'fast-deep-equal';
 import type { ReplicaSlice } from 'local-replica/zustand';
@@ -8,7 +9,8 @@ import {
   getActiveWorkspaceId,
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
-import { createReplicaSlice, type ReplicaLens } from '@/libs/replica';
+import { createReplicaSlice, type ReplicaLens, revalidateReplica } from '@/libs/replica';
+import { userService } from '@/services/user';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
 import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
 import { type StoreSetter } from '@/store/types';
@@ -194,6 +196,19 @@ export class WorkspaceUserSettingsActionImpl {
     };
   };
 
+  /**
+   * Re-read the active workspace's preference from the server. Call it after
+   * a server-side write to this member's preference that the client did not
+   * make itself (e.g. publishing a pinned private Agent moves its pin into
+   * `sidebarPinnedItemIds`), so the next local whole-array write is not based
+   * on a stale copy.
+   */
+  refreshWorkspaceUserPreference = async (): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
+    if (!workspaceId) return;
+    await revalidateReplica(getWorkspaceUserPreferenceResource(), workspaceId);
+  };
+
   updateWorkspaceUserPreference = async (
     patch: Partial<WorkspaceUserPreference>,
   ): Promise<void> => {
@@ -247,6 +262,69 @@ export class WorkspaceUserSettingsActionImpl {
     // them, which the sidebar presence dots cache per agent. (Personal mode
     // has no overrides, so the early return above needs no refresh.)
     if (patch.agentDeviceOverrides) void refreshAgentDeviceBindings();
+  };
+
+  /**
+   * Turn the composer's "New worktree" switch on or off for one directory
+   * (`getWorktreeModeKey`). Inside a workspace it lives in this member's
+   * workspace bucket, in personal mode in `users.preference`. Applied
+   * optimistically so the switch flips at once, rolled back if the write fails
+   * (rethrown, so the caller can say so); the server applies the cap.
+   */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
+
+    if (!workspaceId) {
+      const previous = this.#get().preference;
+      this.#set(
+        {
+          preference: {
+            ...previous,
+            worktreeModeDirs: applyWorktreeModeDir(previous.worktreeModeDirs, key, enabled),
+          },
+        },
+        false,
+        n('setWorktreeModeDir'),
+      );
+      try {
+        const worktreeModeDirs = await userService.setWorktreeModeDir(key, enabled);
+        this.#set(
+          { preference: { ...this.#get().preference, worktreeModeDirs } },
+          false,
+          n('setWorktreeModeDir/confirmed'),
+        );
+      } catch (error) {
+        this.#set(
+          {
+            preference: {
+              ...this.#get().preference,
+              worktreeModeDirs: previous.worktreeModeDirs,
+            },
+          },
+          false,
+          n('setWorktreeModeDir/rollback'),
+        );
+        throw error;
+      }
+      return;
+    }
+
+    const replica = this.#replica();
+    if (replica.getConfirmed(workspaceId) === undefined) {
+      await replica.hydrate({ workspaceId });
+      if (getActiveWorkspaceId() !== workspaceId) return;
+    }
+    const previous = this.#get().workspaceUserPreference;
+    replica.update(workspaceId, (data) => data ?? previous, { persist: false });
+    await replica.optimistic(
+      workspaceId,
+      (data) => ({
+        ...data,
+        worktreeModeDirs: applyWorktreeModeDir(data.worktreeModeDirs, key, enabled),
+      }),
+      () => workspaceUserSettingsService.setWorktreeModeDir(key, enabled),
+      { revalidate: true },
+    );
   };
 }
 

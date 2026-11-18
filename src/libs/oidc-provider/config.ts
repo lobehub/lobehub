@@ -1,4 +1,4 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
+import { BRANDING_NAME, BUSINESS_OIDC_CLIENTS } from '@lobechat/business-const';
 import {
   ACCEPTANCE_CLIENT_ID,
   ACCEPTANCE_EXTENSION_CLIENT_ID,
@@ -19,9 +19,9 @@ const desktopAppOrigins = cloudAppOrigins.includes(new URL(appUrl).origin)
 const marketBaseUrl = new URL(appEnv.MARKET_BASE_URL ?? 'https://market.lobehub.com').origin;
 
 /**
- * Default OIDC client configuration
+ * Clients the open-source distribution registers itself.
  */
-export const defaultClients: ClientMetadata[] = [
+const builtinClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: 'lobehub-desktop',
@@ -127,6 +127,37 @@ export const defaultClients: ClientMetadata[] = [
     token_endpoint_auth_method: 'none',
   },
 ];
+
+/**
+ * Appends a distribution's statically registered clients to the built-in ones.
+ *
+ * A distribution client may not reuse a built-in `client_id`: oidc-provider
+ * would silently keep one of the two, and a slot that replaced the desktop
+ * client's redirect URIs or grant types would change who can sign in as it.
+ */
+export const mergeBusinessClients = (
+  builtin: ClientMetadata[],
+  business: readonly ClientMetadata[],
+): ClientMetadata[] => {
+  const seen = new Set(builtin.map((client) => client.client_id));
+
+  for (const client of business) {
+    if (seen.has(client.client_id)) {
+      throw new Error(`OIDC client "${client.client_id}" is registered more than once`);
+    }
+    seen.add(client.client_id);
+  }
+
+  return [...builtin, ...business];
+};
+
+/**
+ * Default OIDC client configuration
+ */
+export const defaultClients: ClientMetadata[] = mergeBusinessClients(
+  builtinClients,
+  BUSINESS_OIDC_CLIENTS as ClientMetadata[],
+);
 
 /**
  * OIDC Scopes definition

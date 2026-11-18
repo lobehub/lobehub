@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -6,6 +7,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { isDev } from '@/utils/env';
 
 import { contextSelectors, useConversationStore } from '../../store';
+import { revealStyles } from '../revealStyles';
 import type { ChatItemProps } from '../type';
 
 export interface ActionsProps {
@@ -31,7 +33,7 @@ const Actions = memo<ActionsProps>(({ actionAddon, placement, actions }) => {
     >
       {!isUser && actionAddon}
       {actions && (
-        <Flexbox horizontal align={'center'} role="menubar">
+        <Flexbox horizontal align={'center'} role="menubar" {...stylex.props(revealStyles.menubar)}>
           {actions}
         </Flexbox>
       )}

@@ -98,13 +98,42 @@ describe('desktop tab shortcuts', () => {
     }
   });
 
+  it('uses Command, not Control, for the number shortcuts on macOS', () => {
+    const userAgent = vi
+      .spyOn(navigator, 'userAgent', 'get')
+      .mockReturnValue('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
+    renderHook(useRegisterDesktopTabHotkeys);
+
+    press('1', 'Digit1', { ctrlKey: true });
+    expect(state.switchTab).not.toHaveBeenCalled();
+
+    press('1', 'Digit1', { metaKey: true });
+    expect(state.switchTab).toHaveBeenLastCalledWith('first');
+
+    userAgent.mockRestore();
+  });
+
+  it('jumps to the last tab with 9, however many tabs are open', () => {
+    renderHook(useRegisterDesktopTabHotkeys);
+
+    press('9', 'Digit9', { ctrlKey: true });
+    expect(state.switchTab).toHaveBeenLastCalledWith('third');
+
+    state.tabs = Array.from({ length: 12 }, (_, i) => ({ id: `tab-${i + 1}` }));
+    press('9', 'Digit9', { ctrlKey: true });
+    expect(state.switchTab).toHaveBeenLastCalledWith('tab-12');
+    press('8', 'Digit8', { ctrlKey: true });
+    expect(state.switchTab).toHaveBeenLastCalledWith('tab-8');
+  });
+
   it('ignores missing tabs, empty lists and unrelated modifier combinations', () => {
     renderHook(useRegisterDesktopTabHotkeys);
-    press('9', 'Digit9', { ctrlKey: true });
+    press('5', 'Digit5', { ctrlKey: true });
     press('1', 'Digit1', { altKey: true });
     press('1', 'Digit1', { altKey: true, ctrlKey: true });
     press('Tab', 'Tab', { altKey: true });
     state.tabs = [];
+    press('9', 'Digit9', { ctrlKey: true });
     press('Tab', 'Tab', { ctrlKey: true });
     press('Tab', 'Tab', { ctrlKey: true, shiftKey: true });
     expect(state.switchTab).not.toHaveBeenCalled();

@@ -408,6 +408,20 @@ export function createCallbacksTransformer(
 
 export const FIRST_CHUNK_ERROR_KEY = '_isFirstChunkError';
 
+const SOCKET_DISCONNECT_PATTERN = /ECONNRESET|EPIPE|socket hang up|other side closed/i;
+
+/**
+ * The upstream connection dropped while the SDK iterator was reading the body: undici throws
+ * `TypeError: terminated` with the socket error as `cause` (e.g. `read ECONNRESET`). Nothing
+ * failed to parse, so it is a provider stream interruption, not a `ProviderBizError` that the
+ * router later rewraps as a harness `StreamChunkError`.
+ */
+const isUpstreamDisconnect = (errorData: { causeMessage?: unknown; message?: unknown }) =>
+  (typeof errorData.message === 'string' &&
+    (errorData.message === 'terminated' || SOCKET_DISCONNECT_PATTERN.test(errorData.message))) ||
+  (typeof errorData.causeMessage === 'string' &&
+    SOCKET_DISCONNECT_PATTERN.test(errorData.causeMessage));
+
 export const createFirstErrorHandleTransformer = (
   errorHandler?: (errorJson: any) => any,
   provider?: string,
@@ -425,7 +439,11 @@ export const createFirstErrorHandleTransformer = (
         controller.enqueue({
           ...errorData,
           [FIRST_CHUNK_ERROR_KEY]: true,
-          errorType: errorHandler?.(errorData) || AgentRuntimeErrorType.ProviderBizError,
+          errorType:
+            errorHandler?.(errorData) ||
+            (isUpstreamDisconnect(errorData)
+              ? AgentRuntimeErrorType.ProviderStreamInterrupted
+              : AgentRuntimeErrorType.ProviderBizError),
           provider,
         });
       } else {

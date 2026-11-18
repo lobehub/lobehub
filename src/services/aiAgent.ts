@@ -398,10 +398,23 @@ class AiAgentService {
     return await lambdaClient.agentSteerQueue.remove.mutate(params);
   }
 
-  /**
-   * Defer an agent run to a future time. Creates an empty `scheduled` topic that
-   * the backend cron fires once `runAt` passes; nothing runs now.
-   */
+  /** Persist a first send before the device checkout starts. */
+  async submitWorktreeTurn(
+    params: Parameters<typeof lambdaClient.aiAgent.submitWorktreeTurn.mutate>[0],
+    workspaceId: string | null,
+  ) {
+    return createWorkspaceLambdaClient(workspaceId).aiAgent.submitWorktreeTurn.mutate(params);
+  }
+
+  async cancelWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.cancelWorktreeTurn.mutate({ topicId });
+  }
+
+  async retryWorktreeTurn(topicId: string) {
+    return lambdaClient.aiAgent.retryWorktreeTurn.mutate({ topicId });
+  }
+
+  /** Persist a scheduled turn for the backend to dispatch at the selected time. */
   async scheduleAgentRun(params: ScheduleAgentRunParams): Promise<ScheduleAgentRunResult> {
     return await lambdaClient.aiAgent.scheduleAgentRun.mutate(params);
   }
@@ -459,6 +472,15 @@ class AiAgentService {
    */
   async getOperationStatus(params: { operationId: string }) {
     return await lambdaClient.aiAgent.getOperationStatus.query(params);
+  }
+
+  /**
+   * Stop one Claude Code background task of a run hosted by `lh hetero exec`.
+   * `accepted` only means Claude Code took the request; the task's `stopped`
+   * snapshot arrives through the run's own stream.
+   */
+  async stopHeteroBackgroundTask(params: { operationId: string; taskId: string }) {
+    return await lambdaClient.aiAgent.stopHeteroBackgroundTask.mutate(params);
   }
 
   /**

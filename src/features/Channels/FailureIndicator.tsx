@@ -4,7 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import { CircleAlert, LocateFixed } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { unresolvedFailures } from './jobStatus';
+import { mainTimelineFailures } from './jobStatus';
 import type { ReplyEntry } from './MessageReceipts';
 import { ReplyDetail, replyEntries } from './MessageReceipts';
 import { statusStyles, toneStyles } from './styles';
@@ -43,7 +43,7 @@ function FailureRow({ channelId, entry }: { channelId: string; entry: ReplyEntry
  */
 export function FailureIndicator({ detail }: { detail: ChannelDetail }) {
   const { t } = useTranslation('channel');
-  const failures = unresolvedFailures(detail.jobs);
+  const failures = mainTimelineFailures(detail.jobs);
   if (!failures.length) return null;
   const entries = replyEntries(detail, failures, t('unnamedAgent'));
   const label = t('failure.title', { count: failures.length });

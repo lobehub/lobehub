@@ -20,6 +20,11 @@ const log = debug('lobe-server:ai-agent-service');
 /** The part of `HeteroDispatchDeps` that settling a dispatch failure needs. */
 export interface HeteroDispatchErrorDeps {
   db: LobeChatDatabase;
+  /**
+   * A share visitor run: its topic and messages are visitor rows, which the
+   * models hide unless opted in, so settling the run must opt in too.
+   */
+  includeShareVisitor?: boolean;
   messageModel: MessageModel;
   topicModel: TopicModel;
   userId: string;
@@ -112,7 +117,9 @@ export const finalizeHeteroDispatchError = async (
   //     hooks, so asking afterwards can no longer tell "delivered" from "never
   //     had one".
   const terminalReported = hookDispatcher.canDeliver(operationId, 'onComplete');
-  await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId).completeOperation(
+  await new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId, {
+    includeShareVisitor: deps.includeShareVisitor,
+  }).completeOperation(
     {
       agentId,
       assistantMessageId,

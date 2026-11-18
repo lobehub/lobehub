@@ -3,16 +3,16 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Button, confirmModal, Icon, Switch, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
-import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
+import { HardDriveDownload } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AccountDeletion from '@/business/client/features/AccountDeletion';
 import { useTransferAgentsFormItem } from '@/business/client/hooks/useTransferAgentsFormItem';
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { useDataExportItem } from '@/features/DataExporter/useDataExportItem';
 import DataImporter from '@/features/DataImporter';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
-import { configService } from '@/services/config';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -28,6 +28,7 @@ const AdvancedActions = () => {
   const resetSettings = useUserStore((s) => s.resetSettings);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
   const form = useForm();
+  const exportItem = useDataExportItem({ enabled: enableBusinessFeatures });
 
   const handleReset = useCallback(() => {
     confirmModal({
@@ -45,16 +46,8 @@ const AdvancedActions = () => {
 
   const renderExportButtonFormItem = () => {
     return {
-      children: (
-        <Button
-          icon={<Icon icon={HardDriveUpload} />}
-          onClick={() => {
-            configService.exportAll();
-          }}
-        >
-          {t('storage.actions.export.button')}
-        </Button>
-      ),
+      children: exportItem.children,
+      desc: exportItem.desc,
       label: (
         <SettingsSearchAnchor id={'storage-export'}>
           {t('storage.actions.export.title')}

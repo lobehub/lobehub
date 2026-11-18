@@ -1,6 +1,6 @@
 'use client';
 
-import { upsertPluginMode } from '@lobechat/types';
+import { upsertConnectorEnabled } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -99,10 +99,10 @@ export const useAgentComposioConnect = ({ agentId, appSlug, identifier, label }:
         tools,
       });
 
-      // Pin the tool for this agent so the runtime actually resolves it.
+      // Turn the tool on for this agent so the runtime actually resolves it.
       const config = agentSelectors.getAgentConfigById(agentId)(useAgentStore.getState());
       await updateAgentConfigById(agentId, {
-        plugins: upsertPluginMode(config?.plugins, identifier, 'pinned'),
+        plugins: upsertConnectorEnabled(config?.plugins, identifier, true),
       });
 
       await fetchAgentConnectors(agentId);

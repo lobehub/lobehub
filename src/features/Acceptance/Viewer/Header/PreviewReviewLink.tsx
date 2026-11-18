@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, MonitorSmartphone } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,17 +11,13 @@ import type { AcceptanceBundle } from '@/services/verify';
 
 import { previewReviewUrl } from './previewReview';
 
-const styles = createStaticStyles(({ css }) => ({
-  link: css`
-    cursor: pointer;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      text-decoration: underline;
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    cursor: 'pointer',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    textDecoration: { 'default': null, ':hover': 'underline' },
+  },
+});
 
 interface PreviewReviewLinkProps {
   acceptanceId: string;
@@ -32,7 +30,7 @@ const PreviewReviewLink = memo<PreviewReviewLinkProps>(({ acceptanceId, rounds }
   if (!href) return null;
   return (
     <a
-      className={styles.link}
+      {...stylex.props(styles.link)}
       href={href}
       rel={'noreferrer'}
       target={'_blank'}

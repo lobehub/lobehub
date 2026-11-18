@@ -355,5 +355,41 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       expect(refreshMessages).toHaveBeenCalledWith({ agentId: 'a', topicId: 'topic-1' });
       expect(refreshTopic).toHaveBeenCalledTimes(1);
     });
+
+    // ROOT CAUSE:
+    //
+    // The hub forwards `op_lifecycle` asynchronously, so a stopped run's
+    // `interrupted` notice can land after its socket closed on the terminal
+    // frame but before the server's in-flight step persisted the partial reply.
+    // The run then looked unowned, and its refetch replaced the streamed text
+    // the terminal handler had kept with the step's empty placeholder.
+    //
+    // Before: the notice refetched the topic's messages.
+    // After: a run stopped in this tab settles through its own stream only.
+    it('does not refetch messages when a run stopped here ends after its socket closed', () => {
+      const { mux, refreshMessages, refreshTopic, state } = setup();
+      state.operations = {
+        'local-run': {
+          context: { agentId: 'a', scope: 'main', threadId: null, topicId: 'topic-1' },
+          id: 'local-run',
+          metadata: { serverOperationId: 'stopped-op' },
+          status: 'cancelled',
+          type: 'execServerAgentRuntime',
+        },
+      };
+
+      mux.emit('lifecycle', lifecycle('stopped-op', 'interrupted', { agentId: 'a', topicId: 't' }));
+
+      expect(refreshMessages).not.toHaveBeenCalled();
+      expect(refreshTopic).not.toHaveBeenCalled();
+    });
+
+    it('still refetches messages when a run stopped elsewhere ends', () => {
+      const { mux, refreshMessages } = setup();
+
+      mux.emit('lifecycle', lifecycle('other-op', 'interrupted', { agentId: 'a', topicId: 't' }));
+
+      expect(refreshMessages).toHaveBeenCalledWith({ agentId: 'a', topicId: 't' });
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { type AgentGroupDetail } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -300,6 +301,42 @@ describe('active conversation projection', () => {
       activeGroupId: undefined,
       activeThreadId: null,
       activeTopicId: null,
+    });
+  });
+
+  describe('route-less pages', () => {
+    beforeEach(() => {
+      useAgentStore.setState({ builtinAgentIdMap: { [INBOX_SESSION_ID]: 'agent-inbox' } }, false);
+    });
+
+    it.each([
+      ['personal Home', '/', null],
+      ['workspace Home', '/acme', 'acme'],
+      ['workspace Home with a trailing slash', '/acme/', 'acme'],
+    ])('projects the inbox agent on %s', (_label, url, workspaceSlug) => {
+      projectActiveConversationCoordinate(
+        resolveActiveConversationCoordinate({ params: {}, url, workspaceSlug }),
+      );
+
+      expect(useAgentStore.getState().activeAgentId).toBe('agent-inbox');
+      expect(useChatStore.getState()).toMatchObject({
+        activeAgentId: undefined,
+        activeTopicId: undefined,
+      });
+    });
+
+    it('clears the active agent on a route-less page other than Home', () => {
+      useAgentStore.setState({ activeAgentId: 'agent-inbox' }, false);
+
+      projectActiveConversationCoordinate(
+        resolveActiveConversationCoordinate({
+          params: {},
+          url: '/settings',
+          workspaceSlug: 'acme',
+        }),
+      );
+
+      expect(useAgentStore.getState().activeAgentId).toBeUndefined();
     });
   });
 });

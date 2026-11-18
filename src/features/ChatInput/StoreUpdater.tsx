@@ -20,7 +20,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     canRecordVoiceMessage,
     chatInputEditorRef,
     contextSelectionKey,
-    contextWindowMessages,
+    contextWindow,
     draftKey,
     feature = DEFAULT_CHAT_INPUT_FEATURE,
     mobile,
@@ -30,11 +30,11 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     onSend,
     onVoiceMessageSend,
     onMarkdownContentChange,
-    sendMenu,
     mentionItems,
     allowExpand,
     slashPlacement,
     getMessages,
+    queueSendWhileUploading,
     resolveSendBlocked,
     topicId,
     uploadContextKey,
@@ -48,13 +48,16 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('canRecordVoiceMessage', canRecordVoiceMessage);
     useStoreUpdater('contextSelectionKey', contextSelectionKey);
     useStoreUpdater('uploadContextKey', uploadContextKey);
-    useStoreUpdater('contextWindowMessages', contextWindowMessages);
+    useStoreUpdater('contextWindow', contextWindow);
 
     // Sync draftKey before paint: the draft-transition subscriber
     // (useChatInputDraft) swaps the editor document on this change, and doing
     // it post-paint would flash the previous topic's draft for one frame.
     useLayoutEffect(() => {
       if (draftKey !== undefined && storeApi.getState().draftKey !== draftKey) {
+        // A send queued in the conversation being left must not fire if the user
+        // comes back before its uploads settle: drop it on the first switch.
+        storeApi.getState().cancelUploadQueuedSend();
         storeApi.setState({ draftKey });
       }
     }, [draftKey, storeApi]);
@@ -69,15 +72,13 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
+    useStoreUpdater('queueSendWhileUploading', queueSendWhileUploading);
+    // A send queued for uploads watches the global file store; an unmounted
+    // composer has nothing left to send it from.
+    useEffect(() => () => storeApi.getState().cancelUploadQueuedSend(), [storeApi]);
     useStoreUpdater('onSend', onSend);
     useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
-
-    useEffect(() => {
-      // `createStoreUpdater` skips undefined values, but follow-up mode needs to
-      // actively clear any previously injected send menu from the store.
-      storeApi.setState({ sendMenu });
-    }, [sendMenu, storeApi]);
 
     useImperativeHandle(chatInputEditorRef, () => editor);
 

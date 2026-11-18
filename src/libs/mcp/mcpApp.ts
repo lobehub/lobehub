@@ -6,7 +6,11 @@
  * (`state.mcpApp`) so the conversation can fetch the HTML and render it.
  */
 
-import { getMcpToolVisibility, isMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import {
+  getMcpToolVisibility,
+  isMcpToolVisibleTo,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
 
 /** Capability key a client advertises to tell servers it can render MCP Apps. */
 export const MCP_APPS_EXTENSION_ID = 'io.modelcontextprotocol/ui';
@@ -24,6 +28,7 @@ export interface McpAppToolState {
    * desktop can serve them.
    */
   deviceId?: string;
+  preferredModelDisplayMode?: 'inline' | 'fullscreen';
   resourceUri: string;
   /**
    * The MCP server that produced the result (`getMcpServerFingerprint`). The
@@ -40,29 +45,29 @@ const isUiUri = (value: unknown): value is string =>
  * Read the UI resource URI a tool declares. Supports the current nested
  * `_meta.ui.resourceUri` and the deprecated flat `_meta["ui/resourceUri"]`.
  */
-export const getToolUiResourceUri = (tool: { _meta?: unknown } | undefined): string | undefined => {
-  const meta = tool?._meta as Record<string, any> | undefined;
-  if (!meta) return;
-
-  const uri = meta.ui?.resourceUri ?? meta['ui/resourceUri'];
-
-  return isUiUri(uri) ? uri : undefined;
-};
+export const getToolUiResourceUri = (
+  tool: { _meta?: unknown } | undefined,
+  enabled = false,
+): string | undefined => resolveMcpUiToolMeta(tool?._meta, enabled).resourceUri;
 
 /**
  * Whether a view may call this tool (`tools/call` from the app). Its
  * `_meta.ui.visibility` lists who may: unset means `["model", "app"]`, and a
  * tool without `"app"` must be refused to views.
  */
-export const isToolVisibleToApp = (tool: { _meta?: unknown } | undefined): boolean =>
-  isMcpToolVisibleTo(getMcpToolVisibility(tool?._meta), 'app');
+export const isToolVisibleToApp = (
+  tool: { _meta?: unknown } | undefined,
+  enabled = false,
+): boolean => isMcpToolVisibleTo(getMcpToolVisibility(tool?._meta, enabled), 'app');
 
 /**
  * Whether this tool may be in the model's tool list. A tool whose
  * `_meta.ui.visibility` leaves out `"model"` exists only for its view.
  */
-export const isToolVisibleToModel = (tool: { _meta?: unknown } | undefined): boolean =>
-  isMcpToolVisibleTo(getMcpToolVisibility(tool?._meta), 'model');
+export const isToolVisibleToModel = (
+  tool: { _meta?: unknown } | undefined,
+  enabled = false,
+): boolean => isMcpToolVisibleTo(getMcpToolVisibility(tool?._meta, enabled), 'model');
 
 /**
  * The raw MCP tool result state. Server AgentRuntime calls persist the whole
@@ -90,13 +95,25 @@ export const unwrapMcpToolState = <T = any>(state: T): T => {
 export const getMcpAppFromState = (state: unknown): McpAppToolState | undefined => {
   const mcpApp = (
     unwrapMcpToolState(state) as
-      { mcpApp?: { deviceId?: unknown; resourceUri?: unknown; server?: unknown } } | undefined
+      | {
+          mcpApp?: {
+            deviceId?: unknown;
+            preferredModelDisplayMode?: unknown;
+            resourceUri?: unknown;
+            server?: unknown;
+          };
+        }
+      | undefined
   )?.mcpApp;
   if (!isUiUri(mcpApp?.resourceUri)) return;
 
   return {
     ...(typeof mcpApp.deviceId === 'string' && { deviceId: mcpApp.deviceId }),
     resourceUri: mcpApp.resourceUri,
+    ...((mcpApp.preferredModelDisplayMode === 'inline' ||
+      mcpApp.preferredModelDisplayMode === 'fullscreen') && {
+      preferredModelDisplayMode: mcpApp.preferredModelDisplayMode,
+    }),
     ...(typeof mcpApp.server === 'string' && { server: mcpApp.server }),
   };
 };

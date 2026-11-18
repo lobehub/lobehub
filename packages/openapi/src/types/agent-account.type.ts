@@ -1,5 +1,15 @@
-import { AGENT_ACCOUNT_KINDS } from '@lobechat/types';
+import {
+  AGENT_ACCOUNT_DIGEST_MINUTES_RANGE,
+  AGENT_ACCOUNT_KINDS,
+  AGENT_ACCOUNT_PERSISTED_KINDS,
+  AGENT_ACCOUNT_STATUSES,
+  AGENT_ACCOUNT_WAKE_MODES,
+} from '@lobechat/types';
 import { z } from 'zod';
+
+import type { AgentAccountView } from '@/database/models/agentAccount';
+
+import { dateTimeSchema, jsonObjectSchema } from './common.type';
 
 // ==================== Path / Query Schemas ====================
 
@@ -117,3 +127,75 @@ export const SetAgentAccountCredentialRequestSchema = z.object({
 export type SetAgentAccountCredentialRequest = z.infer<
   typeof SetAgentAccountCredentialRequestSchema
 >;
+
+// ==================== Response Schemas ====================
+
+/**
+ * Every field an account view carries. Typed against the view so a column added
+ * to it fails type-checking here rather than being silently dropped from the
+ * SDK — the schema is strict, so a missing field would also make strict
+ * response validators reject real payloads.
+ */
+const agentAccountShape = {
+  /** Last time the account was read or used — every account view carries it. */
+  accessedAt: dateTimeSchema,
+  agentId: z.string(),
+  /** Stored JSON declared by the provider (or the mounting caller). */
+  capabilities: z
+    .object({
+      login: z.boolean().optional(),
+      receive: z.boolean(),
+      send: z.boolean(),
+      sign: z.boolean().optional(),
+    })
+    .meta({ id: 'AgentAccountCapabilities' }),
+  createdAt: dateTimeSchema,
+  /** Non-secret display facts about the installed credential. */
+  credentialHint: z
+    .object({
+      expiresAt: z.string().optional(),
+      masked: z.string().optional(),
+      rotatedAt: z.string().optional(),
+      username: z.string().optional(),
+    })
+    .nullable(),
+  displayName: z.string().nullable(),
+  /** Whether a secret is installed. Never the secret itself. */
+  hasCredential: z.boolean(),
+  id: z.string(),
+  identifier: z.string(),
+  // The persisted kinds, not just the creatable ones: an unfiltered read still
+  // returns retired-kind rows, and the response contract must not exclude a
+  // value the API actually returns.
+  kind: z.enum(AGENT_ACCOUNT_PERSISTED_KINDS),
+  /** Provider-side non-secret handles (inboxId, chatId, …), owned by the provider. */
+  metadata: jsonObjectSchema.nullable(),
+  provider: z.string(),
+  revokedAt: dateTimeSchema.nullable(),
+  /** The owner's own settings, such as wake rules. */
+  settings: z.object({
+    wake: z
+      .object({
+        digestMinutes: z
+          .number()
+          .int()
+          .min(AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.min)
+          .max(AGENT_ACCOUNT_DIGEST_MINUTES_RANGE.max)
+          .optional(),
+        mode: z.enum(AGENT_ACCOUNT_WAKE_MODES).optional(),
+        wakeSenders: z.array(z.string()).optional(),
+      })
+      .optional(),
+  }),
+  status: z.enum(AGENT_ACCOUNT_STATUSES),
+  updatedAt: dateTimeSchema,
+  userId: z.string(),
+  workspaceId: z.string().nullable(),
+} satisfies Record<keyof AgentAccountView, z.ZodType>;
+
+export const AgentAccountSchema = z.object(agentAccountShape).strict().meta({ id: 'AgentAccount' });
+
+export const AgentAccountListSchema = z
+  .object({ accounts: z.array(AgentAccountSchema), total: z.number().int().min(0) })
+  .strict()
+  .meta({ id: 'AgentAccountList' });

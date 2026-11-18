@@ -8,6 +8,8 @@ import { ActivationResultTrimProcessor } from '../ActivationResultTrim';
 const CREDS_SYSTEM_ROLE = 'lobe-creds instructions: manage credentials carefully.\n'.repeat(20);
 const SKILL_CONTENT = '# PowerShell Skill\n\nRun PowerShell commands safely.\n'.repeat(20);
 const RESOURCE_TREE = '<resources skill="PowerShell">\n- scripts/run.ps1\n</resources>';
+const LOCK_REASON =
+  'Device switching is off for this run: it is locked to device "device-a". Tell the user to pick another device.';
 
 const credsManifest = {
   api: [
@@ -92,6 +94,93 @@ describe('ActivationResultTrimProcessor', () => {
       const content = result.messages[0].content as string;
       expect(content).toContain('Already active: github.');
       expect(content).toContain('Not found: nonexistent.');
+    });
+
+    it('should keep why a withheld tool is unavailable instead of a bare not-found', async () => {
+      // A device-locked run walls the device picker off and the activator says
+      // why. Rebuilding the result from `notFound` alone turned that into
+      // "Not found: lobe-remote-device." on the very next LLM call — the typo
+      // reading the explanation exists to prevent.
+      const processor = new ActivationResultTrimProcessor({ injectedManifests: [credsManifest] });
+      const result = await processor.process(
+        createContext([
+          activateToolsMessage({
+            content: [
+              'Successfully activated tools: lobe-creds.listCreds, lobe-creds.createCred.',
+              'Usage instructions for the activated items are in the system prompt.',
+              `\nNot available: lobe-remote-device. ${LOCK_REASON}`,
+              '\nNot found: nonexistent',
+            ].join('\n'),
+            pluginState: {
+              activatedTools: [{ apiCount: 2, identifier: 'lobe-creds', name: 'Creds' }],
+              alreadyActive: [],
+              notAvailable: [{ identifier: 'lobe-remote-device', reason: LOCK_REASON }],
+              notFound: ['lobe-remote-device', 'nonexistent'],
+            },
+          }),
+        ]),
+      );
+
+      const content = result.messages[0].content as string;
+      expect(content).toContain(`Not available: lobe-remote-device. ${LOCK_REASON}`);
+      expect(content).toContain('Not found: nonexistent.');
+      expect(content).not.toContain('Not found: lobe-remote-device');
+    });
+
+    it('should recover the unavailable reason from results persisted without it in state', async () => {
+      // Rows written before `notAvailable` existed carry the reason only in
+      // their text; they are replayed on every later turn of the topic.
+      const processor = new ActivationResultTrimProcessor({ injectedManifests: [credsManifest] });
+      const result = await processor.process(
+        createContext([
+          activateToolsMessage({
+            content: [
+              'Successfully activated tools: lobe-creds.listCreds, lobe-creds.createCred.',
+              'Usage instructions for the activated items are in the system prompt.',
+              `\nNot available: lobe-remote-device. ${LOCK_REASON}`,
+              '\nNot found: nonexistent',
+            ].join('\n'),
+            pluginState: {
+              activatedTools: [{ apiCount: 2, identifier: 'lobe-creds', name: 'Creds' }],
+              alreadyActive: [],
+              notFound: ['lobe-remote-device', 'nonexistent'],
+            },
+          }),
+        ]),
+      );
+
+      const content = result.messages[0].content as string;
+      expect(content).toContain(`Not available: lobe-remote-device. ${LOCK_REASON}`);
+      expect(content).toContain('Not found: nonexistent.');
+      expect(content).not.toContain('Not found: lobe-remote-device');
+    });
+
+    it('should state the unavailable reason once next to a fallback-activated skill', async () => {
+      // The skill suffix is cut at the trailing sections; without the
+      // `Not available:` label the reason rode along inside the suffix and a
+      // contradicting "Not found" for the same tool was appended after it.
+      const processor = new ActivationResultTrimProcessor({
+        injectedManifests: [credsManifest],
+        injectedSkills: [powershellSkill],
+      });
+      const result = await processor.process(
+        createContext([
+          activateToolsMessage({
+            content: `Successfully activated tools: lobe-creds.listCreds, lobe-creds.createCred.\n${SKILL_CONTENT}\n\n${RESOURCE_TREE}\n\nNot available: lobe-remote-device. ${LOCK_REASON}`,
+            pluginState: {
+              activatedSkills: [{ name: 'PowerShell' }],
+              activatedTools: [{ apiCount: 2, identifier: 'lobe-creds', name: 'Creds' }],
+              notAvailable: [{ identifier: 'lobe-remote-device', reason: LOCK_REASON }],
+              notFound: ['lobe-remote-device'],
+            },
+          }),
+        ]),
+      );
+
+      const content = result.messages[0].content as string;
+      expect(content).toContain(RESOURCE_TREE);
+      expect(content.split(LOCK_REASON)).toHaveLength(2);
+      expect(content).not.toContain('Not found');
     });
 
     it('should NOT trim when an activated tool is not injected into the system prompt', async () => {

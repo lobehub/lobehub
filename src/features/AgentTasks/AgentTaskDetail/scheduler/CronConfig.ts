@@ -76,6 +76,20 @@ export const WEEKDAYS = [
   { key: 0, label: 'taskSchedule.weekdays.sun' },
 ] as const;
 
+/** Minutes every plan can pick; any other exact minute is the gated custom time. */
+export const STANDARD_MINUTES = [0, 30] as const;
+
+/**
+ * The minutes a picker offers. Without custom-time access it stays on the
+ * standard ones plus the value already stored, so a schedule set before a
+ * downgrade (or by an agent) still reads back as it runs.
+ */
+export const getMinuteChoices = (canUseCustomMinute: boolean, currentMinute: number): number[] => {
+  if (canUseCustomMinute) return Array.from({ length: 60 }, (_, minute) => minute);
+
+  return [...new Set<number>([...STANDARD_MINUTES, currentMinute])].sort((a, b) => a - b);
+};
+
 /**
  * Parse cron pattern (minute hour day month weekday) into editable schedule info.
  */
@@ -95,7 +109,8 @@ export const parseCronPattern = (
 
   const [minute, hour, , , weekday] = parts;
   const rawMinute = minute === '*' ? 0 : Number.parseInt(minute);
-  const triggerMinute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  // Interval minutes such as `*/15` pin no clock minute.
+  const triggerMinute = Number.isNaN(rawMinute) ? 0 : rawMinute;
 
   if (hour.startsWith('*/')) {
     const interval = Number.parseInt(hour.slice(2));
@@ -124,8 +139,7 @@ export const buildCronPattern = (
   hourlyInterval?: number,
   weekdays?: number[],
 ): string => {
-  const rawMinute = triggerTime.minute();
-  const minute = rawMinute >= 15 && rawMinute < 45 ? 30 : 0;
+  const minute = triggerTime.minute();
   const hour = triggerTime.hour();
 
   switch (scheduleType) {

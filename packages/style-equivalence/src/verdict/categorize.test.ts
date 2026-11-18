@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { categorizeCase } from './categorize';
+import { categorizeCase, differsOnlyUnmasked } from './categorize';
 
 const plan = (flags: string[] = []) => ({ flags }) as never;
 
@@ -27,5 +27,22 @@ describe('categorizeCase', () => {
       ),
     ).toBe('needs-signoff');
     expect(categorizeCase(unchanged, { gaps: [], status: 'difference' })).toBe('difference');
+  });
+
+  it('sends a difference that appears only with the inline style absent to sign-off', () => {
+    const masked = {
+      combos: [{ __inlineStyle: true }, { __inlineStyle: false }],
+      flags: [],
+    };
+    const only = (combo: number) => ({
+      comboDifferences: [{ combo }],
+      gaps: [],
+      status: 'difference' as const,
+    });
+    expect(categorizeCase(masked, only(1) as never)).toBe('needs-signoff');
+    expect(differsOnlyUnmasked(masked, only(1) as never)).toBe(true);
+    expect(categorizeCase(masked, only(0) as never)).toBe('difference');
+    expect(differsOnlyUnmasked(masked, only(0) as never)).toBe(false);
+    expect(differsOnlyUnmasked({ combos: [{}], flags: [] }, only(0) as never)).toBe(false);
   });
 });

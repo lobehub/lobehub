@@ -1,6 +1,7 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentDocumentIndexSnapshot,
   AgentGroupConfig,
   BotPlatformContext,
   DiscordContext,
@@ -308,6 +309,12 @@ export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
 export interface AgentWorldSnapshot {
   /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
   agent?: RunAgentSnapshot;
+  /**
+   * Library skills the agent set to `auto` (explicit tri-state entries). A
+   * library skill is opt-in per agent and `agent.plugins` is already collapsed
+   * to pinned ids, so the skill pool reads the opted-in ones from here.
+   */
+  autoSkillIds?: string[];
   /** Channel-specific facts the model should know (bot platform, Discord …). */
   channel?: {
     botPlatform?: BotPlatformContext;
@@ -350,6 +357,13 @@ export interface AgentWorldSnapshot {
  */
 export interface AgentRunBinding {
   /**
+   * The agent-document index snapshot (rows + change notes) this run renders
+   * from, pinned on its first step so later steps send the same index and
+   * notes (see `resolveAgentDocumentIndex`). Replaced only when the history is
+   * compressed mid-run.
+   */
+  agentDocumentIndex?: AgentDocumentIndexSnapshot;
+  /**
    * Device routed for this run. `id` stays absent until a device is bound;
    * `systemInfo` may already carry a working directory for runs whose cwd was
    * resolved from a persisted device row.
@@ -372,8 +386,8 @@ export interface AgentState {
   activatedStepTools?: ActivatedStepTool[];
   // --- Late-bound execution facts ---
   /**
-   * Execution facts bound at a step boundary (device routing). The only
-   * business slot the host may write after creation.
+   * Execution facts bound at a step boundary (device routing, agent-document
+   * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
 
@@ -636,8 +650,10 @@ export interface AgentState {
   toolSourceMap?: Record<string, ToolSource>;
 
   /**
-   * How many times this operation has answered unresolvable tool calls with a
-   * rejected tool result. Operation-scoped on purpose: the same rejection rows
+   * How many consecutive LLM turns this operation has answered unresolvable
+   * tool calls with a rejected tool result. Any resolved tool call reaching a
+   * tool executor resets it to 0, so it measures a model stuck on names that do not exist,
+   * not the run's lifetime total of typos. Operation-scoped on purpose: the same rejection rows
    * are also readable from the message history, but that history is rehydrated
    * from the DB on every step and carries earlier operations' rejections, so
    * counting rows there would spend a new operation's budget before it starts.

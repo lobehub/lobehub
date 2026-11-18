@@ -33,6 +33,8 @@ import {
   Trash2,
   Users,
   UsersRound,
+  WebhookIcon,
+  ZapIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +42,11 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
@@ -82,6 +88,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
+  const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -260,12 +267,25 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Connector,
               label: t('workspaceSetting.tab.connector'),
             },
+            // Every member sees the workspace's event subscriptions, so it is
+            // clear what fires the shared agents; managing one is per row.
+            enableWebhook && {
+              icon: ZapIcon,
+              key: WorkspaceSettingsTabs.Automations,
+              label: t('tab.automations'),
+            },
+            // The workspace's agents' webhooks; made on each agent's page, managed here too.
+            enableWebhook && {
+              icon: WebhookIcon,
+              key: WorkspaceSettingsTabs.Webhooks,
+              label: t('tab.webhooks'),
+            },
             {
               icon: KeyRound,
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Connection,
           title: t('group.connection'),
         },
@@ -367,6 +387,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       canViewBilling,
       canCreateContent,
       hideDocs,
+      enableWebhook,
       avatarUrl,
       username,
     ],

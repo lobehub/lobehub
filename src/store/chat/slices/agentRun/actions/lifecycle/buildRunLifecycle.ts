@@ -5,8 +5,10 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
+import { workService } from '@/services/work';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import { linkOwnBranchPullRequest } from '@/store/chat/slices/agentRun/actions/lifecycle/linkOwnBranchPullRequest';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
 import {
@@ -17,7 +19,9 @@ import {
   hasCompletedAssistantText,
   isAudioOnlyFirstUserMessage,
 } from '@/store/chat/utils/topicTitle';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { getUserStoreState } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
@@ -259,7 +263,7 @@ export const buildRunLifecycle = (
           return;
         }
         const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-        const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
+        const title = toTitleText(firstUserText).slice(0, 80) || 'New Topic';
         // `internal_updateTopic` already balances its own loading owner. For a
         // new client-runtime topic like "阅读下面...", an extra `false` here would
         // consume the runtime's loading owner and hide the sidebar spinner early.
@@ -396,6 +400,23 @@ export const buildRunLifecycle = (
       // side effect. Run it before the queued-message early return so a follow-up
       // cannot strand an audio-first topic without a title.
       if (disposition === 'success') summarizeVoiceTopicTitleAfterCompletion();
+
+      // Same for the topic's linked PRs: a queued follow-up skips the
+      // completion notification, not these. The run's gh / push commands were
+      // linked by the completion Work scan before the run reported its end; only
+      // a mounted list (Better Coding Experience PR chip / sidebar) refetches.
+      if (adapter.runScope !== 'sub_agent') {
+        void workService.refreshTopicPullRequests(topicId).catch(() => {});
+        // A PR someone opened on the topic's own branch — looked up before a
+        // queued turn can move the topic off that branch.
+        if (
+          disposition === 'success' &&
+          topicId &&
+          agentId &&
+          labPreferSelectors.enableBetterCodingExperience(getUserStoreState())
+        )
+          void linkOwnBranchPullRequest(get, { agentId, topicId });
+      }
 
       const completeSuccess = () => {
         get().completeOperation(operationId);

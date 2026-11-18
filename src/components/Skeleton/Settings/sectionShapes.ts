@@ -77,28 +77,12 @@ export const SETTINGS_SECTION_SHAPES: Record<string, SettingsSectionsShape> = {
     sections: [
       { variant: 'banner' },
       {
-        descKey: ['subscription', 'referral.inviteLink.description'],
-        field: 'snippet',
-        heading: ['subscription', 'referral.inviteLink.title'],
-        variant: 'form',
-      },
-      {
-        descKey: ['subscription', 'referral.inviteCode.description'],
-        extra: { height: 24, width: 24 },
-        field: 'snippet',
-        heading: ['subscription', 'referral.inviteCode.title'],
-        variant: 'form',
-      },
-      {
-        columns: 4,
-        descKey: ['subscription', 'referral.stats.description'],
+        columns: 5,
         heading: ['subscription', 'referral.stats.title'],
-        inset: true,
-        tileHeight: 61,
-        tiles: 4,
-        variant: 'tiles',
+        rows: 1,
+        stats: 4,
+        variant: 'table',
       },
-      { columns: 5, heading: ['subscription', 'referral.table.title'], rows: 1, variant: 'table' },
       {
         descKey: ['subscription', 'referral.rules.description'],
         heading: ['subscription', 'referral.rules.title'],
@@ -107,20 +91,34 @@ export const SETTINGS_SECTION_SHAPES: Record<string, SettingsSectionsShape> = {
       },
     ],
   },
+  // The overview tab of the usage and balance page: limits, the balance with
+  // its auto top-up and cost-hint rows, then storage.
   usage: {
     sections: [
       {
+        blocks: [{ cellHeight: 70 }],
+        extra: { height: 24, width: 146 },
+        heading: ['subscription', 'usage.overview.section.limits'],
+        variant: 'quota',
+      },
+      {
         blocks: [
           {
-            caption: ['subscription', 'usage.overview.section.credits'],
             cellHeight: 95,
             labels: [
               ['subscription', 'usage.overview.credits.topUp'],
               ['subscription', 'usage.window.referral'],
             ],
           },
+        ],
+        extra: { height: 24, width: 160 },
+        heading: ['subscription', 'usage.overview.section.credits'],
+        rows: 2,
+        variant: 'quota',
+      },
+      {
+        blocks: [
           {
-            caption: ['subscription', 'usage.overview.section.storage'],
             cellHeight: 70,
             labels: [
               ['subscription', 'usage.storage.file.used'],
@@ -128,12 +126,11 @@ export const SETTINGS_SECTION_SHAPES: Record<string, SettingsSectionsShape> = {
             ],
           },
         ],
-        extra: { height: 24, width: 146 },
-        heading: ['subscription', 'usage.overview.title'],
+        heading: ['subscription', 'usage.overview.section.storage'],
         variant: 'quota',
       },
-      { columns: 8, heading: ['spend', 'table.title'], rows: 10, toolbar: true, variant: 'table' },
     ],
+    tabs: 3,
   },
 };
 

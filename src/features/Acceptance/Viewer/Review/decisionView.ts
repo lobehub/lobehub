@@ -64,13 +64,13 @@ export const resolveDecisionView = (
     settled:
       decidedCount === 0
         ? {
-            statusText: t('acceptance.bar.progressZero', { total: reviewTotal }),
+            statusText: t('acceptance.bar.progressZero', { count: reviewTotal }),
             subText: undefined,
           }
         : pendingCount === 0
           ? needsFixCount === 0
             ? {
-                statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
+                statusText: t('acceptance.bar.progressDone', { count: reviewTotal }),
                 subText: undefined,
               }
             : {

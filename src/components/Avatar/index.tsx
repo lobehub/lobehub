@@ -49,6 +49,9 @@ const Avatar = memo<AvatarProps>(
             height={size}
             loading={'lazy'}
             src={src}
+            // Mirrors @lobehub/ui's own avatar <img>: crop a non-square image
+            // to the square instead of stretching it.
+            style={{ objectFit: 'cover' }}
             width={size}
             onError={markBroken}
           />

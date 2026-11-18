@@ -14,7 +14,11 @@ import {
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 
 import { messagePlugins, messages, messageTranslates, messageTTS, users } from '../../schemas';
-import { createChatImageItem, materializeChatAudioItem } from './attachments';
+import {
+  createChatImageItem,
+  groupMessageFilesByKind,
+  materializeChatAudioItem,
+} from './attachments';
 import type { MessageByIdsQueries } from './queryByIds';
 import type { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
@@ -57,6 +61,7 @@ export class MessagePageQueries extends MessageScope {
       includeFileWorks,
       pageSize = 1000,
       postProcessUrl,
+      skipCompressedMembers,
       skipWorks,
       topicId,
       timing,
@@ -210,6 +215,7 @@ export class MessagePageQueries extends MessageScope {
       current,
       hasBeforeCursor: !!before,
       postProcessUrl,
+      skipCompressedMembers,
       result,
       timing,
       topicId,
@@ -254,15 +260,7 @@ export class MessagePageQueries extends MessageScope {
       return [];
     }
 
-    const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
-    const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
-    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
-    const fileList = relatedFileList.filter(
-      (i) =>
-        !(i.fileType || '').startsWith('image') &&
-        !(i.fileType || '').startsWith('video') &&
-        !(i.fileType || '').startsWith('audio'),
-    );
+    const { audioList, fileList, imageList, videoList } = groupMessageFilesByKind(relatedFileList);
 
     const threadMap = this.relations.createThreadMap(threadData);
 
@@ -395,6 +393,7 @@ export class MessagePageQueries extends MessageScope {
     result,
     timing,
     topicId,
+    skipCompressedMembers,
     window,
   }: {
     /**
@@ -423,6 +422,8 @@ export class MessagePageQueries extends MessageScope {
     timing?: ModelTimingContext;
     topicId?: string;
     /** Explicit group window (cursor pagination); overrides the row-derived one. */
+    /** See `QueryMessageParams.skipCompressedMembers`. */
+    skipCompressedMembers?: boolean;
     window?: MessageGroupNodeWindow;
   }): Promise<UIChatMessage[]> => {
     if (!topicId) return [];
@@ -434,6 +435,7 @@ export class MessagePageQueries extends MessageScope {
         () =>
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
+            skipCompressedMembers,
             window,
           }),
         { current, hasMessages: result.length > 0, topicId },
@@ -449,6 +451,7 @@ export class MessagePageQueries extends MessageScope {
         () =>
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
+            skipCompressedMembers,
           }),
         { current, hasMessages: false, topicId },
       );
@@ -461,6 +464,7 @@ export class MessagePageQueries extends MessageScope {
         () =>
           this.byIds.queryMessageGroupNodes(topicId, undefined, postProcessUrl, timing, {
             allowShareVisitor,
+            skipCompressedMembers,
           }),
         { current, hasMessages: true, topicId },
       );
@@ -481,7 +485,7 @@ export class MessagePageQueries extends MessageScope {
           },
           postProcessUrl,
           timing,
-          { allowShareVisitor },
+          { allowShareVisitor, skipCompressedMembers },
         ),
       { current, hasMessages: true, topicId },
     );

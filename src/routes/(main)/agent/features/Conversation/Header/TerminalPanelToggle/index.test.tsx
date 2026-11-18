@@ -6,10 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalPanelToggle from './index';
 
 const mocks = vi.hoisted(() => ({
-  hasTerminalTarget: false,
-  isDesktop: true,
   showTerminalPanel: false,
   toggleTerminalPanel: vi.fn(),
+  visible: true,
 }));
 
 const actionIconPropsSpy = vi.hoisted(() => vi.fn());
@@ -25,20 +24,10 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   };
 });
 
-vi.mock('@/const/version', () => ({
-  get isDesktop() {
-    return mocks.isDesktop;
-  },
-}));
-
-vi.mock('@/store/device', () => ({
-  deviceSelectors: {
-    // The real selector decides this from the device list; the header consumes
-    // the derived boolean, so the mock supplies it directly.
-    hasTerminalTarget: (s: { hasTerminalTarget: boolean }) => s.hasTerminalTarget,
-  },
-  useDeviceStore: (selector: (state: { hasTerminalTarget: boolean }) => unknown) =>
-    selector({ hasTerminalTarget: mocks.hasTerminalTarget }),
+// Where the entry shows is `useTerminalEntry`'s call (tested beside it); the
+// header only renders what it answers.
+vi.mock('@/features/ChatTerminal/useTerminalEntry', () => ({
+  useTerminalEntry: () => mocks.visible,
 }));
 
 vi.mock('@/store/global', () => ({
@@ -73,9 +62,8 @@ vi.mock('@/store/user/selectors', () => ({
 
 describe('TerminalPanelToggle', () => {
   beforeEach(() => {
-    mocks.hasTerminalTarget = false;
-    mocks.isDesktop = true;
     mocks.showTerminalPanel = false;
+    mocks.visible = true;
     mocks.toggleTerminalPanel.mockReset();
     actionIconPropsSpy.mockClear();
   });
@@ -96,21 +84,11 @@ describe('TerminalPanelToggle', () => {
     expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ active: true }));
   });
 
-  it('stays hidden on the web while no device can host a shell', () => {
-    mocks.isDesktop = false;
+  it('renders nothing where the header holds no terminal entry', () => {
+    mocks.visible = false;
 
     render(<TerminalPanelToggle />);
 
     expect(screen.queryByRole('button')).toBeNull();
-  });
-
-  it('appears on the web once a device can host a shell', () => {
-    mocks.isDesktop = false;
-    mocks.hasTerminalTarget = true;
-
-    render(<TerminalPanelToggle />);
-
-    fireEvent.click(screen.getByRole('button'));
-    expect(mocks.toggleTerminalPanel).toHaveBeenCalledTimes(1);
   });
 });

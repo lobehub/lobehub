@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import type {
   ConnectorToolPermission,
@@ -12,7 +12,11 @@ import {
   userConnectorTools,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import {
+  buildWorkspacePayload,
+  buildWorkspaceWhere,
+  normalizeWorkspaceId,
+} from '../utils/workspace';
 import { connectorAccessScope } from './connectorScope';
 
 export interface SyncToolInput {
@@ -29,11 +33,23 @@ export interface SyncToolInput {
   toolName: string;
 }
 
+export interface ConnectorToolModelOptions {
+  /**
+   * For agent runs and their tool calls. Besides the scoped rows, by-connector
+   * reads also reach the tools of the caller's own personal connectors: a
+   * private agent's workspace run resolves its owner's personal connectors
+   * (`ConnectorModel.resolveByIdentifiers`), and their tool rows live in the
+   * personal scope. Management reads and every write keep the strict scope.
+   */
+  agentRun?: boolean;
+}
+
 export class ConnectorToolModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
   private evaluationDatasetId?: string;
+  private readsOwnPersonalTools: boolean;
 
   static forEvaluation(
     db: LobeChatDatabase,
@@ -47,10 +63,16 @@ export class ConnectorToolModel {
     return model;
   }
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options: ConnectorToolModelOptions = {},
+  ) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.readsOwnPersonalTools = !!options.agentRun;
   }
 
   private ownership = () =>
@@ -75,6 +97,39 @@ export class ConnectorToolModel {
           ),
       ),
     );
+
+  /**
+   * Scope for by-connector reads. A run model (`agentRun`) in a workspace
+   * also reads the tools of the caller's own personal connectors; reading
+   * one's own personal tool list grants nothing the personal scope does not.
+   */
+  private resolvedReadScope = () => {
+    if (
+      !this.readsOwnPersonalTools ||
+      this.evaluationDatasetId ||
+      !normalizeWorkspaceId(this.workspaceId)
+    ) {
+      return this.ownership();
+    }
+    return or(
+      this.ownership(),
+      and(
+        eq(userConnectorTools.userId, this.userId),
+        isNull(userConnectorTools.workspaceId),
+        exists(
+          this.db
+            .select({ id: userConnectors.id })
+            .from(userConnectors)
+            .where(
+              and(
+                eq(userConnectors.id, userConnectorTools.userConnectorId),
+                connectorAccessScope(this.db, { userId: this.userId }),
+              ),
+            ),
+        ),
+      ),
+    );
+  };
 
   /**
    * Deterministic tool order: grouped by connector, sorted by toolName within it.
@@ -188,7 +243,7 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()))
+      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.resolvedReadScope()))
       .orderBy(...this.toolOrder());
   };
 
@@ -204,7 +259,7 @@ export class ConnectorToolModel {
       .from(userConnectorTools)
       .where(
         and(
-          this.ownership(),
+          this.resolvedReadScope(),
           inArray(userConnectorTools.userConnectorId, connectorIds),
           ne(userConnectorTools.permission, Permission.disabled),
         ),
@@ -222,7 +277,9 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)))
+      .where(
+        and(this.resolvedReadScope(), inArray(userConnectorTools.userConnectorId, connectorIds)),
+      )
       .orderBy(...this.toolOrder());
   };
 

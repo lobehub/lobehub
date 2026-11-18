@@ -57,6 +57,7 @@ function expected(): Array<
     ['groupList', 'query', 12],
     ['heartbeat', 'mutation', 13],
     ['list', 'query', 12],
+    ['moveTreeToProject', 'mutation', 13],
     ['pinDocument', 'mutation', 13],
     ['previewSubtaskLayers', 'query', 12],
     ['releaseTaskLock', 'mutation', 13],

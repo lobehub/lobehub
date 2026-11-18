@@ -496,6 +496,27 @@ describe('GenerationBatchModel', () => {
       expect(mockGetFullFileUrl).toHaveBeenCalledWith('end-frame.jpg');
     });
 
+    it('should transform config referenceAudioUrl through FileService', async () => {
+      await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          userId,
+          config: { prompt: 'cover in jazz', referenceAudioUrl: 'music/reference.mp3' },
+        })
+        .returning();
+
+      const results = await generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(
+        testTopic.id,
+      );
+
+      expect(results[0].config).toEqual({
+        prompt: 'cover in jazz',
+        referenceAudioUrl: 'https://example.com/music/reference.mp3',
+      });
+      expect(mockGetFullFileUrl).toHaveBeenCalledWith('music/reference.mp3');
+    });
+
     it('should transform config with both imageUrl and endImageUrl through FileService', async () => {
       await serverDB
         .insert(generationBatches)

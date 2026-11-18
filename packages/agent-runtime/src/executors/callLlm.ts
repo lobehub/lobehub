@@ -102,6 +102,7 @@ const executePreparedCall = async (
         return await finalizeCallLlmTurn({
           assistantMessageId: prepared.assistantMessageId,
           attempts: attemptsMade,
+          contextAccounting: prepared.context.contextAccounting,
           events,
           host,
           model: prepared.model,
@@ -154,6 +155,7 @@ const executePreparedCall = async (
       if (interrupted) {
         await persistInterruptedCallLlmResult({
           assistantMessageId: prepared.assistantMessageId,
+          contextAccounting: prepared.context.contextAccounting,
           host,
           output: execution.output,
         });
@@ -181,6 +183,7 @@ const executePreparedCall = async (
       if (interrupted && lastOutput) {
         await persistInterruptedCallLlmResult({
           assistantMessageId: prepared.assistantMessageId,
+          contextAccounting: prepared.context.contextAccounting,
           host,
           output: lastOutput,
         });
@@ -247,6 +250,14 @@ const pickSeedField = (source: object, key: string) => {
   return value === undefined ? undefined : value;
 };
 
+/** Epoch ms of a stored creation time; JSON events carry numbers, not `Date`s. */
+const toSeedTime = (value: unknown): number | undefined => {
+  if (value === null || value === undefined) return;
+  const time =
+    value instanceof Date ? value.getTime() : new Date(value as number | string).getTime();
+  return Number.isFinite(time) ? time : undefined;
+};
+
 const buildAssistantMessageSeed = (
   assistantMessage: { id: string },
   seed: object = assistantMessage,
@@ -254,6 +265,9 @@ const buildAssistantMessageSeed = (
   id: assistantMessage.id,
   ...(pickSeedField(seed, 'agentId') !== undefined && {
     agentId: pickSeedField(seed, 'agentId'),
+  }),
+  ...(toSeedTime(pickSeedField(seed, 'createdAt')) !== undefined && {
+    createdAt: toSeedTime(pickSeedField(seed, 'createdAt')),
   }),
   ...(pickSeedField(seed, 'groupId') !== undefined && {
     groupId: pickSeedField(seed, 'groupId'),
@@ -283,8 +297,11 @@ const buildAssistantMessageSeed = (
 const buildSteerParentSeed = (parent: RuntimeMessageRef | undefined) => {
   if (parent?.role !== 'user' || !parent.metadata?.steer) return;
 
+  const createdAt = toSeedTime(parent.createdAt);
+
   return {
     content: parent.content ?? '',
+    ...(createdAt !== undefined && { createdAt }),
     id: parent.id,
     metadata: parent.metadata,
     parentId: parent.parentId ?? null,

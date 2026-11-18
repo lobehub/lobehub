@@ -7,6 +7,7 @@ import {
   Icon,
   InputNumber,
   Select,
+  Tag,
   Text,
   ToggleGroup,
 } from '@lobehub/ui';
@@ -15,8 +16,11 @@ import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessPreciseSchedule } from '@/business/client/hooks/useBusinessPreciseSchedule';
+
 import {
   buildCronPattern,
+  getMinuteChoices,
   parseCronPattern,
   SCHEDULE_TYPE_OPTIONS,
   type ScheduleType,
@@ -49,15 +53,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const DEFAULT_PATTERN = '0 9 * * *';
 const DEFAULT_TIMEZONE = 'UTC';
 
-// Cron storage rounds minutes to 0 or 30 (see buildCronPattern), so the picker
-// only needs to offer half-hour slots — flatten to a single column instead of
-// antd's hour×minute grid.
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
-  const hour = Math.floor(i / 2);
-  const minute = i % 2 === 0 ? 0 : 30;
-  const label = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-  return { label, value: hour * 60 + minute };
-});
+const pad = (n: number) => String(n).padStart(2, '0');
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({ label: pad(hour), value: hour }));
+
+/** Sentinel minute option that opens the upgrade flow instead of changing the value. */
+const CUSTOM_MINUTE_UPGRADE = -1;
 
 export interface SchedulerFormChange {
   maxExecutions: number | null;
@@ -74,6 +75,7 @@ interface SchedulerFormProps {
 
 const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, pattern, timezone }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canUseCustomMinute, onUpgrade } = useBusinessPreciseSchedule();
 
   const weekdayOptions = useMemo(
     () => WEEKDAYS.map(({ key, label }) => ({ label: t(label as any), value: String(key) })),
@@ -155,16 +157,18 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
     emit({ scheduleType: value, weekdays: nextWeekdays });
   };
 
-  const handleTimeChange = (totalMinutes: number) => {
-    const next = dayjs()
-      .hour(Math.floor(totalMinutes / 60))
-      .minute(totalMinutes % 60);
+  const handleHourChange = (hour: number) => {
+    const next = triggerTime.hour(hour);
     setTriggerTime(next);
     emit({ triggerTime: next });
   };
 
-  const handleHourlyMinuteChange = (minute: number) => {
-    const next = dayjs().hour(0).minute(minute);
+  const handleMinuteChange = (minute: number) => {
+    if (minute === CUSTOM_MINUTE_UPGRADE) {
+      onUpgrade?.();
+      return;
+    }
+    const next = triggerTime.minute(minute);
     setTriggerTime(next);
     emit({ triggerTime: next });
   };
@@ -210,6 +214,38 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
 
   const showTimeRow = scheduleType !== 'hourly';
 
+  const minuteSelect = (
+    <Select
+      popupMatchSelectWidth={false}
+      showSearch={canUseCustomMinute}
+      style={{ flexShrink: 0, width: 80 }}
+      value={triggerTime.minute()}
+      variant="filled"
+      options={[
+        ...getMinuteChoices(canUseCustomMinute, triggerTime.minute()).map((minute) => ({
+          label: `:${pad(minute)}`,
+          value: minute,
+        })),
+        ...(canUseCustomMinute
+          ? []
+          : [
+              {
+                label: (
+                  <Flexbox horizontal align="center" gap={8}>
+                    {t('taskSchedule.customMinute')}
+                    <Tag color="gold" size="small" style={{ marginInlineEnd: 0 }}>
+                      {t('taskSchedule.customMinute.badge')}
+                    </Tag>
+                  </Flexbox>
+                ),
+                value: CUSTOM_MINUTE_UPGRADE,
+              },
+            ]),
+      ]}
+      onChange={handleMinuteChange}
+    />
+  );
+
   return (
     <Flexbox gap={16}>
       <Flexbox horizontal gap={12}>
@@ -228,12 +264,16 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         {showTimeRow && (
           <Flexbox flex={1} gap={6}>
             <Text className={styles.fieldLabel}>{t('taskSchedule.time')}</Text>
-            <Select
-              options={TIME_OPTIONS}
-              value={triggerTime.hour() * 60 + triggerTime.minute()}
-              variant="filled"
-              onChange={handleTimeChange}
-            />
+            <Flexbox horizontal align="center" gap={6}>
+              <Select
+                options={HOUR_OPTIONS}
+                style={{ flex: 1, minWidth: 0 }}
+                value={triggerTime.hour()}
+                variant="filled"
+                onChange={handleHourChange}
+              />
+              {minuteSelect}
+            </Flexbox>
           </Flexbox>
         )}
         {scheduleType === 'hourly' && (
@@ -249,18 +289,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                 variant="filled"
                 onChange={handleHourlyIntervalChange}
               />
-              <Select
-                style={{ flexShrink: 0, width: 80 }}
-                value={triggerTime.minute()}
-                variant="filled"
-                options={[
-                  { label: ':00', value: 0 },
-                  { label: ':15', value: 15 },
-                  { label: ':30', value: 30 },
-                  { label: ':45', value: 45 },
-                ]}
-                onChange={handleHourlyMinuteChange}
-              />
+              {minuteSelect}
             </Flexbox>
           </Flexbox>
         )}

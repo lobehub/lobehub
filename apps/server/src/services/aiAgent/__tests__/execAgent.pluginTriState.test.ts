@@ -29,12 +29,14 @@ const {
 }));
 
 // Feature-gated builtin tools (e.g. builtin-dashboard) join the disabled set
-// when their flag is off; this suite covers the agent's own tri-state config,
+// when their flag is off; this suite covers the agent's own plugin entries,
 // so run it with every gate open. Gating has its own coverage in
 // pipeline/__tests__/toolDiscovery.featureGate.test.ts.
 vi.mock('@/server/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({ enableDashboard: true }),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi
+    .fn()
+    .mockResolvedValue({ enableDashboard: true, enableWebhook: true }),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -198,7 +200,7 @@ const generateToolsArg = () =>
 const toolManifestMapArg = () =>
   mockCreateOperation.mock.calls[0][0].toolSet.manifestMap as Record<string, unknown>;
 
-describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disabled)', () => {
+describe('AiAgentService.execAgent - agent plugin entries (on / off / disabled)', () => {
   let service: AiAgentService;
 
   beforeEach(() => {
@@ -214,37 +216,22 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
       pluginManifest('plugin-a'),
       pluginManifest('plugin-b'),
       pluginManifest('plugin-c'),
+      pluginManifest('plugin-d'),
     ]);
     service = new AiAgentService({} as any, 'test-user-id');
   });
 
-  it('excludes a disabled entry from the installed-plugins auto-discovery pool, in a mixed-shape array', async () => {
+  it('keeps only the installed plugins that are on, in a mixed-shape array: a disabled entry and a missing entry are both left out', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-1',
       model: 'gpt-4',
-      // legacy string (implicit pinned) + explicit disabled object + untouched auto (plugin-c absent)
-      plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }],
-      provider: 'openai',
-      systemRole: 'You are a helper',
-    });
-
-    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
-
-    const installed = installedPluginsArg().map((p) => p.identifier);
-    expect(installed).toContain('plugin-a');
-    expect(installed).toContain('plugin-c');
-    expect(installed).not.toContain('plugin-b');
-  });
-
-  it('only feeds pinned identifiers into the engine agentConfig.plugins, excluding disabled', async () => {
-    mockGetAgentConfig.mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      model: 'gpt-4',
+      // legacy string (implicit pinned) + explicit disabled object + explicit
+      // auto object; plugin-d has no entry, which is off
       plugins: [
-        { identifier: 'plugin-a', mode: 'pinned' },
+        'plugin-a',
         { identifier: 'plugin-b', mode: 'disabled' },
+        { identifier: 'plugin-c', mode: 'auto' },
       ],
       provider: 'openai',
       systemRole: 'You are a helper',
@@ -252,11 +239,64 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
-    expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+    const installed = installedPluginsArg().map((p) => p.identifier);
+    expect(installed).toEqual(['plugin-a', 'plugin-c']);
+    expect(installed).not.toContain('plugin-b');
+    expect(installed).not.toContain('plugin-d');
+    // The activator's map follows the same cut.
+    expect(Object.keys(toolManifestMapArg())).toEqual(
+      expect.arrayContaining(['plugin-a', 'plugin-c']),
+    );
+    expect(toolManifestMapArg()).not.toHaveProperty('plugin-b');
+    expect(toolManifestMapArg()).not.toHaveProperty('plugin-d');
+  });
+
+  it('keeps a pinned plugin out of the engine agentConfig.plugins, which only carries pinned builtin tools', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [
+        { identifier: 'plugin-a', mode: 'pinned' },
+        { identifier: 'plugin-b', mode: 'disabled' },
+        { identifier: 'lobe-image-generation', mode: 'pinned' },
+      ],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    // A pinned plugin is on: found through the activator, not invoked up front.
+    expect(agentConfigPluginsArg()).toEqual(['lobe-image-generation']);
+    expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a']);
+    expect(toolManifestMapArg()).toHaveProperty('plugin-a');
     expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
   });
 
-  it('behaves identically to a pure string array when no entry is disabled', async () => {
+  it('feeds the plugins that are on into the engine agentConfig.plugins in manual mode, excluding disabled', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      // Manual mode has no activator, so on is the only way to reach the model.
+      chatConfig: { skillActivateMode: 'manual' },
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [
+        { identifier: 'plugin-a', mode: 'pinned' },
+        { identifier: 'plugin-b', mode: 'disabled' },
+        { identifier: 'plugin-c', mode: 'auto' },
+      ],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    expect(agentConfigPluginsArg()).toEqual(['plugin-a', 'plugin-c']);
+    expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-a', 'plugin-c']);
+    expect(disabledPluginIdsArg()).toEqual(['plugin-b']);
+  });
+
+  it('reads a pure string array as the plugins that are on, leaving every other installed plugin off', async () => {
     mockGetAgentConfig.mockResolvedValue({
       chatConfig: {},
       id: 'agent-1',
@@ -269,8 +309,29 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
 
     const installed = installedPluginsArg().map((p) => p.identifier);
-    expect(installed).toEqual(['plugin-a', 'plugin-b', 'plugin-c']);
-    expect(agentConfigPluginsArg()).toEqual(['plugin-a']);
+    expect(installed).toEqual(['plugin-a']);
+    expect(agentConfigPluginsArg()).toEqual([]);
+    expect(disabledPluginIdsArg()).toEqual([]);
+  });
+
+  it('brings in a plugin the agent has off on the turn that @-mentions it', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+      selectedToolIds: ['plugin-d'],
+    } as any);
+
+    expect(installedPluginsArg().map((p) => p.identifier)).toEqual(['plugin-d']);
+    expect(agentConfigPluginsArg()).toEqual(['plugin-d']);
   });
 
   it('restricts an orchestration turn to the exclusive plugin set', async () => {
@@ -304,14 +365,32 @@ describe('AiAgentService.execAgent - three-state plugin config (pinned/auto/disa
       plugins: [
         { identifier: 'composio-disabled', mode: 'disabled' },
         { identifier: 'skill-disabled', mode: 'disabled' },
+        { identifier: 'composio-on', mode: 'auto' },
+        { identifier: 'skill-on', mode: 'auto' },
       ],
       provider: 'openai',
       systemRole: 'You are a helper',
     });
-    mockGetComposioManifests.mockResolvedValue([toolManifest('composio-disabled')]);
-    mockGetLobehubSkillManifests.mockResolvedValue([toolManifest('skill-disabled')]);
+    mockGetComposioManifests.mockResolvedValue([
+      toolManifest('composio-disabled'),
+      toolManifest('composio-on'),
+      toolManifest('composio-off'),
+    ]);
+    mockGetLobehubSkillManifests.mockResolvedValue([
+      toolManifest('skill-disabled'),
+      toolManifest('skill-on'),
+      toolManifest('skill-off'),
+    ]);
 
     await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    // The manifests that are on do reach the map, so the absences below are
+    // the disabled entry's doing rather than an empty source.
+    expect(toolManifestMapArg()).toHaveProperty('composio-on');
+    expect(toolManifestMapArg()).toHaveProperty('skill-on');
+    // No entry is off, the same as disabled for a connector.
+    expect(toolManifestMapArg()).not.toHaveProperty('composio-off');
+    expect(toolManifestMapArg()).not.toHaveProperty('skill-off');
 
     // The disabled entries must not resurface in the map the activator uses
     // to build <available_tools> — even though they're excluded from the

@@ -19,6 +19,7 @@ const MEMBER_THREAD_ID = 'telegram:-100123';
 
 // platform id -> service.ts location (lark shares feishu's service)
 const SERVICE_DIR: Record<string, string> = {
+  dingtalk: 'dingtalk',
   discord: 'discord',
   feishu: 'feishu',
   imessage: 'imessage',
@@ -61,8 +62,9 @@ describe('PLATFORM_UNSUPPORTED_MESSAGE_APIS', () => {
       .map(([id]) => id)
       .sort();
     // `linq` is messenger-only (shared iMessage / SMS pool): it has no channel
-    // service behind the message tool at all, so history is pre-injected.
-    expect(noHistory).toEqual(['linq', 'qq', 'telegram', 'wechat']);
+    // service behind the message tool at all, so history is pre-injected. `wecom` is the same:
+    // AI bots only answer on their own long connection and have no history API.
+    expect(noHistory).toEqual(['dingtalk', 'linq', 'qq', 'telegram', 'wechat', 'wecom']);
   });
 });
 

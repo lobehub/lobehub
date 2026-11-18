@@ -33,6 +33,10 @@ const Cloudflare = dynamic(() => import('./cloudflare'), {
   loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
+const DoubaoSpeech = dynamic(() => import('./doubaospeech'), {
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
+  ssr: false,
+});
 const Bedrock = dynamic(() => import('./bedrock'), {
   loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
@@ -80,6 +84,9 @@ const ProviderDetailPage = (props: ProviderDetailPageProps) => {
     }
     case 'comfyui': {
       return <ComfyUI />;
+    }
+    case 'doubaospeech': {
+      return <DoubaoSpeech />;
     }
     case 'github': {
       return <GitHub />;

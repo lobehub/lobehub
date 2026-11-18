@@ -167,6 +167,45 @@ describe('GatewayManager', () => {
 
       await expect(manager.startClient('fakeplatform', 'app-1')).resolves.toBeUndefined();
     });
+
+    it('reaches a client whose start is still pending when it is stopped', async () => {
+      await manager.start();
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: { key: 'value' },
+        userId: 'owner-1',
+      });
+      let finishStart!: () => void;
+      mockStartedClient.start.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finishStart = resolve)),
+      );
+
+      const starting = manager.startClient('fakeplatform', 'app-1');
+      await vi.waitFor(() => expect(mockStartedClient.start).toHaveBeenCalledTimes(1));
+
+      await manager.stopClient('fakeplatform', 'app-1');
+      expect(mockStartedClient.stop).toHaveBeenCalledTimes(1);
+
+      finishStart();
+      await starting;
+      // The stop removed the entry; the late start does not re-register it.
+      expect((manager as any).clients.size).toBe(0);
+    });
+
+    it('does not keep a client whose start failed', async () => {
+      await manager.start();
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: { key: 'value' },
+        userId: 'owner-1',
+      });
+      mockStartedClient.start.mockRejectedValueOnce(new Error('subscribe rejected'));
+
+      await expect(manager.startClient('fakeplatform', 'app-1')).rejects.toThrow(
+        'subscribe rejected',
+      );
+      expect((manager as any).clients.size).toBe(0);
+    });
   });
 
   describe('stopClient', () => {

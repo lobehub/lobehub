@@ -1,5 +1,6 @@
 import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import { AuvIdentifier } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { describe, expect, it } from 'vitest';
@@ -29,6 +30,15 @@ describe('filterPluginsByShareGate', () => {
   it('exposes no tools when the allowlist is missing or empty', () => {
     expect(filterPluginsByShareGate(['web-search'], buildGate())).toEqual([]);
     expect(filterPluginsByShareGate(['web-search'], buildGate({ toolGrants: [] }))).toEqual([]);
+  });
+
+  it('keeps a pinned device builtin only under the device grant', () => {
+    const ids = [AuvIdentifier, 'mcp-github'];
+
+    expect(filterPluginsByShareGate(ids, buildGate())).toEqual([]);
+    expect(filterPluginsByShareGate(ids, { ...buildGate(), canUseDevice: true })).toEqual([
+      AuvIdentifier,
+    ]);
   });
 
   it('treats a per-API grant as candidacy for the whole identifier', () => {
@@ -137,6 +147,12 @@ describe('resolveEffectiveShareToolGrants — lobe-activator', () => {
     expect(
       resolveEffectiveShareToolGrants({ skillGrants: ['pdf-report'] }).has(LobeActivatorIdentifier),
     ).toBe(false);
+  });
+
+  it('implies the activator from the device grant alone', () => {
+    expect(
+      resolveEffectiveShareToolGrants({ canUseDevice: true }).get(LobeActivatorIdentifier),
+    ).toEqual(new Set([ActivatorApiName.activateTools]));
   });
 
   it('never lets a stored activator entry widen the implied scope or stand alone', () => {

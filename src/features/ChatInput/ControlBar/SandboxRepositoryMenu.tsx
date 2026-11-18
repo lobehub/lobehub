@@ -1,30 +1,20 @@
 'use client';
 
 import type { EnvironmentConfiguration } from '@lobechat/types';
-import { Github } from '@lobehub/icons';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { PlusIcon, SettingsIcon } from 'lucide-react';
+import { CircleOffIcon, PlusIcon, SettingsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RepositoryAvatar from '@/components/RepositoryAvatar';
+
 import OptionRow from './OptionRow';
 import { repositorySlug } from './sandboxEnvironmentOptions';
+import SubmenuHeader from './SubmenuHeader';
 
 const styles = stylex.create({
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBlock: '4px',
-    paddingInline: '8px',
-  },
-  headerTitle: {
-    fontSize: '12px',
-    fontWeight: 500,
-    color: cssVar.colorTextSecondary,
-  },
   hint: {
     paddingInline: '8px',
     fontSize: '12px',
@@ -33,19 +23,6 @@ const styles = stylex.create({
   list: {
     maxHeight: '280px',
     overflowY: 'auto',
-  },
-  manageButton: {
-    cursor: 'pointer',
-    display: 'flex',
-    gap: '4px',
-    alignItems: 'center',
-    padding: '0',
-    borderStyle: 'none',
-    fontSize: '11px',
-    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
-    backgroundColor: 'transparent',
-    backgroundImage: 'none',
-    transition: 'color 0.2s',
   },
 });
 
@@ -60,6 +37,12 @@ interface SandboxRepositoryMenuProps {
   environments: SandboxRepositoryOption[];
   failed: boolean;
   loaded: boolean;
+  /**
+   * A first row for working without a repository. Offered where this menu is
+   * the whole choice — the temporary sandbox, whose folder is always a fresh
+   * empty one — rather than one level under a list of places.
+   */
+  none?: { active: boolean; onPick: () => void };
   onAdd: () => void;
   /** Closes the whole work-location menu; a final pick leaves it. */
   onClose: () => void;
@@ -70,31 +53,56 @@ interface SandboxRepositoryMenuProps {
 }
 
 /**
- * The second level of the work-location menu: the repositories a conversation
- * can work on, and the way to add one without leaving the composer.
+ * The repositories a conversation can work on, and the way to add one without
+ * leaving the composer: the whole menu on the temporary sandbox, one level
+ * under the drive's folders on the persistent one.
  */
 const SandboxRepositoryMenu = memo<SandboxRepositoryMenuProps>(
-  ({ environments, failed, loaded, onAdd, onClose, onManage, onPick, onRetry, selectedId }) => {
+  ({
+    environments,
+    failed,
+    loaded,
+    none,
+    onAdd,
+    onClose,
+    onManage,
+    onPick,
+    onRetry,
+    selectedId,
+  }) => {
     const { t } = useTranslation('chat');
     return (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
-        <div {...stylex.props(styles.header)}>
-          <span {...stylex.props(styles.headerTitle)}>{t('sandboxEnvironment.title')}</span>
-          <button {...stylex.props(styles.manageButton)} type={'button'} onClick={onManage}>
-            <Icon icon={SettingsIcon} size={11} />
-            <span>{t('sandboxDrive.manageEnvironments')}</span>
-          </button>
-        </div>
+        <SubmenuHeader
+          title={t('sandboxEnvironment.title')}
+          action={{
+            icon: SettingsIcon,
+            label: t('sandboxDrive.manageEnvironments'),
+            onClick: onManage,
+          }}
+        />
         <Text className={stylex.props(styles.hint).className}>{t('sandboxEnvironment.hint')}</Text>
 
         <div {...stylex.props(styles.list)}>
+          {none && (
+            <OptionRow
+              compact
+              active={none.active}
+              icon={<Icon icon={CircleOffIcon} size={16} />}
+              label={t('sandboxEnvironment.none')}
+              onClick={() => {
+                onClose();
+                none.onPick();
+              }}
+            />
+          )}
           {environments.map((environment) => (
             <OptionRow
               compact
               active={environment.id === selectedId}
               desc={environment.description || undefined}
               hint={repositorySlug(environment)}
-              icon={<Github size={16} />}
+              icon={<RepositoryAvatar size={16} url={repositorySlug(environment)} />}
               key={environment.id}
               label={environment.name}
               onClick={() => {
