@@ -238,7 +238,7 @@ export const isShareToolApiGranted = (
 };
 
 /**
- * Upper bound on `AgentShareConfig.deviceAllowEmails`. Device access is meant
- * for a handful of trusted people; a larger audience should use `all`.
+ * Upper bound on `AgentShareConfig.deviceAllowUserIds`. Device access hands
+ * over the creator's machine, so it is meant for a handful of trusted people.
  */
-export const AGENT_SHARE_DEVICE_ALLOW_EMAILS_LIMIT = 100;
+export const AGENT_SHARE_DEVICE_ALLOW_USERS_LIMIT = 100;

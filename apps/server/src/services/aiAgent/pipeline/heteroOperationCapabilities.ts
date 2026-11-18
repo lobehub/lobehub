@@ -40,21 +40,29 @@ export const heteroOperationCapabilities = (
     channel?: boolean;
     /** The run answers a bot message its owner sent (`botContext.isOwner`). */
     ownerBotTurn?: boolean;
+    /**
+     * A share visitor drives the run. It gets only the run's own callbacks:
+     * a goal or acceptance round it created would belong to the creator.
+     */
+    shareVisitor?: boolean;
     taskId?: string;
     /** The run answers a message the user sent: a chat turn or one they scheduled. */
     userTurn?: boolean;
   } = {},
-): HeteroOperationCapability[] => [
-  'hetero:ingest',
-  ...(options.channel
-    ? (['channel:read', 'channel:message'] as const)
-    : options.ownerBotTurn
-      ? (['channel:message'] as const)
-      : []),
-  'hetero:finish',
-  'hetero:intervention:read',
-  ...(isGoalPrompt(prompt) || (options.userTurn && !options.channel && !options.taskId)
-    ? (['goal:manage'] as const)
-    : []),
-  ...(options.taskId ? (['acceptance:evidence'] as const) : []),
-];
+): HeteroOperationCapability[] =>
+  options.shareVisitor
+    ? ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read']
+    : [
+        'hetero:ingest',
+        ...(options.channel
+          ? (['channel:read', 'channel:message'] as const)
+          : options.ownerBotTurn
+            ? (['channel:message'] as const)
+            : []),
+        'hetero:finish',
+        'hetero:intervention:read',
+        ...(isGoalPrompt(prompt) || (options.userTurn && !options.channel && !options.taskId)
+          ? (['goal:manage'] as const)
+          : []),
+        ...(options.taskId ? (['acceptance:evidence'] as const) : []),
+      ];
