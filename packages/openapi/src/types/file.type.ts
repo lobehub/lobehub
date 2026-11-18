@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { pageInfoShape, totalShape } from '../helpers/pagination';
 import type { PUBLIC_FILE_FIELDS, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { dateTimeSchema, jsonObjectSchema, PaginationQuerySchema } from './common.type';
@@ -477,9 +478,10 @@ export const FileListItemSchema = FileSchema.extend({
 
 export const FileListResponseSchema = z
   .object({
+    ...pageInfoShape,
     /** Files sharing the same content hash are listed once. */
     files: z.array(FileListItemSchema),
-    total: z.number().int().min(0),
+    ...totalShape,
     /** Sum of the matched files' sizes in bytes, as a decimal string. */
     totalSize: z.string(),
   })

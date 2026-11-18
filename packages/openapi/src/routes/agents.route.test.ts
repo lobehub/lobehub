@@ -163,3 +163,45 @@ describe('agent detail and deletion', () => {
     expect(await db.select().from(agents).where(eq(agents.id, agent.id))).toHaveLength(0);
   });
 });
+
+describe('agent list pagination', () => {
+  const seed = async (count: number) => {
+    for (let i = 0; i < count; i++) {
+      await request('/', { body: { title: `Agent ${i}` }, method: 'POST' });
+    }
+  };
+  const titles = (page: { agents: { title: string }[] }) => page.agents.map((agent) => agent.title);
+
+  it('reports hasMore and a nextCursor that fetches the next offset', async () => {
+    await seed(3);
+
+    const first = await json(await request('/?limit=2'));
+    expect(first).toMatchObject({ hasMore: true, total: 3 });
+    expect(first.agents).toHaveLength(2);
+    expect(() => AgentListSchema.parse(first)).not.toThrow();
+
+    const second = await json(
+      await request(`/?limit=2&cursor=${encodeURIComponent(first.nextCursor)}`),
+    );
+    expect(second).toMatchObject({ hasMore: false, nextCursor: null, total: 3 });
+    expect(second.agents).toHaveLength(1);
+    expect(new Set([...titles(first), ...titles(second)]).size).toBe(3);
+  });
+
+  it('still honors the deprecated page/pageSize and matches the cursor pages', async () => {
+    await seed(3);
+
+    const byCursor = await json(await request('/?limit=2'));
+    const next = await json(await request(`/?limit=2&cursor=${byCursor.nextCursor}`));
+    const byPage = await json(await request('/?page=2&pageSize=2'));
+
+    expect(titles(byPage)).toEqual(titles(next));
+    expect(byPage).toMatchObject({ hasMore: false, nextCursor: null, total: 3 });
+  });
+
+  it('rejects a cursor it did not issue', async () => {
+    const res = await request('/?cursor=garbage');
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ code: 'validation_error' });
+  });
+});
