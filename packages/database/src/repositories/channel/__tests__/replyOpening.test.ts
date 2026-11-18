@@ -610,6 +610,47 @@ describe('Channel reply opening', () => {
       expect(moved.threadId).toBeNull();
     });
 
+    it('keeps the main-timeline message the request quotes in the continued run', async () => {
+      const team = await mentionAgent();
+      await execution.open(team.channel.id, team.job.id, { threadTitle: 'Deploy failure' });
+      await execution.claim(team.channel.id, team.job.id, lease);
+      await execution.accepted(team.channel.id, team.job.id);
+      await execution.saveDraft(team.channel.id, team.job.id, 'The token expired.');
+      await execution.publish(team.channel.id, team.job.id);
+      await execution.releaseWriter(team.channel.id, team.job.id);
+      const [thread] = await db
+        .select()
+        .from(channelThreads)
+        .where(eq(channelThreads.channelId, team.channel.id));
+      // A note on the main timeline, after the Thread's root, settled without waking anyone.
+      const note = await team.asMember.send(team.channel.id, {
+        content: 'Rotate it with the cron, not by hand.',
+        mentions: [],
+        requestKey: 'note',
+        routing: 'decision',
+      });
+      await db
+        .update(channelMessages)
+        .set({ routingStatus: 'skipped' })
+        .where(eq(channelMessages.id, note.id));
+      const request = await team.asMember.send(team.channel.id, {
+        content: 'Apply this correction',
+        mentions: [team.agent.id],
+        replyToId: note.id,
+        requestKey: 'apply',
+        routing: 'decision',
+      });
+      const [job] = await jobsOf(db, request.id);
+
+      await execution.open(team.channel.id, job.id, { ack: 'On it.', threadId: thread.id });
+      expect(await execution.claim(team.channel.id, job.id, lease)).toBeTruthy();
+
+      expect((await execution.input(team.channel.id, job.id)).map(({ id }) => id)).toEqual([
+        note.id,
+        request.id,
+      ]);
+    });
+
     it('takes a follow-up deferred behind it into the Thread, where it reads the answer', async () => {
       const team = await fixture.createTeamChannel();
       const coder = await fixture.addAgent(team.channel.id, 'Coder');

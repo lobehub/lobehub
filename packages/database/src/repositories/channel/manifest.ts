@@ -6,7 +6,7 @@ import {
   channelMessageReceipt,
   channelMessageVia,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, gt, isNull, lt, lte, notInArray, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 
 import type {
   ChannelJobItem,
@@ -57,11 +57,16 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
     // A message deleted after the manifest froze leaves the context it was in.
     messageStands(),
     threadId
-      ? // A request on the main timeline continued in an earlier Thread sits after its root.
+      ? // A request on the main timeline continued in an earlier Thread sits after its root,
+        // and so may the main-timeline message it quotes.
         or(
           eq(channelMessages.threadId, threadId),
           mainPrefix,
           eq(channelMessages.id, manifest.requestMessageId),
+          and(
+            isNull(channelMessages.threadId),
+            sql`${channelMessages.id} = (SELECT request.reply_to_id FROM channel_messages AS request WHERE request.id = ${manifest.requestMessageId} AND request.thread_id IS NULL)`,
+          ),
         )
       : isNull(channelMessages.threadId),
   );
