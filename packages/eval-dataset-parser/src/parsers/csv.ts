@@ -10,6 +10,9 @@ export function parseCSV(content: string, options?: ParseOptions): ParseResult {
     skipEmptyLines: true,
   });
 
+  const error = result.errors.find(({ type }) => type === 'Quotes' || type === 'FieldMismatch');
+  if (error) throw new Error(`Invalid CSV (${error.code}): ${error.message}`);
+
   const rows = options?.preview ? result.data.slice(0, options.preview) : result.data;
   const headers = result.meta.fields || [];
 
