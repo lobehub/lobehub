@@ -100,8 +100,9 @@ const ContentBlock = memo<ContentBlockProps>(
     ) : null;
 
     // Nothing was streamed before the turn died: the error stands in for the
-    // whole block.
-    if (error && (content === LOADING_FLAT || !content)) {
+    // whole block. Reasoning streamed before the error (e.g. a call stopped at
+    // its step deadline while thinking) was seen by the user and stays.
+    if (error && (content === LOADING_FLAT || !content) && !hasRenderableReasoning(reasoning)) {
       return taskCompletionNotice ? (
         <Flexbox gap={8}>
           {taskCompletionNotice}
