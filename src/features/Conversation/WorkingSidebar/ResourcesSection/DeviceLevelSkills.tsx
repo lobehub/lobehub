@@ -11,6 +11,8 @@ import {
   useProjectSkills,
 } from '@/features/SkillsList';
 
+import { useSelectSkill } from './useSelectSkill';
+
 const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
   startSkillDrag(event, {
     category: 'projectSkill',
@@ -35,10 +37,8 @@ interface DeviceLevelSkillsProps {
 const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
   ({ deviceId, hideHeader, searchQuery = '', workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { deviceItems, error, getRowActions, mutate, onOpenFile, onOpenSkill } = useProjectSkills(
-      workingDirectory,
-      deviceId,
-    );
+    const onSelectSkill = useSelectSkill('projectSkill');
+    const { deviceItems, error, mutate } = useProjectSkills(workingDirectory, deviceId);
 
     const items = useMemo(
       () => filterSkillItems(deviceItems, searchQuery),
@@ -62,10 +62,8 @@ const DeviceLevelSkills = memo<DeviceLevelSkillsProps>(
 
     const list = (
       <SkillsList
-        getRowActions={getRowActions}
         items={items}
-        onOpenFile={onOpenFile}
-        onOpenSkill={onOpenSkill}
+        onSelectSkill={onSelectSkill}
         onSkillDragStart={handleSkillDragStart}
       />
     );

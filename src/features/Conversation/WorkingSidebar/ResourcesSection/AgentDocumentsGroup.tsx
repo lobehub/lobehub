@@ -11,7 +11,7 @@ import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';
-import { EyeIcon, FileTextIcon, GlobeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, GlobeIcon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties, DragEvent, MouseEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,9 +28,7 @@ import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skill
 import { startDocumentDrag } from '@/features/ChatInput/InputEditor/ReferDocument/documentDragData';
 import {
   filterSkillItems,
-  openRenameSkillModal,
   type SkillListItem,
-  type SkillRowAction,
   SkillSection,
   SkillsList,
   SkillsSearchBar,
@@ -50,7 +48,10 @@ import { standardizeIdentifier } from '@/utils/identifier';
 
 import DeviceLevelSkills from './DeviceLevelSkills';
 import ProjectLevelSkills from './ProjectLevelSkills';
+import { useCanManageUserSkills } from './useCanManageUserSkills';
 import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
+import { UserSkillsManagement } from './UserSkillsManagement';
+import { useSelectSkill } from './useSelectSkill';
 
 dayjs.extend(relativeTime);
 
@@ -288,13 +289,14 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
-    const { t: tCommon } = useTranslation('common');
 
     const agentId = useAgentStore((s) => s.activeAgentId);
+    const canManageUserSkills = useCanManageUserSkills(agentId || '');
     const { docId } = useParams<{ docId?: string }>();
     const navigate = useWorkspaceAwareNavigate();
     const openDocument = useChatStore((s) => s.openDocument);
     const isDocumentMode = !!docId;
+    const canManageSkills = !isDocumentMode && canManageUserSkills;
     const resolvedOpenMode = openMode ?? (isDocumentMode ? 'route' : 'portal');
     const isLocalEnabled = useAgentStore((s) =>
       agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
@@ -303,6 +305,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       isDocumentMode ? 'documents' : 'skills',
     );
     const [skillSearchQuery, setSkillSearchQuery] = useState('');
+    const [managingSkillsFor, setManagingSkillsFor] = useState<string>();
     const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
     const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
     const resolvedFilter = controlledFilter ?? filter;
@@ -325,7 +328,8 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     // Mirror what each child component reads so the parent can decide the
     // section layout (flat when a single source has items, sectioned otherwise).
     // Both hooks are SWR-deduped against their respective child fetches.
-    const userSkillItems = useUserSkills(enabled);
+    // Include disabled inventory so the management entry survives disabling every skill.
+    const userSkillItems = useUserSkills(enabled, canManageSkills);
     const {
       deviceItems: deviceSkillItems,
       error: projectSkillsError,
@@ -365,7 +369,6 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       () =>
         skillBundleViews.map(({ bundle, files }) => ({
           description: bundle.description ?? undefined,
-          fileCount: files.length,
           files,
           id: bundle.documentId,
           name: bundle.title || bundle.filename || '',
@@ -424,105 +427,30 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       [openAgentDocument, skillBundleViews],
     );
 
+    const getAgentSkillIdentifier = useCallback(
+      (item: SkillListItem) => {
+        const filename = skillBundleViews.find((view) => view.bundle.documentId === item.id)?.bundle
+          .filename;
+        return filename ? buildAgentSkillIdentifier(filename) : undefined;
+      },
+      [skillBundleViews],
+    );
+    const selectAgentSkill = useSelectSkill('agentSkill', getAgentSkillIdentifier);
+
     // The runtime resolves these via the `agent-skills:<filename>` identifier
     // (built from the shared const helper so the prefix stays in lockstep with
     // the server-side resolver). Display label keeps the human-readable title.
     const handleAgentSkillDragStart = useCallback(
       (item: SkillListItem, event: DragEvent) => {
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const filename = view?.bundle.filename;
-        if (!filename) return;
+        const type = getAgentSkillIdentifier(item);
+        if (!type) return;
         startSkillDrag(event, {
           category: 'agentSkill',
           label: item.name,
-          type: buildAgentSkillIdentifier(filename),
+          type,
         });
       },
-      [skillBundleViews],
-    );
-
-    // Agent skills are document bundles, so view / rename / delete map onto the
-    // agent-document service (`item.id` is the bundle's documentId; the service
-    // keys off the row id carried on the bundle).
-    const getAgentSkillActions = useCallback(
-      (item: SkillListItem): SkillRowAction[] => {
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const rowId = view?.bundle.id;
-        return [
-          {
-            icon: EyeIcon,
-            key: 'view',
-            label: t('workingPanel.skills.actions.view'),
-            onClick: openAgentSkill,
-            sfSymbol: 'eye',
-          },
-          {
-            disabled: !rowId,
-            icon: PencilIcon,
-            key: 'rename',
-            label: t('workingPanel.skills.actions.rename'),
-            onClick: () => {
-              if (!rowId) return;
-              openRenameSkillModal({
-                currentName: item.name,
-                onSubmit: async (newName) => {
-                  try {
-                    await agentDocumentService.renameDocument({
-                      agentId: agentId!,
-                      id: rowId,
-                      newTitle: newName,
-                    });
-                    await mutate();
-                    return undefined;
-                  } catch (error) {
-                    return error instanceof Error
-                      ? error.message
-                      : t('workingPanel.skills.rename.error');
-                  }
-                },
-              });
-            },
-            sfSymbol: 'pencil',
-          },
-          {
-            danger: true,
-            disabled: !rowId,
-            icon: Trash2Icon,
-            key: 'delete',
-            label: t('workingPanel.skills.actions.delete'),
-            onClick: () => {
-              if (!rowId) return;
-              confirmModal({
-                cancelText: tCommon('cancel'),
-                content: t('workingPanel.skills.delete.agentConfirm', { name: item.name }),
-                okButtonProps: { danger: true },
-                okText: tCommon('delete'),
-                onOk: async () => {
-                  try {
-                    // A skill bundle always holds its SKILL.md and resources.
-                    await agentDocumentService.removeDocument({
-                      agentId: agentId!,
-                      id: rowId,
-                      withChildren: true,
-                    });
-                    await mutate();
-                    toast.success(t('workingPanel.skills.delete.success'));
-                  } catch (error) {
-                    toast.error(
-                      error instanceof Error
-                        ? error.message
-                        : t('workingPanel.skills.delete.error'),
-                    );
-                  }
-                },
-                title: t('workingPanel.skills.delete.title'),
-              });
-            },
-            sfSymbol: 'trash',
-          },
-        ];
-      },
-      [agentId, mutate, openAgentSkill, skillBundleViews, t, tCommon],
+      [getAgentSkillIdentifier],
     );
 
     if (!agentId) return null;
@@ -556,15 +484,31 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
     const renderAgentSkillsList = () => (
       <SkillsList
-        getRowActions={getAgentSkillActions}
         items={matchedSkillItems}
         onOpenFile={openAgentSkillFile}
         onOpenSkill={openAgentSkill}
+        onSelectSkill={isDocumentMode ? undefined : selectAgentSkill}
         onSkillDragStart={handleAgentSkillDragStart}
       />
     );
 
     const renderSkills = () => {
+      if (agentId && managingSkillsFor === agentId) {
+        return (
+          <UserSkillsManagement
+            agentId={agentId}
+            items={userSkillItems}
+            key={agentId}
+            onClose={() =>
+              setManagingSkillsFor((current) => (current === agentId ? undefined : current))
+            }
+          />
+        );
+      }
+
+      // This is an invocation picker for agent/project/device/user skills, not a
+      // full capability inventory. Builtin bundles intentionally keep their existing
+      // slash/profile entry points instead of being copied into this sidebar.
       // Sections render in fixed order — agent → project → device → user — and each one
       // hides itself when it has nothing to show. When exactly one source has
       // items we drop the group header and render the list flat (no redundant
@@ -616,7 +560,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       return (
         <Flexbox gap={16} style={{ paddingBottom: 16 }}>
           <SkillsSearchBar onSearch={setSkillSearchQuery} />
-          {!hasMatch && (
+          {!hasMatch && !(hasUser && canManageSkills) && (
             <Center flex={1} gap={8} paddingBlock={24}>
               <Empty description={t('workingPanel.skills.noSearchResults')} icon={SkillsIcon} />
             </Center>
@@ -650,7 +594,13 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasMatchedUser && <UserLevelSkills hideHeader={flat} searchQuery={skillSearchQuery} />}
+          {hasUser && (
+            <UserLevelSkills
+              hideHeader={flat}
+              searchQuery={skillSearchQuery}
+              onManage={canManageSkills ? () => setManagingSkillsFor(agentId) : undefined}
+            />
+          )}
         </Flexbox>
       );
     };

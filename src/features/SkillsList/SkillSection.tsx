@@ -4,6 +4,8 @@ import { memo, type ReactNode, useState } from 'react';
 import AsyncError from '@/components/AsyncError';
 
 export interface SkillSectionHeader {
+  /** Independent header action, outside the accordion's collapse trigger. */
+  action?: ReactNode;
   /** Wrap the section in a collapsible Accordion. Defaults to true. */
   collapsible?: boolean;
   count?: number;
@@ -125,14 +127,15 @@ const SkillSection = memo<SkillSectionProps>(
 
     if (!sectionHeader) return body;
 
-    const { collapsible = true, count, title } = sectionHeader;
+    const { action, collapsible = true, count, title } = sectionHeader;
 
     if (!collapsible) {
       return (
         <Flexbox gap={4}>
-          <div className={styles.flatHeader}>
+          <Flexbox horizontal align="center" className={styles.flatHeader} justify="space-between">
             <HeaderRow count={count} title={title} />
-          </div>
+            {action}
+          </Flexbox>
           {body}
         </Flexbox>
       );
@@ -145,7 +148,13 @@ const SkillSection = memo<SkillSectionProps>(
         styles={{ trigger: { paddingBlock: 2, paddingInline: 4 } }}
         value={expanded ? [ITEM_KEY] : []}
         items={[
-          { key: ITEM_KEY, title: <HeaderRow count={count} title={title} />, children: body },
+          {
+            action,
+            alwaysShowAction: true,
+            key: ITEM_KEY,
+            title: <HeaderRow count={count} title={title} />,
+            children: body,
+          },
         ]}
         onValueChange={(keys) => setExpanded(keys.length > 0)}
       />
