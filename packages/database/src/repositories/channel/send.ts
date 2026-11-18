@@ -7,6 +7,7 @@ import { agents, channelMembers, channelMessages, channelThreads, files } from '
 import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { isSharedAgentChannel } from './agent';
 import { attachFiles, fileIdsByMessage } from './attachments';
 import {
   activeMembers,
@@ -19,6 +20,7 @@ import {
 } from './delivery';
 import { ChannelError } from './error';
 import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
+import { assertSharedAgentAdmission } from './shareLimits';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -172,14 +174,30 @@ export const sendMessage = async (
       peerOf(channel, member.userId)!,
     );
 
-  if (fileIds.length && channel.agentId) {
-    // Another person's shared Agent runs as its owner, who cannot read the sender's files.
+  if (channel.agentId) {
     const [bound] = await tx
-      .select({ ownerId: agents.userId })
+      .select({
+        agentOwnerId: agents.userId,
+        agentVisibility: agents.visibility,
+        agentWorkspaceId: agents.workspaceId,
+      })
       .from(agents)
       .where(eq(agents.id, channel.agentId));
-    if (bound?.ownerId !== member.userId && !channel.workspaceId)
-      throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
+    // The same test the Channel list uses, so a workspace conversation with a shared Agent is
+    // treated like a personal one, while a colleague's public workspace Agent (the workspace's
+    // own) is not.
+    if (bound?.agentOwnerId && isSharedAgentChannel(channel, bound, member.userId!)) {
+      // Another person's shared Agent runs as its owner, who cannot read the sender's files.
+      if (fileIds.length)
+        throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
+      await assertSharedAgentAdmission(tx, {
+        agentId: channel.agentId,
+        content: input.content,
+        inThread: !!threadId,
+        ownerId: bound.agentOwnerId,
+        visitorId: member.userId!,
+      });
+    }
   }
 
   if (fileIds.length) {

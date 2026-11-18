@@ -94,6 +94,7 @@ export function Composer({
   onSend,
   placeholder,
   replyTarget,
+  starter,
   onCancelReply,
 }: {
   /** Who is replying right now; shown on the line above the input. Omit to drop that line. */
@@ -105,12 +106,14 @@ export function Composer({
   members: ChannelPublicMember[];
   placeholder: string;
   replyTarget?: ChannelReplyTarget | null;
+  /** Markdown filling an empty composer when no draft is saved; see {@link useComposerDraft}. */
+  starter?: string;
   onCancelReply?: () => void;
 } & ComposerDelivery) {
   const { t } = useTranslation('channel');
   const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
-  const draft = useComposerDraft(editor, draftKey);
+  const draft = useComposerDraft(editor, draftKey, starter);
   useEffect(() => {
     if (replyTarget) editor.focus();
   }, [editor, replyTarget]);
@@ -126,7 +129,9 @@ export function Composer({
   const requests = useSingleton(createChannelSendRequest);
   const attachments = useAttachments(draftKey);
   const { allowed } = usePermission('create_content');
-  const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
+  const knowledgeBase = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
+  /** Files sent to another person's shared Agent are refused server-side, so offer no upload. */
+  const enableUpload = knowledgeBase && !channel?.sharedAgent;
   const canUpload = allowed && enableUpload;
   const upload = (files: File[]) => {
     if (!sending.current && canUpload) return attachments.upload(files);

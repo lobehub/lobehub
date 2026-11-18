@@ -156,15 +156,22 @@ export class ChannelExecutionRepository {
       return 'revoked';
     });
 
-  /** Retire only an untouched reservation, racing recordStart on the operation row itself. */
-  retireReservation = async (channelId: string, jobId: string) =>
+  /**
+   * Retire only an untouched reservation, racing recordStart on the operation row itself.
+   * `failure` records why dispatch refused it, for a reason the requester can act on.
+   */
+  retireReservation = async (
+    channelId: string,
+    jobId: string,
+    failure?: { message: string; type?: string },
+  ) =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId, true);
       if (!job.operationId || !job.writerHeld) return false;
       const status = job.publicationRevoked ? 'interrupted' : 'error';
       const [retired] = await tx
         .update(agentOperations)
-        .set({ status, completedAt: new Date() })
+        .set({ status, completedAt: new Date(), ...(failure && { error: failure }) })
         .where(and(eq(agentOperations.id, job.operationId), eq(agentOperations.status, 'idle')))
         .returning({ id: agentOperations.id });
       if (!retired) return false;
@@ -720,7 +727,7 @@ export class ChannelExecutionRepository {
    * stopped. The writer stays held until termination is confirmed. A late failure after the
    * reply was published or the release settled the job changes nothing.
    */
-  fail = async (channelId: string, jobId: string, failure: { message: string }) =>
+  fail = async (channelId: string, jobId: string, failure: { message: string; type?: string }) =>
     withChannelLock(this.db, channelId, async (tx) => {
       const job = await claimed(tx, channelId, jobId, true);
       if (job.publishedMessageId || (!job.writerHeld && job.status !== 'running')) return;
@@ -738,7 +745,7 @@ export class ChannelExecutionRepository {
         tx,
         job,
         stopping ? 'interrupted' : 'error',
-        stopping ? undefined : failure.message,
+        stopping ? undefined : failure,
       );
       await audit(tx, channelId, 'execution_failed', job.id, {
         message: failure.message,

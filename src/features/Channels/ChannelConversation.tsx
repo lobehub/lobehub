@@ -43,12 +43,15 @@ interface ChannelConversationProps {
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
   onOpenTopic?: (topic: ReplyTopic) => void;
   onStartThread?: (draft: ChannelThreadDraft) => void;
+  /** Markdown filling the main composer when nothing is saved for it; never sent by itself. */
+  starter?: string;
   threadId?: string | null;
 }
 
 const Timeline = ({
   channelId,
   inert,
+  starter,
   threadId = null,
   onOpenThread,
   onOpenTopic,
@@ -272,6 +275,7 @@ const Timeline = ({
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
                 replyTarget={reply.target}
+                starter={threadId ? undefined : starter}
                 activity={
                   hasReplyActivity(detail, threadId) ? (
                     <ReplyActivity detail={detail} threadId={threadId} />

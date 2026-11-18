@@ -126,6 +126,16 @@ class ChannelActionImpl {
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };
+  /**
+   * The caller's direct Channel with a shared Agent, opened on first use from its share id or
+   * handle. The server resolves the share every time, so a paused or revoked share fails here
+   * even when a Channel already exists.
+   */
+  openShared = async (share: string) => {
+    const channelId = await channelService.openShared({ share });
+    if (channelId) await this.#refreshAfterWrite(this.refreshList);
+    return channelId ?? undefined;
+  };
   remove = async (channelId: string) => {
     const scope = cacheScope.get();
     // Optimistically hide the row; failure restores it. Keep the open conversation

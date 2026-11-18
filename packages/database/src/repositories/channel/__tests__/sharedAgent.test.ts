@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { SHARE_VISITOR_PROMPT_MAX_LENGTH } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -209,6 +210,124 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     expect(third.topic).toMatchObject({ senderId: visitorId, userId: ownerId });
   });
 
+  describe('errors a visitor sees', () => {
+    const failedView = async (channelId: string, viewer: ChannelRepository) => {
+      const claim = (await execution.claim(channelId, (await send(channelId, 'boom')).id, lease))!;
+      await execution.fail(channelId, claim.job.id, {
+        message: 'Upstream provider key sk-owner-secret rejected',
+      });
+      const view = await viewer.detail(channelId);
+      return view!.jobs.find((job) => job.id === claim.job.id)!;
+    };
+
+    it('redacts the failure text of a shared Agent’s run, as the share page does', async () => {
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const job = await failedView(channel.id, visitor);
+
+      expect(job.status).toBe('failed');
+      expect(job.errorMessage).toBeNull();
+      expect(job.errorType).toBe('AgentRuntimeError');
+    });
+
+    it('shows the raw failure when the owner’s share opts into error details', async () => {
+      await db
+        .update(agentShares)
+        .set({ shareConfig: { maxTurnsPerTopic: 2, showErrorDetails: true } })
+        .where(eq(agentShares.id, shareId));
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const job = await failedView(channel.id, visitor);
+
+      expect(job.errorMessage).toBe('Upstream provider key sk-owner-secret rejected');
+    });
+
+    // The visitor saw "no reason recorded" when the owner's monthly cap refused the reply.
+    it('keeps a spend-limit refusal readable for the visitor', async () => {
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const claim = (await execution.claim(channel.id, (await send(channel.id, 'hi')).id, lease))!;
+      expect(
+        await execution.retireReservation(channel.id, claim.job.id, {
+          message: 'This shared Agent reached its monthly usage limit',
+          type: 'ShareSpendLimitExceeded',
+        }),
+      ).toBe(true);
+      const job = (await visitor.detail(channel.id))!.jobs.find(
+        (item) => item.id === claim.job.id,
+      )!;
+
+      expect(job).toMatchObject({
+        errorMessage: 'This shared Agent reached its monthly usage limit',
+        errorType: 'ShareSpendLimitExceeded',
+        status: 'failed',
+      });
+    });
+
+    it('leaves an ordinary Agent’s failure text as it was', async () => {
+      const ownAgentId = 'agt_channel_shared_own';
+      await db.insert(agents).values({ id: ownAgentId, title: 'Mine', userId: visitorId });
+      const { channel } = await visitor.create({ agentId: ownAgentId, title: 'Mine' });
+      const job = await failedView(channel.id, visitor);
+
+      expect(job.errorMessage).toBe('Upstream provider key sk-owner-secret rejected');
+    });
+  });
+
+  describe('visitor limits', () => {
+    const open = async () =>
+      (await visitor.create({ agentId, sharedAgent: true, title: 'Shared Helper' })).channel;
+    const sendText = (channelId: string, content: string, requestKey: string) =>
+      visitor.send(channelId, { content, requestKey, routing: 'fallback' });
+
+    it('refuses a prompt beyond the share’s length cap', async () => {
+      const channel = await open();
+      await expect(
+        sendText(channel.id, 'x'.repeat(SHARE_VISITOR_PROMPT_MAX_LENGTH + 1), 'long'),
+      ).rejects.toThrow(`limited to ${SHARE_VISITOR_PROMPT_MAX_LENGTH} characters`);
+      await expect(sendText(channel.id, 'ok', 'short')).resolves.toBeDefined();
+    });
+
+    it('refuses a message that would need a topic beyond maxTopicsPerVisitor', async () => {
+      await db
+        .update(agentShares)
+        .set({ shareConfig: { maxTopicsPerVisitor: 1, maxTurnsPerTopic: 2 } })
+        .where(eq(agentShares.id, shareId));
+      const channel = await open();
+      const first = (await execution.claim(channel.id, (await send(channel.id, 'a')).id, lease))!;
+      await execution.accepted(channel.id, first.job.id);
+      await execution.saveDraft(channel.id, first.job.id, 'Answer');
+      await execution.publish(channel.id, first.job.id);
+      await execution.releaseWriter(channel.id, first.job.id);
+
+      // One topic is at the cap, but it still takes a turn: the conversation continues in it.
+      await expect(sendText(channel.id, 'b', 'b')).resolves.toBeDefined();
+
+      // Once that topic is out of turns, a new one would exceed the cap.
+      await db.insert(messages).values(
+        ['one', 'two'].map((content) => ({
+          content,
+          role: 'user' as const,
+          topicId: first.topic.id,
+          userId: ownerId,
+        })),
+      );
+      await expect(sendText(channel.id, 'c', 'c')).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+        message: 'You have reached the limit of 1 conversations with this Agent',
+      });
+    });
+  });
+
   describe('reading its conversation history', () => {
     const start = async () => {
       const { channel } = await visitor.create({
@@ -317,6 +436,29 @@ describe('a shared Agent in the visitor’s workspace', () => {
     await expect(
       new ChannelHistoryRepository(db, visitorId, fixture.workspaceId).readMessages(operationId),
     ).rejects.toThrow('Channel operation not found');
+  });
+
+  it('refuses attachments, like a personal conversation', async () => {
+    const channel = await open();
+    const [file] = await db
+      .insert(files)
+      .values({
+        fileType: 'text/plain',
+        name: 'note.txt',
+        size: 1,
+        url: 'files/ws-note.txt',
+        userId: visitorId,
+        workspaceId: fixture.workspaceId,
+      })
+      .returning();
+    await expect(
+      inWorkspace.send(channel.id, {
+        content: 'See file',
+        fileIds: [file.id],
+        requestKey: 'ws-file',
+        routing: 'fallback',
+      }),
+    ).rejects.toThrow('Attachments cannot be sent to a shared Agent');
   });
 
   it('still cannot join a workspace group', async () => {

@@ -176,6 +176,18 @@ describe('dispatching a contact’s shared Agent', () => {
     expect(executions.accepted).toHaveBeenCalledWith('channel', 'job');
   });
 
+  it('records the run as a share run and denies tools that need approval', async () => {
+    await coordinator().advance('channel');
+
+    const [params] = execAgent.mock.calls[0];
+    expect(params.trigger).toBe('agent_share');
+    // Never `headless`: that would auto-approve `required` tools with the owner's credentials.
+    expect(params.userInterventionConfig).toEqual({
+      approvalMode: 'manual',
+      denyIntervention: true,
+    });
+  });
+
   it.each([
     [
       'the share was paused',
@@ -191,6 +203,21 @@ describe('dispatching a contact’s shared Agent', () => {
     await coordinator().advance('channel');
 
     expect(execAgent).not.toHaveBeenCalled();
-    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job');
+    expect(executions.retireReservation).toHaveBeenCalledWith(
+      'channel',
+      'job',
+      expect.toBeOneOf([undefined, expect.any(Object)]),
+    );
+  });
+
+  // The visitor saw only "no reason recorded" when the owner's monthly cap refused the reply.
+  it('records the spend-limit refusal so the visitor learns why', async () => {
+    checkSpend.mockResolvedValue({ allowed: false });
+    await coordinator().advance('channel');
+
+    expect(executions.retireReservation).toHaveBeenCalledWith('channel', 'job', {
+      message: 'This shared Agent reached its monthly usage limit',
+      type: 'ShareSpendLimitExceeded',
+    });
   });
 });

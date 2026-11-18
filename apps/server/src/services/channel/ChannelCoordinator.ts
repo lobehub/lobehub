@@ -2,7 +2,7 @@ import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildChannelPrompt, CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import type { ChannelExecutionConfig, ChannelSharedAgentAccess } from '@lobechat/types';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 import { groupBy } from 'es-toolkit';
@@ -41,6 +41,20 @@ import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routed
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
+
+/**
+ * A dispatch refused for a reason the requester can act on. Its `type` is kept on the failed
+ * job, so the visitor of a shared Agent (whose failure text is otherwise redacted) still learns
+ * why, in their own language.
+ */
+class ChannelDispatchError extends Error {
+  constructor(
+    readonly type: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 /** A co-addressed Agent as the run reads it: its name, and its title when that says more. */
 const describePeer = (agent: ChannelCoAddressedAgent) => {
@@ -91,7 +105,11 @@ export class ChannelCoordinator {
       visitorUserId: requesterId,
       workspaceId: share.workspaceId ?? undefined,
     });
-    if (!spend.allowed) throw new Error('This shared Agent reached its monthly usage limit');
+    if (!spend.allowed)
+      throw new ChannelDispatchError(
+        ChatErrorType.ShareSpendLimitExceeded,
+        'This shared Agent reached its monthly usage limit',
+      );
     return {
       agentId,
       canUseDevice: await resolveShareVisitorDeviceAccess(this.db, share, requesterId),
@@ -343,8 +361,16 @@ export class ChannelCoordinator {
         }),
         reservedOperationId: job.operationId,
         shareGate,
-        trigger: 'channel',
-        userInterventionConfig: { approvalMode: 'headless' },
+        // A shared Agent's run is the owner's, paid by the share and read by a visitor: it is
+        // recorded as a share run so usage separates it from the owner's own Channel runs. The
+        // Channel reply flow keys off the reserved operation and job, never this label.
+        trigger: share ? RequestTrigger.AgentShare : 'channel',
+        // Nobody can approve a tool mid-run: `headless` would auto-approve every `required` tool
+        // with the owner's credentials, which the share never granted. Deny them instead, telling
+        // the Agent why, so the run neither parks nor acts without consent.
+        userInterventionConfig: share
+          ? { approvalMode: 'manual', denyIntervention: true }
+          : { approvalMode: 'headless' },
       });
       if (!result.success) throw new Error(result.error || 'Agent could not start');
       await this.executions.accepted(job.channelId, job.id);
@@ -356,10 +382,17 @@ export class ChannelCoordinator {
         workspaceId ?? undefined,
       ).findById(job.operationId);
       if (operation?.status === 'idle') {
-        await this.executions.retireReservation(job.channelId, job.id);
+        await this.executions.retireReservation(
+          job.channelId,
+          job.id,
+          error instanceof ChannelDispatchError
+            ? { message: error.message, type: error.type }
+            : undefined,
+        );
       } else
         await this.executions.fail(job.channelId, job.id, {
           message: error instanceof Error ? error.message : 'Agent could not start',
+          ...(error instanceof ChannelDispatchError && { type: error.type }),
         });
     } finally {
       clearInterval(renew);

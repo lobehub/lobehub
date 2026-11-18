@@ -189,6 +189,7 @@
   "profile.view": "View profile",
   "projectAgents": "Project Agents",
   "receipt.errorReason": "Failure reason",
+  "receipt.errorShareSpendLimit": "This shared Agent reached the monthly usage limit its creator set. It will be available again next month.",
   "receipt.errorUnavailable": "No detailed reason was recorded. Check the Agent’s model and device settings before sending again.",
   "receipt.failedHint": "Mention it again to retry.",
   "receipt.worktree": "Working in its own worktree · {{branch}}",

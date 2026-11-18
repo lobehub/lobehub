@@ -6,6 +6,8 @@ export default {
   'people.noOthers': 'No one else is in this workspace yet',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
   'receipt.errorReason': 'Failure reason',
+  'receipt.errorShareSpendLimit':
+    'This shared Agent reached the monthly usage limit its creator set. It will be available again next month.',
   'receipt.errorUnavailable':
     'No detailed reason was recorded. Check the Agent’s model and device settings before sending again.',
   'sort.by': 'Sort by',

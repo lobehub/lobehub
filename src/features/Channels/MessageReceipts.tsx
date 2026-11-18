@@ -1,4 +1,5 @@
 import type { ChannelDetail, ChannelPublicJob, ChannelPublicMessage } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 import { Button, Flexbox, Popover, Text, usePopoverContext } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, Square } from 'lucide-react';
@@ -14,6 +15,18 @@ import { channelJobStatus, channelJobTone, isChannelJobActive } from './jobStatu
 import { memberAvatar, memberName } from './memberName';
 import { statusStyles, styles } from './styles';
 import { useOpenReplyAgent } from './useOpenReplyAgent';
+
+/**
+ * The failure reason under a reply. A known category reads in the viewer's language: a shared
+ * Agent's visitor gets no raw text, so the category is all that explains a spend-limit refusal.
+ */
+export const receiptErrorText = (
+  job: Pick<ChannelPublicJob, 'errorMessage' | 'errorType'>,
+  t: (key: 'receipt.errorShareSpendLimit' | 'receipt.errorUnavailable') => string,
+) =>
+  job.errorType === ChatErrorType.ShareSpendLimitExceeded
+    ? t('receipt.errorShareSpendLimit')
+    : job.errorMessage?.trim() || t('receipt.errorUnavailable');
 
 export interface ReplyEntry {
   agentId?: string | null;
@@ -108,7 +121,7 @@ export function ReplyDetail({
         <Flexbox gap={4}>
           <Text weight={500}>{t('receipt.errorReason')}</Text>
           <Text style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
-            {job.errorMessage?.trim() || t('receipt.errorUnavailable')}
+            {receiptErrorText(job, t)}
           </Text>
         </Flexbox>
       )}

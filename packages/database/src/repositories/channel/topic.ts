@@ -9,7 +9,7 @@ import type { Transaction } from '../../type';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 
 // Matches Bot AgentBridgeService: check on the next request, never expire guild Threads.
-const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
+export const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
 
 /**
  * Resolve continuation from the source-side job history, without Channel fields on topics.

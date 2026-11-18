@@ -744,11 +744,16 @@ export class GeneralChatAgent implements Agent {
           // Request approval for tools that need intervention
           // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            if (selectUserInterventionConfig(state)?.approvalMode === 'headless') {
+            const interventionConfig = selectUserInterventionConfig(state);
+            if (
+              interventionConfig?.approvalMode === 'headless' ||
+              interventionConfig?.denyIntervention
+            ) {
               instructions.push({
                 payload: {
-                  blockedContent:
-                    'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+                  blockedContent: interventionConfig.denyIntervention
+                    ? 'This tool needs approval, and nobody can approve it in this conversation, so it was not run. Do not retry it; continue without it or tell the user what you could not do.'
+                    : 'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
                   blockedReason: 'human_intervention_unavailable',
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,

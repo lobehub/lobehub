@@ -4,6 +4,7 @@ import {
   channelMessageEditedAt,
   channelMessageReceipt,
   channelMessageVia,
+  type ChatMessageError,
   defaultChannelAgentDirectory,
   type LobeAgentAgencyConfig,
   resolveAgentAgencyConfig,
@@ -25,9 +26,11 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { sanitizeVisitorError } from '../../models/message/visitor';
 import {
   agentOperations,
   agents,
+  agentShares,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -281,20 +284,55 @@ const publicJobColumns = {
   operationStatus: agentOperations.status,
   createdAt: channelJobs.createdAt,
   publicationRevoked: channelJobs.publicationRevoked,
+  // Read only to redact the error of a shared Agent's run, then dropped by `readJobs`.
+  sharedRun: sql<boolean>`${channelJobs.executionConfig}->'share' IS NOT NULL`,
+  shareShowsErrorDetails: sql<boolean>`COALESCE(${agentShares.shareConfig}->>'showErrorDetails' = 'true', false)`,
 };
 
 /** At most this many of a main view's threads' jobs still at work ride along with its own. */
 const THREAD_ACTIVE_JOB_LIMIT = 50;
 
-const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
-  tx
+/**
+ * A shared Agent runs under its owner's credentials, so its failure text can carry the owner's
+ * provider or infrastructure diagnostics. The viewer of such a run is the visitor, who gets the
+ * share page's projection (`sanitizeVisitorError`): a classified type, and the message only for
+ * the few visitor-safe codes, unless the owner's share opts into `showErrorDetails`.
+ */
+const redactSharedRunError = <
+  Job extends {
+    errorMessage: string | null;
+    errorType: string | null;
+    sharedRun: boolean;
+    shareShowsErrorDetails: boolean;
+  },
+>({
+  sharedRun,
+  shareShowsErrorDetails,
+  ...job
+}: Job) => {
+  if (!sharedRun || job.errorMessage === null) return job;
+  const safe = sanitizeVisitorError(
+    { message: job.errorMessage, type: job.errorType ?? undefined } as ChatMessageError,
+    { showErrorDetails: shareShowsErrorDetails },
+  );
+  return { ...job, errorMessage: safe?.message ?? null, errorType: safe?.type?.toString() ?? null };
+};
+
+const readJobs = async (tx: Transaction, where: SQL | undefined, limit: number) => {
+  const rows = await tx
     .select(publicJobColumns)
     .from(channelJobs)
     .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
     .leftJoin(topics, eq(topics.id, channelJobs.topicId))
+    .leftJoin(
+      agentShares,
+      sql`${agentShares.id}::text = ${channelJobs.executionConfig}->'share'->>'shareId'`,
+    )
     .where(where)
     .orderBy(desc(channelJobs.createdAt))
     .limit(limit);
+  return rows.map(redactSharedRunError);
+};
 
 interface MemberDevice {
   agentId: string | null;

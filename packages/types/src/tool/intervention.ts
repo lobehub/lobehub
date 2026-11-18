@@ -142,6 +142,16 @@ export interface UserInterventionConfig {
    *             security blacklist tools are skipped (not blocked)
    */
   approvalMode: 'auto-run' | 'allow-list' | 'manual' | 'headless';
+
+  /**
+   * Server only: resolve every call that would wait for human approval as a blocked tool result
+   * instead of parking the run, while the mode's own rules still decide which calls need approval.
+   * With `manual`, `required` and `always` tools are denied (the Agent is told why) and `never`
+   * tools run. Unlike `headless`, a `required` tool is never auto-approved. For runs with nobody
+   * to approve, but whose creator did not consent to unattended tool use (a shared Agent in a
+   * Channel). Not part of {@link UserInterventionConfigSchema}, so no client can send it.
+   */
+  denyIntervention?: boolean;
 }
 
 export const UserInterventionConfigSchema = z.object({

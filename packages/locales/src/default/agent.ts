@@ -1066,6 +1066,8 @@ export default {
   'share.visitor.access.signInDesc':
     'Sign in to start chatting with this shared agent. Your topics stay tied to your account.',
   'share.visitor.access.signInTitle': 'Sign in to continue',
+  'share.visitor.chat.channelsDisabled':
+    "Chatting with shared agents isn't available for your account yet.",
   'share.visitor.errors.fileUnavailable':
     'One of the attachments is no longer available. Remove it and try again.',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',

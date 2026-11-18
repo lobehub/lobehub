@@ -847,6 +847,7 @@
   "share.visitor.access.signInCta": "登录",
   "share.visitor.access.signInDesc": "登录后即可与这个分享助手对话，你的话题会保留在自己的账号下。",
   "share.visitor.access.signInTitle": "登录后继续",
+  "share.visitor.chat.channelsDisabled": "你的账号暂未开放与分享的 Agent 对话。",
   "share.visitor.errors.fileUnavailable": "有附件已不可用，请移除后重试。",
   "share.visitor.errors.generic": "消息发送失败，请重试。",
   "share.visitor.errors.heteroDeviceUnavailable": "创建者的设备当前离线，请稍后再试。",

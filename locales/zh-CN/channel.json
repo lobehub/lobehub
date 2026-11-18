@@ -189,6 +189,7 @@
   "profile.view": "查看资料",
   "projectAgents": "项目 Agent",
   "receipt.errorReason": "失败原因",
+  "receipt.errorShareSpendLimit": "这个分享的 Agent 已达到创作者设置的每月用量上限，下个月会恢复。",
   "receipt.errorUnavailable": "未记录具体原因，请检查 Agent 的模型与设备设置后重新发送。",
   "receipt.failedHint": "再次 @ 它即可重试。",
   "receipt.worktree": "在独立 worktree 中工作 · {{branch}}",
