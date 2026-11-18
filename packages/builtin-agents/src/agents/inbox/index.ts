@@ -1,4 +1,3 @@
-import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { UserInteractionIdentifier } from '@lobechat/builtin-tool-user-interaction';
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 
@@ -14,7 +13,9 @@ import { createSystemRole } from './systemRole';
 export const INBOX: BuiltinAgentDefinition = {
   avatar: DEFAULT_INBOX_AVATAR,
   runtime: (ctx) => ({
-    plugins: [AgentDocumentsIdentifier, UserInteractionIdentifier, ...(ctx.plugins || [])],
+    // Agent documents is not pinned: it stays discoverable and the activator
+    // enables it when the user works with documents.
+    plugins: [UserInteractionIdentifier, ...(ctx.plugins || [])],
     // A user-customized prompt wins; the runtime one is only the default.
     systemRole:
       ctx.storedSystemRole ||
