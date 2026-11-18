@@ -23,6 +23,7 @@ import ProvidersRoutes from './providers.route';
 import PushTokenRoutes from './push-tokens.route';
 import ResponsesRoutes from './responses.route';
 import RolesRoutes from './roles.route';
+import RunRoutes from './runs.route';
 import AgentSignalsRoutes from './signals.route';
 import TasksRoutes from './tasks.route';
 import TopicsRoutes from './topics.route';
@@ -55,6 +56,7 @@ export default {
   'push-tokens': PushTokenRoutes,
   'responses': ResponsesRoutes,
   'roles': RolesRoutes,
+  'runs': RunRoutes,
   'signals': AgentSignalsRoutes,
   'tasks': TasksRoutes,
   'topics': TopicsRoutes,

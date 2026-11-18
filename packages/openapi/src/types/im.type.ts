@@ -187,7 +187,10 @@ export const ImSendResultSchema = z
     /** `false` when this was an idempotent retry of an already-received message. */
     accepted: z.boolean(),
     /** The agent run that will answer; null on an idempotent retry. */
-    operationId: z.string().nullable(),
+    operationId: z.string().nullable().meta({
+      description:
+        'The agent run that will answer (null on an idempotent retry); follow it with `GET /runs/{id}`.',
+    }),
     topicId: z.string(),
     userMessage: ImMessageSchema,
   } satisfies ShapeOf<ImSendResult>)

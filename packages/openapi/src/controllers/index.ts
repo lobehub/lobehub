@@ -12,6 +12,7 @@ export * from './model.controller';
 export * from './permission.controller';
 export * from './provider.controller';
 export * from './role.controller';
+export * from './run.controller';
 export * from './topic.controller';
 export * from './usage.controller';
 export * from './user.controller';

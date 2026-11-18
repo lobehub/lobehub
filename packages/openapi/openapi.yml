@@ -758,6 +758,8 @@ components:
                   - workspace:write
                   - user:read
                   - user:write
+                  - run:read
+                  - run:write
             - type: "null"
         updatedAt:
           type: string
@@ -824,6 +826,8 @@ components:
                   - workspace:write
                   - user:read
                   - user:write
+                  - run:read
+                  - run:write
             - type: "null"
         updatedAt:
           type: string
@@ -4019,6 +4023,8 @@ components:
         accepted:
           type: boolean
         operationId:
+          description: The agent run that will answer (null on an idempotent retry);
+            follow it with `GET /runs/{id}`.
           type:
             - string
             - "null"
@@ -6981,6 +6987,1047 @@ components:
         - revoked
         - roleId
       additionalProperties: false
+    CreateRunResult:
+      type: object
+      properties:
+        id:
+          type:
+            - string
+            - "null"
+        scheduledAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        status:
+          type: string
+          enum:
+            - queued
+            - scheduled
+        topicId:
+          type: string
+        userMessageId:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - scheduledAt
+        - status
+        - topicId
+        - userMessageId
+      additionalProperties: false
+    RunFunctionTool:
+      type: object
+      properties:
+        description:
+          type: string
+        name:
+          type: string
+          pattern: ^[\w-]{1,64}$
+        parameters:
+          type: object
+          propertyNames:
+            type: string
+          additionalProperties: {}
+        type:
+          type: string
+          const: function
+      required:
+        - name
+        - type
+      additionalProperties: false
+    Run:
+      type: object
+      properties:
+        agentId:
+          type:
+            - string
+            - "null"
+        completedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        completionReason:
+          type:
+            - string
+            - "null"
+        continuedByRunId:
+          type:
+            - string
+            - "null"
+        cost:
+          type: object
+          properties:
+            currency:
+              type: string
+            total:
+              type:
+                - number
+                - "null"
+          required:
+            - currency
+            - total
+          additionalProperties: false
+        createdAt:
+          type: string
+          format: date-time
+        error:
+          anyOf:
+            - $ref: "#/components/schemas/RunError"
+            - type: "null"
+        groupId:
+          type:
+            - string
+            - "null"
+        id:
+          type: string
+        maxSteps:
+          anyOf:
+            - type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            - type: "null"
+        model:
+          type:
+            - string
+            - "null"
+        parentRunId:
+          type:
+            - string
+            - "null"
+        pendingInterventionCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        pendingToolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunToolCall"
+        provider:
+          type:
+            - string
+            - "null"
+        result:
+          anyOf:
+            - type: object
+              properties:
+                content:
+                  type:
+                    - string
+                    - "null"
+                messageId:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - content
+                - messageId
+              additionalProperties: false
+            - type: "null"
+        startedAt:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        stepCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        taskId:
+          type:
+            - string
+            - "null"
+        threadId:
+          type:
+            - string
+            - "null"
+        topicId:
+          type:
+            - string
+            - "null"
+        trigger:
+          type:
+            - string
+            - "null"
+        usage:
+          $ref: "#/components/schemas/RunUsage"
+      required:
+        - agentId
+        - completedAt
+        - completionReason
+        - continuedByRunId
+        - cost
+        - createdAt
+        - error
+        - groupId
+        - id
+        - maxSteps
+        - model
+        - parentRunId
+        - pendingInterventionCount
+        - pendingToolCalls
+        - provider
+        - result
+        - startedAt
+        - status
+        - stepCount
+        - taskId
+        - threadId
+        - topicId
+        - trigger
+        - usage
+      additionalProperties: false
+    RunError:
+      type: object
+      properties:
+        message:
+          type: string
+        type:
+          type:
+            - string
+            - "null"
+      required:
+        - message
+        - type
+      additionalProperties: false
+    RunToolCall:
+      type: object
+      properties:
+        arguments:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - arguments
+        - id
+        - name
+      additionalProperties: false
+    RunStatus:
+      type: string
+      enum:
+        - scheduled
+        - queued
+        - running
+        - waiting_for_human
+        - waiting_for_tool_results
+        - waiting_for_async_tool
+        - completed
+        - failed
+        - cancelled
+        - abandoned
+    RunUsage:
+      type: object
+      properties:
+        inputTokens:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        llmCalls:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        outputTokens:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        toolCalls:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        totalTokens:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - inputTokens
+        - llmCalls
+        - outputTokens
+        - toolCalls
+        - totalTokens
+      additionalProperties: false
+    RunEvent:
+      oneOf:
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties: {}
+              additionalProperties: false
+            type:
+              type: string
+              const: run.started
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                llmCalls:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+              required:
+                - llmCalls
+              additionalProperties: false
+            type:
+              type: string
+              const: step.started
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                llmCalls:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
+              required:
+                - llmCalls
+              additionalProperties: false
+            type:
+              type: string
+              const: step.completed
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                delta:
+                  type: string
+              required:
+                - delta
+              additionalProperties: false
+            type:
+              type: string
+              const: message.delta
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                delta:
+                  type: string
+              required:
+                - delta
+              additionalProperties: false
+            type:
+              type: string
+              const: reasoning.delta
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                content:
+                  type:
+                    - string
+                    - "null"
+                reasoning:
+                  type:
+                    - string
+                    - "null"
+                toolCalls:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RunToolCall"
+              required:
+                - content
+                - reasoning
+                - toolCalls
+              additionalProperties: false
+            type:
+              type: string
+              const: message.completed
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                toolCall:
+                  $ref: "#/components/schemas/RunToolCall"
+              required:
+                - toolCall
+              additionalProperties: false
+            type:
+              type: string
+              const: tool_call.started
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                content:
+                  type:
+                    - string
+                    - "null"
+                isSuccess:
+                  type: boolean
+                toolCall:
+                  $ref: "#/components/schemas/RunToolCall"
+              required:
+                - content
+                - isSuccess
+                - toolCall
+              additionalProperties: false
+            type:
+              type: string
+              const: tool_call.completed
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                interventions:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RunIntervention"
+              required:
+                - interventions
+              additionalProperties: false
+            type:
+              type: string
+              const: intervention.requested
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                toolCalls:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RunToolCall"
+              required:
+                - toolCalls
+              additionalProperties: false
+            type:
+              type: string
+              const: tool_results.required
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                error:
+                  $ref: "#/components/schemas/RunError"
+              required:
+                - error
+              additionalProperties: false
+            type:
+              type: string
+              const: run.error
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - waiting_for_human
+                    - waiting_for_tool_results
+              required:
+                - status
+              additionalProperties: false
+            type:
+              type: string
+              const: run.waiting
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                result:
+                  anyOf:
+                    - type: object
+                      properties:
+                        content:
+                          type:
+                            - string
+                            - "null"
+                        messageId:
+                          type:
+                            - string
+                            - "null"
+                      required:
+                        - content
+                        - messageId
+                      additionalProperties: false
+                    - type: "null"
+              required:
+                - result
+              additionalProperties: false
+            type:
+              type: string
+              const: run.completed
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties:
+                error:
+                  $ref: "#/components/schemas/RunError"
+              required:
+                - error
+              additionalProperties: false
+            type:
+              type: string
+              const: run.failed
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type:
+                - string
+                - "null"
+            runId:
+              type: string
+            stepIndex:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            timestamp:
+              type: integer
+              minimum: -9007199254740991
+              maximum: 9007199254740991
+            data:
+              type: object
+              properties: {}
+              additionalProperties: false
+            type:
+              type: string
+              const: run.cancelled
+          required:
+            - id
+            - runId
+            - stepIndex
+            - timestamp
+            - data
+            - type
+          additionalProperties: false
+    RunIntervention:
+      type: object
+      properties:
+        id:
+          type: string
+        tool:
+          type: object
+          properties:
+            apiName:
+              type: string
+            arguments:
+              type: string
+            identifier:
+              type: string
+          required:
+            - apiName
+            - arguments
+            - identifier
+          additionalProperties: false
+        type:
+          type: string
+          enum:
+            - approval
+            - question
+      required:
+        - id
+        - tool
+        - type
+      additionalProperties: false
+    CancelRunResult:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/RunStatus"
+      required:
+        - cancelled
+        - id
+        - status
+      additionalProperties: false
+    RunInterventionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunIntervention"
+      required:
+        - items
+      additionalProperties: false
+    ResolveRunInterventionResult:
+      type: object
+      properties:
+        continuedByRunId:
+          type: string
+        interventionId:
+          type: string
+      required:
+        - continuedByRunId
+        - interventionId
+      additionalProperties: false
+    ResolveRunInterventionRequest:
+      oneOf:
+        - type: object
+          properties:
+            action:
+              type: string
+              const: approve
+          required:
+            - action
+          additionalProperties: false
+        - type: object
+          properties:
+            action:
+              type: string
+              const: reject
+            continue:
+              type: boolean
+            reason:
+              type: string
+              maxLength: 2000
+          required:
+            - action
+          additionalProperties: false
+        - type: object
+          properties:
+            action:
+              type: string
+              const: answer
+            content:
+              type: string
+              minLength: 1
+            answers:
+              type: object
+              propertyNames:
+                type: string
+              additionalProperties:
+                anyOf:
+                  - type: string
+                  - type: array
+                    items:
+                      type: string
+          required:
+            - action
+            - content
+          additionalProperties: false
+        - type: object
+          properties:
+            action:
+              type: string
+              const: skip
+            reason:
+              type: string
+              maxLength: 2000
+          required:
+            - action
+          additionalProperties: false
+    SubmitRunToolResultsResult:
+      type: object
+      properties:
+        callIds:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+        state:
+          type: string
+          enum:
+            - resumed
+            - held
+      required:
+        - callIds
+        - id
+        - state
+      additionalProperties: false
+    QueueRunMessageResult:
+      type: object
+      properties:
+        id:
+          type: string
+        length:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        state:
+          type: string
+          enum:
+            - queued
+            - delivering
+            - taken
+      required:
+        - id
+        - length
+        - state
+      additionalProperties: false
+    RunQueuedMessageList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunQueuedMessage"
+      required:
+        - items
+      additionalProperties: false
+    RunQueuedMessage:
+      type: object
+      properties:
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        delivering:
+          type: boolean
+        fileIds:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+      required:
+        - content
+        - createdAt
+        - delivering
+        - fileIds
+        - id
+      additionalProperties: false
+    RemoveRunQueuedMessageResult:
+      type: object
+      properties:
+        id:
+          type: string
+        removed:
+          type: boolean
+        state:
+          type: string
+          enum:
+            - removed
+            - delivering
+            - taken
+            - absent
+            - queued
+      required:
+        - id
+        - removed
+        - state
+      additionalProperties: false
     AgentSignalEmission:
       type: object
       properties:
@@ -9055,6 +10102,7 @@ components:
           type: string
         operationId:
           type: string
+          description: The started run; follow it with `GET /runs/{id}`.
         status:
           type: string
         success:
@@ -13296,6 +14344,8 @@ paths:
                           - workspace:write
                           - user:read
                           - user:write
+                          - run:read
+                          - run:write
                     - type: "null"
               required:
                 - name
@@ -35911,6 +36961,1747 @@ paths:
       parameters:
         - in: path
           name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/runs:
+    post:
+      operationId: runs.create
+      description: >-
+        Stores the input as a user message and starts the agent in the
+        background. Answers 202 with the run id; follow it through `GET
+        /runs/{id}/events`. With `scheduledAt` the run is only scheduled: the
+        response has status `scheduled` and no run id.
+
+
+        **API key scopes:** `model:invoke` + `run:write`.
+      summary: Start an agent run
+      tags:
+        - runs
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CreateRunResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+              example:
+                data:
+                  id: op_1763370000000_agt_6sQwJ3dVbX1m_tpc_9Lw2
+                  scheduledAt: null
+                  status: queued
+                  topicId: tpc_9Lw2kQhX0c7a
+                  userMessageId: msg_3HsP0fWq1Zxa
+                success: true
+                timestamp: 2026-01-01T00:00:00.000Z
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - model:invoke
+        - run:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                  minLength: 1
+                approvalMode:
+                  description: "How tool calls that need a person are handled. `headless`
+                    (default, as on `/responses` and `/im/messages`): never wait
+                    — tools that normally ask for approval run without asking,
+                    and calls that always need a person (questions to the user,
+                    commands caught by the security audit) are refused so the
+                    agent carries on. `auto-run`: the same, except those
+                    always-ask calls park the run as `waiting_for_human`.
+                    `manual`: every tool that asks for approval parks the run
+                    until it is resolved through `/runs/{id}/interventions`.
+                    `allow-list`: like `manual`, and every tool not in
+                    `allowList` asks."
+                  type: string
+                  enum:
+                    - headless
+                    - manual
+                    - allow-list
+                    - auto-run
+                allowList:
+                  maxItems: 200
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                fileIds:
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                groupId:
+                  type: string
+                  minLength: 1
+                input:
+                  type: string
+                  minLength: 1
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                tools:
+                  maxItems: 64
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RunFunctionTool"
+                topicId:
+                  type: string
+                  minLength: 1
+              required:
+                - input
+              additionalProperties: false
+            example:
+              agentId: agt_6sQwJ3dVbX1m
+              input: Summarize the open issues labelled `bug`.
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/runs/{id}:
+    get:
+      operationId: runs.get
+      description: >-
+        Status, step count, token usage and cost, the final reply of a completed
+        run, and what a waiting run waits on (`pendingInterventionCount`,
+        `pendingToolCalls`). Accepts the `operationId` returned by
+        `/im/messages` and `/tasks/{id}/runs`.
+
+
+        **API key scopes:** `run:read`.
+      summary: Get a run
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Run"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - run:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/runs/{id}/events:
+    get:
+      operationId: runs.events
+      description: >-
+        Server-sent events (`text/event-stream`). Replays the run from its first
+        event, or from `Last-Event-ID` (header) / `after` (query) to resume
+        without gaps. The stream closes after `run.completed`, `run.failed`,
+        `run.cancelled` or `run.waiting`; it also closes after a few minutes, so
+        reconnect with the last id until one of those arrives. Lines starting
+        with `:` are heartbeats.
+
+
+        **API key scopes:** `run:read`.
+      summary: Stream run events
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunEvent"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/RunEvent"
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - run:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: after
+          schema:
+            type: string
+            pattern: ^(0|\d+-\d+)$
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/runs/{id}/cancel:
+    post:
+      operationId: runs.cancel
+      description: >-
+        Stops a running run, or one waiting on an intervention. A finished run
+        is left as it is (`cancelled: false`).
+
+
+        **API key scopes:** `run:write`.
+      summary: Cancel a run
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CancelRunResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - run:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+  /api/v1/runs/{id}/interventions:
+    get:
+      operationId: runs.listInterventions
+      description: >-
+        Tool approvals and questions the run waits on (status
+        `waiting_for_human`).
+
+
+        **API key scopes:** `run:read`.
+      summary: List pending interventions
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RunInterventionList"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - run:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/runs/{id}/interventions/{interventionId}:
+    post:
+      operationId: runs.resolveIntervention
+      description: >-
+        Approve or reject a tool call, or answer (or skip) a question. The agent
+        carries on as a new run, `continuedByRunId`; stream that one next.
+
+
+        **API key scopes:** `model:invoke` + `run:write`.
+      summary: Resolve an intervention
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ResolveRunInterventionResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - model:invoke
+        - run:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: interventionId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveRunInterventionRequest"
+            example:
+              action: approve
+  /api/v1/runs/{id}/tool-results:
+    post:
+      operationId: runs.submitToolResults
+      description: >-
+        Results of your own function tools (`pendingToolCalls`) for a run in
+        `waiting_for_tool_results`. Send one for every pending call; the run
+        resumes under the same id.
+
+
+        **API key scopes:** `model:invoke` + `run:write`.
+      summary: Submit client tool results
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SubmitRunToolResultsResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - model:invoke
+        - run:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  minItems: 1
+                  maxItems: 64
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      callId:
+                        type: string
+                        minLength: 1
+                      output:
+                        type: string
+                    required:
+                      - callId
+                      - output
+                    additionalProperties: false
+              required:
+                - results
+              additionalProperties: false
+            example:
+              results:
+                - callId: call_2b3c
+                  output: '{"temperature":21}'
+  /api/v1/runs/{id}/messages:
+    post:
+      operationId: runs.queueMessage
+      description: >-
+        Queues a user message behind the running turn. The agent picks it up at
+        its next decision point and answers it as the next turn. Retry with the
+        same `id` when the outcome is unknown.
+
+
+        **API key scopes:** `model:invoke` + `run:write`.
+      summary: Queue a message on a running run
+      tags:
+        - runs
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/QueueRunMessageResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Service unavailable
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - model:invoke
+        - run:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                fileIds:
+                  maxItems: 50
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                id:
+                  type: string
+                  pattern: ^[\w-]{1,64}$
+              required:
+                - content
+              additionalProperties: false
+            example:
+              content: Also include issues labelled `regression`.
+    get:
+      operationId: runs.listQueuedMessages
+      description: >-
+        Your messages queued behind the run that it has not answered yet, oldest
+        first. `delivering` ones were picked up and can no longer be withdrawn.
+
+
+        **API key scopes:** `run:read`.
+      summary: List messages queued on a run
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RunQueuedMessageList"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Service unavailable
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - run:read
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - $ref: "#/components/parameters/WorkspaceId"
+  /api/v1/runs/{id}/messages/{messageId}:
+    delete:
+      operationId: runs.removeQueuedMessage
+      description: >-
+        Withdraws a queued message. A message the run already picked up cannot
+        be withdrawn (`removed: false`).
+
+
+        **API key scopes:** `run:write`.
+      summary: Withdraw a queued message
+      tags:
+        - runs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/RemoveRunQueuedMessageResult"
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                required:
+                  - data
+                  - success
+                  - timestamp
+                additionalProperties: false
+          description: Successful response
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Service unavailable
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/RateLimitLimit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/RateLimitRemaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/RateLimitReset"
+      x-required-scopes:
+        - run:write
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: messageId
           schema:
             type: string
             minLength: 1

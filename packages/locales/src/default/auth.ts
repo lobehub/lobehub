@@ -77,6 +77,7 @@ export default {
   'apikey.scopes.groups.knowledge': 'Knowledge',
   'apikey.scopes.groups.mcp': 'MCP servers',
   'apikey.scopes.groups.model': 'Models',
+  'apikey.scopes.groups.run': 'Agent runs',
   'apikey.scopes.groups.usage': 'Usage',
   'apikey.scopes.groups.user': 'User',
   'apikey.scopes.groups.workspace': 'Workspace',

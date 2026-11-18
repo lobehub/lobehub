@@ -37,6 +37,9 @@ export default {
   'consent.scope.offline_access': 'Allow the client to access your data',
   'consent.scope.openid': 'Authenticate using your LobeHub account',
   'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',
+  'consent.scope.run-read': 'View your agent runs, their status and live output',
+  'consent.scope.run-write':
+    'Control your agent runs: cancel, steer, approve tool calls and send tool results',
   'consent.scope.sync-read': 'Read your synchronized data',
   'consent.scope.sync-write': 'Write and update your synchronized data',
   'consent.thirdParty.developedBy': 'By {{developerName}}',
