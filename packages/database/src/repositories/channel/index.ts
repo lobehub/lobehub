@@ -190,15 +190,8 @@ export class ChannelRepository {
       const member = await this.addOwner(tx, channel.id);
 
       if (agentId)
-        await addAgentMember(
-          tx,
-          channel,
-          this.userId,
-          { agentId, config: params.agentConfig },
-          member.id,
-        );
-      for (const agent of params.agents ?? [])
-        await addAgentMember(tx, channel, this.userId, agent, member.id);
+        await addAgentMember(tx, channel, member, { agentId, config: params.agentConfig });
+      for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
       const access = { channel, member } satisfies ChannelAccess;
       for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
 
@@ -240,20 +233,13 @@ export class ChannelRepository {
           .returning();
         const member = await this.addOwner(tx, channel.id);
         const access = { channel, member } satisfies ChannelAccess;
-        await addAgentMember(
-          tx,
-          channel,
-          this.userId,
-          {
-            agentId: direct.agentId,
-            config: bound.config ?? undefined,
-            description: bound.description,
-            name: bound.name ?? undefined,
-          },
-          member.id,
-        );
-        for (const agent of params.agents ?? [])
-          await addAgentMember(tx, channel, this.userId, agent, member.id);
+        await addAgentMember(tx, channel, member, {
+          agentId: direct.agentId,
+          config: bound.config ?? undefined,
+          description: bound.description,
+          name: bound.name ?? undefined,
+        });
+        for (const agent of params.agents ?? []) await addAgentMember(tx, channel, member, agent);
         for (const userId of new Set(params.userIds)) await addChannelUser(tx, access, userId);
         return access;
       },
@@ -262,11 +248,9 @@ export class ChannelRepository {
 
   /** Adds a usable Agent reference; a missing reference is allowed only for retained history. */
   addAgent = async (channelId: string, input: ChannelAddAgentInput) =>
-    this.write(
-      channelId,
-      (tx, { channel, member }) => addAgentMember(tx, channel, this.userId, input, member.id),
-      { minRole: 'admin' },
-    );
+    this.write(channelId, (tx, { channel, member }) => addAgentMember(tx, channel, member, input), {
+      minRole: 'admin',
+    });
 
   /** The channel-local device and directory of one Agent member. */
   agentEnvironment = async (channelId: string, memberId: string) =>
