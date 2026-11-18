@@ -40,6 +40,14 @@ type DecryptUserKeyVaults = (
 /** PostgreSQL stores statement_timeout as a signed 32-bit millisecond value.
  * @see https://github.com/postgres/postgres/blob/f9562b95/src/backend/utils/misc/guc_parameters.dat
  */
+/**
+ * `created_at` keeps microseconds, but the memory extractor's user cursor round-trips through a
+ * JS Date and keeps only milliseconds. Comparing and ordering on the millisecond-truncated value
+ * keeps the cursor and the rows on one scale; on the raw column every user in the cursor's
+ * millisecond is listed again, so the hourly page chain never ends.
+ */
+const usersCreatedAtMs = sql<Date>`date_trunc('milliseconds', ${users.createdAt})`;
+
 const MAX_STATEMENT_TIMEOUT_MS = 2_147_483_647;
 
 const validateDeletionStatementTimeout = (timeoutMs?: number) => {
@@ -821,8 +829,8 @@ export class UserModel {
   ) => {
     const cursorCondition = options.cursor
       ? or(
-          gt(users.createdAt, options.cursor.createdAt),
-          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
+          gt(usersCreatedAtMs, options.cursor.createdAt),
+          and(eq(usersCreatedAtMs, options.cursor.createdAt), gt(users.id, options.cursor.id)),
         )
       : undefined;
 
@@ -836,7 +844,7 @@ export class UserModel {
     return db.query.users.findMany({
       columns: { createdAt: true, id: true },
       limit: options.limit,
-      orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
+      orderBy: () => [asc(usersCreatedAtMs), asc(users.id)],
       where,
     });
   };
@@ -847,8 +855,8 @@ export class UserModel {
   ) => {
     const cursorCondition = options.cursor
       ? or(
-          gt(users.createdAt, options.cursor.createdAt),
-          and(eq(users.createdAt, options.cursor.createdAt), gt(users.id, options.cursor.id)),
+          gt(usersCreatedAtMs, options.cursor.createdAt),
+          and(eq(usersCreatedAtMs, options.cursor.createdAt), gt(users.id, options.cursor.id)),
         )
       : undefined;
 
@@ -882,7 +890,7 @@ export class UserModel {
       .where(
         and(cursorCondition, whitelistCondition, memoryEnabledCondition, hasChattedTopicCondition),
       )
-      .orderBy(asc(users.createdAt), asc(users.id));
+      .orderBy(asc(usersCreatedAtMs), asc(users.id));
 
     return options.limit !== undefined ? query.limit(options.limit) : query;
   };

@@ -164,6 +164,16 @@ export async function listUserMemoryIdentities(
   return res.map((item) => ({ ...item, layer: LayersEnum.Identity }));
 }
 
+/**
+ * The cursor for the page after `rows`, or none when `rows` is a short page. Every caller
+ * schedules another run while a cursor comes back, so ending on a short page keeps a cursor that
+ * fails to advance from chaining runs forever.
+ */
+const nextPageCursor = (rows: { createdAt: Date; id: string }[], pageSize: number) => {
+  const last = rows.at(-1);
+  return last && rows.length >= pageSize ? { createdAt: last.createdAt, id: last.id } : undefined;
+};
+
 export async function getTopicsForUser(
   ctx: MemoryExtractionExecutorContext,
   job: TopicPaginationJob,
@@ -185,16 +195,8 @@ export async function getTopicsForUser(
     return { ids: [] };
   }
 
-  const last = rows.at(-1);
-  const nextCursor = last
-    ? {
-        createdAt: last.createdAt,
-        id: last.id,
-      }
-    : undefined;
-
   return {
-    cursor: nextCursor,
+    cursor: nextPageCursor(rows, pageSize),
     ids: rows.map((topic) => topic.id),
   };
 }
@@ -215,16 +217,8 @@ export async function getUsers(
     return { ids: [] };
   }
 
-  const last = rows.at(-1);
-  const nextCursor = last
-    ? {
-        createdAt: last.createdAt,
-        id: last.id,
-      }
-    : undefined;
-
   return {
-    cursor: nextCursor,
+    cursor: nextPageCursor(rows, limit),
     ids: rows.map((row) => row.id),
   };
 }
@@ -245,16 +239,8 @@ export async function getUsersForHourlyExtraction(
     return { ids: [] };
   }
 
-  const last = rows.at(-1);
-  const nextCursor = last
-    ? {
-        createdAt: last.createdAt,
-        id: last.id,
-      }
-    : undefined;
-
   return {
-    cursor: nextCursor,
+    cursor: nextPageCursor(rows, limit),
     ids: rows.map((row) => row.id),
   };
 }

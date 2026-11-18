@@ -554,4 +554,32 @@ describe('TopicModel - listTopicsForMemoryExtractor pagination', () => {
 
     expect(rows.map((t) => t.id)).toEqual(['cursor-topic-z', 'after-1', 'after-2']);
   });
+
+  it('pages through topics sharing a millisecond without repeating or skipping any', async () => {
+    const ids = ['t-z', 't-a', 't-m'];
+    await serverDB.insert(topics).values(ids.map((id) => ({ id, userId })));
+    await insertUserMessages(ids);
+    // Same millisecond, different microseconds, as rows written by SQL defaults keep.
+    for (const [id, fraction] of Object.entries({
+      't-a': '001900',
+      't-m': '001290',
+      't-z': '001200',
+    })) {
+      await serverDB.execute(
+        sql`UPDATE ${topics} SET created_at = ${`2026-11-17T10:29:19.${fraction}Z`}::timestamptz WHERE id = ${id}`,
+      );
+    }
+
+    const seen: string[] = [];
+    let cursor: { createdAt: Date; id: string } | undefined;
+    for (let page = 0; page < 10; page++) {
+      const rows = await topicModel.listTopicsForMemoryExtractor({ cursor, limit: 1 });
+      if (rows.length === 0) break;
+      seen.push(...rows.map((t) => t.id));
+      const last = rows.at(-1)!;
+      cursor = { createdAt: last.createdAt, id: last.id };
+    }
+
+    expect(seen).toEqual(['t-a', 't-m', 't-z']);
+  });
 });

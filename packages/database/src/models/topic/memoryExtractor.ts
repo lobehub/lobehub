@@ -4,6 +4,14 @@ import { messages, topics } from '../../schemas';
 import type { TopicModelContext } from './context';
 import type { ListTopicsForMemoryExtractorCursor } from './types';
 
+/**
+ * `created_at` keeps microseconds, but the pagination cursor round-trips through a JS Date and
+ * keeps only milliseconds. Comparing and ordering on the millisecond-truncated value keeps the
+ * cursor and the rows on one scale; on the raw column every topic in the cursor's millisecond is
+ * listed again, so a page never advances.
+ */
+const topicsCreatedAtMs = sql<Date>`date_trunc('milliseconds', ${topics.createdAt})`;
+
 export const listTopicsForMemoryExtractor = async (
   ctx: TopicModelContext,
   options: {
@@ -29,8 +37,8 @@ export const listTopicsForMemoryExtractor = async (
     ? and(
         ne(topics.id, options.cursor.id),
         or(
-          gt(topics.createdAt, options.cursor.createdAt),
-          and(eq(topics.createdAt, options.cursor.createdAt), gt(topics.id, options.cursor.id)),
+          gt(topicsCreatedAtMs, options.cursor.createdAt),
+          and(eq(topicsCreatedAtMs, options.cursor.createdAt), gt(topics.id, options.cursor.id)),
         ),
       )
     : undefined;
@@ -43,7 +51,7 @@ export const listTopicsForMemoryExtractor = async (
       userId: true,
     },
     limit: options.limit,
-    orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
+    orderBy: (fields, { asc }) => [asc(topicsCreatedAtMs), asc(fields.id)],
     where: and(
       ctx.ownership(),
       // Share-visitor conversations are not the creator's own speech — never
