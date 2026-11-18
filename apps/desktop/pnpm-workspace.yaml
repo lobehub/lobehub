@@ -1,5 +1,6 @@
 packages:
   - '../cli'
+  - '../../packages/sdk'
   - '../../packages/agent-gateway-client'
   - '../../packages/agent-tracing'
   - '../../packages/chat-adapter-imessage'
