@@ -117,3 +117,4 @@
 - 同批修正一个既有类型错误：`apps/server/src/services/tfs/git.ts` 读取 `getUserSettings()` 返回的 `market` jsonb 时被推断为 `{}`，导致全仓 `type-check` 失败；按 `MarketAuthTokens` 收窄后再读 `accessToken`。与部署自动重跑无关，仅因阻塞类型检查门禁一并修复。
 - 尚未执行：真实造一次中断（更新时正在跑的任务 / 对话）后由新容器启动自动重跑的端到端验收、Docker 镜像构建、目标服务器升级。线上容器镜像早于本次改动，单纯重启只会跑旧代码；真实验收要先构建并推送镜像再走一次更新。库表与脚本 SQL 已在真实 PostgreSQL 上验证，但这不等于产品级恢复验收。
 - 尚未执行 Docker 镜像构建、真实 Compose 解析、目标服务器升级及真实页面验收；不能据此宣称已经上线或全链路通过。
+- 上游同步（2026-11-18）：已 rebase 到 `upstream/canary` `55c24e8fb6`，保留 TFS、Fork CLI、部署结算与自动恢复定制；上游 `0220_channel_sections` 与本 Fork 的恢复队列迁移顺延为 `0221_nosy_tag`，两份 snapshot 和 journal 已连续校验。
