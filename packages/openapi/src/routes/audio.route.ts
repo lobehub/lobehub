@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { DescribeRouteOptions } from 'hono-openapi';
-import { describeRoute } from 'hono-openapi';
+import { describeRoute, resolver } from 'hono-openapi';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
@@ -8,6 +8,7 @@ import { errorResponse, routeDoc } from '../common/openapi';
 import { AudioController } from '../controllers/audio.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermissionWithApiKeyScope } from '../middleware/permission-check';
+import { SpeechRequestSchema } from '../types/audio.type';
 import {
   MAX_TRANSCRIPTION_UPLOAD_BYTES,
   TRANSCRIPTION_FORMATS,
@@ -69,6 +70,12 @@ app.post(
       'API keys need the `generation:write` scope (keys issued with `model:invoke` are also accepted). ' +
       "Synthesis errors use OpenAI's `{ error: { message, type, code, param } }` body; " +
       'authentication and permission errors use the platform `ApiError` envelope.',
+    // The handler validates the body itself (to answer OpenAI-shaped errors),
+    // so the schema is declared here rather than through `zValidator`.
+    requestBody: {
+      content: { 'application/json': { schema: resolver(SpeechRequestSchema) as never } },
+      required: true,
+    },
     responses: {
       200: {
         content: {

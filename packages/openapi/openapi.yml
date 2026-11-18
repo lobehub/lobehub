@@ -13899,6 +13899,72 @@ paths:
 
 
         **API key scopes:** `generation:write`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: string
+                  minLength: 1
+                  maxLength: 4096
+                instructions:
+                  type: string
+                model:
+                  type: string
+                  minLength: 1
+                params:
+                  type: object
+                  properties:
+                    emotion:
+                      type: string
+                      minLength: 1
+                    pitch:
+                      type: number
+                    sampleRate:
+                      type: integer
+                      exclusiveMinimum: 0
+                      maximum: 9007199254740991
+                    volume:
+                      type: number
+                  additionalProperties: false
+                provider:
+                  type: string
+                  minLength: 1
+                response_format:
+                  type: string
+                  enum:
+                    - mp3
+                    - opus
+                    - aac
+                    - flac
+                    - wav
+                    - pcm
+                speed:
+                  type: number
+                  minimum: 0.25
+                  maximum: 4
+                stream_format:
+                  type: string
+                  enum:
+                    - audio
+                    - sse
+                voice:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: object
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                      required:
+                        - id
+              required:
+                - input
+                - model
+        required: true
       responses:
         "200":
           content:

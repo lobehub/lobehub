@@ -390,11 +390,12 @@ export class Audio extends HeyApiClient {
      *
      * **API key scopes:** `generation:write`.
      */
-    public createSpeech<ThrowOnError extends boolean = false>(options?: Options<PostApiV1AudioSpeechData, ThrowOnError>): RequestResult<PostApiV1AudioSpeechResponses, PostApiV1AudioSpeechErrors, ThrowOnError> {
-        return (options?.client ?? this.client).post<PostApiV1AudioSpeechResponses, PostApiV1AudioSpeechErrors, ThrowOnError>({
+    public createSpeech<ThrowOnError extends boolean = false>(options: Options<PostApiV1AudioSpeechData, ThrowOnError>): RequestResult<PostApiV1AudioSpeechResponses, PostApiV1AudioSpeechErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<PostApiV1AudioSpeechResponses, PostApiV1AudioSpeechErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/audio/speech',
-            ...options
+            ...options,
+            headers: mergeMethodHeaders({ 'Content-Type': 'application/json' }, options.headers)
         });
     }
     

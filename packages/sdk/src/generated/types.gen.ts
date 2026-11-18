@@ -4423,7 +4423,24 @@ export type PatchApiV1ApiKeysByIdResponses = {
 export type PatchApiV1ApiKeysByIdResponse = PatchApiV1ApiKeysByIdResponses[keyof PatchApiV1ApiKeysByIdResponses];
 
 export type PostApiV1AudioSpeechData = {
-    body?: never;
+    body: {
+        input: string;
+        instructions?: string;
+        model: string;
+        params?: {
+            emotion?: string;
+            pitch?: number;
+            sampleRate?: number;
+            volume?: number;
+        };
+        provider?: string;
+        response_format?: 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm';
+        speed?: number;
+        stream_format?: 'audio' | 'sse';
+        voice?: string | {
+            id: string;
+        };
+    };
     headers?: {
         /**
          * Run the request inside a workspace instead of the caller's personal space. Omit it for personal data. A personal API key cannot send it (403 `workspace_mismatch`); a workspace API key is bound to its workspace, so the header may be omitted and, when sent, must name that same workspace (403 `workspace_mismatch` otherwise). An unknown workspace answers 404, and a caller who is not a member answers 403 `workspace_mismatch`. Workspace API key access also depends on the workspace's plan. Routes that change workspace-wide settings additionally require the admin or owner role.
