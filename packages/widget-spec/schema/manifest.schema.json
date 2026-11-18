@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema1": {
+      "description": "Credentials the script reads from its environment, resolved from connectors.",
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema2": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema3"
+      }
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "connector": {
+          "description": "Connector supplying the credential, e.g. 'github'.",
+          "$ref": "#/$defs/__schema4"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "field": {
+          "description": "Header to read when the connector holds several, e.g. DD-API-KEY.",
+          "$ref": "#/$defs/__schema5"
+        },
+        "inject": {
+          "description": "Where a Market connector's token is sent: the egress proxy sets `header` on requests to `host`.",
+          "$ref": "#/$defs/__schema6"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z_a-z]\\w*$",
+          "description": "Environment variable the script reads, e.g. GITHUB_TOKEN."
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name"]
+    },
+    "__schema4": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema5": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "header": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[!#$%&'*+.^`|~\\w-]+$"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema7"
+            },
+            {
+              "minItems": 1,
+              "maxItems": 5,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema7"
+              }
+            }
+          ]
+        },
+        "prefix": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[^\\0\\n\\r]*$"
+        }
+      },
+      "required": ["host"]
+    },
+    "__schema7": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^(?:\\*\\.)?[\\w-]+(?:\\.[\\w-]+)+$"
+    },
+    "__schema8": {
+      "description": "Record the output as a metric on every published run, for a trend line.",
+      "$ref": "#/$defs/__schema9"
+    },
+    "__schema9": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["gauge", "counter"]
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "valuePath": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": ["key"]
+    },
+    "__schema10": {
+      "description": "Hosts the sandbox may reach; omitted or empty means no network.",
+      "$ref": "#/$defs/__schema11"
+    },
+    "__schema11": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema12"
+          }
+        }
+      },
+      "required": ["allow"]
+    },
+    "__schema12": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "__schema13": {
+      "description": "Plain-text settings a person fills in, exposed to the script as env vars.",
+      "$ref": "#/$defs/__schema14"
+    },
+    "__schema14": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema15"
+      }
+    },
+    "__schema15": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/__schema16"
+        },
+        "description": {
+          "$ref": "#/$defs/__schema18"
+        },
+        "label": {
+          "$ref": "#/$defs/__schema19"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema20"
+        },
+        "options": {
+          "$ref": "#/$defs/__schema21"
+        },
+        "required": {
+          "$ref": "#/$defs/__schema23"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema24"
+        },
+        "value": {
+          "$ref": "#/$defs/__schema25"
+        }
+      },
+      "required": ["name", "type"]
+    },
+    "__schema16": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "__schema17": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "__schema18": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "__schema19": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "__schema20": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Z][\\dA-Z_]*$"
+    },
+    "__schema21": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema22"
+      }
+    },
+    "__schema22": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": ["value"]
+    },
+    "__schema23": {
+      "type": "boolean"
+    },
+    "__schema24": {
+      "type": "string",
+      "enum": ["string", "number", "boolean", "date", "select"]
+    },
+    "__schema25": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "__schema26": {
+      "description": "Suggested refresh cadence as a cron pattern, applied on publish.",
+      "$ref": "#/$defs/__schema27"
+    },
+    "__schema27": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        }
+      },
+      "required": ["pattern"]
+    },
+    "__schema28": {
+      "description": "Script time limit in milliseconds; defaults to 30000.",
+      "$ref": "#/$defs/__schema29"
+    },
+    "__schema29": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 120000
+    },
+    "__schema30": {
+      "type": "string",
+      "maxLength": 200
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What a widget script needs to run — credentials, network hosts, params, timeout — and how its output is scheduled and trended.",
+  "properties": {
+    "description": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "env": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "metric": {
+      "$ref": "#/$defs/__schema8"
+    },
+    "network": {
+      "$ref": "#/$defs/__schema10"
+    },
+    "params": {
+      "$ref": "#/$defs/__schema13"
+    },
+    "schedule": {
+      "$ref": "#/$defs/__schema26"
+    },
+    "timeoutMs": {
+      "$ref": "#/$defs/__schema28"
+    },
+    "title": {
+      "$ref": "#/$defs/__schema30"
+    }
+  },
+  "title": "LobeHub widget manifest",
+  "type": "object"
+}

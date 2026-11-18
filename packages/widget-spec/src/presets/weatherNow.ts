@@ -1,4 +1,4 @@
-import type { WidgetPreset } from '@lobechat/types';
+import type { WidgetPreset } from '@lobechat/types/widget';
 
 // The script runs in the widget sandbox (node, global fetch, no packages).
 const SCRIPT = String.raw`// Current weather and the next hours for one city, from Open-Meteo (no key).

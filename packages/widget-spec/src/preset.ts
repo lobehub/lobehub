@@ -1,5 +1,5 @@
-import type { WidgetPreset } from '@lobechat/types';
-import { WIDGET_PRESET_CATEGORIES } from '@lobechat/types';
+import type { WidgetPreset } from '@lobechat/types/widget';
+import { WIDGET_PRESET_CATEGORIES } from '@lobechat/types/widget';
 import { z } from 'zod';
 
 import { widgetContentSchema } from './manifest';

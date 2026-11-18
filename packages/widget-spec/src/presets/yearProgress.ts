@@ -1,4 +1,4 @@
-import type { WidgetPreset } from '@lobechat/types';
+import type { WidgetPreset } from '@lobechat/types/widget';
 
 // The script runs in the widget sandbox (node, global fetch, no packages).
 const SCRIPT = String.raw`// How far through the year, month and week today is, in the chosen time zone.

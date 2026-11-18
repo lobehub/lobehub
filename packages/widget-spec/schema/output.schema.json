@@ -1,0 +1,270 @@
+{
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/$defs/__schema1"
+        }
+      ]
+    },
+    "__schema1": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema2": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "message": {
+          "$ref": "#/$defs/__schema1"
+        }
+      }
+    },
+    "__schema4": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "status": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "time": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "url": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "value": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": ["title"]
+    },
+    "__schema5": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema6"
+      }
+    },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "points": {
+          "maxItems": 1000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema7"
+          }
+        }
+      },
+      "required": ["name", "points"]
+    },
+    "__schema7": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "v": {
+          "type": "number"
+        }
+      },
+      "required": ["t", "v"]
+    },
+    "__schema8": {
+      "type": "string",
+      "const": "series"
+    },
+    "__schema9": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema10": {
+      "minItems": 1,
+      "maxItems": 30,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema11"
+      }
+    },
+    "__schema11": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "date", "link"]
+        }
+      },
+      "required": ["key"]
+    },
+    "__schema12": {
+      "maxItems": 500,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema13"
+      }
+    },
+    "__schema13": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 2000
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "__schema14": {
+      "type": "string",
+      "const": "table"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The one JSON document a widget script prints to stdout.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "delta": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "description": {
+          "$ref": "#/$defs/__schema1"
+        },
+        "label": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "meta": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "trend": {
+          "type": "string",
+          "enum": ["up", "down", "flat"]
+        },
+        "type": {
+          "type": "string",
+          "const": "stat"
+        },
+        "unit": {
+          "$ref": "#/$defs/__schema2"
+        },
+        "value": {
+          "$ref": "#/$defs/__schema0"
+        }
+      },
+      "required": ["type", "value"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "items": {
+          "maxItems": 200,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema4"
+          }
+        },
+        "meta": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "type": {
+          "type": "string",
+          "const": "list"
+        }
+      },
+      "required": ["items", "type"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "series": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "unit": {
+          "$ref": "#/$defs/__schema9"
+        }
+      },
+      "required": ["series", "type"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "meta": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "rows": {
+          "$ref": "#/$defs/__schema12"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema14"
+        }
+      },
+      "required": ["columns", "rows", "type"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "meta": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "type": {
+          "type": "string",
+          "const": "data"
+        }
+      },
+      "required": ["data", "type"]
+    }
+  ],
+  "title": "LobeHub widget output"
+}

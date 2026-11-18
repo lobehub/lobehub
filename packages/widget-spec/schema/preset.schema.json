@@ -1,0 +1,1399 @@
+{
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "enum": ["time", "weather", "dev", "life", "finance", "content", "business"]
+    },
+    "__schema1": {
+      "type": "string",
+      "pattern": "^[a-z][\\da-z-]*\\.v\\d+$"
+    },
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "__schema3": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][\\da-z]*(?:-[\\da-z]+)*$"
+    },
+    "__schema4": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z]{2}(?:-[A-Z]{2})?$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "params": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 100
+                }
+              }
+            }
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 100
+          }
+        }
+      }
+    },
+    "__schema5": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "delta": {
+              "$ref": "#/$defs/__schema6"
+            },
+            "description": {
+              "$ref": "#/$defs/__schema7"
+            },
+            "label": {
+              "$ref": "#/$defs/__schema8"
+            },
+            "meta": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "trend": {
+              "type": "string",
+              "enum": ["up", "down", "flat"]
+            },
+            "type": {
+              "type": "string",
+              "const": "stat"
+            },
+            "unit": {
+              "$ref": "#/$defs/__schema8"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema6"
+            }
+          },
+          "required": ["type", "value"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema10"
+              }
+            },
+            "meta": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "type": {
+              "type": "string",
+              "const": "list"
+            }
+          },
+          "required": ["items", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "meta": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "series": {
+              "$ref": "#/$defs/__schema11"
+            },
+            "type": {
+              "$ref": "#/$defs/__schema14"
+            },
+            "unit": {
+              "$ref": "#/$defs/__schema15"
+            }
+          },
+          "required": ["series", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "columns": {
+              "$ref": "#/$defs/__schema16"
+            },
+            "meta": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "rows": {
+              "$ref": "#/$defs/__schema18"
+            },
+            "type": {
+              "$ref": "#/$defs/__schema20"
+            }
+          },
+          "required": ["columns", "rows", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "meta": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "type": {
+              "type": "string",
+              "const": "data"
+            }
+          },
+          "required": ["data", "type"]
+        }
+      ]
+    },
+    "__schema6": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/$defs/__schema7"
+        }
+      ]
+    },
+    "__schema7": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema8": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "__schema9": {
+      "type": "object",
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "message": {
+          "$ref": "#/$defs/__schema7"
+        }
+      }
+    },
+    "__schema10": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "status": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "time": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "url": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "value": {
+          "$ref": "#/$defs/__schema6"
+        }
+      },
+      "required": ["title"]
+    },
+    "__schema11": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema12"
+      }
+    },
+    "__schema12": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "points": {
+          "maxItems": 1000,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema13"
+          }
+        }
+      },
+      "required": ["name", "points"]
+    },
+    "__schema13": {
+      "type": "object",
+      "properties": {
+        "t": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "v": {
+          "type": "number"
+        }
+      },
+      "required": ["t", "v"]
+    },
+    "__schema14": {
+      "type": "string",
+      "const": "series"
+    },
+    "__schema15": {
+      "$ref": "#/$defs/__schema8"
+    },
+    "__schema16": {
+      "minItems": 1,
+      "maxItems": 30,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema17"
+      }
+    },
+    "__schema17": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "title": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "date", "link"]
+        }
+      },
+      "required": ["key"]
+    },
+    "__schema18": {
+      "maxItems": 500,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema19"
+      }
+    },
+    "__schema19": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 2000
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "__schema20": {
+      "type": "string",
+      "const": "table"
+    },
+    "__schema21": {
+      "type": "object",
+      "properties": {
+        "h": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 12
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        }
+      },
+      "required": ["h", "w"]
+    },
+    "__schema22": {
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema23"
+      }
+    },
+    "__schema23": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "__schema24": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "__schema25": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "__schema26": {
+      "type": "object",
+      "properties": {
+        "manifest": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "$ref": "#/$defs/__schema27"
+                },
+                "env": {
+                  "$ref": "#/$defs/__schema28"
+                },
+                "metric": {
+                  "$ref": "#/$defs/__schema35"
+                },
+                "network": {
+                  "$ref": "#/$defs/__schema37"
+                },
+                "params": {
+                  "$ref": "#/$defs/__schema40"
+                },
+                "schedule": {
+                  "$ref": "#/$defs/__schema53"
+                },
+                "timeoutMs": {
+                  "$ref": "#/$defs/__schema55"
+                },
+                "title": {
+                  "$ref": "#/$defs/__schema57"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputType": {
+          "type": "string",
+          "enum": ["stat", "list", "series", "table", "data"],
+          "description": "The output document type stdout must match."
+        },
+        "runtime": {
+          "type": "string",
+          "enum": ["node", "python", "bash"],
+          "description": "Interpreter the sandbox runs the script with."
+        },
+        "script": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "description": "Source that prints one JSON output document to stdout."
+        },
+        "view": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "chart": {
+                  "type": "string",
+                  "enum": ["line", "bar", "area"]
+                },
+                "columns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "html": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 204800
+                },
+                "layout": {
+                  "$ref": "#/$defs/__schema63"
+                },
+                "limit": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 500
+                },
+                "size": {
+                  "type": "string",
+                  "enum": ["sm", "md", "lg"]
+                },
+                "surface": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "default",
+                        "sky",
+                        "cloudy",
+                        "rain",
+                        "storm",
+                        "snow",
+                        "night",
+                        "sunset",
+                        "forest",
+                        "ocean",
+                        "sand",
+                        "rose",
+                        "slate"
+                      ]
+                    },
+                    {
+                      "$ref": "#/$defs/__schema67"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["outputType", "runtime", "script"]
+    },
+    "__schema27": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "__schema28": {
+      "description": "Credentials the script reads from its environment, resolved from connectors.",
+      "$ref": "#/$defs/__schema29"
+    },
+    "__schema29": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema30"
+      }
+    },
+    "__schema30": {
+      "type": "object",
+      "properties": {
+        "connector": {
+          "description": "Connector supplying the credential, e.g. 'github'.",
+          "$ref": "#/$defs/__schema31"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "field": {
+          "description": "Header to read when the connector holds several, e.g. DD-API-KEY.",
+          "$ref": "#/$defs/__schema32"
+        },
+        "inject": {
+          "description": "Where a Market connector's token is sent: the egress proxy sets `header` on requests to `host`.",
+          "$ref": "#/$defs/__schema33"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z_a-z]\\w*$",
+          "description": "Environment variable the script reads, e.g. GITHUB_TOKEN."
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name"]
+    },
+    "__schema31": {
+      "type": "string",
+      "minLength": 1
+    },
+    "__schema32": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "__schema33": {
+      "type": "object",
+      "properties": {
+        "header": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[!#$%&'*+.^`|~\\w-]+$"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema34"
+            },
+            {
+              "minItems": 1,
+              "maxItems": 5,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema34"
+              }
+            }
+          ]
+        },
+        "prefix": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[^\\0\\n\\r]*$"
+        }
+      },
+      "required": ["host"]
+    },
+    "__schema34": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^(?:\\*\\.)?[\\w-]+(?:\\.[\\w-]+)+$"
+    },
+    "__schema35": {
+      "description": "Record the output as a metric on every published run, for a trend line.",
+      "$ref": "#/$defs/__schema36"
+    },
+    "__schema36": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["gauge", "counter"]
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "valuePath": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": ["key"]
+    },
+    "__schema37": {
+      "description": "Hosts the sandbox may reach; omitted or empty means no network.",
+      "$ref": "#/$defs/__schema38"
+    },
+    "__schema38": {
+      "type": "object",
+      "properties": {
+        "allow": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema39"
+          }
+        }
+      },
+      "required": ["allow"]
+    },
+    "__schema39": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "__schema40": {
+      "description": "Plain-text settings a person fills in, exposed to the script as env vars.",
+      "$ref": "#/$defs/__schema41"
+    },
+    "__schema41": {
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema42"
+      }
+    },
+    "__schema42": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/__schema43"
+        },
+        "description": {
+          "$ref": "#/$defs/__schema45"
+        },
+        "label": {
+          "$ref": "#/$defs/__schema46"
+        },
+        "name": {
+          "$ref": "#/$defs/__schema47"
+        },
+        "options": {
+          "$ref": "#/$defs/__schema48"
+        },
+        "required": {
+          "$ref": "#/$defs/__schema50"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema51"
+        },
+        "value": {
+          "$ref": "#/$defs/__schema52"
+        }
+      },
+      "required": ["name", "type"]
+    },
+    "__schema43": {
+      "$ref": "#/$defs/__schema44"
+    },
+    "__schema44": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "__schema45": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "__schema46": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "__schema47": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Z][\\dA-Z_]*$"
+    },
+    "__schema48": {
+      "minItems": 1,
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/__schema49"
+      }
+    },
+    "__schema49": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "value": {
+          "type": "string",
+          "maxLength": 200
+        }
+      },
+      "required": ["value"]
+    },
+    "__schema50": {
+      "type": "boolean"
+    },
+    "__schema51": {
+      "type": "string",
+      "enum": ["string", "number", "boolean", "date", "select"]
+    },
+    "__schema52": {
+      "$ref": "#/$defs/__schema44"
+    },
+    "__schema53": {
+      "description": "Suggested refresh cadence as a cron pattern, applied on publish.",
+      "$ref": "#/$defs/__schema54"
+    },
+    "__schema54": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        }
+      },
+      "required": ["pattern"]
+    },
+    "__schema55": {
+      "description": "Script time limit in milliseconds; defaults to 30000.",
+      "$ref": "#/$defs/__schema56"
+    },
+    "__schema56": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 120000
+    },
+    "__schema57": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "__schema58": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 12
+    },
+    "__schema59": {
+      "type": "string",
+      "enum": ["narrow", "short"]
+    },
+    "__schema60": {
+      "type": "object",
+      "properties": {
+        "bind": {
+          "$ref": "#/$defs/__schema61"
+        },
+        "eq": {
+          "$ref": "#/$defs/__schema62"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "gt": {
+          "type": "number"
+        },
+        "gte": {
+          "type": "number"
+        },
+        "in": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema62"
+          }
+        },
+        "lt": {
+          "type": "number"
+        },
+        "lte": {
+          "type": "number"
+        },
+        "ne": {
+          "$ref": "#/$defs/__schema62"
+        }
+      },
+      "required": ["bind"],
+      "additionalProperties": false
+    },
+    "__schema61": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[\\w$-]+(?:\\.[\\w$-]+)*$"
+    },
+    "__schema62": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema63": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "align": {
+              "type": "string",
+              "enum": ["start", "center", "end", "stretch", "baseline"]
+            },
+            "children": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema63"
+              }
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["row", "column"]
+            },
+            "gap": {
+              "$ref": "#/$defs/__schema64"
+            },
+            "justify": {
+              "$ref": "#/$defs/__schema65"
+            },
+            "padding": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 48
+            },
+            "type": {
+              "type": "string",
+              "const": "stack"
+            },
+            "wrap": {
+              "type": "boolean"
+            }
+          },
+          "required": ["children", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "children": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema63"
+              }
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "gap": {
+              "$ref": "#/$defs/__schema64"
+            },
+            "type": {
+              "type": "string",
+              "const": "grid"
+            }
+          },
+          "required": ["children", "columns", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "align": {
+              "type": "string",
+              "enum": ["start", "center", "end"]
+            },
+            "lines": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "size": {
+              "type": "string",
+              "enum": ["xs", "sm", "md", "lg", "xl", "2xl", "display"]
+            },
+            "tone": {
+              "type": "string",
+              "enum": ["default", "secondary", "tertiary", "success", "warning", "error"]
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "weight": {
+              "type": "string",
+              "enum": ["regular", "medium", "semibold", "bold"]
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "name": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "size": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 160
+            },
+            "type": {
+              "type": "string",
+              "const": "icon"
+            }
+          },
+          "required": ["name", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "fit": {
+              "type": "string",
+              "enum": ["cover", "contain"]
+            },
+            "height": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 800
+            },
+            "radius": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 400
+            },
+            "src": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "type": {
+              "type": "string",
+              "const": "image"
+            },
+            "width": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 1600
+            }
+          },
+          "required": ["src", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "max": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "min": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "type": {
+              "type": "string",
+              "const": "progress"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema66"
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "children": {
+              "maxItems": 200,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema63"
+              }
+            },
+            "color": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "max": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "size": {
+              "type": "number",
+              "minimum": 24,
+              "maximum": 400
+            },
+            "type": {
+              "type": "string",
+              "const": "ring"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema66"
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "columns": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            },
+            "total": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "type": {
+              "type": "string",
+              "const": "dots"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema66"
+            }
+          },
+          "required": ["total", "type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "height": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 400
+            },
+            "key": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["line", "area", "bar"]
+            },
+            "type": {
+              "type": "string",
+              "const": "sparkline"
+            },
+            "values": {
+              "$ref": "#/$defs/__schema61"
+            }
+          },
+          "required": ["type", "values"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "color": {
+              "$ref": "#/$defs/__schema66"
+            },
+            "type": {
+              "type": "string",
+              "const": "badge"
+            },
+            "value": {
+              "$ref": "#/$defs/__schema66"
+            }
+          },
+          "required": ["type", "value"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "type": {
+              "type": "string",
+              "const": "divider"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "type": {
+              "type": "string",
+              "const": "spacer"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "$ref": "#/$defs/__schema58"
+            },
+            "hideWhen": {
+              "$ref": "#/$defs/__schema59"
+            },
+            "visible": {
+              "$ref": "#/$defs/__schema60"
+            },
+            "direction": {
+              "type": "string",
+              "enum": ["row", "column"]
+            },
+            "gap": {
+              "$ref": "#/$defs/__schema64"
+            },
+            "items": {
+              "$ref": "#/$defs/__schema61"
+            },
+            "justify": {
+              "$ref": "#/$defs/__schema65"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 48
+            },
+            "template": {
+              "$ref": "#/$defs/__schema63"
+            },
+            "type": {
+              "type": "string",
+              "const": "repeat"
+            }
+          },
+          "required": ["items", "template", "type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema64": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 48
+    },
+    "__schema65": {
+      "type": "string",
+      "enum": ["start", "center", "end", "between", "around"]
+    },
+    "__schema66": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema62"
+        },
+        {
+          "$ref": "#/$defs/__schema67"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "template": {
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": ["template"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "__schema67": {
+      "type": "object",
+      "properties": {
+        "bind": {
+          "$ref": "#/$defs/__schema61"
+        },
+        "digits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "fallback": {
+          "$ref": "#/$defs/__schema62"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "number",
+            "compact",
+            "percent",
+            "date",
+            "time",
+            "datetime",
+            "weekday",
+            "relative"
+          ]
+        },
+        "map": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema62"
+          }
+        },
+        "pattern": {
+          "type": "string",
+          "maxLength": 50
+        }
+      },
+      "required": ["bind"],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A ready-made widget the gallery lists and installs.",
+  "properties": {
+    "category": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "contract": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "description": {
+      "$ref": "#/$defs/__schema2"
+    },
+    "id": {
+      "$ref": "#/$defs/__schema3"
+    },
+    "locales": {
+      "$ref": "#/$defs/__schema4"
+    },
+    "sample": {
+      "$ref": "#/$defs/__schema5"
+    },
+    "size": {
+      "$ref": "#/$defs/__schema21"
+    },
+    "tags": {
+      "$ref": "#/$defs/__schema22"
+    },
+    "title": {
+      "$ref": "#/$defs/__schema24"
+    },
+    "version": {
+      "$ref": "#/$defs/__schema25"
+    },
+    "widget": {
+      "$ref": "#/$defs/__schema26"
+    }
+  },
+  "required": ["category", "description", "id", "sample", "title", "version", "widget"],
+  "title": "LobeHub widget preset",
+  "type": "object"
+}
