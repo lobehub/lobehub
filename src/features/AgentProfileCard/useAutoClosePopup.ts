@@ -25,15 +25,17 @@ interface UseAutoClosePopupOptions {
  *   close transition both run in effects, so even `open={false}` would leave
  *   the card on screen. `detached` tells the caller to drop the popover
  *   entirely until the trigger is shown again.
- * - A route change can move or replace the trigger without the pointer ever
- *   leaving it.
+ * - A navigation, including one that only changes the query or hash (group
+ *   profile tabs, history traversal), can move or replace the trigger without
+ *   the pointer ever leaving it.
  * - Scrolling a list moves the trigger away from a pointer that stands still.
  * - Escape: a hover-opened card never takes focus, and an editor that holds it
  *   (the chat composer) stops the key before Base UI's dismiss sees it, so it
  *   is caught in the capture phase and still reaches the editor.
  */
 export const useAutoClosePopup = ({ open, setOpen }: UseAutoClosePopupOptions) => {
-  const { pathname } = useLocation();
+  // Every navigation gets a new key, query- and hash-only ones included.
+  const { key: locationKey } = useLocation();
   const setOpenRef = useRef(setOpen);
   setOpenRef.current = setOpen;
   const triggerRef = useRef<Element | null>(null);
@@ -49,12 +51,12 @@ export const useAutoClosePopup = ({ open, setOpen }: UseAutoClosePopupOptions) =
     };
   }, []);
 
-  const lastPathnameRef = useRef(pathname);
+  const lastLocationKeyRef = useRef(locationKey);
   useEffect(() => {
-    if (lastPathnameRef.current === pathname) return;
-    lastPathnameRef.current = pathname;
+    if (lastLocationKeyRef.current === locationKey) return;
+    lastLocationKeyRef.current = locationKey;
     setOpenRef.current(false);
-  }, [pathname]);
+  }, [locationKey]);
 
   useEffect(() => {
     if (!open) return;

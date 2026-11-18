@@ -93,6 +93,16 @@ describe('useAutoClosePopup', () => {
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
+  it('closes the card when only the query or hash changes', async () => {
+    const { navigate, setOpen } = setup();
+
+    await act(() => navigate('/?tab=agt_writer'));
+    expect(setOpen).toHaveBeenCalledTimes(1);
+
+    await act(() => navigate('/?tab=agt_writer#skills'));
+    expect(setOpen).toHaveBeenCalledTimes(2);
+  });
+
   it('closes the card when a container of the trigger scrolls, not when anything else does', () => {
     const { result, setOpen } = setup();
     const list = document.createElement('div');
