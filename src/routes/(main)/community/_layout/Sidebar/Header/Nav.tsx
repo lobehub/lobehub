@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { Bot, ShapesIcon } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,8 +24,7 @@ interface Item {
 
 const useActiveTabKey = () => {
   const { pathname } = useActiveLocation();
-  if (pathname.endsWith('/community')) return DiscoverTab.Home;
-  return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Home;
+  return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Assistants;
 };
 
 const Nav = memo(() => {
@@ -36,12 +35,6 @@ const Nav = memo(() => {
   const items: Item[] = useMemo(
     () =>
       [
-        {
-          icon: ShapesIcon,
-          key: DiscoverTab.Home,
-          title: t('tab.home'),
-          url: '/community',
-        },
         {
           icon: Bot,
           key: DiscoverTab.Assistants,

@@ -14,6 +14,7 @@ import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
@@ -23,12 +24,14 @@ import { itemStyles } from '../style';
 interface ItemProps {
   avatar?: string;
   description?: string;
+  detailHref?: string;
   identifier: string;
   onOpenDetail?: () => void;
   title?: string;
 }
 
-const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, title }) => {
+const Item = memo<ItemProps>((props) => {
+  const { avatar, description, detailHref, identifier, onOpenDetail, title } = props;
   const { t } = useTranslation(['setting', 'plugin', 'common']);
   const styles = itemStyles;
   const { allowed: canCreate } = usePermission('create_content');
@@ -75,13 +78,18 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
             },
           ]}
         >
-          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} />
+          <ActionIcon
+            aria-label={t('more', { ns: 'common' })}
+            disabled={!canEdit}
+            icon={MoreVerticalIcon}
+          />
         </DropdownMenu>
       );
     }
 
     return (
       <ActionIcon
+        aria-label={t('tools.builtins.install')}
         disabled={!canCreate}
         icon={Plus}
         title={t('tools.builtins.install')}
@@ -96,15 +104,25 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
       align={'center'}
       className={styles.container}
       gap={12}
-      paddingBlock={12}
+      paddingBlock={detailHref ? 8 : 12}
       paddingInline={12}
-      style={{ cursor: 'pointer' }}
-      variant={'outlined'}
+      style={onOpenDetail ? { cursor: 'pointer' } : undefined}
+      variant={detailHref ? 'borderless' : 'outlined'}
       onClick={onOpenDetail}
     >
-      <Avatar avatar={avatar} size={40} style={{ marginInlineEnd: 0 }} />
+      <Avatar
+        avatar={avatar}
+        size={detailHref ? 36 : 40}
+        style={{ flex: 'none', marginInlineEnd: 0 }}
+      />
       <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-        <span className={styles.title}>{title || identifier}</span>
+        {detailHref ? (
+          <WorkspaceLink className={styles.title} to={detailHref}>
+            {title || identifier}
+          </WorkspaceLink>
+        ) : (
+          <span className={styles.title}>{title || identifier}</span>
+        )}
         {description && <span className={styles.description}>{description}</span>}
       </Flexbox>
       <div onClick={stopPropagation}>{renderAction()}</div>

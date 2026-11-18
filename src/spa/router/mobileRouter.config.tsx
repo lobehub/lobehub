@@ -107,15 +107,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
       // List routes (with ListLayout)
       {
         children: [
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Mobile > Discover > List > Home',
-              { preloadId: 'mobile-community' },
-            ),
-            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }) },
-            index: true,
-          },
+          { element: redirectElement('agent'), index: true },
           {
             children: [
               {

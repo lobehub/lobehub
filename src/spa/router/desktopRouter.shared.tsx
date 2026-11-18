@@ -9,7 +9,6 @@ import {
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
 import AppsSkeleton from '@/components/Skeleton/Apps';
-import CommunityHomeSkeleton from '@/components/Skeleton/CommunityHome';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
@@ -248,22 +247,11 @@ export const sharedMainAreaChildren: RouteObject[] = [
             path: 'skill',
           },
           {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/mcp'),
-                  'Desktop > Discover > List > MCP',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
-                },
-                index: true,
-              },
-            ],
             element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/mcp/_layout'),
-              'Desktop > Discover > List > MCP > Layout',
+              () => import('@/routes/(main)/community/(list)/mcp'),
+              'Desktop > Discover > List > MCP',
             ),
+            handle: { meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }) },
             path: 'mcp',
           },
           {
@@ -274,21 +262,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
             path: 'workspace',
           },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/(home)'),
-              'Desktop > Discover > List > Home',
-              { preloadId: 'community' },
-            ),
-            handle: {
-              meta: routeMeta({
-                icon: ShapesIcon,
-                Skeleton: CommunityHomeSkeleton,
-                titleKey: 'navigation.discover',
-              }),
-            },
-            index: true,
-          },
+          { element: redirectElement('agent'), index: true },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/community/(list)/_layout'),

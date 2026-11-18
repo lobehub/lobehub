@@ -19,6 +19,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { isLegacyMcp } from '@/features/CommunityMcp/isLegacyMcp';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -38,7 +39,6 @@ import AgentConnectorItem from './AgentConnectorItem';
 import AgentSkillItem from './AgentSkillItem';
 import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
-import { AccountsNeedReauth, countAccountsNeedingReauth } from './ConnectorRowFeedback';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
 import type { ToolDetailType } from './SkillDetail';
@@ -93,11 +93,6 @@ const SkillList = memo<SkillListProps>(
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
-    const marketplaceConnectors = useToolStore(
-      connectorSelectors.marketplaceMcpConnectors,
-      isEqual,
-    );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
@@ -173,7 +168,7 @@ const SkillList = memo<SkillListProps>(
     // 1. Integrations (Builtin, LobeHub and Composio skills)
     // 2. Community MCP Tools (type === 'plugin')
     // 3. Custom MCP Tools (type === 'customPlugin')
-    const { integrations, communityMCPs, customMCPs } = useMemo(() => {
+    const { integrations, communityPlugins, customPlugins } = useMemo(() => {
       type IntegrationItem =
         | { builtinAgentSkill: BuiltinSkillManifest; type: 'builtinAgent' }
         | { builtinTool: LobeBuiltinTool; type: 'builtin' }
@@ -289,12 +284,16 @@ const SkillList = memo<SkillListProps>(
       });
 
       // Separate installed plugins into community and custom
-      const communityPlugins = installedPluginList.filter((plugin) => plugin.type === 'plugin');
-      const customPlugins = installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+      const communityPlugins = installedPluginList.filter(
+        (plugin) => plugin.type === 'plugin' && !isLegacyMcp(plugin),
+      );
+      const customPlugins = installedPluginList.filter(
+        (plugin) => plugin.type === 'customPlugin' && !isLegacyMcp(plugin),
+      );
 
       return {
-        communityMCPs: communityPlugins,
-        customMCPs: customPlugins,
+        communityPlugins,
+        customPlugins,
         integrations: sortedIntegrations,
       };
     }, [
@@ -313,9 +312,8 @@ const SkillList = memo<SkillListProps>(
       integrations.length > 0 ||
       marketAgentSkills.length > 0 ||
       userAgentSkills.length > 0 ||
-      communityMCPs.length > 0 ||
-      marketplaceConnectors.length > 0 ||
-      customMCPs.length > 0 ||
+      communityPlugins.length > 0 ||
+      customPlugins.length > 0 ||
       agentBoundConnectors.length > 0;
 
     // A failed fetch must read as a failure with Retry, never as the "no skills"
@@ -356,8 +354,8 @@ const SkillList = memo<SkillListProps>(
         />
       ));
 
-    const renderCommunityMCPs = () => [
-      ...communityMCPs.map((plugin) => (
+    const renderPlugins = (plugins: typeof communityPlugins, detailType: ToolDetailType) =>
+      plugins.map((plugin) => (
         <McpSkillItem
           author={plugin.author}
           avatar={plugin.avatar}
@@ -367,58 +365,9 @@ const SkillList = memo<SkillListProps>(
           runtimeType={plugin.runtimeType}
           title={plugin.title || plugin.identifier}
           type={plugin.type as LobeToolType}
-          onSelect={onSelect ? () => onSelect(plugin.identifier, 'plugin') : undefined}
-        />
-      )),
-      // Marketplace installs made on the connector path (no legacy plugin row)
-      ...marketplaceConnectors.map((c) => (
-        <McpSkillItem
-          avatar={c.metadata?.avatar as string | undefined}
-          identifier={c.identifier}
-          isSelected={selectedIdentifier === c.identifier}
-          key={c.id}
-          runtimeType="mcp"
-          title={c.name || c.identifier}
-          type={'plugin' as LobeToolType}
-          onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
-        />
-      )),
-    ];
-
-    const renderCustomMCPs = () =>
-      customMCPs.map((plugin) => (
-        <McpSkillItem
-          author={plugin.author}
-          avatar={plugin.avatar}
-          identifier={plugin.identifier}
-          isSelected={selectedIdentifier === plugin.identifier}
-          key={plugin.identifier}
-          runtimeType={plugin.runtimeType}
-          title={plugin.title || plugin.identifier}
-          type={plugin.type as LobeToolType}
-          onSelect={onSelect ? () => onSelect(plugin.identifier, 'mcp-connector') : undefined}
+          onSelect={onSelect ? () => onSelect(plugin.identifier, detailType) : undefined}
         />
       ));
-
-    // Custom connectors from the connector store (user-added OAuth MCP servers)
-    const renderCustomConnectors = () =>
-      customConnectors.map((c) => {
-        const brokenAccounts = countAccountsNeedingReauth(c.links);
-        return (
-          <McpSkillItem
-            identifier={c.identifier}
-            isSelected={selectedIdentifier === c.identifier}
-            key={c.id}
-            runtimeType="mcp"
-            title={c.name || c.identifier}
-            type={'customPlugin' as LobeToolType}
-            description={
-              brokenAccounts > 0 ? <AccountsNeedReauth count={brokenAccounts} /> : undefined
-            }
-            onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
-          />
-        );
-      });
 
     // Split integrations into builtin tools vs builtin skills
     const builtinToolItems = integrations.filter((i) => i.type === 'builtin');
@@ -466,19 +415,15 @@ const SkillList = memo<SkillListProps>(
       );
     };
 
-    // Connectors tab: tools/MCP items (provide API-level permissions)
-    // Skills tab: prompt/agent-based skills (show description/content)
     const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
     const hasBuiltinSkills = builtinSkillItems.length > 0 && !isConnectorView;
     // Skills tab only shows agent-based community skills; Lobehub/Composio OAuth
     // connectors live exclusively in the Connectors view (hasCommunityConnectors).
     const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
-    const communityToolCount = communityMCPs.length + marketplaceConnectors.length;
+    const communityToolCount = communityPlugins.length;
     const hasCommunityTools = communityToolCount > 0 && isConnectorView;
-    // In connector view: custom MCPs (old plugins) + custom connectors (new store).
-    // In skill view: user agent skills
-    const hasCustomConnectors =
-      isConnectorView && (customMCPs.length > 0 || customConnectors.length > 0);
+    // Custom MCP servers are managed in the marketplace.
+    const hasCustomConnectors = isConnectorView && customPlugins.length > 0;
     const hasCustomSkills = userAgentSkills.length > 0 && !isConnectorView;
     // Lobehub/Composio OAuth skills go in Connectors tab (they provide tools)
     const hasCommunityConnectors = communitySkillItems.length > 0 && isConnectorView;
@@ -582,7 +527,7 @@ const SkillList = memo<SkillListProps>(
           renderSection(
             'communityTools',
             t('skillGroup.communityTools', 'Community Tools'),
-            renderCommunityMCPs(),
+            renderPlugins(communityPlugins, 'plugin'),
             communityToolCount,
           )}
 
@@ -590,11 +535,8 @@ const SkillList = memo<SkillListProps>(
           renderSection(
             'customConnectors',
             t('skillGroup.customConnectors', 'Custom Connectors'),
-            <>
-              {renderCustomConnectors()}
-              {renderCustomMCPs()}
-            </>,
-            customConnectors.length + customMCPs.length,
+            renderPlugins(customPlugins, 'mcp-connector'),
+            customPlugins.length,
           )}
 
         {hasAgentConnectors &&

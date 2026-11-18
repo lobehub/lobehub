@@ -664,6 +664,10 @@ export default {
 
   'mcp.validated.title': 'Validated',
 
+  'mcp.add': 'Add MCP',
+  'mcp.marketplaceDescription': 'Find and install MCP servers for your agents.',
+  'mcp.noneInstalled': 'No installed MCP servers',
+  'mcp.searchPlaceholder': 'Search MCP servers',
   'mcpEmpty.description': 'Try adjusting filters or searching with different keywords.',
 
   'mcpEmpty.search': 'No matching MCP Servers found',
@@ -884,6 +888,11 @@ export default {
 
   'skills.categories.ai-llms.description':
     'AI model integrations, LLM tooling, and prompt engineering skills',
+  'skills.lobehubPicks': 'LobeHub Picks',
+  'skills.marketplaceDescription': 'Discover and install skills for your agents.',
+  'skills.moreCategories': 'More categories',
+  'skills.noneInstalled': 'No installed skills',
+  'skills.searchPlaceholder': 'Search skills',
   'skills.categories.ai-llms.name': 'AI & LLMs',
 
   'skills.categories.all.description': 'All Skills',

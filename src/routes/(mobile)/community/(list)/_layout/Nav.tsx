@@ -8,7 +8,6 @@ import { memo, useState } from 'react';
 
 import Menu from '@/components/Menu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { DiscoverTab } from '@/types/discover';
 
 import { useNav } from '../../../../(main)/community/features/useNav';
 
@@ -72,11 +71,7 @@ const Nav = memo(() => {
           items={items}
           onClick={({ key }) => {
             scrollToTop();
-            if (key === DiscoverTab.Home) {
-              navigate('/community');
-            } else {
-              navigate(`/community/${key}`);
-            }
+            navigate(`/community/${key}`);
             setOpen(false);
           }}
         />

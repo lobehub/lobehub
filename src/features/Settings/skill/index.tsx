@@ -6,9 +6,11 @@ import isEqual from 'fast-deep-equal';
 import { ArrowLeft, ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavHeader from '@/features/NavHeader';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
@@ -265,6 +267,10 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
 
 ToolSettings.displayName = 'ToolSettings';
 
-const Page = () => <ToolSettings viewMode="skill" />;
+const Page = () => {
+  const { search } = useLocation();
+  const slug = useActiveWorkspaceSlug();
+  return <Navigate replace to={buildWorkspaceAwarePath('/community/skill' + search, slug)} />;
+};
 
 export default Page;

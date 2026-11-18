@@ -1,19 +1,18 @@
 'use client';
 
 import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
+import { GithubIcon, McpIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CustomConnectorModal } from '@/features/Connectors';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
-import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
@@ -55,7 +54,6 @@ const styles = stylex.create({
     borderInlineEndStyle: 'solid',
     borderInlineEndColor: cssVar.colorBorderSecondary,
   },
-  tooltipAnchor: { display: 'inline-flex' },
 });
 
 interface LeftPanelProps {
@@ -71,20 +69,14 @@ interface LeftPanelProps {
 
 const LeftPanel = memo<LeftPanelProps>(
   ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
-    const { t } = useTranslation(['setting', 'tool']);
-    const [showAddConnector, setShowAddConnector] = useState(false);
+    const { t } = useTranslation('setting');
+    const navigate = useWorkspaceAwareNavigate();
 
     const handleOpenStore = useCallback(() => {
       createSkillStoreModal();
     }, []);
 
     const isConnectorView = viewMode === 'connector';
-    // Adding a workspace connector follows the same member policy as editing one.
-    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
-    const addConnectorTitle = t('connector.add.title', {
-      defaultValue: 'Add Custom Connector',
-      ns: 'tool',
-    });
     const isConnectorPage = page && isConnectorView;
 
     if (isConnectorPage)
@@ -102,24 +94,9 @@ const LeftPanel = memo<LeftPanelProps>(
                   onClick={handleOpenStore}
                 />
               </Tooltip>
-              <Tooltip
-                title={
-                  canAddConnector || isPolicyPending
-                    ? undefined
-                    : t('tools.connectorFeedback.manageOnly')
-                }
-              >
-                {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
-                <span {...stylex.props(styles.tooltipAnchor)}>
-                  <Button
-                    disabled={!canAddConnector}
-                    icon={Grid2x2Plus}
-                    onClick={() => setShowAddConnector(true)}
-                  >
-                    {addConnectorTitle}
-                  </Button>
-                </span>
-              </Tooltip>
+              <Button icon={McpIcon} onClick={() => navigate('/community/mcp')}>
+                MCP
+              </Button>
             </Flexbox>
           </div>
           <ConnectorManagePolicy variant={'page'} />
@@ -130,10 +107,6 @@ const LeftPanel = memo<LeftPanelProps>(
               onSelect={onSelect}
             />
           </div>
-          <CustomConnectorModal
-            open={showAddConnector}
-            onClose={() => setShowAddConnector(false)}
-          />
         </SkillListVariantProvider>
       );
 
@@ -152,24 +125,9 @@ const LeftPanel = memo<LeftPanelProps>(
 
             <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
               {isConnectorView ? (
-                // Connector view: single action to add a custom OAuth connector.
-                <Tooltip
-                  title={
-                    canAddConnector || isPolicyPending
-                      ? addConnectorTitle
-                      : t('tools.connectorFeedback.manageOnly')
-                  }
-                >
-                  {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
-                  <span {...stylex.props(styles.tooltipAnchor)}>
-                    <Button
-                      disabled={!canAddConnector}
-                      icon={Grid2x2Plus}
-                      size="small"
-                      onClick={() => setShowAddConnector(true)}
-                    />
-                  </span>
-                </Tooltip>
+                <Button icon={McpIcon} size="small" onClick={() => navigate('/community/mcp')}>
+                  MCP
+                </Button>
               ) : (
                 // Skill view: import a skill from a URL, GitHub, or a zip upload.
                 <DropdownMenu
@@ -235,7 +193,6 @@ const LeftPanel = memo<LeftPanelProps>(
             />
           </div>
         </div>
-        <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
       </>
     );
   },

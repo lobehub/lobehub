@@ -578,10 +578,9 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
-  // Vite resolves an optimized dep by bare name for every importer. Pre-bundling
-  // the workspace-pinned 2.1.x would hand it to mdast-util-to-markdown-cjk-friendly,
-  // which needs the 2.2 attention API, and <Markdown> throws in dev.
-  exclude: [...stylexTokenModules, 'mdast-util-to-markdown'],
+  // Bundle the Markdown serializer per importer. Externalizing its bare name
+  // makes the CJK plugin resolve the workspace's 2.1.x instead of its own 2.2.x.
+  exclude: [...stylexTokenModules],
   include: [
     'react',
     'react-dom',

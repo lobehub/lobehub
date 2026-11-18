@@ -6,6 +6,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { SearchIcon } from 'lucide-react';
 import { memo, useState } from 'react';
+import { useLocation } from 'react-router';
 
 import { MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
@@ -25,7 +26,10 @@ const styles = stylex.create({
 });
 
 const Header = memo(() => {
-  const [showSearch, setShowSearch] = useState(false);
+  const { pathname } = useLocation();
+  const hasCatalogSearch = /\/community\/(?:skill|mcp)\/?$/.test(pathname);
+  const [searchOpen, setShowSearch] = useState(false);
+  const showSearch = !hasCatalogSearch && searchOpen;
 
   return (
     <ChatHeader
@@ -44,7 +48,7 @@ const Header = memo(() => {
         )
       }
       right={
-        showSearch ? (
+        hasCatalogSearch ? null : showSearch ? (
           <Flexbox
             align={'center'}
             className={stylex.props(styles.search).className}

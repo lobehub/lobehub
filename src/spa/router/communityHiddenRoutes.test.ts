@@ -31,6 +31,20 @@ const resolveRedirect = (routes: RouteObject[], url: string) => {
 };
 
 describe('hidden Marketplace sections', () => {
+  it.each([
+    ['desktop', mainAreaMetaRoutes],
+    ['mobile', mobileRoutes],
+  ] as const)('opens Agents from the Marketplace index on %s', (_platform, routes) => {
+    for (const pathname of ['/community', '/acme/community']) {
+      const leaf = matchRoutes(routes, pathname)?.at(-1)?.route;
+      expect(leaf?.index).toBe(true);
+      expect(leaf?.element).toMatchObject({
+        props: { replace: true, to: 'agent' },
+        type: Navigate,
+      });
+    }
+  });
+
   it.each(hiddenUrls)('redirects %s to the Marketplace home on desktop', (url) => {
     expect(resolveRedirect(mainAreaMetaRoutes, url)).toBe(url.replace(/\/(model|provider).*$/, ''));
   });

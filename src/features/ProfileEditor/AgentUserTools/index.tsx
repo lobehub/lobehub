@@ -106,7 +106,7 @@ const AgentUserTools = memo<AgentToolProps & { variant?: 'chip' | 'list' }>((pro
               : 'settingAgent.tools.level.libraryDesc',
           ),
       extra: (
-        <Button size={'small'} type={'text'} onClick={() => navigate('/settings/skill')}>
+        <Button size={'small'} type={'text'} onClick={() => navigate('/community/skill')}>
           {t('settingAgent.tools.manageLibrary')}
         </Button>
       ),
