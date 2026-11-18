@@ -134,6 +134,73 @@ const preferenceBody = {
   title: 'Terse answers',
 };
 
+/**
+ * Every writable category with a valid create body, a valid patch body, and the
+ * row field that patch would change, so authorization cases can cover each layer.
+ */
+const CATEGORIES = [
+  {
+    body: identityBody,
+    category: 'identities',
+    field: 'role',
+    patch: { role: 'Hijacked' },
+    table: userMemoriesIdentities,
+  },
+  {
+    body: preferenceBody,
+    category: 'preferences',
+    field: 'conclusionDirectives',
+    patch: { conclusionDirectives: 'Hijacked' },
+    table: userMemoriesPreferences,
+  },
+  {
+    body: {
+      description: 'Migrating the billing service',
+      summary: 'Billing migration',
+      title: 'Billing',
+    },
+    category: 'contexts',
+    field: 'description',
+    patch: { description: 'Hijacked' },
+    table: userMemoriesContexts,
+  },
+  {
+    body: {
+      narrative: 'Met the design team about onboarding',
+      summary: 'Design sync',
+      title: 'Sync',
+    },
+    category: 'activities',
+    field: 'narrative',
+    patch: { narrative: 'Hijacked' },
+    table: userMemoriesActivities,
+  },
+  {
+    body: { situation: 'Flaky CI on Fridays', summary: 'Pin the runner image', title: 'CI lesson' },
+    category: 'experiences',
+    field: 'situation',
+    patch: { situation: 'Hijacked' },
+    table: userMemoriesExperiences,
+  },
+] as const;
+
+type Category = (typeof CATEGORIES)[number];
+
+const createEntry = async ({ body, category }: Category, key: string = KEYS.write) => {
+  const res = await call(`/memories/${category}`, { body, key });
+  expect(res.status).toBe(201);
+  return (await json(res)).data as { id: string };
+};
+
+/** The stored value of the field a patch would change, read straight from the table. */
+const storedField = async ({ field, table }: Category, id: string) => {
+  const [row] = await serverDB
+    .select()
+    .from(table as typeof userMemoriesIdentities)
+    .where(eq((table as typeof userMemoriesIdentities).id, id));
+  return (row as Record<string, unknown>)[field];
+};
+
 const createIdentity = async (key: string = KEYS.write) => {
   const res = await call('/memories/identities', { body: identityBody, key });
   expect(res.status).toBe(201);
@@ -347,6 +414,96 @@ describe('PATCH /memories/{category}/{id}', () => {
       (await call(path, { body: { role: 'x' }, key: KEYS.read, method: 'PATCH' })).status,
     ).toBe(403);
   });
+});
+
+describe('authorization on every writable category', () => {
+  const cases = CATEGORIES.map((layer) => [layer.category, layer] as const);
+
+  it.each(cases)('POST /memories/%s answers 401 without a key', async (category, layer) => {
+    const res = await call(`/memories/${category}`, { body: layer.body });
+
+    expect(res.status).toBe(401);
+    expect(await serverDB.select().from(layer.table)).toHaveLength(0);
+  });
+
+  it.each(cases)(
+    'POST /memories/%s answers 403 insufficient_scope for a read-only key',
+    async (category, layer) => {
+      const res = await call(`/memories/${category}`, { body: layer.body, key: KEYS.read });
+
+      expect(res.status).toBe(403);
+      expect((await json(res)).code).toBe('insufficient_scope');
+      expect(await serverDB.select().from(layer.table)).toHaveLength(0);
+    },
+  );
+
+  it.each(cases)('PATCH /memories/%s/{id} answers 401 without a key', async (category, layer) => {
+    const entry = await createEntry(layer);
+    const before = await storedField(layer, entry.id);
+
+    const res = await call(`/memories/${category}/${entry.id}`, {
+      body: layer.patch,
+      method: 'PATCH',
+    });
+
+    expect(res.status).toBe(401);
+    expect(await storedField(layer, entry.id)).toBe(before);
+  });
+
+  it.each(cases)(
+    'PATCH /memories/%s/{id} answers 403 insufficient_scope for a read-only key',
+    async (category, layer) => {
+      const entry = await createEntry(layer);
+      const before = await storedField(layer, entry.id);
+
+      const res = await call(`/memories/${category}/${entry.id}`, {
+        body: layer.patch,
+        key: KEYS.read,
+        method: 'PATCH',
+      });
+
+      expect(res.status).toBe(403);
+      expect((await json(res)).code).toBe('insufficient_scope');
+      expect(await storedField(layer, entry.id)).toBe(before);
+    },
+  );
+
+  it.each(cases)(
+    "PATCH /memories/%s/{id} answers 404 for another user's entry and leaves it untouched",
+    async (category, layer) => {
+      const entry = await createEntry(layer);
+      const before = await storedField(layer, entry.id);
+      expect(before).not.toBe('Hijacked');
+
+      const res = await call(`/memories/${category}/${entry.id}`, {
+        body: layer.patch,
+        key: KEYS.stranger,
+        method: 'PATCH',
+      });
+
+      expect(res.status).toBe(404);
+      expect(await storedField(layer, entry.id)).toBe(before);
+    },
+  );
+
+  it.each(cases)(
+    "PATCH /memories/%s/{id} answers 403 when a non-member names the owner's workspace",
+    async (category, layer) => {
+      const entry = await createEntry(layer);
+      const before = await storedField(layer, entry.id);
+
+      const res = await call(`/memories/${category}/${entry.id}`, {
+        body: layer.patch,
+        key: KEYS.stranger,
+        method: 'PATCH',
+        workspaceId: WORKSPACE,
+      });
+
+      expect(res.status).toBe(403);
+      expect((await json(res)).code).toBe('workspace_mismatch');
+      expect(await storedField(layer, entry.id)).toBe(before);
+    },
+  );
 });
 
 describe('POST /memories/search', () => {
