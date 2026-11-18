@@ -16,6 +16,7 @@ import {
   assertCanUseTopicTargets,
   assertCanViewConversationTargets,
   assertCanViewTopicTargets,
+  createConversationViewFilter,
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { assertCreatorTopicTargets } from '@/server/routers/lambda/_helpers/shareVisitorTargetGuard';
 import {
@@ -393,13 +394,21 @@ export class TopicBranchService extends BaseService {
         ftsSearchRepo,
       ).queryByKeyword(q, { agentId, groupId }, { onlyMine });
 
+      // An unscoped search spans every member's topics, so ownership is not
+      // authorization: keep only the matches whose owning conversation the
+      // caller may `view`, before the page is cut from the ranking.
+      const visible = await createConversationViewFilter(this.guardCtx, rows);
+      const eligible = rows.filter((row) => visible(row));
+
       // The model ranks every match at once; the page is cut from that ranking.
       const window = resolvePagination({ cursor, limit });
-      const items = rows.slice(window.offset, window.offset + window.limit).map(projectPublicTopic);
+      const items = eligible
+        .slice(window.offset, window.offset + window.limit)
+        .map(projectPublicTopic);
       return {
         items,
-        total: rows.length,
-        ...buildPageInfo({ ...window, returned: items.length, total: rows.length }),
+        total: eligible.length,
+        ...buildPageInfo({ ...window, returned: items.length, total: eligible.length }),
       };
     } catch (error) {
       this.fail(error, 'Search topics');

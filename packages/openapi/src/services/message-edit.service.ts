@@ -9,6 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import {
   assertCanUseMessageTargets,
   assertCanViewTopicTargets,
+  createConversationViewFilter,
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { assertCreatorMessageTargets } from '@/server/routers/lambda/_helpers/shareVisitorTargetGuard';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
@@ -247,18 +248,29 @@ export class MessageEditService extends BaseService {
         limit: window.limit,
         offset: window.offset,
       });
-      const items: MessageSearchHit[] = result.items.map((item) => ({
-        agentId: item.agentId,
-        createdAt: item.createdAt.toISOString(),
-        groupId: item.groupId,
-        id: item.id,
-        role: item.role,
-        snippet: item.snippet,
-        threadId: item.threadId,
-        topicId: item.topicId,
-        topicTitle: item.topicTitle,
-      }));
-      return { items, ...this.pageInfo(window, items.length, result.hasMore) };
+
+      // Workspace ownership is not authorization: every member reads every
+      // member's messages, so a hit is only shown when the caller may `view` the
+      // conversation that owns it — the same check reading that topic directly
+      // would run.
+      const visible = await createConversationViewFilter(this.guardCtx, result.items);
+
+      const items: MessageSearchHit[] = result.items
+        .filter((item) => visible(item))
+        .map((item) => ({
+          agentId: item.agentId,
+          createdAt: item.createdAt.toISOString(),
+          groupId: item.groupId,
+          id: item.id,
+          role: item.role,
+          snippet: item.snippet,
+          threadId: item.threadId,
+          topicId: item.topicId,
+          topicTitle: item.topicTitle,
+        }));
+      // The cursor advances past the raw page, not the filtered one: dropped
+      // hits still consumed their offsets.
+      return { items, ...this.pageInfo(window, result.items.length, result.hasMore) };
     } catch (error) {
       this.fail(error, 'Search messages');
     }
