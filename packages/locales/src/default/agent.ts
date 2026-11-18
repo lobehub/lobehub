@@ -196,6 +196,8 @@ export default {
     'Provide help in direct and group chats—ideal for customer service, communities, and official accounts.',
   'channel.platform.qq.description':
     'Serve users in private, group, and guild chats—ideal for Chinese communities, support, and fan groups.',
+  'channel.platform.webhook.description':
+    "Connect any chat platform you run: it POSTs signed messages in, and the agent's replies are POSTed to your callback URL—ideal for in-house IM, custom apps and platforms without a built-in channel.",
   'channel.platform.wecom.description':
     'Answer colleagues in WeCom direct chats and in internal group chats when they @-mention the bot—ideal for teams that already work in WeCom.',
   'channel.platform.slack.description':
@@ -359,6 +361,27 @@ export default {
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.qq.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket under Connection options on the Connect tab.',
+  'channel.webhook.botId': 'Bot ID',
+  'channel.webhook.botIdHint':
+    'A name for this bot, unique across LobeHub. It is part of the inbound URL and is sent back as `botId` in every callback.',
+  'channel.webhook.botIdPlaceholder': 'e.g. support-bot',
+  'channel.webhook.botIdInvalid':
+    'Use 3–64 letters, digits, "-" or "_", starting with a letter or digit.',
+  'channel.webhook.callbackUrl': 'Callback URL',
+  'channel.webhook.callbackUrlHint':
+    "Where LobeHub POSTs the agent's replies. It must be publicly reachable; private and internal addresses are refused.",
+  'channel.webhook.callbackUrlInvalid': 'Enter an http:// or https:// URL.',
+  'channel.webhook.signingSecret': 'Signing Secret',
+  'channel.webhook.signingSecretHint':
+    'Shared by both directions: sign inbound requests with it, and verify the X-LobeHub-Signature on callbacks. At least 32 characters; stored encrypted.',
+  'channel.webhook.signingSecretInvalid':
+    'The secret must be at least 32 characters with no spaces.',
+  'channel.webhook.generateSecret': 'Generate secret',
+  'channel.webhook.generateSecretSuccess':
+    'Secret generated. Copy it to your platform before saving.',
+  'channel.webhook.inboundUrl': 'Inbound URL',
+  'channel.webhook.inboundUrlHint':
+    'Have your platform POST each message to this URL, signed with the signing secret. See the setup guide for the message format.',
   'channel.wecom.botId': 'BotID',
   'channel.wecom.botIdHint': 'The BotID of your WeCom AI bot (API mode).',
   'channel.wecom.secret': 'Secret',

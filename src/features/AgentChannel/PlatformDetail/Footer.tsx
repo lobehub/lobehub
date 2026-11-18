@@ -317,9 +317,13 @@ export const FooterActions = memo<FooterActionsProps>(
     const settingsConnectionMode = useWatch(form, 'settings.connectionMode');
     const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
 
-    const webhookUrl = applicationId
-      ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
-      : `${origin}/api/agent/webhooks/${platformId}`;
+    // A custom webhook bot has its own inbound route; the rest share the per-platform one.
+    const isCustomWebhook = platformId === 'webhook';
+    const webhookUrl = isCustomWebhook
+      ? `${origin}/api/agent/webhooks/custom/${applicationId ?? ''}`
+      : applicationId
+        ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
+        : `${origin}/api/agent/webhooks/${platformId}`;
 
     const showConnectionActions = connectionActions && hasConfig;
     const showActionBar = showConnectionActions || isDirty || !hideSave;
@@ -376,7 +380,9 @@ export const FooterActions = memo<FooterActionsProps>(
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" gap={8}>
               <span style={{ fontWeight: 600 }}>{t('channel.endpointUrl')}</span>
-              <Tag>{'Event Subscription URL'}</Tag>
+              <Tag>
+                {isCustomWebhook ? t('channel.webhook.inboundUrl') : 'Event Subscription URL'}
+              </Tag>
             </Flexbox>
             <Flexbox horizontal gap={8}>
               <div {...stylex.props(styles.webhookBox)}>{webhookUrl}</div>
@@ -394,12 +400,16 @@ export const FooterActions = memo<FooterActionsProps>(
               style={NOTICE_STYLE}
               type="info"
               message={
-                <Trans<'channel.endpointUrlHint', 'agent'>
-                  components={{ bold: <strong /> }}
-                  i18nKey="channel.endpointUrlHint"
-                  ns="agent"
-                  values={{ fieldName: 'Event Subscription URL', name: platformDef.name }}
-                />
+                isCustomWebhook ? (
+                  t('channel.webhook.inboundUrlHint')
+                ) : (
+                  <Trans<'channel.endpointUrlHint', 'agent'>
+                    components={{ bold: <strong /> }}
+                    i18nKey="channel.endpointUrlHint"
+                    ns="agent"
+                    values={{ fieldName: 'Event Subscription URL', name: platformDef.name }}
+                  />
+                )
               }
             />
           </Flexbox>

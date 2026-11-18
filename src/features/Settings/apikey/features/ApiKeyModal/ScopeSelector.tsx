@@ -68,6 +68,7 @@ const styles = stylex.create({
  */
 type ScopeGroupKey =
   | 'agent'
+  | 'bot'
   | 'chat'
   | 'file'
   | 'knowledge'
@@ -117,6 +118,8 @@ const SCOPE_GROUPS: readonly ScopeGroup[] = [
     },
   },
   { key: 'chat', label: 'apikey.scopes.groups.chat', read: 'chat:read', write: 'chat:write' },
+  // Agent bots (channels) and sending as one (`/api/v1/bots`); credentials are always masked.
+  { key: 'bot', label: 'apikey.scopes.groups.bot', read: 'bot:read', write: 'bot:write' },
   // Agent runs over the REST API; starting one also takes `model:invoke`.
   { key: 'run', label: 'apikey.scopes.groups.run', read: 'run:read', write: 'run:write' },
   {
