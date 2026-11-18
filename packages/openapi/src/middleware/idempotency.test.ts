@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { renderApiError } from '../common/errors';
 import { idempotencyMiddleware } from './idempotency';
 
 const store = vi.hoisted(() => new Map<string, any>());
@@ -40,16 +41,29 @@ interface Caller {
   scopes?: string[] | null;
   userId?: string | null;
   workspaceId?: string;
+  workspaceRole?: string;
 }
 
-const createApp = ({ apiKeyId = 'key-1', scopes, userId = 'user-1', workspaceId }: Caller = {}) => {
+const createApp = ({
+  apiKeyId = 'key-1',
+  scopes,
+  userId = 'user-1',
+  workspaceId,
+  workspaceRole,
+}: Caller = {}) => {
   const app = new Hono();
   app.use('*', async (c, next) => {
     c.set('userId', userId);
     c.set('authType', 'apikey');
     c.set('authData', { apiKeyId });
     c.set('workspaceId', workspaceId);
+    c.set('workspaceRole', workspaceRole);
     c.set('apiKeyScopes', scopes);
+    await next();
+  });
+  // Mirrors `requestIdMiddleware`: every request gets the id it echoes back.
+  app.use('*', async (c, next) => {
+    c.set('requestId', c.req.header('X-Request-Id') ?? 'req_test');
     await next();
   });
   app.use('*', idempotencyMiddleware);
@@ -59,6 +73,9 @@ const createApp = ({ apiKeyId = 'key-1', scopes, userId = 'user-1', workspaceId 
     return c.json({ data: { id: `item_${created}`, ...body }, success: true }, 201);
   });
   app.post('/fail', (c) => c.json({ success: false }, 500));
+  app.post('/reject', (c) =>
+    renderApiError(c, { code: 'conflict', message: 'Already exists', status: 422 }),
+  );
   // Synthesized audio is raw bytes: 0x00 and 0xFF sequences are not valid UTF-8.
   app.post('/audio', (c) =>
     c.body(Buffer.from([0x49, 0x44, 0x33, 0x00, 0x80, 0xff, 0xfe]), 200, {
@@ -163,6 +180,52 @@ describe('idempotencyMiddleware', () => {
 
     expect(narrowed.headers.get('Idempotent-Replayed')).toBeNull();
     expect(created).toBe(2);
+  });
+
+  it('never replays a response cached while the caller held a higher workspace role', async () => {
+    // An administrator caches a privileged answer, then is demoted; the retry
+    // must reach the route's current guards instead of the stored answer.
+    await createApp({ workspaceId: 'ws-1', workspaceRole: 'admin' }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+    const demoted = await createApp({ workspaceId: 'ws-1', workspaceRole: 'member' }).request(
+      '/items',
+      post({ name: 'a' }, 'k1'),
+    );
+
+    expect(demoted.headers.get('Idempotent-Replayed')).toBeNull();
+    expect(created).toBe(2);
+  });
+
+  it('replays for the same credential holding the same workspace role', async () => {
+    const caller = { workspaceId: 'ws-1', workspaceRole: 'admin' } as const;
+    await createApp(caller).request('/items', post({ name: 'a' }, 'k1'));
+    const retry = await createApp(caller).request('/items', post({ name: 'a' }, 'k1'));
+
+    expect(retry.headers.get('Idempotent-Replayed')).toBe('true');
+    expect(created).toBe(1);
+  });
+
+  it('stamps a replayed refusal with the retrying request id', async () => {
+    const app = createApp();
+    const first = await app.request(
+      '/reject',
+      post({ name: 'a' }, 'k-reject', { 'X-Request-Id': 'req_first' }),
+    );
+    const retry = await app.request(
+      '/reject',
+      post({ name: 'a' }, 'k-reject', { 'X-Request-Id': 'req_second' }),
+    );
+
+    expect(retry.status).toBe(422);
+    expect(retry.headers.get('Idempotent-Replayed')).toBe('true');
+    await expect(first.json()).resolves.toMatchObject({ requestId: 'req_first' });
+    // The cached outcome is unchanged, only the correlation id follows the retry.
+    await expect(retry.json()).resolves.toMatchObject({
+      code: 'conflict',
+      requestId: 'req_second',
+    });
   });
 
   it('replays binary responses byte for byte', async () => {

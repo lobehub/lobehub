@@ -4,7 +4,7 @@ import type { Context, Next } from 'hono';
 
 import { redisService } from '@/server/services/redis';
 
-import { renderApiError } from '../common/errors';
+import { getRequestId, renderApiError } from '../common/errors';
 import { logFailOpen } from '../helpers/fail-open-log';
 
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
@@ -50,10 +50,46 @@ const decodeBody = (record: IdempotentResponseRecord) => {
   return Uint8Array.from(Buffer.from(record.body, 'base64')).buffer;
 };
 
+/**
+ * A stored refusal carries the first request's `requestId`, while
+ * `requestIdMiddleware` stamps the retry's own id on `X-Request-Id`. Header and
+ * body would then name different requests, so the replayed error takes the
+ * current id: the cached outcome (status, code, message) is unchanged, only the
+ * correlation id belongs to the caller asking now.
+ */
+const withCurrentRequestId = (
+  c: Context,
+  record: IdempotentResponseRecord,
+  body: string | ArrayBuffer,
+): string | ArrayBuffer => {
+  if (record.status < 400) return body;
+  if (!(record.contentType ?? '').includes('application/json')) return body;
+
+  try {
+    const parsed: unknown = JSON.parse(
+      typeof body === 'string' ? body : new TextDecoder().decode(body),
+    );
+    if (typeof parsed !== 'object' || parsed === null) return body;
+
+    const error = parsed as { requestId?: unknown };
+    if (typeof error.requestId !== 'string') return body;
+
+    error.requestId = getRequestId(c);
+    return new TextEncoder().encode(JSON.stringify(error)).buffer as ArrayBuffer;
+  } catch {
+    // A 4xx that is not JSON, or no longer parseable, replays untouched.
+    return body;
+  }
+};
+
 const replay = (c: Context, record: IdempotentResponseRecord) => {
   const headers = new Headers({ [IDEMPOTENT_REPLAYED_HEADER]: 'true' });
   if (record.contentType) headers.set('Content-Type', record.contentType);
-  return c.body(decodeBody(record), record.status as never, Object.fromEntries(headers));
+  return c.body(
+    withCurrentRequestId(c, record, decodeBody(record)) as never,
+    record.status as never,
+    Object.fromEntries(headers),
+  );
 };
 
 /**
@@ -76,8 +112,9 @@ const authorizationOf = (c: Context) => {
  * the request, the workspace it resolved to, and the authorization it carried.
  * This middleware runs before route guards, so a replay must never cross any of
  * them — another (possibly scope-restricted) API key of the same user, the same
- * key in another workspace, or the same key after its scopes were narrowed,
- * each gets its own key space instead of the first caller's response.
+ * key in another workspace, the same key after its scopes were narrowed, or the
+ * same key after the caller's workspace role changed, each gets its own key
+ * space instead of the first caller's response.
  */
 const principalOf = (c: Context) => {
   const apiKeyId = (c.get('authData') as { apiKeyId?: number | string } | null)?.apiKeyId;
@@ -85,6 +122,10 @@ const principalOf = (c: Context) => {
     c.get('authType') ?? '',
     apiKeyId ?? '',
     c.get('workspaceId') ?? '',
+    // The role is authorization too: the route guards that read it run after
+    // this middleware, so an administrator demoted to member must not keep
+    // replaying the privileged answer cached while they still held the role.
+    c.get('workspaceRole') ?? '',
     authorizationOf(c),
   ].join(':');
 };
