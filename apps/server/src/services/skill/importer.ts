@@ -7,6 +7,7 @@ import {
   type CreateSkillInput,
   type GitHubSkillBatchInput,
   type GitHubSkillCandidate,
+  type GitHubSkillDiscovery,
   type GitHubSkillOutcome,
   type ImportGitHubInput,
   type ImportUrlInput,
@@ -363,7 +364,7 @@ export class SkillImporter {
     return { commit, directories, info };
   }
 
-  async discoverGitHubSkills(gitUrl: string) {
+  async discoverGitHubSkills(gitUrl: string): Promise<GitHubSkillDiscovery> {
     const { commit, directories, info } = await this.gitHubCollection(gitUrl);
     const entries = directories.map(([path, directory]) => {
       const fallbackName = path.split('/').at(-1) || info.repo;
@@ -433,7 +434,7 @@ export class SkillImporter {
     return { candidates, commit, scope: this.importScope };
   }
 
-  async importGitHubSkills(input: GitHubSkillBatchInput) {
+  async importGitHubSkills(input: GitHubSkillBatchInput): Promise<GitHubSkillOutcome[]> {
     if (this.importScope !== input.scope)
       throw new SkillImportError('The active library changed. Find skills again.', 'CONFLICT');
     const { directories, info } = await this.gitHubCollection(input.gitUrl, input.commit);

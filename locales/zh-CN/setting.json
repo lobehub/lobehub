@@ -204,6 +204,8 @@
   "agentSkillModal.github.desc": "粘贴公开 GitHub 仓库中技能目录的 URL，该目录下需包含 SKILL.md 文件。",
   "agentSkillModal.github.empty": "此链接下没有找到 SKILL.md，请尝试其他仓库或目录。",
   "agentSkillModal.github.find": "查找技能",
+  "agentSkillModal.github.findFailed": "无法读取这个 GitHub 链接，请检查链接后重试。",
+  "agentSkillModal.github.importFailed": "未能导入所选技能，请重新查找后再试。",
   "agentSkillModal.github.install": "导入 {{count}} 项（含 {{updates}} 项更新）",
   "agentSkillModal.github.noMatch": "没有匹配的技能",
   "agentSkillModal.github.retry": "重试失败项",

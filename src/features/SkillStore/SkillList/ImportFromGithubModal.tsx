@@ -1,8 +1,7 @@
 'use client';
 
-import type { GitHubSkillCandidate, GitHubSkillOutcome } from '@lobechat/types';
+import type { GitHubSkillCandidate } from '@lobechat/types';
 import {
-  Alert,
   Button,
   Checkbox,
   createModal,
@@ -12,34 +11,39 @@ import {
   Text,
   useModalContext,
 } from '@lobehub/ui';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePermission } from '@/hooks/usePermission';
-import { agentSkillService } from '@/services/skill';
-import { useToolStore } from '@/store/tool';
+import AsyncError from '@/components/AsyncError';
 
-type Discovery = Awaited<ReturnType<typeof agentSkillService.discoverGitHubSkills>>;
+import { useGithubSkillImport } from './useGithubSkillImport';
+
 const eligible = (item: GitHubSkillCandidate) => item.status === 'new' || item.status === 'update';
 
 const ImportFromGithubContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const refresh = useToolStore((s) => s.refreshAgentSkills);
-  const { allowed: canCreate } = usePermission('create_content');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [url, setUrl] = useState('');
-  const [query, setQuery] = useState('');
-  const [scan, setScan] = useState<Discovery>();
-  const [selected, setSelected] = useState<string[]>([]);
-  const [results, setResults] = useState<GitHubSkillOutcome[]>([]);
+  const {
+    canCreate,
+    candidates,
+    discover,
+    failure,
+    install,
+    loading,
+    query,
+    results,
+    scan,
+    selected,
+    setQuery,
+    setSelected,
+    setUrl,
+    url,
+  } = useGithubSkillImport();
 
   useEffect(() => {
     setCanDismissByClickOutside(!loading);
   }, [loading, setCanDismissByClickOutside]);
 
-  const candidates = scan?.candidates ?? [];
   const chosen = candidates.filter((item) => selected.includes(item.path));
   const selectedNames = new Set(chosen.map((item) => item.name.toLowerCase()));
   const visible = candidates.filter(({ name, path, description }) =>
@@ -63,66 +67,28 @@ const ImportFromGithubContent = memo(() => {
     (item) => eligible(item) && !duplicateNames.has(item.name.toLowerCase()),
   );
 
-  const discover = async () => {
-    if (!canCreate || !url.trim() || loading) return;
-    setLoading(true);
-    setError('');
-    try {
-      const next = await agentSkillService.discoverGitHubSkills(url.trim());
-      setScan(next);
-      setQuery('');
-      setResults([]);
-      setSelected(
-        next.candidates.length === 1 && next.candidates[0].status === 'new'
-          ? [next.candidates[0].path]
-          : [],
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const install = async (paths: string[]) => {
-    if (!canCreate || !scan || !paths.length || loading) return;
-    setLoading(true);
-    setError('');
-    try {
-      const batch = await agentSkillService.importGitHubSkills({
-        commit: scan.commit,
-        gitUrl: url.trim(),
-        scope: scan.scope,
-        selections: candidates
-          .filter((item) => paths.includes(item.path))
-          .map(({ path, revision }) => ({ path, revision })),
-      });
-      setResults((prev) => [...prev.filter((item) => !paths.includes(item.path)), ...batch]);
-      setQuery('');
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <Flexbox gap={12}>
       <Text as="h4">{t('agentSkillModal.github.title')}</Text>
-      {error && <Alert showIcon title={error} type="error" />}
+      {failure && (
+        <AsyncError
+          align="start"
+          details={failure.details}
+          variant="inline"
+          title={t(
+            failure.stage === 'find'
+              ? 'agentSkillModal.github.findFailed'
+              : 'agentSkillModal.github.importFailed',
+          )}
+        />
+      )}
       <Input
         aria-label="GitHub URL"
         disabled={loading}
         placeholder={t('agentSkillModal.github.urlPlaceholder')}
         value={url}
+        onChange={(event) => setUrl(event.target.value)}
         onPressEnter={discover}
-        onChange={(event) => {
-          setUrl(event.target.value);
-          setScan(undefined);
-          setResults([]);
-          setError('');
-        }}
       />
       {!scan && (
         <>
@@ -235,7 +201,7 @@ const ImportFromGithubContent = memo(() => {
                   {t('agentSkillModal.github.retry')}
                 </Button>
               )}
-              <Button disabled={loading} type="primary" onClick={close}>
+              <Button disabled={loading} onClick={close}>
                 {t('common:close')}
               </Button>
             </Flexbox>

@@ -216,6 +216,14 @@ export interface GitHubSkillCandidate extends GitHubSkillSelection {
   status: 'new' | 'update' | 'unchanged' | 'conflict' | 'forbidden' | 'invalid';
 }
 
+export interface GitHubSkillDiscovery {
+  candidates: GitHubSkillCandidate[];
+  /** Commit the scan was read at; the import pins the same one. */
+  commit: string;
+  /** Library the scan ran against; an import into another library is refused. */
+  scope: string;
+}
+
 export interface GitHubSkillBatchInput {
   commit: string;
   gitUrl: string;

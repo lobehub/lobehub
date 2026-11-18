@@ -339,6 +339,10 @@ export default {
   'agentSkillModal.github.empty':
     'No SKILL.md found at this URL. Try another repository or directory.',
   'agentSkillModal.github.find': 'Find skills',
+  'agentSkillModal.github.findFailed':
+    'Couldn’t read this GitHub link. Check the URL and try again.',
+  'agentSkillModal.github.importFailed':
+    'Couldn’t import the selected skills. Find skills again, then retry.',
   'agentSkillModal.github.install': 'Import {{count}} ({{updates}} updates)',
   'agentSkillModal.github.noMatch': 'No matching skills',
   'agentSkillModal.github.retry': 'Retry failed imports',
