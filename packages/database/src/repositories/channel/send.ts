@@ -18,7 +18,7 @@ import {
   pairedAgent,
 } from './delivery';
 import { ChannelError } from './error';
-import { peerOf, requirePeerRelation } from './peer';
+import { isWorkspaceMember, peerOf, requirePeerRelation } from './peer';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -187,6 +187,10 @@ export const sendMessage = async (
   }
 
   if (fileIds.length) {
+    // A workspace's public files are its members'. An external contact talking in it attaches
+    // only files they uploaded themselves, never one of the workspace's by its id.
+    const external =
+      !!channel.workspaceId && !(await isWorkspaceMember(tx, channel.workspaceId, member.userId!));
     // Lock in a stable order so concurrent sends and file cleanup cannot deadlock.
     const accessible = await tx
       .select({ id: files.id })
@@ -194,10 +198,12 @@ export const sendMessage = async (
       .where(
         and(
           inArray(files.id, fileIds),
-          buildWorkspaceWhere(
-            { userId: member.userId!, workspaceId: channel.workspaceId ?? undefined },
-            files,
-          ),
+          external
+            ? eq(files.userId, member.userId!)
+            : buildWorkspaceWhere(
+                { userId: member.userId!, workspaceId: channel.workspaceId ?? undefined },
+                files,
+              ),
         ),
       )
       .orderBy(asc(files.id))

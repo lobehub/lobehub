@@ -32,7 +32,8 @@ const areMutualContacts = async (
   return rows.length >= 2;
 };
 
-const isWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
+/** Whether `userId` is an active member of the workspace. */
+export const isWorkspaceMember = async (tx: Transaction, workspaceId: string, userId: string) => {
   const [member] = await tx
     .select({ userId: workspaceMembers.userId })
     .from(workspaceMembers)
