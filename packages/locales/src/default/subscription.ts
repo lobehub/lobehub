@@ -219,6 +219,11 @@ export default {
   'credits.dedicatedBudget.createTitle': 'New dedicated budget',
   'credits.dedicatedBudget.details.action': 'View details',
   'credits.dedicatedBudget.details.empty': 'No shared members yet',
+  'credits.dedicatedBudget.details.customLimit': 'Custom limit',
+  'credits.dedicatedBudget.details.defaultLimit': 'Default ({{amount}})',
+  'credits.dedicatedBudget.details.editLimit': "Edit {{name}}'s limit",
+  'credits.dedicatedBudget.details.limitReached': 'Limit reached',
+  'credits.dedicatedBudget.details.noLimit': 'No limit',
   'credits.dedicatedBudget.details.removedShare': 'Spent by removed members',
   'credits.dedicatedBudget.details.title': 'Dedicated budget details',
   'credits.dedicatedBudget.details.total': 'Total spent',
@@ -229,6 +234,10 @@ export default {
   'credits.dedicatedBudget.membersCount_other': '{{count}} members',
   'credits.dedicatedBudget.membersEmpty': 'No shared members yet',
   'credits.dedicatedBudget.membersPlaceholder': 'Select members to share this budget',
+  'credits.dedicatedBudget.memberLimit': 'Per-member limit',
+  'credits.dedicatedBudget.memberLimitHint':
+    'The most each member can use from this budget per billing cycle. Members who reach it move on to their next budget. Leave empty for no limit.',
+  'credits.dedicatedBudget.memberLimitPlaceholder': 'No limit',
   'credits.dedicatedBudget.desc':
     'Carve out shared allowances for groups of members — consumed before their personal quotas',
   'credits.dedicatedBudget.name': 'Name',
