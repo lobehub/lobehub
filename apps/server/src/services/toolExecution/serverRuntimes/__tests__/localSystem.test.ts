@@ -12,6 +12,10 @@ vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
   executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
     mockExecuteToolCall(...args),
 }));
+const mockInitializeTfsDeviceCheckout = vi.fn();
+vi.mock('@/server/services/tfs/deviceCheckout', () => ({
+  initializeTfsDeviceCheckout: mockInitializeTfsDeviceCheckout,
+}));
 
 // Import after mock setup
 const { localSystemRuntime } = await import('../localSystem');
@@ -501,6 +505,41 @@ describe('localSystemRuntime', () => {
       await proxy[LocalSystemApiName.readFile]({ cwd: '/etc', path: 'passwd' });
 
       expect(parseArgs()).toEqual({ path: 'passwd' });
+    });
+  });
+
+  it('passes the temporary TFS Git config to device shell commands', async () => {
+    mockInitializeTfsDeviceCheckout.mockImplementationOnce(async ({ onCredential }) => {
+      onCredential?.([
+        ['credential.helper', ''],
+        ['http.http://dev.tellhowsoft.com/DefaultCollection/.helper', 'secret-helper'],
+      ]);
+      return 'TFS checkout: TFS repository checkout ready.';
+    });
+    mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+    const proxy = localSystemRuntime.factory({
+      activeDeviceId: 'device-1',
+      operationId: 'op-1',
+      serverDB: {} as any,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workingDirectory: '/root/workflow',
+    });
+
+    await proxy[LocalSystemApiName.runCommand]({ command: 'git push -u origin feature/ui-optimize' });
+
+    const args = JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments);
+    expect(args.env).toMatchObject({
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      GIT_CONFIG_KEY_0: ['credential', 'helper'].join('.'),
+      GIT_CONFIG_VALUE_0: '',
+      GIT_CONFIG_KEY_1: 'http.http://dev.tellhowsoft.com/DefaultCollection/.helper',
+      GIT_CONFIG_VALUE_1: 'secret-helper',
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_TERMINAL_PROMPT: '0',
     });
   });
 

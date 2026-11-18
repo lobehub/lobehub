@@ -94,6 +94,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     const proxy: Record<string, (args: any) => Promise<any>> = {};
     let checkout: Promise<string | undefined> | undefined;
     let checkoutReported = false;
+    let tfsGitConfig: Array<[string, string]> | undefined;
 
     for (const api of LocalSystemManifest.api) {
       const workingDirArg = WORKING_DIR_ARG[api.name];
@@ -185,12 +186,33 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
                     deviceId: context.activeDeviceId!,
                     deviceWorkspaceId,
                     operationId: context.operationId,
+                    onCredential: (config) => {
+                      tfsGitConfig = config;
+                    },
                     topicId: context.topicId!,
                     userId: context.userId!,
                     workspaceId: await getContentWorkspaceId(),
                   }),
               ))
             : undefined;
+        if (api.name === LocalSystemApiName.runCommand && tfsGitConfig?.length) {
+          finalArgs = {
+            ...finalArgs,
+            env: {
+              ...(finalArgs.env ?? {}),
+              GIT_CONFIG_GLOBAL: '/dev/null',
+              GIT_CONFIG_NOSYSTEM: '1',
+              GIT_CONFIG_COUNT: String(tfsGitConfig.length),
+              GIT_TERMINAL_PROMPT: '0',
+              ...Object.fromEntries(
+                tfsGitConfig.flatMap(([key, value], index) => [
+                  [`GIT_CONFIG_KEY_${index}`, key],
+                  [`GIT_CONFIG_VALUE_${index}`, value],
+                ]),
+              ),
+            },
+          };
+        }
         // Only a command can outlive its call. The device may keep watching it
         // and report the final result later, which lets the transport park the
         // run instead of the model polling.
