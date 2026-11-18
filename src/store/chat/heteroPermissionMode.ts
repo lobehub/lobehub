@@ -152,3 +152,32 @@ export const registerLocalPermissionModeSwitcher = (
 export const getLocalPermissionModeSwitcher = (
   topicId: string,
 ): LocalPermissionModeSwitcher | undefined => localSwitchers.get(topicId);
+
+/**
+ * The server operation of a topic's run hosted by `lh hetero exec`, which a
+ * mid-run switch is sent to: the live Gateway operation this window started
+ * (its server id arrives with the first response), else the topic's persisted
+ * `runningOperation` (a run picked up after a reload).
+ */
+export const findRunningServerOperationId = (
+  state: Pick<ChatStore, 'operations'>,
+  topicId: string,
+  metadata: ChatTopicMetadata | null | undefined,
+): string | undefined => {
+  for (const operation of Object.values(state.operations ?? {})) {
+    if (
+      operation.type !== 'execServerAgentRuntime' ||
+      operation.status !== 'running' ||
+      operation.context.topicId !== topicId ||
+      !operation.metadata.serverOperationId
+    ) {
+      continue;
+    }
+    const parent = operation.parentOperationId
+      ? state.operations[operation.parentOperationId]
+      : undefined;
+    if (parent?.type === 'execServerAgentRuntime') continue;
+    return operation.metadata.serverOperationId;
+  }
+  return metadata?.runningOperation?.operationId;
+};

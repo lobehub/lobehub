@@ -75,6 +75,8 @@ export default {
     'It will read and plan only, and ask you to approve the plan before changing anything.',
   'claudeCode.permission.exitPlan.title': 'Claude’s plan is ready',
   'claudeCode.permission.exitPlan.allowedPrompts': 'Approving also lets Claude run:',
+  'claudeCode.permission.inspector.permission': 'Permission request',
+  'claudeCode.permission.inspector.plan': 'Plan approval',
   'claudeCode.permission.option.allow': 'Allow',
   'claudeCode.permission.option.allow_session': 'Always allow in this session',
   'claudeCode.permission.option.deny': 'Deny',

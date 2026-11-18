@@ -73,6 +73,8 @@
   "claudeCode.permission.enterPlan.title": "Claude 想进入计划模式",
   "claudeCode.permission.exitPlan.allowedPrompts": "批准后，Claude 还可以运行：",
   "claudeCode.permission.exitPlan.title": "Claude 拟好了计划",
+  "claudeCode.permission.inspector.permission": "权限请求",
+  "claudeCode.permission.inspector.plan": "计划审批",
   "claudeCode.permission.option.allow": "允许",
   "claudeCode.permission.option.allow_session": "本会话内总是允许",
   "claudeCode.permission.option.approve_accept_edits": "批准，并自动接受改文件",

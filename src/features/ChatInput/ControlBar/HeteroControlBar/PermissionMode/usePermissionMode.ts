@@ -17,6 +17,7 @@ import { aiAgentService } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import {
   effectivePermissionMode,
+  findRunningServerOperationId,
   getLocalPermissionModeSwitcher,
   readTopicPermissionMode,
   setPendingHeteroPermissionMode,
@@ -45,7 +46,6 @@ type SwitchFailure = 'switchFailed' | 'switchUnsupported';
 
 const switchRunningSession = async (
   topicId: string,
-  runningOperationId: string | undefined,
   mode: HeteroPermissionMode,
 ): Promise<SwitchFailure | undefined> => {
   const local = getLocalPermissionModeSwitcher(topicId);
@@ -57,6 +57,12 @@ const switchRunningSession = async (
       return 'switchFailed';
     }
   }
+  const state = useChatStore.getState();
+  const runningOperationId = findRunningServerOperationId(
+    state,
+    topicId,
+    topicSelectors.getTopicById(topicId)(state)?.metadata,
+  );
   if (!runningOperationId) return;
 
   try {
@@ -127,8 +133,6 @@ export const usePermissionMode = (
     if (!topicId) setPendingHeteroPermissionMode(agentId, remembered);
   }, [agentId, remembered, topicId]);
 
-  const runningOperationId = metadata?.runningOperation?.operationId;
-
   const select = useCallback(
     async (next: HeteroPermissionMode) => {
       if (!topicId) setPendingHeteroPermissionMode(agentId, next);
@@ -149,10 +153,10 @@ export const usePermissionMode = (
       }
       if (!topicId) return;
 
-      const failure = await switchRunningSession(topicId, runningOperationId, next);
+      const failure = await switchRunningSession(topicId, next);
       if (failure) toast.info(t(`heteroAgent.permissionMode.${failure}`));
     },
-    [agentId, key, runningOperationId, setPermissionModeDir, t, topicId, updateTopicMetadata],
+    [agentId, key, setPermissionModeDir, t, topicId, updateTopicMetadata],
   );
 
   return { fallback, mode, runningMode: effectivePermissionMode(mode, fallback), select };

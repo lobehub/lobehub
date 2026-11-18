@@ -73,6 +73,8 @@
   "claudeCode.permission.enterPlan.title": "Claude wants to enter plan mode",
   "claudeCode.permission.exitPlan.allowedPrompts": "Approving also lets Claude run:",
   "claudeCode.permission.exitPlan.title": "Claude’s plan is ready",
+  "claudeCode.permission.inspector.permission": "Permission request",
+  "claudeCode.permission.inspector.plan": "Plan approval",
   "claudeCode.permission.option.allow": "Allow",
   "claudeCode.permission.option.allow_session": "Always allow in this session",
   "claudeCode.permission.option.approve_accept_edits": "Approve, accept edits",
