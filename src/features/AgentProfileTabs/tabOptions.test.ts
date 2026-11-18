@@ -79,6 +79,7 @@ describe('buildAgentProfileTabOptions', () => {
       'instruction',
       'knowledge',
       'engine',
+      'environment',
       'tools',
       'skills',
       'channel',
@@ -103,6 +104,7 @@ describe('buildAgentProfileTabOptions', () => {
       'instruction',
       'knowledge',
       'engine',
+      'environment',
       'tools',
       'skills',
       'channel',
@@ -168,6 +170,7 @@ describe('buildAgentProfileTabOptions', () => {
       'instruction',
       'knowledge',
       'engine',
+      'environment',
       'tools',
       'skills',
       'mail',
@@ -229,7 +232,7 @@ describe('instruction, knowledge, engine, environment, tools and skills tabs', (
     shareSupported: false,
   };
 
-  it('leaves instruction, knowledge, tools and skills out, and adds environment, for agents that bring their own', () => {
+  it('leaves instruction, knowledge, tools and skills out, and keeps environment, for agents that bring their own', () => {
     const options = buildAgentProfileTabOptions({ ...base, heterogeneous: true });
 
     expect(options.map((option) => option.value)).toEqual([

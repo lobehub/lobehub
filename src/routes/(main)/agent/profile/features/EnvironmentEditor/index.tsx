@@ -24,20 +24,18 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
+import { AgentConfigCard } from '../ProfileEditor/AgentConfigCard';
+import AgentExecutionEnvironment from '../ProfileEditor/AgentExecutionEnvironment';
 import CloudHeterogeneousConfig from '../ProfileEditor/CloudHeterogeneousConfig';
 import HeterogeneousAgentStatusCard from '../ProfileEditor/HeterogeneousAgentStatusCard';
 import RemoteAgentConfigCard from '../ProfileEditor/RemoteAgentConfigCard';
-import WorkspaceAgentDevicePolicy from '../ProfileEditor/WorkspaceAgentDevicePolicy';
-import { WorkspaceAgentPolicyCard } from '../ProfileEditor/WorkspaceAgentPolicyCard';
 
-const EnvironmentEditor = memo(() => {
+const HeterogeneousEnvironment = ({ agentId }: { agentId: string }) => {
   const { t } = useTranslation(['setting', 'agent']);
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
   // Where this caller's new topics run. The environment picker and the panel
   // below both follow it, so the panel never describes this client by default.
@@ -91,9 +89,7 @@ const EnvironmentEditor = memo(() => {
   };
 
   const isRemoteHetero =
-    isHeterogeneous &&
-    !!heterogeneousProvider &&
-    isRemoteHeterogeneousType(heterogeneousProvider.type);
+    !!heterogeneousProvider && isRemoteHeterogeneousType(heterogeneousProvider.type);
   const localDesktopAvailable =
     isDesktop && !!heterogeneousProvider && executionTarget.target === 'local';
   // Workspace agents are excluded even when the author could spawn them
@@ -222,6 +218,64 @@ const EnvironmentEditor = memo(() => {
   };
 
   return (
+    <Flexbox gap={8} style={{ containerType: 'inline-size' }}>
+      {isRemoteHetero && heterogeneousProvider ? (
+        // Remote platform agents (openclaw / hermes): show device config panel
+        <>
+          <RemoteAgentConfigCard
+            provider={heterogeneousProvider}
+            onBoundDeviceChange={updateBoundDeviceId}
+          />
+          {isWorkspaceAgent && (
+            <AgentExecutionEnvironment agentId={agentId} showDevicePicker={false} />
+          )}
+        </>
+      ) : heterogeneousProvider ? (
+        // CLI agents: pick where new topics run, then configure that environment.
+        <>
+          <AgentConfigCard
+            fullWidth
+            icon={MonitorSmartphone}
+            title={t('settingAgent.devicePolicy.title')}
+          >
+            <HeteroExecutionTargetSelect
+              agentId={agentId}
+              deviceId={executionTarget.deviceId}
+              isOverridden={executionTarget.isOverridden}
+              isPending={executionTarget.isPending}
+              isSelectable={executionTarget.isSelectable}
+              providerType={heterogeneousProvider.type}
+              target={executionTarget.target}
+            />
+          </AgentConfigCard>
+          {renderHeterogeneousPanel()}
+          {/* Follows the engine and its sign-in, not where the run lands. */}
+          {heterogeneousProvider.type === 'claude-code' &&
+            (heterogeneousProvider.authMode ?? 'subscription') === 'subscription' && (
+              <AgentConfigCard
+                fullWidth
+                icon={Fingerprint}
+                title={t('heterogeneousStatus.entrypoint.label')}
+              >
+                <ClaudeCodeEntrypointSetting
+                  disabled={!canEdit}
+                  env={heterogeneousProvider.env}
+                  onEnvChange={updateHeterogeneousEnv}
+                />
+              </AgentConfigCard>
+            )}
+        </>
+      ) : null}
+    </Flexbox>
+  );
+};
+
+const EnvironmentEditor = memo(() => {
+  const { t } = useTranslation('setting');
+  const agentId = useAgentStore((s) => s.activeAgentId || '');
+  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+
+  return (
     <Flexbox gap={32} paddingBlock={'8px 48px'}>
       <Flexbox gap={4}>
         <Text fontSize={24} weight={600}>
@@ -229,53 +283,11 @@ const EnvironmentEditor = memo(() => {
         </Text>
         <Text type={'secondary'}>{t('settingAgent.environment.desc')}</Text>
       </Flexbox>
-      <Flexbox gap={8} style={{ containerType: 'inline-size' }}>
-        {isRemoteHetero && heterogeneousProvider ? (
-          // Remote platform agents (openclaw / hermes): show device config panel
-          <>
-            <RemoteAgentConfigCard
-              provider={heterogeneousProvider}
-              onBoundDeviceChange={updateBoundDeviceId}
-            />
-            <WorkspaceAgentDevicePolicy agentId={agentId} showDevicePicker={false} />
-          </>
-        ) : isHeterogeneous && heterogeneousProvider ? (
-          // CLI agents: pick where new topics run, then configure that environment.
-          <>
-            <WorkspaceAgentPolicyCard
-              fullWidth
-              icon={MonitorSmartphone}
-              title={t('settingAgent.devicePolicy.title')}
-            >
-              <HeteroExecutionTargetSelect
-                agentId={agentId}
-                deviceId={executionTarget.deviceId}
-                isOverridden={executionTarget.isOverridden}
-                isPending={executionTarget.isPending}
-                isSelectable={executionTarget.isSelectable}
-                providerType={heterogeneousProvider.type}
-                target={executionTarget.target}
-              />
-            </WorkspaceAgentPolicyCard>
-            {renderHeterogeneousPanel()}
-            {/* Follows the engine and its sign-in, not where the run lands. */}
-            {heterogeneousProvider.type === 'claude-code' &&
-              (heterogeneousProvider.authMode ?? 'subscription') === 'subscription' && (
-                <WorkspaceAgentPolicyCard
-                  fullWidth
-                  icon={Fingerprint}
-                  title={t('heterogeneousStatus.entrypoint.label')}
-                >
-                  <ClaudeCodeEntrypointSetting
-                    disabled={!canEdit}
-                    env={heterogeneousProvider.env}
-                    onEnvChange={updateHeterogeneousEnv}
-                  />
-                </WorkspaceAgentPolicyCard>
-              )}
-          </>
-        ) : null}
-      </Flexbox>
+      {isHeterogeneous ? (
+        <HeterogeneousEnvironment agentId={agentId} />
+      ) : (
+        <AgentExecutionEnvironment agentId={agentId} />
+      )}
     </Flexbox>
   );
 });
