@@ -4,6 +4,7 @@ import {
   getMcpServerFingerprint,
   hasMcpUiResource,
   isLocalMcpServer,
+  isLoopbackHostname,
   isMcpThreadEntrypoint,
   lacksUiResourceMeta,
   partitionMcpToolsForViews,
@@ -25,6 +26,7 @@ import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
 import debug from 'debug';
 
+import { appEnv } from '@/envs/app';
 import {
   type HttpMCPClientParams,
   type McpAppToolState,
@@ -78,6 +80,20 @@ export interface MCPToolCallProcessedResult {
   };
   success: boolean;
 }
+
+/**
+ * Whether the browser viewing a result runs on this server's machine: the
+ * desktop, or a deployment served from a loopback APP_URL. Only then is a
+ * loopback MCP server's page (`mcpUi.local`) the viewer's own localhost.
+ */
+const servesViewerMachine = () => {
+  if (isDesktop) return true;
+  try {
+    return !!appEnv.APP_URL && isLoopbackHostname(new URL(appEnv.APP_URL).hostname);
+  } catch {
+    return false;
+  }
+};
 
 // Removed MCPConnection interface as it's no longer needed
 
@@ -446,7 +462,7 @@ export class MCPService {
           // MCP-UI: the result embeds its own `ui://` view (no resource to read
           // back); its calls reach this server only
           processedResult.state.mcpUi = {
-            ...(isLocalMcpServer(clientParams) && { local: true }),
+            ...(servesViewerMachine() && isLocalMcpServer(clientParams) && { local: true }),
             server: await getMcpServerFingerprint(clientParams),
           };
         }

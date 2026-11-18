@@ -13,9 +13,10 @@ export const toModelContent = (result: any): string => {
   if (result?.state?.mcpApp) return result.content;
   if (!result?.state || typeof result.state !== 'object') return JSON.stringify(result);
 
-  const { _meta, mcpUi, ...state } = result.state;
-  // MCP-UI keeps `structuredContent` for the model; only its views' HTML is the user's
-  if (mcpUi && Array.isArray(state.content))
+  const { _meta, mcpUi: _mcpUi, ...state } = result.state;
+  // MCP-UI keeps `structuredContent` for the model; only its views' HTML is the
+  // user's, whether or not the views render (`mcp_apps`)
+  if (Array.isArray(state.content))
     state.content = state.content.map((block: unknown) => {
       const summary = describeMcpUiResourceBlock(block);
       return summary ? { text: summary, type: 'text' } : block;

@@ -727,7 +727,8 @@ describe('MCPService', () => {
           toolName: 'show_card',
         });
 
-        // A stdio server runs here: its views may load loopback pages
+        // A stdio server on the machine the viewer's browser runs on (loopback
+        // APP_URL in tests): its views may load loopback pages
         expect(result.state.mcpUi).toEqual({
           local: true,
           server: await getMcpServerFingerprint(mockParams),
@@ -754,6 +755,27 @@ describe('MCPService', () => {
         });
 
         expect(result.state.mcpUi).toBeUndefined();
+      });
+
+      it("does not let a remote deployment's loopback server load pages on viewers' machines", async () => {
+        const { appEnv } = await import('@/envs/app');
+        const appUrl = appEnv.APP_URL;
+        (appEnv as { APP_URL?: string }).APP_URL = 'https://chat.example.com';
+        mockClient.getToolUiResourceUri.mockResolvedValue(undefined);
+        mockClient.callTool.mockResolvedValue({ content: [card], isError: false });
+
+        try {
+          const result = await mcpService.callTool({
+            argsStr: '{}',
+            clientParams: mockParams,
+            mcpApps: true,
+            toolName: 'show_card',
+          });
+
+          expect(result.state.mcpUi).toEqual({ server: expect.any(String) });
+        } finally {
+          (appEnv as { APP_URL?: string }).APP_URL = appUrl;
+        }
       });
 
       it('does not mark an error result', async () => {

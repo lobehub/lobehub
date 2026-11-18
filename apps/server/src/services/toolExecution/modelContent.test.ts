@@ -40,6 +40,23 @@ describe('toModelContent', () => {
     });
   });
 
+  it('summarizes ui:// HTML even when the result is unmarked (mcp_apps off)', () => {
+    const content = toModelContent({
+      content: 'x',
+      state: {
+        content: [
+          {
+            resource: { mimeType: 'text/html', text: '<i>secret-html</i>', uri: 'ui://c' },
+            type: 'resource',
+          },
+        ],
+      },
+      success: true,
+    });
+    expect(content).not.toContain('secret-html');
+    expect(content).toContain('ui://c');
+  });
+
   it('serializes any other result without _meta', () => {
     const model = JSON.parse(
       toModelContent({ content: '', state: { _meta: { x: 1 }, content: [] }, success: true }),
