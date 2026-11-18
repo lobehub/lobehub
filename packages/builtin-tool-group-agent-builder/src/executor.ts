@@ -28,6 +28,7 @@ import type {
   CreateGroupParams,
   GetAgentInfoParams,
   InviteAgentParams,
+  ListGroupMembersParams,
   RemoveAgentParams,
   SearchAgentParams,
   UpdateAgentConfigWithIdParams,
@@ -165,6 +166,16 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     return groupAgentBuilderRuntime.getAgentInfo(resolveActiveGroupId(ctx, params.groupId), params);
   };
 
+  listGroupMembers = async (
+    params: ListGroupMembersParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const blocked = awaitingCreateGroup(ctx, params.groupId);
+    if (blocked) return blocked;
+
+    return groupAgentBuilderRuntime.listGroupMembers(resolveActiveGroupId(ctx, params.groupId));
+  };
+
   // ==================== Group Member Management ====================
 
   searchAgent = async (params: SearchAgentParams): Promise<BuiltinToolResult> => {
@@ -294,11 +305,12 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
     params: UpdateAgentConfigWithIdParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const blocked = awaitingCreateGroup(ctx);
+    const { agentId: paramAgentId, groupId: paramGroupId, ...restParams } = params;
+
+    const blocked = awaitingCreateGroup(ctx, paramGroupId);
     if (blocked) return blocked;
 
-    const { agentId: paramAgentId, ...restParams } = params;
-    const groupId = resolveActiveGroupId(ctx);
+    const groupId = resolveActiveGroupId(ctx, paramGroupId);
     const group = groupId ? await getGroupRoster(groupId) : undefined;
 
     if (paramAgentId) {

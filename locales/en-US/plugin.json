@@ -391,6 +391,7 @@
   "builtins.lobe-group-agent-builder.apiName.getAvailableModels": "Get available models",
   "builtins.lobe-group-agent-builder.apiName.installPlugin": "Install Skill",
   "builtins.lobe-group-agent-builder.apiName.inviteAgent": "Invite member",
+  "builtins.lobe-group-agent-builder.apiName.listGroupMembers": "List members",
   "builtins.lobe-group-agent-builder.apiName.removeAgent": "Remove member",
   "builtins.lobe-group-agent-builder.apiName.searchAgent": "Search agents",
   "builtins.lobe-group-agent-builder.apiName.searchMarketTools": "Search Skill market",

@@ -35,6 +35,8 @@ import type {
   GetAgentInfoParams,
   InviteAgentParams,
   InviteAgentState,
+  ListGroupMembersParams,
+  ListGroupMembersState,
   RemoveAgentParams,
   RemoveAgentState,
   SearchAgentParams,
@@ -49,6 +51,7 @@ import type {
 } from '@lobechat/builtin-tool-group-agent-builder';
 import {
   AWAITING_CREATE_GROUP_RESULT,
+  formatGroupMembers,
   GroupAgentBuilderIdentifier,
 } from '@lobechat/builtin-tool-group-agent-builder';
 import { formatAgentProfile } from '@lobechat/prompts';
@@ -262,6 +265,49 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         }
       },
 
+      /**
+       * Group-built members are virtual agents, which `searchAgent` (and the
+       * agent-management search) deliberately leave out — this roster read is
+       * how the model recovers a member's id for update/remove.
+       */
+      listGroupMembers: async (
+        params: ListGroupMembersParams,
+        ctx: ToolExecutionContext,
+      ): Promise<ToolExecutionResult> => {
+        const blocked = await awaitingCreateGroup(ctx, params.groupId);
+        if (blocked) return blocked;
+
+        const groupId = await resolveGroupId(ctx, params.groupId);
+        if (!groupId) return noGroupContext();
+
+        try {
+          // Same visibility rule as getAgentInfo: a group the caller cannot view
+          // is reported as missing. The roster carries only public profile
+          // fields, and `getGroupAgentsWithMeta` already drops members the
+          // caller cannot see.
+          if ((await getConfigAccess('agentGroup', groupId)) === 'none') {
+            return groupNotFound(groupId);
+          }
+
+          const roster = await chatGroupModel.getGroupAgentsWithMeta(groupId);
+          const members = roster.map((member) => ({
+            description: member.description ?? undefined,
+            id: member.agentId,
+            isSupervisor: member.role === 'supervisor',
+            name: member.name ?? undefined,
+            title: member.title || 'Untitled Agent',
+          }));
+
+          return {
+            content: formatGroupMembers(members),
+            state: { groupId, members, total: members.length } satisfies ListGroupMembersState,
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to list group members');
+        }
+      },
+
       // ==================== Group Member Management ====================
 
       searchAgent: async (params: SearchAgentParams): Promise<ToolExecutionResult> => {
@@ -416,7 +462,7 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
           await inheritGroupAccessLevel(groupId, [agent]);
 
           return {
-            content: `Successfully created agent "${params.title}" and added it to the group.`,
+            content: `Successfully created agent "${params.title}" (ID: ${agent.id}) and added it to the group. Use this ID for getAgentInfo, updateAgentPrompt, updateConfig and removeAgent.`,
             state: {
               agentId: agent.id,
               success: true,
@@ -793,11 +839,15 @@ export const groupAgentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigWithIdParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const blocked = await awaitingCreateGroup(ctx);
+        const { agentId: paramAgentId, groupId: paramGroupId, ...rest } = params;
+
+        const blocked = await awaitingCreateGroup(ctx, paramGroupId);
         if (blocked) return blocked;
 
-        const groupId = await resolveGroupId(ctx);
-        const { agentId: paramAgentId, ...rest } = params;
+        // Like every other member tool, an explicit `groupId` names the group, so
+        // a member of a group that is neither being edited nor created in this
+        // conversation can still be configured.
+        const groupId = await resolveGroupId(ctx, paramGroupId);
 
         // A caller-supplied id has to be confirmed against this group's roster
         // first. The delegated `AgentBuilder.updateConfig` write is scoped by
