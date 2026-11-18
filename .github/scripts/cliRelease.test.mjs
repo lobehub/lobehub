@@ -168,6 +168,23 @@ test('waits for public registry visibility, verifies source and latest, and boun
   );
 });
 
+test('retries a temporary registry 404 after npm publication', async () => {
+  let calls = 0;
+  await verifyPublication({
+    name: '@lichao0223/lobehub-cli',
+    version: '0.0.79',
+    sha: 'current',
+    attempts: 2,
+    sleep: async () => {},
+    read: async () => {
+      calls++;
+      if (calls === 1) throw new Error('Registry lookup failed: HTTP 404');
+      return registry('0.0.79', { '0.0.79': { gitHead: 'current' } });
+    },
+  });
+  assert.equal(calls, 2);
+});
+
 test('persists a reservation in Git, reuses it after a failed run, and skips after publication', async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), 'cli-release-test-'));
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -108,7 +108,15 @@ export async function verifyPublication({
   attempts = 60,
 }) {
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const metadata = await read(name);
+    let metadata;
+    try {
+      metadata = await read(name);
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'Registry lookup failed: HTTP 404')
+        throw error;
+      if (attempt + 1 < attempts) await sleep(10_000);
+      continue;
+    }
     const published = metadata.versions?.[version];
     if (published) {
       if (published.gitHead !== sha) throw new Error(`Source mismatch for ${name}@${version}`);
