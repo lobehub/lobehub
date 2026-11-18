@@ -9,8 +9,10 @@ import {
   agents,
   agentShares,
   channelJobs,
+  channelThreads,
   files,
   messages,
+  topics,
   userContacts,
   userSettings,
 } from '../../../schemas';
@@ -324,6 +326,65 @@ describe('a contact’s shared Agent in a direct conversation', () => {
       await expect(sendText(channel.id, 'c', 'c')).rejects.toMatchObject({
         code: 'TOO_MANY_REQUESTS',
         message: 'You have reached the limit of 1 conversations with this Agent',
+      });
+    });
+
+    it('judges a send by the topic its own Thread would continue', async () => {
+      await db
+        .update(agentShares)
+        .set({ shareConfig: { maxTopicsPerVisitor: 2, maxTurnsPerTopic: 2 } })
+        .where(eq(agentShares.id, shareId));
+      const channel = await open();
+      const settle = async (job: { id: string }) => {
+        const claimed = (await execution.claim(channel.id, job.id, lease))!;
+        await execution.accepted(channel.id, job.id);
+        await execution.saveDraft(channel.id, job.id, 'Answer');
+        await execution.publish(channel.id, job.id);
+        await execution.releaseWriter(channel.id, job.id);
+        return claimed.topic;
+      };
+
+      // A Thread with turns left, and a main-timeline topic, touched last, that has run out of them.
+      const root = await sendText(channel.id, 'root', 'root');
+      const [rootJob] = await jobsOf(db, root.id);
+      const mainTopic = await settle(rootJob);
+      const [thread] = await db
+        .insert(channelThreads)
+        .values({
+          channelId: channel.id,
+          followerMemberIds: [rootJob.memberId],
+          rootMessageId: root.id,
+          rootSequence: root.sequence,
+        })
+        .returning();
+      const inThread = await visitor.send(channel.id, {
+        content: 'In thread',
+        requestKey: 'thread',
+        routing: 'fallback',
+        threadId: thread.id,
+      });
+      const threadTopic = await settle((await jobsOf(db, inThread.id))[0]);
+      expect(mainTopic.id).not.toBe(threadTopic.id);
+      await db.insert(messages).values(
+        ['one', 'two'].map((content) => ({
+          content,
+          role: 'user' as const,
+          topicId: mainTopic.id,
+          userId: ownerId,
+        })),
+      );
+      await db.update(topics).set({ updatedAt: new Date() }).where(eq(topics.id, mainTopic.id));
+
+      await expect(
+        visitor.send(channel.id, {
+          content: 'More',
+          requestKey: 'thread-more',
+          routing: 'fallback',
+          threadId: thread.id,
+        }),
+      ).resolves.toBeDefined();
+      await expect(sendText(channel.id, 'main', 'main')).rejects.toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
       });
     });
   });

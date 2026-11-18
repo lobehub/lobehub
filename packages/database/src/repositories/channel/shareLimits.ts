@@ -3,9 +3,9 @@ import {
   AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
   SHARE_VISITOR_PROMPT_MAX_LENGTH,
 } from '@lobechat/const';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 
-import { agentShares, messages, topics } from '../../schemas';
+import { agentShares, channelJobs, messages, topics } from '../../schemas';
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
@@ -17,9 +17,11 @@ import { TOPIC_STALE_THRESHOLD } from './topic';
  *
  * - The prompt length cap (`SHARE_VISITOR_PROMPT_MAX_LENGTH`).
  * - `maxTopicsPerVisitor`: a conversation starts a new topic (`resolveTopic`) when the visitor has
- *   none to continue, so the send is refused only when the visitor is at the cap and their latest
- *   topic cannot take another turn (`maxTurnsPerTopic` reached, or idle past the staleness
- *   window). Messages inside a Thread continue their topic regardless of staleness.
+ *   none to continue, so the send is refused only when the visitor is at the cap and the topic
+ *   this conversation would continue cannot take another turn (`maxTurnsPerTopic` reached, or
+ *   idle past the staleness window). That topic is the one of the visitor's latest claimed run in
+ *   the same Channel and Thread, as `continuationTopic` selects it; a Thread continues its topic
+ *   regardless of staleness.
  *
  * Like the spend limit, a send-time guardrail rather than an atomic reservation: the turn cap
  * itself is still enforced atomically when the run writes the visitor's message
@@ -29,13 +31,15 @@ export const assertSharedAgentAdmission = async (
   tx: Transaction,
   params: {
     agentId: string;
+    channelId: string;
     content: string;
-    inThread: boolean;
     ownerId: string;
+    requesterMemberId: string;
+    threadId: string | null;
     visitorId: string;
   },
 ) => {
-  const { agentId, content, inThread, ownerId, visitorId } = params;
+  const { agentId, channelId, content, ownerId, requesterMemberId, threadId, visitorId } = params;
   if (content.length > SHARE_VISITOR_PROMPT_MAX_LENGTH)
     throw new ChannelError(
       'BAD_REQUEST',
@@ -65,16 +69,25 @@ export const assertSharedAgentAdmission = async (
 
   const [latest] = await tx
     .select({ id: topics.id, updatedAt: topics.updatedAt })
-    .from(topics)
-    .where(visitorTopics)
-    .orderBy(desc(topics.updatedAt))
+    .from(channelJobs)
+    .innerJoin(topics, eq(topics.id, channelJobs.topicId))
+    .where(
+      and(
+        eq(channelJobs.channelId, channelId),
+        eq(channelJobs.requesterMemberId, requesterMemberId),
+        threadId ? eq(channelJobs.threadId, threadId) : isNull(channelJobs.threadId),
+        isNotNull(channelJobs.claimedAt),
+        visitorTopics,
+      ),
+    )
+    .orderBy(desc(channelJobs.claimedAt), desc(channelJobs.id))
     .limit(1);
   if (latest) {
     const [turns] = await tx
       .select({ value: count() })
       .from(messages)
       .where(and(eq(messages.topicId, latest.id), eq(messages.role, 'user')));
-    const fresh = inThread || Date.now() - latest.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD;
+    const fresh = !!threadId || Date.now() - latest.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD;
     if (fresh && (turns?.value ?? 0) < maxTurns) return;
   }
   throw new ChannelError(
