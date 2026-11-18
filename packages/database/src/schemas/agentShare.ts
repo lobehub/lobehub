@@ -43,6 +43,14 @@ export interface AgentShareConfig {
    * whether an email has a LobeHub account.
    */
   deviceAllowEmails?: string[];
+  /**
+   * Origins (`https://example.com`, `https://*.example.com`) allowed to frame
+   * this share's embed page (`/embed/agent/:slug`) — the page's
+   * `frame-ancestors` source list. Empty or absent forbids every embedding.
+   * Written normalized (see `@lobechat/embed/origin`) and honored only while
+   * the creator has the `agent_embed` feature flag.
+   */
+  embedAllowedOrigins?: string[];
   /** Ordered, explicitly selected creator Works for this share's public profile. */
   featuredWorkIds?: string[];
   /**

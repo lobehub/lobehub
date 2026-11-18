@@ -9,9 +9,11 @@ import { LOBE_LOCALE_COOKIE } from '@/const/locale';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
+import { resolveAgentEmbedFrameAncestors } from '@/server/services/agentShare/embedPolicy';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
+import { matchAgentEmbedRoute, withAgentEmbedFrameHeaders } from '../embedRoutes';
 import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
 import { isShareSpaRoute } from '../shareRoutes';
 import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
@@ -156,6 +158,19 @@ export function defineConfig() {
       return response;
     }
 
+    // The embed page is responsive on its own and runs inside a host website's
+    // panel, so it always gets the desktop bundle whatever the device.
+    if (matchAgentEmbedRoute(url.pathname)) {
+      const embedPath = `/spa/${RouteVariants.serializeVariants({ isMobile: false, locale: safeLocale })}${url.pathname}`;
+      logDefault('Agent embed route, rewriting to: %s', embedPath);
+      url.pathname = embedPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
     if (
       isAlwaysWorkbenchSpaRoute(url.pathname) ||
       (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname))
@@ -264,6 +279,10 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
+    // Agent Share embed pages: framed on a host website, where a redirect to
+    // the (unframeable) sign-in page would leave a blank panel. The page shows
+    // its own sign-in prompt, and every shareChat call authenticates itself.
+    '/embed/agent/(.*)',
     // retired standalone report links (/verify/:runId) — they now redirect to
     // the run's acceptance round, and must stay reachable without a session:
     // the run id is still the read capability, enforced by the run's own
@@ -283,6 +302,11 @@ export function defineConfig() {
     logBetterAuth('BetterAuth middleware processing request: %s %s', req.method, req.url);
 
     const response = defaultMiddleware(req);
+
+    const embedSlug = matchAgentEmbedRoute(req.nextUrl.pathname);
+    if (embedSlug) {
+      return withAgentEmbedFrameHeaders(response, await resolveAgentEmbedFrameAncestors(embedSlug));
+    }
 
     // when enable auth protection, only public route is not protected, others are all protected
     const isProtected = !isPublicRoute(req);

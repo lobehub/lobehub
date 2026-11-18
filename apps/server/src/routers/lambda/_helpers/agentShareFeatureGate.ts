@@ -32,3 +32,19 @@ export const assertAgentShareCreationEnabled = async (userId: string) => {
     });
   }
 };
+
+/**
+ * Writing an embed allowlist needs the `agent_embed` rollout flag on top of
+ * deployment support. Clearing one does not, so revoking never depends on it.
+ */
+export const assertAgentEmbedEnabled = async (userId: string) => {
+  assertAgentShareVisitorEnabled();
+
+  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
+  if (featureFlags.enableAgentEmbed !== true) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Agent embedding is not enabled for this account',
+    });
+  }
+};

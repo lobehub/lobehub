@@ -647,3 +647,85 @@ describe('agentShareRouter', () => {
     });
   });
 });
+
+describe('agentShareRouter embed allowlist', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
+    mockUpdateConfig.mockResolvedValue({ agentId: 'agent-1' });
+    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentEmbed: true });
+  });
+
+  const caller = async () =>
+    agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('stores the allowlist normalized and de-duplicated', async () => {
+    await (
+      await caller()
+    ).updateShareConfig({
+      agentId: 'agent-1',
+      config: {
+        embedAllowedOrigins: [
+          'https://Docs.Example.com/',
+          'https://docs.example.com',
+          'http://localhost:5555',
+        ],
+      },
+    });
+
+    expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('user-1');
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+      embedAllowedOrigins: ['https://docs.example.com', 'http://localhost:5555'],
+    });
+  });
+
+  it.each([
+    ['a path', 'https://example.com/page'],
+    ['a CSP injection', "https://example.com 'unsafe-inline'"],
+    ['a directive separator', 'https://example.com; script-src *'],
+    ['a bare wildcard', '*'],
+    ['a top-level wildcard', 'https://*.com'],
+  ])('rejects %s before writing', async (_label, origin) => {
+    await expect(
+      (await caller()).updateShareConfig({
+        agentId: 'agent-1',
+        config: { embedAllowedOrigins: [origin] },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('caps the allowlist length', async () => {
+    const origins = Array.from({ length: 21 }, (_, i) => `https://site${i}.example.com`);
+
+    await expect(
+      (await caller()).updateShareConfig({
+        agentId: 'agent-1',
+        config: { embedAllowedOrigins: origins },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('refuses a non-empty allowlist outside the agent_embed rollout', async () => {
+    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentEmbed: false });
+
+    await expect(
+      (await caller()).updateShareConfig({
+        agentId: 'agent-1',
+        config: { embedAllowedOrigins: ['https://example.com'] },
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('always lets the creator clear the allowlist', async () => {
+    mockGetFeatureFlagsState.mockResolvedValue({ enableAgentEmbed: false });
+
+    await (
+      await caller()
+    ).updateShareConfig({ agentId: 'agent-1', config: { embedAllowedOrigins: [] } });
+
+    expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', { embedAllowedOrigins: [] });
+  });
+});

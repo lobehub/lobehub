@@ -82,6 +82,11 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
+  /**
+   * Agent Share embedding (`agent_embed`), evaluated for the share creator. Off by
+   * default: the embed allowlist is hidden and embed pages refuse to be framed.
+   */
+  enableAgentEmbed: boolean | undefined;
   /** Inbound webhooks wake Agents (`webhook`): MCP Events, generic webhooks, Automations. Off by default. */
   enableWebhook: boolean | undefined;
   /**

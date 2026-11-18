@@ -392,6 +392,7 @@ describe('desktop router shared definition', () => {
       { element: null, path: '*' },
     ]);
     expect(webPaths).toContain('/verify-im');
+    expect(webPaths).toContain('/embed/agent/:slugOrId/:topicId?');
     // `/share/*` moved to the standalone Share app (apps/share).
     expect(webPaths).not.toContain('/share/t');
     expect(webPaths).not.toContain('/share/page');
@@ -414,6 +415,7 @@ describe('desktop router shared definition', () => {
     expect(webPaths).toContain('/onboarding');
     expect(webPaths).not.toContain('/desktop-onboarding');
     expect(electronPaths).not.toContain('/verify-im');
+    expect(electronPaths).not.toContain('/embed/agent/:slugOrId/:topicId?');
     expect(electronPaths).not.toContain('/share/t');
     expect(electronPaths).not.toContain('/share/page');
     expect(electronPaths).not.toContain('/verify');

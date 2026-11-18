@@ -27,6 +27,7 @@ const DEFAULT_AGENT_SHARE_CONFIG = {
   allowCreatorViewSessions: false,
   allowReadMemory: false,
   demoCases: [],
+  embedAllowedOrigins: [],
   featuredWorkIds: [],
   maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
@@ -47,6 +48,7 @@ const normalizeAgentShareConfig = (
   demoCases: config?.demoCases ?? [],
   deviceAccess: config?.deviceAccess ?? 'none',
   deviceAllowEmails: config?.deviceAllowEmails ?? [],
+  embedAllowedOrigins: config?.embedAllowedOrigins ?? [],
   featuredWorkIds: config?.featuredWorkIds ?? [],
   maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
   maxTopicsPerVisitor:

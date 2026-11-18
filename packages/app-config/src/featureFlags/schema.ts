@@ -27,6 +27,14 @@ export const FeatureFlagsSchema = z.object({
    */
   agent_share: FeatureFlagValue.optional(),
 
+  /**
+   * Agent Share embedding: the share settings offer an "Embed on a website"
+   * allowlist, and `/embed/agent/:slug` may be framed by the listed origins.
+   * Evaluated against the share CREATOR, so array values are creator user IDs.
+   * Off: every embed response forbids framing and the allowlist is hidden.
+   */
+  agent_embed: FeatureFlagValue.optional(),
+
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
@@ -215,6 +223,8 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // are additionally hard-blocked by ENABLE_BUSINESS_FEATURES on the server
   // gate, so setting this env-side does not enable the feature there.
   agent_share: false,
+  // Off until an admin publishes a creator allowlist or flips it to true.
+  agent_embed: false,
 
   ai_image: true,
 
@@ -283,6 +293,7 @@ export const mapFeatureFlagsEnvToState = (
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId, 'edit_agent'),
 
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId, 'agent_share'),
+    enableAgentEmbed: evaluateFeatureFlag(config.agent_embed, userId, 'agent_embed'),
     // Deprecated compatibility field for released LobeHub Mobile clients; see IFeatureFlagsState.
     enableGatewayMuxMobile: ENABLE_BUSINESS_FEATURES,
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),

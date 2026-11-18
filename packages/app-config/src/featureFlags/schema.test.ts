@@ -361,6 +361,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableMcpApps).toBe(false);
   });
 
+  it('should keep Agent Share embedding off by default and enable it per creator', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_embed).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentEmbed).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ agent_embed: true }).enableAgentEmbed).toBe(true);
+
+    const config = { agent_embed: ['creator-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'creator-123').enableAgentEmbed).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'creator-456').enableAgentEmbed).toBe(false);
+  });
+
   it('should keep agent knowledge spaces off by default and enable them per user', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_knowledge_space).toBe(false);
     expect(
