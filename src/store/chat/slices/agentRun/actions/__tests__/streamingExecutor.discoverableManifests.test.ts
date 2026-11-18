@@ -45,9 +45,11 @@ describe('internal_createAgentState manifest map', () => {
       plugins: [],
     });
     vi.spyOn(toolEngineering, 'createAgentToolsEngine').mockReturnValue({
+      getAllPluginManifests: () =>
+        new Map([[discoverableTool.identifier, discoverableTool.manifest]]),
       generateToolsDetailed: vi
         .fn()
-        .mockReturnValue({ enabledManifests: [], enabledToolIds: [], tools: [] }),
+        .mockReturnValue({ enabledManifests: [], enabledToolIds: ['lobe-activator'], tools: [] }),
     } as any);
     act(() => {
       useToolStore.setState({ builtinTools: [discoverableTool] });

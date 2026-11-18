@@ -67,6 +67,7 @@ interface RunOptions {
   disabledPluginIds?: string[];
   /** A device gateway is configured for the deployment. */
   gatewayConfigured?: boolean;
+  memoryEnabled?: boolean;
   /** The agent's legacy pinned entries, which also read as on. */
   plugins?: string[];
   /** This turn's @-mention picks. */
@@ -114,7 +115,7 @@ const run = (options: RunOptions = {}) => {
     } as never,
     {
       disabledPluginIds: options.disabledPluginIds ?? [],
-      globalMemoryEnabled: false,
+      globalMemoryEnabled: options.memoryEnabled ?? false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
       loadHistoryMessages: vi.fn().mockResolvedValue([]),
@@ -139,6 +140,43 @@ const offeredToolNames = (result: { tools?: { function: { name: string } }[] }) 
 /** The agent turned the plugin on: an `auto` entry in its plugins. */
 const ON = { autoSkillIds: [FEISHU] };
 const MANUAL = { chatConfig: { skillActivateMode: 'manual' } };
+
+describe('Agent first-turn tool payload', () => {
+  it.each([
+    { expected: ['lobe-user-memory', 'lobe-web-browsing'], memory: true, search: true },
+    { expected: ['lobe-user-memory'], memory: true, search: false },
+    { expected: ['lobe-web-browsing'], memory: false, search: true },
+    { expected: [], memory: false, search: false },
+  ])(
+    'only lists available capabilities (memory=$memory, search=$search)',
+    async ({ expected, memory, search }) => {
+      const result = await run({
+        chatConfig: { searchMode: search ? 'auto' : 'off' },
+        memoryEnabled: memory,
+      });
+      const loaders = ['lobe-activator', 'lobe-skills'];
+      const capabilities = ['lobe-user-memory', 'lobe-web-browsing'];
+      expect(result.toolsResult.enabledToolIds.toSorted()).toEqual(loaders);
+      expect(offeredToolNames(result)).toHaveLength(6);
+      expect(availableToolIds(result.toolManifestMap, loaders).toSorted()).toEqual(expected);
+      const activated = result.toolsEngine!.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'test-model',
+        provider: 'test-provider',
+        skipDefaultTools: true,
+        toolIds: [
+          ...capabilities,
+          'lobe-attachments',
+          'lobe-agent-account',
+          'lobe-browser',
+          'lobe-knowledge-base',
+          'lobe-mcp-events',
+        ],
+      });
+      expect(activated.enabledToolIds.toSorted()).toEqual(expected);
+    },
+  );
+});
 
 describe('discoverTools — installed plugins are opt-in per agent', () => {
   it('only offers a configurable builtin to discovery when this agent opted in', async () => {
